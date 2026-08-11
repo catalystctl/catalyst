@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { apiKeyService, CreateApiKeyRequest, UpdateApiKeyRequest, type ApiKey } from '../services/apiKeys';
 import { toast } from 'sonner';
@@ -11,7 +11,8 @@ export function useApiKeys() {
     queryKey: qk.apiKeys(),
     queryFn: () => apiKeyService.list(),
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    // api_key_* admin SSE.
+    refetchInterval: false,
     refetchIntervalInBackground: false,
   });
 }
@@ -37,7 +38,8 @@ export function useApiKeyUsage(id: string | undefined) {
     queryFn: () => apiKeyService.getUsage(id!),
     enabled: !!id,
     staleTime: 30_000,
-    refetchInterval: 30_000,
+    // Usage counters are not SSE-pushed; keep a light poll while the detail view is open.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -119,8 +121,8 @@ export function useDeleteApiKey() {
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: qk.apiKeys() });
       const previous = queryClient.getQueryData<ApiKey[]>(qk.apiKeys());
-      queryClient.setQueryData<ApiKey[]>(qk.apiKeys(), (old) =>
-        old ? old.filter((key) => key.id !== id) : old,
+      queryClient.setQueryData<ApiKey[]>(qk.apiKeys(), (old: ApiKey[] | undefined) =>
+        old ? old.filter((key: ApiKey) => key.id !== id) : old,
       );
       return { previous };
     },

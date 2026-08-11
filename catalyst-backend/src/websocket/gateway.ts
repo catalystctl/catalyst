@@ -1077,6 +1077,24 @@ export class WebSocketGateway {
           this.logger.error({ err, nodeId }, 'WebSocket handler error: failed to persist health report');
         }
 
+        // Fan out to admin SSE so node dashboards stop hard-polling.
+        // Throttled lightly via allowAgentMetrics already; still avoid flooding UI.
+        this.pushToAdminSubscribers('node_metrics_updated', {
+          type: 'node_metrics_updated',
+          nodeId,
+          isOnline: true,
+          agentVersion: message.agentVersion ? String(message.agentVersion) : undefined,
+          cpuPercent,
+          memoryUsageMb: Math.round(memoryUsageMb),
+          memoryTotalMb: Math.round(memoryTotalMb),
+          diskUsageMb: Math.round(diskUsageMb),
+          diskTotalMb: Math.round(diskTotalMb),
+          networkRxBytes: Number(message.networkRxBytes ?? 0),
+          networkTxBytes: Number(message.networkTxBytes ?? 0),
+          containerCount: Math.max(0, Math.round(containerCount)),
+          timestamp: new Date().toISOString(),
+        });
+
         // --- Agent auto-update check ---
         // Compare the agent's version against the panel version.
         // If the agent is behind, send an update_agent command with the target version.
@@ -1087,6 +1105,14 @@ export class WebSocketGateway {
           { nodeId, targetVersion: message.targetVersion },
           'Agent confirmed update is being applied',
         );
+        // Fan out to admin SSE so Agent Control Panel updates without polling.
+        this.pushToAdminSubscribers('agent_update_started', {
+          type: 'agent_update_started',
+          nodeId,
+          targetVersion: message.targetVersion ?? null,
+          progress: typeof message.progress === 'number' ? message.progress : 0,
+          timestamp: new Date().toISOString(),
+        });
         // The agent will exec() the new binary and reconnect.
         // No further update commands needed for this node until reconnect.
       } else if (message.type === "agent_update_failed") {
@@ -1094,10 +1120,27 @@ export class WebSocketGateway {
           { nodeId, error: message.error },
           'Agent reported update failure — clearing tracking so next health_report retries',
         );
+        this.pushToAdminSubscribers('agent_update_failed', {
+          type: 'agent_update_failed',
+          nodeId,
+          error: message.error ?? 'Update failed',
+          timestamp: new Date().toISOString(),
+        });
         // Clear the tracking entry so the next health_report will
         // re-trigger the update_agent command instead of silently
         // skipping it because "we already sent that version".
         this.agentUpdateSent.delete(nodeId);
+      } else if (message.type === "agent_update_progress") {
+        this.pushToAdminSubscribers('agent_update_progress', {
+          type: 'agent_update_progress',
+          nodeId,
+          status: message.status ?? 'updating',
+          progress: typeof message.progress === 'number' ? message.progress : 0,
+          currentVersion: message.currentVersion ?? null,
+          targetVersion: message.targetVersion ?? null,
+          error: message.error ?? null,
+          timestamp: new Date().toISOString(),
+        });
       } else if (message.type === "resource_stats") {
         if (!this.allowAgentMetrics(nodeId)) {
           if (this.shouldWarnRateLimit(nodeId, this.agentMetricsLimit.windowMs)) {

@@ -68,7 +68,7 @@ function ServerListItem({ server }: { server: Server }) {
 
  {/* Status indicator */}
  <div className="shrink-0">
- <ServerStatusBadge status={server.status} />
+ <ServerStatusBadge status={server.status} operationStage={server.operationStage} operationProgress={server.operationProgress} />
  </div>
 
  {/* Name + Node */}

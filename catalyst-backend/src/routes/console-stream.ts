@@ -19,18 +19,10 @@ import { hasNodeAccess } from '../lib/permissions.js';
 import { captureSystemError } from '../services/error-logger.js';
 import { ErrorCodes } from '../shared-types.js';
 import { checkIsAdmin } from './servers/_helpers.js';
+import { openSseStream, formatSse as formatSseMessage } from '../utils/sse.js';
 
 interface ConsoleCommandBody {
   command: string;
-}
-
-function formatSseMessage(event: string, data: unknown): string {
-  const json = typeof data === 'string' ? data : JSON.stringify(data);
-  return `event: ${event}\ndata: ${json.replace(/\n/g, '\\n')}\n\n`;
-}
-
-function formatSseComment(comment: string): string {
-  return `: ${comment}\n\n`;
 }
 
 export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGateway) {
@@ -75,44 +67,27 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         return;
       }
 
-      // Build SSE response with proper CORS headers using origin whitelist
-      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
-      const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean);
-      if (allowedOrigins.includes(origin)) {
-        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
-        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
-      }
-      reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // Disable nginx buffering for SSE
-      });
-
-      // Send initial heartbeat to establish connection
-      reply.raw.write(formatSseComment('connected'));
-      reply.raw.write(formatSseMessage('connected', { serverId, timestamp: new Date().toISOString() }));
-
-      // Enforce SSE subscriber cap
+      // Cap check before hijacking so we can still send a JSON 503.
       const MAX_SSE_CONSOLE_PER_SERVER = 50;
       if (wsGateway.getSseSubscriberCount(serverId) >= MAX_SSE_CONSOLE_PER_SERVER) {
         reply.status(503).send({ error: 'Too many console viewers. Please try again later.' });
         return;
       }
 
+      const sse = openSseStream(request, reply);
+      sse.comment('connected');
+      sse.push('connected', { serverId, timestamp: new Date().toISOString() });
+
       // Register SSE subscriber — pushes events to this HTTP connection
       const { unsubscribe, touch } = wsGateway.addSseSubscriber(serverId, (event, data) => {
-        try {
-          reply.raw.write(formatSseMessage(event, data));
-        } catch {
-          // Connection closed — unsubscribe will be called via 'close' event
-        }
+        // data may already be a JSON string from the gateway
+        sse.write(formatSseMessage(event, data));
       });
 
       // Keep-alive heartbeat every 25s (below most proxy 30s timeouts)
       const heartbeat = setInterval(() => {
         try {
-          reply.raw.write(formatSseComment('heartbeat'));
+          sse.comment('heartbeat');
           // Touch the subscriber so the backend sweep knows this connection is
           // still alive even when the agent is offline and no console data is
           // flowing. Without this, subscribers are deleted after 5 min of agent

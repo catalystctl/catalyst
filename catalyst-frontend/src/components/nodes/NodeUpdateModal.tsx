@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@/csync';
 import { ChevronDown, ChevronRight, MapPin } from 'lucide-react';
 import type { NodeInfo } from '../../types/node';
 import { nodesApi } from '../../services/api/nodes';

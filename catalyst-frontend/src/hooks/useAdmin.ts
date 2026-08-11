@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { adminApi } from '../services/api/admin';
 
@@ -7,7 +7,8 @@ export function useAdminStats() {
     queryKey: qk.adminStats(),
     queryFn: adminApi.stats,
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    // CRUD SSE invalidates; slow safety poll for online/offline counts.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -17,6 +18,7 @@ export function useAdminHealth() {
     queryKey: qk.adminHealth(),
     queryFn: adminApi.health,
     staleTime: 15_000,
+    // Health is not fully event-driven; keep a moderate poll.
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
   });
@@ -27,7 +29,8 @@ export function useAdminUsers(params?: { page?: number; limit?: number; search?:
     queryKey: qk.adminUsers(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listUsers(params),
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    // user_* admin SSE keeps lists fresh.
+    refetchInterval: false,
     refetchIntervalInBackground: false,
   });
 }
@@ -51,7 +54,8 @@ export function useAdminServers(params?: {
     queryKey: qk.adminServers(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listServers(params),
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    // server_* admin + global SSE.
+    refetchInterval: false,
     refetchIntervalInBackground: false,
   });
 }
@@ -61,7 +65,8 @@ export function useAdminNodes(params?: { search?: string }) {
     queryKey: qk.adminNodes(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listNodes(params),
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    // node_* + node_updated (online/offline) admin SSE.
+    refetchInterval: false,
     refetchIntervalInBackground: false,
   });
 }
@@ -79,7 +84,8 @@ export function useAuditLogs(params?: {
     queryKey: qk.adminAuditLogs(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listAuditLogs(params),
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    // audit_log_created SSE.
+    refetchInterval: false,
     refetchIntervalInBackground: false,
   });
 }
@@ -143,7 +149,8 @@ export function useAuthLockouts(params?: { page?: number; limit?: number; search
     queryKey: qk.adminAuthLockouts(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listAuthLockouts(params),
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    // auth_lockout_* SSE.
+    refetchInterval: false,
     refetchIntervalInBackground: false,
   });
 }
@@ -189,7 +196,8 @@ export function useSystemErrors(params?: {
     queryKey: qk.adminSystemErrors(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listSystemErrors(params),
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    // system_error SSE inserts into cache.
+    refetchInterval: false,
     refetchIntervalInBackground: false,
   });
 }

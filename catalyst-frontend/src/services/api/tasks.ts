@@ -20,8 +20,14 @@ export type UpdateTaskPayload = {
 
 export const tasksApi = {
   list: async (serverId: string) => {
-    const data = await apiClient.get<{ tasks: Task[] }>(`/api/servers/${serverId}/tasks`);
-    return data.tasks ?? [];
+    const data = await apiClient.get<{ tasks?: Task[] } | Task[]>(`/api/servers/${serverId}/tasks`);
+    // Backend sends `{ tasks: [...] }`; tolerate a bare array or nested shapes.
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.tasks)) return data.tasks;
+    const nested = (data as any)?.data;
+    if (Array.isArray(nested)) return nested;
+    if (nested && Array.isArray(nested.tasks)) return nested.tasks;
+    return [];
   },
   create: async (serverId: string, payload: CreateTaskPayload) => {
     const data = await apiClient.post<{ success: boolean; task: Task }>(

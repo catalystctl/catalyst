@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
@@ -732,11 +732,12 @@ export default function MigrationPage() {
  queryKey: qk.migrationJobs(),
  queryFn: migrationApi.listJobs,
  staleTime: 30_000,
+ // Primary: migration_job_updated admin SSE. Safety poll while any job is active.
  refetchInterval: (query) => {
  const data = query.state.data;
  if (!Array.isArray(data)) return false;
- const hasActive = data.some(j => j.status === 'running' || j.status === 'validating');
- return hasActive ? 2000 : false;
+ const hasActive = data.some(j => ['running', 'validating', 'paused'].includes(j.status));
+ return hasActive ? 10_000 : false;
  },
  });
 
@@ -748,11 +749,12 @@ export default function MigrationPage() {
  queryKey: qk.migrationJob(activeJobId!),
  queryFn: () => migrationApi.getStatus(activeJobId!),
  enabled: !!activeJobId,
- staleTime: 30_000,
+ staleTime: 5_000,
+ // Primary: migration_job_updated SSE patches/invalidates this key.
  refetchInterval: (query) => {
  const job = query.state.data;
  if (!job) return false;
- return (job.status === 'running' || job.status === 'validating') ? 2000 : false;
+ return ['running', 'validating', 'paused'].includes(job.status) ? 10_000 : false;
  },
  });
 
@@ -761,11 +763,12 @@ export default function MigrationPage() {
  queryKey: qk.migrationSteps(activeJobId!),
  queryFn: () => migrationApi.getSteps(activeJobId!, { limit: 500 }),
  enabled: !!activeJobId,
- staleTime: 30_000,
+ staleTime: 5_000,
+ // Primary: migration_step_updated SSE. Safety poll while job active.
  refetchInterval: (_query) => {
  const job = activeJob;
- if (!job) return 2000;
- return ['running', 'validating', 'paused'].includes(job.status) ? 2000 : false;
+ if (!job) return false;
+ return ['running', 'validating', 'paused'].includes(job.status) ? 10_000 : false;
  },
  });
 

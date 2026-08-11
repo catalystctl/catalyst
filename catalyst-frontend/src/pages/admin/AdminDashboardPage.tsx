@@ -38,7 +38,7 @@ function AdminDashboardPage() {
  const { data: health, isLoading: healthLoading } = useAdminHealth();
  const { data: nodesData } = useAdminNodes();
  const { data: serversData } = useAdminServers({ limit: 100 });
- const { data: clusterMetrics, isLoading: metricsLoading } = useClusterMetrics(5000);
+ const { data: clusterMetrics, isLoading: metricsLoading } = useClusterMetrics(60_000);
 
  const nodes = nodesData?.nodes ?? [];
  const servers = serversData?.servers ?? [];

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@/csync';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Copy } from 'lucide-react';
 import { qk } from '@/lib/queryKeys';

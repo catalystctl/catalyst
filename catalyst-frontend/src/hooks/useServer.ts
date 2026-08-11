@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { serversApi } from '../services/api/servers';
 import { reportSystemError } from '../services/api/systemErrors';
@@ -17,9 +17,10 @@ export function useServer(id?: string) {
     enabled: Boolean(id),
     staleTime: 15_000,
     placeholderData: (prev) => prev,
+    // Status is patched from global SSE; poll only during transitional power/install states.
     refetchInterval: (query) => {
       const data = query.state.data as Server | undefined;
-      return data && transitionalStatuses.has(data.status) ? 2000 : 10000;
+      return data && transitionalStatuses.has(data.status) ? 2000 : false;
     },
     refetchIntervalInBackground: false,
   });

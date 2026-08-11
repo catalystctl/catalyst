@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { nodesApi } from '../services/api/nodes';
 import { useAdminNodes } from './useAdmin';
@@ -77,10 +77,11 @@ const TIME_RANGE_LIMITS: Record<TimeRange, number> = {
 };
 
 /**
- * Fetches live (latest-only) cluster metrics. Polls at `refreshInterval`.
- * Computes network RX/TX as per-second delta rates between polls.
+ * Fetches live (latest-only) cluster metrics.
+ * Primary updates: admin SSE `node_metrics_updated` (patches this query cache).
+ * `refreshInterval` is a safety poll only (default 60s).
  */
-export function useClusterMetrics(refreshInterval = 5000) {
+export function useClusterMetrics(refreshInterval = 60_000) {
   const { data: nodesData } = useAdminNodes();
   const nodes = nodesData?.nodes ?? [];
   // Track previous cumulative byte values to compute deltas

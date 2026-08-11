@@ -386,7 +386,8 @@ function AuditLogsPage() {
 
  useEffect(() => {
  if (!livePoll) return;
- const interval = setInterval(() => refetch(), 15000);
+ // Prefer audit_log_created admin SSE (AppLayout). Safety poll while "Auto" is on.
+ const interval = setInterval(() => refetch(), 60_000);
  return () => clearInterval(interval);
  }, [livePoll, refetch]);
 

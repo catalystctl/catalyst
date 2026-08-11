@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@/csync';
 import {
  ArrowLeftRight,
  ArrowUpCircle,
@@ -434,7 +434,7 @@ export default function ServerModManagerTab({
  queryFn: () => modManagerApi.installed(serverId ?? '', modTarget),
  enabled: Boolean(serverId && modManagerConfig),
  staleTime: 300_000,
- refetchInterval: 10000,
+ refetchInterval: false, // install/uninstall/update complete via SSE
  refetchIntervalInBackground: false,
  });
 

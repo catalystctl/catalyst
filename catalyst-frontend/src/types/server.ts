@@ -31,11 +31,24 @@ export interface ModManagerProviderObject {
 }
 type ModManagerProvider = string | ModManagerProviderObject;
 
+export interface ServerOwnerInfo {
+  id: string;
+  username?: string | null;
+  email?: string | null;
+  name?: string | null;
+}
+
 export interface Server {
   id: string;
   ownerId?: string;
+  /** Resolved owner profile from GET /api/servers/:id (not always present on list). */
+  owner?: ServerOwnerInfo | null;
   name: string;
   status: ServerStatus;
+  /** Soft realtime progress for install/transfer/clone (from SSE). */
+  operationStage?: string | null;
+  /** 0–100 when known. */
+  operationProgress?: number | null;
   nodeId: string;
   templateId: string;
   nodeName?: string;
@@ -206,6 +219,9 @@ export type ServerAllocation = {
   containerPort: number;
   hostPort: number;
   isPrimary: boolean;
+  allocationId?: string | null;
+  ip?: string | null;
+  alias?: string | null;
 };
 
 export interface ServerMetrics {

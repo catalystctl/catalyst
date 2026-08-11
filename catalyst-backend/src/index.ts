@@ -520,10 +520,14 @@ async function bootstrap() {
 				global: true,
 				encodings: ["gzip", "br", "deflate"],
 				threshold: 1024, // Only compress responses > 1KB
-			});
+				// Never compress SSE — browsers + proxies mishandle chunked gzip streams.
+				customTypes: /^(?!text\/event-stream).*/i,
+			} as any);
 			app.addHook("onSend", async (_request, reply, _payload) => {
-				if (reply.getHeader("content-type")?.toString().includes("text/event-stream")) {
-					reply.header("content-encoding", undefined);
+				const ct = reply.getHeader("content-type")?.toString() ?? "";
+				if (ct.includes("text/event-stream")) {
+					reply.removeHeader("content-encoding");
+					reply.header("content-encoding", "identity");
 				}
 			});
 		}

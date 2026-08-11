@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, Check, Eye, EyeOff, RefreshCw, AlertTriangle, Info, Trash2, Shield, Users } from 'lucide-react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { serversApi } from '../../services/api/servers';

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
+import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 
 /** Default timeouts for power command acks from the agent. */
 const POWER_ACK_TIMEOUT = {
@@ -241,6 +242,14 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         },
       });
 
+      emitServerOperationProgress((app as any).wsGateway, {
+        serverId,
+        operation: "install",
+        stage: "Installation started",
+        progress: 5,
+        state: "installing",
+      });
+
       // 202: accepted for async processing; completion via server_state_update
       reply.status(202).send({
         success: true,
@@ -397,6 +406,14 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           stream: "system",
           data: "Reinstallation started (data wipe + install).",
         },
+      });
+
+      emitServerOperationProgress((app as any).wsGateway, {
+        serverId,
+        operation: "reinstall",
+        stage: "Reinstallation started",
+        progress: 5,
+        state: "installing",
       });
 
       reply.status(202).send({

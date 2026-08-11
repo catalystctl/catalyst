@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import SetupPage from './pages/setup/SetupPage';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -82,6 +82,7 @@ function PageTransition({ children }: { children: React.ReactNode }) {
 
 function App() {
  useAuthInit();
+ const location = useLocation();
  const theme = useThemeStore((s) => s.theme);
  const setThemeSettings = useThemeStore((s) => s.setThemeSettings);
  const applyTheme = useThemeStore((s) => s.applyTheme);
@@ -176,7 +177,7 @@ function App() {
  // a redirect loop — they can log in normally.
  if (setupRequired && !isAuthenticated) {
  return (
- <ErrorBoundary>
+ <ErrorBoundary resetKey={location.pathname}>
  <ToastProvider />
  <PluginProvider>
  <AnimatePresence initial={false}>
@@ -197,7 +198,7 @@ function App() {
  }
 
  return (
- <ErrorBoundary>
+ <ErrorBoundary resetKey={location.pathname}>
  <ToastProvider />
  <PluginProvider>
  <AnimatePresence initial={false}>

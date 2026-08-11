@@ -27,7 +27,7 @@ export const pluginManagerApi = {
       `/api/servers/${serverId}/plugin-manager/game-versions`,
       { params: { provider } },
     );
-    return data.data ?? [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   search: async (
     serverId: string,
@@ -70,7 +70,7 @@ export const pluginManagerApi = {
     const data = await apiClient.get<{ success: boolean; data: InstalledPlugin[] }>(
       `/api/servers/${serverId}/plugin-manager/installed`,
     );
-    return data.data ?? [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   uninstall: async (serverId: string, filename: string) => {
     const data = await apiClient.post<{ success: boolean }>(

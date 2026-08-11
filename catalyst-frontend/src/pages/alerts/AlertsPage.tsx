@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 
@@ -255,14 +255,14 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  scope,
  }),
  staleTime: 30_000,
- refetchInterval: 30_000,
+ refetchInterval: false as const, // alert SSE via admin/server streams
  });
  const { data: alertStats } = useQuery({
  queryKey: qk.alertStats({ scope, serverId }),
  queryFn: () => alertsApi.statsScoped({ scope }),
  enabled: !serverId,
  staleTime: 30_000,
- refetchInterval: 30_000,
+ refetchInterval: false as const, // alert SSE via admin/server streams
  });
  const { data: alertRules = [] } = useAlertRules({
  scope,

@@ -11,20 +11,12 @@ import { prisma } from '../db.js';
 import { auth } from '../auth.js';
 import { fromNodeHeaders } from 'better-auth/node';
 import { hasNodeAccess } from '../lib/permissions.js';
+import { openSseStream } from '../utils/sse.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const METRICS_EVENT_TYPES = ['resource_stats', 'storage_resize_complete'];
 
 type ReqHeaders = Record<string, string | string[] | undefined>;
-
-function formatSse(event: string, data: unknown): string {
-  const json = typeof data === 'string' ? data : JSON.stringify(data);
-  return `event: ${event}\ndata: ${json.replace(/\n/g, '\\n')}\n\n`;
-}
-
-function formatSseComment(comment: string): string {
-  return `: ${comment}\n\n`;
-}
 
 // Module-level subscriber registry
 interface Subscriber {
@@ -93,33 +85,15 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         }
       }
 
-      // SSE headers — prevent proxy buffering. CORS uses the same origin whitelist
-      // as console SSE (never reflect arbitrary Origin with credentials).
-      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
-      const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map((o) => o.trim()).filter(Boolean);
-      if (origin && allowedOrigins.includes(origin)) {
-        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
-        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
-      }
-      reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      });
-
-      reply.raw.write(formatSseComment('connected'));
-      reply.raw.write(formatSse('connected', {
+      const sse = openSseStream(request, reply);
+      sse.comment('connected');
+      sse.push('connected', {
         serverId,
         timestamp: new Date().toISOString(),
-      }));
+      });
 
       const push = (eventType: string, data: unknown) => {
-        try {
-          reply.raw.write(formatSse(eventType, data));
-        } catch {
-          // Connection closed
-        }
+        sse.push(eventType, data);
       };
 
       // Push cached latest metric immediately so the client doesn't wait for the next agent tick
@@ -162,7 +136,7 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
 
       const heartbeatTimer = setInterval(() => {
         try {
-          reply.raw.write(formatSseComment('heartbeat'));
+          sse.comment('heartbeat');
         } catch {
           clearInterval(heartbeatTimer);
         }

@@ -48,10 +48,10 @@ interface Props {
 
 export default function ServerDatabasesTab({
  isSuspended,
- databases,
+ databases: databasesProp,
  databasesLoading,
  databasesError,
- databaseHosts,
+ databaseHosts: hostsProp,
  databaseAllocation,
  canManageDatabases,
  databaseHostId,
@@ -65,6 +65,8 @@ export default function ServerDatabasesTab({
  deletePending,
  onDelete,
 }: Props) {
+ const databases = Array.isArray(databasesProp) ? databasesProp : [];
+ const databaseHosts = Array.isArray(hostsProp) ? hostsProp : [];
  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
  const databaseLimitReached =
  databaseAllocation > 0 && databases.length >= databaseAllocation;

@@ -2,10 +2,10 @@
  * SSE-based storage resize completion hook.
  *
  * Listens for `storage_resize_complete` events via SSE and triggers
- * TanStack Query invalidation + toast notification.
+ * Catalyst Sync invalidation + toast notification.
  */
 import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@/csync';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 import { qk } from '../lib/queryKeys';
 import { notifyError, notifySuccess } from '../utils/notify';

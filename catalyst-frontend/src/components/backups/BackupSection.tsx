@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
 import { useBackups } from '../../hooks/useBackups';
 import { notifyError, notifyInfo } from '../../utils/notify';

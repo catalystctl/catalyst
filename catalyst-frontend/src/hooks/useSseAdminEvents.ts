@@ -4,18 +4,46 @@
  * Listens for ALL admin entity events (users, servers, nodes, templates,
  * roles, alert rules, alert instances, API keys, locations, nests,
  * database hosts, and IP pools) via the admin SSE stream and
- * updates the appropriate TanStack Query caches in real-time.
+ * updates the appropriate Catalyst Sync caches in real-time.
  *
  * Only connects if the user has admin permissions (avoids 401 spam on /api/admin/events).
  */
 import { useEffect, useMemo } from 'react';
-import { useQueryClient, type Query } from '@tanstack/react-query';
+import { useQueryClient, type Query } from '@/csync';
 import { useAuthStore } from '../stores/authStore';
 import { hasAnyAdminPermission } from '../components/auth/ProtectedRoute';
 import { createAdminEventsStream, type AdminEventType } from '../services/api/admin-events';
 import { qk } from '../lib/queryKeys';
 import type { AdminUser, SystemError } from '../types/admin';
 import type { Template } from '../types/template';
+
+/** Coalesce admin SSE side-effects into one microtask/rAF window to avoid invalidate storms. */
+function createAdminWorkScheduler() {
+  const pending = new Set<() => void>();
+  let scheduled = false;
+  const flush = () => {
+    scheduled = false;
+    const jobs = [...pending];
+    pending.clear();
+    for (const job of jobs) {
+      try {
+        job();
+      } catch {
+        /* isolate */
+      }
+    }
+  };
+  return (job: () => void) => {
+    pending.add(job);
+    if (scheduled) return;
+    scheduled = true;
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => queueMicrotask(flush));
+    } else {
+      queueMicrotask(flush);
+    }
+  };
+}
 
 export function useSseAdminEvents() {
   const queryClient = useQueryClient();
@@ -30,8 +58,11 @@ export function useSseAdminEvents() {
   useEffect(() => {
     if (!isAdmin) return;
 
+    const schedule = createAdminWorkScheduler();
+
     const disconnect = createAdminEventsStream(
       (type: AdminEventType, data: Record<string, unknown>) => {
+        schedule(() => {
         const q = queryClient as any;
 
         // ── User Events ─────────────────────────────────────────────
@@ -203,6 +234,9 @@ export function useSseAdminEvents() {
             q.invalidateQueries({ queryKey: qk.nodeStats(nodeId) });
             q.invalidateQueries({ queryKey: qk.nodeMetrics(nodeId) });
             q.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
+            // Agent control panel status depends on node online + agentVersion
+            q.invalidateQueries({ queryKey: qk.agentStatus(nodeId) });
+            q.invalidateQueries({ queryKey: qk.agentUpdateStatus(nodeId) });
           }
         }
 
@@ -445,6 +479,176 @@ export function useSseAdminEvents() {
             q.invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId) });
           }
         }
+
+        // ── Migration progress ───────────────────────────────────────
+        if (type === 'migration_job_updated') {
+          const jobId = String(data.jobId ?? '');
+          q.invalidateQueries({ queryKey: qk.migrationJobs() });
+          if (jobId) {
+            // Patch active job detail when present; always mark list stale.
+            q.setQueryData(qk.migrationJob(jobId), (prev: any) => {
+              if (!prev || typeof prev !== 'object') return prev;
+              return {
+                ...prev,
+                status: data.status ?? prev.status,
+                currentPhase: data.currentPhase ?? prev.currentPhase,
+                progress: data.progress ?? prev.progress,
+                error: data.error !== undefined ? data.error : prev.error,
+                completedAt: data.completedAt ?? prev.completedAt,
+              };
+            });
+            // Ensure observers without cache still refetch
+            q.invalidateQueries({ queryKey: qk.migrationJob(jobId) });
+          }
+        }
+
+        if (type === 'migration_step_updated') {
+          const jobId = String(data.jobId ?? '');
+          const step = data.step as Record<string, unknown> | undefined;
+          if (jobId && step && typeof step === 'object' && step.id) {
+            q.setQueryData(qk.migrationSteps(jobId), (prev: any) => {
+              if (!prev || typeof prev !== 'object') return prev;
+              const steps = Array.isArray(prev.steps) ? prev.steps : null;
+              if (!steps) {
+                // Unknown shape — force refetch
+                return prev;
+              }
+              const idx = steps.findIndex((s: any) => s?.id === step.id);
+              let nextSteps;
+              if (idx >= 0) {
+                nextSteps = steps.slice();
+                nextSteps[idx] = { ...steps[idx], ...step };
+              } else {
+                nextSteps = [...steps, step];
+              }
+              return { ...prev, steps: nextSteps };
+            });
+            // Safety refetch so pagination/count stay correct
+            q.invalidateQueries({ queryKey: qk.migrationSteps(jobId) });
+          } else if (jobId) {
+            q.invalidateQueries({ queryKey: qk.migrationSteps(jobId) });
+          }
+        }
+
+        // ── Node live metrics (health_report fanout) ─────────────────
+        if (type === 'node_metrics_updated') {
+          const nodeId = String(data.nodeId ?? '');
+          const cpu = Number(data.cpuPercent ?? 0);
+          const memUsage = Number(data.memoryUsageMb ?? 0);
+          const memTotal = Number(data.memoryTotalMb ?? 0);
+          const memoryPct = memTotal > 0 ? Math.round((memUsage / memTotal) * 100) : 0;
+          const ts = String(data.timestamp ?? new Date().toISOString());
+
+          // Live-patch cluster metrics cache (dense dashboard stream without REST fanout)
+          q.setQueriesData(
+            {
+              predicate: (query: Query) =>
+                Array.isArray(query.queryKey) && query.queryKey[0] === 'cluster-metrics',
+            },
+            (prev: any) => {
+              if (!prev || typeof prev !== 'object' || !Array.isArray(prev.nodes)) return prev;
+              let found = false;
+              const nodes = prev.nodes.map((n: any) => {
+                if (n.nodeId !== nodeId) return n;
+                found = true;
+                return {
+                  ...n,
+                  isOnline: data.isOnline !== false,
+                  cpu: Number.isFinite(cpu) ? cpu : n.cpu,
+                  memory: memoryPct || n.memory,
+                  timestamp: ts,
+                };
+              });
+              if (!found && nodeId) {
+                nodes.push({
+                  nodeId,
+                  nodeName: String(data.nodeName ?? nodeId.slice(0, 8)),
+                  isOnline: data.isOnline !== false,
+                  cpu: Number.isFinite(cpu) ? cpu : 0,
+                  memory: memoryPct,
+                  networkRx: 0,
+                  networkTx: 0,
+                  timestamp: ts,
+                });
+              }
+              const onlineNodes = nodes.filter((n: any) => n.isOnline);
+              const totalCpu =
+                onlineNodes.length > 0
+                  ? Math.round(onlineNodes.reduce((s: number, n: any) => s + (n.cpu || 0), 0) / onlineNodes.length)
+                  : 0;
+              const totalMemory =
+                onlineNodes.length > 0
+                  ? Math.round(onlineNodes.reduce((s: number, n: any) => s + (n.memory || 0), 0) / onlineNodes.length)
+                  : 0;
+              return {
+                ...prev,
+                nodes,
+                totalCpu,
+                totalMemory,
+                onlineCount: onlineNodes.length,
+                offlineCount: nodes.length - onlineNodes.length,
+                lastUpdated: ts,
+              };
+            },
+          );
+
+          if (nodeId) {
+            q.invalidateQueries({ queryKey: qk.nodeStats(nodeId) });
+            q.invalidateQueries({ queryKey: qk.nodeMetrics(nodeId) });
+            q.invalidateQueries({ queryKey: qk.node(nodeId) });
+            q.invalidateQueries({ queryKey: qk.agentStatus(nodeId) });
+          }
+          // Don't full-invalidate clusterMetrics — we patched it. Still refresh lists lightly.
+          q.invalidateQueries({ queryKey: qk.dashboardResources() });
+        }
+
+                // ── Agent control ────────────────────────────────────────────
+        if (
+          type === 'agent_update_started' ||
+          type === 'agent_update_failed' ||
+          type === 'agent_update_progress'
+        ) {
+          const nodeId = String(data.nodeId ?? '');
+          if (!nodeId) return;
+          // Patch update-status cache when payload includes progress fields
+          if (type === 'agent_update_progress' || type === 'agent_update_started' || type === 'agent_update_failed') {
+            q.setQueryData(qk.agentUpdateStatus(nodeId), (prev: any) => {
+              const base = prev && typeof prev === 'object' ? prev : {};
+              if (type === 'agent_update_started') {
+                return {
+                  ...base,
+                  status: 'updating',
+                  targetVersion: data.targetVersion ?? base.targetVersion ?? null,
+                  progress: typeof data.progress === 'number' ? data.progress : base.progress ?? 0,
+                  error: null,
+                  startedAt: data.timestamp ?? new Date().toISOString(),
+                };
+              }
+              if (type === 'agent_update_failed') {
+                return {
+                  ...base,
+                  status: 'failed',
+                  error: data.error ?? 'Update failed',
+                  progress: base.progress ?? 0,
+                };
+              }
+              // progress
+              return {
+                ...base,
+                status: data.status ?? base.status ?? 'updating',
+                progress: typeof data.progress === 'number' ? data.progress : base.progress ?? 0,
+                currentVersion: data.currentVersion ?? base.currentVersion,
+                targetVersion: data.targetVersion ?? base.targetVersion,
+                error: data.error ?? base.error ?? null,
+              };
+            });
+          }
+          q.invalidateQueries({ queryKey: qk.agentUpdateStatus(nodeId) });
+          q.invalidateQueries({ queryKey: qk.agentStatus(nodeId) });
+          q.invalidateQueries({ queryKey: qk.node(nodeId) });
+          q.invalidateQueries({ queryKey: qk.nodeStats(nodeId) });
+        }
+      });
       },
       () => {},
     );

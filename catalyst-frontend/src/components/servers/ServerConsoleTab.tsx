@@ -1,8 +1,7 @@
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowDownLeft, ArrowUpRight, Check, Copy, Search, Trash2, X } from 'lucide-react';
-import CustomConsole from '../../components/console/CustomConsole';
+import XtermConsole from '../../components/console/XtermConsole';
 import { formatBytes } from '../../utils/formatters';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Props {
  liveMetrics: {
@@ -80,10 +79,10 @@ export default function ServerConsoleTab({
  return 1000;
  });
 
- // Fetch console when scrollback changes
- useEffect(() => {
- refetch().catch(() => {});
- }, [scrollback, refetch]);
+ // scrollback is a client-side display window (XtermConsole slices entries).
+ // Parent already loads a fixed initialLines budget — do not re-hit /logs here.
+ // (A prior effect on [scrollback, refetch] spammed GET /logs every render when
+ // refetch identity was unstable under csync.)
 
  const handleSend = useCallback(
  (event: FormEvent<HTMLFormElement>) => {
@@ -152,7 +151,7 @@ export default function ServerConsoleTab({
  : '0.0';
 
  return (
- <TooltipProvider delayDuration={300}>
+ <>
  <div className="flex flex-row flex-nowrap gap-3 items-stretch">
  {/* Resource Stats */}
  <div className="flex flex-col gap-2 self-stretch w-44 lg:w-52 shrink-0">
@@ -295,18 +294,14 @@ export default function ServerConsoleTab({
  </button>
  </div>
  ) : (
- <Tooltip>
- <TooltipTrigger asChild>
  <button
  type="button"
+ title="Search (Ctrl+F)"
  onClick={() => { setSearchOpen(true); setTimeout(() => searchRef.current?.focus(), 50); }}
  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <Search className="h-3.5 w-3.5" />
  </button>
- </TooltipTrigger>
- <TooltipContent side="bottom">Search (Ctrl+F)</TooltipContent>
- </Tooltip>
  )}
 
  {/* Buffer select */}
@@ -333,48 +328,36 @@ export default function ServerConsoleTab({
 
  <div className="hidden h-3.5 w-px bg-border sm:block" />
 
- <Tooltip>
- <TooltipTrigger asChild>
  <button
  type="button"
+ title={autoScroll ? 'Auto-scroll on' : 'Auto-scroll off'}
  onClick={() => setAutoScroll(!autoScroll)}
  className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${autoScroll ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'}`}
  >
  <ArrowDown className="h-3.5 w-3.5" />
  </button>
- </TooltipTrigger>
- <TooltipContent side="bottom">{autoScroll ? 'Auto-scroll on' : 'Auto-scroll off'}</TooltipContent>
- </Tooltip>
 
- <Tooltip>
- <TooltipTrigger asChild>
  <button
  type="button"
+ title={copied ? 'Copied!' : 'Copy output'}
  onClick={handleCopy}
  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
  </button>
- </TooltipTrigger>
- <TooltipContent side="bottom">{copied ? 'Copied!' : 'Copy output'}</TooltipContent>
- </Tooltip>
 
- <Tooltip>
- <TooltipTrigger asChild>
  <button
  type="button"
+ title="Clear console"
  onClick={() => { clearConsole(); setAutoScroll(true); }}
  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/50/10 hover:text-destructive"
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
- </TooltipTrigger>
- <TooltipContent side="bottom">Clear console</TooltipContent>
- </Tooltip>
  </div>
 
  {/* Console Output */}
- <CustomConsole
+ <XtermConsole
  entries={entries}
  searchQuery={searchQuery}
  scrollback={scrollback}
@@ -428,7 +411,7 @@ export default function ServerConsoleTab({
  </form>
  </div>
  </div>
- </TooltipProvider>
+ </>
  );
 }
 

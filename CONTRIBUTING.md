@@ -254,7 +254,7 @@ type CreateUserInput = z.infer<typeof CreateUserSchema>;
 **Component Structure:**
 ```typescript
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 
 interface ComponentProps {
   id: string;
@@ -282,7 +282,7 @@ export function MyComponent({ id, title }: ComponentProps) {
 - Return `{ data, isLoading, error, refetch }` pattern
 
 **State Management:**
-- Use **TanStack Query** for server state
+- Use **Catalyst Sync (`@/csync`)** for server state
 - Use **Zustand** for global client state
 - Keep component state local when possible
 

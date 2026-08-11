@@ -9,9 +9,10 @@
  *
  * Events streamed:
  *   - server_state_update / server_state — status changes (start/stop/crash)
- *   - backup_complete / backup_restore_complete / backup_delete_complete
- *   - eula_required
- *   - alert
+ *   - backup_* (started + complete for create/restore/delete)
+ *   - server_files_changed — file manager mutations
+ *   - task_progress / task_complete, resource_stats, mod/plugin manager
+ *   - eula_required, alert, server lifecycle
  *
  * Command input goes over the dedicated console SSE route or REST API.
  * Agent ↔ Server traffic stays on WebSocket (bidirectional).
@@ -23,6 +24,7 @@ import { auth } from '../auth.js';
 import { fromNodeHeaders } from 'better-auth/node';
 import { hasNodeAccess, getUserAccessibleNodes } from '../lib/permissions.js';
 import { decideServerAccess, isFullAdminRole } from '../lib/server-access.js';
+import { openSseStream } from '../utils/sse.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const CLEANUP_INTERVAL_MS = 60_000;
@@ -30,15 +32,6 @@ const CLEANUP_INTERVAL_MS = 60_000;
 interface SseSubscriber {
   unsubscribe: () => void;
   heartbeatTimer: ReturnType<typeof setInterval>;
-}
-
-function formatSse(event: string, data: unknown): string {
-  const json = typeof data === 'string' ? data : JSON.stringify(data);
-  return `event: ${event}\ndata: ${json.replace(/\n/g, '\\n')}\n\n`;
-}
-
-function formatSseComment(comment: string): string {
-  return `: ${comment}\n\n`;
 }
 
 // Module-level subscriber registry so timers survive across HTTP requests
@@ -60,6 +53,10 @@ const EVENT_TYPES = [
   'backup_complete',
   'backup_restore_complete',
   'backup_delete_complete',
+  // Lifecycle start events (FE was listening; BE never subscribed — silent gap)
+  'backup_started',
+  'backup_restore_started',
+  'backup_delete_started',
   'eula_required',
   'alert',
   'server_log',
@@ -72,6 +69,8 @@ const EVENT_TYPES = [
   'server_updated',
   'server_suspended',
   'server_unsuspended',
+  // File manager realtime (emitted from files routes; was missing from subscriber filter)
+  'server_files_changed',
   'user_created',
   'user_deleted',
   'user_updated',
@@ -83,6 +82,8 @@ const EVENT_TYPES = [
   'plugin_install_complete',
   'plugin_uninstall_complete',
   'plugin_update_complete',
+  // Dense install/transfer/clone progress (% + stage)
+  'server_operation_progress',
 ];
 
 export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGateway) {
@@ -206,43 +207,25 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         }
       }
 
-      // SSE headers — prevent proxy buffering with proper CORS using origin whitelist
-      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
-      const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean);
-      if (allowedOrigins.includes(origin)) {
-        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
-        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
-      }
-      reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      });
-
-      // Send initial connected event
-      reply.raw.write(formatSseComment('connected'));
-      reply.raw.write(formatSse('connected', {
-        serverId,
-        isGlobal,
-        timestamp: new Date().toISOString(),
-      }));
-
-      // Subscribe to gateway events
-      const push = (eventType: string, data: unknown) => {
-        try {
-          reply.raw.write(formatSse(eventType, data));
-        } catch {
-          // Connection closed — cleanup will happen via 'close' event
-        }
-      };
-
-      // Enforce SSE subscriber caps
+      // Enforce SSE subscriber caps BEFORE opening the stream (JSON error path).
       const MAX_SSE_EVENTS_PER_SERVER = 100;
       if (!isGlobal && wsGateway.getSseEventSubscriberCount(serverId) >= MAX_SSE_EVENTS_PER_SERVER) {
         reply.status(503).send({ error: 'Too many event subscribers. Please try again later.' });
         return;
       }
+
+      // Hijack so Fastify keeps the socket open after this handler returns.
+      const sse = openSseStream(request, reply);
+      sse.comment('connected');
+      sse.push('connected', {
+        serverId,
+        isGlobal,
+        timestamp: new Date().toISOString(),
+      });
+
+      const push = (eventType: string, data: unknown) => {
+        sse.push(eventType, data);
+      };
 
       // Per-server subscription OR user-scoped global subscription for AppLayout.
       // For non-admins always pass an explicit list (may be empty). Only full
@@ -293,7 +276,7 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       // Keep-alive heartbeat
       const heartbeatTimer = setInterval(() => {
         try {
-          reply.raw.write(formatSseComment('heartbeat'));
+          sse.comment('heartbeat');
         } catch {
           clearInterval(heartbeatTimer);
         }

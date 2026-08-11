@@ -256,9 +256,8 @@ export const normalizeHostIp = (value?: string | null) => {
   if (!IPV4_REGEX.test(trimmed)) {
     throw new Error("Host IP must be a valid IPv4 or IPv6 address");
   }
-  if (trimmed.startsWith("127.")) {
-    throw new Error("Host IP must be a non-loopback IPv4 address");
-  }
+  // Loopback (127.0.0.0/8) is allowed — same-machine / local-dev nodes commonly
+  // use 127.0.0.1 as publicAddress, and IPv6 already accepts ::1.
   return trimmed;
 };
 

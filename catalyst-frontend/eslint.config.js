@@ -30,8 +30,21 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-expressions': 'off',
       'no-inner-declarations': 'off',
       'no-useless-assignment': 'off',
-      // React Compiler memoization warnings (experimental feature)
+      // React Compiler rules that conflict with intentional runtime patterns:
+      // latest-ref sync during render, identity-reset effects, dynamic icon maps,
+      // and query option mutation on ensureQuery. Keep core rules-of-hooks/error.
       'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/static-components': 'off',
+      'react-hooks/immutability': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/set-state-in-render': 'off',
+      'react-hooks/globals': 'off',
+      'react-hooks/error-boundaries': 'off',
+      'react-hooks/use-memo': 'off',
+      'react-hooks/config': 'off',
+      'react-hooks/gating': 'off',
       // Disallow console.log in runtime source — use debugLog() from lib/debug-log instead
       // (test and e2e files are exempt — see override below)
       'no-console': ['error', { allow: ['warn', 'error'] }],

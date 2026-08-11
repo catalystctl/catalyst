@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 
 import { motion, AnimatePresence, type Variants } from 'framer-motion';

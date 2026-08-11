@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
 import { filesApi } from '../../../services/api/files';
 import {

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { serversApi } from '../services/api/servers';
 import { reportSystemError } from '../services/api/systemErrors';
@@ -21,7 +21,7 @@ export function useServerMetricsHistory(serverId?: string, timeRange?: MetricsTi
     },
     enabled: Boolean(serverId),
     staleTime: 5 * 1000, // 5 seconds - data is considered fresh for 5 seconds
-    refetchInterval: 10 * 1000, // Refetch every 10 seconds
+    refetchInterval: 30_000, // Live gauges use SSE (useServerMetrics); history is secondary
     refetchIntervalInBackground: false, // Don't refetch when tab is not focused
   });
 }

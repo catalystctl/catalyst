@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { subscribeSharedEventSource } from '../../services/api/sse-hub';
+import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
 import { agentApi } from '../../services/api/agent';
 import type {
@@ -193,8 +194,10 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
     queryKey: qk.agentStatus(node.id),
     queryFn: () => agentApi.getStatus(node.id),
     enabled: node.isOnline,
-    staleTime: 10_000,
-    refetchInterval: 15_000,
+    staleTime: 15_000,
+    // Online/offline + version refresh via node_updated / agent_update_* admin SSE.
+    // Light safety poll while online for uptime/runtime fields that are not evented.
+    refetchInterval: node.isOnline ? 60_000 : false,
   });
 
   const { data: _, mutate: ping, isPending: isPinging } = useMutation({
@@ -324,7 +327,8 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// LOGS TAB — Uses polling instead of SSE (no SSE endpoint exists)
+// LOGS TAB — Live tail via short poll while streaming (agent has no log SSE yet).
+// node_updated / reconnect still refreshes via query invalidation on the initial batch.
 // ══════════════════════════════════════════════════════════════════════════
 function AgentLogsTab({ nodeId }: { nodeId: string }) {
   const [logs, setLogs] = useState<AgentLogEntry[]>([]);
@@ -334,7 +338,6 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
   const [autoScroll, setAutoScroll] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Fetch initial logs
   const { data: initialLogs, isLoading } = useQuery({
@@ -356,42 +359,34 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
     })));
   }
 
-  // Polling for streaming mode — merge new entries instead of replacing to avoid
-  // losing entries between polls and preserve scroll position.
+  // Live tail via shared SSE hub (/api/nodes/:id/agent/logs/stream).
+  // Multi-tab leader election means only one tab pulls from the agent.
   useEffect(() => {
-    if (!isStreaming) {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-      return;
-    }
+    if (!isStreaming) return;
 
-    pollIntervalRef.current = setInterval(async () => {
-      try {
-        const fresh = await agentApi.getLogs(nodeId, { lines: 300 });
-        if (fresh && fresh.length > 0) {
-          setLogs((prev) => {
-            // Build a set of existing keys to avoid duplicates
-            const existing = new Set(prev.map((l) => `${l.timestamp}|${l.target}|${l.message}`));
-            const newEntries = fresh
-              .filter((l) => !existing.has(`${l.timestamp}|${l.target}|${l.message}`))
-              .map((l) => ({ timestamp: l.timestamp, level: l.level, target: l.target, message: l.message }));
-            if (newEntries.length === 0) return prev;
-            return [...prev, ...newEntries];
-          });
-        }
-      } catch {
-        // Silently ignore poll failures
-      }
-    }, 2000);
-
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-    };
+    const url = `/api/nodes/${encodeURIComponent(nodeId)}/agent/logs/stream`;
+    return subscribeSharedEventSource(
+      url,
+      ['agent_logs', 'agent_logs_error', 'connected'],
+      (type, data) => {
+        if (type !== 'agent_logs') return;
+        const fresh = Array.isArray((data as any).logs) ? ((data as any).logs as AgentLogEntry[]) : [];
+        if (fresh.length === 0) return;
+        setLogs((prev) => {
+          const existing = new Set(prev.map((l) => `${l.timestamp}|${l.target}|${l.message}`));
+          const newEntries = fresh
+            .filter((l) => !existing.has(`${l.timestamp}|${l.target}|${l.message}`))
+            .map((l) => ({
+              timestamp: l.timestamp,
+              level: l.level,
+              target: l.target,
+              message: l.message,
+            }));
+          if (newEntries.length === 0) return prev;
+          return [...prev, ...newEntries].slice(-2000);
+        });
+      },
+    );
   }, [nodeId, isStreaming]);
 
   // Auto-scroll
@@ -581,8 +576,15 @@ function AgentUpdateTab({
   const { data: updateStatus } = useQuery({
     queryKey: qk.agentUpdateStatus(nodeId),
     queryFn: () => agentApi.getUpdateStatus(nodeId),
-    staleTime: 5_000,
-    refetchInterval: 5_000,
+    staleTime: 2_000,
+    // agent_update_* admin SSE is primary; poll only while an update is in flight.
+    refetchInterval: (query) => {
+      const s = query.state.data as { status?: string } | undefined;
+      if (!s?.status || s.status === 'idle' || s.status === 'failed' || s.status === 'completed') {
+        return false;
+      }
+      return 3_000;
+    },
   });
 
   const updateMutation = useMutation({

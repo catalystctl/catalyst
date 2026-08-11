@@ -2,16 +2,35 @@
  * SSE-based real-time server state update hook.
  *
  * Connects to /api/servers/all-servers/events (global endpoint) and updates
- * TanStack Query caches when server state changes.
+ * Catalyst Sync caches when server state changes.
  *
  * Use this in AppLayout to handle state updates for all servers globally.
  */
 import { useCallback, useEffect, useRef } from 'react';
-import { useQueryClient, type Query } from '@tanstack/react-query';
+import { useQueryClient, type Query } from '@/csync';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 import { qk } from '../lib/queryKeys';
 
 const DEBOUNCE_MS = 16; // ~60fps
+
+const TRANSITIONAL = new Set(['installing', 'starting', 'stopping', 'transferring', 'cloning']);
+function transitionalStage(state: string): string | undefined {
+  switch (state) {
+    case 'installing':
+      return 'Installing server';
+    case 'transferring':
+      return 'Transferring server';
+    case 'cloning':
+      return 'Cloning files';
+    case 'starting':
+      return 'Starting';
+    case 'stopping':
+      return 'Stopping';
+    default:
+      return TRANSITIONAL.has(state) ? state : undefined;
+  }
+}
+
 
 export function useServerStateUpdates() {
   const queryClient = useQueryClient();
@@ -39,6 +58,18 @@ export function useServerStateUpdates() {
         (prev: any) => {
           if (!prev || typeof prev !== 'object') return prev;
           if (!matchesId(prev)) return prev;
+          const stage =
+            typeof update.data.stage === 'string'
+              ? update.data.stage
+              : typeof update.data.progressMessage === 'string'
+                ? update.data.progressMessage
+                : transitionalStage(update.state);
+          const progressPct =
+            typeof update.data.progress === 'number'
+              ? update.data.progress
+              : typeof update.data.percent === 'number'
+                ? update.data.percent
+                : undefined;
           return {
             ...prev,
             status: update.state,
@@ -47,6 +78,10 @@ export function useServerStateUpdates() {
               typeof update.data.exitCode === 'number'
                 ? update.data.exitCode
                 : prev.lastExitCode,
+            // Soft progress fields (agent may not send % yet; stage still helps UI)
+            operationStage: stage ?? prev.operationStage,
+            operationProgress:
+              progressPct !== undefined ? progressPct : prev.operationProgress,
           };
         },
       );
@@ -78,13 +113,8 @@ export function useServerStateUpdates() {
       },
     );
 
-    // Invalidate queries in single batch
-    q.invalidateQueries({ queryKey: qk.servers() });
-
-    // Invalidate server detail queries for each updated server
-    for (const serverId of updates.keys()) {
-      q.invalidateQueries({ queryKey: qk.server(serverId) });
-    }
+    // Patch is source of truth — do NOT invalidate list/detail (avoids refetch storms).
+    // Safety polls on transitional statuses still refresh if SSE is missed.
 
     isProcessing.current = false;
   }, [queryClient]);
@@ -119,6 +149,8 @@ export function useServerStateUpdates() {
           if (state === 'running' || state === 'stopped' || state === 'offline') {
             (queryClient as any).invalidateQueries({ queryKey: qk.files(serverId) });
           }
+          // Activity log records power transitions
+          (queryClient as any).invalidateQueries({ queryKey: qk.serverActivity(serverId) });
           return;
         }
 
@@ -152,11 +184,73 @@ export function useServerStateUpdates() {
             q.invalidateQueries({ queryKey: qk.server(serverId) });
             q.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
             q.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
+            q.invalidateQueries({ queryKey: qk.serverActivity(serverId) });
           }
           return;
         }
 
-        if (
+        if (type === 'server_operation_progress') {
+          const q = queryClient as any;
+          const stage = typeof data.stage === 'string' ? data.stage : undefined;
+          const progress =
+            typeof data.progress === 'number'
+              ? data.progress
+              : typeof data.percent === 'number'
+                ? data.percent
+                : undefined;
+          const state = typeof data.state === 'string' ? data.state : undefined;
+          q.setQueriesData(
+            {
+              predicate: (query: Query) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'servers' &&
+                query.queryKey.length >= 2 &&
+                typeof query.queryKey[1] === 'string' &&
+                (query.queryKey[1] === serverId ||
+                  (query.state.data as any)?.id === serverId ||
+                  (query.state.data as any)?.uuid === serverId),
+            },
+            (prev: any) => {
+              if (!prev || typeof prev !== 'object' || Array.isArray(prev)) return prev;
+              if (prev.id !== serverId && prev.uuid !== serverId) return prev;
+              return {
+                ...prev,
+                ...(state ? { status: state } : {}),
+                operationStage: stage ?? prev.operationStage,
+                operationProgress:
+                  progress !== undefined ? progress : prev.operationProgress,
+              };
+            },
+          );
+          // Also patch list rows
+          q.setQueriesData(
+            {
+              predicate: (query: Query) => {
+                if (!Array.isArray(query.queryKey) || query.queryKey[0] !== 'servers') return false;
+                if (query.queryKey.length === 1) return true;
+                if (query.queryKey.length >= 2 && typeof query.queryKey[1] === 'object') return true;
+                return false;
+              },
+            },
+            (prev: any) => {
+              if (!Array.isArray(prev)) return prev;
+              return prev.map((srv: any) =>
+                srv?.id === serverId || srv?.uuid === serverId
+                  ? {
+                      ...srv,
+                      ...(state ? { status: state } : {}),
+                      operationStage: stage ?? srv.operationStage,
+                      operationProgress:
+                        progress !== undefined ? progress : srv.operationProgress,
+                    }
+                  : srv,
+              );
+            },
+          );
+          return;
+        }
+
+                if (
           type === 'backup_started' ||
           type === 'backup_restore_started' ||
           type === 'backup_delete_started' ||
@@ -168,7 +262,26 @@ export function useServerStateUpdates() {
         }
 
         if (type === 'server_files_changed') {
-          (queryClient as any).invalidateQueries({ queryKey: qk.files(serverId) });
+          const q = queryClient as any;
+          const changedPath = typeof data.path === 'string' ? data.path
+            : typeof data.from === 'string' ? data.from
+            : typeof data.to === 'string' ? data.to
+            : undefined;
+          if (changedPath) {
+            // Invalidate the parent directory listing (and exact path if cached)
+            const normalized = changedPath.replace(/\\/g, '/');
+            const parent = normalized.includes('/')
+              ? normalized.replace(/\/[^/]*$/, '') || '/'
+              : '/';
+            q.invalidateQueries({ queryKey: qk.files(serverId, parent) });
+            q.invalidateQueries({ queryKey: qk.files(serverId, normalized) });
+            // Also invalidate root when change is nested (tree may show ancestors)
+            if (parent !== '/') {
+              q.invalidateQueries({ queryKey: qk.files(serverId, '/') });
+            }
+          } else {
+            q.invalidateQueries({ queryKey: qk.files(serverId) });
+          }
         }
 
         // Task execution events
@@ -201,13 +314,9 @@ export function useServerStateUpdates() {
           (queryClient as any).invalidateQueries({ queryKey: qk.alertStats() });
         }
 
-        // Resource stats events - invalidate server metrics
-        if (type === 'resource_stats') {
-          const serverId = String(data.serverId ?? '');
-          if (serverId) {
-            (queryClient as any).invalidateQueries({ queryKey: qk.serverMetrics(serverId) });
-          }
-        }
+        // Resource stats stream frequently — live gauges use useServerMetrics (dedicated SSE).
+        // Do NOT invalidate historical metrics charts on every tick (refetch storm).
+        // Charts refresh on their own slower interval.
       },
       () => {},
     );

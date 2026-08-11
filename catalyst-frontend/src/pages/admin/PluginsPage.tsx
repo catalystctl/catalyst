@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
@@ -190,7 +190,7 @@ function PluginSettingsModal({
  queryFn: () => fetchPluginDetails(pluginName),
  enabled: open,
  staleTime: 60_000,
- refetchInterval: 30_000,
+ refetchInterval: 60_000,
  });
 
  const manifestSchema = pluginDetails?.configSchema ?? {};
@@ -220,9 +220,36 @@ function PluginSettingsModal({
  onError: (error: any) => toast.error(error.message || 'Failed to update configuration'),
  });
 
- type ConfigSchemaEntry = { type: string; default?: any; description?: string; label?: string; options?: any[] };
+ type ConfigSchemaEntry = {
+ type: string;
+ default?: any;
+ description?: string;
+ label?: string;
+ /** Plain strings ("medium") or objects ({ value, label }). */
+ options?: Array<string | number | boolean | { value: any; label?: string }>;
+ };
  function isConfigSchema(v: any): v is ConfigSchemaEntry {
  return v && typeof v === 'object' && typeof v.type === 'string';
+ }
+
+ /** Normalize plugin.json select options for <option> rendering. */
+ function normalizeSelectOptions(
+ options: ConfigSchemaEntry['options'] | undefined,
+ ): Array<{ value: string; label: string; raw: any }> {
+ if (!Array.isArray(options)) return [];
+ return options.map((opt, index) => {
+ if (opt !== null && typeof opt === 'object' && !Array.isArray(opt)) {
+ const raw = (opt as any).value !== undefined ? (opt as any).value : (opt as any).id ?? index;
+ const label =
+ (opt as any).label ??
+ (opt as any).name ??
+ (opt as any).title ??
+ String(raw);
+ return { value: String(raw), label: String(label), raw };
+ }
+ // Plain string/number/boolean from plugin.json, e.g. "medium"
+ return { value: String(opt), label: String(opt), raw: opt };
+ });
  }
 
  const buildSaveConfig = (): PluginConfig => {
@@ -274,7 +301,7 @@ function PluginSettingsModal({
  const currentValue = schema ? schema.default : value;
  const description = schema ? (schema.description || '') : '';
  const label = schema ? (schema.label || key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())) : key;
- const selectOptions = schema ? (schema.options || []) : [];
+ const selectOptions = normalizeSelectOptions(schema?.options);
 
  const runtimeOverride = runtimeValues[key];
  const isRuntimeObject = runtimeOverride !== undefined && !isConfigSchema(runtimeOverride);
@@ -316,17 +343,24 @@ function PluginSettingsModal({
  <select
  value={String(effectiveValue ?? '')}
  onChange={(e) => {
- const selected = selectOptions.find((o: any) => String(o.value) === e.target.value);
- const newVal = selected ? selected.value : e.target.value;
+ const selected = selectOptions.find((o) => o.value === e.target.value);
+ // Prefer original raw value (keeps numbers/bools typed); fall back to string.
+ const newVal = selected ? selected.raw : e.target.value;
  handleConfigChange(key, schema
  ? { ...(value as Record<string, any>), default: newVal }
  : newVal);
  }}
- className="flex h-9 w-full rounded-md border border-border bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+ className="flex h-9 w-full rounded-md border border-border bg-card px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
  >
- {selectOptions.map((opt: any) => (
- <option key={String(opt.value)} value={String(opt.value)}>
- {opt.label || opt.value}
+ {/* Empty placeholder only if current value is not in the list */}
+ {!selectOptions.some((o) => o.value === String(effectiveValue ?? '')) && (
+ <option value={String(effectiveValue ?? '')} disabled>
+ {effectiveValue == null || effectiveValue === '' ? 'Select…' : String(effectiveValue)}
+ </option>
+ )}
+ {selectOptions.map((opt) => (
+ <option key={opt.value} value={opt.value}>
+ {opt.label}
  </option>
  ))}
  </select>

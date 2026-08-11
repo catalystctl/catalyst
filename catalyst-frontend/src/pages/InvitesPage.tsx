@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { serversApi } from '../services/api/servers';

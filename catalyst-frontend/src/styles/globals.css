@@ -345,6 +345,23 @@ select option {
   border-color: hsl(var(--surface-0));
 }
 
+/*
+ * xterm.js ships `.xterm-viewport { background-color: #000 }` which shows as a
+ * black frame/letterbox around the cell grid once FitAddon snaps to char cells.
+ * Paint host + viewport with the card token; keep the canvas transparent so the
+ * themed cell background shows through without a #000 fringe.
+ */
+.xterm-console-host,
+.xterm-console-host .xterm,
+.xterm-console-host .xterm-viewport {
+  background-color: hsl(var(--card)) !important;
+}
+
+.xterm-console-host .xterm-screen,
+.xterm-console-host .xterm-screen canvas {
+  background-color: transparent !important;
+}
+
 .console-line {
   padding: 1px 0;
   transition: background-color var(--duration-fast) var(--ease-standard);

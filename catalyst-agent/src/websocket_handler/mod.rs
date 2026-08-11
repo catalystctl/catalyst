@@ -420,6 +420,11 @@ pub struct WebSocketHandler {
     /// Uses a std Mutex so spawn_log_stream can register/abort synchronously.
     pub(crate) active_log_streams:
         Arc<std::sync::Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
+    /// Last emitted byte offsets for container console files: container_id → (stdout, stderr).
+    /// Prevents re-broadcasting historical log content when a tail is (re)started — e.g. every
+    /// console command used to call spawn_log_stream which reset pos to 0 and re-emitted the
+    /// OpenJDK/startup banner into live SSE + ServerLog rows.
+    pub(crate) log_stream_offsets: Arc<std::sync::Mutex<HashMap<String, (u64, u64)>>>,
     pub(crate) monitor_tasks: Arc<RwLock<HashMap<String, tokio::task::JoinHandle<()>>>>,
     pub(crate) active_uploads: Arc<RwLock<HashMap<String, BackupUploadSession>>>,
     /// Auto-restart config per server_id, stored when start_server_with_details is called.
@@ -486,6 +491,7 @@ impl Clone for WebSocketHandler {
             backend_connected: self.backend_connected.clone(),
             write: self.write.clone(),
             active_log_streams: self.active_log_streams.clone(),
+            log_stream_offsets: self.log_stream_offsets.clone(),
             monitor_tasks: self.monitor_tasks.clone(),
             active_uploads: self.active_uploads.clone(),
             auto_restart_configs: self.auto_restart_configs.clone(),
@@ -541,6 +547,7 @@ impl WebSocketHandler {
             backend_connected,
             write: Arc::new(RwLock::new(None)),
             active_log_streams: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            log_stream_offsets: Arc::new(std::sync::Mutex::new(HashMap::new())),
             monitor_tasks: Arc::new(RwLock::new(HashMap::new())),
             active_uploads: Arc::new(RwLock::new(HashMap::new())),
             auto_restart_configs: Arc::new(RwLock::new(HashMap::new())),
@@ -1476,6 +1483,7 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let write = Arc::clone(write);
                 // Track in-flight update so agent_update_status can report progress.
+                let started_at = chrono::Utc::now().to_rfc3339();
                 {
                     let mut st = self.agent_update_state.write().await;
                     *st = Some(AgentUpdateState {
@@ -1483,14 +1491,75 @@ impl WebSocketHandler {
                         progress: 10,
                         target_version: target_version.clone(),
                         error: None,
-                        started_at: Some(chrono::Utc::now().to_rfc3339()),
+                        started_at: Some(started_at.clone()),
                     });
+                }
+                // Push live progress immediately (panel subscribed via admin SSE).
+                {
+                    let payload = json!({
+                        "type": "agent_update_progress",
+                        "requestId": msg.get("requestId"),
+                        "status": "downloading",
+                        "progress": 10,
+                        "targetVersion": target_version,
+                        "currentVersion": env!("CARGO_PKG_VERSION"),
+                    });
+                    let mut w = write.lock().await;
+                    let _ = w.send(Message::Text(payload.to_string().into())).await;
                 }
                 tokio::spawn(async move {
                     let updater = crate::updater::AgentUpdater::new(&handler.config);
                     let options = crate::updater::UpdateOptions { target_version };
+                    // Mid-flight heartbeat while download/apply runs (best-effort).
+                    let progress_write = Arc::clone(&write);
+                    let progress_handler = handler.clone();
+                    let mid_target = options.target_version.clone();
+                    let mid_req = msg_clone.get("requestId").cloned();
+                    let mid_task = tokio::spawn(async move {
+                        // 35% after a short delay (download likely underway)
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        {
+                            let mut st = progress_handler.agent_update_state.write().await;
+                            if let Some(s) = st.as_mut() {
+                                if s.status == "downloading" && s.progress < 35 {
+                                    s.progress = 35;
+                                }
+                            }
+                        }
+                        let payload = json!({
+                            "type": "agent_update_progress",
+                            "requestId": mid_req,
+                            "status": "downloading",
+                            "progress": 35,
+                            "targetVersion": mid_target,
+                            "currentVersion": env!("CARGO_PKG_VERSION"),
+                        });
+                        let mut w = progress_write.lock().await;
+                        let _ = w.send(Message::Text(payload.to_string().into())).await;
+                        // 60% later
+                        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                        {
+                            let mut st = progress_handler.agent_update_state.write().await;
+                            if let Some(s) = st.as_mut() {
+                                if s.status == "downloading" && s.progress < 60 {
+                                    s.progress = 60;
+                                }
+                            }
+                        }
+                        let payload = json!({
+                            "type": "agent_update_progress",
+                            "requestId": mid_req,
+                            "status": "downloading",
+                            "progress": 60,
+                            "targetVersion": mid_target,
+                            "currentVersion": env!("CARGO_PKG_VERSION"),
+                        });
+                        let mut w = progress_write.lock().await;
+                        let _ = w.send(Message::Text(payload.to_string().into())).await;
+                    });
                     match updater.update(&options).await {
                         Ok(_) => {
+                            mid_task.abort();
                             info!("Agent update succeeded, restarting via exec()");
                             {
                                 let mut st = handler.agent_update_state.write().await;
@@ -1502,14 +1571,27 @@ impl WebSocketHandler {
                                     started_at: st.as_ref().and_then(|s| s.started_at.clone()),
                                 });
                             }
-                            // Notify backend that update is being applied (before exec replaces us).
-                            // After exec() the new process will reconnect with
-                            // the updated version, but this message lets the
-                            // panel know the update is in progress.
+                            // Progress + started so panel flips to applying before exec.
+                            let progress_payload = json!({
+                                "type": "agent_update_progress",
+                                "requestId": msg_clone.get("requestId"),
+                                "status": "applying",
+                                "progress": 90,
+                                "targetVersion": options.target_version,
+                                "currentVersion": env!("CARGO_PKG_VERSION"),
+                            });
+                            {
+                                let mut w = write.lock().await;
+                                let _ = w
+                                    .send(Message::Text(progress_payload.to_string().into()))
+                                    .await;
+                            }
                             let payload = json!({
                                 "type": "agent_update_started",
                                 "requestId": msg_clone.get("requestId"),
                                 "targetVersion": options.target_version,
+                                "progress": 90,
+                                "status": "applying",
                             });
                             let mut w = write.lock().await;
                             let _ = w.send(Message::Text(payload.to_string().into())).await;
@@ -1517,6 +1599,7 @@ impl WebSocketHandler {
                             drop(w);
                         }
                         Err(e) => {
+                            mid_task.abort();
                             error!("Agent update failed: {}", e);
                             {
                                 let mut st = handler.agent_update_state.write().await;

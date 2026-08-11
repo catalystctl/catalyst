@@ -81,7 +81,7 @@ function ServerCard({ server }: { server: Server }) {
  >
  {server.name}
  </Link>
- <ServerStatusBadge status={server.status} />
+ <ServerStatusBadge status={server.status} operationStage={server.operationStage} operationProgress={server.operationProgress} />
  </div>
  <div className="flex flex-wrap gap-2 text-xs">
  <Badge variant="secondary" className="gap-1.5">

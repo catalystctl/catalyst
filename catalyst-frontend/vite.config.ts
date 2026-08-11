@@ -57,6 +57,18 @@ export default defineConfig(async ({ mode }) => {
           target: 'http://127.0.0.1:3000',
           changeOrigin: true,
           cookieDomainRewrite: '',
+          // Long-lived SSE must not be timed out / buffered by the dev proxy.
+          timeout: 0,
+          proxyTimeout: 0,
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              // Hint upstream that this is a streaming client when Accept is event-stream.
+              const accept = req.headers.accept ?? '';
+              if (typeof accept === 'string' && accept.includes('text/event-stream')) {
+                proxyReq.setHeader('Accept', 'text/event-stream');
+              }
+            });
+          },
         },
         '/ws': {
           target: 'ws://127.0.0.1:3000',
@@ -73,7 +85,9 @@ export default defineConfig(async ({ mode }) => {
       // Manual chunks for better caching — vendors change less frequently
       manualChunks: {
         'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-        'vendor-query': ['@tanstack/react-query'],
+        'vendor-csync': [
+          path.resolve(__dirname, './src/csync/index.ts'),
+        ],
         'vendor-radix': [
           '@radix-ui/react-dialog',
           '@radix-ui/react-dropdown-menu',

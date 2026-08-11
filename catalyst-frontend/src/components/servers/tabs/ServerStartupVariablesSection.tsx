@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { Save, RotateCcw, AlertCircle, CheckCircle2, Cog } from 'lucide-react';
 import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
 import { notifyError, notifySuccess } from '../../../utils/notify';
 import type { ServerStartupVariable } from '../../../types/server';
 import SectionHeader from './SectionHeader';
+
+// Stable empty fallback — inline `?? []` / ternary `[]` recreates identity every
+// render and infinite-loops the React 19 prev-state sync while loading.
+const EMPTY_STARTUP_VARIABLES: ServerStartupVariable[] = [];
 
 interface Props {
  serverId: string;
@@ -24,7 +28,7 @@ export default function ServerStartupVariablesSection({
  const [touched, setTouched] = useState<Set<string>>(new Set());
 
  const {
- data: variables,
+ data: variablesData,
  isLoading,
  isError,
  } = useQuery<ServerStartupVariable[]>({
@@ -32,21 +36,26 @@ export default function ServerStartupVariablesSection({
  queryFn: () => serversApi.getVariables(serverId),
  enabled: Boolean(serverId),
  staleTime: 60_000,
+ // Must return stable empty ref — fresh `[]` every read re-triggers prev-state sync.
+ select: (data) => (Array.isArray(data) ? data : EMPTY_STARTUP_VARIABLES),
  });
+ // Always an array for .forEach/.map/.some — never trust raw cache shape.
+ // EMPTY_STARTUP_VARIABLES is module-scoped so identity is stable while loading.
+ const variables = Array.isArray(variablesData) ? variablesData : EMPTY_STARTUP_VARIABLES;
 
- // Sync local values when variables load
+ // Sync local values when the *query result identity* changes (real data load/refetch).
+ // Do not use a fresh [] fallback here — that loops under React 19.
  const [prevVariables, setPrevVariables] = useState(variables);
  if (variables !== prevVariables) {
  setPrevVariables(variables);
- if (variables) {
+ // Reset local form state on real loads (including empty template → clear fields).
  const next: Record<string, string> = {};
- variables.forEach((v) => {
+ for (const v of variables) {
  next[v.name] = v.value;
- });
+ }
  setLocalValues(next);
  setLocalErrors({});
  setTouched(new Set());
- }
  }
 
  const updateMutation = useMutation({
@@ -71,7 +80,7 @@ export default function ServerStartupVariablesSection({
  });
 
  const hasChanges = useMemo(() => {
- if (!variables) return false;
+ if (variables.length === 0) return false;
  return variables.some((v) => localValues[v.name] !== v.value);
  }, [variables, localValues]);
 
@@ -89,7 +98,7 @@ export default function ServerStartupVariablesSection({
  };
 
  const handleSave = () => {
- if (!variables) return;
+ if (variables.length === 0) return;
  const payload: Record<string, string> = {};
  variables.forEach((v) => {
  if (v.name in localValues) {
@@ -100,7 +109,7 @@ export default function ServerStartupVariablesSection({
  };
 
  const handleReset = () => {
- if (!variables) return;
+ if (variables.length === 0) return;
  const next: Record<string, string> = {};
  variables.forEach((v) => {
  next[v.name] = v.value;
@@ -251,7 +260,7 @@ export default function ServerStartupVariablesSection({
  <span>Failed to load startup variables</span>
  </div>
  </div>
- ) : !variables || variables.length === 0 ? (
+ ) : variables.length === 0 ? (
  <p className="py-4 text-center text-xs text-muted-foreground">
  No startup variables defined for this template.
  </p>

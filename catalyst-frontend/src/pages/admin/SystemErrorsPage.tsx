@@ -127,20 +127,27 @@ function useCopyToClipboard() {
 }
 
 // ── SSE Connection Status Hook ──
+// Reuses the shared admin EventSource hub (no second socket).
 function useSseStatus() {
- const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'closed' | 'error'>('closed');
+ const [status, setStatus] = useState<
+ 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'error'
+ >('closed');
 
  useEffect(() => {
- const es = new EventSource('/api/admin/events', { withCredentials: true });
- es.onopen = () => setStatus('connected');
- es.onerror = () => {
- if (es.readyState === EventSource.CONNECTING) setStatus('reconnecting');
- else if (es.readyState === EventSource.CLOSED) setStatus('closed');
- else setStatus('error');
- };
+ // Lazy import avoids circular deps with admin page bundle
+ let unsub: (() => void) | undefined;
+ import('../../services/api/admin-events')
+ .then(({ createAdminEventsStream }) => {
+ unsub = createAdminEventsStream(
+ () => {
+ /* status-only subscriber — cache updates come from AppLayout useSseAdminEvents */
+ },
+ (s) => setStatus(s),
+ );
+ })
+ .catch(() => setStatus('error'));
  return () => {
- es.close();
- setStatus('closed');
+ unsub?.();
  };
  }, []);
 

@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQueryClient, useMutation, useQuery } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
 import {
  AlertTriangle,
@@ -21,6 +21,7 @@ import {
  ChevronDown,
 } from 'lucide-react';
 import { serversApi } from '../../../services/api/servers';
+import Combobox from '@/components/ui/combobox';
 import { notifySuccess, notifyError } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
 import UpdateServerModal from '../UpdateServerModal';
@@ -38,6 +39,9 @@ interface Allocation {
  containerPort: number;
  hostPort: number;
  isPrimary: boolean;
+ allocationId?: string | null;
+ ip?: string | null;
+ alias?: string | null;
 }
 
 interface TemplateImage {
@@ -50,6 +54,12 @@ interface ServerInfo {
  id: string;
  name: string;
  ownerId?: string;
+ owner?: {
+ id: string;
+ username?: string | null;
+ email?: string | null;
+ name?: string | null;
+ } | null;
  status: string;
  nodeId: string;
  templateId?: string;
@@ -114,10 +124,17 @@ interface Props {
  // Allocations
  allocations: Allocation[];
  allocationsError: string | null;
+ availableNodeAllocations: Array<{
+ id: string;
+ ip: string;
+ port: number;
+ alias?: string | null;
+ }>;
+ availableNodeAllocationsError: string | null;
+ selectedAllocationId: string;
+ onSelectedAllocationIdChange: (id: string) => void;
  newContainerPort: string;
  onNewContainerPortChange: (port: string) => void;
- newHostPort: string;
- onNewHostPortChange: (port: string) => void;
  addAllocationPending: boolean;
  onAddAllocation: () => void;
  removeAllocationPending: boolean;
@@ -237,10 +254,12 @@ export default function ServerAdminTab({
  onUnsuspend,
  allocations,
  allocationsError,
+ availableNodeAllocations,
+ availableNodeAllocationsError,
+ selectedAllocationId,
+ onSelectedAllocationIdChange,
  newContainerPort,
  onNewContainerPortChange,
- newHostPort,
- onNewHostPortChange,
  addAllocationPending,
  onAddAllocation,
  removeAllocationPending,
@@ -261,6 +280,11 @@ export default function ServerAdminTab({
  onResetCrashCount,
  canDelete,
 }: Props) {
+ // Defensive: parent may pass non-array from cache/API shape mismatches.
+ const safeAllocations = Array.isArray(allocations) ? allocations : [];
+ const safeAvailableNodeAllocations = Array.isArray(availableNodeAllocations)
+ ? availableNodeAllocations
+ : [];
  // ── State ──
  const [rebuildConfirm, setRebuildConfirm] = useState(false);
  const [killConfirm, setKillConfirm] = useState(false);
@@ -269,30 +293,125 @@ export default function ServerAdminTab({
  const [killPending, setKillPending] = useState(false);
  const [reinstallPending, setReinstallPending] = useState(false);
  const [newOwnerId, setNewOwnerId] = useState('');
+ const [newOwnerLabel, setNewOwnerLabel] = useState('');
+ const [ownerSearch, setOwnerSearch] = useState('');
+ const [debouncedOwnerSearch, setDebouncedOwnerSearch] = useState('');
  const [transferOwnerPending, setTransferOwnerPending] = useState(false);
  const [transferOwnerConfirm, setTransferOwnerConfirm] = useState(false);
  const [envExpanded, setEnvExpanded] = useState(false);
  const [removeAllocationConfirm, setRemoveAllocationConfirm] = useState<{ open: boolean; containerPort: number | null }>({ open: false, containerPort: null });
  const [removeAllocationHotPending, setRemoveAllocationHotPending] = useState(false);
+ const [imageVariantPending, setImageVariantPending] = useState(false);
+ const [imageVariantConfirm, setImageVariantConfirm] = useState<{ open: boolean; variantName: string; label: string; image: string } | null>(null);
  const queryClient = useQueryClient();
  const navigate = useNavigate();
 
+ // Transfer ownership candidates (owner or admin.write)
+ useEffect(() => {
+ const t = window.setTimeout(() => setDebouncedOwnerSearch(ownerSearch.trim()), 250);
+ return () => window.clearTimeout(t);
+ }, [ownerSearch]);
+
+ const transferCandidatesQuery = useQuery({
+ queryKey: ['servers', serverId, 'transfer-candidates', debouncedOwnerSearch] as const,
+ queryFn: () =>
+ serversApi.transferCandidates(serverId, {
+ search: debouncedOwnerSearch || undefined,
+ limit: 50,
+ }),
+ enabled: Boolean(serverId) && canAdminWrite && !isSuspended,
+ staleTime: 30_000,
+ });
+ const transferCandidates = Array.isArray(transferCandidatesQuery.data)
+ ? transferCandidatesQuery.data
+ : [];
+
+ const transferUserOptions = useMemo(() => {
+ const toOption = (u: {
+ id: string;
+ username?: string | null;
+ email?: string | null;
+ name?: string | null;
+ }) => ({
+ value: u.id,
+ label: (
+ <div className="flex min-w-0 items-center gap-2">
+ <span className="truncate font-medium">{u.username || u.email}</span>
+ {u.username ? (
+ <span className="truncate text-muted-foreground">({u.email})</span>
+ ) : null}
+ </div>
+ ),
+ keywords: [u.username || '', u.email || '', u.name || '', u.id],
+ });
+
+ const options = transferCandidates
+ .filter((u) => u.id !== server.ownerId)
+ .map(toOption);
+
+ // Keep the currently selected owner visible even if a new search excludes them.
+ if (
+ newOwnerId &&
+ !options.some((o) => o.value === newOwnerId) &&
+ newOwnerLabel
+ ) {
+ options.unshift({
+ value: newOwnerId,
+ label: (
+ <div className="flex min-w-0 items-center gap-2">
+ <span className="truncate font-medium">{newOwnerLabel}</span>
+ </div>
+ ),
+ keywords: [newOwnerLabel, newOwnerId],
+ });
+ }
+ return options;
+ }, [transferCandidates, server.ownerId, newOwnerId, newOwnerLabel]);
+
+ const currentOwnerDisplay = useMemo(() => {
+ const owner = server.owner;
+ if (owner?.username || owner?.email) {
+ const primary = owner.username || owner.email || owner.id;
+ const secondary =
+ owner.username && owner.email ? owner.email : owner.name || null;
+ return { primary, secondary, id: owner.id || server.ownerId };
+ }
+ if (server.ownerId) {
+ return { primary: server.ownerId, secondary: null as string | null, id: server.ownerId };
+ }
+ return null;
+ }, [server.owner, server.ownerId]);
+
  // ── Environment variables state ──
- const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
+ // Seed from server.environment on first render — the prev-ref sync below only
+ // runs on *changes*, so without this the editor stays empty while the count badge
+ // still shows Object.keys(server.environment).length.
+ const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>(() => {
+ const env = server?.environment;
+ if (!env || typeof env !== 'object') return [];
+ const entries = Object.entries(env).map(([key, value]) => ({
+ key,
+ value: String(value ?? ''),
+ }));
+ return entries;
+ });
  const [envDirty, setEnvDirty] = useState(false);
 
  const prevEnvRef = useRef(server?.environment);
  if (server?.environment !== prevEnvRef.current) {
  prevEnvRef.current = server?.environment;
- if (!server?.environment) {
+ // Don't clobber in-progress edits if the user has dirty local state.
+ if (envDirty) {
+ // still advance the ref so we don't loop; next clean load will pick up server values
+ } else if (!server?.environment || typeof server.environment !== 'object') {
  setEnvVars([]);
  setEnvDirty(false);
  } else {
  const entries = Object.entries(server.environment).map(([key, value]) => ({
  key,
- value: String(value),
+ value: String(value ?? ''),
  }));
- setEnvVars(entries.length ? entries : [{ key: '', value: '' }]);
+ setEnvVars(entries);
  setEnvDirty(false);
  }
  }
@@ -334,6 +453,17 @@ export default function ServerAdminTab({
  templateImages.find((img) => img.name === currentImageVariant)?.label ??
  (currentImageVariant || 'Default');
 
+ // When IMAGE_VARIANT is unset, treat the template default (or current image match) as active.
+ const activeVariantName = (() => {
+ if (currentImageVariant) return currentImageVariant;
+ const byImage = templateImages.find((img) => img.image === currentResolvedImage);
+ if (byImage) return byImage.name;
+ const byDefault = templateImages.find(
+ (img) => img.image === (server.template?.defaultImage ?? server.template?.image),
+ );
+ return byDefault?.name ?? '';
+ })();
+
  const canEdit = !isSuspended && server.status !== 'archived';
  const canEditWhenStopped =
  canEdit && (server.status === 'stopped' || server.status === 'crashed' || server.status === 'error');
@@ -364,6 +494,44 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  }
  }, [serverId]);
+
+ const handleChangeImageVariant = useCallback(async () => {
+ if (!imageVariantConfirm) return;
+ const variantName = imageVariantConfirm.variantName;
+ try {
+ setImageVariantPending(true);
+ const nextEnv: Record<string, string> = { ...(server.environment ?? {}) };
+ if (variantName) {
+ nextEnv.IMAGE_VARIANT = variantName;
+ } else {
+ delete nextEnv.IMAGE_VARIANT;
+ }
+ // Drop stale resolved image so backend re-resolves from the new variant.
+ delete nextEnv.TEMPLATE_IMAGE;
+ await serversApi.update(serverId, { environment: nextEnv });
+ await serversApi.rebuild(serverId);
+ notifySuccess(
+ variantName
+ ? `Switched to ${imageVariantConfirm.label} and started rebuild`
+ : 'Reset to default image and started rebuild',
+ );
+ setImageVariantConfirm(null);
+ } catch (err: unknown) {
+ reportSystemError({
+ level: 'error',
+ component: 'ServerAdminTab',
+ message: err instanceof Error ? err.message : String(err),
+ stack: err instanceof Error ? err.stack : undefined,
+ metadata: { context: 'change image variant' },
+ });
+ notifyError(err instanceof Error ? err.message : 'Failed to change image variant');
+ } finally {
+ setImageVariantPending(false);
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
+ queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
+ }
+ }, [imageVariantConfirm, server.environment, serverId, queryClient]);
 
  const handleKill = useCallback(async () => {
  try {
@@ -415,6 +583,8 @@ export default function ServerAdminTab({
  await serversApi.transferOwnership(serverId, { newOwnerId: newOwnerId.trim() });
  notifySuccess('Ownership transferred');
  setNewOwnerId('');
+ setNewOwnerLabel('');
+ setOwnerSearch('');
  setTransferOwnerConfirm(false);
  } catch (err: unknown) {
  reportSystemError({
@@ -431,7 +601,7 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  queryClient.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
  }
- }, [serverId, newOwnerId]);
+ }, [serverId, newOwnerId, queryClient]);
 
  // ── Hot-remove allocation handler ──
  const handleRemoveAllocation = useCallback((containerPort: number) => {
@@ -625,9 +795,16 @@ export default function ServerAdminTab({
  <Copy className="h-3.5 w-3.5" />
  </button>
  </div>
- {currentImageVariant && (
+ {(currentImageVariant || activeVariantName) && (
  <div className="mt-2 text-[10px] text-muted-foreground">
- Variant: <span className="font-medium text-foreground">{currentImageLabel}</span>
+ Variant:{' '}
+ <span className="font-medium text-foreground">
+ {currentImageLabel !== 'Default'
+ ? currentImageLabel
+ : (templateImages.find((img) => img.name === activeVariantName)?.label ??
+ templateImages.find((img) => img.name === activeVariantName)?.name ??
+ 'Default')}
+ </span>
  </div>
  )}
  </div>
@@ -636,28 +813,45 @@ export default function ServerAdminTab({
  <div>
  <div className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">Available Variants</div>
  <div className="space-y-1">
- {templateImages.map((img) => (
- <div
+ {templateImages.map((img) => {
+ const isActive = img.name === activeVariantName;
+ return (
+ <button
+ type="button"
  key={img.name}
- className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
- img.name === currentImageVariant
+ disabled={!canEdit || imageVariantPending || isActive}
+ onClick={() =>
+ setImageVariantConfirm({
+ open: true,
+ variantName: img.name,
+ label: img.label ?? img.name,
+ image: img.image,
+ })
+ }
+ className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-default ${
+ isActive
  ? 'border-primary/30 bg-primary/5'
- : 'border-border/30 bg-surface-2/20'
+ : canEdit
+ ? 'border-border/30 bg-surface-2/20 hover:border-primary/30 hover:bg-primary/[0.03]'
+ : 'border-border/30 bg-surface-2/20 opacity-70'
  }`}
  >
  <div className="min-w-0 flex-1">
  <div className="text-xs font-medium text-foreground">{img.label ?? img.name}</div>
  <div className="truncate font-mono text-[10px] text-muted-foreground">{img.image}</div>
  </div>
- {img.name === currentImageVariant && (
+ {isActive ? (
  <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Active</span>
- )}
- </div>
- ))}
+ ) : canEdit ? (
+ <span className="ml-2 shrink-0 text-[10px] font-medium text-primary">Use</span>
+ ) : null}
+ </button>
+ );
+ })}
  </div>
  <p className="mt-2 flex items-start gap-1 text-[10px] text-muted-foreground">
  <Info className="mt-0.5 h-3 w-3 shrink-0" />
- Change the variant via the <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[10px]">IMAGE_VARIANT</code> env var, then rebuild.
+ Select a variant to update the image and rebuild the container. Server data is preserved.
  </p>
  </div>
  )}
@@ -741,7 +935,7 @@ export default function ServerAdminTab({
 
  {/* Port Allocations */}
  <ServerTabCard>
- <SectionHeader icon={Network} title="Port Allocations" description="Host-to-container port bindings." />
+ <SectionHeader icon={Network} title="Port Allocations" description="Claim node allocations and map them to container ports." />
 
  {allocationsError && (
  <div className="mb-3 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
@@ -749,10 +943,34 @@ export default function ServerAdminTab({
  </div>
  )}
 
- {/* Add form */}
- <div className="grid grid-cols-2 gap-2 text-xs">
+ {/* Add form — node allocation dropdown (same pattern as create server) */}
+ <div className="space-y-2">
+ <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] text-xs">
+ <select
+ className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none disabled:opacity-50"
+ value={selectedAllocationId}
+ onChange={(e) => {
+ const nextId = e.target.value;
+ onSelectedAllocationIdChange(nextId);
+ const selected = safeAvailableNodeAllocations.find((a) => a.id === nextId);
+ if (selected) {
+ onNewContainerPortChange(String(selected.port));
+ }
+ }}
+ disabled={!canEditAllocations}
+ >
+ <option value="">Select allocation</option>
+ {safeAvailableNodeAllocations
+ .filter((a) => !safeAllocations.some((alloc) => alloc.hostPort === a.port && alloc.ip === a.ip))
+ .map((allocation) => (
+ <option key={allocation.id} value={allocation.id}>
+ {allocation.ip}:{allocation.port}
+ {allocation.alias ? ` (${allocation.alias})` : ''}
+ </option>
+ ))}
+ </select>
  <input
- className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+ className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none sm:w-28"
  value={newContainerPort}
  onChange={(e) => onNewContainerPortChange(e.target.value)}
  placeholder="Container port"
@@ -761,37 +979,49 @@ export default function ServerAdminTab({
  max={65535}
  disabled={!canEditAllocations}
  />
- <input
- className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
- value={newHostPort}
- onChange={(e) => onNewHostPortChange(e.target.value)}
- placeholder="Host port (optional)"
- type="number"
- min={1}
- max={65535}
- disabled={!canEditAllocations}
- />
  </div>
+ {availableNodeAllocationsError ? (
+ <p className="text-[10px] text-warning">{availableNodeAllocationsError}</p>
+ ) : null}
+ {!availableNodeAllocationsError && safeAvailableNodeAllocations.length === 0 ? (
+ <p className="text-[10px] text-muted-foreground">
+ No free node allocations.
+ {server.nodeId ? (
+ <>
+ {' '}
+ <a
+ href={`/admin/nodes/${server.nodeId}/allocations`}
+ target="_blank"
+ rel="noopener noreferrer"
+ className="font-medium text-primary hover:underline"
+ >
+ Create one →
+ </a>
+ </>
+ ) : null}
+ </p>
+ ) : null}
  <button
  type="button"
- className="mt-2 w-full rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+ className="w-full rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
  onClick={onAddAllocation}
- disabled={!canEditAllocations || addAllocationPending}
+ disabled={!canEditAllocations || addAllocationPending || !selectedAllocationId}
  >
  Add allocation
  </button>
+ </div>
 
  {/* List */}
  <div className="mt-3 space-y-1.5">
- {allocations.length === 0 ? (
+ {safeAllocations.length === 0 ? (
  <TabEmptyState
  title="No allocations configured"
  description="Add a port binding to make the server reachable."
  />
  ) : (
- allocations.map((alloc) => (
+ safeAllocations.map((alloc) => (
  <div
- key={`${alloc.containerPort}-${alloc.hostPort}`}
+ key={`${alloc.containerPort}-${alloc.hostPort}-${alloc.allocationId ?? 'legacy'}`}
  className={`group relative flex items-center justify-between rounded-lg border px-3 py-2 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02] ${
  alloc.isPrimary
  ? 'border-primary/30 bg-primary/5'
@@ -799,15 +1029,21 @@ export default function ServerAdminTab({
  }`}
  >
  <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
- <div className="flex items-center gap-2">
+ <div className="flex min-w-0 flex-wrap items-center gap-2">
  {alloc.isPrimary ? (
  <Star className="h-3 w-3 shrink-0 fill-primary text-primary" />
  ) : (
  <div className="h-3 w-3 shrink-0 rounded-full border border-muted-foreground/30" />
  )}
- <code className="text-xs font-mono text-foreground">{alloc.containerPort}</code>
+ <code className="text-xs font-mono text-foreground">
+ {alloc.ip ? `${alloc.ip}:` : ''}
+ {alloc.hostPort}
+ </code>
  <span className="text-muted-foreground">→</span>
- <code className="text-xs font-mono text-foreground">{alloc.hostPort}</code>
+ <code className="text-xs font-mono text-foreground">{alloc.containerPort}</code>
+ {alloc.alias ? (
+ <span className="truncate text-[10px] text-muted-foreground">({alloc.alias})</span>
+ ) : null}
  {alloc.isPrimary && (
  <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">Primary</span>
  )}
@@ -816,7 +1052,7 @@ export default function ServerAdminTab({
  )}
  </div>
  {!alloc.isPrimary && (
- <div className="flex items-center gap-1.5">
+ <div className="flex shrink-0 items-center gap-1.5">
  <button
  type="button"
  onClick={() => onSetPrimary(alloc.containerPort)}
@@ -906,31 +1142,63 @@ export default function ServerAdminTab({
  <ServerTabCard>
  <SectionHeader icon={UserRoundCog} title="Transfer Ownership" description="Transfer this server to another user." />
 
- <div className="flex flex-wrap items-end gap-2">
- <div className="flex-1 min-w-[200px]">
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">New Owner User ID</label>
- <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+ <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+ <div className="min-w-0 flex-1">
+ <label className="text-[10px] uppercase tracking-wide text-muted-foreground">New owner</label>
+ <div className="mt-1">
+ <Combobox
  value={newOwnerId}
- onChange={(e) => setNewOwnerId(e.target.value)}
- placeholder="Enter user ID"
- disabled={isSuspended}
+ onChange={(id) => {
+ setNewOwnerId(id);
+ const match = transferCandidates.find((u) => u.id === id);
+ setNewOwnerLabel(
+ match
+ ? match.username
+ ? `${match.username} (${match.email})`
+ : match.email
+ : id,
+ );
+ }}
+ options={transferUserOptions}
+ searchValue={ownerSearch}
+ onSearchChange={setOwnerSearch}
+ placeholder={
+ transferCandidatesQuery.isLoading
+ ? 'Loading users...'
+ : 'Search by username or email...'
+ }
+ searchPlaceholder="Search username or email..."
+ emptyMessage={
+ transferCandidatesQuery.isLoading
+ ? 'Searching…'
+ : 'No users found.'
+ }
+ className="w-full"
  />
+ </div>
+ {transferCandidatesQuery.isError ? (
+ <p className="mt-1 text-[10px] text-warning">
+ Unable to load users. You may not have permission to search accounts.
+ </p>
+ ) : null}
  </div>
  <button
  type="button"
  onClick={() => setTransferOwnerConfirm(true)}
- disabled={!newOwnerId.trim() || isSuspended}
+ disabled={!newOwnerId.trim() || isSuspended || newOwnerId === server.ownerId}
  className="rounded-md border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-foreground transition-all hover:bg-warning disabled:opacity-50"
  >
  Transfer
  </button>
  </div>
 
- {server.ownerId && (
+ {currentOwnerDisplay && (
  <div className="mt-3 rounded-lg border border-border/30 bg-surface-2/20 px-3 py-2">
  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Current Owner</div>
- <div className="mt-0.5 font-mono text-xs text-foreground">{server.ownerId}</div>
+ <div className="mt-0.5 text-xs font-medium text-foreground">{currentOwnerDisplay.primary}</div>
+ {currentOwnerDisplay.secondary ? (
+ <div className="mt-0.5 text-[10px] text-muted-foreground">{currentOwnerDisplay.secondary}</div>
+ ) : null}
  </div>
  )}
  </ServerTabCard>
@@ -1004,6 +1272,20 @@ export default function ServerAdminTab({
  onCancel={() => setRebuildConfirm(false)}
  />
  <ConfirmAction
+ open={Boolean(imageVariantConfirm?.open)}
+ title="Change Container Image"
+ description={
+ imageVariantConfirm
+ ? `Switch to "${imageVariantConfirm.label}" (${imageVariantConfirm.image})? This updates IMAGE_VARIANT and rebuilds the container. Server data is preserved; the server will not automatically start after rebuilding.`
+ : ''
+ }
+ confirmLabel="Change & rebuild"
+ variant="primary"
+ pending={imageVariantPending}
+ onConfirm={handleChangeImageVariant}
+ onCancel={() => setImageVariantConfirm(null)}
+ />
+ <ConfirmAction
  open={killConfirm}
  title="Force Kill Server"
  description="This will immediately terminate the server process without a graceful shutdown. Players may lose unsaved progress. This cannot be undone."
@@ -1026,7 +1308,7 @@ export default function ServerAdminTab({
  <ConfirmAction
  open={transferOwnerConfirm}
  title="Transfer Ownership"
- description={`Transfer ownership of "${serverName}" to user ID "${newOwnerId.trim()}". The new owner will receive full management access. You will retain your current access permissions.`}
+ description={`Transfer ownership of "${serverName}" to ${newOwnerLabel || newOwnerId.trim()}. The new owner will receive full management access. You will retain your current access permissions.`}
  confirmLabel="Transfer ownership"
  variant="warning"
  pending={transferOwnerPending}

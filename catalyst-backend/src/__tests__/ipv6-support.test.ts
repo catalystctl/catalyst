@@ -237,8 +237,9 @@ describe('IPAM - normalizeHostIp', () => {
     expect(normalizeHostIp('192.168.1.1')).toBe('192.168.1.1');
   });
 
-  it('rejects IPv4 loopback', () => {
-    expect(() => normalizeHostIp('127.0.0.1')).toThrow('loopback');
+  it('accepts IPv4 loopback for same-machine / local-dev nodes', () => {
+    expect(normalizeHostIp('127.0.0.1')).toBe('127.0.0.1');
+    expect(normalizeHostIp('127.0.0.2')).toBe('127.0.0.2');
   });
 
   it('accepts IPv6 global unicast', () => {

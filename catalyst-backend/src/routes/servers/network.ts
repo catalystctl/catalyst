@@ -8,10 +8,25 @@ import { canAccessServer, collectUsedHostPortsByIp, ensureNotSuspended, findPort
  *  running servers support hot-add / hot-remove (the agent will sync firewall rules). */
 const ALLOCATION_ALLOWED_STATUSES = new Set(["stopped", "running", "crashed", "error"]);
 
-const allocationSchema = z.object({
-  containerPort: z.number().int().min(1).max(65535),
-  hostPort: z.number().int().min(1).max(65535),
-});
+const allocationSchema = z
+  .object({
+    /** Preferred: claim a free NodeAllocation on the server's node. */
+    allocationId: z.string().min(1).optional(),
+    containerPort: z.number().int().min(1).max(65535).optional(),
+    /** Legacy free-form host port (bridge/IPAM or when no NodeAllocation pool is used). */
+    hostPort: z.number().int().min(1).max(65535).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      !value.allocationId &&
+      (value.containerPort === undefined || value.hostPort === undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide allocationId, or both containerPort and hostPort",
+      });
+    }
+  });
 
 export async function serverNetworkRoutes(app: FastifyInstance) {
   const rbac = createRbacMiddleware(prisma);
@@ -49,19 +64,37 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
 
       const bindings = parseStoredPortBindings(server.portBindings);
 
+      const nodeAllocations = await prisma.nodeAllocation.findMany({
+        where: { serverId },
+        select: { id: true, ip: true, port: true, alias: true },
+      });
+      const nodeAllocByHostPort = new Map(
+        nodeAllocations.map((alloc) => [alloc.port, alloc] as const),
+      );
+
       const allocations = Object.entries(bindings)
-        .map(([containerPort, hostPort]) => ({
-          containerPort: Number(containerPort),
-          hostPort,
-          isPrimary: Number(containerPort) === server.primaryPort,
-        }))
+        .map(([containerPort, hostPort]) => {
+          const nodeAlloc = nodeAllocByHostPort.get(hostPort);
+          return {
+            containerPort: Number(containerPort),
+            hostPort,
+            isPrimary: Number(containerPort) === server.primaryPort,
+            allocationId: nodeAlloc?.id ?? null,
+            ip: nodeAlloc?.ip ?? server.primaryIp ?? null,
+            alias: nodeAlloc?.alias ?? null,
+          };
+        })
         .sort((a, b) => a.containerPort - b.containerPort);
 
       if (!allocations.length && server.primaryPort) {
+        const nodeAlloc = nodeAllocByHostPort.get(server.primaryPort);
         allocations.push({
           containerPort: server.primaryPort,
           hostPort: server.primaryPort,
           isPrimary: true,
+          allocationId: nodeAlloc?.id ?? null,
+          ip: nodeAlloc?.ip ?? server.primaryIp ?? null,
+          alias: nodeAlloc?.alias ?? null,
         });
       }
 
@@ -75,7 +108,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate, rbac.requirePermission('server.update', 'serverId')], preHandler: [validateRequestBody(allocationSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const { containerPort, hostPort } = request.body as z.infer<typeof allocationSchema>;
+      const body = request.body as z.infer<typeof allocationSchema>;
       const userId = request.user.userId;
 
       const server = await prisma.server.findUnique({
@@ -114,8 +147,33 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         });
       }
 
-      const parsedContainerPort = parsePortValue(containerPort);
-      const parsedHostPort = parsePortValue(hostPort);
+      let claimedAllocationId: string | null = null;
+      let claimedAllocationIp: string | null = null;
+      let claimedAllocationAlias: string | null = null;
+      let parsedContainerPort: number | null = null;
+      let parsedHostPort: number | null = null;
+
+      if (body.allocationId) {
+        const allocation = await prisma.nodeAllocation.findUnique({
+          where: { id: body.allocationId },
+        });
+        if (!allocation || allocation.nodeId !== server.nodeId) {
+          return reply.status(404).send({ error: "Allocation not found" });
+        }
+        if (allocation.serverId && allocation.serverId !== serverId) {
+          return reply.status(409).send({ error: "Allocation is already assigned to another server" });
+        }
+        claimedAllocationId = allocation.id;
+        claimedAllocationIp = allocation.ip;
+        claimedAllocationAlias = allocation.alias ?? null;
+        parsedHostPort = allocation.port;
+        // Default container port to the host allocation port unless explicitly overridden.
+        parsedContainerPort = parsePortValue(body.containerPort) ?? allocation.port;
+      } else {
+        parsedContainerPort = parsePortValue(body.containerPort);
+        parsedHostPort = parsePortValue(body.hostPort);
+      }
+
       if (!parsedContainerPort || !parsedHostPort) {
         return reply.status(400).send({ error: "Invalid port value" });
       }
@@ -138,7 +196,13 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return reply.status(409).send({ error: "Host port already assigned to allocation" });
       }
 
-      if (!shouldUseIpam(server.networkMode ?? undefined) && server.networkMode !== "host") {
+      // When claiming a NodeAllocation, host-port ownership is already tracked there.
+      // Keep free-form conflict checks for legacy hostPort posts on bridge (non-IPAM).
+      if (
+        !claimedAllocationId &&
+        !shouldUseIpam(server.networkMode ?? undefined) &&
+        server.networkMode !== "host"
+      ) {
         const siblingServers = await prisma.server.findMany({
           where: {
             nodeId: server.nodeId,
@@ -173,10 +237,33 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
           if (!fresh) throw new Error("Server not found");
           const txBindings = parseStoredPortBindings(fresh.portBindings);
           // Re-check inside transaction — concurrent request may have added this port
-          if (txBindings[parsedContainerPort]) {
+          if (txBindings[parsedContainerPort!]) {
             throw new Error("Allocation already exists for container port");
           }
-          txBindings[parsedContainerPort] = parsedHostPort;
+          if (Object.values(txBindings).includes(parsedHostPort!)) {
+            const isSamePrimary =
+              parsedContainerPort === fresh.primaryPort &&
+              parsedHostPort === fresh.primaryPort;
+            if (!isSamePrimary) {
+              throw new Error("Host port already assigned to allocation");
+            }
+          }
+
+          if (claimedAllocationId) {
+            const claim = await tx.nodeAllocation.updateMany({
+              where: {
+                id: claimedAllocationId,
+                nodeId: server.nodeId,
+                OR: [{ serverId: null }, { serverId }],
+              },
+              data: { serverId },
+            });
+            if (claim.count === 0) {
+              throw new Error("Allocation is already assigned to another server");
+            }
+          }
+
+          txBindings[parsedContainerPort!] = parsedHostPort!;
           return tx.server.update({
             where: { id: serverId },
             data: { portBindings: txBindings },
@@ -184,7 +271,11 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         });
       } catch (err) {
         const msg = (err as Error)?.message || "";
-        if (msg === "Allocation already exists for container port") {
+        if (
+          msg === "Allocation already exists for container port" ||
+          msg === "Host port already assigned to allocation" ||
+          msg === "Allocation is already assigned to another server"
+        ) {
           return reply.status(409).send({ error: msg });
         }
         throw err;
@@ -194,7 +285,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
 
       // If server is running, notify the agent to open the firewall port
       if (server.status === "running" && wsGateway?.sendToAgent) {
-        const containerIp = server.primaryIp ?? "";
+        const containerIp = claimedAllocationIp ?? server.primaryIp ?? "";
         wsGateway.sendToAgent(server.nodeId, {
           type: "allocation_added",
           serverId,
@@ -234,6 +325,9 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
           containerPort: parsedContainerPort,
           hostPort: parsedHostPort,
           isPrimary: parsedContainerPort === updated.primaryPort,
+          allocationId: claimedAllocationId,
+          ip: claimedAllocationIp ?? server.primaryIp ?? null,
+          alias: claimedAllocationAlias,
         },
       });
     }
@@ -303,9 +397,21 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
 
       delete bindings[parsedContainerPort];
 
-      await prisma.server.update({
-        where: { id: serverId },
-        data: { portBindings: bindings },
+      await prisma.$transaction(async (tx) => {
+        await tx.server.update({
+          where: { id: serverId },
+          data: { portBindings: bindings },
+        });
+
+        // Release matching NodeAllocation(s) so the port returns to the free pool.
+        // Prefer exact host-port match; fall back to any still-linked row for this host port.
+        await tx.nodeAllocation.updateMany({
+          where: {
+            serverId,
+            port: removedHostPort,
+          },
+          data: { serverId: null },
+        });
       });
 
       const wsGateway = app.wsGateway;

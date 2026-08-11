@@ -27,15 +27,16 @@ import {
  useServerMetricsHistory,
  type MetricsTimeRange,
 } from '../../hooks/useServerMetricsHistory';
-import { useTasks } from '../../hooks/useTasks';
+import { useTasks, normalizeTasks } from '../../hooks/useTasks';
 import { useServerDatabases } from '../../hooks/useServerDatabases';
 import { useDatabaseHosts } from '../../hooks/useAdmin';
 import { useAuthStore } from '../../stores/authStore';
 import { useConsole } from '../../hooks/useConsole';
 import { useEulaPrompt } from '../../hooks/useEulaPrompt';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
 import { serversApi } from '../../services/api/servers';
+import { nodesApi } from '../../services/api/nodes';
 import { databasesApi } from '../../services/api/databases';
 import { tasksApi } from '../../services/api/tasks';
 import { getErrorMessage } from '../../utils/errors';
@@ -48,6 +49,7 @@ import type {
 
 import ServerControls from '../../components/servers/ServerControls';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
+import ErrorBoundary from '../../components/shared/ErrorBoundary';
 import FileManager from '../../components/files/FileManager';
 import BackupSection from '../../components/backups/BackupSection';
 import { usePluginTabs } from '../../plugins/hooks';
@@ -154,11 +156,8 @@ function ServerDetailsPage() {
  initialLines: consoleScrollback,
  maxEntries: consoleScrollback,
  });
-
- useEffect(() => {
- if (!serverId) return;
- refetchConsole().catch(() => {});
- }, [refetchConsole, serverId]);
+ // Initial logs load is owned by useConsole/useQuery — do NOT refetch on every
+ // render via an effect on refetchConsole (unstable deps caused /logs spam).
 
  // ── EULA ──
  const { eulaPrompt, isLoading: eulaLoading, respond: respondEula } =
@@ -221,7 +220,8 @@ function ServerDetailsPage() {
  server?.environment?.VERSION;
 
  // ── Tasks ──
- const { data: tasks = [], isLoading: tasksLoading } = useTasks(serverId);
+ const { data: tasksData, isLoading: tasksLoading } = useTasks(serverId);
+ const tasks = normalizeTasks(tasksData);
 
  // ── Databases ──
  const {
@@ -255,16 +255,34 @@ function ServerDetailsPage() {
  });
 
  // ── Allocations (admin) ──
+ // Always coerce to arrays — `?? []` only covers undefined, not object cache shapes.
  const allocationsQuery = useQuery({
  queryKey: qk.serverAllocations(serverId ?? ''),
  queryFn: () => serversApi.allocations(serverId ?? ''),
  enabled: Boolean(serverId),
  staleTime: 30_000,
- refetchInterval: 30_000,
+ refetchInterval: 60_000 /* allocation SSE not dense; safety */,
+ select: (data) => (Array.isArray(data) ? data : []),
  });
- const allocations = allocationsQuery.data ?? [];
+ const allocations = Array.isArray(allocationsQuery.data) ? allocationsQuery.data : [];
  const allocationsError = allocationsQuery.error
  ? getErrorMessage(allocationsQuery.error, 'Unable to load allocations')
+ : null;
+
+ // Free node allocations for the server's node (dropdown options)
+ const nodeIdForAllocations = server?.nodeId;
+ const nodeAllocationsQuery = useQuery({
+ queryKey: qk.adminNodeAllocations(nodeIdForAllocations ?? ''),
+ queryFn: () => nodesApi.allocations(nodeIdForAllocations ?? ''),
+ enabled: Boolean(nodeIdForAllocations),
+ staleTime: 30_000,
+ select: (data) => (Array.isArray(data) ? data : []),
+ });
+ const availableNodeAllocations = (
+ Array.isArray(nodeAllocationsQuery.data) ? nodeAllocationsQuery.data : []
+ ).filter((allocation) => !allocation.serverId);
+ const availableNodeAllocationsError = nodeAllocationsQuery.error
+ ? getErrorMessage(nodeAllocationsQuery.error, 'Unable to load node allocations')
  : null;
 
  // ── State: Settings ──
@@ -273,7 +291,7 @@ function ServerDetailsPage() {
  // ── State: Admin ──
  const [suspendReason, setSuspendReason] = useState('');
  const [newContainerPort, setNewContainerPort] = useState('');
- const [newHostPort, setNewHostPort] = useState('');
+ const [selectedAllocationId, setSelectedAllocationId] = useState('');
  const [restartPolicy, setRestartPolicy] = useState<
  'always' | 'on-failure' | 'never'
  >('on-failure');
@@ -519,30 +537,33 @@ function ServerDetailsPage() {
  reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'addAllocationMutation' } });
  throw new Error('Missing server id');
  }
- const containerPort = Number(newContainerPort);
- const hostPort = Number(newHostPort || newContainerPort);
- if (!Number.isFinite(containerPort) || containerPort <= 0) {
+ if (!selectedAllocationId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'No allocation selected', metadata: { context: 'addAllocationMutation' } });
+ throw new Error('Select a node allocation');
+ }
+ const selected = availableNodeAllocations.find((a) => a.id === selectedAllocationId);
+ const containerPort = Number(newContainerPort || selected?.port);
+ if (!Number.isFinite(containerPort) || containerPort <= 0 || containerPort > 65535) {
  reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Invalid container port', metadata: { context: 'addAllocationMutation' } });
  throw new Error('Invalid container port');
  }
- if (!Number.isFinite(hostPort) || hostPort <= 0) {
- reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Invalid host port', metadata: { context: 'addAllocationMutation' } });
- throw new Error('Invalid host port');
- }
  return serversApi.addAllocation(serverId, {
+ allocationId: selectedAllocationId,
  containerPort,
- hostPort,
  });
  },
  onSuccess: () => {
  setNewContainerPort('');
- setNewHostPort('');
+ setSelectedAllocationId('');
  notifySuccess('Allocation added');
  },
  onSettled: () => {
  if (serverId) {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ }
+ if (nodeIdForAllocations) {
+ queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeIdForAllocations) });
  }
  },
  onError: (error: any) =>
@@ -566,6 +587,9 @@ function ServerDetailsPage() {
  if (serverId) {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ }
+ if (nodeIdForAllocations) {
+ queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeIdForAllocations) });
  }
  },
  onError: (error: any) =>
@@ -1041,6 +1065,18 @@ function ServerDetailsPage() {
  </div>
 
  {/* ── Tab Content ── */}
+ {/* resetKey clears a tab-local crash so switching tabs works without full refresh */}
+ <ErrorBoundary
+ resetKey={tab ?? activeTab}
+ fallback={
+ <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-xl border border-border/40 bg-card px-4 py-10 text-center">
+ <p className="text-sm font-medium text-foreground">This tab hit an error</p>
+ <p className="max-w-md text-xs text-muted-foreground">
+ Switch tabs or retry. The rest of the server page stays usable.
+ </p>
+ </div>
+ }
+ >
  <div>
  <Suspense fallback={<TabSkeleton />}>
  {!isPluginTab && activeTab === 'console' && (
@@ -1226,10 +1262,12 @@ function ServerDetailsPage() {
  onUnsuspend={() => unsuspendMutation.mutate()}
  allocations={allocations}
  allocationsError={allocationsError}
+ availableNodeAllocations={availableNodeAllocations}
+ availableNodeAllocationsError={availableNodeAllocationsError}
+ selectedAllocationId={selectedAllocationId}
+ onSelectedAllocationIdChange={setSelectedAllocationId}
  newContainerPort={newContainerPort}
  onNewContainerPortChange={setNewContainerPort}
- newHostPort={newHostPort}
- onNewHostPortChange={setNewHostPort}
  addAllocationPending={addAllocationMutation.isPending}
  onAddAllocation={() => addAllocationMutation.mutate()}
  removeAllocationPending={removeAllocationMutation.isPending}
@@ -1290,6 +1328,7 @@ function ServerDetailsPage() {
  })()}
  </Suspense>
  </div>
+ </ErrorBoundary>
  </div>
 
  {eulaPrompt && (

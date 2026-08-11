@@ -19,6 +19,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { resolveUserPermissions } from '../lib/permissions-catalog.js';
 import { prisma } from '../db.js';
 import { hasPermission } from '../lib/permissions.js';
+import { openSseStream } from '../utils/sse.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const ADMIN_EVENT_TYPES = [
@@ -49,18 +50,15 @@ const ADMIN_EVENT_TYPES = [
   'mod_install_complete', 'mod_uninstall_complete', 'mod_update_complete',
   // Plugin manager events (admin-scoped)
   'plugin_install_complete', 'plugin_uninstall_complete', 'plugin_update_complete',
+  // Migration progress (Pterodactyl → Catalyst)
+  'migration_job_updated', 'migration_step_updated',
+  // Agent control panel
+  'agent_update_started', 'agent_update_failed', 'agent_update_progress',
+  // Node live metrics (from agent health_report)
+  'node_metrics_updated',
 ];
 
 type ReqHeaders = Record<string, string | string[] | undefined>;
-
-function formatSse(event: string, data: unknown): string {
-  const json = typeof data === 'string' ? data : JSON.stringify(data);
-  return `event: ${event}\ndata: ${json.replace(/\n/g, '\\n')}\n\n`;
-}
-
-function formatSseComment(comment: string): string {
-  return `: ${comment}\n\n`;
-}
 
 interface AdminSubscriber {
   unsubscribe: () => void;
@@ -110,32 +108,16 @@ export function adminEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGate
         return;
       }
 
-      // SSE headers — prevent proxy buffering with proper CORS using origin whitelist
-      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
-      const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean);
-      if (allowedOrigins.includes(origin)) {
-        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
-        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
-      }
-      reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      });
-
-      reply.raw.write(formatSseComment('connected'));
-      reply.raw.write(formatSse('connected', {
+      // Take ownership of the socket so Fastify does not end the response on return.
+      const sse = openSseStream(request, reply);
+      sse.comment('connected');
+      sse.push('connected', {
         userId,
         timestamp: new Date().toISOString(),
-      }));
+      });
 
       const push = (eventType: string, data: unknown) => {
-        try {
-          reply.raw.write(formatSse(eventType, data));
-        } catch {
-          // Connection closed
-        }
+        sse.push(eventType, data);
       };
 
       // Subscribe to all admin event types
@@ -143,7 +125,7 @@ export function adminEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGate
 
       const heartbeatTimer = setInterval(() => {
         try {
-          reply.raw.write(formatSseComment('heartbeat'));
+          sse.comment('heartbeat');
         } catch {
           clearInterval(heartbeatTimer);
         }

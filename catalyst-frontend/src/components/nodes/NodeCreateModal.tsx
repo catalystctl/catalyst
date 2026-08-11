@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@/csync';
 import { MapPin, ArrowRight, CheckCircle, Loader2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { nodesApi } from '../../services/api/nodes';
 import { locationsApi } from '../../services/api/locations';

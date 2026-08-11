@@ -79,13 +79,9 @@ export function usePluginWebSocket(
     }
 
     const wsUrl = url || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
-    const fullUrl = `${wsUrl}/ws/plugins`;
-
-    // Don't attempt connection if no custom URL provided — the default /ws/plugins
-    // endpoint doesn't exist on the backend yet. Only connect if an explicit URL is given.
-    if (!url) {
-      return;
-    }
+    // Plugins share the main panel WebSocket gateway (`/ws`), which already
+    // dispatches `plugin:{name}:{event}` messages from the backend host API.
+    const fullUrl = url ? (url.includes('://') ? url : `${wsUrl}${url.startsWith('/') ? '' : '/'}${url}`) : `${wsUrl}/ws`;
 
     const ws = new WebSocket(fullUrl);
     wsRef.current = ws;

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { nodesApi } from '../services/api/nodes';
 import { reportSystemError } from '../services/api/systemErrors';
@@ -43,7 +43,8 @@ export function useNodeStats(nodeId?: string) {
     },
     enabled: Boolean(nodeId),
     staleTime: 15_000,
-    refetchInterval: 10_000,
+    // Primary: node_metrics_updated / node_updated admin SSE.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -58,7 +59,8 @@ export function useNodeMetrics(nodeId?: string) {
     },
     enabled: Boolean(nodeId),
     staleTime: 15_000,
-    refetchInterval: 15_000,
+    // Primary: node_metrics_updated admin SSE.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }

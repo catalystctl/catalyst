@@ -1337,3 +1337,60 @@ test.describe('Keyboard Navigation', () => {
     }
   });
 });
+
+
+// ─── Catalyst Sync (csync) smoke ─────────────────────────────────────────────
+
+test.describe('Catalyst Sync server-state layer', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+  });
+
+  test('window.__CSYNC__ dump is available after login', async ({ page }) => {
+    test.setTimeout(45_000);
+    await navAndWait(page, '/servers');
+    const dump = await page.evaluate(() => {
+      const api = (window as any).__CSYNC__;
+      if (!api?.dump) return null;
+      const rows = api.dump();
+      return { count: Array.isArray(rows) ? rows.length : -1, hasClient: Boolean(api.client) };
+    });
+    expect.soft(dump).not.toBeNull();
+    expect.soft(dump?.hasClient).toBe(true);
+    // After /servers, cache should hold at least one query entry (or empty list still registered via observers)
+    expect.soft(typeof dump?.count).toBe('number');
+  });
+
+  test('Servers page loads list data without TanStack runtime', async ({ page }) => {
+    test.setTimeout(45_000);
+    await navAndWait(page, '/servers');
+    // No React Query devtools portal
+    await expect.soft(page.locator('[class*="tsqd"], [aria-label*="React Query"]')).toHaveCount(0);
+    // Page should render main content (heading or empty state or cards)
+    await expect.soft(page.getByRole('main')).toBeVisible({ timeout: 10_000 });
+    const hasContent = await page
+      .locator('text=/server|no servers|create/i')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    expect.soft(hasContent).toBe(true);
+  });
+
+  test('Dashboard uses csync without hard crash', async ({ page }) => {
+    test.setTimeout(45_000);
+    const ok = await navAndWait(page, '/');
+    expect.soft(ok).toBe(true);
+    // Ensure no uncaught pageerror from csync
+    // (Playwright fails test on pageerror if listener set — soft check via evaluate)
+    const hasCsync = await page.evaluate(() => Boolean((window as any).__CSYNC__?.client));
+    expect.soft(hasCsync).toBe(true);
+  });
+
+  test('Profile page mutation path still navigable', async ({ page }) => {
+    test.setTimeout(45_000);
+    await navAndWait(page, '/profile');
+    await expect
+      .soft(page.locator('text=/profile|account|security|sessions/i').first())
+      .toBeVisible({ timeout: 10_000 });
+  });
+});

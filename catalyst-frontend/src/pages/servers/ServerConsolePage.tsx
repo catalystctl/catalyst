@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { ArrowDown, Check, Copy, Search, Trash2, X, Terminal } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
-import CustomConsole from '../../components/console/CustomConsole';
+import XtermConsole from '../../components/console/XtermConsole';
 import { useConsole } from '../../hooks/useConsole';
 import { useServer } from '../../hooks/useServer';
 import { useEulaPrompt } from '../../hooks/useEulaPrompt';
@@ -57,7 +57,6 @@ function ServerConsolePage() {
  const canSend = Boolean(serverId) && (isConnected || streamStatus === 'reconnecting') && server?.status === 'running' && !isSuspended;
 
  useEffect(() => {
- // eslint-disable-next-line react-hooks/set-state-in-effect
  setAutoScroll(true);
  }, [serverId]);
 
@@ -292,7 +291,7 @@ function ServerConsolePage() {
  </div>
 
  {/* Console Output */}
- <CustomConsole
+ <XtermConsole
  entries={entries}
  autoScroll={autoScroll}
  searchQuery={searchQuery}

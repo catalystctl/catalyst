@@ -3,7 +3,7 @@
  * profile data without risking a full session wipe.
  *
  * The sidebar reads user name/avatar from `useAuthStore` (zustand), not from
- * TanStack Query. Profile updates from SSE or mutations invalidate the
+ * Catalyst Sync. Profile updates from SSE or mutations invalidate the
  * ['profile'] query, but that query has NO active observer unless the user is
  * on /profile — so invalidateQueries does nothing on every other page.
  *
@@ -14,7 +14,7 @@
  *     transient 401 cannot wipe the whole session via AuthStore:refresh.
  */
 import { useEffect, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@/csync';
 import { useAuthStore } from '../stores/authStore';
 import { authApi } from '../services/api/auth';
 

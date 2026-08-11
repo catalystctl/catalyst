@@ -27,13 +27,14 @@ interface Props {
 export default function ServerTasksTab({
  serverId,
  isSuspended,
- tasks,
+ tasks: tasksProp,
  tasksLoading,
  onPause,
  pausePending,
  onDelete,
  deletePending,
 }: Props) {
+ const tasks = Array.isArray(tasksProp) ? tasksProp : [];
  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
  const pendingDeleteTask = tasks.find((task) => task.id === pendingDeleteId);
 

@@ -17,17 +17,38 @@ type Props = {
  placeholder?: string;
  searchPlaceholder?: string;
  className?: string;
+ /** Optional controlled search (e.g. for server-side filtering). */
+ searchValue?: string;
+ onSearchChange?: (value: string) => void;
+ emptyMessage?: string;
 };
 
-function Combobox({ value, onChange, options, placeholder = 'Select...', searchPlaceholder, className }: Props) {
+function Combobox({
+ value,
+ onChange,
+ options,
+ placeholder = 'Select...',
+ searchPlaceholder,
+ className,
+ searchValue,
+ onSearchChange,
+ emptyMessage = 'No matches found.',
+}: Props) {
  const [open, setOpen] = useState(false);
- const [search, setSearch] = useState('');
+ const [internalSearch, setInternalSearch] = useState('');
  const [focusIdx, setFocusIdx] = useState(0);
  const listRef = useRef<HTMLDivElement>(null);
+ const search = searchValue !== undefined ? searchValue : internalSearch;
+ const setSearch = (next: string) => {
+ onSearchChange?.(next);
+ if (searchValue === undefined) setInternalSearch(next);
+ };
 
  const selected = useMemo(() => options.find((o) => o.value === value), [options, value]);
 
  const filtered = useMemo(() => {
+ // When search is controlled externally, the parent is expected to already
+ // filter/fetch options — still apply a light local filter for snappy UX.
  if (!search.trim()) return options;
  const q = search.toLowerCase();
  return options.filter((o) => {
@@ -120,7 +141,7 @@ function Combobox({ value, onChange, options, placeholder = 'Select...', searchP
  <div ref={listRef} className="max-h-56 overflow-y-auto py-1">
  {filtered.length === 0 ? (
  <div className="py-6 text-center text-sm text-muted-foreground">
- No matches found.
+ {emptyMessage}
  </div>
  ) : (
  filtered.map((option, idx) => (

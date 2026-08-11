@@ -1,12 +1,12 @@
 /**
  * SSE-based backup hook.
  *
- * Loads backups via REST API (TanStack Query).
+ * Loads backups via REST API (Catalyst Sync).
  * Listens for backup_complete / backup_restore_complete / backup_delete_complete
  * via SSE to trigger query invalidation without polling.
  */
 import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { backupsApi } from '../services/api/backups';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
@@ -15,19 +15,25 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
   const queryClient = useQueryClient();
   const { page = 1, limit = 10 } = options ?? {};
 
-  // SSE listener — invalidates backup queries when completions arrive
+  // SSE listener — started + complete events (global AppLayout stream also covers this;
+  // per-server stream keeps BackupSection live even if global filter misses).
   useEffect(() => {
     if (!serverId) return;
+
+    const backupEvents = new Set<ServerEventType>([
+      'backup_started',
+      'backup_restore_started',
+      'backup_delete_started',
+      'backup_complete',
+      'backup_restore_complete',
+      'backup_delete_complete',
+    ]);
 
     const disconnect = createServerEventsStream(
       serverId,
       (type: ServerEventType, data: Record<string, unknown>) => {
-        if (String(data.serverId) !== serverId) return;
-        if (
-          type !== 'backup_complete' &&
-          type !== 'backup_restore_complete' &&
-          type !== 'backup_delete_complete'
-        ) return;
+        if (String(data.serverId ?? serverId) !== serverId) return;
+        if (!backupEvents.has(type)) return;
 
         queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
 
@@ -49,14 +55,18 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
     queryFn: () => backupsApi.list(serverId!, { page, limit }),
     enabled: Boolean(serverId),
     placeholderData: (prev) => prev,
+    // Only safety-poll while a backup is actively processing; idle lists are SSE-driven.
     refetchInterval: (query) => {
-      const data = query.state.data;
+      const data = query.state.data as any;
       if (!data) return false;
       const backups = data.backups ?? data;
-      if (Array.isArray(backups) && backups.some((b: any) => b.status === 'in_progress' || b.status === 'processing')) {
+      if (
+        Array.isArray(backups) &&
+        backups.some((b: any) => b.status === 'in_progress' || b.status === 'processing')
+      ) {
         return 5000;
       }
-      return 15000;
+      return false;
     },
     staleTime: 30_000,
   });

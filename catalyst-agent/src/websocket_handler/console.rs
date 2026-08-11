@@ -195,15 +195,31 @@ impl WebSocketHandler {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
-        // Abort and drop every tail task for this server (not just the keys).
+        // Collect container ids before aborting so we can drop their byte cursors.
+        // Without this, a recreated container reusing the same id would resume at
+        // a stale high offset (or 0-after-shrink) incorrectly across reinstalls.
         let keys: Vec<String> = streams
             .keys()
             .filter(|key| key.starts_with(&prefix))
             .cloned()
             .collect();
+        let container_ids: Vec<String> = keys
+            .iter()
+            .filter_map(|key| key.split_once(':').map(|(_, cid)| cid.to_string()))
+            .collect();
         for key in keys {
             if let Some(handle) = streams.remove(&key) {
                 handle.abort();
+            }
+        }
+        drop(streams);
+        if !container_ids.is_empty() {
+            let mut offsets = match self.log_stream_offsets.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            for cid in container_ids {
+                offsets.remove(&cid);
             }
         }
     }
@@ -540,11 +556,31 @@ impl WebSocketHandler {
     }
 
     pub(crate) fn spawn_log_stream(&self, server_id: &str, container_id: &str) {
+        let stream_key = format!("{}:{}", server_id, container_id);
+        let prefix = format!("{}:", server_id);
+
+        // If this exact stream is already running, do nothing. Every console command
+        // used to call spawn_log_stream, which aborted + restarted the tail from byte 0
+        // and re-emitted the entire log file (OpenJDK banner, etc.) on each keystroke.
+        {
+            let streams = match self.active_log_streams.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            if let Some(existing) = streams.get(&stream_key) {
+                if !existing.is_finished() {
+                    debug!(
+                        "Log stream already active for {} (container {}), skipping respawn",
+                        server_id, container_id
+                    );
+                    return;
+                }
+            }
+        }
+
         let handler = self.clone();
         let server_id = server_id.to_string();
         let container_id = container_id.to_string();
-        let stream_key = format!("{}:{}", server_id, container_id);
-        let prefix = format!("{}:", server_id);
         let stream_key_for_task = stream_key.clone();
 
         let handle = tokio::spawn(async move {
@@ -580,20 +616,26 @@ impl WebSocketHandler {
             }
         });
 
-        // Register synchronously: abort any prior tails for this server, then insert.
+        // Register synchronously: abort other tails for this server (e.g. installer →
+        // game container transition), but never the brand-new handle we just spawned.
+        // Same-key active stream was already short-circuited above.
         let mut streams = match self.active_log_streams.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
         let stale: Vec<String> = streams
             .keys()
-            .filter(|key| key.starts_with(&prefix))
+            .filter(|key| key.starts_with(&prefix) && *key != &stream_key)
             .cloned()
             .collect();
         for key in stale {
             if let Some(old) = streams.remove(&key) {
                 old.abort();
             }
+        }
+        // Replace a finished same-key entry if present.
+        if let Some(old) = streams.remove(&stream_key) {
+            old.abort();
         }
         streams.insert(stream_key, handle);
     }
@@ -609,6 +651,8 @@ impl WebSocketHandler {
         let stderr_exists = stderr_path.exists();
         let stdout_meta = tokio::fs::metadata(&stdout_path).await.ok();
         let stderr_meta = tokio::fs::metadata(&stderr_path).await.ok();
+        let stdout_len = stdout_meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let stderr_len = stderr_meta.as_ref().map(|m| m.len()).unwrap_or(0);
         info!(
             "Console log stream started for server {} (container {}) — stdout: exists={} size={:?}, stderr: exists={} size={:?}",
             server_id,
@@ -619,8 +663,34 @@ impl WebSocketHandler {
             stderr_meta.as_ref().map(|m| m.len()),
         );
 
-        let mut stdout_pos = 0u64;
-        let mut stderr_pos = 0u64;
+        // Resume from last emitted offset when known so a restarted tail does not
+        // re-broadcast historical content. On first sighting start at 0 so the
+        // initial stream still delivers startup output (OpenJDK banner, etc.)
+        // exactly once; subsequent restarts use the saved cursor.
+        // If the file shrank (truncate/rotate/recreate), fall back to 0.
+        let (mut stdout_pos, mut stderr_pos) = {
+            let offsets = match self.log_stream_offsets.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            match offsets.get(container_id).copied() {
+                Some((out, err)) => {
+                    let out = if out > stdout_len { 0 } else { out };
+                    let err = if err > stderr_len { 0 } else { err };
+                    (out, err)
+                }
+                None => (0, 0),
+            }
+        };
+        // Persist the starting point immediately so a crash mid-stream still advances.
+        {
+            let mut offsets = match self.log_stream_offsets.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            offsets.insert(container_id.to_string(), (stdout_pos, stderr_pos));
+        }
+
         let mut loop_count = 0u32;
 
         // Tail the stdout/stderr files
@@ -635,6 +705,10 @@ impl WebSocketHandler {
 
             match tokio::fs::read_to_string(&stdout_path).await {
                 Ok(content) => {
+                    // File truncated/rotated under us
+                    if (stdout_pos as usize) > content.len() {
+                        stdout_pos = 0;
+                    }
                     if (stdout_pos as usize) < content.len() {
                         let new_text = &content[stdout_pos as usize..];
                         let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
@@ -673,6 +747,9 @@ impl WebSocketHandler {
 
             match tokio::fs::read_to_string(&stderr_path).await {
                 Ok(content) => {
+                    if (stderr_pos as usize) > content.len() {
+                        stderr_pos = 0;
+                    }
                     if (stderr_pos as usize) < content.len() {
                         let new_text = &content[stderr_pos as usize..];
                         let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
@@ -707,6 +784,14 @@ impl WebSocketHandler {
                         warn!("server {} stderr read error: {}", server_id, e);
                     }
                 }
+            }
+
+            if had_data {
+                let mut offsets = match self.log_stream_offsets.lock() {
+                    Ok(g) => g,
+                    Err(p) => p.into_inner(),
+                };
+                offsets.insert(container_id.to_string(), (stdout_pos, stderr_pos));
             }
 
             // Periodic status log every 50 iterations (~10 seconds) when no data
@@ -754,6 +839,7 @@ impl WebSocketHandler {
                             self.emit_console_output(server_id, "stdout", &batch)
                                 .await?;
                         }
+                        stdout_pos = content.len() as u64;
                     }
                 }
                 if let Ok(content) = tokio::fs::read_to_string(&stderr_path).await {
@@ -778,7 +864,16 @@ impl WebSocketHandler {
                             self.emit_console_output(server_id, "stderr", &batch)
                                 .await?;
                         }
+                        stderr_pos = content.len() as u64;
                     }
+                }
+                // Persist final offsets so a later respawn does not re-emit the flush.
+                {
+                    let mut offsets = match self.log_stream_offsets.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner(),
+                    };
+                    offsets.insert(container_id.to_string(), (stdout_pos, stderr_pos));
                 }
                 info!(
                     "Console log stream ended for server {} (container {}) after {} loops",

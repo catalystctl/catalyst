@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer } from '@/csync';
 
 const ROW_HEIGHT = 44;
 const OVERSCAN = 20;
@@ -9,10 +9,11 @@ export function useFileListVirtualizer(
   parentRef: React.RefObject<HTMLDivElement | null>,
 ) {
   const estimateSize = useCallback(() => ROW_HEIGHT, []);
+  const getScrollElement = useCallback(() => parentRef.current, [parentRef]);
 
   const virtualizer = useVirtualizer({
     count,
-    getScrollElement: () => parentRef.current,
+    getScrollElement,
     estimateSize,
     overscan: OVERSCAN,
   });

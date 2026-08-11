@@ -98,10 +98,19 @@ export const serversApi = {
     return data.data;
   },
   allocations: async (id: string) => {
-    const data = await apiClient.get<ApiResponse<any>>(`/api/servers/${id}/allocations`);
-    return Array.isArray(data.data) ? data.data : [];
+    const data = await apiClient.get<ApiResponse<any> | any[]>(`/api/servers/${id}/allocations`);
+    // Backend: { success, data: Allocation[] }. Tolerate bare array / nested shapes.
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray((data as any).data)) return (data as any).data;
+    if (data && Array.isArray((data as any).allocations)) return (data as any).allocations;
+    return [];
   },
-  addAllocation: async (id: string, payload: { containerPort: number; hostPort: number }) => {
+  addAllocation: async (
+    id: string,
+    payload:
+      | { allocationId: string; containerPort?: number }
+      | { containerPort: number; hostPort: number },
+  ) => {
     const data = await apiClient.post<ApiResponse<any>>(`/api/servers/${id}/allocations`, payload);
     return data.data;
   },
@@ -272,6 +281,26 @@ export const serversApi = {
   transferOwnership: async (id: string, payload: { newOwnerId: string }) => {
     const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/transfer-ownership`, payload);
     return data;
+  },
+
+  transferCandidates: async (
+    id: string,
+    params?: { search?: string; limit?: number },
+  ) => {
+    type TransferCandidate = {
+      id: string;
+      email: string;
+      username: string;
+      name?: string | null;
+    };
+    const data = await apiClient.get<
+      ApiResponse<TransferCandidate[]> | TransferCandidate[] | { users?: TransferCandidate[] }
+    >(`/api/servers/${id}/transfer-candidates`, { params });
+    // Backend: { success, data: User[] }. Tolerate bare array / nested shapes.
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray((data as any).data)) return (data as any).data;
+    if (data && Array.isArray((data as any).users)) return (data as any).users;
+    return [];
   },
 
   archive: async (id: string) => {

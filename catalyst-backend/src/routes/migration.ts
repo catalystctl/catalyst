@@ -240,6 +240,22 @@ export async function migrationRoutes(app: FastifyInstance) {
         },
       });
 
+      // Notify admin SSE subscribers immediately so Migration UI updates without poll.
+      try {
+        const { getWsGateway } = await import("../websocket/gateway.js");
+        const gateway = getWsGateway();
+        gateway?.pushToAdminSubscribers?.("migration_job_updated", {
+          type: "migration_job_updated",
+          jobId: job.id,
+          status: job.status,
+          currentPhase: job.currentPhase,
+          progress: job.progress,
+          timestamp: new Date().toISOString(),
+        });
+      } catch {
+        /* non-fatal */
+      }
+
       // Start migration asynchronously
       const service = getMigrationService(logger, app);
       service.startMigration(job.id).catch(async (err) => {
@@ -256,6 +272,14 @@ export async function migrationRoutes(app: FastifyInstance) {
           await prisma.migrationJob.update({
             where: { id: job.id },
             data: { status: "failed", error: err.message || "Failed to start migration" },
+          });
+          const { getWsGateway } = await import("../websocket/gateway.js");
+          getWsGateway()?.pushToAdminSubscribers?.("migration_job_updated", {
+            type: "migration_job_updated",
+            jobId: job.id,
+            status: "failed",
+            error: err.message || "Failed to start migration",
+            timestamp: new Date().toISOString(),
           });
         } catch (updateErr) {
           logger.error({ jobId: job.id, err: updateErr }, "Failed to update job status after start error");

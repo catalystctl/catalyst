@@ -30,7 +30,7 @@ export function optimisticInvalidate(
  * Lightweight key matcher — checks if queryKey starts with any of the given prefixes.
  *
  * Collection keys like `qk.servers()` now return `['servers']` (no null suffix),
- * so prefix matching works naturally with TanStack Query v5.
+ * so prefix matching works naturally with Catalyst Sync v5.
  */
 function matchQueryKeys(queryKey: readonly unknown[], prefixes: readonly unknown[]): boolean {
   return prefixes.some((p) => {

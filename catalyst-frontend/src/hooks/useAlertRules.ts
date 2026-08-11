@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { alertsApi } from '../services/api/alerts';
 

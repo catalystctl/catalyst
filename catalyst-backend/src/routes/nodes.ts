@@ -10,6 +10,7 @@ import { createApiKey, deleteApiKey } from "../services/api-key-service";
 import { captureSystemError } from "../services/error-logger";
 import { getUpdateStatus } from "../services/auto-updater";
 import { createAuditLog } from "../middleware/audit.js";
+import { openSseStream } from "../utils/sse.js";
 
 // ID format validation — accepts UUID, Cuid2, and other safe identifier formats.
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -2395,6 +2396,90 @@ export async function nodeRoutes(app: FastifyInstance) {
 		},
 	);
 
+	// Live agent log tail (SSE) — panel pulls from agent and pushes to browser.
+	// Agents do not open a dedicated log socket; this is the true stream surface.
+	app.get(
+		"/:nodeId/agent/logs/stream",
+		{
+			onRequest: [app.authenticate],
+			config: { rateLimit: false },
+		},
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.read")) return;
+			const { nodeId } = request.params as { nodeId: string };
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			const gateway = (app as any).wsGateway;
+			if (!gateway) {
+				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+			}
+
+			const sse = openSseStream(request, reply);
+			sse.comment("connected");
+			const writeEvent = (event: string, data: unknown) => {
+				sse.push(event, data);
+			};
+			writeEvent("connected", { nodeId, timestamp: new Date().toISOString() });
+
+			const seen = new Set<string>();
+			const keyOf = (l: any) =>
+				`${l?.timestamp ?? ""}|${l?.target ?? ""}|${l?.message ?? ""}`;
+
+			const pull = async () => {
+				if (!node.isOnline && !(await prisma.node.findUnique({ where: { id: nodeId }, select: { isOnline: true } }))?.isOnline) {
+					writeEvent("agent_logs", { nodeId, logs: [], offline: true });
+					return;
+				}
+				try {
+					const response = await gateway.requestFromAgent(nodeId, {
+						type: "agent_logs",
+						lines: 150,
+					});
+					const logs: unknown[] = Array.isArray(response?.logs) ? response.logs : [];
+					const fresh: unknown[] = [];
+					for (const l of logs) {
+						const k = keyOf(l);
+						if (seen.has(k)) continue;
+						seen.add(k);
+						fresh.push(l);
+					}
+					// Cap seen set
+					if (seen.size > 5000) {
+						const keep = [...seen].slice(-2000);
+						seen.clear();
+						for (const k of keep) seen.add(k);
+					}
+					if (fresh.length > 0) {
+						writeEvent("agent_logs", { nodeId, logs: fresh });
+					}
+				} catch {
+					writeEvent("agent_logs_error", { nodeId, error: "pull_failed" });
+				}
+			};
+
+			// Initial snapshot then interval tail
+			void pull();
+			const interval = setInterval(() => void pull(), 2000);
+			const heartbeat = setInterval(() => {
+				try {
+					sse.comment("heartbeat");
+				} catch {
+					clearInterval(interval);
+					clearInterval(heartbeat);
+				}
+			}, 25_000);
+
+			request.raw.on("close", () => {
+				clearInterval(interval);
+				clearInterval(heartbeat);
+			});
+		},
+	);
+
 	// Restart agent
 	app.post(
 		"/:nodeId/agent/restart",
@@ -2473,6 +2558,19 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			if (!sent) {
 				return reply.status(503).send({ error: "Failed to send update command to agent" });
+			}
+
+			// Optimistic admin SSE so the control panel flips to "updating" immediately.
+			try {
+				gateway.pushToAdminSubscribers?.("agent_update_started", {
+					type: "agent_update_started",
+					nodeId,
+					targetVersion: version ?? null,
+					progress: 0,
+					timestamp: new Date().toISOString(),
+				});
+			} catch {
+				/* non-fatal */
 			}
 
 			await createAuditLog(request.user.userId, {

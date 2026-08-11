@@ -268,7 +268,7 @@ catalyst-frontend/src/
 │   ├── layout/              # Sidebar, header, navigation
 │   └── ...
 ├── pages/                   # Page components (mirrors routes)
-├── hooks/                   # React hooks (TanStack Query wrappers)
+├── hooks/                   # React hooks (Catalyst Sync wrappers)
 │   ├── useServers.ts
 │   ├── useAuth.ts
 │   └── ...
@@ -283,7 +283,7 @@ catalyst-frontend/src/
 
 ### Key Architecture Patterns
 
-**State Management** — Zustand for global UI state, TanStack Query for server state:
+**State Management** — Zustand for global UI state, Catalyst Sync for server state:
 
 ```typescript
 // Fetch with automatic caching and refetch
@@ -336,9 +336,9 @@ Manages sidebar state, modals, and transient UI elements.
 
 ---
 
-### Frontend Hooks (React + TanStack Query)
+### Frontend Hooks (React + Catalyst Sync)
 
-Hooks are in `catalyst-frontend/src/hooks/`. They wrap API calls with TanStack Query for caching, refetching, and transitional state handling.
+Hooks are in `catalyst-frontend/src/hooks/`. They wrap API calls with Catalyst Sync for caching, refetching, and transitional state handling.
 
 #### `useAuth` — Authentication Operations
 
@@ -575,7 +575,7 @@ Deprecated alias to `themeStore`. Use `themeStore` directly.
 
 ## Frontend Hooks Reference
 
-Hooks live in `catalyst-frontend/src/hooks/`. All hooks are TanStack Query wrappers over the API services.
+Hooks live in `catalyst-frontend/src/hooks/`. All hooks are Catalyst Sync wrappers over the API services.
 
 ### Admin Hooks (`hooks/useAdmin.ts`)
 
@@ -1141,7 +1141,7 @@ docker compose logs -f frontend   # Tail frontend only
 
 ### Frontend
 
-- **Transitional states auto-refetch** — Servers in `installing`, `starting`, `stopping`, or `transferring` states are polled every 1 second via TanStack Query. Don't override this behavior.
+- **Transitional states auto-refetch** — Servers in `installing`, `starting`, `stopping`, or `transferring` states are polled every 1 second via Catalyst Sync. Don't override this behavior.
 - **Plugin frontend components share the bundle** — Plugin frontend code is compiled with the main app. Ensure plugin components don't leak state.
 - **Modals must be dismissed properly** — Use Escape key or explicit close buttons. Don't rely on route changes to close dialogs.
 

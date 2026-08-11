@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 
 import { ChevronDown, Folder, FolderOpen, Server } from 'lucide-react';
@@ -36,7 +36,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
  enabled: Boolean(serverId) && isExpanded,
  refetchOnWindowFocus: false,
  staleTime: 30_000,
- refetchInterval: 15_000,
+ refetchInterval: 60_000, // SSE server_files_changed is primary
  refetchIntervalInBackground: false,
  });
  const childDirectories = useMemo(
@@ -144,7 +144,7 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
  enabled: Boolean(serverId),
  refetchOnWindowFocus: false,
  staleTime: 30_000,
- refetchInterval: 15_000,
+ refetchInterval: 60_000, // SSE server_files_changed is primary
  refetchIntervalInBackground: false,
  });
 

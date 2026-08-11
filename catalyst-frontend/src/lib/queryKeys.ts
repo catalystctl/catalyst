@@ -1,5 +1,5 @@
 /**
- * Centralized TanStack Query key constants.
+ * Centralized Catalyst Sync key constants.
  * Import from here instead of hardcoding strings — rename in one place.
  *
  * Convention: plural prefix for entity collections, then id, then sub-entity.
@@ -8,7 +8,7 @@
  *
  * IMPORTANT: Parameterized keys use conditional inclusion — when no params are
  * provided, the key is just the prefix (e.g. ['servers']), so prefix-based
- * invalidation works correctly in TanStack Query v5.
+ * invalidation works correctly with prefix matching (csync / former RQ v5).
  *   qk.servers()              → ['servers']               — prefix matches ALL
  *   qk.servers({status:'run'}) → ['servers', {status:'run'}] — specific filter
  *   qk.server(id)             → ['servers', id]          — specific detail

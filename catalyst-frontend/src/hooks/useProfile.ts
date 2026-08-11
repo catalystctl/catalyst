@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 import { profileApi } from '../services/api/profile';
 import { qk } from '../lib/queryKeys';
 
@@ -7,7 +7,7 @@ export function useProfile() {
     queryKey: qk.profile(),
     queryFn: profileApi.getProfile,
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    refetchInterval: false, // user_updated / profileSync SSE+poll
     refetchIntervalInBackground: false,
   });
 }
@@ -33,7 +33,7 @@ export function useAuditLog(limit = 50, offset = 0) {
     queryKey: qk.profileAuditLog(limit, offset),
     queryFn: () => profileApi.getAuditLog(limit, offset),
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    refetchInterval: false,
     refetchIntervalInBackground: false,
   });
 }

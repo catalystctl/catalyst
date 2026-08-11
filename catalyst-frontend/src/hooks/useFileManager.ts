@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { filesApi } from '../services/api/files';
 import type { FileEntry } from '../types/file';
@@ -33,7 +33,9 @@ export function useFileManager(serverId?: string, initialPath = '/') {
       return filesApi.list(serverId, path);
     },
     enabled: Boolean(serverId),
-    refetchInterval: 10000,
+    // server_files_changed SSE (useServerStateUpdates) invalidates file lists.
+    // Long safety poll only — avoids 10s thrash on idle file managers.
+    refetchInterval: 60_000,
     staleTime: 30_000,
     refetchIntervalInBackground: false,
   });

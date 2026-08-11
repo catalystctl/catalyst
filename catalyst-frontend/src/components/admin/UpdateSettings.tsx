@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@/csync';
 import {
  ArrowUpCircle,
  Container,
@@ -50,7 +50,7 @@ export default function UpdateSettings() {
  queryKey: qk.adminUpdateStatus(),
  queryFn: adminApi.updateStatus,
  staleTime: 15_000,
- refetchInterval: 30_000,
+ refetchInterval: 60_000,
  });
 
  const triggerMutation = useMutation({

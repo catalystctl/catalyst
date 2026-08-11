@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
+import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 
 /**
  * Find the next available host port starting from `startPort`.
@@ -456,6 +457,23 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               where: { id: allocationId },
               data: { serverId: created.id },
             });
+
+            // Claim any additional free NodeAllocations matching secondary port bindings.
+            const secondaryHostPorts = Object.values(resolvedPortBindings).filter(
+              (port) => port !== (allocationPort ?? validatedPrimaryPort),
+            );
+            if (secondaryHostPorts.length > 0) {
+              await tx.nodeAllocation.updateMany({
+                where: {
+                  nodeId,
+                  serverId: null,
+                  port: { in: secondaryHostPorts },
+                  ...(allocationIp ? { ip: allocationIp } : {}),
+                },
+                data: { serverId: created.id },
+              });
+            }
+
             return updated as typeof created;
           }
 
@@ -1007,6 +1025,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           });
         }
 
+        emitServerOperationProgress(wsGatewayCloning, {
+          serverId: server.id,
+          operation: "clone",
+          stage: "Clone started — copying files",
+          progress: 10,
+          state: ServerState.CLONING,
+        });
+
         reply.status(201).send({
           success: true,
           data: withConnectionInfo({ ...server, status: ServerState.CLONING }, node),
@@ -1037,6 +1063,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         });
 
         const wsGatewayFileCopy = (app as any).wsGateway;
+
+        emitServerOperationProgress(wsGatewayFileCopy, {
+          serverId: cloneServerId,
+          operation: "clone",
+          stage: "Copying server files",
+          progress: 40,
+          state: ServerState.CLONING,
+        });
 
         // Perform file copy in background
         (async () => {
@@ -1130,6 +1164,13 @@ export async function serverCoreRoutes(app: FastifyInstance) {
                 state: 'stopped',
               });
             }
+            emitServerOperationProgress(wsGatewayDone, {
+              serverId: cloneServerId,
+              operation: "clone",
+              stage: "Clone complete",
+              progress: 100,
+              state: "stopped",
+            });
           } catch (err: any) {
             // Failure — still set to stopped but log the error
             await prisma.server.update({
@@ -1368,8 +1409,30 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         nodeAccessGranted,
       );
 
+      // Resolve owner display fields (Server.ownerId has no Prisma relation)
+      const ownerUser = server.ownerId
+        ? await prisma.user.findUnique({
+            where: { id: server.ownerId },
+            select: { id: true, username: true, email: true, name: true },
+          })
+        : null;
+
       const { access, ...serverData } = server;
-      reply.send({ success: true, data: { ...withConnectionInfo(serverData as any), effectivePermissions } });
+      reply.send({
+        success: true,
+        data: {
+          ...withConnectionInfo(serverData as any),
+          effectivePermissions,
+          owner: ownerUser
+            ? {
+                id: ownerUser.id,
+                username: ownerUser.username,
+                email: ownerUser.email,
+                name: ownerUser.name,
+              }
+            : null,
+        },
+      });
     }
   );
 
@@ -1383,7 +1446,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
-        include: { node: true },
+        include: { node: true, template: true },
       });
 
       if (!server) {
@@ -1644,9 +1707,40 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         newAllocation = { id: allocation.id, ip: allocation.ip, port: allocation.port };
       }
 
+      // When environment is updated, re-resolve TEMPLATE_IMAGE from IMAGE_VARIANT
+      // so docker image changes apply on the next rebuild/start without manual env edits.
+      let resolvedUpdateEnvironment: Record<string, string> | undefined;
+      if (environment !== undefined) {
+        resolvedUpdateEnvironment = { ...(environment || {}) };
+        if (server.template) {
+          const images = Array.isArray((server.template as any).images)
+            ? ((server.template as any).images as any[])
+            : [];
+          const requestedVariant = resolvedUpdateEnvironment.IMAGE_VARIANT;
+          if (requestedVariant && images.length > 0) {
+            const hasVariant = images.some((option) => option?.name === requestedVariant);
+            if (!hasVariant) {
+              return reply.status(400).send({
+                error: `Unknown image variant: ${requestedVariant}`,
+              });
+            }
+          }
+          // Empty IMAGE_VARIANT means "use template default"
+          if (requestedVariant === '') {
+            delete resolvedUpdateEnvironment.IMAGE_VARIANT;
+          }
+          const resolvedImage = resolveTemplateImage(
+            server.template as any,
+            resolvedUpdateEnvironment,
+          );
+          resolvedUpdateEnvironment.TEMPLATE_IMAGE = resolvedImage;
+        }
+      }
+
       const updated = await prisma.$transaction(async (tx) => {
         let nextPrimaryIp = server.primaryIp ?? null;
-        let nextEnvironment = (environment || server.environment) as Record<string, string>;
+        let nextEnvironment = (resolvedUpdateEnvironment || server.environment) as Record<string, string>;
+
 
         if (hasPrimaryIpUpdate) {
           if (normalizedPrimaryIp && normalizedPrimaryIp.length > 0) {
@@ -1677,7 +1771,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           }
 
           nextEnvironment = {
-            ...((environment || server.environment || {}) as Record<string, any>),
+            ...((resolvedUpdateEnvironment || environment || server.environment || {}) as Record<string, any>),
           };
           if (nextPrimaryIp) {
             nextEnvironment.CATALYST_NETWORK_IP = nextPrimaryIp;
@@ -1686,7 +1780,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           }
         } else if (isHostNetwork && hostNetworkIp) {
           nextEnvironment = {
-            ...((environment || server.environment || {}) as Record<string, any>),
+            ...((resolvedUpdateEnvironment || environment || server.environment || {}) as Record<string, any>),
             CATALYST_NETWORK_IP: hostNetworkIp,
           };
         }
@@ -1711,7 +1805,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           nextPrimaryIp = newAllocation.ip;
           nextPrimaryPort = newAllocation.port;
           nextEnvironment = {
-            ...((environment || server.environment || {}) as Record<string, any>),
+            ...((resolvedUpdateEnvironment || environment || server.environment || {}) as Record<string, any>),
             CATALYST_NETWORK_IP: newAllocation.ip,
           };
         }

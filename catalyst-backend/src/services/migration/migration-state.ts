@@ -4,6 +4,24 @@
 
 import type { PrismaClient } from "@prisma/client";
 
+function emitAdminMigrationEvent(
+  eventType: string,
+  data: Record<string, unknown>,
+): void {
+  // Fire-and-forget: migration must not fail if SSE is unavailable.
+  void import("../../websocket/gateway.js")
+    .then(({ getWsGateway }) => {
+      const gateway = getWsGateway();
+      if (!gateway?.pushToAdminSubscribers) return;
+      gateway.pushToAdminSubscribers(eventType, {
+        type: eventType,
+        ...data,
+        timestamp: new Date().toISOString(),
+      });
+    })
+    .catch(() => {});
+}
+
 export class MigrationStateManager {
   constructor(private prisma: PrismaClient) {}
 
@@ -71,10 +89,19 @@ export class MigrationStateManager {
     if (error) {
       data.error = error;
     }
-    return this.prisma.migrationJob.update({
+    const job = await this.prisma.migrationJob.update({
       where: { id: jobId },
       data,
     });
+    emitAdminMigrationEvent("migration_job_updated", {
+      jobId,
+      status: job.status,
+      currentPhase: job.currentPhase,
+      progress: job.progress,
+      error: job.error ?? null,
+      completedAt: job.completedAt?.toISOString?.() ?? job.completedAt ?? null,
+    });
+    return job;
   }
 
   async updateJobProgress(
@@ -87,23 +114,38 @@ export class MigrationStateManager {
       skipped: number;
     }
   ) {
-    return this.prisma.migrationJob.update({
+    const job = await this.prisma.migrationJob.update({
       where: { id: jobId },
       data: {
         currentPhase,
         progress,
       },
     });
+    emitAdminMigrationEvent("migration_job_updated", {
+      jobId,
+      status: job.status,
+      currentPhase,
+      progress,
+      error: job.error ?? null,
+    });
+    return job;
   }
 
   async startJob(jobId: string) {
-    return this.prisma.migrationJob.update({
+    const job = await this.prisma.migrationJob.update({
       where: { id: jobId },
       data: {
         status: "running",
         startedAt: new Date(),
       },
     });
+    emitAdminMigrationEvent("migration_job_updated", {
+      jobId,
+      status: "running",
+      currentPhase: job.currentPhase,
+      progress: job.progress,
+    });
+    return job;
   }
 
   // ========================================================================
@@ -116,7 +158,7 @@ export class MigrationStateManager {
     action: string,
     sourceId?: string
   ) {
-    return this.prisma.migrationStep.create({
+    const step = await this.prisma.migrationStep.create({
       data: {
         jobId,
         phase,
@@ -125,6 +167,24 @@ export class MigrationStateManager {
         status: "pending",
       },
     });
+    emitAdminMigrationEvent("migration_step_updated", {
+      jobId,
+      step: {
+        id: step.id,
+        jobId: step.jobId,
+        phase: step.phase,
+        action: step.action,
+        sourceId: step.sourceId,
+        status: step.status,
+        targetId: step.targetId,
+        error: step.error,
+        durationMs: step.durationMs,
+        metadata: step.metadata,
+        startedAt: step.startedAt,
+        completedAt: step.completedAt,
+      },
+    });
+    return step;
   }
 
   async updateStepStatus(
@@ -150,10 +210,28 @@ export class MigrationStateManager {
     if (opts?.durationMs !== undefined) data.durationMs = opts.durationMs;
     if (opts?.metadata) data.metadata = opts.metadata;
 
-    return this.prisma.migrationStep.update({
+    const step = await this.prisma.migrationStep.update({
       where: { id: stepId },
       data,
     });
+    emitAdminMigrationEvent("migration_step_updated", {
+      jobId: step.jobId,
+      step: {
+        id: step.id,
+        jobId: step.jobId,
+        phase: step.phase,
+        action: step.action,
+        sourceId: step.sourceId,
+        status: step.status,
+        targetId: step.targetId,
+        error: step.error,
+        durationMs: step.durationMs,
+        metadata: step.metadata,
+        startedAt: step.startedAt,
+        completedAt: step.completedAt,
+      },
+    });
+    return step;
   }
 
   async getPendingSteps(jobId: string) {

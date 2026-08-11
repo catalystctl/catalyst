@@ -2,7 +2,7 @@ import { useState } from 'react';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
 import SectionHeader from './SectionHeader';
-import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
 import { notifySuccess, notifyError } from '../../../utils/notify';

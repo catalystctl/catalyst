@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { allocateIpForServer, canAccessServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, OWNER_SERVER_PERMISSIONS, path, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
+import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 
 export async function serverAdminopsRoutes(app: FastifyInstance) {
   app.patch(
@@ -410,6 +411,15 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         data: { status: ServerState.TRANSFERRING },
       });
 
+
+      emitServerOperationProgress((app as any).wsGateway, {
+        serverId: id,
+        operation: "transfer",
+        stage: "Transfer started",
+        progress: 5,
+        state: ServerState.TRANSFERRING,
+      });
+
       // Get WebSocket gateway
       const wsGateway = (app as any).wsGateway;
 
@@ -421,6 +431,15 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
             stream: "system",
             data: `Creating backup on source node...`,
           },
+        });
+
+
+        emitServerOperationProgress((app as any).wsGateway, {
+          serverId: id,
+          operation: "transfer",
+          stage: "Creating backup on source",
+          progress: 20,
+          state: ServerState.TRANSFERRING,
         });
 
         const backupName = `transfer-${Date.now()}`;
@@ -461,6 +480,15 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
             stream: "system",
             data: `Restoring on target node ${targetNode.name}...`,
           },
+        });
+
+
+        emitServerOperationProgress((app as any).wsGateway, {
+          serverId: id,
+          operation: "transfer",
+          stage: `Streaming to ${targetNode.name}`,
+          progress: 55,
+          state: ServerState.TRANSFERRING,
         });
 
         // Step 3: Start backup stream on source agent and relay to target.
@@ -505,6 +533,14 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
             finishResult?.error || "Target agent failed to finish restore stream",
           );
         }
+
+        emitServerOperationProgress((app as any).wsGateway, {
+          serverId: id,
+          operation: "transfer",
+          stage: "Finalizing transfer",
+          progress: 90,
+          state: ServerState.TRANSFERRING,
+        });
 
         await prisma.serverLog.create({
           data: {
@@ -559,6 +595,14 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
           },
         });
 
+        emitServerOperationProgress((app as any).wsGateway, {
+          serverId: id,
+          operation: "transfer",
+          stage: "Transfer finished",
+          progress: 100,
+          state: "stopped",
+        });
+
         reply.send({
           success: true,
           message: "Server transferred successfully",
@@ -604,7 +648,60 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
     }
   );
 
-  // Suspend server
+  // Search users eligible as transfer-ownership targets (owner or admin.write)
+  app.get(
+    "/:serverId/transfer-candidates",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const userId = request.user.userId;
+      const { search, limit } = request.query as { search?: string; limit?: string | number };
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        select: { id: true, ownerId: true },
+      });
+      if (!server) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+
+      const isAdmin = checkIsAdmin(request, "admin.write");
+      if (server.ownerId !== userId && !isAdmin) {
+        return reply.status(403).send({ error: "Only the server owner or an admin can transfer ownership" });
+      }
+
+      const searchQuery = typeof search === "string" ? search.trim() : "";
+      const take = Math.min(Math.max(Number(limit) || 25, 1), 50);
+
+      const users = await prisma.user.findMany({
+        where: {
+          id: { not: server.ownerId },
+          banned: false,
+          ...(searchQuery
+            ? {
+                OR: [
+                  { email: { contains: searchQuery, mode: "insensitive" as const } },
+                  { username: { contains: searchQuery, mode: "insensitive" as const } },
+                  { name: { contains: searchQuery, mode: "insensitive" as const } },
+                ],
+              }
+            : {}),
+        },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          name: true,
+        },
+        orderBy: { username: "asc" },
+        take,
+      });
+
+      reply.send({ success: true, data: users });
+    }
+  );
+
+  // Transfer ownership
   app.post(
     "/:serverId/transfer-ownership",
     { onRequest: [app.authenticate] },

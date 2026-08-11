@@ -24,3 +24,8 @@ export type {
   PluginErrorFallbackProps,
 } from './plugin-definition';
 export * from './plugin-ui';
+
+export {
+  subscribeServerRealtime,
+  subscribeAdminRealtime,
+} from './pluginHostRealtime';

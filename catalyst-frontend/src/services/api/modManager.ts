@@ -27,7 +27,7 @@ export const modManagerApi = {
       `/api/servers/${serverId}/mod-manager/game-versions`,
       { params: { provider, game } },
     );
-    return data.data ?? [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   search: async (
     serverId: string,
@@ -79,7 +79,7 @@ export const modManagerApi = {
       `/api/servers/${serverId}/mod-manager/installed`,
       { params: { target } },
     );
-    return data.data ?? [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   uninstall: async (serverId: string, filename: string, target?: string) => {
     const data = await apiClient.post<{ success: boolean }>(

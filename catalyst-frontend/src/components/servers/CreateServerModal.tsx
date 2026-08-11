@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { serversApi } from '../../services/api/servers';
 import { useTemplates } from '../../hooks/useTemplates';

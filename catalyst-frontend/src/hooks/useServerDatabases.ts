@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { databasesApi } from '../services/api/databases';
 import { reportSystemError } from '../services/api/systemErrors';

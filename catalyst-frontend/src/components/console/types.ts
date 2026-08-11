@@ -1,5 +1,6 @@
 /**
- * Console types — shared between main thread and worker.
+ * Console entry shapes shared by the hook and XtermConsole.
+ * (ANSI/HTML processing types removed with CustomConsole.)
  */
 
 export type RawEntry = {
@@ -7,13 +8,4 @@ export type RawEntry = {
   stream: string;
   data: string;
   timestamp?: string;
-};
-
-export type ProcessedEntry = {
-  id: string;
-  stream: string;
-  timestamp: string;
-  html: string;
-  /** Raw visible character count (HTML tags stripped) — used for deterministic row height. */
-  textLength: number;
 };

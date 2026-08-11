@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@/csync';
 import {
  ArrowLeftRight,
  ArrowUpCircle,
@@ -182,6 +182,10 @@ function VersionSelector({
  );
 }
 
+// Stable empty fallback — inline `?? []` recreates identity every render and
+// infinite-loops the React 19 prev-state sync below when providers are missing.
+const EMPTY_PLUGIN_PROVIDERS: string[] = [];
+
 // ── Main Component ──
 export default function ServerPluginManagerTab({
  serverId,
@@ -190,7 +194,9 @@ export default function ServerPluginManagerTab({
 }: Props) {
  const queryClient = useQueryClient();
  // ── Provider state ──
- const pluginManagerProviders = pluginManagerConfig?.providers ?? [];
+ const pluginManagerProviders = Array.isArray(pluginManagerConfig?.providers)
+ ? pluginManagerConfig.providers
+ : EMPTY_PLUGIN_PROVIDERS;
  const [pluginProvider, setPluginProvider] = useState('modrinth');
 
  // ── Sync (set state during render, React 19 pattern) ──
@@ -318,7 +324,7 @@ export default function ServerPluginManagerTab({
  queryFn: () => pluginManagerApi.installed(serverId ?? ''),
  enabled: Boolean(serverId && pluginManagerConfig),
  staleTime: 300_000,
- refetchInterval: 10000,
+ refetchInterval: false, // install/uninstall/update complete via SSE
  refetchIntervalInBackground: false,
  });
 

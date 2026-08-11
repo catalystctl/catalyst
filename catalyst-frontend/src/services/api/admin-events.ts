@@ -1,3 +1,5 @@
+import { subscribeSharedEventSource, type StreamStatus } from './sse-hub';
+
 /**
  * SSE service for admin entity events.
  *
@@ -73,9 +75,15 @@ export type AdminEventType =
   // Plugin manager events (admin-scoped)
   | 'plugin_install_complete'
   | 'plugin_uninstall_complete'
-  | 'plugin_update_complete';
+  | 'plugin_update_complete'
+  | 'migration_job_updated'
+  | 'migration_step_updated'
+  | 'agent_update_started'
+  | 'agent_update_failed'
+  | 'agent_update_progress'
+  | 'node_metrics_updated';
 
-const ADMIN_EVENT_TYPES: AdminEventType[] = [
+export const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'user_created',
   'user_deleted',
   'user_updated',
@@ -142,44 +150,30 @@ const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'plugin_install_complete',
   'plugin_uninstall_complete',
   'plugin_update_complete',
+  'migration_job_updated',
+  'migration_step_updated',
+  'agent_update_started',
+  'agent_update_failed',
+  'agent_update_progress',
+  'node_metrics_updated',
 ];
 
-type AdminEventHandler = (type: AdminEventType, data: Record<string, unknown>) => void;
+export type AdminEventHandler = (type: AdminEventType, data: Record<string, unknown>) => void;
+
+export type { StreamStatus };
 
 /**
- * Creates an SSE connection to /api/admin/events.
- * Returns a disconnect function. Multiple calls can coexist (one per admin page).
- *
- * @param onEvent - Called for each matching event
- * @param onStatus - Called on connection status changes
+ * Subscribe to /api/admin/events via the shared EventSource hub.
+ * Multiple callers (AppLayout + pages) share one socket.
  */
 export function createAdminEventsStream(
   onEvent: AdminEventHandler,
-  onStatus: (status: 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'error') => void,
+  onStatus: (status: StreamStatus) => void,
 ): () => void {
-  const url = '/api/admin/events';
-  const es = new EventSource(url, { withCredentials: true });;
-
-  es.onopen = () => onStatus('connected');
-  es.onerror = () => {
-    if (es.readyState === EventSource.CONNECTING) onStatus('reconnecting');
-    else if (es.readyState === EventSource.CLOSED) onStatus('closed');
-    else onStatus('error');
-  };
-
-  for (const type of ADMIN_EVENT_TYPES) {
-    es.addEventListener(type, (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data) as Record<string, unknown>;
-        onEvent(type, data);
-      } catch {
-        // ignore parse errors
-      }
-    });
-  }
-
-  return () => {
-    es.close();
-    onStatus('closed');
-  };
+  return subscribeSharedEventSource(
+    '/api/admin/events',
+    ADMIN_EVENT_TYPES,
+    (type, data) => onEvent(type as AdminEventType, data),
+    onStatus,
+  );
 }

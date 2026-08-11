@@ -1,13 +1,13 @@
 /**
  * SSE-based real-time server metrics hook.
  *
- * Connects to /api/servers/:serverId/metrics/stream and returns
- * resource_stats events (CPU, memory, disk, network).
+ * Uses the dedicated /api/servers/:serverId/metrics/stream endpoint
+ * (shared EventSource hub) and returns resource_stats (CPU, memory, disk, network).
  *
  * Throttled to ~4 Hz to avoid flooding React state.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
+import { createServerMetricsStream, type ServerEventType } from '../services/api/server-events';
 import type { ServerMetrics as ServerMetricsType } from '../types/server';
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
@@ -28,10 +28,12 @@ export function useServerMetrics(serverId?: string, allocatedMemoryMb?: number) 
   useEffect(() => {
     if (!serverId) return;
 
-    const disconnect = createServerEventsStream(
+    const disconnect = createServerMetricsStream(
       serverId,
       (type: ServerEventType, data: Record<string, unknown>) => {
-        if (type !== 'resource_stats' || String(data.serverId) !== serverId) return;
+        if (type !== 'resource_stats') return;
+        // metrics/stream may omit serverId; accept either match or missing
+        if (data.serverId != null && String(data.serverId) !== serverId) return;
 
         const applyMetrics = (d: Record<string, unknown>) => {
           const cpuPercent = clampPercent(Number(d.cpuPercent ?? d.cpu ?? 0));
