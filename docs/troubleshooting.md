@@ -83,9 +83,9 @@ docker compose up -d
 **Common causes:**
 - PostgreSQL not ready when backend starts
 - Corrupted database volume
-- Wrong `DATABASE_URL`
+- Wrong `DATABASE_URL` / mismatched `POSTGRES_PASSWORD`
 
-**Fix:**
+**Fix (generic):**
 
 ```bash
 # Check PostgreSQL status
@@ -94,13 +94,26 @@ docker compose logs postgres
 
 # Recreate the database volume (⚠️ this wipes your data)
 docker compose down
-docker volume rm catalyst-catalyst-postgres-data
+docker volume ls | grep catalyst-postgres
+docker volume rm <the-postgres-volume-name>
 docker compose up -d
 
 # Re-run migrations
 docker compose exec backend pnpm run db:migrate
 docker compose exec backend pnpm run db:seed
 ```
+
+**Fix specifically for `P1000` / `password authentication failed for user "catalyst"`:**
+
+The official Postgres image only applies `POSTGRES_PASSWORD` on **first** volume
+init. If you re-ran `install.sh`, used `--reconfigure`, or edited `.env` after the
+volume already existed, the backend now presents a password the DB user does not
+have.
+
+- **Wipe and re-init** (above), **or**
+- Put the original password back in `.env`, **or**
+- `ALTER USER catalyst WITH PASSWORD '...'` inside the running postgres container,
+  then update `.env` to match.
 
 ### Containerd Not Found (Agent)
 

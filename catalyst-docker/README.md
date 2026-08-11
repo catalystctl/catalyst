@@ -437,6 +437,40 @@ docker compose exec postgres psql -U catalyst -d catalyst_db -c "SELECT 1;"
 docker compose exec backend pnpm run db:seed
 ```
 
+**Symptom:** `Error: P1000 Authentication failed` / postgres log
+`password authentication failed for user "catalyst"`
+
+**Cause:** `POSTGRES_PASSWORD` in `.env` no longer matches the password stored
+inside the existing `catalyst-postgres-data` volume. The official Postgres image
+only reads `POSTGRES_PASSWORD` the **first** time the data directory is created.
+This commonly happens after:
+- re-running `install.sh --reconfigure` / a second install that regenerated secrets
+- editing `POSTGRES_PASSWORD` in `.env` and restarting without wiping volumes
+- uninstalling (which keeps volumes) then installing again with a new password
+
+**Fix (fresh install / wipe data):**
+
+```bash
+docker compose down
+# Project-prefixed name is typically catalyst-docker_catalyst-postgres-data
+docker volume ls | grep catalyst-postgres
+docker volume rm <the-postgres-volume-name>
+docker compose up -d
+```
+
+**Fix (keep data, restore the old password):** put the original password back in
+`.env` as `POSTGRES_PASSWORD=...`, then `docker compose up -d --force-recreate backend`.
+
+**Fix (keep data, set a new password inside Postgres):**
+
+```bash
+# From the host, using the CURRENT (old) password via the postgres container
+# which authenticates locally as the superuser without the app password:
+docker compose exec postgres psql -U catalyst -d catalyst_db \
+  -c "ALTER USER catalyst WITH PASSWORD 'your-new-password';"
+# Then set POSTGRES_PASSWORD=your-new-password in .env and recreate backend.
+```
+
 ### `podman compose up -d` hangs
 
 This is normal — `podman-compose` waits for all healthchecks before returning. Check progress:

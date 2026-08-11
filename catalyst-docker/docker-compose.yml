@@ -71,6 +71,13 @@ services:
       PORT: 3000
 
       # Database
+      # NOTE: POSTGRES_PASSWORD is only applied by the official Postgres image on
+      # FIRST volume initialization. Changing it in .env later without wiping
+      # catalyst-postgres-data leaves the DB user on the old password and causes
+      # Prisma P1000 ("password authentication failed for user catalyst").
+      # Compose does not URL-encode ${POSTGRES_PASSWORD}; install.sh generates
+      # URL-safe passwords (no /+=). If you set a custom password with special
+      # characters, URL-encode them in a full DATABASE_URL override instead.
       DATABASE_URL: postgresql://catalyst:${POSTGRES_PASSWORD}@postgres:5432/catalyst_db
 
       # Redis

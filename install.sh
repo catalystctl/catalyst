@@ -40,8 +40,9 @@ for arg in "$@"; do
             echo "  -h, --help                     Show this help"
             echo ""
             echo "Environment overrides (used with -y):"
-            echo "  PUBLIC_URL=    Panel URL (e.g. http://192.168.1.100:8080)"
-            echo "  APP_NAME=      Panel name (default: Catalyst)"
+            echo "  PUBLIC_URL=       Panel URL (e.g. http://192.168.1.100:8080)"
+            echo "  APP_NAME=         Panel name (default: Catalyst)"
+            echo "  REMOVE_VOLUMES=1  With --uninstall -y, also delete compose volumes"
             exit 0
             ;;
         *)
@@ -355,6 +356,12 @@ INSTALL
 
 # ── Check if .env looks incomplete ───────────────────────────────────────────
 # Returns 0 (true) if the .env appears to be from an interrupted setup.
+#
+# IMPORTANT: A completed install that keeps the default PUBLIC_URL
+# (http://localhost:8080) is NOT incomplete. Treating it as incomplete caused
+# re-runs (especially with -y) to regenerate POSTGRES_PASSWORD while the
+# existing Postgres volume still held the old password → Prisma P1000
+# "password authentication failed for user catalyst".
 is_env_incomplete() {
     local env_file="$1"
 
@@ -363,19 +370,40 @@ is_env_incomplete() {
         return 0
     fi
 
-    # Heuristic: PUBLIC_URL is still the .env.example default but secrets
-    # were already generated — meaning the script ran but the interactive
-    # prompts were never completed.
-    local public_url_val
-    public_url_val=$(grep "^PUBLIC_URL=" "$env_file" 2>/dev/null | cut -d= -f2- || echo "")
-    if [[ -z "$public_url_val" || "$public_url_val" == "http://localhost:8080" ]]; then
-        # Secrets generated = script ran past the copy phase = interrupted mid-config
-        if ! grep -q "^POSTGRES_PASSWORD=CHANGE_ME" "$env_file" 2>/dev/null; then
-            return 0
-        fi
+    # Mixed secret state: one required secret written, the other still a
+    # placeholder — only happens with a half-written .env (pre-staging or crash).
+    local pg_pass auth_secret
+    pg_pass=$(grep "^POSTGRES_PASSWORD=" "$env_file" 2>/dev/null | cut -d= -f2- || echo "")
+    auth_secret=$(grep "^BETTER_AUTH_SECRET=" "$env_file" 2>/dev/null | cut -d= -f2- || echo "")
+
+    local pg_placeholder=false auth_placeholder=false
+    if [[ -z "$pg_pass" || "$pg_pass" == CHANGE_ME* ]]; then
+        pg_placeholder=true
+    fi
+    if [[ -z "$auth_secret" || "$auth_secret" == CHANGE_ME* ]]; then
+        auth_placeholder=true
+    fi
+
+    if $pg_placeholder && ! $auth_placeholder; then
+        return 0
+    fi
+    if ! $pg_placeholder && $auth_placeholder; then
+        return 0
     fi
 
     return 1
+}
+
+# Read a KEY=value from an env file (value may contain '=').
+env_get() {
+    local env_file="$1" key="$2"
+    grep "^${key}=" "$env_file" 2>/dev/null | head -n1 | cut -d= -f2- || true
+}
+
+# True when value is empty or still a CHANGE_ME* placeholder.
+is_placeholder_secret() {
+    local val="${1:-}"
+    [[ -z "$val" || "$val" == CHANGE_ME* ]]
 }
 
 # ── State ─────────────────────────────────────────────────────────────────────
@@ -646,6 +674,12 @@ phase_configure() {
         fi
     fi
 
+    # When reconfiguring, keep a pointer to the previous .env so we can reuse
+    # non-placeholder secrets. Postgres only applies POSTGRES_PASSWORD on the
+    # FIRST init of the data volume — regenerating it against an existing
+    # volume causes P1000 password authentication failures.
+    local previous_env=""
+
     # ── Decide what to do with an existing .env ──────────────────────────
     if $env_exists && ! $env_incomplete && ! $FORCE_RECONFIGURE; then
         # Fully configured .env — just show a reminder
@@ -658,9 +692,9 @@ phase_configure() {
         # Interrupted previous run — offer to reconfigure
         warn "Previous setup was interrupted — .env is incomplete"
         if [[ "$NON_INTERACTIVE" == "true" ]] || confirm "Reconfigure .env now?"; then
-            # Back up the incomplete .env, start fresh from .env.example
-            mv "${DEST}/.env" "${DEST}/.env.incomplete.$$"
-            info "Backed up incomplete .env to .env.incomplete.$$"
+            previous_env="${DEST}/.env.incomplete.$$"
+            mv "${DEST}/.env" "$previous_env"
+            info "Backed up incomplete .env to $(basename "$previous_env")"
         else
             info "Aborted. Edit manually: nano ${DEST}/.env"
             return 0
@@ -668,8 +702,9 @@ phase_configure() {
     elif $env_exists && $FORCE_RECONFIGURE; then
         # --reconfigure flag — back up and start fresh
         warn "Reconfigure requested — backing up existing .env"
-        mv "${DEST}/.env" "${DEST}/.env.backup.$$"
-        info "Backed up to .env.backup.$$"
+        previous_env="${DEST}/.env.backup.$$"
+        mv "${DEST}/.env" "$previous_env"
+        info "Backed up to $(basename "$previous_env")"
     fi
 
     if $DRY_RUN; then
@@ -684,11 +719,54 @@ phase_configure() {
     cp "${DEST}/.env.example" "$STAGING_ENV"
     ok "Preparing .env configuration..."
 
-    # ── Auto-generate secrets ──────────────────────────────────────────────
-    NEW_PG_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 32)
-    NEW_AUTH_SECRET=$(openssl rand -base64 32)
-    NEW_REDIS_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 24)
-    NEW_API_KEY_SECRET=$(openssl rand -base64 32)
+    # ── Secrets: reuse existing non-placeholder values when present ───────
+    # Fresh install → generate everything.
+    # --reconfigure / resume → keep POSTGRES_PASSWORD (and other real secrets)
+    # so they stay in sync with any already-initialized Docker volumes.
+    local prev_pg="" prev_auth="" prev_redis="" prev_api=""
+    if [[ -n "$previous_env" && -f "$previous_env" ]]; then
+        prev_pg=$(env_get "$previous_env" POSTGRES_PASSWORD)
+        prev_auth=$(env_get "$previous_env" BETTER_AUTH_SECRET)
+        prev_redis=$(env_get "$previous_env" REDIS_PASSWORD)
+        prev_api=$(env_get "$previous_env" API_KEY_SECRET)
+    fi
+
+    local NEW_PG_PASS NEW_AUTH_SECRET NEW_REDIS_PASS NEW_API_KEY_SECRET
+    local reused_pg=false reused_auth=false reused_redis=false reused_api=false
+
+    if ! is_placeholder_secret "$prev_pg"; then
+        NEW_PG_PASS="$prev_pg"
+        reused_pg=true
+    else
+        NEW_PG_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 32)
+    fi
+
+    if ! is_placeholder_secret "$prev_auth"; then
+        NEW_AUTH_SECRET="$prev_auth"
+        reused_auth=true
+    else
+        NEW_AUTH_SECRET=$(openssl rand -base64 32)
+    fi
+
+    # Redis password may legitimately be empty (no auth). Only treat CHANGE_ME*
+    # as a placeholder; empty is preserved as empty.
+    if [[ -n "$previous_env" && -f "$previous_env" ]] && grep -q "^REDIS_PASSWORD=" "$previous_env" 2>/dev/null; then
+        if [[ "$prev_redis" == CHANGE_ME* ]]; then
+            NEW_REDIS_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 24)
+        else
+            NEW_REDIS_PASS="$prev_redis"
+            reused_redis=true
+        fi
+    else
+        NEW_REDIS_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 24)
+    fi
+
+    if ! is_placeholder_secret "$prev_api"; then
+        NEW_API_KEY_SECRET="$prev_api"
+        reused_api=true
+    else
+        NEW_API_KEY_SECRET=$(openssl rand -base64 32)
+    fi
 
     sed -i "s~^POSTGRES_PASSWORD=.*~POSTGRES_PASSWORD=${NEW_PG_PASS}~" "$STAGING_ENV"
     sed -i "s~^BETTER_AUTH_SECRET=.*~BETTER_AUTH_SECRET=${NEW_AUTH_SECRET}~" "$STAGING_ENV"
@@ -702,7 +780,19 @@ phase_configure() {
         printf '\n# HMAC secret for panel/agent API keys\nAPI_KEY_SECRET=%s\n' "${NEW_API_KEY_SECRET}" >> "$STAGING_ENV"
     fi
 
-    ok "Generated POSTGRES_PASSWORD, BETTER_AUTH_SECRET, REDIS_PASSWORD, API_KEY_SECRET"
+    if $reused_pg || $reused_auth || $reused_redis || $reused_api; then
+        ok "Preserved existing secrets (Postgres password is only applied on first volume init)"
+        $reused_pg    && info "Reused POSTGRES_PASSWORD from previous .env"
+        $reused_auth  && info "Reused BETTER_AUTH_SECRET from previous .env"
+        $reused_redis && info "Reused REDIS_PASSWORD from previous .env"
+        $reused_api   && info "Reused API_KEY_SECRET from previous .env"
+        ! $reused_pg    && info "Generated new POSTGRES_PASSWORD"
+        ! $reused_auth  && info "Generated new BETTER_AUTH_SECRET"
+        ! $reused_redis && info "Generated new REDIS_PASSWORD"
+        ! $reused_api   && info "Generated new API_KEY_SECRET"
+    else
+        ok "Generated POSTGRES_PASSWORD, BETTER_AUTH_SECRET, REDIS_PASSWORD, API_KEY_SECRET"
+    fi
 
     # ── Detect default PUBLIC_URL ─────────────────────────────────────────
     DETECTED_IP=""
@@ -819,21 +909,46 @@ phase_uninstall() {
     echo -e "  ${BLD}This will remove:${RST}"
     echo -e "    ${RED}${DEST}/${RST}"
     echo ""
+    echo -e "  ${DIM}Named Docker volumes (postgres DB, server files, backups) are kept by default.${RST}"
+    echo -e "  ${DIM}If you reinstall later with a new POSTGRES_PASSWORD while keeping the old${RST}"
+    echo -e "  ${DIM}postgres volume, the backend will fail with Prisma P1000 auth errors.${RST}"
+    echo ""
 
     if ! confirm "Remove the Catalyst Docker stack?"; then
         info "Aborted."
         exit 0
     fi
 
+    local remove_volumes=false
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        # -y uninstall keeps data unless the operator opts in explicitly.
+        if [[ "${REMOVE_VOLUMES:-}" == "1" || "${REMOVE_VOLUMES:-}" == "true" ]]; then
+            remove_volumes=true
+        fi
+    else
+        if confirm "Also delete data volumes (database, servers, backups)? This cannot be undone."; then
+            remove_volumes=true
+        fi
+    fi
+
     if $DRY_RUN; then
-        info "[dry-run] Would remove ${DEST}"
+        if $remove_volumes; then
+            info "[dry-run] Would remove ${DEST} and compose volumes"
+        else
+            info "[dry-run] Would remove ${DEST} (volumes kept)"
+        fi
         return 0
     fi
 
     # Stop containers first
     if [[ -f "${DEST}/docker-compose.yml" ]]; then
         info "Stopping containers..."
-        cd "$DEST" && $COMPOSE_CMD down 2>/dev/null || true
+        if $remove_volumes; then
+            # -v removes named volumes declared in the compose file
+            (cd "$DEST" && $COMPOSE_CMD down -v 2>/dev/null) || true
+        else
+            (cd "$DEST" && $COMPOSE_CMD down 2>/dev/null) || true
+        fi
     fi
 
     rm -rf "$DEST"
@@ -841,8 +956,15 @@ phase_uninstall() {
 
     echo ""
     echo -e "  ${GRN}${BLD}Catalyst has been uninstalled.${RST}"
-    echo -e "  ${DIM}Note: Docker volumes (database, server data) are NOT removed.${RST}"
-    echo -e "  ${DIM}To delete all data: docker volume prune${RST}"
+    if $remove_volumes; then
+        ok "Compose volumes removed (database + server data wiped)"
+    else
+        echo -e "  ${DIM}Note: Docker volumes (database, server data) were kept.${RST}"
+        echo -e "  ${DIM}To wipe them later:${RST}"
+        echo -e "  ${CYN}  docker volume ls | grep catalyst${RST}"
+        echo -e "  ${CYN}  docker volume rm <name>${RST}"
+        echo -e "  ${DIM}Or re-run: REMOVE_VOLUMES=1 bash install.sh --uninstall -y${RST}"
+    fi
     echo ""
 }
 
@@ -893,6 +1015,8 @@ print_summary() {
     echo ""
     echo -e "  ${YLW}Tip:${RST} First registered user becomes admin."
     echo -e "  ${YLW}Tip:${RST} Edit config anytime: ${CYN}nano ${DEST}/.env${RST}"
+    echo -e "  ${YLW}Tip:${RST} Do not change POSTGRES_PASSWORD after first start without wiping the postgres volume,"
+    echo -e "       ${DIM}or you will get Prisma P1000 password authentication failures.${RST}"
     echo -e "  ${DIM}Log: ${LOGFILE}${RST}"
     echo ""
 }

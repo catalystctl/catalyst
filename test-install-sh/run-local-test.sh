@@ -208,6 +208,109 @@ fi
 echo ""
 echo "Test 3: PASSED ✓"
 
+# ── Test 4: is_env_incomplete must not false-positive on default PUBLIC_URL ──
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║  Test 4: incomplete-env heuristic + secret reuse     ║"
+echo "╚══════════════════════════════════════════════════════╝"
+
+eval "$(sed -n '/^is_env_incomplete()/,/^}/p' "$PROJECT_DIR/install.sh")"
+eval "$(sed -n '/^is_placeholder_secret()/,/^}/p' "$PROJECT_DIR/install.sh")"
+eval "$(sed -n '/^env_get()/,/^}/p' "$PROJECT_DIR/install.sh")"
+
+# Completed install that kept the default PUBLIC_URL must NOT look incomplete
+COMPLETE_ENV=$(mktemp)
+cat > "$COMPLETE_ENV" <<'EOF'
+PUBLIC_URL=http://localhost:8080
+POSTGRES_PASSWORD=AlreadyGeneratedPassword123
+BETTER_AUTH_SECRET=AlreadyGeneratedAuthSecret
+REDIS_PASSWORD=AlreadyGeneratedRedis
+API_KEY_SECRET=AlreadyGeneratedApiKey
+EOF
+if is_env_incomplete "$COMPLETE_ENV"; then
+    echo "  FAIL: complete .env with default PUBLIC_URL treated as incomplete"
+    rm -f "$COMPLETE_ENV"
+    exit 1
+fi
+echo "  OK: complete default-PUBLIC_URL .env is not incomplete"
+
+# Mixed secrets (half-written) should be incomplete
+MIXED_ENV=$(mktemp)
+cat > "$MIXED_ENV" <<'EOF'
+PUBLIC_URL=http://localhost:8080
+POSTGRES_PASSWORD=AlreadyGeneratedPassword123
+BETTER_AUTH_SECRET=CHANGE_ME_GENERATE_WITH_OPENSSL_RAND_BASE64_32
+EOF
+if ! is_env_incomplete "$MIXED_ENV"; then
+    echo "  FAIL: mixed secret state should be incomplete"
+    rm -f "$COMPLETE_ENV" "$MIXED_ENV"
+    exit 1
+fi
+echo "  OK: mixed secret state is incomplete"
+
+# Explicit marker
+MARKER_ENV=$(mktemp)
+cat > "$MARKER_ENV" <<'EOF'
+PUBLIC_URL=http://192.168.1.10:8080
+POSTGRES_PASSWORD=AlreadyGeneratedPassword123
+BETTER_AUTH_SECRET=AlreadyGeneratedAuthSecret
+# CATALYST_SETUP_INCOMPLETE=1
+EOF
+if ! is_env_incomplete "$MARKER_ENV"; then
+    echo "  FAIL: CATALYST_SETUP_INCOMPLETE marker ignored"
+    rm -f "$COMPLETE_ENV" "$MIXED_ENV" "$MARKER_ENV"
+    exit 1
+fi
+echo "  OK: explicit incomplete marker detected"
+
+rm -f "$COMPLETE_ENV" "$MIXED_ENV" "$MARKER_ENV"
+
+# Reconfigure must preserve POSTGRES_PASSWORD from the previous .env
+setup_archive
+TESTROOT4=$(mktemp -d)
+mkdir -p "$TESTROOT4/bin"
+cp "$SCRIPT_DIR/mock-docker" "$TESTROOT4/bin/docker"
+cp "$SCRIPT_DIR/mock-docker-compose" "$TESTROOT4/bin/docker-compose"
+cp "$SCRIPT_DIR/mock-curl" "$TESTROOT4/bin/curl"
+
+cd "$TESTROOT4"
+PATH="$TESTROOT4/bin:$PATH" PUBLIC_URL=http://localhost:8080 bash "$PROJECT_DIR/install.sh" -y
+FIRST_PG=$(grep "^POSTGRES_PASSWORD=" "$TESTROOT4/catalyst-docker/.env" | cut -d= -f2-)
+FIRST_AUTH=$(grep "^BETTER_AUTH_SECRET=" "$TESTROOT4/catalyst-docker/.env" | cut -d= -f2-)
+
+PATH="$TESTROOT4/bin:$PATH" PUBLIC_URL=http://localhost:8080 bash "$PROJECT_DIR/install.sh" --reconfigure -y
+SECOND_PG=$(grep "^POSTGRES_PASSWORD=" "$TESTROOT4/catalyst-docker/.env" | cut -d= -f2-)
+SECOND_AUTH=$(grep "^BETTER_AUTH_SECRET=" "$TESTROOT4/catalyst-docker/.env" | cut -d= -f2-)
+
+if [[ "$FIRST_PG" != "$SECOND_PG" ]]; then
+    echo "  FAIL: --reconfigure regenerated POSTGRES_PASSWORD (was '$FIRST_PG', now '$SECOND_PG')"
+    exit 1
+fi
+if [[ "$FIRST_AUTH" != "$SECOND_AUTH" ]]; then
+    echo "  FAIL: --reconfigure regenerated BETTER_AUTH_SECRET"
+    exit 1
+fi
+echo "  OK: --reconfigure reuses POSTGRES_PASSWORD and BETTER_AUTH_SECRET"
+
+# A second plain install with existing complete .env must skip reconfiguration
+PATH="$TESTROOT4/bin:$PATH" PUBLIC_URL=http://localhost:8080 bash "$PROJECT_DIR/install.sh" -y >/tmp/catalyst-install-reentry.out 2>&1
+THIRD_PG=$(grep "^POSTGRES_PASSWORD=" "$TESTROOT4/catalyst-docker/.env" | cut -d= -f2-)
+if [[ "$FIRST_PG" != "$THIRD_PG" ]]; then
+    echo "  FAIL: re-entry install changed POSTGRES_PASSWORD"
+    exit 1
+fi
+if ! grep -qi "already exists and looks configured" /tmp/catalyst-install-reentry.out; then
+    echo "  FAIL: re-entry install did not skip configured .env"
+    cat /tmp/catalyst-install-reentry.out | tail -20
+    exit 1
+fi
+echo "  OK: re-entry install skips configured .env (default PUBLIC_URL)"
+
+rm -rf "$TESTROOT4"
+
+echo ""
+echo "Test 4: PASSED ✓"
+
 # ── Final cleanup ─────────────────────────────────────────────────────────────
 rm -rf /tmp/test-catalyst-archive
 

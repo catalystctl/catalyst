@@ -686,9 +686,11 @@ docker compose logs -f backend
 | `POSTGRES_PASSWORD` | Docker Compose → PostgreSQL container | **Yes** (in `.env`) |
 | `DATABASE_URL` | Backend code → connect to PostgreSQL | **No** (auto-built from `POSTGRES_PASSWORD` inside the container) |
 
-The backend container's entrypoint constructs `DATABASE_URL` from `POSTGRES_PASSWORD`. You do **not** need to set `DATABASE_URL` in the Docker Compose `.env`.
+Compose injects `DATABASE_URL=postgresql://catalyst:${POSTGRES_PASSWORD}@postgres:5432/catalyst_db` into the backend. You do **not** need to set `DATABASE_URL` in the Docker Compose `.env`.
 
 If you're running the backend outside Docker (development), then you **do** need `DATABASE_URL` in `catalyst-backend/.env`.
+
+**Critical:** the official Postgres image only applies `POSTGRES_PASSWORD` the first time the data volume is initialized. Changing the value in `.env` (or re-running install with a newly generated password) while keeping `catalyst-postgres-data` causes Prisma **P1000** — `password authentication failed for user "catalyst"`. Fix by wiping the volume, restoring the original password, or `ALTER USER` inside Postgres (see [troubleshooting](troubleshooting.md#database-initialization-fails)).
 
 ### 7. `PUBLIC_URL` Mismatch
 
