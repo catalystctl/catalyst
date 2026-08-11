@@ -433,7 +433,7 @@ step_checkout_env() {
 # Maps to:
 #   - pnpm install --frozen-lockfile         (ci.yml lint/test/build jobs)
 #   - cargo fetch                           (ci.yml lint/test/build jobs)
-#   - Cache: actions/cache@v5 for node_modules and cargo registry
+#   - Cache: actions/cache@v5 for pnpm store (not node_modules) and cargo registry
 step_install_deps() {
   step_header "Dependency Install"
   local step_name="install_deps"

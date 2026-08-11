@@ -110,18 +110,17 @@ jobs:
         shell: bash
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
-      - name: Cache pnpm install
+      # Cache the content-addressable store only. Caching package-level
+      # node_modules under a hoisted layout leaves stale .bin wrappers
+      # (e.g. catalyst-backend/node_modules/.bin/eslint -> ../eslint/...) that
+      # break after lockfile upgrades. Store hits still keep installs fast.
+      - name: Cache pnpm store
         uses: actions/cache@v5
         with:
-          path: |
-            ${{ env.STORE_PATH }}
-            node_modules
-            catalyst-backend/node_modules
-            catalyst-frontend/node_modules
-            packages/plugin-sdk/node_modules
-            packages/plugin-sdk-cli/node_modules
-          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
-          restore-keys: pnpm-deps-${{ runner.os }}-
+          path: ${{ env.STORE_PATH }}
+          key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
+          restore-keys: |
+            pnpm-store-v2-${{ runner.os }}-
 
       - name: Cache Prisma Client
         uses: actions/cache@v5
@@ -244,18 +243,17 @@ jobs:
         shell: bash
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
-      - name: Cache pnpm install
+      # Cache the content-addressable store only. Caching package-level
+      # node_modules under a hoisted layout leaves stale .bin wrappers
+      # (e.g. catalyst-backend/node_modules/.bin/eslint -> ../eslint/...) that
+      # break after lockfile upgrades. Store hits still keep installs fast.
+      - name: Cache pnpm store
         uses: actions/cache@v5
         with:
-          path: |
-            ${{ env.STORE_PATH }}
-            node_modules
-            catalyst-backend/node_modules
-            catalyst-frontend/node_modules
-            packages/plugin-sdk/node_modules
-            packages/plugin-sdk-cli/node_modules
-          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
-          restore-keys: pnpm-deps-${{ runner.os }}-
+          path: ${{ env.STORE_PATH }}
+          key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
+          restore-keys: |
+            pnpm-store-v2-${{ runner.os }}-
 
       - name: Cache Prisma Client
         uses: actions/cache@v5
@@ -349,18 +347,17 @@ jobs:
         shell: bash
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
-      - name: Cache pnpm install
+      # Cache the content-addressable store only. Caching package-level
+      # node_modules under a hoisted layout leaves stale .bin wrappers
+      # (e.g. catalyst-backend/node_modules/.bin/eslint -> ../eslint/...) that
+      # break after lockfile upgrades. Store hits still keep installs fast.
+      - name: Cache pnpm store
         uses: actions/cache@v5
         with:
-          path: |
-            ${{ env.STORE_PATH }}
-            node_modules
-            catalyst-backend/node_modules
-            catalyst-frontend/node_modules
-            packages/plugin-sdk/node_modules
-            packages/plugin-sdk-cli/node_modules
-          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
-          restore-keys: pnpm-deps-${{ runner.os }}-
+          path: ${{ env.STORE_PATH }}
+          key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
+          restore-keys: |
+            pnpm-store-v2-${{ runner.os }}-
 
       - name: Cache Prisma Client
         uses: actions/cache@v5
