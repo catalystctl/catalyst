@@ -1,9 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from '@prisma/adapter-pg';
-import pg from 'pg';
 
 // Prisma v7: Use adapter for PostgreSQL
-const pool = new pg.Pool({
+// Pass connection config directly to PrismaPg instead of a pre-built pg.Pool
+// to avoid instanceof check failures in hoisted pnpm layouts
+const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
   max: Number(process.env.DB_POOL_MAX || 50),
   idleTimeoutMillis: 30000,
@@ -13,7 +14,6 @@ const pool = new pg.Pool({
   // on each connection. pg.Pool does not natively support a connection-level statement_timeout
   // option; configure it in postgresql.conf or via a pool 'connect' listener if desired.
 });
-const adapter = new PrismaPg(pool);
 
 export const prisma = new PrismaClient({
   adapter,

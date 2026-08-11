@@ -1661,7 +1661,7 @@ sudo ctr -n catalyst images pull docker.io/your-image:tag
 For security vulnerabilities, **do not** open a public GitHub issue. Instead:
 
 - Read [docs/SECURITY.md](./SECURITY.md) for the full security policy
-- Read [docs/SECURITY_QUICK_REFERENCE.md](./SECURITY_QUICK_REFERENCE.md) for the quick guide
+- Read [Security Policy](./SECURITY.md) for the quick guide
 - Report via the channel specified in the security policy
 
 ---

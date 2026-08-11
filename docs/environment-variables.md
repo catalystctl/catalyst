@@ -194,7 +194,7 @@ Do not commit OAuth secrets to version control. Use secret managers, Docker secr
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `SFTP_ENABLED` | `true` \| `false` | `true` | Enable the JWT-authenticated SFTP server for server file access. |
+| `SFTP_ENABLED` | `true` \| `false` | `true` | Enable SFTP file access (agent-hosted; opaque `sftp_` tokens). |
 | `SFTP_PORT` | Integer | `2022` | SFTP listen port. |
 | `SERVER_DATA_DIR` | Filesystem path | `/var/lib/catalyst/servers` | Root directory for server data. All server files live under this path. |
 | `SFTP_HOST_KEY` | Filesystem path | `./sftp_host_key` | Path to SSH host private key for SFTP authentication. |
@@ -271,7 +271,7 @@ Webhooks include an `X-Webhook-Signature` header with an HMAC-SHA256 hash of the
 | `MAX_AGENT_CONNECTIONS` | Integer | `1000` | Max concurrent WebSocket connections from agent nodes. |
 | `MAX_CLIENT_CONNECTIONS` | Integer | `10000` | Max concurrent connections from dashboard/API clients. |
 | `MAX_CONNECTIONS_PER_USER` | Integer | `10` | Max concurrent connections per authenticated user. |
-| `WORKERS` | Integer | `0` | Number of Bun worker processes. `0` = single process (cluster mode off). Set to a positive number for multi-process cluster mode. |
+| `WORKERS` | Integer | `0` | Number of **Node.js** cluster worker processes. `0` = single process (cluster mode off). Set to a positive number for multi-process cluster mode. |
 | `METRICS_RETENTION_DAYS` | Integer | `30` | How long to retain server metrics data, in days. |
 
 ### Auto Updater
@@ -316,7 +316,7 @@ cp catalyst-docker/.env.example catalyst-docker/.env
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `FRONTEND_PORT` | Host:Container binding | `0.0.0.0:8080` | Port binding for the frontend service. For podman (rootless), use a port ≥ 1024 (e.g., `0.0.0.0:8080`). |
-| `BACKEND_PORT` | Host:Container binding | `0.0.0.0:3000` | Port binding for the backend service. |
+| `BACKEND_PORT` | Host:Container binding | `127.0.0.1:3000` (compose default) | Host publish for the backend API. Compose defaults to **localhost-only**; the process still listens on `0.0.0.0` inside the container. |
 | `SFTP_PORT` | Host:Container binding | `0.0.0.0:2022` | Port binding for the SFTP service. |
 
 ::: tip Restricting Bind Addresses

@@ -45,7 +45,7 @@ docker compose ps
 curl http://localhost:3000/health
 ```
 
-That's it. Open your `PUBLIC_URL` in a browser. The first user to register becomes admin.
+That's it. Open your `PUBLIC_URL` in a browser and complete the **Setup** wizard to create the administrator.
 
 > **Want more detail?** Read the full [Installation Guide](installation.md) or continue below for the complete Docker reference.
 
@@ -72,8 +72,8 @@ The Docker Compose stack (`catalyst-docker/docker-compose.yml`) defines four cor
 | Service | Image | Purpose | Default Exposed Port |
 |---------|-------|---------|---------------------|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
-| `redis` | `redis:7-alpine` | Cache / session store | `127.0.0.1:6379` |
-| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API + SFTP server | `127.0.0.1:3000`, `0.0.0.0:2022` |
+| `redis` | `redis:7-alpine` | Compose service; not session store in current backend | `127.0.0.1:6379` |
+| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API (SFTP publish may still map `:2022`; runtime SFTP is agent-hosted) | `127.0.0.1:3000`, `0.0.0.0:2022` |
 | `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Nginx static SPA | `0.0.0.0:80` |
 
 ### What Each Service Does
@@ -225,7 +225,7 @@ Then start with: `docker compose -f docker-compose.yml -f docker-compose.overrid
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FRONTEND_PORT` | `0.0.0.0:80` | Panel access. Use `127.0.0.1:8080` to restrict to localhost. |
+| `FRONTEND_PORT` | `0.0.0.0:8080` (install / `.env.example`; bare compose fallback is `:80`) | Panel access. Use `127.0.0.1:8080` to restrict to localhost. |
 | `BACKEND_PORT` | `127.0.0.1:3000` | API access. Usually localhost-only (proxied by nginx). |
 | `SFTP_PORT` | `0.0.0.0:2022` | SFTP file access. Must be externally reachable. |
 | `POSTGRES_PORT` | `127.0.0.1:5432` | Database. Disable by commenting out if not needed externally. |

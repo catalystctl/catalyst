@@ -149,7 +149,7 @@ ask() {
     else
         echo -en "\n  ${BLD}?${RST} ${prompt_text}: "
     fi
-    read -r answer
+    read -r answer </dev/tty
     # Use default if empty
     if [[ -z "$answer" ]]; then
         answer="$default_val"
@@ -160,7 +160,7 @@ ask() {
 confirm() {
     # confirm "Question" → returns 0 (yes) or 1 (no)
     echo -en "\n  ${BLD}?${RST} $1 ${DIM}[y/N]${RST}: "
-    read -r ans
+    read -r ans </dev/tty
     [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]
 }
 

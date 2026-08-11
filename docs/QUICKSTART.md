@@ -83,13 +83,16 @@ You should see four containers, all healthy:
 
 ---
 
-## Step 5: Login
+## Step 5: Complete Setup
 
 1. Open your `PUBLIC_URL` in a browser (e.g., `http://localhost:8080`).
-2. Click **Create Account** and register your first user.
-3. 🎉 **You are now the administrator!**
+2. On first launch the panel opens the **Setup** wizard (`/setup`): **Welcome** → **Admin Account** → **Appearance**.
+3. Create the administrator account and finish setup.
+4. Sign in with those credentials. You are the administrator.
 
-> **No seeding required.** The first user to register automatically becomes the admin.
+> **No database seeding required.** Setup creates the Administrator role and **disables open self-registration**. Re-enable registration later under **Admin → Security** if you want public sign-ups.
+>
+> Dev-only seed credentials (`admin@example.com` / `admin123`) apply only if you explicitly ran a seed script — not the Docker production path.
 
 ---
 
@@ -99,7 +102,7 @@ Your panel is running, but you need a **node** (a machine to run game servers on
 
 | What you want | Where to go |
 |---|---|
-| Set up a node and deploy the agent | [Getting Started → Step 3](getting-started.md#step-3-create-a-node) |
+| Set up a node and deploy the agent | [Getting Started → Step 4](getting-started.md#step-4-create-a-node) |
 | Create your first game server | [Getting Started → Step 7](getting-started.md#step-7-create-your-first-server) |
 | Enable HTTPS / TLS | [Docker Setup → TLS](docker-setup.md#tls--https-setup) |
 | Understand every config option | [Environment Variables](environment-variables.md) |

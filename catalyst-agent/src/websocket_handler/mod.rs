@@ -735,7 +735,7 @@ impl WebSocketHandler {
             } else {
                 // ±20% jitter so many agents don't reconnect in lockstep.
                 let jitter_span = (network_backoff_secs / 5).max(1);
-                let raw = rand_08::random::<u64>() % (jitter_span * 2 + 1);
+                let raw = rand::random::<u64>() % (jitter_span * 2 + 1);
                 let with_jitter = if raw >= jitter_span {
                     network_backoff_secs.saturating_add(raw - jitter_span)
                 } else {

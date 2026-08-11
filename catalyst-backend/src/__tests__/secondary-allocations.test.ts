@@ -172,11 +172,11 @@ afterAll(async () => {
     await prisma.server.delete({ where: { id } }).catch(() => {});
   }
   // Clean up template, node, user, role, location
-  await prisma.serverTemplate.delete({ where: { id: testTemplateId } });
-  await prisma.node.delete({ where: { id: testNodeId } });
-  await prisma.user.delete({ where: { id: testUserId } });
-  await prisma.role.delete({ where: { id: adminRoleId } });
-  await prisma.location.delete({ where: { id: testLocationId } });
+  if (testTemplateId) await prisma.serverTemplate.delete({ where: { id: testTemplateId } });
+  if (testNodeId) await prisma.node.delete({ where: { id: testNodeId } });
+  if (testUserId) await prisma.user.delete({ where: { id: testUserId } });
+  if (adminRoleId) await prisma.role.delete({ where: { id: adminRoleId } });
+  if (testLocationId) await prisma.location.delete({ where: { id: testLocationId } });
 });
 
 // ============================================================================

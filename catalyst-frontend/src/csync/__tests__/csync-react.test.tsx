@@ -177,7 +177,7 @@ describe('csync react hooks', () => {
     await waitFor(() => expect(result.current.data).toEqual([{ id: 'b' }, { id: 'c' }]));
     expect(Array.isArray(result.current.data)).toBe(true);
     // .find must not throw — same contract ServerTasksTab relies on
-    expect(result.current.data!.find((t: any) => t.id === 'c')).toEqual({ id: 'c' });
+    expect((result.current.data as any)!.find((t: any) => t.id === 'c')).toEqual({ id: 'c' });
   });
 
   it('setQueryData triggers useQuery observers', async () => {

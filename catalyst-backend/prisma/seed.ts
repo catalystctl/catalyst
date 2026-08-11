@@ -7,16 +7,14 @@
 import 'dotenv/config';
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from '@prisma/adapter-pg';
-import pg from 'pg';
 import { auth, initAuth } from "../src/auth";
 import { withRegistrationBypass } from "../src/lib/registration-gate.js";
 initAuth();
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Prisma v7: Use adapter for PostgreSQL
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
+// Prisma v7: pass config directly to avoid instanceof mismatch in hoisted pnpm layouts
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 // Function to convert HTTP URL to WebSocket URL

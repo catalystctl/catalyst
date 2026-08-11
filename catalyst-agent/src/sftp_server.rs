@@ -36,11 +36,12 @@ use std::sync::Arc;
 
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use russh::server::{Auth, Msg, Server, Session};
-use russh::{Channel, ChannelId, MethodSet};
+use russh::server::{Auth, ChannelOpenHandle, Msg, Server, Session};
+use russh::{Channel, ChannelId, MethodKind, MethodSet};
 use russh_sftp::protocol::{
     File, FileAttributes, Handle, Name, OpenFlags, Packet, Status, StatusCode, Version,
 };
+use russh_sftp::server::StatusReply;
 
 use crate::config::AgentConfig;
 use crate::file_manager::FileManager;
@@ -207,18 +208,40 @@ struct CatalystSftpHandler {
 #[derive(Debug, Clone)]
 struct SftpError(String);
 
-impl From<SftpError> for StatusCode {
-    fn from(err: SftpError) -> StatusCode {
+impl SftpError {
+    fn status_code(&self) -> StatusCode {
         // Map common error messages to appropriate SFTP status codes
-        if err.0 == "EOF" {
+        if self.0 == "EOF" {
             StatusCode::Eof
-        } else if err.0.starts_with("Permission denied") {
+        } else if self.0.starts_with("Permission denied") {
             StatusCode::PermissionDenied
-        } else if err.0.starts_with("No such file") {
+        } else if self.0.starts_with("No such file") {
             StatusCode::NoSuchFile
         } else {
             StatusCode::Failure
         }
+    }
+}
+
+impl From<SftpError> for StatusCode {
+    fn from(err: SftpError) -> StatusCode {
+        err.status_code()
+    }
+}
+
+// russh-sftp ≥2.3 requires Handler::Error: Into<StatusReply>
+impl From<SftpError> for StatusReply {
+    fn from(err: SftpError) -> StatusReply {
+        let message = err.0.clone();
+        StatusReply::new(err.status_code()).with_message(message)
+    }
+}
+
+/// Auth rejection that steers the client back to password auth.
+fn reject_password() -> Auth {
+    Auth::Reject {
+        proceed_with_methods: Some(MethodSet::from([MethodKind::Password].as_slice())),
+        partial_success: false,
     }
 }
 
@@ -926,7 +949,6 @@ impl Drop for SshSession {
     }
 }
 
-#[async_trait::async_trait]
 impl russh::server::Handler for SshSession {
     type Error = anyhow::Error;
 
@@ -938,9 +960,7 @@ impl russh::server::Handler for SshSession {
         // SFTP only supports password auth (sftp_ tokens).
         // Reject publickey at the offer stage so the client doesn't
         // waste time signing a challenge.
-        Ok(Auth::Reject {
-            proceed_with_methods: Some(MethodSet::PASSWORD),
-        })
+        Ok(reject_password())
     }
 
     async fn auth_publickey(
@@ -949,9 +969,7 @@ impl russh::server::Handler for SshSession {
         _public_key: &russh::keys::PublicKey,
     ) -> Result<Auth, Self::Error> {
         // Reject publickey signature too (belt and suspenders).
-        Ok(Auth::Reject {
-            proceed_with_methods: Some(MethodSet::PASSWORD),
-        })
+        Ok(reject_password())
     }
 
     async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
@@ -962,9 +980,7 @@ impl russh::server::Handler for SshSession {
                 "SFTP auth rejected: non-sftp token for server {}",
                 server_id
             );
-            return Ok(Auth::Reject {
-                proceed_with_methods: Some(MethodSet::PASSWORD),
-            });
+            return Ok(reject_password());
         }
 
         match validate_sftp_token(&self.config, password, server_id).await {
@@ -983,15 +999,11 @@ impl russh::server::Handler for SshSession {
             }
             Ok(None) => {
                 tracing::warn!("SFTP auth failed: invalid token for server {}", server_id);
-                Ok(Auth::Reject {
-                    proceed_with_methods: Some(MethodSet::PASSWORD),
-                })
+                Ok(reject_password())
             }
             Err(e) => {
                 tracing::error!("SFTP token validation error: {}", e);
-                Ok(Auth::Reject {
-                    proceed_with_methods: Some(MethodSet::PASSWORD),
-                })
+                Ok(reject_password())
             }
         }
     }
@@ -999,11 +1011,14 @@ impl russh::server::Handler for SshSession {
     async fn channel_open_session(
         &mut self,
         channel: Channel<Msg>,
+        reply: ChannelOpenHandle,
         _session: &mut Session,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<(), Self::Error> {
         let mut channels = self.channels.lock().await;
         channels.insert(channel.id(), channel);
-        Ok(true)
+        // russh 0.62: must explicitly accept via ChannelOpenHandle
+        reply.accept().await;
+        Ok(())
     }
 
     async fn subsystem_request(
@@ -1101,8 +1116,8 @@ fn load_or_generate_host_key(path: &PathBuf) -> Result<ssh_key::PrivateKey, Stri
         path
     );
 
-    let mut rng = rand_08::rngs::OsRng;
-    let key = ssh_key::PrivateKey::random(&mut rng, ssh_key::Algorithm::Ed25519)
+    // russh 0.62 / ssh-key 0.7 + rand 0.10: use thread rng
+    let key = ssh_key::PrivateKey::random(&mut rand::rng(), ssh_key::Algorithm::Ed25519)
         .map_err(|e| format!("Failed to generate host key: {}", e))?;
 
     if let Some(parent) = path.parent() {

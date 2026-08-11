@@ -348,7 +348,7 @@ describe('IPAM - allocateIpForServer', () => {
     expect(ip).toMatch(/^2001:db8:1::/);
 
     await prisma.ipAllocation.deleteMany({ where: { serverId: server.id } });
-    await prisma.server.delete({ where: { id: server.id } });
+    if (server.id) await prisma.server.delete({ where: { id: server.id } });
   });
 });
 

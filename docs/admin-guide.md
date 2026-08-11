@@ -190,7 +190,7 @@ Catalyst uses a granular role-based access control (RBAC) system. Permissions ar
 | Category | Permissions |
 |----------|------------|
 | **Administration** | `*` (Super Admin), `admin.read`, `admin.write` |
-| **Servers** | `server.read`, `server.create`, `server.start`, `server.stop`, `server.delete`, `server.suspend`, `server.transfer`, `server.schedule` |
+| **Servers** | `server.read`, `server.create`, `server.start`, `server.stop`, `server.delete`, `server.suspend`, `server.transfer` (**move to another node**, not ownership), `server.schedule`. Ownership transfer requires **owner** or `admin.write`. Install/reinstall/rebuild are owner/admin/`ServerAccess` scoped. |
 | **Nodes** | `node.read`, `node.create`, `node.update`, `node.delete`, `node.view_stats`, `node.manage_allocation` |
 | **Locations** | `location.read`, `location.create`, `location.update`, `location.delete` |
 | **Templates** | `template.read`, `template.create`, `template.update`, `template.delete` |
@@ -253,7 +253,7 @@ Nodes are the compute machines that run game server containers. Each node runs t
 ### Creating a Node
 
 1. Navigate to **Admin → Nodes**.
-2. Click **Create Node**.
+2. Click **Register Node**.
 3. Fill in the configuration:
    - **Name** — unique identifier (e.g., `node-us-east-1`)
    - **Description** — optional human-readable description
@@ -678,7 +678,7 @@ API keys allow programmatic access to the Catalyst API. They can be scoped with 
 2. Click **Create API Key**.
 3. Configure:
    - **Name** — descriptive name (1–100 characters)
-   - **Permissions** — select specific permissions or grant all (`allPermissions: true`)
+   - **Permissions** — select specific permissions, or `allPermissions: true` for the **full set of the creator’s live permissions** (not an independent superuser `*`)
    - **Expiration** — optional TTL in seconds (1 hour to 1 year)
    - **Rate limit** — max requests per time window (default: 100 per 60 seconds)
    - **Metadata** — optional key-value pairs for tracking

@@ -79,16 +79,13 @@ For production deployments, custom setups, or when things go wrong:
 | [Automation & Plugin Guide](automation.md) | Scheduled tasks, webhooks, API automation, bulk operations, plugins |
 | [Development Guide](development.md) | Dev environment setup, testing, code style, build process |
 | [Plugin System Guide](plugins.md) | Complete plugin development guide: architecture, SDK, examples, security |
-| [Plugin System Analysis](plugin-system-analysis.md) | Deep dive into the plugin architecture and internals |
-| [Plugin System Gap Analysis](plugin-system-gaps.md) | Identified gaps and recommended improvements for the plugin system |
+| [Plugin SDK README](../packages/plugin-sdk/README.md) | SDK package API surface, exports, and scaffolding CLI |
 
 ### Security
 
 | Document | Description |
 |----------|-------------|
-| [Security Policy](SECURITY.md) | Security policy, vulnerability reporting, threat model |
-| [Security Quick Reference](SECURITY_QUICK_REFERENCE.md) | Quick security checklist and best practices |
-| [Security Review Prompt](SECURITY_REVIEW_PROMPT.md) | Formal security review checklist and audit template |
+| [Security Policy](SECURITY.md) | Security policy, vulnerability reporting, threat model, deployment warnings |
 
 ---
 
@@ -132,4 +129,4 @@ If you find gaps in the documentation or encounter unclear sections:
 
 ---
 
-*Last updated: 2026-05-11*
+*Last updated: 2026-08-11 (v1.18.1 accuracy pass)

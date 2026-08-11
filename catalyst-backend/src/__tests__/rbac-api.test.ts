@@ -9,14 +9,12 @@ import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import pg from 'pg';
 import { auth } from '../auth';
 import { nanoid } from 'nanoid';
 import { hasPermission, hasAnyPermission, getUserPermissions } from '../lib/permissions';
 
-// Prisma v7: Use adapter for PostgreSQL
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
+// Prisma v7: pass config directly to avoid instanceof mismatch in hoisted pnpm layouts
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 
 const prisma = new PrismaClient({
   adapter,
@@ -434,9 +432,9 @@ describe('RBAC - Route Protection Verification', () => {
       expect(permissions.has('template.read')).toBe(true);
 
       // Cleanup
-      await prisma.user.delete({ where: { id: multiRoleUser.id } });
-      await prisma.role.delete({ where: { id: role1.id } });
-      await prisma.role.delete({ where: { id: role2.id } });
+      if (multiRoleUser.id) await prisma.user.delete({ where: { id: multiRoleUser.id } });
+      if (role1.id) await prisma.role.delete({ where: { id: role1.id } });
+      if (role2.id) await prisma.role.delete({ where: { id: role2.id } });
     });
   });
 });

@@ -77,7 +77,7 @@ Catalyst has multiple components you can contribute to:
 ### Prerequisites
 
 - **Node.js 20+** - For backend and frontend
-- **Rust 1.70+** - For agent development
+- **Rust 1.95** (toolchain pin in `catalyst-agent/rust-toolchain.toml`) - For agent development
 - **Docker & Docker Compose** - For local development
 - **PostgreSQL 14+** - Database (or use Docker)
 - **Git** - Version control
@@ -586,7 +586,7 @@ If applicable, add screenshots to help explain the problem.
 **Environment:**
 - OS: [e.g. Ubuntu 22.04]
 - Node.js: [e.g. 20.10.0]
-- Rust: [e.g. 1.70.0]
+- Rust: [e.g. 1.95.0]
 - Catalyst Version: [e.g. 1.0.0]
 
 **Logs:**

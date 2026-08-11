@@ -105,7 +105,7 @@ API keys follow the format `catalyst_<base64>`. They are scoped to specific perm
 - `prefix` — `catalyst`
 - `start` — first 8 characters (safe to display)
 - `enabled` — whether the key is active
-- `allPermissions` — grants `*` (all permissions)
+- `allPermissions` — key may use the **full set of the creator/user’s live permissions** (not a synthetic superuser `*` if the user lacks `*`)
 - `permissions` — array of specific permission strings
 - `expiresAt` — optional expiration date
 - `rateLimitMax` — requests per window (default 100)
@@ -4584,7 +4584,8 @@ No content — the upload was sent as part of the poll request.
     "enabled": true,
     "host": "panel.example.com",
     "port": 2022,
-    "sftpPassword": "jwt-token-here",
+    "sftpPassword": "sftp_<opaque-token>",
+    "username": "<server-uuid>",
     "expiresAt": "2024-01-01T01:00:00Z",
     "ttlMs": 3600000,
     "ttlOptions": [
@@ -5241,7 +5242,7 @@ GET /api/servers?page=1&limit=20
 - For integration examples, see [automation.md](./automation.md)
 - For agent authentication details, see [agent.md](./agent.md)
 - For admin-only endpoints, see [admin-guide.md](./admin-guide.md)
-- For WebSocket message formats, see the [Plugin System Analysis](./plugin-system-analysis.md)
+- For WebSocket message formats, see the [Plugin System Guide](./plugins.md)
 - For Docker deployment, see [docker-setup.md](./docker-setup.md)
 
 ---
@@ -5253,7 +5254,7 @@ API keys follow the format: `catalyst_<base64-encoded-uuid>`
 Example: `catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6`
 
 Keys can be scoped:
-- **Full access** (`allPermissions: true`) — acts as if the user has `*` permission
+- **Full access** (`allPermissions: true`) — uses the full set of the owning user’s **current** permissions (shrinks if the user loses perms; not an independent `*` grant)
 - **Scoped** (`permissions: [...]`) — limited to specific permissions
 
 ---

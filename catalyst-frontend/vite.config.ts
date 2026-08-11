@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 export default defineConfig(async ({ mode }) => {
-  const env = loadEnv(mode, path.resolve(__dirname, '.'), 'VITE_');
+  const env = loadEnv(mode, path.resolve(import.meta.dirname, '.'), 'VITE_');
 
   const plugins: Plugin[] = [
     react(),
@@ -20,7 +20,7 @@ export default defineConfig(async ({ mode }) => {
         if (source.startsWith('.') || source.startsWith('/')) return null;
         const resolved = await this.resolve(
           source,
-          path.resolve(__dirname, 'src/main.tsx'),
+          path.resolve(import.meta.dirname, 'src/main.tsx'),
           options,
         );
         return resolved;
@@ -44,8 +44,8 @@ export default defineConfig(async ({ mode }) => {
     plugins,
     resolve: {
       alias: [
-        { find: '@', replacement: path.resolve(__dirname, './src') },
-        { find: '@plugins', replacement: path.resolve(__dirname, '../catalyst-plugins') },
+        { find: '@', replacement: path.resolve(import.meta.dirname, './src') },
+        { find: '@plugins', replacement: path.resolve(import.meta.dirname, '../catalyst-plugins') },
       ],
     },
     server: {
@@ -86,7 +86,7 @@ export default defineConfig(async ({ mode }) => {
       manualChunks: {
         'vendor-react': ['react', 'react-dom', 'react-router-dom'],
         'vendor-csync': [
-          path.resolve(__dirname, './src/csync/index.ts'),
+          path.resolve(import.meta.dirname, './src/csync/index.ts'),
         ],
         'vendor-radix': [
           '@radix-ui/react-dialog',

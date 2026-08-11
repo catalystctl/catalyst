@@ -174,7 +174,7 @@ const TONE_AVATAR: Record<ActionTone, string> = {
 };
 
 /** Build a one-line human summary from the most useful detail fields. */
-function buildSummary(action: string, details: DetailBag): string | null {
+function buildSummary(_action: string, details: DetailBag): string | null {
   const parts: string[] = [];
   const prev = details.previousStatus ?? details.fromStatus;
   const next = details.newStatus ?? details.toStatus ?? details.status;

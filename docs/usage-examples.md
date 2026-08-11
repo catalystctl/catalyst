@@ -495,7 +495,7 @@ curl http://localhost:3000/api/servers/srv_xyz789/files/list \
 
 ## Admin Operations
 
-> **Scope:** Admin-only endpoints require `admin` role or the `allPermissions` flag. See [admin-guide.md](./admin-guide.md).
+> **Scope:** Admin-only endpoints require sufficient role permissions (for example `admin.write` or `*`). An API key with `allPermissions: true` only carries the **owning user’s live permissions**, not a synthetic superuser grant. See [admin-guide.md](./admin-guide.md).
 
 ### List Users
 

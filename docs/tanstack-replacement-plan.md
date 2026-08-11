@@ -1,3 +1,5 @@
+> **Status (v1.18.1):** Implemented. Frontend uses **Catalyst Sync (`csync`)**; `@tanstack/*` is **not** a runtime dependency. Keep this file as historical design notes; do not treat inventory counts below as current.
+
 # Eliminate TanStack entirely — Catalyst Sync (csync)
 
 **Status:** Implemented in frontend (csync drop-in + virtualizer + SSE patch-first for server_state). Full domain tag redesign can continue iteratively.

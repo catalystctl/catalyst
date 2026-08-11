@@ -158,7 +158,7 @@ However, we kindly request:
 ### For Deployment
 
 - **Use TLS/HTTPS** for all production deployments
-- **Rotate secrets regularly** (JWT secrets, database passwords)
+- **Rotate secrets regularly** (`BETTER_AUTH_SECRET`, `API_KEY_SECRET`, database passwords)
 - **Enable database encryption** at rest
 - **Implement rate limiting** on all public APIs
 - **Use strong passwords** for all services (25+ characters)
@@ -171,29 +171,30 @@ However, we kindly request:
 ### For Users
 
 - **Use strong passwords** for your Catalyst account
-- **Enable 2FA** when available (coming soon)
+- **Enable two-factor authentication (TOTP)** and/or passkeys from **Profile → Security**
 - **Review permissions** before granting access
 - **Report suspicious activity** immediately
 - **Keep your instance updated** with the latest security patches
 - **Monitor audit logs** regularly for unusual behavior
-- **Use API tokens** instead of passwords for automation
+- **Use API keys** instead of passwords for automation
 - **Revoke unused tokens** and credentials
 
 ## Security Features
 
 Catalyst is **free and open-source software**. Security features include:
 
-- **JWT-based authentication** with configurable expiration
-- **Role-based access control (RBAC)** with fine-grained permissions
-- **Path validation** to prevent directory traversal
-- **Input sanitization** on all user-provided data
+- **Session authentication** via Better Auth (HTTP-only cookies; optional bearer session token)
+- **API keys** (prefix `catalyst…`) stored as **HMAC-SHA256** digests (`API_KEY_SECRET`, falling back to `BETTER_AUTH_SECRET`)
+- **Role-based access control (RBAC)** with fine-grained permissions and server-scoped `ServerAccess`
+- **Path validation** to prevent directory traversal on panel and agent
+- **Input sanitization** on user-provided data
 - **SQL injection protection** via Prisma ORM
-- **Audit logging** for all privileged operations
-- **Rate limiting** on authentication endpoints
-- **Container isolation** for game servers
+- **Audit logging** for privileged operations (coverage evolves; do not assume every action is logged)
+- **Rate limiting** on authentication and many public API routes
+- **Container isolation** for game servers (containerd)
 - **Secret scanning** in CI/CD pipelines (gitleaks)
 - **Dependency scanning** via Dependabot
-- **SFTP chroot jails** for file access isolation
+- **Agent-hosted SFTP** with opaque `sftp_` tokens and per-server path isolation (not OS chroot jails)
 
 **All security features are open-source and auditable.** You are free to review, modify, and improve them under the GPLv3 license.
 
@@ -201,16 +202,18 @@ Catalyst is **free and open-source software**. Security features include:
 
 ### Agent-Backend Communication
 
-- Agent authentication uses a shared secret (`NODE_SECRET`)
-- WebSocket connections are not encrypted by default
+- Agent authentication uses a **node API key** (`NODE_API_KEY` / headers `X-Node-Api-Key` or legacy `X-Catalyst-Node-Token`), **not** a `NODE_SECRET` env var
+- WebSocket connections are not encrypted by default on the wire
 - **Recommendation**: Deploy backend with TLS/WSS in production
-- **Recommendation**: Use VPN or private network for agent-backend communication
+- **Recommendation**: Use VPN or private network for agent-backend communication when possible
 
 ### File Operations
 
-- File operations are restricted to server-specific directories
-- Path traversal protection implemented in both backend and agent
-- SFTP provides chrooted access per server
+- File operations are restricted to server-specific directories via path resolution on the agent
+- Path traversal protection is implemented in both backend and agent
+- SFTP password auth accepts **`sftp_`-prefixed tokens** only; the agent validates them with the backend (`POST /api/agent/sftp/validate-token`)
+- Tokens are **opaque and in-memory** on the panel process (not JWTs). Multi-instance panel deployments do not share the token map unless architecture changes
+- Compose default publish for SFTP is **`0.0.0.0:2022`** (public). Treat tokens as bearer secrets and restrict exposure in production
 
 ### Database Access
 
@@ -218,6 +221,28 @@ Catalyst is **free and open-source software**. Security features include:
 - Prisma ORM provides SQL injection protection
 - **Recommendation**: Use read-only credentials where possible
 - **Recommendation**: Enable PostgreSQL SSL in production
+
+## Server access (authorization contract)
+
+Authoritative implementation: `catalyst-backend/src/lib/server-access.ts` (`decideServerAccess`, `canAccessServer`, `getEffectiveServerPermissions`) and `ensureServerAccess` in server route helpers.
+
+A caller may act on a server when **any** of the following holds:
+
+1. They **own** the server
+2. They have explicit **`ServerAccess`** including the required permission string
+3. Their role includes global `*` or `admin.write`
+4. They are **assigned to the server’s node** **and** have `node.update` (full server powers on that node)
+
+**Not sufficient alone:** node assignment without `node.update`, `admin.read`, or a generic “user can see servers” role.
+
+| Operation | Typical gate |
+|-----------|--------------|
+| Ownership transfer | Owner **or** `admin.write` only |
+| Move server to another node | Owner, `ServerAccess(server.transfer)`, or admin/node_manage path |
+| Reinstall (data wipe) | Owner, `admin.write`, or `ServerAccess(server.reinstall)` — **destructive** |
+| Delete | Owner, `ServerAccess(server.delete)`, or admin/node_manage, plus lifecycle/suspension rules |
+
+Default grants that include `server.delete` are security-sensitive — review server shares carefully.
 
 ## Security Disclosure History
 
@@ -232,7 +257,7 @@ When vulnerabilities are disclosed, they will be listed here with:
 
 ## Additional Resources
 
-- **GPLv3 License**: [LICENSE](LICENSE)
+- **GPLv3 License**: [LICENSE](../LICENSE)
 - **GNU GPL FAQ**: https://www.gnu.org/licenses/gpl-faq.html
 - **FSF Security Guidelines**: https://www.fsf.org/
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)

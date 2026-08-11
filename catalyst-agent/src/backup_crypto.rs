@@ -2,8 +2,9 @@
 //!
 //! Extracted from `websocket_handler.rs` to keep crypto concerns isolated.
 
-use aes_gcm::aead::Aead;
-use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
+use aes_gcm::aead::Generate;
+use aes_gcm::aead::{consts::U12, Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Nonce};
 
 /// Magic header prepended to encrypted backups for format identification.
 pub const BACKUP_ENCRYPTION_MAGIC: &[u8] = b"CATALYST_ENC_V1:";
@@ -17,13 +18,14 @@ pub fn encrypt_backup(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
     }
     let cipher =
         Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
-    let nonce = Aes256Gcm::generate_nonce(&mut rand_08::thread_rng()); // 96-bit
+    // aes-gcm 0.11: Nonce::generate() uses getrandom (default feature)
+    let nonce: Nonce<U12> = Nonce::<U12>::generate();
     let ciphertext = cipher
         .encrypt(&nonce, data)
         .map_err(|e| format!("Encryption failed: {}", e))?;
     // Prepend magic header + nonce
     let mut result = BACKUP_ENCRYPTION_MAGIC.to_vec();
-    result.extend_from_slice(&nonce);
+    result.extend_from_slice(nonce.as_slice());
     result.extend_from_slice(&ciphertext);
     Ok(result)
 }
@@ -42,12 +44,13 @@ pub fn decrypt_backup(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
     if payload.len() < 12 {
         return Err("Invalid encrypted backup: too short".to_string());
     }
-    let nonce = Nonce::from_slice(&payload[..12]);
+    let nonce = Nonce::<U12>::try_from(&payload[..12])
+        .map_err(|_| "Invalid encrypted backup: bad nonce".to_string())?;
     let ciphertext = &payload[12..];
     let cipher =
         Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
     cipher
-        .decrypt(nonce, ciphertext)
+        .decrypt(&nonce, ciphertext)
         .map_err(|e| format!("Decryption failed: {}", e))
 }
 
@@ -78,12 +81,32 @@ mod tests {
         let key = test_key();
         let plaintext = b"sensitive data";
         let mut encrypted = encrypt_backup(plaintext, &key).unwrap();
-        // Flip a bit in the ciphertext (after magic + nonce)
-        let tamper_idx = BACKUP_ENCRYPTION_MAGIC.len() + 12 + 2;
-        if tamper_idx < encrypted.len() {
-            encrypted[tamper_idx] ^= 0xff;
+        // Flip a byte in the ciphertext portion (after magic + nonce)
+        let flip_at = BACKUP_ENCRYPTION_MAGIC.len() + 12 + 2;
+        if flip_at < encrypted.len() {
+            encrypted[flip_at] ^= 0xff;
         }
-        let result = decrypt_backup(&encrypted, &key);
-        assert!(result.is_err(), "tampered ciphertext must be rejected");
+        assert!(decrypt_backup(&encrypted, &key).is_err());
+    }
+
+    #[test]
+    fn wrong_key_rejected() {
+        let key = test_key();
+        let mut other = test_key();
+        other[0] ^= 0xff;
+        let encrypted = encrypt_backup(b"data", &key).unwrap();
+        assert!(decrypt_backup(&encrypted, &other).is_err());
+    }
+
+    #[test]
+    fn unencrypted_rejected() {
+        let key = test_key();
+        assert!(decrypt_backup(b"not encrypted", &key).is_err());
+    }
+
+    #[test]
+    fn bad_key_length_rejected() {
+        assert!(encrypt_backup(b"x", b"short").is_err());
+        assert!(decrypt_backup(b"x", b"short").is_err());
     }
 }

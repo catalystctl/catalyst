@@ -6,38 +6,37 @@
  *
  * Uses soft assertions (expect.soft) so one failure does not stop the rest.
  * Generous timeouts (30-60s per test) to accommodate CI and dev-server spin-up.
+ *
+ * IMPORTANT: Tests use dedicated test users, NOT the seeded admin@example.com account.
  */
 
 import { test, type Page, expect } from '@playwright/test';
+import { createTestUser, deleteTestUser, loginUser, navAndWait, type TestUser } from './test-helpers';
+
+// ─── Shared test user ────────────────────────────────────────────────────────
+
+let testUser: TestUser | null = null;
+
+// Create a dedicated test user before all tests
+test.beforeAll(async ({ browser }) => {
+  const page = await browser.newPage();
+  testUser = await createTestUser(page);
+  await page.close();
+});
+
+// Clean up the test user after all tests
+test.afterAll(async () => {
+  if (testUser) {
+    await deleteTestUser(testUser.email);
+  }
+});
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
-const CREDS = { email: 'admin@example.com', password: 'admin123' };
-
-/** Log in via the UI and wait for navigation away from /login. */
+/** Log in via the UI using the dedicated test user. */
 async function login(page: Page) {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await page.locator('input[id="email"]').waitFor({ state: 'visible', timeout: 10_000 });
-  await page.locator('input[id="email"]').fill(CREDS.email);
-  await page.locator('input[id="password"]').fill(CREDS.password);
-  await page.locator('button:has-text("Sign in")').first().click();
-  await page
-    .waitForURL((url: URL) => !url.pathname.includes('/login'), { timeout: 15_000 })
-    .catch(() => {});
-  await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
-}
-
-/** Navigate and settle — returns false if navigation fails. */
-async function navAndWait(page: Page, path: string): Promise<boolean> {
-  try {
-    const resp = await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 15_000 });
-    if (!resp) return false;
-    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
-    await page.waitForTimeout(600);
-    return true;
-  } catch {
-    return false;
-  }
+  if (!testUser) throw new Error('Test user not initialized');
+  await loginUser(page, testUser);
 }
 
 // ─── Test suites ─────────────────────────────────────────────────────────────
@@ -188,7 +187,8 @@ test.describe('Authentication Flows', () => {
 
     const emailInput = page.locator('input[type="email"], input[id="email"]').first();
     await emailInput.waitFor({ state: 'visible', timeout: 10_000 });
-    await emailInput.fill('admin@example.com');
+    if (!testUser) throw new Error('Test user not initialized');
+    await emailInput.fill(testUser.email);
 
     await page.locator('form button[type="submit"], button:has-text("Send"), button:has-text("Submit")').first().click();
 
@@ -1089,8 +1089,9 @@ test.describe('Form Validation', () => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' });
     await page.locator('input[id="email"]').waitFor({ state: 'visible', timeout: 10_000 });
 
-    await page.locator('input[id="email"]').fill('admin@example.com');
-    await page.locator('input[id="password"]').fill('admin123');
+    if (!testUser) throw new Error('Test user not initialized');
+    await page.locator('input[id="email"]').fill(testUser.email);
+    await page.locator('input[id="password"]').fill(testUser.password);
 
     const submitBtn = page.locator('button:has-text("Sign in")').first();
     await submitBtn.click();

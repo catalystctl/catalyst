@@ -22,10 +22,11 @@ export default defineConfig({
     hookTimeout: 30000,
     teardownTimeout: 30000,
     isolate: false,
+    // Vitest 4 removed poolOptions; keep sequential single-worker runs so
+    // DB-backed suites do not stomp on shared fixtures.
     pool: 'forks',
-    poolOptions: {
-      forks: { singleFork: true },
-    },
+    fileParallelism: false,
+    maxWorkers: 1,
     reporters: ['verbose'],
     setupFiles: [],
   },

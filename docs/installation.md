@@ -66,7 +66,7 @@ nano .env          # Set PUBLIC_URL at minimum
 docker compose up -d
 ```
 
-> **Tip:** The **first user to register** automatically becomes the administrator. No seeding required.
+> **Tip:** Complete the **Setup** wizard on first visit to create the administrator. No seeding required. Open registration is disabled after setup.
 >
 > After installation, follow [Getting Started](./getting-started.md) for your first admin setup.
 
@@ -175,7 +175,7 @@ pnpm run dev   # backend + frontend with hot reload
 When you first visit your Catalyst URL:
 
 1. The wizard detects no users exist
-2. Register your first account — it becomes the **admin** automatically
+2. Complete the **Setup** wizard — the admin account you create becomes the administrator
 3. Optionally configure SMTP, panel branding, and OAuth from the admin panel
 
 > **Seed alternative:** Run `docker exec -e NODE_ENV=development catalyst-backend pnpm run db:seed` to create a default admin (`admin@example.com` / `admin123`). **Change this password immediately.**
@@ -399,7 +399,7 @@ No protocol, no port — bare hostname or IP only.
 
 ## Development Setup
 
-Catalyst uses a Bun workspace monorepo. Requirements:
+Catalyst uses a **pnpm** workspace monorepo. Requirements:
 
 - [Node.js](https://nodejs.org/) >= 22 + [pnpm](https://pnpm.io/) >= 8
 - Docker or Podman (for PostgreSQL, Redis)

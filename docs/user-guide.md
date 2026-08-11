@@ -363,41 +363,40 @@ Catalyst runs a dedicated SFTP server (default port: 2022). Instead of using you
 
    | Field | Value |
    |-------|-------|
-   | **Host** | Your Catalyst panel hostname or IP |
-   | **Port** | `2022` (or custom `SFTP_PORT`) |
-   | **Username** | Your server ID |
-   | **Password** | The generated SFTP token |
+   | **Host** | Node public address or hostname from connection-info (the **game node**, not necessarily the panel URL) |
+   | **Port** | Node SFTP port (often `2022`) |
+   | **Username** | Server ID (`serverId`) |
+   | **Password** | Opaque `sftp_` token from the panel |
 
-6. Connect to access your server's file directory.
+6. Connect to access your server's file directory on that node.
 
 ### SFTP Security
 
 - Tokens are single-purpose and scoped to a specific user + server pair.
 - Tokens automatically expire after the selected TTL.
-- Tokens are validated against an in-memory cache with SHA-256 indexing for O(1) lookups.
+- Tokens are opaque (`sftp_…`), stored in panel memory, and validated by the agent via the backend.
 - Tokens are automatically revoked when you lose access to a server.
-- Maximum file size for SFTP uploads is configurable (default: 100 MB).
-- File operations are restricted to the server's data directory.
+- File operations are restricted to the server's data directory on the agent (path isolation, not OS chroot).
 
 ### SFTP Client Examples
 
 **FileZilla:**
 1. File → Site Manager → New Site
 2. Protocol: SFTP
-3. Host: `your-catalyst.example.com`, Port: `2022`
+3. Host: `<node-address>`, Port: `2022` (or the port shown in connection-info)
 4. Logon Type: Normal
-5. User: `<server-id>`, Password: `<sftp_token>`
+5. User: `<server-id>`, Password: `sftp_<token>`
 
 **Command line (sftp):**
 ```bash
-sftp -P 2022 -oPasswordPrompt=no \
-  "sftp_token@your-catalyst.example.com"
+# username is the server id; password is the sftp_ token
+sftp -P 2022 "<server-id>@<node-address>"
 ```
 
 **curl:**
 ```bash
-curl -sftp -u "<server-id>:<sftp_token>" \
-  --url "sftp://your-catalyst.example.com:2022/"
+curl -sftp -u "<server-id>:sftp_<token>" \
+  --url "sftp://<node-address>:2022/"
 ```
 
 ---
@@ -864,7 +863,7 @@ Share access to your server with other users.
 ### Server Invites
 
 1. Navigate to your server → **Users** tab.
-2. Click **Create Invite**.
+2. Click **Send invite**.
 3. Configure:
    - **Email** — the email address of the person to invite
    - **Permissions** — select which permissions to grant:

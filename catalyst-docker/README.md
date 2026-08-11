@@ -14,10 +14,10 @@ cp .env.example .env
 # Edit .env — set PUBLIC_URL, POSTGRES_PASSWORD, BETTER_AUTH_SECRET
 nano .env
 docker compose up -d
-# Open PUBLIC_URL in your browser, register → you're the admin!
+# Open PUBLIC_URL → complete Setup wizard → you are the admin
 ```
 
-That's it. The first user to register becomes the administrator. No database seeding required.
+That's it. The first-run **Setup** wizard creates the administrator. No database seeding required.
 
 ---
 
@@ -84,7 +84,7 @@ nano .env
 |---|---|---|
 | `PASSKEY_RP_ID` | `localhost` | Set to hostname from `PUBLIC_URL` for passkeys |
 | `FRONTEND_PORT` | `0.0.0.0:8080` | Change to `127.0.0.1:8080` to block external access |
-| `BACKEND_PORT` | `0.0.0.0:3000` | Change to `127.0.0.1:3000` for localhost-only API |
+| `BACKEND_PORT` | `127.0.0.1:3000` | Change to `127.0.0.1:3000` for localhost-only API |
 | `SFTP_PORT` | `0.0.0.0:2022` | Change if port 2022 is in use |
 | `SFTP_HOST_KEY` | *(auto)* | Set empty explicitly for Podman (see [Troubleshooting](#troubleshooting)) |
 
@@ -141,7 +141,7 @@ If any container shows `(unhealthy)` or `Restarting`, see [Troubleshooting](#tro
 
 Open `PUBLIC_URL` in your browser (e.g. `http://192.168.1.78:8080`).
 
-The **first user to register becomes the administrator** automatically.
+Complete the **Setup** wizard on first visit; that account becomes the administrator and open registration is disabled.
 
 > **Optional:** If you want pre-seeded demo data, run:
 > ```bash
@@ -160,8 +160,8 @@ The Docker Compose stack defines four services:
 | Service | Image | Purpose | Exposed Port |
 |---|---|---|---|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
-| `redis` | `redis:7-alpine` | Cache / session store | `127.0.0.1:6379` |
-| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API + SFTP | `127.0.0.1:3000`, `0.0.0.0:2022` |
+| `redis` | `redis:7-alpine` | Present in compose; **not** the Better Auth session store in current backend | `127.0.0.1:6379` |
+| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API (SFTP runtime is on the agent; compose may still map `:2022`) | `127.0.0.1:3000`, `0.0.0.0:2022` |
 | `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Nginx static SPA | `0.0.0.0:8080` |
 
 ### Service Dependencies

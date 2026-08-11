@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import pg from 'pg';
 import { auth } from '../src/auth';
 import { withRegistrationBypass } from '../src/lib/registration-gate.js';
 
@@ -29,8 +28,7 @@ const adminUsername = adminUsernameEnv;
 const adminPassword = adminPasswordEnv;
 const adminName = adminNameEnv;
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 const adminPermissions = [

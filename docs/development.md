@@ -24,9 +24,9 @@
 
 | Tool | Minimum Version | Purpose |
 |------|----------------|---------|
-| **Bun** | 1.0+ | JavaScript/TypeScript runtime (monorepo package manager) |
+| **pnpm** | 9+ (repo uses pnpm 11 workspace settings) | JavaScript/TypeScript package manager for the monorepo |
 | **Node.js** | 20+ | Peer dependency resolution |
-| **Rust** | 1.70+ | Catalyst agent (cross-compiled targets) |
+| **Rust** | **1.95.0** (see `catalyst-agent/rust-toolchain.toml`) | Catalyst agent (cross-compiled targets) |
 | **cargo** | Latest stable | Rust package manager & build tool |
 | **Docker** | 24+ or **Podman** | Development infra (PostgreSQL, Redis) |
 | **PostgreSQL** | 14+ | Primary database (provided via Docker/Podman) |
@@ -57,7 +57,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## Repository Structure
 
-Catalyst is a multi-package monorepo managed via Bun workspaces:
+Catalyst is a multi-package monorepo managed via **pnpm** workspaces (`pnpm-workspace.yaml`):
 
 ```
 catalyst/
@@ -66,7 +66,7 @@ catalyst/
 │   ├── prisma/                # Database schema & migrations
 │   ├── tests/                 # Bash integration tests
 │   └── package.json
-├── catalyst-frontend/         # React 18 + Vite SPA
+├── catalyst-frontend/         # React 19 + Vite SPA (csync server state)
 │   ├── src/                   # React components, pages, hooks
 │   ├── e2e/                   # Playwright E2E tests
 │   └── package.json
@@ -105,13 +105,13 @@ pnpm run dev:infra
 
 # 3. Seed the database
 pnpm run db:seed
-pnpm run db:seed:admin   # Creates admin@example.com / password123
+pnpm run db:seed:admin   # Creates admin@example.com / admin123
 
 # 4. Start both dev servers in parallel
 pnpm run dev
 
 # Navigate to http://localhost:5173
-# Login: admin@example.com / password123
+# Login: admin@example.com / admin123
 ```
 
 ### Alternative: Manual Start
@@ -1026,7 +1026,7 @@ pnpm run db:seed
 pnpm run db:seed:admin
 ```
 
-Default seeded credentials: `admin@example.com` / `password123`
+Default seeded credentials: `admin@example.com` / `admin123`
 
 ---
 
@@ -1082,7 +1082,7 @@ chore: update dependencies
 
 - [Architecture Overview](./architecture.md) — System design, data flow, and component responsibilities
 - [API Reference](./api-reference.md) — Complete REST API endpoint reference for integration
-- [Plugin System Analysis](./plugin-system-analysis.md) — Internal plugin system internals (deep dive)
+- [Plugin System Guide](./plugins.md) — Internal plugin system internals (deep dive)
 - [Automation Guide](./automation.md) — API integration examples (WHMCS, Python, Node.js)
 
 ---

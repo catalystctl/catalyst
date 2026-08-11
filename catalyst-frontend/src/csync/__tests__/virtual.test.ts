@@ -66,19 +66,20 @@ describe('useVirtualizer', () => {
       }),
     );
 
-    const firstEnd = result.current.getVirtualItems().at(-1)!.index;
+    const itemsBefore = result.current.getVirtualItems();
+    const firstEnd = itemsBefore[itemsBefore.length - 1]!.index;
 
     act(() => {
       el.scrollTop = 26 * 100; // jump ~100 rows down
       el.dispatchEvent(new Event('scroll'));
     });
 
-    const items = result.current.getVirtualItems();
-    expect(items.length).toBeGreaterThan(0);
-    expect(items[0].index).toBeGreaterThan(50);
-    expect(items[0].index).toBeGreaterThan(firstEnd - 5);
+    const itemsAfter = result.current.getVirtualItems();
+    expect(itemsAfter.length).toBeGreaterThan(0);
+    expect(itemsAfter[0].index).toBeGreaterThan(50);
+    expect(itemsAfter[0].index).toBeGreaterThan(firstEnd - 5);
     // Must not still be stuck on the initial top window
-    expect(items.every((it) => it.index < 40)).toBe(false);
+    expect(itemsAfter.every((it) => it.index < 40)).toBe(false);
   });
 
   it('scrollToIndex updates the window toward the target', () => {

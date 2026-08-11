@@ -1028,9 +1028,9 @@ The PluginLoader is initialized with a hardcoded path traversal (`../../..`) to 
 
 ## Cross-References
 
-- [Plugin System Analysis](./plugin-system-analysis.md) — Internal architecture deep dive
-- [Plugin System Gaps](./plugin-system-gaps.md) — Identified gaps and recommended improvements
-- [Plugin System Improvement Report](./plugin-system-improvement-report.md) — Detailed improvement plan
+- [Plugin System Guide](./plugins.md) (this document) — Internal architecture deep dive
+- [Plugin SDK README](../packages/plugin-sdk/README.md) — Identified gaps and recommended improvements
+- [Development Guide — plugins](./development.md) — Detailed improvement plan
 - [API Reference](./api-reference.md) — Plugin management endpoints (`/api/plugins/*`)
 - [Architecture Overview](./architecture.md) — System design and component relationships
 - [Security Policy](./SECURITY.md) — Security model for the entire platform

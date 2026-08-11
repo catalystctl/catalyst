@@ -1,6 +1,7 @@
 import { test, type Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { createTestUser, deleteTestUser, loginUser, type TestUser } from './test-helpers';
 
 /**
  * DYNAMIC SCREENSHOT CRAWLER
@@ -12,11 +13,30 @@ import fs from 'fs';
  *   4. Every modal      — discovered by clicking trigger buttons
  *
  * Output: docs/screenshots/{auth,user,admin}/ + docs/screenshots/{auth,user,admin}/modals/
+ * 
+ * IMPORTANT: Uses a dedicated test user, NOT the seeded admin@example.com account.
  */
 
 const BASE_DIR = path.resolve(process.cwd(), '../docs/screenshots');
-const CREDS = { email: 'admin@example.com', password: 'admin123' };
 const RESOLUTION = { width: 1920, height: 1080 };
+
+// ─── Shared test user ────────────────────────────────────────────────────────
+
+let testUser: TestUser | null = null;
+
+// Create a dedicated test user before all tests
+test.beforeAll(async ({ browser }) => {
+  const page = await browser.newPage();
+  testUser = await createTestUser(page);
+  await page.close();
+});
+
+// Clean up the test user after all tests
+test.afterAll(async () => {
+  if (testUser) {
+    await deleteTestUser(testUser.email);
+  }
+});
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -41,14 +61,11 @@ async function navAndWait(page: Page, pathStr: string): Promise<boolean> {
 }
 
 async function login(page: Page) {
+  if (!testUser) throw new Error('Test user not initialized');
   await navAndWait(page, '/login');
   await page.locator('input[id="email"]').waitFor({ state: 'visible', timeout: 10_000 });
   await page.locator('input[id="password"]').waitFor({ state: 'visible', timeout: 5_000 });
-  await page.locator('input[id="email"]').fill(CREDS.email);
-  await page.locator('input[id="password"]').fill(CREDS.password);
-  await page.locator('button:has-text("Sign in")').first().click();
-  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15_000 }).catch(() => {});
-  await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
+  await loginUser(page, testUser);
   await page.waitForTimeout(500);
 }
 

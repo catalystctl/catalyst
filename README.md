@@ -31,7 +31,7 @@ docker compose up -d
 
 ### 2. Access the panel
 
-Open your `PUBLIC_URL` in a browser. The **first user to register becomes the administrator** automatically.
+Open your `PUBLIC_URL` in a browser. Complete the **Setup** wizard (admin account + appearance). That first setup user becomes the administrator and open registration is disabled afterward.
 
 That's it. No build steps, no dependency installation, no manual secret generation (the install script does that for you).
 
@@ -126,7 +126,7 @@ See [Docker Setup](docs/docker-setup.md) for full TLS, reverse proxy, and harden
 **Tech Stack:**
 
 - **Backend:** TypeScript 6.0, Fastify, PostgreSQL, WebSocket Gateway
-- **Frontend:** React 19, Vite, TanStack Query, Radix UI
+- **Frontend:** React 19, Vite, Catalyst Sync (csync), Radix UI
 - **Agent:** Rust 1.95, Tokio, containerd gRPC
 - **Features:** RBAC, SFTP, Plugin System, Task Scheduling, Alerts
 

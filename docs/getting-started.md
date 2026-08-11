@@ -7,7 +7,7 @@
 ## Table of Contents
 
 - [Before You Begin](#before-you-begin)
-- [Step 1: Initial Login](#step-1-initial-login)
+- [Step 1: Initial Setup and Login](#step-1-initial-setup-and-login)
   - [Forgot Password Flow](#forgot-password-flow)
 - [Step 2: Configure Your Profile](#step-2-configure-your-profile)
   - [Enable Two-Factor Authentication](#enable-two-factor-authentication)
@@ -25,7 +25,7 @@
   - [Understanding Template Variables](#understanding-template-variables)
 - [Step 7: Create Your First Server](#step-7-create-your-first-server)
   - [Accepting an Invite (Optional)](#accepting-an-invite-optional)
-- [Step 8: Install the Server](#step-8-install-the-server)
+- [Step 8: Installation (usually automatic)](#step-8-installation-usually-automatic)
 - [Step 9: Access the Console](#step-9-access-the-console)
 - [Step 10: Basic Server Management](#step-10-basic-server-management)
 - [Next Steps](#next-steps)
@@ -55,28 +55,40 @@ You'll also need:
 
 ---
 
-## Step 1: Initial Login
+## Step 1: Initial Setup and Login
 
-1. Open your browser and navigate to `http://localhost` (or your configured domain)
-2. Click **Sign In** on the login page
-3. Enter the admin credentials:
-   - **Email:** `admin@example.com`
-   - **Password:** `admin123`
-4. Click **Sign In**
+### Production / Docker path (default)
 
-You'll be taken to the dashboard where you can see an overview of your system.
+1. Open your browser to your `PUBLIC_URL` (for example `http://localhost:8080`, not bare `:80` unless you changed `FRONTEND_PORT`).
+2. On a fresh install the panel requires **Setup** (`/setup`):
+   1. **Welcome**
+   2. **Admin Account** — email, username, password for the first administrator
+   3. **Appearance** — branding/theme options
+3. Finish setup. Catalyst creates the **Administrator** role (`*`), assigns it to your user, and **disables open self-registration**.
+4. Sign in with **Sign in** using the credentials you just created.
 
-> **Did you seed the database?** If you ran `docker compose exec backend pnpm run db:seed`, the default admin account is `admin@example.com` / `admin123`. **Change this password immediately** after your first login.
+You land on the dashboard overview.
 
-### Registration
+> **Do not rely on seed accounts for production.** Seed users exist only if you deliberately ran a seed script in a development environment.
 
-If you have user registration enabled, new users can click **Create Account** to register. Registration requires:
+### Development seed path (optional)
 
-- **Email** — must be unique across the system
-- **Username** — 2–32 characters, must be unique
-- **Password** — must meet complexity requirements (min 8 characters)
+If you ran `pnpm run db:seed` / `db:seed:admin` (or equivalent) in a **dev** environment, you may sign in with the seed admin:
 
-New users receive a welcome email and start with the default "User" role (read-only access to their own servers).
+- **Email:** `admin@example.com`
+- **Password:** `admin123`
+
+**Change this password immediately.** Seed credentials are not part of the Docker one-liner production path.
+
+### Registration after setup
+
+Open registration is **off** after setup. Admins can re-enable it under **Admin → Security**. When enabled, new users use **Create account** with:
+
+- **Email** — unique
+- **Username** — 2–32 characters, unique
+- **Password** — minimum 8 characters (complexity rules apply)
+
+New self-registered users receive the default **User** role (limited access). They do **not** become administrators.
 
 ### Forgot Password Flow
 
@@ -190,25 +202,23 @@ For passwordless login support:
 
 ## Step 3: Create a Location
 
-Locations are logical groupings for your nodes (e.g., data centers, regions).
+Locations are logical groupings for your nodes (for example data centers or regions).
 
-1. Navigate to **Admin** → **Locations** (`/admin/locations`).
-2. Click **Create Location**
-3. Fill in the details:
-   - **Name:** e.g., `US East 1`
-   - **Description:** e.g., `US East Coast Data Center`
-4. Click **Save**
+1. Navigate to **Admin → Nodes**.
+2. Open **Locations** (modal from the Nodes page — there is **no** `/admin/locations` route).
+3. Create a location with a **Name** (for example `US East 1`) and optional description.
+4. Save.
 
-Locations are used to organize nodes and help users choose where to deploy their servers.
+Locations organize nodes and help users choose where to deploy servers.
 
 ---
 
 ## Step 4: Create a Node
 
-A node represents a physical or virtual machine that runs game server containers.
+A node is a physical or virtual machine that runs game server containers via the Catalyst agent.
 
-1. Navigate to **Admin** → **Nodes**
-2. Click **Create Node**
+1. Navigate to **Admin → Nodes**.
+2. Click **Register Node** (UI label; not “Create Node”).
 3. Fill in the required fields:
 
 | Field | Description | Example |
@@ -508,20 +518,27 @@ If someone invited you to a server, you'll receive an invite link:
 
 ---
 
-## Step 8: Install the Server
+## Step 8: Installation (usually automatic)
 
-Before a server can run, it needs to be installed (this downloads game files and runs the template's install script).
+Creating a server **starts installation immediately** in typical flows — you usually do **not** click a separate **Install** button after create.
 
-1. Go to your server's detail page
-2. Click **Install** (or **Reinstall** to re-run the installation)
-3. The agent will:
-   - Pull the container image
-   - Create the server data directory
-   - Execute the install script inside a temporary container
-   - Download game files (e.g., Paper.jar for Minecraft)
-   - Set up default configuration files
+While installing, the agent:
 
-Installation progress is shown in the server console. For Minecraft, this downloads the Paper jar and creates default `server.properties` and `eula.txt`.
+- Pulls the container image
+- Creates the server data directory
+- Runs the template install script in a temporary container
+- Downloads game files (for example Paper.jar for Minecraft)
+- Writes default configuration files
+
+Watch progress on the **Console** tab. For Minecraft, installation typically fetches the Paper jar and creates default `server.properties` / `eula.txt`.
+
+If installation fails or you need a clean reinstall:
+
+1. Open the server detail page
+2. Use **Admin → Reinstall** (or the reinstall control your role exposes)
+3. Confirm — **reinstall wipes server data** and re-runs the install script
+
+> **Warning:** Reinstall is destructive. Back up first if you need existing files.
 
 ---
 
@@ -581,16 +598,16 @@ Access your server files through the web UI:
 
 ### SFTP Access
 
-For SFTP access (if enabled on the panel):
+For SFTP access (agent-hosted on the **game node**):
 
-1. Go to your server → **Settings** → **SFTP**
-2. Generate an SFTP token
-3. Connect with your SFTP client:
+1. Open the server → **SFTP** tab (or connection details from the UI)
+2. Generate or copy the SFTP token from the panel (`GET /api/sftp/connection-info`)
+3. Connect with your SFTP client using the values the panel shows:
    ```
-   Host: your-panel.com
-   Port: 2022
-   Username: <your-username>.<server-uuid>
-   Password: <sftp-token>
+   Host: <node public address or hostname>
+   Port: <node SFTP port, often 2022>
+   Username: <server-id>          # not your panel username
+   Password: sftp_<token>         # opaque token, not a JWT
    ```
 
 ### Backups

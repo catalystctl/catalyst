@@ -9,13 +9,11 @@ import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import pg from 'pg';
 import { auth } from '../auth';
 import { hasPermission, hasAnyPermission, hasAllPermissions, getUserPermissions, getUserRoles, parseScopedPermission } from '../lib/permissions';
 
-// Prisma v7: Use adapter for PostgreSQL
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
+// Prisma v7: pass config directly to avoid instanceof mismatch in hoisted pnpm layouts
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 
 const prisma = new PrismaClient({
   adapter,
@@ -107,7 +105,7 @@ describe('RBAC - Permission Utilities', () => {
 
     afterAll(async () => {
       // Cleanup
-      await prisma.user.delete({ where: { id: testUserId } });
+      if (testUserId) await prisma.user.delete({ where: { id: testUserId } });
       await prisma.role.deleteMany({
         where: { name: { in: ['TestAdmin', 'TestModerator', 'TestScoped'] } },
       });
@@ -205,7 +203,7 @@ describe('RBAC - Permission Utilities', () => {
       expect(hasDelete).toBe(true); // From extra role
 
       // Cleanup
-      await prisma.role.delete({ where: { id: extraRole.id } });
+      if (extraRole.id) await prisma.role.delete({ where: { id: extraRole.id } });
     });
   });
 
@@ -234,8 +232,8 @@ describe('RBAC - Permission Utilities', () => {
     });
 
     afterAll(async () => {
-      await prisma.user.delete({ where: { id: testUserId } });
-      await prisma.role.delete({ where: { id: limitedRole.id } });
+      if (testUserId) await prisma.user.delete({ where: { id: testUserId } });
+      if (limitedRole.id) await prisma.role.delete({ where: { id: limitedRole.id } });
     });
 
     it('should return true if user has any of the required permissions', async () => {
@@ -289,8 +287,8 @@ describe('RBAC - Permission Utilities', () => {
     });
 
     afterAll(async () => {
-      await prisma.user.delete({ where: { id: testUserId } });
-      await prisma.role.delete({ where: { id: limitedRole.id } });
+      if (testUserId) await prisma.user.delete({ where: { id: testUserId } });
+      if (limitedRole.id) await prisma.role.delete({ where: { id: limitedRole.id } });
     });
 
     it('should return true when user has all required permissions', async () => {
@@ -346,7 +344,7 @@ describe('RBAC - Permission Utilities', () => {
     });
 
     afterAll(async () => {
-      await prisma.user.delete({ where: { id: testUserId } });
+      if (testUserId) await prisma.user.delete({ where: { id: testUserId } });
       await prisma.role.deleteMany({ where: { id: { in: [role1.id, role2.id] } } });
     });
 
@@ -386,7 +384,7 @@ describe('RBAC - Permission Utilities', () => {
       const nodeReadCount = uniquePerms.filter(p => p === 'node.read').length;
       expect(nodeReadCount).toBe(1); // Should be deduplicated
 
-      await prisma.role.delete({ where: { id: role3.id } });
+      if (role3.id) await prisma.role.delete({ where: { id: role3.id } });
     });
 
     it('should return empty set for user with no roles', async () => {
@@ -435,7 +433,7 @@ describe('RBAC - Permission Utilities', () => {
     });
 
     afterAll(async () => {
-      await prisma.user.delete({ where: { id: testUserId } });
+      if (testUserId) await prisma.user.delete({ where: { id: testUserId } });
       await prisma.role.deleteMany({ where: { id: { in: [role1.id, role2.id] } } });
     });
 
@@ -623,7 +621,7 @@ describe('RBAC - Role Model Integration', () => {
 
       expect(userWithRoles?.roles).toHaveLength(2);
 
-      await prisma.role.delete({ where: { id: role2.id } });
+      if (role2.id) await prisma.role.delete({ where: { id: role2.id } });
     });
   });
 
@@ -782,17 +780,17 @@ describe('RBAC - Default Roles Validation', () => {
     });
 
     // Seed the default admin user with Administrator role
+    // DO NOT create a new admin user - verify the seeded one exists
     const existingAdmin = await prisma.user.findUnique({
       where: { email: 'admin@example.com' },
+      include: { roles: { select: { id: true } } },
     });
 
-    if (!existingAdmin) {
-      const adminUser = await prisma.user.create({
+    if (existingAdmin && existingAdmin.roles.length === 0) {
+      // If admin exists but has no roles, assign the Administrator role
+      await prisma.user.update({
+        where: { id: existingAdmin.id },
         data: {
-          email: 'admin@example.com',
-          username: 'admin',
-          name: 'Admin',
-          emailVerified: true,
           roles: {
             connect: { id: defaultAdminRoleId },
           },
@@ -802,9 +800,8 @@ describe('RBAC - Default Roles Validation', () => {
   });
 
   afterAll(async () => {
-    // Cleanup seeded data
-    await prisma.user.deleteMany({ where: { email: 'admin@example.com' } });
-    await prisma.role.deleteMany({ where: { name: { in: ['Administrator', 'Moderator', 'User'] } } });
+    // Cleanup: DO NOT delete the seeded admin user - it's shared across the system
+    // Roles are left in place as they may be used by other tests
   });
 
   it('should verify default roles exist with correct structure', async () => {

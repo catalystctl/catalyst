@@ -54,8 +54,8 @@ The stack consists of four services:
 | Service | Image | Purpose | Default Port |
 |---------|-------|---------|-------------|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
-| `redis` | `redis:7-alpine` | Cache / sessions | `127.0.0.1:6379` |
-| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | API + SFTP | `127.0.0.1:3000`, `0.0.0.0:2022` |
+| `redis` | `redis:7-alpine` | Compose service; not used as session store by current backend | `127.0.0.1:6379` |
+| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | API (agent hosts SFTP; compose may map `:2022`) | `127.0.0.1:3000`, `0.0.0.0:2022` |
 | `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Web panel | `0.0.0.0:80` |
 
 > **Important:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct bare-metal installation is not supported.
@@ -400,7 +400,7 @@ This builds and runs the Rust agent locally. Requires root for containerd access
 
 When you first visit your Catalyst URL, the setup wizard detects that no users exist:
 
-1. Register your first account — it becomes the **administrator** automatically
+1. Complete the **Setup** wizard — the account you create becomes the **administrator** and open registration is disabled
 2. The admin has full access to all features
 3. From the admin panel, configure SMTP, branding, and OAuth providers
 
