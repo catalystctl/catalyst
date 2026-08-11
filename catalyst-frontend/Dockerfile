@@ -14,7 +14,7 @@ WORKDIR /app
 # the package.json specifiers.
 COPY pnpm-lock.yaml .npmrc ./
 COPY pnpm-workspace.yaml ./
-RUN printf '%s\n' '{"name":"catalyst","private":true,"devDependencies":{"@commitlint/cli":"^21.0.2","@commitlint/config-conventional":"^21.0.2","husky":"^9.1.7","typescript":"~6.0.3"}}' > package.json
+RUN printf '%s\n' '{"name":"catalyst","private":true,"devDependencies":{"@commitlint/cli":"^21.2.1","@commitlint/config-conventional":"^21.2.0","husky":"^9.1.7","typescript":"~6.0.3"}}' > package.json
 
 # Copy frontend manifest first for dependency-layer caching
 COPY catalyst-frontend/package.json ./catalyst-frontend/
