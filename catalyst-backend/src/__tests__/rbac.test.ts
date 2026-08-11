@@ -735,6 +735,10 @@ describe('RBAC - Full Permission Coverage', () => {
 
 describe('RBAC - Default Roles Validation', () => {
   let defaultAdminRoleId: string;
+  // Dedicated fixture user — never create/mutate/delete admin@example.com
+  // (that account is optional dev seed only; CI starts from an empty DB).
+  let fixtureAdminUserId: string | undefined;
+  const fixtureAdminEmail = `rbac-default-admin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.local`;
 
   beforeAll(async () => {
     // Seed the default roles that the seed script would create.
@@ -779,29 +783,28 @@ describe('RBAC - Default Roles Validation', () => {
       },
     });
 
-    // Seed the default admin user with Administrator role
-    // DO NOT create a new admin user - verify the seeded one exists
-    const existingAdmin = await prisma.user.findUnique({
-      where: { email: 'admin@example.com' },
-      include: { roles: { select: { id: true } } },
-    });
-
-    if (existingAdmin && existingAdmin.roles.length === 0) {
-      // If admin exists but has no roles, assign the Administrator role
-      await prisma.user.update({
-        where: { id: existingAdmin.id },
-        data: {
-          roles: {
-            connect: { id: defaultAdminRoleId },
-          },
+    // Prove Administrator can be attached to a real user without relying on
+    // the optional dev seed account (admin@example.com is absent in CI).
+    const fixtureAdmin = await prisma.user.create({
+      data: {
+        email: fixtureAdminEmail,
+        username: `rbacdefadmin${Date.now().toString(36)}`,
+        name: 'RBAC Default Admin Fixture',
+        emailVerified: true,
+        roles: {
+          connect: { id: defaultAdminRoleId },
         },
-      });
-    }
+      },
+    });
+    fixtureAdminUserId = fixtureAdmin.id;
   });
 
   afterAll(async () => {
-    // Cleanup: DO NOT delete the seeded admin user - it's shared across the system
-    // Roles are left in place as they may be used by other tests
+    if (fixtureAdminUserId) {
+      await prisma.user.delete({ where: { id: fixtureAdminUserId } }).catch(() => undefined);
+    }
+    // Roles stay — shared defaults used by other suites / seed scripts.
+    // Never touch admin@example.com from this suite.
   });
 
   it('should verify default roles exist with correct structure', async () => {
@@ -824,14 +827,17 @@ describe('RBAC - Default Roles Validation', () => {
     expect(userRole?.permissions).toContain('server.read');
   });
 
-  it('should verify default admin user has Administrator role', async () => {
-    const adminUser = await prisma.user.findFirst({
-      where: { email: 'admin@example.com' },
+  it('should grant Administrator role to a user and resolve via relation', async () => {
+    expect(fixtureAdminUserId).toBeDefined();
+    const adminUser = await prisma.user.findUnique({
+      where: { id: fixtureAdminUserId as string },
       include: { roles: true },
     });
 
     expect(adminUser).toBeDefined();
+    expect(adminUser?.email).toBe(fixtureAdminEmail);
     expect(adminUser?.roles.some((r) => r.name === 'Administrator')).toBe(true);
+    expect(adminUser?.roles.some((r) => r.id === defaultAdminRoleId)).toBe(true);
   });
 });
 
