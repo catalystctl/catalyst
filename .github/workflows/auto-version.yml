@@ -383,13 +383,16 @@ jobs:
 
       - name: Install protoc
         if: steps.cache-protoc.outputs.cache-hit != 'true'
+        shell: bash
         run: |
+          set -euo pipefail
           apt-get update && apt-get install -y unzip ca-certificates
           curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
           unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
           chmod +x /usr/local/bin/protoc
 
       - name: Install target linkers
+        shell: bash
         run: |
           set -euo pipefail
           apt-get update
