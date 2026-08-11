@@ -31,24 +31,31 @@ jobs:
       - name: Determine version bump
         id: bump
         run: |
-          # Get the latest tag (fallback to root package.json version)
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          # Prefer highest semver tag globally (not git-describe ancestry).
+          # A concurrent auto-version race can leave a tag on an orphaned
+          # release commit while package.json on main already carries that
+          # version — describe would then re-bump to the same number.
+          HIGHEST_TAG=$(git tag -l 'v[0-9]*' | sed 's/^v//' | sort -V | tail -1 || true)
+          PKG_VERSION=$(node -p "require('./package.json').version")
 
-          if [ -z "$LATEST_TAG" ]; then
-            CURRENT_VERSION=$(node -p "require('./package.json').version")
+          if [ -z "$HIGHEST_TAG" ]; then
+            CURRENT_VERSION="$PKG_VERSION"
             echo "No previous tag found. Using package.json version: $CURRENT_VERSION"
           else
-            CURRENT_VERSION=${LATEST_TAG#v}
-            echo "Latest tag: $LATEST_TAG"
+            # max(highest tag, package.json) so we never re-mint an existing version
+            CURRENT_VERSION=$(printf '%s\n%s\n' "$HIGHEST_TAG" "$PKG_VERSION" | sort -V | tail -1)
+            echo "Highest tag: v$HIGHEST_TAG; package.json: $PKG_VERSION → current=$CURRENT_VERSION"
           fi
 
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
 
-          # Determine commit range
-          if [ -z "$LATEST_TAG" ]; then
+          # Commit range for conventional-commit analysis: last ancestor tag if
+          # present, else since root. Falls back to last release commit subject.
+          ANCESTOR_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$ANCESTOR_TAG" ]; then
             COMMIT_RANGE=$(git rev-list --max-parents=0 HEAD)..HEAD
           else
-            COMMIT_RANGE="${LATEST_TAG}..HEAD"
+            COMMIT_RANGE="${ANCESTOR_TAG}..HEAD"
           fi
 
           # Analyze commits for bump type
@@ -168,7 +175,11 @@ jobs:
           git add -A
           git commit -m "chore(release): bump version to $VERSION" || true
 
-          git tag -a "v$VERSION" -m "Release v$VERSION"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists — skipping retag (concurrent race or redo)"
+          else
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+          fi
           git push origin main --follow-tags
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -13,3 +13,8 @@ allowBuilds:
 # Packages like vitest are frequently updated and the policy blocks
 # fresh releases, causing CI to fail on newly-generated lockfiles.
 minimumReleaseAge: 0
+# pnpm 10+ no longer reads package.json "pnpm.overrides"; keep overrides here
+# so CI (pnpm latest) frozen installs match the lockfile.
+overrides:
+  '@radix-ui/react-slot': 1.3.3
+  '@radix-ui/react-compose-refs': 1.1.5
