@@ -808,7 +808,7 @@ The agent provides real-time console streaming via WebSocket:
 
 - **Output** — Container stdout/stderr is streamed to the panel from files at `/var/log/catalyst/console/{container-id}/{stdout,stderr}`
 - **Input** — Commands from the panel are forwarded to the container's stdin via containerd exec
-- **Console FIFO** — Uses a named pipe at `/tmp/catalyst-console/{container-id}` for reliable I/O
+- **Console FIFO** — Uses a named pipe at `{console_log_dir}/{container-id}/stdin` (default: `/var/lib/catalyst/console/{container-id}/stdin`) for reliable I/O
 - **Line splitting** — Handles `\n` (Unix), `\r\n` (Windows), and `\r` (Paper/Minecraft overwrites) — `\r` emulates terminal behavior to prevent progress lines from concatenating
 - **Batching** — Console output is batched up to `MAX_CONSOLE_BATCH_BYTES` (32 KB) before sending
 - **Polling** — Log files are read every 50ms when data is available, 200ms when idle
@@ -1257,17 +1257,27 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/catalyst-agent /etc/catalyst-agent/config.toml
+User=root
+Group=root
+WorkingDirectory=/opt/catalyst-agent
+ExecStart=/opt/catalyst-agent/catalyst-agent --config /opt/catalyst-agent/config.toml
 Restart=always
-RestartSec=5s
-TimeoutStartSec=120
-TimeoutStopSec=30
-LimitNOFILE=1048576
-LimitNPROC=1048576
+RestartSec=5
+LimitNOFILE=65536
 
-# Security settings
-NoNewPrivileges=false
+# Hardening (compatible with container management)
+NoNewPrivileges=true
+ProtectSystem=full
 PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+# Writable host paths under ProtectSystem=full.
+# Console FIFOs live under data_dir/console (NOT /tmp — PrivateTmp remounts /tmp).
+# Prefix optional paths with "-" so missing dirs do not fail start (226/NAMESPACE).
+ReadWritePaths=/var/lib/catalyst /etc/cni/net.d /var/lib/cni -/mnt /run/containerd
 
 [Install]
 WantedBy=multi-user.target

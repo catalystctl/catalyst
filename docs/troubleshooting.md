@@ -355,6 +355,68 @@ docker compose logs backend | grep -i oidc
 
 ## Agent Connection & WebSocket Issues
 
+### Agent Exits with `status=226/NAMESPACE`
+
+**Symptoms:** After install or reboot, `catalyst-agent.service` fails immediately and restarts in a loop. Journal shows:
+
+```text
+catalyst-agent.service: Failed to set up mount namespacing: /tmp/catalyst-console: No such file or directory
+catalyst-agent.service: Failed at step NAMESPACE spawning /opt/catalyst-agent/catalyst-agent: No such file or directory
+catalyst-agent.service: Main process exited, code=exited, status=226/NAMESPACE
+```
+
+(The second line is misleading — the binary is usually present; systemd aborts during namespace setup before `ExecStart`.)
+
+**Cause:** The unit listed a non-existent path in `ReadWritePaths=` (historically `/tmp/catalyst-console`). With `ProtectSystem=` / mount namespacing, systemd requires every non-optional `ReadWritePaths` entry to exist at start. Paths under `/tmp` are especially fragile: `PrivateTmp=true` gives the service a private tmpfs, and host `/tmp` dirs vanish on reboot.
+
+Console I/O does **not** use `/tmp/catalyst-console`. FIFOs and log files live under `console_log_dir`, which defaults to `/var/lib/catalyst/console`.
+
+**Fix (immediate):**
+
+```bash
+# 1. Inspect the unit
+systemctl cat catalyst-agent.service
+
+# 2. Remove any /tmp/catalyst-console (or other missing) ReadWritePaths entry.
+#    Prefer the paths written by current deploy-agent.sh:
+sudo tee /etc/systemd/system/catalyst-agent.service << 'EOF'
+[Unit]
+Description=Catalyst Agent - Game Server Management
+After=network-online.target containerd.service
+Wants=network-online.target
+Requires=containerd.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/catalyst-agent
+ExecStart=/opt/catalyst-agent/catalyst-agent --config /opt/catalyst-agent/config.toml
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/catalyst /etc/cni/net.d /var/lib/cni -/mnt /run/containerd
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo mkdir -p /var/lib/catalyst/console
+sudo systemctl daemon-reload
+sudo systemctl reset-failed catalyst-agent
+sudo systemctl restart catalyst-agent
+sudo systemctl status catalyst-agent --no-pager
+```
+
+**Fix (reinstall):** After the panel ships an updated `deploy-agent.sh`, re-run the one-liner install (or only re-fetch `/api/agent/deploy-script` and re-apply the unit) so the unit no longer references `/tmp/catalyst-console`.
+
 ### Agent Shows Offline in the Panel
 
 **Symptoms:** Node appears offline in the admin panel, no resource stats are reported.

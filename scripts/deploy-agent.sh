@@ -416,12 +416,17 @@ EOF
 
 prepare_directories() {
     log "Preparing filesystem layout..."
+    local data_dir="${DATA_DIR:-/var/lib/catalyst}"
+    # Console FIFOs + stdout/stderr live under console_log_dir (default: $data_dir/console).
+    # Never use /tmp for this: PrivateTmp=true + ReadWritePaths on a missing /tmp path
+    # causes systemd exit status 226/NAMESPACE (see docs/troubleshooting.md).
+    local console_dir="${CONSOLE_LOG_DIR:-${data_dir}/console}"
     mkdir -p /opt/catalyst-agent
-    mkdir -p /var/lib/catalyst/{backups,images,migrate}
+    mkdir -p "${data_dir}"/{backups,images,migrate,console}
+    mkdir -p "${console_dir}"
     mkdir -p /etc/cni/net.d
     mkdir -p /var/lib/cni/networks
-    mkdir -p /tmp/catalyst-console
-    chmod 0755 /tmp/catalyst-console
+    chmod 0755 "${console_dir}"
 }
 
 # ---------------------------------------------------------------------------
@@ -673,7 +678,20 @@ EOF
 # ---------------------------------------------------------------------------
 
 write_systemd_unit() {
-    cat > /etc/systemd/system/catalyst-agent.service <<'EOF'
+    local data_dir="${DATA_DIR:-/var/lib/catalyst}"
+    local console_dir="${CONSOLE_LOG_DIR:-${data_dir}/console}"
+    # Build ReadWritePaths. A leading "-" makes systemd ignore the path when it
+    # does not exist yet (avoids 226/NAMESPACE on fresh hosts without /mnt, etc.).
+    # Do NOT list host /tmp paths here: PrivateTmp=true remounts a private tmpfs
+    # on /tmp, and a missing ReadWritePaths target fails unit start before ExecStart.
+    local rw_paths="${data_dir}"
+    case "${console_dir}" in
+        "${data_dir}"/*) ;; # already covered by data_dir
+        *) rw_paths="${rw_paths} ${console_dir}" ;;
+    esac
+    rw_paths="${rw_paths} /etc/cni/net.d /var/lib/cni -/mnt /run/containerd"
+
+    cat > /etc/systemd/system/catalyst-agent.service <<EOF
 [Unit]
 Description=Catalyst Agent - Game Server Management
 After=network-online.target containerd.service
@@ -693,9 +711,8 @@ LimitNOFILE=65536
 # Security: Agent must run as root to manage containers via containerd socket
 # The agent needs unrestricted access to:
 # - /run/containerd/containerd.sock (container management)
-# - /var/lib/catalyst (server data, backups)
+# - ${data_dir} (server data, backups, console FIFOs under console/)
 # - /var/lib/cni and /etc/cni/net.d (container networking)
-# - /tmp/catalyst-console (console I/O pipes)
 #
 # Sandbox directives that ARE safe to enable (tested compatible):
 NoNewPrivileges=true
@@ -712,8 +729,8 @@ RestrictSUIDSGID=true
 # RestrictNamespaces=false (agent may need nsenter for container namespace ops)
 # CapabilityBoundingSet=... (needs CAP_NET_BIND_SERVICE, CAP_SYS_ADMIN for mount)
 
-# Ensure access to required paths
-ReadWritePaths=/var/lib/catalyst /tmp/catalyst-console /etc/cni/net.d /var/lib/cni /mnt /run/containerd
+# Ensure access to required paths ("-" prefix = ignore if missing)
+ReadWritePaths=${rw_paths}
 
 [Install]
 WantedBy=multi-user.target
