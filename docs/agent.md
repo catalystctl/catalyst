@@ -623,8 +623,11 @@ The agent manages server storage using **disk images** (sparse ext4 files) that 
 When a server is created:
 1. The agent creates a sparse disk image of the requested size (via `fallocate`)
 2. Formats it as ext4 (via `mkfs.ext4`)
-3. Mounts it at the server's data directory
-4. If data already exists at the data directory, it uses `rsync` to migrate it to the image
+3. Mounts it at the server's data directory **in the host mount namespace** (`nsenter -t 1 -m`). The remote-agent systemd unit sets `ProtectSystem=full`, which gives the agent a private mount NS. A loop mount created only there is invisible to containerd: install scripts write to the empty host directory, while the file explorer lists the empty image.
+4. If the host mount does not propagate into the agent's namespace, the agent bind-mounts `/proc/1/root/<data-dir>` over the local path so FileManager/SFTP see the same files.
+5. If a leftover private-NS-only mount is detected (host has no mount, agent does), the agent unmounts the private view and migrates any files that landed on the host directory into the image.
+6. If the host-namespace mount fails, the agent **does not** fall back to a private-NS mount (that recreates the split-brain). It uses the plain data directory and logs that disk quota is not enforced.
+7. If data already exists at the data directory, it uses `rsync` to migrate it to the image
 
 ### Resizing Storage
 

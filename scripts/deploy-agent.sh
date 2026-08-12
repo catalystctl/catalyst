@@ -770,6 +770,10 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 #
+# ProtectSystem=full implies a private mount namespace. The agent MUST mount
+# server disk images in the host NS (nsenter -t 1 -m) so containerd bind-mounts
+# and the file explorer see the same files. Do not drop ProtectSystem without
+# also revisiting storage_manager.rs.
 # Sandbox directives that MUST remain disabled (agent requires them):
 # PrivateDevices=false     (needs loop devices for disk images)
 # PrivateNetwork=false     (needs network for WebSocket + CNI)

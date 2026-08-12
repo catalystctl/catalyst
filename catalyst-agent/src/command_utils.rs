@@ -4,6 +4,8 @@
 //! helpers that were previously duplicated between `storage_manager.rs`,
 //! `system_setup.rs`, and `updater.rs`.
 
+use std::io::Read;
+
 use crate::{AgentError, AgentResult};
 
 // ---------------------------------------------------------------------------
@@ -39,10 +41,16 @@ pub fn run_command_sync_with_timeout(
                 if status.success() {
                     return Ok(());
                 }
-                return Err(AgentError::FileSystemError(format!(
-                    "{} failed with status {}",
-                    command, status
-                )));
+                let mut stderr = String::new();
+                if let Some(mut err) = child.stderr.take() {
+                    let _ = err.read_to_string(&mut stderr);
+                }
+                let stderr = stderr.trim();
+                return Err(AgentError::FileSystemError(if stderr.is_empty() {
+                    format!("{} failed with status {}", command, status)
+                } else {
+                    format!("{} failed with status {}: {}", command, status, stderr)
+                }));
             }
             Ok(None) => {
                 if start.elapsed() > timeout {
@@ -82,4 +90,63 @@ pub fn ws_url_to_http_base(ws_url: &str) -> String {
         base = base[..base.len() - 1].to_string();
     }
     base
+}
+
+// ---------------------------------------------------------------------------
+// Host mount-namespace helpers
+// ---------------------------------------------------------------------------
+
+/// True when this process shares PID 1's mount namespace.
+///
+/// `ProtectSystem=` / `PrivateMounts=` (the remote-agent systemd unit) give the
+/// agent a private mount NS. Loop-mounts created there are invisible to
+/// containerd, so install files land on the host directory while the file
+/// explorer lists the empty disk image.
+pub fn same_mount_namespace_as_init() -> bool {
+    match (
+        std::fs::read_link("/proc/self/ns/mnt"),
+        std::fs::read_link("/proc/1/ns/mnt"),
+    ) {
+        (Ok(self_ns), Ok(init_ns)) => self_ns == init_ns,
+        // If we cannot tell, assume we are in the host NS (dev / non-Linux).
+        _ => true,
+    }
+}
+
+/// Run `command args` in PID 1's mount namespace via `nsenter`.
+///
+/// When we already share that namespace this is a direct exec. On failure we
+/// do **not** fall back to a local `mount` — that is what caused the
+/// file-explorer / container split-brain.
+pub fn run_in_host_mount_ns(command: &str, args: &[&str]) -> AgentResult<()> {
+    if same_mount_namespace_as_init() {
+        return run_command_sync(command, args);
+    }
+    let mut ns_args: Vec<&str> = Vec::with_capacity(4 + args.len());
+    ns_args.extend_from_slice(&["-t", "1", "-m", "--", command]);
+    ns_args.extend_from_slice(args);
+    run_command_sync("nsenter", &ns_args)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ws_url_to_http_base_strips_ws_suffix() {
+        assert_eq!(
+            ws_url_to_http_base("wss://panel.example/ws"),
+            "https://panel.example"
+        );
+        assert_eq!(
+            ws_url_to_http_base("ws://localhost:3000/ws"),
+            "http://localhost:3000"
+        );
+    }
+
+    #[test]
+    fn same_mount_namespace_as_init_does_not_panic() {
+        // In CI / cargo test we share the host NS (or cannot read /proc/1).
+        let _ = same_mount_namespace_as_init();
+    }
 }

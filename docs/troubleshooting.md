@@ -417,6 +417,32 @@ sudo systemctl status catalyst-agent --no-pager
 
 **Fix (reinstall):** After the panel ships an updated `deploy-agent.sh`, re-run the one-liner install (or only re-fetch `/api/agent/deploy-script` and re-apply the unit) so the unit no longer references `/tmp/catalyst-console`.
 
+### File Explorer Empty After Remote-Agent Install
+
+**Symptoms:** You install a node with the curl | bash one-liner, create a game server, and the install console looks successful — but the file explorer is empty (maybe just `lost+found`). SFTP shows the same. The running container's `/data` may also look empty, or the game files exist on the host directory while the panel lists nothing.
+
+**Cause:** `ProtectSystem=full` gives `catalyst-agent.service` a private mount namespace. Older agents loop-mounted the per-server ext4 image (`/var/lib/catalyst/images/{uuid}.img` → `/var/lib/catalyst/{uuid}`) **inside that namespace**. containerd (host namespace) then bind-mounted the empty directory *underneath* the loop mount. The install script wrote files there; the file explorer listed the empty image.
+
+**Fix:** Upgrade the agent to a build that mounts disk images in the host mount namespace (`nsenter -t 1 -m`) and reconciles a leftover private-NS mount. Then restart the agent and start (or reinstall) the server so `ensure_mounted` can migrate host-directory files into the image:
+
+```bash
+sudo systemctl restart catalyst-agent
+# Then Start or Reinstall the server from the panel.
+```
+
+To confirm the split-brain on an unpatched agent:
+
+```bash
+# Agent's view (often empty ext4 / lost+found)
+ls /var/lib/catalyst/<server-uuid>
+# Host view via PID 1 — this is what containerd bind-mounts
+sudo nsenter -t 1 -m -- ls /var/lib/catalyst/<server-uuid>
+findmnt /var/lib/catalyst/<server-uuid>
+sudo nsenter -t 1 -m -- findmnt /var/lib/catalyst/<server-uuid>
+```
+
+If the two listings disagree, you are on the broken build.
+
 ### Agent Shows Offline in the Panel
 
 **Symptoms:** Node appears offline in the admin panel, no resource stats are reported.

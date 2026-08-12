@@ -29,10 +29,13 @@ impl StorageManager {
         fs::create_dir_all(self.images_dir()).await?;
         fs::create_dir_all(mount_dir).await?;
 
-        let (mounted, noexec) = self.get_mount_info(mount_dir).await?;
-        if mounted {
-            // If an older mount still has noexec (from before the fix), remount
-            // with exec so game binaries can run from /data.
+        // Host (PID 1) mount table is what containerd bind-mounts. A loop image
+        // mounted only in the agent's ProtectSystem mount NS is invisible to
+        // containers and produces an empty file explorer / empty /data.
+        let host_info = self.mount_info_from("/proc/1/mounts", mount_dir).await?;
+        let local_info = self.mount_info_from("/proc/mounts", mount_dir).await?;
+
+        if let Some((_, noexec)) = host_info {
             if noexec {
                 info!(
                     "Remounting {} to remove noexec (game binaries need exec)",
@@ -40,7 +43,21 @@ impl StorageManager {
                 );
                 self.remount_exec(mount_dir).await?;
             }
+            if local_info.is_none() {
+                self.ensure_local_view(mount_dir).await?;
+            }
             return Ok(image_path);
+        }
+
+        if local_info.is_some() {
+            warn!(
+                "Disk image for {} is mounted only in the agent's mount namespace \
+                 (ProtectSystem=full). containerd cannot see it — install files \
+                 landed on the host directory. Unmounting the private view so we \
+                 can reconcile.",
+                server_uuid
+            );
+            self.unmount_local(mount_dir).await?;
         }
 
         if !image_path.exists() {
@@ -52,8 +69,19 @@ impl StorageManager {
                 .await?;
         }
 
-        self.mount_image(&image_path, mount_dir).await?;
-        Ok(image_path)
+        match self.mount_image(&image_path, mount_dir).await {
+            Ok(()) => Ok(image_path),
+            Err(e) if !command_utils::same_mount_namespace_as_init() => {
+                error!(
+                    "Cannot mount disk image for {} in the host mount namespace ({}). \
+                     Using the plain data directory so install files stay visible to \
+                     containerd and the file explorer. Disk quota will not be enforced.",
+                    server_uuid, e
+                );
+                Ok(image_path)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub async fn resize(
@@ -232,7 +260,7 @@ impl StorageManager {
             let size_arg = format!("{}M", size_mb);
             spawn_blocking(move || {
                 command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
-                command_utils::run_command_sync("resize2fs", &[&mount])?;
+                command_utils::run_in_host_mount_ns("resize2fs", &[&mount])?;
                 Ok::<(), AgentError>(())
             })
             .await
@@ -283,19 +311,67 @@ impl StorageManager {
             .to_str()
             .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
             .to_string();
-        spawn_blocking(move || {
-            command_utils::run_command_sync(
-                "mount",
-                &["-o", "loop,exec,nodev,nosuid", &image, &mount],
-            )?;
-            Ok::<(), AgentError>(())
+        spawn_blocking({
+            let mount = mount.clone();
+            move || {
+                command_utils::run_in_host_mount_ns(
+                    "mount",
+                    &["-o", "loop,exec,nodev,nosuid", &image, &mount],
+                )?;
+                Ok::<(), AgentError>(())
+            }
         })
         .await
         .map_err(|e| AgentError::FileSystemError(format!("Mount task failed: {}", e)))??;
+        self.ensure_local_view(mount_dir).await?;
         Ok(())
     }
 
     async fn unmount(&self, mount_dir: &Path) -> AgentResult<()> {
+        // Same mount NS as PID 1: one umount is enough (and a second would fail).
+        if command_utils::same_mount_namespace_as_init() {
+            let mount = mount_dir
+                .to_str()
+                .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
+                .to_string();
+            return spawn_blocking(move || {
+                command_utils::run_command_sync("umount", &[&mount])?;
+                Ok::<(), AgentError>(())
+            })
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Unmount task failed: {}", e)))?;
+        }
+
+        // Private NS: drop the local bind first so the host umount is not busy.
+        let _ = self.unmount_local(mount_dir).await;
+        if self
+            .mount_info_from("/proc/1/mounts", mount_dir)
+            .await?
+            .is_none()
+        {
+            return Ok(());
+        }
+        let mount = mount_dir
+            .to_str()
+            .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
+            .to_string();
+        spawn_blocking(move || {
+            command_utils::run_in_host_mount_ns("umount", &[&mount])?;
+            Ok::<(), AgentError>(())
+        })
+        .await
+        .map_err(|e| AgentError::FileSystemError(format!("Unmount task failed: {}", e)))??;
+        Ok(())
+    }
+
+    async fn unmount_local(&self, mount_dir: &Path) -> AgentResult<()> {
+        if self
+            .mount_info_from("/proc/mounts", mount_dir)
+            .await?
+            .is_none()
+        {
+            return Ok(());
+        }
         let mount = mount_dir
             .to_str()
             .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
@@ -305,29 +381,71 @@ impl StorageManager {
             Ok::<(), AgentError>(())
         })
         .await
-        .map_err(|e| AgentError::FileSystemError(format!("Unmount task failed: {}", e)))??;
+        .map_err(|e| AgentError::FileSystemError(format!("Local unmount task failed: {}", e)))??;
         Ok(())
     }
 
-    /// Returns (is_mounted, has_noexec) by parsing /proc/mounts once.
-    async fn get_mount_info(&self, mount_dir: &Path) -> AgentResult<(bool, bool)> {
-        let mounts = fs::read_to_string("/proc/mounts").await?;
-        let target = mount_dir.to_string_lossy();
-        for line in mounts.lines() {
-            let mut parts = line.split_whitespace();
-            let _source = parts.next();
-            let mount_point = match parts.next() {
-                Some(p) => p.replace("\\040", " "),
-                None => continue,
-            };
-            if mount_point == target {
-                let _fs_type = parts.next();
-                let opts = parts.next().unwrap_or("");
-                let noexec = opts.split(',').any(|o| o == "noexec");
-                return Ok((true, noexec));
-            }
+    /// If the host has the loop mount but it did not propagate into the agent's
+    /// private mount NS, bind the host's view so FileManager/SFTP see the same
+    /// files as containerd.
+    async fn ensure_local_view(&self, mount_dir: &Path) -> AgentResult<()> {
+        if self
+            .mount_info_from("/proc/mounts", mount_dir)
+            .await?
+            .is_some()
+        {
+            return Ok(());
         }
-        Ok((false, false))
+        let mount = mount_dir
+            .to_str()
+            .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
+            .to_string();
+        let host_view_str = host_root_view(mount_dir).to_string_lossy().to_string();
+        info!(
+            "Host mount at {} did not propagate; bind-mounting {} -> {}",
+            mount, host_view_str, mount
+        );
+        spawn_blocking(move || {
+            command_utils::run_command_sync("mount", &["--bind", &host_view_str, &mount])?;
+            Ok::<(), AgentError>(())
+        })
+        .await
+        .map_err(|e| {
+            AgentError::FileSystemError(format!("Bind host mount view failed: {}", e))
+        })??;
+        Ok(())
+    }
+
+    /// Returns (is_mounted, has_noexec) from the host mount table (containerd's view).
+    async fn get_mount_info(&self, mount_dir: &Path) -> AgentResult<(bool, bool)> {
+        if let Some(info) = self.mount_info_from("/proc/1/mounts", mount_dir).await? {
+            return Ok(info);
+        }
+        Ok(self
+            .mount_info_from("/proc/mounts", mount_dir)
+            .await?
+            .unwrap_or((false, false)))
+    }
+
+    async fn mount_info_from(
+        &self,
+        mounts_file: &str,
+        mount_dir: &Path,
+    ) -> AgentResult<Option<(bool, bool)>> {
+        let mounts = match fs::read_to_string(mounts_file).await {
+            Ok(s) => s,
+            Err(e) if mounts_file != "/proc/mounts" => {
+                warn!(
+                    "Could not read {}: {}; falling back to /proc/mounts",
+                    mounts_file, e
+                );
+                return Ok(None);
+            }
+            Err(e) => {
+                return Err(e.into());
+            }
+        };
+        Ok(parse_mount_info(&mounts, mount_dir))
     }
 
     async fn is_mounted(&self, mount_dir: &Path) -> AgentResult<bool> {
@@ -340,7 +458,7 @@ impl StorageManager {
             .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
             .to_string();
         spawn_blocking(move || {
-            command_utils::run_command_sync("mount", &["-o", "remount,exec", &mount])?;
+            command_utils::run_in_host_mount_ns("mount", &["-o", "remount,exec", &mount])?;
             Ok::<(), AgentError>(())
         })
         .await
@@ -408,5 +526,96 @@ impl StorageManager {
     async fn dir_has_data(&self, dir: &Path) -> AgentResult<bool> {
         let mut entries = fs::read_dir(dir).await?;
         Ok(entries.next_entry().await?.is_some())
+    }
+}
+
+/// Parse /proc/mounts (or /proc/1/mounts) for `mount_dir`.
+/// Returns Some((true, noexec)) when the exact mount point is present.
+pub(crate) fn parse_mount_info(contents: &str, mount_dir: &Path) -> Option<(bool, bool)> {
+    let target = mount_dir.to_string_lossy();
+    for line in contents.lines() {
+        let mut parts = line.split_whitespace();
+        let _source = parts.next();
+        let mount_point = match parts.next() {
+            Some(p) => p.replace("\\040", " "),
+            None => continue,
+        };
+        if mount_point == target {
+            let _fs_type = parts.next();
+            let opts = parts.next().unwrap_or("");
+            let noexec = opts.split(',').any(|o| o == "noexec");
+            return Some((true, noexec));
+        }
+    }
+    None
+}
+
+/// Host-visible path for `mount_dir` via PID 1's root (used when a host mount
+/// does not propagate into the agent's private mount namespace).
+pub(crate) fn host_root_view(mount_dir: &Path) -> PathBuf {
+    let rel = mount_dir.strip_prefix("/").unwrap_or(mount_dir);
+    PathBuf::from("/proc/1/root").join(rel)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    const SAMPLE: &str = "\
+/dev/sda1 / ext4 rw,relatime 0 0\n\
+/dev/loop0 /var/lib/catalyst/srv-1 ext4 rw,relatime,errors=remount-ro 0 0\n\
+/dev/loop1 /var/lib/catalyst/old ext4 ro,noexec,nodev,nosuid 0 0\n\
+/dev/loop2 /var/lib/catalyst/with\\040space ext4 rw,exec 0 0\n";
+
+    #[test]
+    fn parse_mount_info_finds_exact_mount() {
+        let info = parse_mount_info(SAMPLE, Path::new("/var/lib/catalyst/srv-1"));
+        assert_eq!(info, Some((true, false)));
+    }
+
+    #[test]
+    fn parse_mount_info_detects_noexec() {
+        let info = parse_mount_info(SAMPLE, Path::new("/var/lib/catalyst/old"));
+        assert_eq!(info, Some((true, true)));
+    }
+
+    #[test]
+    fn parse_mount_info_missing_is_none() {
+        assert_eq!(
+            parse_mount_info(SAMPLE, Path::new("/var/lib/catalyst/missing")),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_mount_info_does_not_prefix_match() {
+        // /var/lib/catalyst must not match /var/lib/catalyst/srv-1
+        assert_eq!(
+            parse_mount_info(SAMPLE, Path::new("/var/lib/catalyst")),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_mount_info_decodes_escaped_spaces() {
+        let info = parse_mount_info(SAMPLE, Path::new("/var/lib/catalyst/with space"));
+        assert_eq!(info, Some((true, false)));
+    }
+
+    #[test]
+    fn host_root_view_prefixes_proc() {
+        assert_eq!(
+            host_root_view(Path::new("/var/lib/catalyst/abc")),
+            PathBuf::from("/proc/1/root/var/lib/catalyst/abc")
+        );
+    }
+
+    #[test]
+    fn host_root_view_relative_passthrough() {
+        assert_eq!(
+            host_root_view(Path::new("relative/dir")),
+            PathBuf::from("/proc/1/root/relative/dir")
+        );
     }
 }
