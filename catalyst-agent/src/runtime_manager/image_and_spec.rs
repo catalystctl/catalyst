@@ -45,6 +45,94 @@ pub fn detect_install_interpreter(image: &str, script: &str) -> (&'static str, &
     }
 }
 
+/// True when image Cmd is a Pterodactyl yolks `/entrypoint.sh` that evals `$STARTUP`.
+fn cmd_evaluates_startup(cmd: &[String]) -> bool {
+    cmd.iter().any(|part| {
+        let base = part.rsplit('/').next().unwrap_or(part);
+        base == "entrypoint.sh" || base == "entrypoint"
+    })
+}
+
+/// True when the startup string must be parsed by a shell (not exec'd as argv[0]).
+fn startup_needs_shell(command: &str) -> bool {
+    command.contains(char::is_whitespace)
+        || command.contains('"')
+        || command.contains('\'')
+        || command.contains("$(")
+        || command.contains("[[")
+        || command.contains("$((")
+        || command.contains('`')
+        || command.contains(';')
+        || command.contains("&&")
+        || command.contains("||")
+}
+
+/// Build OCI `process.args` for a game-server container.
+///
+/// Pterodactyl Wings never overrides image Entrypoint/Cmd. Modern yolks
+/// (`debian_trixie` and anything based on it, including `wine_latest`) use:
+///   ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
+///   CMD        ["/bin/bash", "/entrypoint.sh"]  // evals `$STARTUP`
+/// Replacing Cmd with the raw startup string makes tini `exec` the entire
+/// command line as argv[0] → ENOENT:
+///   [FATAL tini] exec wine ./SonsOfTheForestDS.exe ... failed: No such file or directory
+pub fn build_process_args(
+    startup_command: &str,
+    image_entrypoint: Option<&[String]>,
+    image_cmd: Option<&[String]>,
+) -> Vec<String> {
+    let entrypoint = image_entrypoint.filter(|e| !e.is_empty());
+    let cmd = image_cmd.filter(|c| !c.is_empty());
+
+    // Wings-compatible: yolks entrypoint.sh reads STARTUP from the environment.
+    if let Some(cmd) = cmd {
+        if cmd_evaluates_startup(cmd) {
+            let mut args = entrypoint.unwrap_or(&[]).to_vec();
+            args.extend(cmd.iter().cloned());
+            return args;
+        }
+    }
+
+    if let Some(entrypoint) = entrypoint {
+        let mut args = entrypoint.to_vec();
+        if !startup_command.is_empty() {
+            if startup_needs_shell(startup_command) {
+                let shell = if crate::shell_utils::requires_bash(startup_command) {
+                    "/bin/bash"
+                } else {
+                    "/bin/sh"
+                };
+                args.push(shell.to_string());
+                args.push("-c".to_string());
+            }
+            args.push(startup_command.to_string());
+        } else if let Some(cmd) = cmd {
+            args.extend(cmd.iter().cloned());
+        }
+        return args;
+    }
+
+    if !startup_command.is_empty() {
+        let escaped_startup = crate::shell_utils::shell_escape_value(startup_command);
+        let shell = if crate::shell_utils::requires_bash(startup_command) {
+            "/bin/bash"
+        } else {
+            "/bin/sh"
+        };
+        let wrapped_command = format!(
+            "export PATH=\"/opt/java/openjdk/bin:${{PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}}\"; exec {} -c {}",
+            shell, escaped_startup
+        );
+        return vec![shell.to_string(), "-c".to_string(), wrapped_command];
+    }
+
+    if let Some(cmd) = cmd {
+        return cmd.to_vec();
+    }
+
+    vec!["/bin/sh".to_string()]
+}
+
 pub fn base_mounts(data_dir: &str) -> Vec<serde_json::Value> {
     vec![
         serde_json::json!({"destination":"/data","type":"bind","source":data_dir,"options":["rbind","rw"]}),
@@ -478,49 +566,7 @@ impl ContainerdRuntime {
             .map(|(k, v)| format!("{}={}", k, v))
             .collect();
 
-        let args = if let Some(entrypoint) = image_entrypoint {
-            let mut args = entrypoint.to_vec();
-            if !config.startup_command.is_empty() {
-                // Startup commands from templates often contain shell syntax
-                // (arithmetic expansion, command substitution, etc.) that must be
-                // parsed by a shell.  Passing them as a single argument to an
-                // image entrypoint that does `exec "$@"` causes the entire string
-                // to be treated as one binary name.  Wrap in `sh -c` so the
-                // entrypoint's exec/eval passes it to a shell.
-                let needs_shell = config.startup_command.contains("$(")
-                    || config.startup_command.contains("[[")
-                    || config.startup_command.contains("$((")
-                    || config.startup_command.contains('`')
-                    || config.startup_command.contains(';')
-                    || config.startup_command.contains("&&")
-                    || config.startup_command.contains("||");
-                if needs_shell {
-                    args.push("/bin/sh".to_string());
-                    args.push("-c".to_string());
-                }
-                args.push(config.startup_command.to_string());
-            } else if let Some(cmd) = image_cmd {
-                args.extend(cmd.iter().cloned());
-            }
-            args
-        } else if !config.startup_command.is_empty() {
-            let escaped_startup = crate::shell_utils::shell_escape_value(config.startup_command);
-            // Some templates (e.g. Hytale) use bash-specific process substitution or
-            // other features that dash/sh cannot handle.  Detect those and use bash
-            // instead of /bin/sh so the command works on all distros.
-            let shell = if crate::shell_utils::requires_bash(config.startup_command) {
-                "/bin/bash"
-            } else {
-                "/bin/sh"
-            };
-            let wrapped_command = format!(
-                "export PATH=\"/opt/java/openjdk/bin:${{PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}}\"; exec {} -c {}",
-                shell, escaped_startup
-            );
-            vec![shell.to_string(), "-c".to_string(), wrapped_command]
-        } else {
-            vec!["/bin/sh".to_string()]
-        };
+        let args = build_process_args(config.startup_command, image_entrypoint, image_cmd);
 
         let mem_limit = (config.memory_mb as i64) * 1024 * 1024;
         let mem_high = (mem_limit as f64 * 0.9) as i64;
@@ -610,5 +656,89 @@ impl ContainerdRuntime {
                 "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths(),
                 "seccomp": default_seccomp_profile()}
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn s(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|p| (*p).to_string()).collect()
+    }
+
+    #[test]
+    fn wine_yolk_keeps_tini_and_entrypoint_sh() {
+        // ghcr.io/ptero-eggs/yolks:wine_latest inherits debian_trixie:
+        //   ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
+        //   CMD        ["/bin/bash", "/entrypoint.sh"]
+        let startup = "wine ./SonsOfTheForestDS.exe -userdatapath \"/home/container/serverconfig\" -dedicatedserver.IpAddress \"0.0.0.0\"";
+        let entrypoint = s(&["/usr/bin/tini", "-g", "--"]);
+        let cmd = s(&["/bin/bash", "/entrypoint.sh"]);
+        let args = build_process_args(startup, Some(&entrypoint), Some(&cmd));
+        assert_eq!(
+            args,
+            s(&["/usr/bin/tini", "-g", "--", "/bin/bash", "/entrypoint.sh"])
+        );
+        // Must NOT pass the raw startup string as tini's argv — that is the
+        // [FATAL tini] exec wine ./SonsOfTheForestDS.exe ... ENOENT bug.
+        assert!(!args.iter().any(|a| a.contains("SonsOfTheForestDS.exe")));
+    }
+
+    #[test]
+    fn debian_trixie_cmd_only_entrypoint_sh() {
+        let entrypoint = s(&["/usr/bin/tini", "-g", "--"]);
+        let cmd = s(&["/entrypoint.sh"]);
+        let args = build_process_args("java -jar server.jar", Some(&entrypoint), Some(&cmd));
+        assert_eq!(args, s(&["/usr/bin/tini", "-g", "--", "/entrypoint.sh"]));
+    }
+
+    #[test]
+    fn older_java_yolk_without_tini_still_uses_entrypoint_sh() {
+        let cmd = s(&["/bin/bash", "/entrypoint.sh"]);
+        let args = build_process_args("java -Xmx2048M -jar server.jar", None, Some(&cmd));
+        assert_eq!(args, s(&["/bin/bash", "/entrypoint.sh"]));
+    }
+
+    #[test]
+    fn tini_without_entrypoint_sh_wraps_spaced_startup() {
+        let entrypoint = s(&["/usr/bin/tini", "-g", "--"]);
+        let args = build_process_args("wine ./game.exe -port 25565", Some(&entrypoint), None);
+        assert_eq!(
+            args,
+            s(&[
+                "/usr/bin/tini",
+                "-g",
+                "--",
+                "/bin/sh",
+                "-c",
+                "wine ./game.exe -port 25565"
+            ])
+        );
+    }
+
+    #[test]
+    fn no_image_metadata_wraps_startup_in_shell() {
+        let args = build_process_args("java -jar server.jar", None, None);
+        assert_eq!(args[0], "/bin/sh");
+        assert_eq!(args[1], "-c");
+        assert!(args[2].contains("java -jar server.jar"));
+    }
+
+    #[test]
+    fn empty_startup_falls_back_to_image_cmd() {
+        let entrypoint = s(&["/usr/bin/tini", "--"]);
+        let cmd = s(&["sleep", "infinity"]);
+        let args = build_process_args("", Some(&entrypoint), Some(&cmd));
+        assert_eq!(args, s(&["/usr/bin/tini", "--", "sleep", "infinity"]));
+    }
+
+    #[test]
+    fn custom_image_cmd_is_not_treated_as_yolk_entrypoint() {
+        // ubuntu:22.04 style CMD ["bash"] must not swallow the egg startup.
+        let args = build_process_args("java -jar server.jar", None, Some(&s(&["bash"])));
+        assert_eq!(args[0], "/bin/sh");
+        assert_eq!(args[1], "-c");
+        assert!(args[2].contains("java -jar server.jar"));
     }
 }

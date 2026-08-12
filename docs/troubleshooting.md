@@ -443,6 +443,21 @@ sudo nsenter -t 1 -m -- findmnt /var/lib/catalyst/<server-uuid>
 
 If the two listings disagree, you are on the broken build.
 
+### Game servers unreachable / no NAT after systemd agent install
+
+**Symptoms:** The node is online and the server starts, but players cannot connect and the container has no outbound internet. `cargo run` on the same host works.
+
+**Cause:** `ProtectKernelTunables=true` and `ProtectKernelModules=true` stop the agent from running `sysctl` / `modprobe`. CNI NAT and port-forwards need `net.ipv4.ip_forward=1`. Disk-image quotas need the `loop` module.
+
+**Fix:** Re-run the current `deploy-agent.sh` one-liner (it writes `/etc/sysctl.d/99-catalyst.conf` and `/etc/modules-load.d/catalyst-loop.conf`), or apply once:
+
+```bash
+sudo sysctl -w net.ipv4.ip_forward=1
+echo 'net.ipv4.ip_forward = 1' | sudo tee /etc/sysctl.d/99-catalyst.conf
+sudo modprobe loop
+echo loop | sudo tee /etc/modules-load.d/catalyst-loop.conf
+```
+
 ### Agent Shows Offline in the Panel
 
 **Symptoms:** Node appears offline in the admin panel, no resource stats are reported.

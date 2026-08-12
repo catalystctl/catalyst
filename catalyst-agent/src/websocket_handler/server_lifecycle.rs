@@ -1336,21 +1336,23 @@ impl WebSocketHandler {
             FirewallManager::remove_server_ports(server_uuid).await;
         }
 
-        // Clean up server data directory (container data, logs, console)
+        // Clean up server data directory + disk image (unmount first if needed)
         let data_dir = self.config.server.data_dir.clone();
         for id in &[server_id, server_uuid] {
             if !id.is_empty() {
                 let server_dir = std::path::Path::new(&data_dir).join(id);
-                if server_dir.exists() {
-                    if let Err(e) = tokio::fs::remove_dir_all(&server_dir).await {
-                        warn!(
-                            "Failed to remove server data dir {}: {}",
-                            server_dir.display(),
-                            e
-                        );
-                    } else {
-                        info!("Removed server data directory: {}", server_dir.display());
-                    }
+                if let Err(e) = self
+                    .storage_manager
+                    .destroy_server_storage(id, &server_dir)
+                    .await
+                {
+                    warn!(
+                        "Failed to destroy storage for {}: {}",
+                        server_dir.display(),
+                        e
+                    );
+                } else {
+                    info!("Removed server storage: {}", server_dir.display());
                 }
             }
         }

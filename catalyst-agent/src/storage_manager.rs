@@ -84,6 +84,173 @@ impl StorageManager {
         }
     }
 
+    /// True when `path` is a mount point in the host (containerd) mount table.
+    /// Errors if the mount table cannot be read — callers must fail closed.
+    pub async fn path_is_mounted(&self, path: &Path) -> AgentResult<bool> {
+        Ok(self.get_mount_info(path).await?.0)
+    }
+
+    /// Replace `dest` with the contents of `src`.
+    ///
+    /// `rename(src, dest)` fails when `dest` is a live loop-mount (the default
+    /// for systemd-installed agents). In that case we copy onto the image first
+    /// and only then swap children, so a failed copy leaves the live tree intact.
+    /// If we cannot read the mount table we abort rather than guessing.
+    pub async fn replace_directory_contents(&self, dest: &Path, src: &Path) -> AgentResult<()> {
+        if !src.exists() {
+            return Err(AgentError::NotFound(format!(
+                "Restore source does not exist: {}",
+                src.display()
+            )));
+        }
+        let mounted = self.path_is_mounted(dest).await?;
+        if mounted {
+            info!(
+                "{} is a mount point; staging restore on the image then swapping",
+                dest.display()
+            );
+            return self.replace_mounted_directory_contents(dest, src).await;
+        }
+        self.replace_unmounted_directory(dest, src).await
+    }
+
+    /// Copy `src` onto a sibling dir *inside* the live mount, then swap children.
+    /// Live dest is not cleared until the copy has succeeded.
+    async fn replace_mounted_directory_contents(&self, dest: &Path, src: &Path) -> AgentResult<()> {
+        let staging = dest.join(".catalyst-restore-new");
+        let old = dest.join(".catalyst-restore-old");
+        let _ = fs::remove_dir_all(&staging).await;
+        let _ = fs::remove_dir_all(&old).await;
+        fs::create_dir_all(&staging).await.map_err(|e| {
+            AgentError::FileSystemError(format!(
+                "Failed to create restore staging {}: {}",
+                staging.display(),
+                e
+            ))
+        })?;
+        if let Err(e) = self.copy_dir_contents(src, &staging).await {
+            let _ = fs::remove_dir_all(&staging).await;
+            return Err(e);
+        }
+        fs::create_dir_all(&old).await.map_err(|e| {
+            AgentError::FileSystemError(format!(
+                "Failed to create restore backup dir {}: {}",
+                old.display(),
+                e
+            ))
+        })?;
+        if let Err(e) = move_children_except(
+            dest,
+            &old,
+            &[".catalyst-restore-new", ".catalyst-restore-old"],
+        )
+        .await
+        {
+            let _ = move_children_except(&old, dest, &[]).await;
+            let _ = fs::remove_dir_all(&old).await;
+            let _ = fs::remove_dir_all(&staging).await;
+            return Err(e);
+        }
+        if let Err(e) = move_children_except(&staging, dest, &[]).await {
+            let _ = move_children_except(dest, &staging, &[".catalyst-restore-old"]).await;
+            let _ = move_children_except(&old, dest, &[]).await;
+            let _ = fs::remove_dir_all(&old).await;
+            let _ = fs::remove_dir_all(&staging).await;
+            return Err(e);
+        }
+        let _ = fs::remove_dir_all(&staging).await;
+        let _ = fs::remove_dir_all(&old).await;
+        let _ = fs::remove_dir_all(src).await;
+        Ok(())
+    }
+
+    /// Dest is not a mount point: move it aside, then rename src into place.
+    /// If dest *is* secretly a mount, the aside-rename fails and dest is untouched.
+    async fn replace_unmounted_directory(&self, dest: &Path, src: &Path) -> AgentResult<()> {
+        if dest.exists() {
+            let bak = dest.with_extension("replace_old");
+            let _ = fs::remove_dir_all(&bak).await;
+            fs::rename(dest, &bak).await.map_err(|e| {
+                AgentError::FileSystemError(format!(
+                    "Failed to move {} aside before restore (is it a mount point?): {}",
+                    dest.display(),
+                    e
+                ))
+            })?;
+            if let Err(e) = fs::rename(src, dest).await {
+                let _ = fs::rename(&bak, dest).await;
+                return Err(AgentError::FileSystemError(format!(
+                    "Failed to move {} onto {}: {}",
+                    src.display(),
+                    dest.display(),
+                    e
+                )));
+            }
+            let _ = fs::remove_dir_all(&bak).await;
+            return Ok(());
+        }
+        fs::rename(src, dest).await.map_err(|e| {
+            AgentError::FileSystemError(format!(
+                "Failed to move {} onto {}: {}",
+                src.display(),
+                dest.display(),
+                e
+            ))
+        })?;
+        Ok(())
+    }
+
+    /// Unmount a server disk image (if any), then delete the mount dir and `.img`.
+    pub async fn destroy_server_storage(
+        &self,
+        server_uuid: &str,
+        mount_dir: &Path,
+    ) -> AgentResult<()> {
+        match self.path_is_mounted(mount_dir).await {
+            Ok(true) => {
+                self.unmount(mount_dir).await?;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                // Fail closed: try to unmount anyway so remove_dir_all cannot
+                // wipe a live image whose mount table we failed to read.
+                warn!(
+                    "Could not determine if {} is mounted ({}); attempting unmount before delete",
+                    mount_dir.display(),
+                    e
+                );
+                if let Err(unmount_err) = self.unmount(mount_dir).await {
+                    return Err(AgentError::FileSystemError(format!(
+                        "Refusing to delete {}: mount status unknown ({}) and unmount failed ({})",
+                        mount_dir.display(),
+                        e,
+                        unmount_err
+                    )));
+                }
+            }
+        }
+        if mount_dir.exists() {
+            fs::remove_dir_all(mount_dir).await.map_err(|e| {
+                AgentError::FileSystemError(format!(
+                    "Failed to remove {}: {}",
+                    mount_dir.display(),
+                    e
+                ))
+            })?;
+        }
+        let image = self.image_path(server_uuid);
+        if image.exists() {
+            fs::remove_file(&image).await.map_err(|e| {
+                AgentError::FileSystemError(format!(
+                    "Failed to remove storage image {}: {}",
+                    image.display(),
+                    e
+                ))
+            })?;
+        }
+        Ok(())
+    }
+
     pub async fn resize(
         &self,
         server_uuid: &str,
@@ -238,6 +405,31 @@ impl StorageManager {
             }
         }
         Ok(())
+    }
+
+    async fn copy_dir_contents(&self, src: &Path, dest: &Path) -> AgentResult<()> {
+        let src_slash = format!("{}/", src.display());
+        let src_dot = format!("{}/.", src.display());
+        let dest_slash = format!("{}/", dest.display());
+        spawn_blocking(move || {
+            if PathBuf::from("/usr/bin/rsync").exists()
+                || PathBuf::from("/usr/local/bin/rsync").exists()
+            {
+                command_utils::run_command_sync_with_timeout(
+                    "rsync",
+                    &["-a", src_slash.as_str(), dest_slash.as_str()],
+                    3600,
+                )
+            } else {
+                command_utils::run_command_sync_with_timeout(
+                    "cp",
+                    &["-a", src_dot.as_str(), dest_slash.as_str()],
+                    3600,
+                )
+            }
+        })
+        .await
+        .map_err(|e| AgentError::FileSystemError(format!("copy_dir_contents task failed: {}", e)))?
     }
 
     async fn grow_image(
@@ -529,6 +721,33 @@ impl StorageManager {
     }
 }
 
+/// Move children of `from` into `to`, skipping `except` names and ext4 `lost+found`.
+async fn move_children_except(from: &Path, to: &Path, except: &[&str]) -> AgentResult<()> {
+    let mut entries = fs::read_dir(from).await.map_err(|e| {
+        AgentError::FileSystemError(format!("Failed to read {}: {}", from.display(), e))
+    })?;
+    while let Some(entry) = entries.next_entry().await.map_err(|e| {
+        AgentError::FileSystemError(format!("Failed to read entry in {}: {}", from.display(), e))
+    })? {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if except.iter().any(|n| *n == name_str) || name_str == "lost+found" {
+            continue;
+        }
+        let src = entry.path();
+        let dest = to.join(&name);
+        fs::rename(&src, &dest).await.map_err(|e| {
+            AgentError::FileSystemError(format!(
+                "Failed to move {} -> {}: {}",
+                src.display(),
+                dest.display(),
+                e
+            ))
+        })?;
+    }
+    Ok(())
+}
+
 /// Parse /proc/mounts (or /proc/1/mounts) for `mount_dir`.
 /// Returns Some((true, noexec)) when the exact mount point is present.
 pub(crate) fn parse_mount_info(contents: &str, mount_dir: &Path) -> Option<(bool, bool)> {
@@ -617,5 +836,43 @@ mod tests {
             host_root_view(Path::new("relative/dir")),
             PathBuf::from("/proc/1/root/relative/dir")
         );
+    }
+
+    #[tokio::test]
+    async fn replace_unmounted_directory_swaps_without_wiping_src_on_rename_fail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("dest");
+        let src = tmp.path().join("src");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(dest.join("live.txt"), b"keep-me").unwrap();
+        std::fs::write(src.join("new.txt"), b"restored").unwrap();
+
+        let sm = StorageManager::new(tmp.path().to_path_buf());
+        sm.replace_unmounted_directory(&dest, &src)
+            .await
+            .expect("unmounted swap");
+
+        assert!(dest.join("new.txt").exists());
+        assert!(!dest.join("live.txt").exists());
+        assert!(!src.exists());
+    }
+
+    #[tokio::test]
+    async fn replace_directory_contents_missing_src_is_not_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("dest");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(dest.join("live.txt"), b"keep-me").unwrap();
+        let sm = StorageManager::new(tmp.path().to_path_buf());
+        let err = sm
+            .replace_directory_contents(&dest, &tmp.path().join("missing"))
+            .await
+            .expect_err("missing src");
+        assert!(
+            dest.join("live.txt").exists(),
+            "live dest must be untouched"
+        );
+        let _ = err;
     }
 }

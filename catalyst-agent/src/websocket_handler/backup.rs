@@ -378,17 +378,12 @@ impl WebSocketHandler {
             )));
         }
 
-        // Validation passed — atomically replace server_dir with restored data.
-        // server_dir may not exist yet, so we ignore remove_dir_all errors.
-        let _ = tokio::fs::remove_dir_all(&server_dir).await;
-        tokio::fs::rename(&tmp_dir, &server_dir)
-            .await
-            .map_err(|e| {
-                AgentError::FileSystemError(format!(
-                    "Failed to move restored directory into place: {}",
-                    e
-                ))
-            })?;
+        // Validation passed — swap restored data into place. On a systemd
+        // loop-mount this copies onto the image then swaps children; it never
+        // remove_dir_all + rename over the live mount.
+        self.storage_manager
+            .replace_directory_contents(&server_dir, &tmp_dir)
+            .await?;
 
         // Ensure restored data is owned by container user
         if let Err(e) = chown_to_container_user(&server_dir).await {
@@ -1366,15 +1361,10 @@ impl WebSocketHandler {
             )));
         }
 
-        // Validation passed — atomically replace server_dir with restored data.
-        let _ = tokio::fs::remove_dir_all(&server_dir).await;
-        if let Err(e) = tokio::fs::rename(&tmp_dir, &server_dir).await {
-            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
-            return Err(AgentError::FileSystemError(format!(
-                "Failed to move restored directory into place: {}",
-                e
-            )));
-        }
+        // Validation passed — swap restored data into place (mount-safe).
+        self.storage_manager
+            .replace_directory_contents(&server_dir, &tmp_dir)
+            .await?;
 
         // Clean up byte counter for this restore stream
         self.active_restore_bytes_written

@@ -451,6 +451,23 @@ prepare_directories() {
     chmod 0755 "${console_dir}"
 }
 
+# Kernel bits the systemd-sandboxed agent cannot set itself:
+# ProtectKernelTunables=true blocks sysctl; ProtectKernelModules=true blocks modprobe.
+# CNI NAT / port-forward need ip_forward; disk images need the loop module.
+prepare_host_kernel() {
+    log "Enabling host kernel settings required by the sandboxed agent..."
+    if command -v sysctl >/dev/null 2>&1; then
+        sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || warn "Could not enable net.ipv4.ip_forward"
+        mkdir -p /etc/sysctl.d
+        printf 'net.ipv4.ip_forward = 1\n' > /etc/sysctl.d/99-catalyst.conf
+    fi
+    if command -v modprobe >/dev/null 2>&1; then
+        modprobe loop >/dev/null 2>&1 || warn "Could not load loop module (disk quotas may fall back to a plain directory)"
+        mkdir -p /etc/modules-load.d
+        printf 'loop\n' > /etc/modules-load.d/catalyst-loop.conf
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Agent binary — download the static musl release matching the panel version
 # ---------------------------------------------------------------------------
@@ -774,6 +791,9 @@ RestrictSUIDSGID=true
 # server disk images in the host NS (nsenter -t 1 -m) so containerd bind-mounts
 # and the file explorer see the same files. Do not drop ProtectSystem without
 # also revisiting storage_manager.rs.
+# ProtectKernelTunables/Modules stay on: deploy-agent.sh sets ip_forward and
+# loads the loop module on the host (prepare_host_kernel). The sandboxed agent
+# cannot sysctl or modprobe.
 # Sandbox directives that MUST remain disabled (agent requires them):
 # PrivateDevices=false     (needs loop devices for disk images)
 # PrivateNetwork=false     (needs network for WebSocket + CNI)
@@ -945,6 +965,7 @@ main() {
     install_cni_plugins "$pkg_manager"
     ensure_containerd_config "$init_system"
     prepare_directories
+    prepare_host_kernel
     install_agent_binary
     write_config
 
