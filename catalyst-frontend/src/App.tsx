@@ -159,7 +159,9 @@ function App() {
  applyTheme();
  }, [theme, applyTheme]);
 
- // Full-screen loading while auth initializes or setup status is checked
+ // Full-screen loading while auth initializes or setup status is checked.
+ // useSetupStatus stays loading until the first /api/setup/status attempt
+ // settles — never gate on csync's isLoading alone (false on first paint).
  if (!isReady || isSetupLoading) {
  return (
  <div className="flex h-screen items-center justify-center bg-background">
@@ -174,7 +176,8 @@ function App() {
  // Redirect unauthenticated users to /setup when OOBE is required.
  // Auth pages are included here so that if setup finishes while the user
  // is on /login (or a 401 bounces them there) they don't get trapped in
- // a redirect loop — they can log in normally.
+ // a redirect loop — they can log in normally. Visiting bare /login during
+ // first-run still works, but the catch-all sends every other path to /setup.
  if (setupRequired && !isAuthenticated) {
  return (
  <ErrorBoundary resetKey={location.pathname}>

@@ -13,6 +13,7 @@ import { notifyError } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
+import { useSetupStatus } from '../../hooks/useSetupStatus';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,10 @@ function LoginPage() {
  const ssoError = searchParams.get('error');
  const ssoProvider = searchParams.get('provider');
  const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname;
+ const fromSetup = Boolean(
+ (location.state as { fromSetup?: boolean } | undefined)?.fromSetup,
+ );
+ const { setupRequired, isLoading: isSetupLoading } = useSetupStatus();
 
  // Redirect away from /login if already authenticated.
  // Only triggers once isReady is true (after init() completes) to avoid
@@ -71,6 +76,16 @@ function LoginPage() {
  navigate(from || '/servers', { replace: true });
  }
  }, [isAuthenticated, isReady, from, navigate]);
+
+ // Fresh install: no accounts yet. If the user lands on /login (bookmark,
+ // 401 bounce before setup status settled, etc.) send them to the OOBE
+ // wizard — unless they just finished setup and cookie auto-login failed.
+ useEffect(() => {
+ if (isSetupLoading || isAuthenticated || fromSetup) return;
+ if (setupRequired) {
+ navigate('/setup', { replace: true });
+ }
+ }, [isSetupLoading, isAuthenticated, fromSetup, setupRequired, navigate]);
 
  const syncPasskeySession = async () => {
  try {
