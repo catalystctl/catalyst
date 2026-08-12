@@ -2,6 +2,7 @@
 # ---------------------------------------------------------------------------
 # Catalyst Agent Deployment Script
 # Installs and configures the Catalyst Agent on a fresh node.
+# Baked into the backend image at /scripts/deploy-agent.sh (see Dockerfile).
 #
 # Supported distros / init systems:
 #   apt    (Debian, Ubuntu)           — systemd

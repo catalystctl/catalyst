@@ -432,11 +432,18 @@ jobs:
       - uses: dorny/paths-filter@v4
         id: filter
         with:
+          # Keep in sync with catalyst-backend/Dockerfile and catalyst-frontend
+          # image build contexts. Missing a baked-in input (e.g. scripts/deploy-agent.sh
+          # COPY'd into the backend image) skips GHCR publish and leaves panels serving
+          # a stale one-liner install script.
           filters: |
             backend:
               - 'catalyst-backend/**'
+              - 'scripts/deploy-agent.sh'
               - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
               - 'package.json'
+              - '.npmrc'
             frontend:
               - 'catalyst-frontend/**'
               - 'pnpm-lock.yaml'
