@@ -462,6 +462,40 @@ is_elf_binary() {
     [ "$(od -An -N4 -tx1 "$1" 2>/dev/null | tr -d ' \n')" = "7f454c46" ]
 }
 
+# curl wrapper: follow redirects, retry, never treat a progress meter as failure.
+# Prints HTTP status to stdout on success via the caller checking the dest file.
+download_file() {
+    local url="$1" dest="$2" timeout="${3:-180}"
+    local http_code curl_rc=0
+    local extra=()
+    # curl 7.71+; ignore on older distros (Ubuntu 20.04 ships 7.68).
+    if curl --help all 2>/dev/null | grep -q -- '--retry-all-errors'; then
+        extra+=(--retry-all-errors)
+    fi
+    # Do not swallow curl's exit status: a truncated HTTP 200 (curl 18) must fail.
+    http_code="$(curl -fL --retry 3 --retry-delay 2 \
+        --connect-timeout 15 --max-time "$timeout" \
+        -A "catalyst-deploy-agent" "${extra[@]}" \
+        -o "$dest" -w '%{http_code}' "$url" 2>/dev/null)" || curl_rc=$?
+    [ "$curl_rc" = 0 ] && [ "$http_code" = "200" ] && [ -s "$dest" ]
+}
+
+fetch_github_release_digest() {
+    local repo="$1" version="$2" asset_name="$3" dest="$4"
+    local api_url digest
+    command -v jq >/dev/null 2>&1 || return 1
+    api_url="https://api.github.com/repos/${repo}/releases/tags/v${version}"
+    if ! download_file "$api_url" "${dest}.api.json" 30; then
+        rm -f "${dest}.api.json"
+        return 1
+    fi
+    digest="$(jq -r --arg n "$asset_name" '.assets[]? | select(.name==$n) | .digest // empty' "${dest}.api.json" \
+        | sed 's/^sha256://' | head -1)"
+    rm -f "${dest}.api.json"
+    [ "${#digest}" = 64 ] || return 1
+    printf '%s\n' "$digest" > "$dest"
+}
+
 normalize_semver() {
     local raw="${1:-}" dots
     raw="${raw#v}"
@@ -507,8 +541,9 @@ resolve_agent_version() {
 
 verify_and_install_binary() {
     local tmp_binary="$1"
-    local checksum_url="$2"
-    local source_label="$3"
+    local source_label="$2"
+    local asset_name="$3"
+    shift 3
 
     if ! is_elf_binary "$tmp_binary"; then
         local err_body
@@ -518,21 +553,42 @@ verify_and_install_binary() {
         return 1
     fi
 
-    if [ -n "$checksum_url" ] && curl -sfL --max-time 30 "$checksum_url" -o "${tmp_binary}.sha256" 2>/dev/null; then
-        local expected actual
-        expected="$(awk '{print $1}' "${tmp_binary}.sha256")"
-        actual="$(sha256sum "$tmp_binary" | awk '{print $1}')"
+    local expected="" src
+    for src in "$@"; do
+        [ -n "$src" ] || continue
         rm -f "${tmp_binary}.sha256"
-        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
-            rm -f "$tmp_binary"
-            fail "Binary checksum mismatch from ${source_label}! Expected ${expected:-<empty>}, got ${actual}."
+        if download_file "$src" "${tmp_binary}.sha256" 60; then
+            expected="$(awk '{print $1}' "${tmp_binary}.sha256" | tr -d '\r')"
+            expected="${expected#sha256:}"
+            if [ "${#expected}" = 64 ]; then
+                break
+            fi
+            expected=""
         fi
-        log "Binary checksum verified (${source_label})."
-    else
-        warn "Could not download checksum from ${source_label} — refusing unverified binary."
+    done
+    rm -f "${tmp_binary}.sha256"
+
+    if [ "${#expected}" != 64 ] && [ -n "${AGENT_RELEASE_REPO:-}" ] && [ -n "${AGENT_VERSION:-}" ]; then
+        if fetch_github_release_digest "$AGENT_RELEASE_REPO" "$AGENT_VERSION" "$asset_name" "${tmp_binary}.sha256"; then
+            expected="$(awk '{print $1}' "${tmp_binary}.sha256" | tr -d '\r')"
+            expected="${expected#sha256:}"
+        fi
+        rm -f "${tmp_binary}.sha256"
+    fi
+
+    if [ "${#expected}" != 64 ]; then
+        warn "Could not obtain checksum for ${source_label} — refusing unverified binary."
         rm -f "$tmp_binary"
         return 1
     fi
+
+    local actual
+    actual="$(sha256sum "$tmp_binary" | awk '{print $1}')"
+    if [ "$expected" != "$actual" ]; then
+        rm -f "$tmp_binary"
+        fail "Binary checksum mismatch from ${source_label}! Expected ${expected}, got ${actual}."
+    fi
+    log "Binary checksum verified (${source_label})."
 
     mv -f "$tmp_binary" /opt/catalyst-agent/catalyst-agent
     chmod 0755 /opt/catalyst-agent/catalyst-agent
@@ -564,8 +620,9 @@ install_agent_binary() {
 
     # ── Priority 1: GitHub Releases, pinned to the panel version ──
     log "Downloading ${asset_name} v${AGENT_VERSION} from GitHub Releases..."
-    if curl -fsSL --progress-bar "$release_url" -o "$tmp_binary" 2>/dev/null; then
-        if verify_and_install_binary "$tmp_binary" "${release_url}.sha256" "GitHub Releases v${AGENT_VERSION}"; then
+    if download_file "$release_url" "$tmp_binary" 180; then
+        if verify_and_install_binary "$tmp_binary" "GitHub Releases v${AGENT_VERSION}" "$asset_name" \
+            "${release_url}.sha256"; then
             return 0
         fi
     else
@@ -575,15 +632,14 @@ install_agent_binary() {
 
     # ── Priority 2: Panel proxy (same version; works when GitHub is blocked) ──
     log "Downloading ${asset_name} v${AGENT_VERSION} from panel..."
-    if curl -fsSL --progress-bar "$backend_url" -o "$tmp_binary" 2>/dev/null; then
-        if verify_and_install_binary "$tmp_binary" "$backend_checksum" "panel v${AGENT_VERSION}"; then
+    if download_file "$backend_url" "$tmp_binary" 180; then
+        if verify_and_install_binary "$tmp_binary" "panel v${AGENT_VERSION}" "$asset_name" \
+            "$backend_checksum" "${release_url}.sha256"; then
             return 0
         fi
     else
         rm -f "$tmp_binary"
-        local http_code
-        http_code="$(curl -sSL -o /dev/null -w '%{http_code}' "$backend_url" 2>/dev/null || echo '000')"
-        warn "Panel download failed (HTTP ${http_code})."
+        warn "Panel download failed for v${AGENT_VERSION}."
     fi
 
     # ── Priority 3: local cargo build (dev machines only) ──

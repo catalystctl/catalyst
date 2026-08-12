@@ -523,12 +523,16 @@ async function bootstrap() {
 				global: true,
 				encodings: ["gzip", "br", "deflate"],
 				threshold: 1024, // Only compress responses > 1KB
-				// Never compress SSE — browsers + proxies mishandle chunked gzip streams.
-				customTypes: /^(?!text\/event-stream).*/i,
+				// Never compress SSE or raw binary downloads — curl -f / mid-stream
+				// gzip aborts look like HTTP 200 with a truncated body.
+				customTypes: /^(?!text\/event-stream)(?!application\/octet-stream).*/i,
 			} as any);
 			app.addHook("onSend", async (_request, reply, _payload) => {
 				const ct = reply.getHeader("content-type")?.toString() ?? "";
-				if (ct.includes("text/event-stream")) {
+				if (
+					ct.includes("text/event-stream") ||
+					ct.includes("application/octet-stream")
+				) {
 					reply.removeHeader("content-encoding");
 					reply.header("content-encoding", "identity");
 				}
@@ -989,11 +993,14 @@ async function bootstrap() {
 			const localPath = resolveLocalAgentBinary(localDir, normalizedArch, assetName);
 			if (localPath) {
 				app.log.info(`Serving agent binary from local file: ${localPath}`);
+				const stat = fs.statSync(localPath);
 				reply.header("Content-Type", "application/octet-stream");
 				reply.header(
 					"Content-Disposition",
 					`attachment; filename=${assetName}`,
 				);
+				reply.header("Content-Encoding", "identity");
+				reply.header("Content-Length", String(stat.size));
 				if (version) reply.header("X-Catalyst-Agent-Version", version);
 				return reply.send(fs.createReadStream(localPath));
 			}
@@ -1029,20 +1036,11 @@ async function bootstrap() {
 					"Content-Disposition",
 					`attachment; filename=${assetName}`,
 				);
+				reply.header("Content-Encoding", "identity");
 				if (version) reply.header("X-Catalyst-Agent-Version", version);
 
-				if (response.body) {
-					const reader = response.body.getReader();
-					while (true) {
-						const { done, value } = await reader.read();
-						if (done) break;
-						reply.raw.write(value);
-					}
-					reply.raw.end();
-					return reply;
-				}
-
 				const buffer = Buffer.from(await response.arrayBuffer());
+				reply.header("Content-Length", String(buffer.length));
 				return reply.send(buffer);
 			} catch (err) {
 				app.log.error(
