@@ -26,7 +26,11 @@ NODE_HOSTNAME="${4:-$(hostname -f 2>/dev/null || hostname)}"
 
 NERDCTL_VERSION="2.2.1"
 CNI_PLUGINS_VERSION="v1.4.1"
-AGENT_RELEASE_REPO="catalystctl/catalyst"
+AGENT_RELEASE_REPO="${AGENT_RELEASE_REPO:-catalystctl/catalyst}"
+# Optional pin from the panel one-liner (`AGENT_VERSION=1.18.8`). Empty means
+# "ask the panel". Never default to GitHub /latest — that can install a newer
+# agent than the running panel understands.
+AGENT_VERSION="${AGENT_VERSION:-}"
 
 # --- Helpers ------------------------------------------------------------------
 log()  { printf '[deploy-agent] %s\n' "$*"; }
@@ -37,7 +41,7 @@ fail() { printf '[deploy-agent] ERROR: %s\n' "$*" >&2; exit 1; }
 if [ "$EUID" -ne 0 ]; then
     if command -v sudo >/dev/null 2>&1; then
         log "Not running as root — re-executing with sudo ..."
-        exec sudo -- "$(command -v bash || command -v sh)" "$0" "$@"
+        exec sudo --preserve-env=AGENT_VERSION,AGENT_RELEASE_REPO,DATA_DIR,CONSOLE_LOG_DIR,CNI_DIR,CNI_BIN_DIR,CNI_DATA_DIR,CNI_RESULTS_DIR,CNI_BRIDGE_NAME,CNI_BRIDGE_SUBNET,SYSTEMD_OVERRIDE_DIR,CATALYST_CONFIG_PATH,SFTP_PORT,SFTP_HOST_KEY -- "$(command -v bash || command -v sh)" "$0" "$@"
     else
         fail "This script must be run as root and sudo is not available."
     fi
@@ -124,7 +128,9 @@ preflight() {
     if curl -fsSL --max-time 10 "https://github.com/${AGENT_RELEASE_REPO}/releases/latest" -o /dev/null 2>&1; then
         github_reachable=true
     fi
-    if curl -fsSL --max-time 10 "${BACKEND_HTTP_URL}/api/agent/download?arch=x86_64" -o /dev/null 2>&1; then
+    if curl -fsSL --max-time 10 "${BACKEND_HTTP_URL}/api/agent/version" -o /dev/null 2>&1; then
+        backend_reachable=true
+    elif curl -fsSL --max-time 10 "${BACKEND_HTTP_URL}/api/agent/download?arch=x86_64" -o /dev/null 2>&1; then
         backend_reachable=true
     fi
 
@@ -431,90 +437,93 @@ prepare_directories() {
 }
 
 # ---------------------------------------------------------------------------
-# Agent binary — build from source
+# Agent binary — download the static musl release matching the panel version
 # ---------------------------------------------------------------------------
 
-build_agent_from_source() {
-    local agent_arch="$1"
-    local cargo_target="${agent_arch}-unknown-linux-musl"
-
-    # Install Rust if not present
-    if ! command -v cargo >/dev/null 2>&1; then
-        log "Installing Rust toolchain..."
-        curl --proto '=https' --tlsv1.2 -fsSL 'https://sh.rustup.rs' \
-            | sh -s -- -y --default-toolchain stable --profile minimal 2>&1
-        # shellcheck disable=SC1091
-        . "${HOME}/.cargo/env"
-        command -v cargo >/dev/null 2>&1 || fail "cargo not found after Rust installation."
-    fi
-
-    # Install musl target for static linking
-    if ! rustup target list --installed 2>/dev/null | grep -q "$cargo_target"; then
-        log "Adding musl target: ${cargo_target}"
-        rustup target add "$cargo_target" 2>&1
-    fi
-
-    # Install musl libc (required for musl linking)
-    case "$(detect_pkg_manager)" in
-        apt) apt-get install -y musl-tools 2>/dev/null || true ;;
-        apk) apk add --no-cache musl-dev 2>/dev/null || true ;;
-        dnf) dnf install -y musl-gcc 2>/dev/null || true ;;
-        yum) yum install -y musl-gcc 2>/dev/null || true ;;
-        pacman) pacman -S --noconfirm musl 2>/dev/null || true ;;
-        zypper) zypper --non-interactive install musl-gcc 2>/dev/null || true ;;
-    esac
-
-    # Clone or update source
-    local build_dir="/tmp/catalyst-agent-build"
-    if [ -d "$build_dir/.git" ]; then
-        log "Updating existing source in ${build_dir}..."
-        git -C "$build_dir" pull --ff-only 2>/dev/null || true
-    else
-        rm -rf "$build_dir"
-        log "Cloning agent source..."
-        # Derive repo URL from backend URL
-        local repo_url
-        repo_url="${BACKEND_HTTP_URL%/}/../catalyst-agent"
-        # Convert file URL to git if possible, otherwise try common patterns
-        if ! git clone --depth 1 "${repo_url}" "$build_dir" 2>/dev/null; then
-            warn "Could not clone from ${repo_url}."
-            fail "Cannot build agent: source not available. Provide a pre-built binary or ensure the agent source is accessible."
-        fi
-    fi
-
-    log "Building agent for ${cargo_target} (this may take a few minutes)..."
-    if cargo build --release --target "$cargo_target" 2>&1; then
-        local built_binary="${build_dir}/target/${cargo_target}/release/catalyst-agent"
-        if [ -f "$built_binary" ]; then
-            cp "$built_binary" /opt/catalyst-agent/catalyst-agent
-            chmod 0755 /opt/catalyst-agent/catalyst-agent
-            log "Agent built and installed from source."
-            rm -rf "$build_dir"
-            return 0
-        fi
-    fi
-
-    # musl build failed — try native gnu target as last resort
-    local native_target="${agent_arch}-unknown-linux-gnu"
-    log "musl build failed, trying native target: ${native_target}"
-    if cargo build --release --target "$native_target" 2>&1; then
-        local native_binary="${build_dir}/target/${native_target}/release/catalyst-agent"
-        if [ -f "$native_binary" ]; then
-            cp "$native_binary" /opt/catalyst-agent/catalyst-agent
-            chmod 0755 /opt/catalyst-agent/catalyst-agent
-            warn "Agent built with gnu target (not statically linked). May need libgcc_s on target."
-            rm -rf "$build_dir"
-            return 0
-        fi
-    fi
-
-    rm -rf "$build_dir"
-    fail "Failed to build agent from source."
+is_elf_binary() {
+    # Do not depend on `file(1)` — it is not in the base package set.
+    # ELF magic is 0x7f 'E' 'L' 'F'.
+    [ -s "$1" ] || return 1
+    [ "$(od -An -N4 -tx1 "$1" 2>/dev/null | tr -d ' \n')" = "7f454c46" ]
 }
 
-# ---------------------------------------------------------------------------
-# Agent binary — download or build
-# ---------------------------------------------------------------------------
+normalize_semver() {
+    local raw="${1:-}" dots
+    raw="${raw#v}"
+    raw="${raw#V}"
+    case "$raw" in
+        ''|*[!0-9.]*|.*|*.) return 1 ;;
+    esac
+    dots="$(printf '%s' "$raw" | tr -cd '.' | wc -c)"
+    [ "$dots" = 1 ] || [ "$dots" = 2 ] || return 1
+    case "$raw" in
+        [0-9]*.[0-9]*)
+            printf '%s' "$raw"
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+resolve_agent_version() {
+    local pinned body extracted
+    if pinned="$(normalize_semver "${AGENT_VERSION:-}")"; then
+        AGENT_VERSION="$pinned"
+        log "Using AGENT_VERSION=${AGENT_VERSION} (from environment / deploy token)."
+        return 0
+    fi
+
+    log "Querying panel version from ${BACKEND_HTTP_URL}/api/agent/version ..."
+    body="$(curl -fsSL --max-time 15 "${BACKEND_HTTP_URL}/api/agent/version" 2>/dev/null || true)"
+    extracted="$(printf '%s' "$body" | sed -n 's/.*"agentVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+    if [ -z "$extracted" ]; then
+        extracted="$(printf '%s' "$body" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+    fi
+    if pinned="$(normalize_semver "$extracted")"; then
+        AGENT_VERSION="$pinned"
+        log "Panel reports version ${AGENT_VERSION} — installing matching agent."
+        return 0
+    fi
+
+    warn "Could not determine panel version from ${BACKEND_HTTP_URL}/api/agent/version."
+    AGENT_VERSION=""
+    return 1
+}
+
+verify_and_install_binary() {
+    local tmp_binary="$1"
+    local checksum_url="$2"
+    local source_label="$3"
+
+    if ! is_elf_binary "$tmp_binary"; then
+        local err_body
+        err_body="$(head -c 200 "$tmp_binary" 2>/dev/null || true)"
+        rm -f "$tmp_binary"
+        warn "${source_label} returned a non-ELF payload: ${err_body}"
+        return 1
+    fi
+
+    if [ -n "$checksum_url" ] && curl -sfL --max-time 30 "$checksum_url" -o "${tmp_binary}.sha256" 2>/dev/null; then
+        local expected actual
+        expected="$(awk '{print $1}' "${tmp_binary}.sha256")"
+        actual="$(sha256sum "$tmp_binary" | awk '{print $1}')"
+        rm -f "${tmp_binary}.sha256"
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+            rm -f "$tmp_binary"
+            fail "Binary checksum mismatch from ${source_label}! Expected ${expected:-<empty>}, got ${actual}."
+        fi
+        log "Binary checksum verified (${source_label})."
+    else
+        warn "Could not download checksum from ${source_label} — refusing unverified binary."
+        rm -f "$tmp_binary"
+        return 1
+    fi
+
+    mv -f "$tmp_binary" /opt/catalyst-agent/catalyst-agent
+    chmod 0755 /opt/catalyst-agent/catalyst-agent
+    log "Agent binary installed from ${source_label}."
+    return 0
+}
 
 install_agent_binary() {
     local agent_arch
@@ -526,82 +535,43 @@ install_agent_binary() {
 
     local tmp_binary="/tmp/catalyst-agent.${agent_arch}"
     local asset_name="catalyst-agent-${agent_arch}-linux-musl"
+    rm -f "$tmp_binary" "${tmp_binary}.sha256"
 
-    # ── Priority 1: Download from GitHub Releases (pre-built, versioned) ──
-    log "Downloading Catalyst Agent binary (${asset_name}) from GitHub Releases..."
-    local release_url
-    release_url="https://github.com/${AGENT_RELEASE_REPO}/releases/latest/download/${asset_name}"
+    resolve_agent_version || true
+    if [ -z "${AGENT_VERSION:-}" ]; then
+        fail "Cannot install agent: panel version is unknown. Re-run from the panel one-liner, or set AGENT_VERSION=x.y.z."
+    fi
 
+    local release_url backend_url backend_checksum
+    release_url="https://github.com/${AGENT_RELEASE_REPO}/releases/download/v${AGENT_VERSION}/${asset_name}"
+    backend_url="${BACKEND_HTTP_URL}/api/agent/download?arch=${agent_arch}&version=${AGENT_VERSION}"
+    backend_checksum="${BACKEND_HTTP_URL}/api/agent/download-checksum?arch=${agent_arch}&version=${AGENT_VERSION}"
+
+    # ── Priority 1: GitHub Releases, pinned to the panel version ──
+    log "Downloading ${asset_name} v${AGENT_VERSION} from GitHub Releases..."
     if curl -fsSL --progress-bar "$release_url" -o "$tmp_binary" 2>/dev/null; then
-        if file "$tmp_binary" | grep -qE 'ELF|script'; then
-            # Verify SHA-256 checksum from GitHub .sha256 sidecar file.
-            # The release pipeline already generates these files alongside the binary.
-            if curl -sfL "${release_url}.sha256" -o "${tmp_binary}.sha256" 2>/dev/null; then
-                EXPECTED_HASH=$(awk '{print $1}' "${tmp_binary}.sha256")
-                ACTUAL_HASH=$(sha256sum "$tmp_binary" | awk '{print $1}')
-                if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
-                    echo "FATAL: Binary checksum mismatch! Expected $EXPECTED_HASH, got $ACTUAL_HASH" >&2
-                    rm -f "$tmp_binary" "${tmp_binary}.sha256"
-                    exit 1
-                fi
-                log "✓ Binary checksum verified"
-                rm -f "${tmp_binary}.sha256"
-            else
-                warn "Could not download checksum file — skipping verification"
-            fi
-            mv -f "$tmp_binary" /opt/catalyst-agent/catalyst-agent
-            chmod 0755 /opt/catalyst-agent/catalyst-agent
-            log "Agent binary installed from GitHub Releases."
+        if verify_and_install_binary "$tmp_binary" "${release_url}.sha256" "GitHub Releases v${AGENT_VERSION}"; then
             return 0
-        else
-            local err_body
-            err_body="$(cat "$tmp_binary" 2>/dev/null || true)"
-            rm -f "$tmp_binary"
-            warn "GitHub Releases returned invalid response: ${err_body:0:200}"
         fi
     else
         rm -f "$tmp_binary"
-        warn "GitHub Releases download failed. Falling back to backend..."
+        warn "GitHub Releases download failed for v${AGENT_VERSION}. Falling back to panel proxy..."
     fi
 
-    # ── Priority 2: Download from the Catalyst backend ──
-    log "Downloading Catalyst Agent binary (${agent_arch}) from backend..."
-    local download_url="${BACKEND_HTTP_URL}/api/agent/download?arch=${agent_arch}"
-
-    if curl -fsSL --progress-bar "$download_url" -o "$tmp_binary" 2>/dev/null; then
-        if file "$tmp_binary" | grep -qE 'ELF|script'; then
-            # Verify SHA-256 checksum from backend .sha256 sidecar file.
-            if curl -sfL "${download_url}.sha256" -o "${tmp_binary}.sha256" 2>/dev/null; then
-                EXPECTED_HASH=$(awk '{print $1}' "${tmp_binary}.sha256")
-                ACTUAL_HASH=$(sha256sum "$tmp_binary" | awk '{print $1}')
-                if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
-                    echo "FATAL: Binary checksum mismatch! Expected $EXPECTED_HASH, got $ACTUAL_HASH" >&2
-                    rm -f "$tmp_binary" "${tmp_binary}.sha256"
-                    exit 1
-                fi
-                log "✓ Binary checksum verified"
-                rm -f "${tmp_binary}.sha256"
-            else
-                warn "Could not download checksum file — skipping verification"
-            fi
-            mv -f "$tmp_binary" /opt/catalyst-agent/catalyst-agent
-            chmod 0755 /opt/catalyst-agent/catalyst-agent
-            log "Agent binary installed from backend."
+    # ── Priority 2: Panel proxy (same version; works when GitHub is blocked) ──
+    log "Downloading ${asset_name} v${AGENT_VERSION} from panel..."
+    if curl -fsSL --progress-bar "$backend_url" -o "$tmp_binary" 2>/dev/null; then
+        if verify_and_install_binary "$tmp_binary" "$backend_checksum" "panel v${AGENT_VERSION}"; then
             return 0
-        else
-            local err_body
-            err_body="$(cat "$tmp_binary" 2>/dev/null || true)"
-            rm -f "$tmp_binary"
-            warn "Backend returned invalid response: ${err_body:0:200}"
         fi
     else
         rm -f "$tmp_binary"
         local http_code
-        http_code="$(curl -sSL -o /dev/null -w '%{http_code}' "$download_url" 2>/dev/null || echo '000')"
-        warn "Backend download failed (HTTP ${http_code})."
+        http_code="$(curl -sSL -o /dev/null -w '%{http_code}' "$backend_url" 2>/dev/null || echo '000')"
+        warn "Panel download failed (HTTP ${http_code})."
     fi
 
-    # ── Priority 3: Check for a local build ──
+    # ── Priority 3: local cargo build (dev machines only) ──
     if [ -f "$(pwd)/target/release/catalyst-agent" ]; then
         log "Using local build from $(pwd)/target/release/catalyst-agent"
         cp "$(pwd)/target/release/catalyst-agent" /opt/catalyst-agent/catalyst-agent
@@ -609,11 +579,7 @@ install_agent_binary() {
         return 0
     fi
 
-    # ── Priority 4: Build from source on this node (last resort) ──
-    warn "Pre-built binary not available from any source. Will build agent from source on this node."
-    warn "This requires Rust toolchain and may take several minutes."
-    build_agent_from_source "$agent_arch"
-    return 0
+    fail "Could not download catalyst-agent v${AGENT_VERSION} (${asset_name}) from GitHub or ${BACKEND_HTTP_URL}. Place a pre-built binary at /opt/catalyst-agent/catalyst-agent or retry with network access."
 }
 
 # ---------------------------------------------------------------------------

@@ -2,12 +2,12 @@
   "name": "{{pluginName}}",
   "version": "1.0.0",
   "displayName": "{{PluginName}}",
-  "description": "A Catalyst plugin created with the SDK",
+  "description": "{{description}}",
   "author": "{{author}}",
   "catalystVersion": ">=1.0.0",
   "permissions": ["server.read"],
   "backend": {
-    "entry": "src/index.js"
+    "entry": "dist/src/index.js"
   },
   "dependencies": {}
 }

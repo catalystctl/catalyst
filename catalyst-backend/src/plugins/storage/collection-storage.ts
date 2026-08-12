@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { PluginCollectionAPI, PluginCollectionOptions } from '../types';
 import { captureSystemError } from '../../services/error-logger';
 import { randomBytes } from 'crypto';
+import { matchFilter, applyUpdateOperators } from '../path-utils';
 
 function generateId(): string {
   return Date.now().toString(36) + randomBytes(4).toString('hex');
@@ -124,41 +125,7 @@ export class CollectionStorage implements PluginCollectionAPI {
     for (const doc of docs) {
       const { _id } = doc;
       const updated = { ...doc };
-
-      if (updateData.$set) {
-        Object.assign(updated, updateData.$set);
-      }
-      if (updateData.$unset) {
-        for (const key of Object.keys(updateData.$unset)) {
-          delete updated[key];
-        }
-      }
-      if (updateData.$inc) {
-        for (const [key, value] of Object.entries(updateData.$inc)) {
-          updated[key] = (updated[key] || 0) + (value as number);
-        }
-      }
-      if (updateData.$push) {
-        for (const [key, value] of Object.entries(updateData.$push)) {
-          if (!Array.isArray(updated[key])) updated[key] = [];
-          updated[key].push(value);
-        }
-      }
-      if (updateData.$pull) {
-        for (const [key, value] of Object.entries(updateData.$pull)) {
-          if (Array.isArray(updated[key])) {
-            if (typeof value === 'object' && value !== null) {
-              updated[key] = updated[key].filter((item: any) => !this.matchFilter(item, value));
-            } else {
-              updated[key] = updated[key].filter((item: any) => item !== value);
-            }
-          }
-        }
-      }
-
-      if (!updateData.$set && !updateData.$unset && !updateData.$inc && !updateData.$push && !updateData.$pull) {
-        Object.assign(updated, updateData);
-      }
+      applyUpdateOperators(updated, updateData);
 
       const { _id: _i, _createdAt, _updatedAt, ...document } = updated;
 
@@ -296,41 +263,7 @@ export class CollectionStorage implements PluginCollectionAPI {
   }
 
   private matchFilter(doc: any, filter: any): boolean {
-    if (!filter || typeof filter !== 'object') return true;
-
-    for (const [key, value] of Object.entries(filter)) {
-      if (key === '$or') {
-        if (!Array.isArray(value) || !(value as any[]).some((sub) => this.matchFilter(doc, sub)))
-          return false;
-      } else if (key === '$and') {
-        if (!Array.isArray(value) || !(value as any[]).every((sub) => this.matchFilter(doc, sub)))
-          return false;
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        const op = value as Record<string, any>;
-        const docValue = doc[key];
-        if (op.$eq !== undefined && docValue !== op.$eq) return false;
-        if (op.$ne !== undefined && docValue === op.$ne) return false;
-        if (op.$gt !== undefined && !(docValue > op.$gt)) return false;
-        if (op.$gte !== undefined && !(docValue >= op.$gte)) return false;
-        if (op.$lt !== undefined && !(docValue < op.$lt)) return false;
-        if (op.$lte !== undefined && !(docValue <= op.$lte)) return false;
-        if (op.$in !== undefined && !Array.isArray(op.$in)) return false;
-        if (op.$in !== undefined && !(op.$in as any[]).includes(docValue)) return false;
-        if (op.$nin !== undefined && !Array.isArray(op.$nin)) return false;
-        if (op.$nin !== undefined && (op.$nin as any[]).includes(docValue)) return false;
-        if (op.$exists !== undefined) {
-          const exists = docValue !== undefined && docValue !== null;
-          if (op.$exists !== exists) return false;
-        }
-        if (op.$regex !== undefined) {
-          const regex = typeof op.$regex === 'string' ? new RegExp(op.$regex, op.$flags || '') : op.$regex;
-          if (!regex.test(String(docValue ?? ''))) return false;
-        }
-      } else {
-        if (doc[key] !== value) return false;
-      }
-    }
-    return true;
+    return matchFilter(doc, filter);
   }
 }
 

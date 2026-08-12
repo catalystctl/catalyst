@@ -1,43 +1,36 @@
 /**
  * Example Plugin Backend
- * 
- * This plugin demonstrates all plugin capabilities:
- * - Custom API routes
+ *
+ * Demonstrates:
+ * - Custom API routes (auto-prefixed to /api/plugins/example-plugin/…)
  * - WebSocket message handlers
- * - Scheduled tasks (cron jobs)
- * - Event listeners
- * - Configuration management
- * - Persistent storage
+ * - Scheduled tasks (cron) registered in onEnable, cleared on disable
+ * - Host lifecycle events (server:started / server:stopped)
+ * - Config via getConfig (returns resolved values, not schema objects)
+ * - Persistent key-value storage
  */
 
-let context;
 let requestCount = 0;
 
 const plugin = {
-  /**
-   * Called when plugin is loaded (but not yet enabled)
-   */
   async onLoad(ctx) {
-    context = ctx;
     ctx.logger.info('Example plugin loaded');
-    
-    // Initialize plugin storage
+
     const initialized = await ctx.getStorage('initialized');
     if (!initialized) {
       await ctx.setStorage('initialized', true);
       await ctx.setStorage('installDate', new Date().toISOString());
       ctx.logger.info('Plugin initialized for the first time');
     }
-    
-    // Register routes during load (before Fastify starts)
-    // Register custom API route
+
+    // Routes must be registered in onLoad (before Fastify listen)
     ctx.registerRoute({
       method: 'GET',
       url: '/hello',
-      handler: async (request, reply) => {
+      handler: async () => {
         requestCount++;
+        // getConfig returns the resolved default/value — not the schema object
         const greeting = ctx.getConfig('greeting') || 'Hello!';
-        
         return {
           success: true,
           message: greeting,
@@ -46,33 +39,29 @@ const plugin = {
         };
       },
     });
-    
-    // Register another route with POST
+
     ctx.registerRoute({
       method: 'POST',
       url: '/echo',
-      handler: async (request, reply) => {
+      handler: async (request) => {
         const body = request.body;
-        
         ctx.logger.info({ body }, 'Echo request received');
-        
         return {
           success: true,
           echoed: body,
+          userId: ctx.getUserId?.(request) ?? null,
           timestamp: new Date().toISOString(),
         };
       },
     });
-    
-    // Register route to get plugin stats
+
     ctx.registerRoute({
       method: 'GET',
       url: '/stats',
-      handler: async (request, reply) => {
+      handler: async () => {
         const installDate = await ctx.getStorage('installDate');
         const lastTaskRun = await ctx.getStorage('lastTaskRun');
         const taskRunCount = (await ctx.getStorage('taskRunCount')) || 0;
-        
         return {
           success: true,
           stats: {
@@ -86,19 +75,13 @@ const plugin = {
       },
     });
   },
-  
-  /**
-   * Called when plugin is enabled
-   */
+
   async onEnable(ctx) {
-    context = ctx;
     ctx.logger.info('Example plugin enabled');
-    
-    // Register WebSocket message handler
+
+    // WS types are auto-prefixed to plugin:example-plugin:<type> by the host
     ctx.onWebSocketMessage('plugin_example_ping', async (data, clientId) => {
       ctx.logger.info({ data, clientId }, 'Received ping from client');
-      
-      // Send pong back
       if (clientId) {
         ctx.sendWebSocketMessage(clientId, {
           type: 'plugin_example_pong',
@@ -107,65 +90,53 @@ const plugin = {
         });
       }
     });
-    
-    // Schedule a task (runs every 5 minutes)
+
+    // cronEnabled is a resolved boolean (not a schema object)
     const cronEnabled = ctx.getConfig('cronEnabled');
-    if (cronEnabled) {
+    if (cronEnabled !== false) {
       ctx.scheduleTask('*/5 * * * *', async () => {
         ctx.logger.info('Example plugin scheduled task executed');
-        
         const taskRunCount = (await ctx.getStorage('taskRunCount')) || 0;
         await ctx.setStorage('taskRunCount', taskRunCount + 1);
         await ctx.setStorage('lastTaskRun', new Date().toISOString());
-        
-        // Emit event that other plugins can listen to
         ctx.emit('example-plugin:task-completed', {
           count: taskRunCount + 1,
           timestamp: new Date().toISOString(),
         });
       });
     }
-    
-    // Listen to Catalyst events
+
+    // Host power routes emit these (see catalyst-backend plugins/host-events)
     ctx.on('server:started', async (data) => {
-      ctx.logger.info({ serverId: data.serverId }, 'Server started event received');
-      
-      // You could send a webhook here, update external systems, etc.
+      ctx.logger.info({ serverId: data.serverId, status: data.status }, 'Server started event');
       const webhookUrl = ctx.getConfig('webhookUrl');
       if (webhookUrl) {
-        // Send webhook notification
-        ctx.logger.info({ webhookUrl }, 'Would send webhook (not implemented)');
+        ctx.logger.info({ webhookUrl, serverId: data.serverId }, 'Would send webhook');
       }
     });
-    
+
     ctx.on('server:stopped', async (data) => {
-      ctx.logger.info({ serverId: data.serverId }, 'Server stopped event received');
+      ctx.logger.info({ serverId: data.serverId, status: data.status }, 'Server stopped event');
     });
-    
-    // Register middleware (runs on all plugin routes)
-    ctx.registerMiddleware(async (request, reply, next) => {
+
+    // Middleware: prefer onResponse timing if available; this is a simple pre-handler demo
+    ctx.registerMiddleware(async (request, _reply, next) => {
       const startTime = Date.now();
-      
+      // Express-style next — duration here is only setup time, not full response.
+      // For real timing, use Fastify onResponse in a future host hook.
       next();
-      
-      const duration = Date.now() - startTime;
-      ctx.logger.debug({ path: request.url, duration }, 'Request completed');
+      ctx.logger.debug(
+        { path: request.url, setupMs: Date.now() - startTime },
+        'Plugin middleware ran',
+      );
     });
   },
-  
-  /**
-   * Called when plugin is disabled
-   */
+
   async onDisable(ctx) {
     ctx.logger.info('Example plugin disabled');
-    
-    // Cleanup resources
-    requestCount = 0;
+    // Host stops + clears scheduled tasks automatically
   },
-  
-  /**
-   * Called when plugin is unloaded
-   */
+
   async onUnload(ctx) {
     ctx.logger.info('Example plugin unloaded');
   },

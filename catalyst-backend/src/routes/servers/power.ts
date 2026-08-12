@@ -3,6 +3,7 @@ import { prisma } from "../../db.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
+import { emitServerStatusEvent } from "../../plugins/host-events.js";
 
 /** Default timeouts for power command acks from the agent. */
 const POWER_ACK_TIMEOUT = {
@@ -803,6 +804,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         where: { id: serverId },
         data: { status: "starting" },
       });
+      emitServerStatusEvent(app, serverId, "starting", { action: "start" });
 
       await createAuditLog(userId, {
         action: "server.start",
@@ -931,6 +933,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         where: { id: serverId },
         data: { status: "stopping" },
       });
+      emitServerStatusEvent(app, serverId, "stopping", { action: "stop" });
 
       const powerResult = await sendPowerCommand(
         gateway,
@@ -1073,6 +1076,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         where: { id: serverId },
         data: { status: "stopping" },
       });
+      emitServerStatusEvent(app, serverId, "stopping", { action: "kill" });
 
       const powerResult = await sendPowerCommand(
         gateway,
@@ -1279,6 +1283,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         where: { id: serverId },
         data: { status: "starting" },
       });
+      emitServerStatusEvent(app, serverId, "starting", { action: "restart" });
 
       await createAuditLog(userId, {
         action: "server.restart",

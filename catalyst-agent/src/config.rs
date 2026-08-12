@@ -386,8 +386,9 @@ impl AgentConfig {
 
         let config = Self {
             server: ServerConfig {
-                // Default to wss:// (encrypted). ws:// is only allowed for
-                // loopback addresses unless CATALYST_ALLOW_INSECURE_WS=1 is set.
+                // Default to wss:// (encrypted). ws:// is allowed for loopback
+                // and RFC1918 private LAN IPs; public hosts need wss:// or
+                // CATALYST_ALLOW_INSECURE_WS=1.
                 backend_url: std::env::var("BACKEND_URL")
                     .unwrap_or_else(|_| "wss://localhost:3000/ws".to_string()),
                 node_id: std::env::var("NODE_ID").map_err(|_| "NODE_ID not set".to_string())?,

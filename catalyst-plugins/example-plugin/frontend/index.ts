@@ -1,31 +1,38 @@
 /**
  * Example Plugin Frontend Entry
- * 
- * This file exports tab configurations that will be registered
- * by the Catalyst frontend plugin system.
+ *
+ * Uses the in-monorepo SDK factory so the host loader recognizes tabs.
  */
 
+import { createFrontendPlugin } from '@/plugins/plugin-definition';
 import { AdminTab, ServerTab } from './components';
 
-export const tabs = [
-  {
-    id: 'example-admin',
-    label: 'Example Plugin',
-    icon: 'Puzzle',
-    component: AdminTab,
-    location: 'admin',
-    order: 100,
-    requiredPermissions: ['admin.read'],
+export default createFrontendPlugin({
+  manifest: {
+    name: 'example-plugin',
+    version: '1.15.13',
+    displayName: 'Example Plugin',
+    description: 'Comprehensive showcase of Catalyst plugin capabilities',
+    author: 'Catalyst Team',
   },
-  {
-    id: 'example-server',
-    label: 'Plugin Demo',
-    icon: 'Zap',
-    component: ServerTab,
-    location: 'server',
-    order: 100,
-    requiredPermissions: ['server.read'],
-  },
-];
-
-export default tabs;
+  tabs: [
+    {
+      id: 'example-admin',
+      label: 'Example Plugin',
+      icon: 'Puzzle',
+      component: AdminTab,
+      location: 'admin',
+      order: 100,
+      requiredPermissions: ['admin.read'],
+    },
+    {
+      id: 'example-server',
+      label: 'Plugin Demo',
+      icon: 'Zap',
+      component: ServerTab,
+      location: 'server',
+      order: 100,
+      requiredPermissions: ['server.read'],
+    },
+  ],
+});

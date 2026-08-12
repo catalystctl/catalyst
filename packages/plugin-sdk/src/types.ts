@@ -131,6 +131,11 @@ export interface PluginBackendContext {
   emitTyped(event: string, data: any): void;
   exposeApi(name: string, handler: (params: any) => Promise<any>): void;
   callPluginApi(pluginName: string, apiName: string, params?: any): Promise<any>;
+
+  /** Host auth sets request.user.userId (not .id). */
+  getUserId?(request: any): string | null;
+  hasPermission?(request: any, ...required: string[]): boolean;
+  requirePermission?(...required: string[]): (request: any, reply: any) => Promise<any> | any;
 }
 
 /**

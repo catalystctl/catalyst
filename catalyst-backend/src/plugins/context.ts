@@ -20,6 +20,8 @@ import type { ScheduledTask } from 'node-cron';
 import EventEmitter from 'events';
 import { captureSystemError } from '../services/error-logger';
 import { createCollectionStorage } from './storage/collection-storage';
+import { resolveConfigValue } from './config-utils';
+import { matchFilter, applyUpdateOperators } from './path-utils';
 
 // ── Simple unique ID generator ──────────────────────────────────────────────
 function generateId(): string {
@@ -85,47 +87,7 @@ function sanitizeUserSelect(userSelect?: Record<string, boolean>): Record<string
   return sanitized;
 }
 
-// ── Filter matching engine for collection queries ───────────────────────────
-function matchFilter(doc: any, filter: any): boolean {
-  if (!filter || typeof filter !== 'object') return true;
-
-  for (const [key, value] of Object.entries(filter)) {
-    if (key === '$or') {
-      if (!Array.isArray(value) || !(value as any[]).some((sub) => matchFilter(doc, sub)))
-        return false;
-    } else if (key === '$and') {
-      if (!Array.isArray(value) || !(value as any[]).every((sub) => matchFilter(doc, sub)))
-        return false;
-    } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      // Comparison operators
-      const op = value as Record<string, any>;
-      const docValue = doc[key];
-      if (op.$eq !== undefined && docValue !== op.$eq) return false;
-      if (op.$ne !== undefined && docValue === op.$ne) return false;
-      if (op.$gt !== undefined && !(docValue > op.$gt)) return false;
-      if (op.$gte !== undefined && !(docValue >= op.$gte)) return false;
-      if (op.$lt !== undefined && !(docValue < op.$lt)) return false;
-      if (op.$lte !== undefined && !(docValue <= op.$lte)) return false;
-      if (op.$in !== undefined && !Array.isArray(op.$in)) return false;
-      if (op.$in !== undefined && !(op.$in as any[]).includes(docValue)) return false;
-      if (op.$nin !== undefined && !Array.isArray(op.$nin)) return false;
-      if (op.$nin !== undefined && (op.$nin as any[]).includes(docValue)) return false;
-      if (op.$exists !== undefined) {
-        const exists = docValue !== undefined && docValue !== null;
-        if (op.$exists !== exists) return false;
-      }
-      if (op.$regex !== undefined) {
-        const regex = typeof op.$regex === 'string' ? new RegExp(op.$regex, op.$flags || '') : op.$regex;
-        if (!regex.test(String(docValue ?? ''))) return false;
-      }
-    } else {
-      // Equality check
-      if (doc[key] !== value) return false;
-    }
-  }
-
-  return true;
-}
+// Filter matching lives in path-utils.ts (dotted-path + $or/$and support).
 
 // ── Field whitelist for write operations ────────────────────────────────────
 const SERVER_WRITE_WHITELIST = new Set(['status']);
@@ -535,44 +497,7 @@ class PluginCollectionImpl implements PluginCollectionAPI {
     for (let i = 0; i < docs.length; i++) {
       if (matchFilter(docs[i], filter)) {
         const now = new Date().toISOString();
-
-        // Apply update operators
-        if (updateData.$set) {
-          Object.assign(docs[i], updateData.$set);
-        }
-        if (updateData.$unset) {
-          for (const key of Object.keys(updateData.$unset)) {
-            delete docs[i][key];
-          }
-        }
-        if (updateData.$inc) {
-          for (const [key, value] of Object.entries(updateData.$inc)) {
-            docs[i][key] = (docs[i][key] || 0) + (value as number);
-          }
-        }
-        if (updateData.$push) {
-          for (const [key, value] of Object.entries(updateData.$push)) {
-            if (!Array.isArray(docs[i][key])) docs[i][key] = [];
-            docs[i][key].push(value);
-          }
-        }
-        if (updateData.$pull) {
-          for (const [key, value] of Object.entries(updateData.$pull)) {
-            if (Array.isArray(docs[i][key])) {
-              if (typeof value === 'object' && value !== null) {
-                docs[i][key] = docs[i][key].filter((item: any) => !matchFilter(item, value));
-              } else {
-                docs[i][key] = docs[i][key].filter((item: any) => item !== value);
-              }
-            }
-          }
-        }
-
-        // If no operators, treat entire update as $set
-        if (!updateData.$set && !updateData.$unset && !updateData.$inc && !updateData.$push && !updateData.$pull) {
-          Object.assign(docs[i], updateData);
-        }
-
+        applyUpdateOperators(docs[i], updateData);
         docs[i]._updatedAt = now;
         count++;
       }
@@ -747,13 +672,13 @@ export function createPluginContext(
           recordAudit(prisma, manifest.name, 'route.accessed', {
             route: prefixedPath,
             method: options.method,
-            userId: (request as any).user?.id,
+            userId: (request as any).user?.userId || (request as any).user?.id,
             ipAddress: (request as any).ip,
           }, {
             duration: Date.now() - start,
             success,
             errorMessage,
-            userId: (request as any).user?.id,
+            userId: (request as any).user?.userId || (request as any).user?.id,
             ipAddress: (request as any).ip,
           });
         }
@@ -815,6 +740,16 @@ export function createPluginContext(
         throw new Error(`Invalid cron expression: ${cronExpression}`);
       }
 
+      // De-dupe: stop any existing job for the same expression (common on re-enable)
+      const existing = tasks.get(taskId);
+      if (existing?.job) {
+        try {
+          existing.job.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+
       const job = cron.schedule(cronExpression, async () => {
         try {
           await handler();
@@ -851,23 +786,27 @@ export function createPluginContext(
     },
 
     getConfig<T = any>(key: string): T | undefined {
-      return manifest.config?.[key] as T | undefined;
+      // Runtime values only — schema objects from plugin.json are unwrapped to `.default`.
+      return resolveConfigValue<T>(manifest.config?.[key]);
     },
 
     async setConfig<T = any>(key: string, value: T): Promise<void> {
       const start = Date.now();
-      // Update plugin config in database
+      // Persist plain values only (never re-store schema field objects).
+      const currentRuntime: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(manifest.config || {})) {
+        currentRuntime[k] = resolveConfigValue(v);
+      }
+      currentRuntime[key] = value as unknown;
+
       await prisma.plugin.update({
         where: { name: manifest.name },
         data: {
-          config: {
-            ...(manifest.config || {}),
-            [key]: value,
-          },
+          config: currentRuntime as any,
         },
       });
 
-      // Update in-memory config
+      // Update in-memory runtime config (plain values)
       if (!manifest.config) {
         manifest.config = {};
       }
@@ -1036,14 +975,67 @@ export function createPluginContext(
         throw new Error(`Plugin "${pluginName}" does not expose API: "${apiName}"`);
       }
 
-      // Call with 10s timeout
+      // Call with timeout + simple consecutive-failure circuit breaker
       const timeoutMs = 10000;
-      return Promise.race([
-        api(params),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`RPC call to ${pluginName}.${apiName} timed out`)), timeoutMs),
-        ),
-      ]);
+      const circuitKey = `${pluginName}.${apiName}`;
+      if (registry.isRpcCircuitOpen?.(circuitKey)) {
+        throw new Error(`RPC circuit open for ${circuitKey} — too many recent failures`);
+      }
+      try {
+        const result = await Promise.race([
+          api(params),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`RPC call to ${pluginName}.${apiName} timed out`)), timeoutMs),
+          ),
+        ]);
+        registry.recordRpcSuccess?.(circuitKey);
+        return result;
+      } catch (err) {
+        registry.recordRpcFailure?.(circuitKey);
+        throw err;
+      }
+    },
+
+    /**
+     * Host auth helper — Better Auth sets `request.user.userId` (not `.id`).
+     * Prefer this over reading the raw request shape.
+     */
+    getUserId(request: any): string | null {
+      return request?.user?.userId || request?.user?.id || null;
+    },
+
+    /**
+     * True when the request user holds any of the given permission strings
+     * (or `*`). Use for soft checks inside handlers.
+     */
+    hasPermission(request: any, ...required: string[]): boolean {
+      const perms: string[] = request?.user?.permissions ?? [];
+      if (perms.includes('*')) return true;
+      return required.some((p) => perms.includes(p));
+    },
+
+    /**
+     * Fastify-style preHandler that requires at least one of the given permissions.
+     *
+     * @example
+     * context.registerRoute({
+     *   method: 'POST',
+     *   url: '/admin-only',
+     *   preHandler: context.requirePermission('admin.write'),
+     *   handler: async (req, reply) => ({ ok: true }),
+     * });
+     */
+    requirePermission(...required: string[]) {
+      return async (request: FastifyRequest, reply: FastifyReply) => {
+        const perms: string[] = (request as any)?.user?.permissions ?? [];
+        if (perms.includes('*') || required.some((p) => perms.includes(p))) {
+          return;
+        }
+        return reply.status(403).send({
+          success: false,
+          error: `Permission denied: requires one of [${required.join(', ')}]`,
+        });
+      };
     },
   };
 

@@ -1,9 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import fetch from "node-fetch";
 import { captureSystemError } from "./error-logger";
+import { getCurrentVersion } from "../lib/panel-version";
+
+export { getCurrentVersion };
 
 export interface UpdateStatus {
 	currentVersion: string;
@@ -17,7 +19,7 @@ export interface UpdateStatus {
 }
 
 let cachedStatus: UpdateStatus = {
-	currentVersion: "unknown",
+	currentVersion: getCurrentVersion(),
 	latestVersion: null,
 	updateAvailable: false,
 	releaseUrl: null,
@@ -28,17 +30,6 @@ let cachedStatus: UpdateStatus = {
 };
 
 let checkInterval: ReturnType<typeof setInterval> | null = null;
-
-export function getCurrentVersion(): string {
-	try {
-		const __dirname = path.dirname(fileURLToPath(import.meta.url));
-		const pkgPath = path.resolve(__dirname, "..", "..", "..", "package.json");
-		const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-		return (pkg.version as string) || "unknown";
-	} catch {
-		return "unknown";
-	}
-}
 
 function normalizeVersion(version: string): string {
 	return version.replace(/^v/, "");

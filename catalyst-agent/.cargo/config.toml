@@ -1,0 +1,11 @@
+# Musl targets are the host-install / auto-update assets. Force static CRT so
+# the binary has no glibc/musl shared-lib dependency (runs on a "distroless"
+# node that only has the kernel + containerd).
+#
+# gnu targets stay dynamically linked — they are for the optional Docker image
+# which ships a matching libc.
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]

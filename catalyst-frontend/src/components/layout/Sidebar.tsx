@@ -32,6 +32,7 @@ import {
 import { useState, MouseEvent, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { usePluginTabs, usePluginRoutes } from '../../plugins/hooks';
+import { PluginSlot } from '../../plugins/PluginSlot';
 import { PANEL_VERSION } from '../../utils/version';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 
@@ -473,6 +474,14 @@ function Sidebar() {
           </button>
         </div>
       </div>
+
+      {/* Plugin extension point */}
+      {!sidebarCollapsed && (
+        <PluginSlot
+          name="sidebar-bottom"
+          className="border-t border-border/70 px-3 py-2 space-y-1"
+        />
+      )}
 
       {/* Version + update status */}
       <div className={cn('border-t border-border/70', sidebarCollapsed ? 'px-2 py-1.5' : 'px-3 py-2')}>

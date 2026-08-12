@@ -23,6 +23,7 @@ import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import { PluginSlot } from '../../plugins/PluginSlot';
 
 function DashboardPage() {
  const user = useAuthStore((s) => s.user);
@@ -325,6 +326,12 @@ function DashboardPage() {
  </div>
  )}
  </ServerTabCard>
+
+ {/* Plugin extension point — plugins register via components: [{ slot: 'dashboard-widgets', … }] */}
+ <PluginSlot
+ name="dashboard-widgets"
+ className="lg:col-span-2 space-y-3"
+ />
  </div>
  </div>
  );

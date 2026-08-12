@@ -441,6 +441,21 @@ jobs:
         run: |
           mv "catalyst-agent/target/${{ matrix.target }}/release/catalyst-agent" "/tmp/${{ matrix.artifact_name }}"
 
+      - name: Verify musl binary is statically linked
+        if: endsWith(matrix.target, '-musl')
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="/tmp/${{ matrix.artifact_name }}"
+          apt-get update -qq && apt-get install -y -qq binutils >/dev/null
+          # Cross-arch safe: a static musl ELF has no PT_INTERP.
+          if readelf -l "$BIN" | grep -q 'INTERP'; then
+            echo "ERROR: ${{ matrix.artifact_name }} is dynamically linked (has PT_INTERP)"
+            readelf -d "$BIN" || true
+            exit 1
+          fi
+          echo "OK: ${{ matrix.artifact_name }} is statically linked (no PT_INTERP)"
+
       - name: Generate SHA256 checksum
         run: |
           sha256sum "/tmp/${{ matrix.artifact_name }}" > "/tmp/${{ matrix.artifact_name }}.sha256"

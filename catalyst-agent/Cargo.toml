@@ -57,3 +57,6 @@ overflow-checks = true
 [profile.release.build-override]
 opt-level = 0
 codegen-units = 16
+
+# Static musl binaries for host install (no libc on the node).
+# gnu targets stay dynamically linked for the optional Docker image.

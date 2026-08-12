@@ -114,6 +114,20 @@ export async function loadPluginFrontend(manifest: PluginManifest): Promise<Load
           });
         }
       }
+
+      // Lifecycle: fire onMount once when the frontend module is first loaded
+      if (typeof definition.onMount === 'function') {
+        try {
+          const maybe = definition.onMount();
+          if (maybe && typeof (maybe as Promise<void>).then === 'function') {
+            (maybe as Promise<void>).catch((err) => {
+              console.error(`[PluginLoader] onMount failed for "${manifest.name}":`, err);
+            });
+          }
+        } catch (err) {
+          console.error(`[PluginLoader] onMount threw for "${manifest.name}":`, err);
+        }
+      }
     }
 
     // ── Legacy pattern: individual named exports ──

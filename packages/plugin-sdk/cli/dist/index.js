@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 function showHelp() {
     console.log(`
 catalyst-plugin — CLI for Catalyst plugin development
@@ -51,16 +53,25 @@ function parseArgs(argv) {
     }
     return { command, name, options };
 }
+function titleCase(name) {
+    return name
+        .replace(/[-_]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 async function createPlugin(name, options) {
     if (!name) {
         console.error('Error: Plugin name is required');
         process.exit(1);
     }
+    if (!/^[a-z0-9-]+$/.test(name)) {
+        console.error('Error: Plugin name must be lowercase alphanumeric with hyphens');
+        process.exit(1);
+    }
     const template = options.template || 'backend-only';
     const targetPath = path.resolve(options.path || '.', name);
     const useTypeScript = options.typescript !== false;
+    // templates live next to the package (packages/plugin-sdk/templates)
     const templatesDir = path.join(__dirname, '..', '..', 'templates', template);
-    // Check if template exists
     try {
         await fs.access(templatesDir);
     }
@@ -68,9 +79,10 @@ async function createPlugin(name, options) {
         console.error(`Error: Template "${template}" not found. Available: backend-only, fullstack, minimal`);
         process.exit(1);
     }
-    // Create directory
     await fs.mkdir(targetPath, { recursive: true });
-    // Copy template files
+    const displayName = titleCase(name);
+    const description = `A Catalyst plugin: ${displayName}`;
+    const author = 'Catalyst Developer';
     const files = await fs.readdir(templatesDir, { recursive: true });
     for (const file of files) {
         const src = path.join(templatesDir, file);
@@ -81,22 +93,23 @@ async function createPlugin(name, options) {
         }
         else {
             let content = await fs.readFile(src, 'utf-8');
-            // Replace placeholders
             content = content
                 .replace(/\{\{pluginName\}\}/g, name)
-                .replace(/\{\{PluginName\}\}/g, name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))
-                .replace(/\{\{author\}\}/g, 'Catalyst Developer');
+                .replace(/\{\{PluginName\}\}/g, displayName)
+                .replace(/\{\{name\}\}/g, name)
+                .replace(/\{\{displayName\}\}/g, displayName)
+                .replace(/\{\{description\}\}/g, description)
+                .replace(/\{\{author\}\}/g, author);
             await fs.mkdir(path.dirname(dst), { recursive: true });
             await fs.writeFile(dst, content);
         }
     }
-    // Initialize git
     try {
         const { execSync } = await import('child_process');
         execSync('git init', { cwd: targetPath, stdio: 'ignore' });
     }
     catch {
-        // Git not available, ignore
+        // Git not available
     }
     console.log(`✅ Created plugin "${name}" at ${targetPath}`);
     console.log(`   Template: ${template}`);
@@ -104,22 +117,21 @@ async function createPlugin(name, options) {
     console.log(`\nNext steps:`);
     console.log(`  cd ${name}`);
     console.log(`  npm install`);
-    console.log(`  npm run dev    # Start development server`);
+    console.log(`  npm run build   # compile TS → JS (backend.entry points at dist/src)`);
+    console.log(`  # Place this folder under catalyst-plugins/ and restart the panel`);
 }
-async function buildPlugin(options) {
+async function buildPlugin() {
     console.log('🔨 Building plugin...');
-    // Simple build: just validate manifest and check for TypeScript
     try {
         const manifest = JSON.parse(await fs.readFile('plugin.json', 'utf-8'));
         console.log(`✅ Manifest valid: ${manifest.name} v${manifest.version}`);
-        // Type check if tsconfig exists
         try {
             await fs.access('tsconfig.json');
             const { execSync } = await import('child_process');
-            execSync('npx tsc --noEmit', { stdio: 'inherit' });
+            execSync('npx tsc', { stdio: 'inherit' });
         }
         catch {
-            console.log('⚠️  No tsconfig.json found, skipping type check');
+            console.log('⚠️  No tsconfig.json found, skipping compile');
         }
         console.log('✅ Build complete');
     }
@@ -149,7 +161,7 @@ async function main() {
             await createPlugin(name, options);
             break;
         case 'build':
-            await buildPlugin(options);
+            await buildPlugin();
             break;
         case 'test':
             await testPlugin();

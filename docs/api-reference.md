@@ -4602,16 +4602,25 @@ No content — the upload was sent as part of the poll request.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
+| `GET` | `/api/agent/version` | No | Running panel version (install script pin) |
 | `GET` | `/api/agent/download` | No | Download agent binary |
+| `GET` | `/api/agent/download-checksum` | No | SHA-256 sidecar for the agent binary |
 | `GET` | `/api/agent/deploy-script` | No | Get deployment script |
 | `GET` | `/api/deploy/:token` | No | Get deployment script for token |
+
+#### GET `/api/agent/version`
+
+**Response:** `{ "version": "1.18.8", "agentVersion": "1.18.8", "releaseRepo": "catalystctl/catalyst" }`
+
+`agentVersion` is the semver the install script should download. `null` if `package.json` is unreadable.
 
 #### GET `/api/agent/download`
 
 **Query params:**
 - `arch` — `x86_64` (default) or `aarch64`/`arm64`
+- `version` — optional semver (e.g. `1.18.8`). Invalid values return 400. When omitted, the panel's own version is used — **not** GitHub `/latest`.
 
-Returns a **musl** static Linux binary (`catalyst-agent-{arch}-linux-musl`). Both architectures are published by the release workflow.
+Returns a **static musl** Linux binary (`catalyst-agent-{arch}-linux-musl`) for that version. Both architectures are published by the release workflow.
 
 #### GET `/api/deploy/:token`
 

@@ -14,6 +14,17 @@ export class PluginRegistry extends EventEmitter {
   private exposedApis: Map<string, Map<string, (params: any) => Promise<any>>> = new Map();
 
   /**
+   * Simple consecutive-failure circuit breaker for RPC calls.
+   * Keyed by `pluginName.apiName`.
+   */
+  private rpcCircuits: Map<
+    string,
+    { failures: number; openUntil: number }
+  > = new Map();
+  private static readonly RPC_FAILURE_THRESHOLD = 5;
+  private static readonly RPC_OPEN_MS = 30_000;
+
+  /**
    * Register a plugin
    */
   register(plugin: LoadedPlugin): void {
@@ -139,5 +150,33 @@ export class PluginRegistry extends EventEmitter {
       apis.clear();
       this.exposedApis.delete(pluginName);
     }
+  }
+
+  // ── RPC circuit breaker ─────────────────────────────────────────────────
+
+  isRpcCircuitOpen(circuitKey: string): boolean {
+    const state = this.rpcCircuits.get(circuitKey);
+    if (!state) return false;
+    if (state.openUntil && Date.now() < state.openUntil) return true;
+    if (state.openUntil && Date.now() >= state.openUntil) {
+      // Half-open: allow one probe
+      state.openUntil = 0;
+      state.failures = PluginRegistry.RPC_FAILURE_THRESHOLD - 1;
+      return false;
+    }
+    return false;
+  }
+
+  recordRpcSuccess(circuitKey: string): void {
+    this.rpcCircuits.delete(circuitKey);
+  }
+
+  recordRpcFailure(circuitKey: string): void {
+    const state = this.rpcCircuits.get(circuitKey) || { failures: 0, openUntil: 0 };
+    state.failures += 1;
+    if (state.failures >= PluginRegistry.RPC_FAILURE_THRESHOLD) {
+      state.openUntil = Date.now() + PluginRegistry.RPC_OPEN_MS;
+    }
+    this.rpcCircuits.set(circuitKey, state);
   }
 }

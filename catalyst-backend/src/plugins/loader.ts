@@ -12,6 +12,7 @@ import { captureSystemError } from '../services/error-logger';
 import { PluginRegistry } from './registry';
 import { createGatedHandler, DEFAULT_GATE_CONFIG, setPluginGateEnabled } from './runtime/request-gate';
 import EventEmitter from 'events';
+import { buildRuntimeConfig, isStoredSchemaPollution, getDeclaredFieldType } from './config-utils';
 
 const CATALYST_VERSION = '1.0.0';
 
@@ -296,7 +297,14 @@ export class PluginLoader {
       // Snapshot original config schema before any mutations
       const originalConfig = manifest.config ? JSON.parse(JSON.stringify(manifest.config)) : undefined;
 
-      // Persist to database FIRST (before creating context)
+      // Persist to database FIRST (before creating context).
+      // On create: store schema (for first-run admin UI). On update: keep stored values,
+      // only bump version — then rehydrate runtime values below.
+      const existingRow = await this.prisma.plugin.findUnique({
+        where: { name: manifest.name },
+        select: { config: true, enabled: true },
+      });
+
       await this.prisma.plugin.upsert({
         where: { name: manifest.name },
         create: {
@@ -309,6 +317,36 @@ export class PluginLoader {
           version: manifest.version,
         },
       });
+
+      // Rehydrate: merge DB-persisted plain values over schema defaults so
+      // getConfig() returns runtime values (and admin-set values survive restart).
+      const storedConfig =
+        (existingRow?.config as Record<string, unknown> | null) ||
+        undefined;
+      const runtimeConfig = buildRuntimeConfig(
+        originalConfig as Record<string, unknown> | undefined,
+        storedConfig,
+      );
+      manifest.config = runtimeConfig as any;
+
+      // If the DB still holds leftover schema objects (first load before any setConfig),
+      // rewrite it to plain runtime values so subsequent restarts stay clean.
+      // Use the same narrow schema detector as buildRuntimeConfig so legitimate
+      // object values like { type: 'incident', description: 'Sev1' } are not "normalized" away.
+      const needsNormalize =
+        !existingRow ||
+        Object.entries((existingRow.config as Record<string, unknown>) || {}).some(([key, v]) => {
+          const declared = getDeclaredFieldType(
+            (originalConfig as Record<string, unknown> | undefined)?.[key],
+          );
+          return isStoredSchemaPollution(v, declared);
+        });
+      if (needsNormalize) {
+        await this.prisma.plugin.update({
+          where: { name: manifest.name },
+          data: { config: runtimeConfig as any },
+        }).catch(() => {});
+      }
 
       // Create plugin context (pass registry for RPC support)
       const context = createPluginContext(
@@ -555,12 +593,18 @@ export class PluginLoader {
         await plugin.backend.onDisable(plugin.context);
       }
 
-      // Stop scheduled tasks
+      // Stop scheduled tasks and clear so re-enable can re-register cleanly
       for (const [taskId, task] of plugin.tasks) {
         if (task.job) {
-          task.job.stop();
+          try {
+            task.job.stop();
+          } catch {
+            /* ignore */
+          }
         }
+        this.logger.debug({ plugin: name, taskId }, 'Stopped plugin task');
       }
+      plugin.tasks.clear();
 
       // Unregister plugin WebSocket handlers from gateway
       if (this.wsGateway.unregisterPluginWsHandlers) {
@@ -777,6 +821,15 @@ export class PluginLoader {
   /**
    * Get registry
    */
+  /**
+   * Emit a host lifecycle event to all loaded plugins' event bus.
+   * Used by core routes (power, admin) so plugins can react to server/user changes.
+   */
+  emitHostEvent(event: string, data: any): void {
+    this.eventEmitter.emit(event, data);
+    this.logger.debug({ event }, 'Host event emitted to plugins');
+  }
+
   getRegistry(): PluginRegistry {
     return this.registry;
   }

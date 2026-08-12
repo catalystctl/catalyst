@@ -881,16 +881,18 @@ To enable hot reload, ensure the PluginLoader is initialized with `hotReload: tr
 
 | Issue | Impact | Workaround |
 |-------|--------|------------|
-| No true process isolation | A plugin crash can take down the server | Write defensive error handling in plugins |
-| Frontend bundled at build time | Cannot install new plugins without rebuilding | Pre-bundle all plugins; use filesystem discovery |
-| ESM hot-reload unreliable | Changes may not reload without restart | Use CJS for dev; restart for prod changes |
-| Collection storage not scalable | O(n) queries over JSON arrays | Limit collection size; implement pagination |
-| No row-level security | Plugins with `server.read` see ALL servers | Filter results at the application level |
-| Task scheduling is ephemeral | Tasks lost on server restart | Re-register tasks in `onEnable()` |
-| No plugin marketplace | Plugins only discovered from filesystem | Maintain a curated list of plugins |
-| Config type mismatch | Backend uses `Record<string, any>`, frontend expects `Record<string, PluginConfigField>` | Ensure consistency between backend and frontend config types |
-| No plugin testing harness (in production) | No built-in way to test plugins against a real DB | Use the SDK's `createTestPlugin` in dev |
-| No circuit breaker for RPC | A slow plugin can block the caller for 10s | Keep plugin APIs fast; implement timeouts |
+| No true process isolation | A plugin crash can take down the server | Write defensive error handling; `runtime: "isolated"` is accepted but forced in-process until worker IPC is finished |
+| Frontend bundled at build time | Cannot install new plugins without rebuilding the panel frontend | Pre-bundle all plugins under `catalyst-plugins/*/frontend` |
+| ESM hot-reload unreliable | Changes may not reload without restart | Restart backend after structural changes |
+| Collection storage (legacy) not scalable | O(n) queries over JSON arrays | Set `"storageEngine": "dedicated"` for large collections |
+| No row-level security | Plugins with `server.read` see ALL servers | Filter results in the plugin; future host helpers may scope by requester |
+| Task scheduling is process-local | Tasks lost on server restart | Re-register tasks in `onEnable()` (host clears on disable) |
+| No plugin marketplace | Plugins only discovered from filesystem | Curate plugins under `catalyst-plugins/` |
+| Config schema vs values | Admin UI needs field schemas; runtime needs plain values | Host unwraps schema → values in `getConfig`; `configSchema` is the original plugin.json |
+| Host auth user id shape | `request.user.userId` (not `.id`) | Use `context.getUserId(request)` |
+| RPC circuit breaker | Repeated failures open a 30s circuit | Keep plugin APIs fast; handle thrown circuit errors |
+| Component slots need host mounts | Only wired slots render | Use `dashboard-widgets` and `sidebar-bottom` today |
+| Memory gate is process heap | One plugin can trip the gate for others | Keep plugins lean; tune `memoryLimitMb` carefully |
 
 ---
 

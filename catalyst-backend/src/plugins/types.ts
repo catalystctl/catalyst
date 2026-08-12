@@ -228,6 +228,21 @@ export interface PluginBackendContext {
   // Plugin-to-plugin RPC
   exposeApi(name: string, handler: (params: any) => Promise<any>): void;
   callPluginApi(pluginName: string, apiName: string, params?: any): Promise<any>;
+
+  /**
+   * Resolve the authenticated user id from a Fastify request.
+   * Host auth sets `request.user.userId` (not `.id`).
+   */
+  getUserId(request: any): string | null;
+
+  /** Soft permission check against request.user.permissions (supports `*`). */
+  hasPermission(request: any, ...required: string[]): boolean;
+
+  /**
+   * preHandler factory that 403s unless the user holds one of the given permissions.
+   * Host auth still runs first; this layers capability checks on top.
+   */
+  requirePermission(...required: string[]): (request: any, reply: any) => Promise<any> | any;
 }
 
 /**

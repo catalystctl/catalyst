@@ -9,6 +9,11 @@ export type {
   PluginWebSocketHandler,
   PluginTaskHandler,
   PluginEventHandler,
+  PluginBackendContext,
+  TypedPluginContext,
+  ScopedPluginDB,
+  LoggerLike,
+  PluginRouteOptions,
 } from './types.js';
 
 // Config
@@ -22,6 +27,9 @@ export type { TypedCollection } from './storage.js';
 // Routes
 export { defineRoutes, PluginRouteBuilder } from './routes.js';
 export type { RouteDefinition } from './routes.js';
+
+// Typed context (was previously unexported dead code)
+export { createTypedContext, defineTypedContext } from './context.js';
 
 // Testing
 export {

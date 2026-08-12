@@ -5,7 +5,6 @@ import Fastify from "fastify";
 import fastifyCompress from "@fastify/compress";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import crypto from "crypto";
 import fastifyWebsocket from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
@@ -81,6 +80,17 @@ import { fileTunnelRoutes } from "./routes/file-tunnel";
 import { migrationRoutes } from "./routes/migration";
 import { updateRoutes } from "./routes/update";
 import { verifyAgentApiKey } from "./lib/agent-auth";
+import { getCurrentVersion, normalizePanelVersion } from "./lib/panel-version";
+import {
+	agentBinaryDir,
+	agentMuslAssetName,
+	agentReleaseRepo,
+	defaultAgentVersion,
+	githubReleaseAssetUrl,
+	normalizeAgentArch,
+	resolveLocalAgentBinary,
+	resolveLocalAgentChecksum,
+} from "./lib/agent-binary";
 
 // Resolve API_KEY_SECRET early (falls back to BETTER_AUTH_SECRET). Fail fast if
 // neither is set so deployment-token / API-key routes never 500 mid-request.
@@ -499,14 +509,7 @@ const authenticate = async (request: any, reply: any) => {
 // ============================================================================
 
 function getPanelVersion(): string {
-	try {
-		const __dirname = path.dirname(fileURLToPath(import.meta.url));
-		const pkgPath = path.resolve(__dirname, "..", "..", "package.json");
-		const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-		return pkg.version as string;
-	} catch {
-		return "unknown";
-	}
+	return getCurrentVersion();
 }
 
 async function bootstrap() {
@@ -945,73 +948,61 @@ async function bootstrap() {
 		// Migration routes (Pterodactyl → Catalyst)
 		await app.register((app) => migrationRoutes(app));
 
+		// Public panel + agent version (used by deploy-agent.sh to pin the binary).
+		app.get(
+			"/api/agent/version",
+			{
+				config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+			},
+			async (_request, reply) => {
+				const version = getCurrentVersion();
+				return reply.send({
+					version,
+					agentVersion: normalizePanelVersion(version) ?? null,
+					releaseRepo: agentReleaseRepo(),
+				});
+			},
+		);
+
 		// Agent binary download endpoint (public)
 		// Priority: 1) local binary (air-gapped / self-hosted), 2) GitHub Releases proxy
+		// Default version is the running panel so a 1.18.x panel never installs 1.19.x.
 		app.get(
 			"/api/agent/download",
 			{
 				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {
-			const arch = (request.query as { arch?: string }).arch || "x86_64";
-			const version = (request.query as { version?: string }).version;
-
-			// Validate version format to prevent URL injection into GitHub URL.
-			if (version && !/^\d+\.\d+(\.\d+)?$/.test(version)) {
+			const query = request.query as { arch?: string; version?: string };
+			const requested = query.version;
+			if (requested && !normalizePanelVersion(requested)) {
 				return reply.status(400).send({
 					error: "Invalid version format — expected semver (e.g. 1.12.2)",
 				});
 			}
 
-			const normalizedArch =
-				arch === "aarch64" || arch === "arm64" ? "aarch64" : "x86_64";
-			const assetName = `catalyst-agent-${normalizedArch}-linux-musl`;
+			const version = defaultAgentVersion(requested);
+			const normalizedArch = normalizeAgentArch(query.arch);
+			const assetName = agentMuslAssetName(normalizedArch);
+			const localDir = agentBinaryDir();
 
-			// ── Priority 1: Serve a locally-placed binary (air-gapped / self-hosted) ──
-			// Set AGENT_BINARY_DIR to a directory containing pre-built binaries named
-			// by the release asset convention (e.g. catalyst-agent-x86_64-linux-musl).
-			// Falls back to the old build target directory for backward compatibility.
-			const agentBinaryDir =
-				process.env.AGENT_BINARY_DIR ||
-				process.env.AGENT_TARGET_DIR ||
-				path.resolve(process.cwd(), "..", "catalyst-agent", "target");
-
-			// Try the release-asset naming convention first
-			const assetPath = path.resolve(agentBinaryDir, assetName);
-			if (fs.existsSync(assetPath)) {
-				app.log.info(`Serving agent binary from local file: ${assetPath}`);
+			const localPath = resolveLocalAgentBinary(localDir, normalizedArch, assetName);
+			if (localPath) {
+				app.log.info(`Serving agent binary from local file: ${localPath}`);
 				reply.header("Content-Type", "application/octet-stream");
 				reply.header(
 					"Content-Disposition",
 					`attachment; filename=${assetName}`,
 				);
-				return reply.send(fs.createReadStream(assetPath));
+				if (version) reply.header("X-Catalyst-Agent-Version", version);
+				return reply.send(fs.createReadStream(localPath));
 			}
 
-			// Try the old build directory layout (target/{target}/release/catalyst-agent)
-			const target = `${normalizedArch}-unknown-linux-musl`;
-			const legacyPath = path.resolve(
-				agentBinaryDir,
-				target,
-				"release",
-				"catalyst-agent",
+			const githubUrl = githubReleaseAssetUrl(
+				agentReleaseRepo(),
+				assetName,
+				version,
 			);
-			if (fs.existsSync(legacyPath)) {
-				app.log.info(`Serving agent binary from legacy build path: ${legacyPath}`);
-				reply.header("Content-Type", "application/octet-stream");
-				reply.header(
-					"Content-Disposition",
-					"attachment; filename=catalyst-agent",
-				);
-				return reply.send(fs.createReadStream(legacyPath));
-			}
-
-			// ── Priority 2: Proxy from GitHub Releases ──
-			const releaseRepo =
-				process.env.AGENT_RELEASE_REPO || "catalystctl/catalyst";
-			const githubUrl = version
-				? `https://github.com/${releaseRepo}/releases/download/v${version}/${assetName}`
-				: `https://github.com/${releaseRepo}/releases/latest/download/${assetName}`;
 
 			app.log.info(
 				`No local binary found — proxying from GitHub Releases: ${githubUrl}`,
@@ -1020,7 +1011,7 @@ async function bootstrap() {
 			try {
 				const response = await fetch(githubUrl, {
 					redirect: "follow",
-					signal: AbortSignal.timeout(120_000), // 2 minutes
+					signal: AbortSignal.timeout(120_000),
 				});
 
 				if (!response.ok) {
@@ -1029,6 +1020,7 @@ async function bootstrap() {
 					);
 					return reply.status(502).send({
 						error: `Failed to download agent from GitHub Releases (HTTP ${response.status})`,
+						version: version ?? null,
 					});
 				}
 
@@ -1037,8 +1029,8 @@ async function bootstrap() {
 					"Content-Disposition",
 					`attachment; filename=${assetName}`,
 				);
+				if (version) reply.header("X-Catalyst-Agent-Version", version);
 
-				// Stream the response body directly
 				if (response.body) {
 					const reader = response.body.getReader();
 					while (true) {
@@ -1050,7 +1042,6 @@ async function bootstrap() {
 					return reply;
 				}
 
-				// Fallback: buffer the entire response
 				const buffer = Buffer.from(await response.arrayBuffer());
 				return reply.send(buffer);
 			} catch (err) {
@@ -1073,33 +1064,26 @@ async function bootstrap() {
 				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {
-			const arch = (request.query as { arch?: string }).arch || "x86_64";
-			const version = (request.query as { version?: string }).version;
-
-			if (version && !/^\d+\.\d+(\.\d+)?$/.test(version)) {
+			const query = request.query as { arch?: string; version?: string };
+			const requested = query.version;
+			if (requested && !normalizePanelVersion(requested)) {
 				return reply.status(400).send({ error: "Invalid version format" });
 			}
 
-			const normalizedArch =
-				arch === "aarch64" || arch === "arm64" ? "aarch64" : "x86_64";
-			const assetName = `catalyst-agent-${normalizedArch}-linux-musl`;
+			const version = defaultAgentVersion(requested);
+			const normalizedArch = normalizeAgentArch(query.arch);
+			const assetName = agentMuslAssetName(normalizedArch);
 
-			// Priority 1: local checksum file next to the binary
-			const agentBinaryDir =
-				process.env.AGENT_BINARY_DIR ||
-				process.env.AGENT_TARGET_DIR ||
-				path.resolve(process.cwd(), "..", "catalyst-agent", "target");
-			const localChecksum = path.resolve(agentBinaryDir, `${assetName}.sha256`);
-			if (fs.existsSync(localChecksum)) {
+			const localChecksum = resolveLocalAgentChecksum(agentBinaryDir(), assetName);
+			if (localChecksum) {
 				return reply.type("text/plain").send(fs.createReadStream(localChecksum));
 			}
 
-			// Priority 2: proxy from GitHub Releases
-			const releaseRepo =
-				process.env.AGENT_RELEASE_REPO || "catalystctl/catalyst";
-			const githubUrl = version
-				? `https://github.com/${releaseRepo}/releases/download/v${version}/${assetName}.sha256`
-				: `https://github.com/${releaseRepo}/releases/latest/download/${assetName}.sha256`;
+			const githubUrl = `${githubReleaseAssetUrl(
+				agentReleaseRepo(),
+				assetName,
+				version,
+			)}.sha256`;
 
 			try {
 				const response = await fetch(githubUrl, {
@@ -1823,18 +1807,20 @@ function generateDeploymentScript(
 	// Build env var exports for any custom agent paths the admin configured.
 	// The deploy-agent.sh will pick these up and write them into config.toml.
 	const pathEnvLines: string[] = [];
-	if (node.serverDataDir) pathEnvLines.push(`DATA_DIR=${shellEscape(node.serverDataDir)}`);
-	if (node.consoleLogDir) pathEnvLines.push(`CONSOLE_LOG_DIR=${shellEscape(node.consoleLogDir)}`);
-	if (node.cniDir) pathEnvLines.push(`CNI_DIR=${shellEscape(node.cniDir)}`);
-	if (node.cniBinDir) pathEnvLines.push(`CNI_BIN_DIR=${shellEscape(node.cniBinDir)}`);
-	if (node.cniDataDir) pathEnvLines.push(`CNI_DATA_DIR=${shellEscape(node.cniDataDir)}`);
-	if (node.cniResultsDir) pathEnvLines.push(`CNI_RESULTS_DIR=${shellEscape(node.cniResultsDir)}`);
-	if (node.cniBridgeName) pathEnvLines.push(`CNI_BRIDGE_NAME=${shellEscape(node.cniBridgeName)}`);
-	if (node.cniBridgeSubnet) pathEnvLines.push(`CNI_BRIDGE_SUBNET=${shellEscape(node.cniBridgeSubnet)}`);
-	if (node.systemdOverrideDir) pathEnvLines.push(`SYSTEMD_OVERRIDE_DIR=${shellEscape(node.systemdOverrideDir)}`);
-	if (node.agentConfigPath) pathEnvLines.push(`CATALYST_CONFIG_PATH=${shellEscape(node.agentConfigPath)}`);
-	if (node.agentReleaseRepo) pathEnvLines.push(`AGENT_RELEASE_REPO=${shellEscape(node.agentReleaseRepo)}`);
-	if (node.sftpPort && node.sftpPort !== 2022) pathEnvLines.push(`SFTP_PORT=${shellEscape(String(node.sftpPort))}`);
+	if (node.serverDataDir) pathEnvLines.push(`export DATA_DIR=${shellEscape(node.serverDataDir)}`);
+	if (node.consoleLogDir) pathEnvLines.push(`export CONSOLE_LOG_DIR=${shellEscape(node.consoleLogDir)}`);
+	if (node.cniDir) pathEnvLines.push(`export CNI_DIR=${shellEscape(node.cniDir)}`);
+	if (node.cniBinDir) pathEnvLines.push(`export CNI_BIN_DIR=${shellEscape(node.cniBinDir)}`);
+	if (node.cniDataDir) pathEnvLines.push(`export CNI_DATA_DIR=${shellEscape(node.cniDataDir)}`);
+	if (node.cniResultsDir) pathEnvLines.push(`export CNI_RESULTS_DIR=${shellEscape(node.cniResultsDir)}`);
+	if (node.cniBridgeName) pathEnvLines.push(`export CNI_BRIDGE_NAME=${shellEscape(node.cniBridgeName)}`);
+	if (node.cniBridgeSubnet) pathEnvLines.push(`export CNI_BRIDGE_SUBNET=${shellEscape(node.cniBridgeSubnet)}`);
+	if (node.systemdOverrideDir) pathEnvLines.push(`export SYSTEMD_OVERRIDE_DIR=${shellEscape(node.systemdOverrideDir)}`);
+	if (node.agentConfigPath) pathEnvLines.push(`export CATALYST_CONFIG_PATH=${shellEscape(node.agentConfigPath)}`);
+	if (node.agentReleaseRepo) pathEnvLines.push(`export AGENT_RELEASE_REPO=${shellEscape(node.agentReleaseRepo)}`);
+	const panelVersion = normalizePanelVersion(getCurrentVersion());
+	if (panelVersion) pathEnvLines.push(`export AGENT_VERSION=${shellEscape(panelVersion)}`);
+	if (node.sftpPort && node.sftpPort !== 2022) pathEnvLines.push(`export SFTP_PORT=${shellEscape(String(node.sftpPort))}`);
 	const pathExports = pathEnvLines.length > 0
 		? `\n# --- Custom agent paths (from node configuration) ---\n${pathEnvLines.join("\n")}\n`
 		: "";

@@ -58,6 +58,21 @@ impl AgentUpdater {
         }
     }
 
+    fn asset_arch() -> &'static str {
+        #[cfg(target_arch = "x86_64")]
+        {
+            "x86_64"
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            "aarch64"
+        }
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        {
+            "unknown"
+        }
+    }
+
     /// Detect the release asset name for the current architecture.
     fn asset_name() -> &'static str {
         #[cfg(target_arch = "x86_64")]
@@ -161,11 +176,12 @@ impl AgentUpdater {
             }
         }
         let mut download_url = format!(
-            "{}/api/agent/download",
-            command_utils::ws_url_to_http_base(&self.backend_url)
+            "{}/api/agent/download?arch={}",
+            command_utils::ws_url_to_http_base(&self.backend_url),
+            Self::asset_arch(),
         );
         if let Some(ver) = target_version {
-            download_url = format!("{}?version={}", download_url, ver);
+            download_url = format!("{}&version={}", download_url, ver);
         }
 
         info!(
@@ -209,11 +225,12 @@ impl AgentUpdater {
         target_version: Option<&str>,
     ) -> AgentResult<String> {
         let mut checksum_url = format!(
-            "{}/api/agent/download-checksum",
-            command_utils::ws_url_to_http_base(&self.backend_url)
+            "{}/api/agent/download-checksum?arch={}",
+            command_utils::ws_url_to_http_base(&self.backend_url),
+            Self::asset_arch(),
         );
         if let Some(ver) = target_version {
-            checksum_url = format!("{}?version={}", checksum_url, ver);
+            checksum_url = format!("{}&version={}", checksum_url, ver);
         }
 
         let client = reqwest::Client::new();

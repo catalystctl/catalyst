@@ -792,27 +792,25 @@ impl WebSocketHandler {
             "wss" => {}
             "ws" => {
                 // Check if ws:// is explicitly allowed via opt-in env var.
-                // Fix for UF-10: ws:// should be blocked for non-loopback
-                // unless the operator explicitly sets CATALYST_ALLOW_INSECURE_WS=1.
+                // Fix for UF-10: ws:// is blocked for public hosts unless the
+                // operator sets CATALYST_ALLOW_INSECURE_WS=1. Loopback and
+                // RFC1918 private LAN targets (10/8, 172.16/12, 192.168/16)
+                // are allowed so agents can reach a panel on the local network.
                 let allow_insecure = std::env::var("CATALYST_ALLOW_INSECURE_WS")
                     .map(|s| s == "1")
                     .unwrap_or(false);
                 if !allow_insecure {
-                    // Block ws:// for non-loopback addresses
                     let host = parsed_url.host_str().unwrap_or("");
-                    let is_loopback = host == "localhost"
-                        || host == "127.0.0.1"
-                        || host == "::1"
-                        || host.starts_with("127.");
-                    if !is_loopback {
+                    if !crate::net_utils::is_allowed_insecure_ws_host(host) {
                         return Err(AgentError::ConfigError(
-                            "Insecure ws:// is not allowed for non-loopback addresses. \
-                             Use wss:// or set CATALYST_ALLOW_INSECURE_WS=1 to override."
+                            "Insecure ws:// is not allowed for public addresses. \
+                             Use wss://, a private LAN / loopback IP, or set \
+                             CATALYST_ALLOW_INSECURE_WS=1 to override."
                                 .to_string(),
                         ));
                     }
                     warn!(
-                        "Using insecure WebSocket connection (ws://) — only allowed for loopback"
+                        "Using insecure WebSocket connection (ws://) — allowed for loopback/private LAN"
                     );
                 } else {
                     warn!("Using insecure WebSocket connection (ws://) — CATALYST_ALLOW_INSECURE_WS=1 is set");

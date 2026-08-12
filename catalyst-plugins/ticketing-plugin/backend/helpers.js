@@ -9,7 +9,7 @@ import {
   TICKET_NUMBER_CHARS,
 } from './constants.js';
 
-/** Resolve a plugin config value, unwrapping schema objects `{ default: … }`. */
+/** Resolve a plugin config value (host now unwraps schema objects; keep defensive unwrap). */
 export function cfg(context, key, fallback) {
   try {
     const val = context.getConfig(key);
@@ -23,8 +23,11 @@ export function cfg(context, key, fallback) {
   }
 }
 
-/** Host auth sets `request.user.userId` (not `.id`). */
-export function getUserId(request) {
+/** Prefer host helper when present; fall back to request.user.userId. */
+export function getUserId(request, context) {
+  if (context && typeof context.getUserId === 'function') {
+    return context.getUserId(request);
+  }
   return request?.user?.userId || request?.user?.id || null;
 }
 

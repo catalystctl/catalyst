@@ -477,6 +477,41 @@ pub fn is_ipv6_site_local(v6: &Ipv6Addr) -> bool {
     (seg0 & 0xffc0) == 0xfec0
 }
 
+/// Hosts allowed for cleartext `ws://` without `CATALYST_ALLOW_INSECURE_WS=1`.
+///
+/// Includes loopback (`localhost`, `127.0.0.0/8`, `::1`) and RFC1918 private
+/// LAN ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) so agents can
+/// reach a panel exposed on the local network without TLS. Public IPs and
+/// unresolved DNS names still require `wss://` or the explicit override.
+pub fn is_allowed_insecure_ws_host(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+
+    // `Url::host_str()` returns IPv6 without brackets, but accept both forms.
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V4(v4)) => v4.is_loopback() || v4.is_private(),
+        Ok(IpAddr::V6(v6)) => {
+            // Check native IPv6 loopback/ULA first. `::1` is also IPv4-compatible
+            // (`0.0.0.1`), so calling to_ipv4() before is_loopback() would reject it.
+            if v6.is_loopback() || v6.is_unique_local() {
+                return true;
+            }
+            if let Some(v4) = v6.to_ipv4() {
+                return v4.is_loopback() || v4.is_private();
+            }
+            false
+        }
+        // Non-IP hostnames (e.g. panel.lan) are not allowlisted by name alone.
+        Err(_) => false,
+    }
+}
+
 /// Check if an IP address is a private/link-local/loopback address that should
 /// not be used as an install script download source (SSRF protection).
 pub fn is_forbidden_install_ip(ip: IpAddr) -> bool {
@@ -662,6 +697,34 @@ mod tests {
         assert!(is_forbidden_install_ip("10.0.0.1".parse().unwrap()));
         assert!(is_forbidden_install_ip("192.168.1.1".parse().unwrap()));
         assert!(!is_forbidden_install_ip("8.8.8.8".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_allowed_insecure_ws_host() {
+        // Loopback
+        assert!(is_allowed_insecure_ws_host("localhost"));
+        assert!(is_allowed_insecure_ws_host("LOCALHOST"));
+        assert!(is_allowed_insecure_ws_host("127.0.0.1"));
+        assert!(is_allowed_insecure_ws_host("127.1.2.3"));
+        assert!(is_allowed_insecure_ws_host("::1"));
+        assert!(is_allowed_insecure_ws_host("[::1]"));
+
+        // RFC1918 private LANs
+        assert!(is_allowed_insecure_ws_host("10.0.0.5"));
+        assert!(is_allowed_insecure_ws_host("172.16.0.1"));
+        assert!(is_allowed_insecure_ws_host("172.31.255.254"));
+        assert!(is_allowed_insecure_ws_host("192.168.1.50"));
+
+        // IPv6 ULA
+        assert!(is_allowed_insecure_ws_host("fd12:3456:789a::1"));
+
+        // Public / non-private must still be blocked
+        assert!(!is_allowed_insecure_ws_host("8.8.8.8"));
+        assert!(!is_allowed_insecure_ws_host("1.1.1.1"));
+        assert!(!is_allowed_insecure_ws_host("172.15.0.1")); // just outside 172.16/12
+        assert!(!is_allowed_insecure_ws_host("172.32.0.1")); // just outside 172.16/12
+        assert!(!is_allowed_insecure_ws_host("panel.example.com"));
+        assert!(!is_allowed_insecure_ws_host(""));
     }
 
     #[test]

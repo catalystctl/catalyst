@@ -9,6 +9,7 @@ import { verifyAgentApiKey } from "../lib/agent-auth";
 import { createApiKey, deleteApiKey } from "../services/api-key-service";
 import { captureSystemError } from "../services/error-logger";
 import { getUpdateStatus } from "../services/auto-updater";
+import { getCurrentVersion } from "../lib/panel-version";
 import { createAuditLog } from "../middleware/audit.js";
 import { openSseStream } from "../utils/sse.js";
 
@@ -2295,7 +2296,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return reply.status(404).send({ error: "Node not found" });
 			}
 
-			const panelVersion = getUpdateStatus().currentVersion || null;
+			const currentPanel = getCurrentVersion();
+			const panelVersion = currentPanel === "unknown" ? null : currentPanel;
 			const runningContainers = node.servers.filter((s: any) => s.status === "running").length;
 
 			// Base data from DB
@@ -2550,7 +2552,10 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
 			}
 
-			const version = targetVersion || getUpdateStatus().currentVersion || undefined;
+			const currentPanel = getCurrentVersion();
+			const version =
+				targetVersion ||
+				(currentPanel === "unknown" ? undefined : currentPanel);
 			const sent = await gateway.sendToAgent(nodeId, {
 				type: "update_agent",
 				targetVersion: version,

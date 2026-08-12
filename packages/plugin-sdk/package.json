@@ -17,6 +17,22 @@
 		"./frontend": {
 			"import": "./dist/frontend/index.js",
 			"types": "./dist/frontend/index.d.ts"
+		},
+		"./config": {
+			"import": "./dist/config.js",
+			"types": "./dist/config.d.ts"
+		},
+		"./routes": {
+			"import": "./dist/routes.js",
+			"types": "./dist/routes.d.ts"
+		},
+		"./storage": {
+			"import": "./dist/storage.js",
+			"types": "./dist/storage.d.ts"
+		},
+		"./context": {
+			"import": "./dist/context.js",
+			"types": "./dist/context.d.ts"
 		}
 	},
 	"scripts": {

@@ -232,7 +232,9 @@ The recommended method for production deployments:
    curl -fsSL https://your-panel.com/api/deploy/YOUR_TOKEN | sudo bash
    ```
 
-The script installs the agent binary, generates `/opt/catalyst-agent/config.toml`, creates a systemd service, and starts the agent.
+The script queries the panel for its version (`GET /api/agent/version`), downloads the matching **static musl** binary from GitHub Releases (`catalyst-agent-{x86_64|aarch64}-linux-musl` at tag `v<panel>`), verifies the `.sha256` sidecar, writes `/opt/catalyst-agent/config.toml`, creates a systemd (or OpenRC) service, and starts the agent. It never builds from source on the node.
+
+If GitHub is unreachable the script falls back to the panel proxy (`GET /api/agent/download?arch=...&version=<panel>`). Override the pin with `AGENT_VERSION=x.y.z` if needed.
 
 ### Manual Installation
 
@@ -380,7 +382,7 @@ format = "json"
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `backend_url` | string | `ws://localhost:3000/ws` | WebSocket URL of the panel backend. Use `wss://` for production with TLS. Non-local `ws://` URLs trigger a security warning unless `CATALYST_ALLOW_INSECURE_WS=1` is set. |
+| `backend_url` | string | `ws://localhost:3000/ws` | WebSocket URL of the panel backend. Use `wss://` for production with TLS. Non-local `ws://` URLs to public IPs are blocked unless `CATALYST_ALLOW_INSECURE_WS=1` is set; loopback and private LAN IPs (`10/8`, `172.16/12`, `192.168/16`) are allowed. |
 | `node_id` | string | *(required)* | UUID of the node (from the panel database) |
 | `api_key` | string | *(required)* | API key for authenticating with the panel (generated in the panel UI). Must not be empty. |
 | `hostname` | string | System hostname | Hostname reported to the panel. Auto-detected via `hostname` command if not set. |
@@ -456,7 +458,7 @@ When no config file is found, the agent falls back to environment variables:
 | `CONTAINERD_SOCKET` | `/run/containerd/containerd.sock` | containerd socket path |
 | `CONTAINERD_NAMESPACE` | `catalyst` | containerd namespace |
 | `LOG_LEVEL` | `info` | Log verbosity |
-| `CATALYST_ALLOW_INSECURE_WS` | *(not set)* | Set to `"1"` to suppress `ws://` security warning (development only) |
+| `CATALYST_ALLOW_INSECURE_WS` | *(not set)* | Set to `"1"` to allow `ws://` to public hosts (development only). Loopback and private LAN IPs are already allowed without this. |
 
 ---
 
@@ -1194,7 +1196,7 @@ The agent supports self-updates initiated by the panel via the `update_agent` We
 
 **Update flow:**
 1. Panel sends `update_agent` command
-2. Agent downloads the arch-matching musl asset from GitHub Releases (`catalyst-agent-{x86_64|aarch64}-linux-musl`), falling back to `{backend_url}/api/agent/download`
+2. Agent downloads the arch-matching **static musl** asset for the **panel version** from GitHub Releases (`.../releases/download/v{panel}/catalyst-agent-{x86_64|aarch64}-linux-musl`), falling back to `{backend_url}/api/agent/download?version={panel}`
 3. Agent writes to `{binary_path}.update`
 4. Agent renames current binary to `{binary_path}.backup`
 5. Agent moves new binary into place
@@ -1356,7 +1358,7 @@ The agent is designed to handle updates gracefully:
 - Run on a local VM or physical machine
 - Single CNI network (auto-detected)
 - No external firewall required
-- Use `ws://localhost:3000/ws` with `CATALYST_ALLOW_INSECURE_WS=1`
+- Use `ws://localhost:3000/ws` (loopback / private LAN IPs are allowed without override)
 
 ### Multi-Node Production
 
@@ -1369,9 +1371,10 @@ The agent is designed to handle updates gracefully:
 ### Air-Gapped / Offline Deployment
 
 - Nodes have no internet access
+- Place pre-built musl binaries (and `.sha256` sidecars) in `AGENT_BINARY_DIR` on the panel so `/api/agent/download` can serve them without GitHub
 - CNI plugins must be pre-installed (downloaded on a connected machine, transferred via USB)
 - Container images must be pre-loaded on each node (via `ctr images import`)
-- The agent cannot auto-update; updates must be done manually
+- Auto-update still goes through the panel proxy; keep `AGENT_BINARY_DIR` in sync with the panel version
 
 ### Headless / Containerized Deployment
 

@@ -9,6 +9,7 @@
     "server.read",
     "user.read"
   ],
+  "storageEngine": "dedicated",
   "config": {
     "autoAssignEnabled": {
       "type": "boolean",

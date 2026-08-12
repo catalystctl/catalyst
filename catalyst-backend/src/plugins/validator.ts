@@ -34,6 +34,8 @@ export const PluginManifestSchema = z.object({
   frontend: z
     .object({
       entry: z.string(),
+      hasTabs: z.boolean().optional(),
+      hasComponents: z.boolean().optional(),
     })
     .optional(),
   dependencies: z
