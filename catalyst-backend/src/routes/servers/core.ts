@@ -121,7 +121,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         template.features && typeof template.features === "object"
           ? (template.features as Record<string, unknown>)
           : {};
-      const templateVariables = (template.variables as Array<{ name?: string; default?: string }>) || [];
+      const templateVariables = (template.variables as Array<{
+        name?: string;
+        default?: string;
+        required?: boolean;
+        rules?: string[];
+      }>) || [];
       const appId =
         environment?.SRCDS_APPID ||
         environment?.STEAM_APPID ||
@@ -163,7 +168,10 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Template image is required" });
       }
       if (template.images && Array.isArray(template.images)) {
-        const hasVariant = template.images.some((option: any) => option?.name === resolvedEnvironment.IMAGE_VARIANT);
+        const hasVariant = template.images.some((option) => {
+          if (!option || typeof option !== "object") return false;
+          return "name" in option && option.name === resolvedEnvironment.IMAGE_VARIANT;
+        });
         if (resolvedEnvironment.IMAGE_VARIANT && !hasVariant) {
           return reply.status(400).send({ error: "Invalid image variant selected" });
         }
@@ -171,15 +179,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       // Validate required template variables are provided
       const requiredVars = templateVariables.filter((v) => v.required);
-      const missingVars = requiredVars.filter((v) => !resolvedEnvironment?.[v.name]);
-      
+      const missingVars = requiredVars.filter((v) => v.name && !resolvedEnvironment[v.name]);
+
       if (missingVars.length > 0) {
         return reply.status(400).send({
           error: `Missing required template variables: ${missingVars.map((v) => v.name).join(", ")}`,
         });
       }
 
-      const templateFeatures = (template.features as any) || {};
       const templateBackupAllocation = Number(templateFeatures.backupAllocationMb);
       const templateDatabaseAllocation = Number(templateFeatures.databaseAllocation);
       const resolvedBackupAllocationMb =
@@ -189,7 +196,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       // Validate variable values against rules
       for (const variable of templateVariables) {
-        const value = resolvedEnvironment?.[variable.name];
+        const value = variable.name ? resolvedEnvironment[variable.name] : undefined;
         if (value && variable.rules) {
           for (const rule of variable.rules) {
             if (rule.startsWith("between:")) {

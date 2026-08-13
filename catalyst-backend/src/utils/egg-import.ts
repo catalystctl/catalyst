@@ -454,7 +454,7 @@ export function minimumDiskMbFromHints(input: {
 
 export function importPterodactylEgg(
 	egg: PteroEgg,
-	options?: { nestId?: string },
+	options?: { nestId?: string | null },
 ): ImportedEggResult {
 	// ── Images ────────────────────────────────────────────────────────
 	let mappedImages: MappedImage[] = [];
