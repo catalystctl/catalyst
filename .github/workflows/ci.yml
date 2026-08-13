@@ -14,13 +14,15 @@
 # ║  Build (push only):                                                          ║
 # ║    build        — pnpm build + cargo build verification                       ║
 # ║                                                                              ║
-# ║  Publish (push to main/develop):                                           ║
-# ║    detect-changes — path filter (parallel with build)                       ║
+# ║  Publish (push to develop):                                                  ║
+# ║    detect-changes — any product path → publish BOTH images                   ║
 # ║    publish-backend  — GHCR image (after lint+test+detect, || build)         ║
 # ║    publish-frontend — GHCR image (after lint+test+detect, || build)         ║
+# ║    main image publish lives in auto-version.yml so baked versions match     ║
+# ║    the tag (GITHUB_TOKEN chore(release) commits do not retrigger CI).      ║
 # ║                                                                              ║
 # ║  Release (in auto-version.yml, not here):                                    ║
-# ║    agent-release — Build release agent binaries, upload to GitHub Release    ║
+# ║    agent-release + publish-images — agent binaries AND both GHCR images     ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: CI/CD — Catalyst
@@ -424,30 +426,27 @@ jobs:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     if: github.event_name == 'push'
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      release: ${{ steps.filter.outputs.release }}
     steps:
       - uses: actions/checkout@v6
 
       - uses: dorny/paths-filter@v4
         id: filter
         with:
-          # Keep in sync with catalyst-backend/Dockerfile and catalyst-frontend
-          # image build contexts. Missing a baked-in input (e.g. scripts/deploy-agent.sh
-          # COPY'd into the backend image) skips GHCR publish and leaves panels serving
-          # a stale one-liner install script.
+          # A version bump is lockstep: backend, frontend, and agent all ship
+          # the same semver. Any product-surface change republishes BOTH images
+          # on develop. On main, auto-version.yml publishes both from the tag.
           filters: |
-            backend:
+            release:
               - 'catalyst-backend/**'
+              - 'catalyst-frontend/**'
+              - 'catalyst-agent/**'
               - 'scripts/deploy-agent.sh'
+              - 'catalyst-docker/**'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - 'package.json'
               - '.npmrc'
-            frontend:
-              - 'catalyst-frontend/**'
-              - 'pnpm-lock.yaml'
-              - 'package.json'
 
   # ──────────────────────────────────────────────────────────────────────────────
   # Job 5b: Publish Backend Docker Image
@@ -464,7 +463,8 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: >-
       github.event_name == 'push' &&
-      needs.detect-changes.outputs.backend == 'true'
+      github.ref != 'refs/heads/main' &&
+      needs.detect-changes.outputs.release == 'true'
 
     steps:
       - uses: actions/checkout@v6
@@ -511,7 +511,8 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: >-
       github.event_name == 'push' &&
-      needs.detect-changes.outputs.frontend == 'true'
+      github.ref != 'refs/heads/main' &&
+      needs.detect-changes.outputs.release == 'true'
 
     steps:
       - uses: actions/checkout@v6

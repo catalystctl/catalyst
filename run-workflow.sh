@@ -849,23 +849,21 @@ step_docker_publish() {
   STEP_STARTS["$step_name"]=$(now_ms)
   local overall_exit=0
 
-  # --- Detect changes (simulate dorny/paths-filter) ---
-  # Maps to: detect-changes: job in ci.yml
-  # Locally we check if the relevant directories have uncommitted changes
-  # or if we can't determine, we assume "all changed" to be safe.
-  local backend_changed=1
-  local frontend_changed=1
-
-  if git diff --quiet HEAD~1 -- catalyst-backend/ pnpm-lock.yaml package.json 2>/dev/null; then
-    backend_changed=0
+  # Lockstep: any product-surface change publishes BOTH images (same as ci.yml
+  # `release` filter). Main-branch GHCR latest is produced by auto-version.yml
+  # from the version tag so baked versions match the agent.
+  local release_changed=1
+  if git diff --quiet HEAD~1 -- \
+      catalyst-backend/ catalyst-frontend/ catalyst-agent/ \
+      scripts/deploy-agent.sh catalyst-docker/ \
+      pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc 2>/dev/null; then
+    release_changed=0
   fi
-  if git diff --quiet HEAD~1 -- catalyst-frontend/ pnpm-lock.yaml package.json 2>/dev/null; then
-    frontend_changed=0
-  fi
+  local backend_changed=$release_changed
+  local frontend_changed=$release_changed
 
-  echo -e "  ${C_BOLD}Change detection (maps to: dorny/paths-filter in ci.yml):${C_RESET}"
-  echo -e "    backend:  $([ "$backend_changed" -eq 1 ] && echo 'CHANGED' || echo 'unchanged')"
-  echo -e "    frontend: $([ "$frontend_changed" -eq 1 ] && echo 'CHANGED' || echo 'unchanged')"
+  echo -e "  ${C_BOLD}Change detection (maps to: dorny/paths-filter release in ci.yml):${C_RESET}"
+  echo -e "    release (both images): $([ "$release_changed" -eq 1 ] && echo 'CHANGED' || echo 'unchanged')"
   echo ""
 
   if [[ "$backend_changed" -eq 0 && "$frontend_changed" -eq 0 ]]; then

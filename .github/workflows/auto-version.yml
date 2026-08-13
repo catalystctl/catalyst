@@ -6,12 +6,14 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   PROTOC_VERSION: "25.1"
   PROTOC_ARCH: "linux-x86_64"
+  REGISTRY: ghcr.io
 
 jobs:
   version:
@@ -475,3 +477,56 @@ jobs:
           files: /tmp/${{ matrix.artifact_name }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Lockstep image publish: a version bump always rebuilds backend AND frontend
+  # from the tagged commit so baked-in versions match the agent binaries.
+  # ci.yml cannot do this on main — GITHUB_TOKEN chore(release) commits do not
+  # retrigger workflows.
+  publish-images:
+    name: Publish ${{ matrix.image }} Image
+    needs: version
+    if: needs.version.outputs.bump != 'none'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            file: catalyst-backend/Dockerfile
+          - image: frontend
+            file: catalyst-frontend/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.version.outputs.new_version }}
+
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ needs.version.outputs.new_version }}
+            type=raw,value=v${{ needs.version.outputs.new_version }}
+            type=sha,prefix=
+
+      - name: Build and push
+        uses: useblacksmith/build-push-action@v2
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
