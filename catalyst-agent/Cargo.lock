@@ -273,7 +273,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "catalyst-agent"
-version = "1.19.4"
+version = "1.19.6"
 dependencies = [
  "aes-gcm",
  "anyhow",

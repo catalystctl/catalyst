@@ -252,5 +252,6 @@ stage_full() {
   stage_apis
   stage_admin
   stage_everything
+  stage_updates
   stage_status
 }

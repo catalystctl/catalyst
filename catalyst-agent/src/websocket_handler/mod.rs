@@ -1557,44 +1557,30 @@ impl WebSocketHandler {
                     });
                     match updater.update(&options).await {
                         Ok(_) => {
+                            // Real apply() exec()s and never returns. Ok means
+                            // already at target — do not fake an apply/restart.
                             mid_task.abort();
-                            info!("Agent update succeeded, restarting via exec()");
+                            info!("Agent already at target version, update skipped");
                             {
                                 let mut st = handler.agent_update_state.write().await;
                                 *st = Some(AgentUpdateState {
-                                    status: "applying".to_string(),
-                                    progress: 90,
+                                    status: "completed".to_string(),
+                                    progress: 100,
                                     target_version: options.target_version.clone(),
                                     error: None,
                                     started_at: st.as_ref().and_then(|s| s.started_at.clone()),
                                 });
                             }
-                            // Progress + started so panel flips to applying before exec.
-                            let progress_payload = json!({
+                            let payload = json!({
                                 "type": "agent_update_progress",
                                 "requestId": msg_clone.get("requestId"),
-                                "status": "applying",
-                                "progress": 90,
+                                "status": "completed",
+                                "progress": 100,
                                 "targetVersion": options.target_version,
                                 "currentVersion": env!("CARGO_PKG_VERSION"),
                             });
-                            {
-                                let mut w = write.lock().await;
-                                let _ = w
-                                    .send(Message::Text(progress_payload.to_string().into()))
-                                    .await;
-                            }
-                            let payload = json!({
-                                "type": "agent_update_started",
-                                "requestId": msg_clone.get("requestId"),
-                                "targetVersion": options.target_version,
-                                "progress": 90,
-                                "status": "applying",
-                            });
                             let mut w = write.lock().await;
                             let _ = w.send(Message::Text(payload.to_string().into())).await;
-                            // drop the write lock before exec replaces this process
-                            drop(w);
                         }
                         Err(e) => {
                             mid_task.abort();

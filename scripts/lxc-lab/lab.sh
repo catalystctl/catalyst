@@ -658,6 +658,7 @@ stage_all() {
   stage_apis
   stage_admin
   stage_everything
+  stage_updates
   stage_status
 }
 
@@ -668,8 +669,9 @@ source "$LAB_DIR/panel-ops.sh"
 source "$LAB_DIR/server-apis.sh"
 # shellcheck disable=SC1091
 source "$LAB_DIR/admin-ops.sh"
-# shellcheck disable=SC1091
 source "$LAB_DIR/everything.sh"
+# shellcheck disable=SC1091
+source "$LAB_DIR/updates.sh"
 
 cmd="${1:-all}"
 case "$cmd" in
@@ -690,13 +692,14 @@ case "$cmd" in
   apis) stage_apis ;;
   admin) stage_admin ;;
   everything) stage_everything ;;
+  updates) stage_updates ;;
   full) stage_full ;;
   status) stage_status ;;
   destroy) stage_destroy ;;
   all) stage_all ;;
   --tcp-proxy) ;;
   *)
-    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|alerts|automations|apis|admin|everything|full|status|destroy}"
+    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|alerts|automations|apis|admin|everything|updates|full|status|destroy}"
     exit 2
     ;;
 esac
