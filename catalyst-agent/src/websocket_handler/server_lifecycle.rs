@@ -431,13 +431,19 @@ impl WebSocketHandler {
         if exit_code != 0 {
             let stderr_trimmed = stderr_buffer.trim();
             let stdout_trimmed = stdout_buffer.trim();
-            let reason = if !stderr_trimmed.is_empty() {
+            let combined = format!("{stdout_buffer}\n{stderr_buffer}");
+            let mut reason = if !stderr_trimmed.is_empty() {
                 stderr_trimmed.to_string()
             } else if !stdout_trimmed.is_empty() {
                 stdout_trimmed.to_string()
             } else {
                 "Install script failed".to_string()
             };
+            if combined.contains("0x202") {
+                reason = format!(
+                    "SteamCMD 0x202: disk write failed. Catalyst gives each server a loop-mounted quota (default 10 GB). CS2 needs about 40 GB. Resize the server disk and reinstall. ({reason})"
+                );
+            }
             info!(
                 "[DEBUG] install_server FAILED: exit_code={}, stdout_len={}, stderr_len={}, reason='{}'",
                 exit_code, stdout_buffer.len(), stderr_buffer.len(), reason

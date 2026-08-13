@@ -400,9 +400,61 @@ function tryParseJson<T>(value: T | string | undefined): T | undefined {
 // ============================================================================
 
 /** Convert a Pterodactyl/Pelican egg to Catalyst-compatible template data. */
+/** SteamCMD 0x202 is a disk write failure. Catalyst loop-quotas make this fatal. */
+const STEAM_APP_DISK_MB: Record<string, number> = {
+	"730": 40960, // Counter-Strike 2 dedicated
+	"740": 15360, // CS:S
+	"232250": 20480, // TF2
+	"2394010": 20480, // Palworld
+	"1690800": 20480, // Satisfactory
+	"2465200": 20480, // Sons of the Forest
+	"376030": 30720, // ARK
+	"2430930": 20480, // Palworld (alt)
+};
+
+const STEAM_DISK_SPACE_DEFAULT_MB = 20480;
+
+export function recommendedDiskForEgg(egg: PteroEgg): number {
+	const vars = Array.isArray(egg.variables) ? egg.variables : [];
+	const appVar = vars.find((item) => {
+		const name = (item.env_variable || "").toUpperCase();
+		return (
+			name === "SRCDS_APPID" ||
+			name === "STEAM_APPID" ||
+			name === "STEAMAPPID" ||
+			name === "APPID"
+		);
+	});
+	const appId = String(appVar?.default_value || "").trim();
+	const recommended = minimumDiskMbFromHints({
+		appId,
+		pterodactylFeatures: Array.isArray(egg.features) ? egg.features : [],
+		storedMinimum: undefined,
+	});
+	return recommended > 0 ? recommended : 10240;
+}
+
+export function minimumDiskMbFromHints(input: {
+	appId?: string;
+	pterodactylFeatures?: unknown;
+	storedMinimum?: unknown;
+}): number {
+	const stored = Number(input.storedMinimum);
+	if (Number.isFinite(stored) && stored > 0) return stored;
+	const appId = String(input.appId || "").trim();
+	if (appId && STEAM_APP_DISK_MB[appId]) return STEAM_APP_DISK_MB[appId];
+	const features = Array.isArray(input.pterodactylFeatures)
+		? input.pterodactylFeatures
+		: [];
+	if (features.includes("steam_disk_space")) {
+		return STEAM_DISK_SPACE_DEFAULT_MB;
+	}
+	return 0;
+}
+
 export function importPterodactylEgg(
 	egg: PteroEgg,
-	options?: { nestId?: string | null; rawImport?: boolean },
+	options?: { nestId?: string },
 ): ImportedEggResult {
 	// ── Images ────────────────────────────────────────────────────────
 	let mappedImages: MappedImage[] = [];
@@ -472,6 +524,12 @@ export function importPterodactylEgg(
 	// Pterodactyl features array (e.g., ["steam_disk_space"])
 	if (Array.isArray(egg.features) && egg.features.length > 0) {
 		features.pterodactylFeatures = egg.features;
+	}
+
+	const recommendedDiskMb = recommendedDiskForEgg(egg);
+	if (recommendedDiskMb > 10240) {
+		features.recommendedDiskMb = recommendedDiskMb;
+		features.minimumDiskMb = recommendedDiskMb;
 	}
 
 	// Startup detection pattern

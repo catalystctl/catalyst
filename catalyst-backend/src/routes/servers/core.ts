@@ -3,6 +3,7 @@ import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
+import { minimumDiskMbFromHints } from "../../utils/egg-import.js";
 
 /**
  * Find the next available host port starting from `startPort`.
@@ -116,7 +117,36 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Template not found" });
       }
 
-      const templateVariables = (template.variables as any[]) || [];
+      const templateFeatures =
+        template.features && typeof template.features === "object"
+          ? (template.features as Record<string, unknown>)
+          : {};
+      const templateVariables = (template.variables as Array<{ name?: string; default?: string }>) || [];
+      const appId =
+        environment?.SRCDS_APPID ||
+        environment?.STEAM_APPID ||
+        environment?.STEAMAPPID ||
+        environment?.APPID ||
+        templateVariables.find((item) =>
+          ["SRCDS_APPID", "STEAM_APPID", "STEAMAPPID", "APPID"].includes(
+            String(item.name || ""),
+          ),
+        )?.default;
+      const minimumDiskMb = minimumDiskMbFromHints({
+        appId,
+        pterodactylFeatures: templateFeatures.pterodactylFeatures,
+        storedMinimum: templateFeatures.minimumDiskMb,
+      });
+      if (minimumDiskMb > 0 && allocatedDiskMb < minimumDiskMb) {
+        return reply.status(400).send({
+          error:
+            `This egg needs at least ${minimumDiskMb} MB of disk ` +
+            `(SteamCMD 0x202 means the server quota is full). ` +
+            `Catalyst uses a loop-mounted quota, unlike Pterodactyl. ` +
+            `CS2 needs about 40 GB.`,
+          minimumDiskMb,
+        });
+      }
       const templateDefaults = templateVariables.reduce((acc, variable) => {
         if (variable?.name && variable?.default !== undefined) {
           acc[variable.name] = String(variable.default);

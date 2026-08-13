@@ -101,6 +101,13 @@ function CreateServerModal() {
  setPort(String(selectedTemplate.supportedPorts[0]));
  }
  }
+ const recommendedDisk = Number(selectedTemplate?.features?.recommendedDiskMb);
+ if (Number.isFinite(recommendedDisk) && recommendedDisk > 0) {
+ setDisk(String(recommendedDisk));
+ }
+ if (selectedTemplate?.allocatedMemoryMb) {
+ setMemory(String(selectedTemplate.allocatedMemoryMb));
+ }
  }
 
  const templateVariables = useMemo(() => {

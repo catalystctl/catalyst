@@ -714,13 +714,14 @@ case "$cmd" in
   everything) stage_everything ;;
   updates) stage_updates ;;
   live) stage_live ;;
+  eggs) python3 "$LAB_DIR/egg-inventory.py" ;;
   full) stage_full ;;
   status) stage_status ;;
   destroy) stage_destroy ;;
   all) stage_all ;;
   --tcp-proxy) ;;
   *)
-    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|alerts|automations|apis|admin|everything|updates|live|full|status|destroy}"
+    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|alerts|automations|apis|admin|everything|updates|live|eggs|full|status|destroy}"
     exit 2
     ;;
 esac
