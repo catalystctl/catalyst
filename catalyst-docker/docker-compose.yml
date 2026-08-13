@@ -95,10 +95,10 @@ services:
       # an extra prompt; override independently for key-rotation isolation.
       API_KEY_SECRET: ${API_KEY_SECRET:-${BETTER_AUTH_SECRET}}
 
-      # CORS — automatically driven by PUBLIC_URL unless you override it.
-      # Add extra origins here as a comma-separated list if needed.
-      CORS_ORIGIN: ${PUBLIC_URL:-http://localhost}
-      FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
+      # CORS — PUBLIC_URL by default. Set CORS_ORIGIN to a comma-separated
+      # list to allow extra panel hosts (LAN IP + domain).
+      CORS_ORIGIN: ${CORS_ORIGIN:-${PUBLIC_URL:-http://localhost}}
+      FRONTEND_URL: ${FRONTEND_URL:-${PUBLIC_URL:-http://localhost}}
 
       # Public address used in deploy scripts, agent config, and email links.
       # Defaults to PUBLIC_URL. Override BACKEND_EXTERNAL_ADDRESS / BACKEND_URL

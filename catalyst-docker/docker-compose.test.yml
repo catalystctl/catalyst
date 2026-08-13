@@ -60,8 +60,8 @@ services:
       API_KEY_SECRET: ${API_KEY_SECRET:-${BETTER_AUTH_SECRET}}
       BETTER_AUTH_URL: ${PUBLIC_URL:-http://localhost}
       PASSKEY_RP_ID: ${PASSKEY_RP_ID:-localhost}
-      CORS_ORIGIN: ${PUBLIC_URL:-http://localhost}
-      FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
+      CORS_ORIGIN: ${CORS_ORIGIN:-${PUBLIC_URL:-http://localhost}}
+      FRONTEND_URL: ${FRONTEND_URL:-${PUBLIC_URL:-http://localhost}}
       BACKEND_EXTERNAL_ADDRESS: ${BACKEND_EXTERNAL_ADDRESS:-${PUBLIC_URL:-http://localhost}}
       BACKEND_URL: ${BACKEND_URL:-${PUBLIC_URL:-http://localhost}}
       SFTP_ENABLED: ${SFTP_ENABLED:-true}

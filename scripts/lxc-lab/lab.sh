@@ -182,8 +182,12 @@ patch_official_env() {
     sed -i 's~^FRONTEND_PORT=.*~FRONTEND_PORT=0.0.0.0:8080~' \"\$ENV\"
     sed -i 's~^BACKEND_PORT=.*~BACKEND_PORT=${backend_bind}~' \"\$ENV\"
     sed -i 's~^SFTP_PORT=.*~SFTP_PORT=0.0.0.0:2022~' \"\$ENV\"
+    if grep -q '^CORS_ORIGIN=' \"\$ENV\"; then
+      sed -i 's~^CORS_ORIGIN=.*~CORS_ORIGIN=${LAB_CORS_ORIGINS}~' \"\$ENV\"
+    else
+      printf '\\nCORS_ORIGIN=%s\\n' '${LAB_CORS_ORIGINS}' >> \"\$ENV\"
+    fi
     # No Caddy/Traefik — leave DOMAIN empty.
-    grep -q '^DOMAIN=' \"\$ENV\" && sed -i 's~^DOMAIN=.*~DOMAIN=~' \"\$ENV\" || true
   "
 }
 
@@ -200,6 +204,7 @@ services:
     environment:
       BACKEND_EXTERNAL_ADDRESS: ${BACKEND_PUBLIC}
       BACKEND_URL: ${BACKEND_PUBLIC}
+      CORS_ORIGIN: ${LAB_CORS_ORIGINS}
 EOF
   "
   log "Starting official postgres/redis/backend in $BACKEND_LXC"
