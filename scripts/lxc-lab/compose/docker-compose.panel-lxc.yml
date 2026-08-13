@@ -1,0 +1,6 @@
+# Official frontend talking to the backend LXC. Used with:
+#   docker compose -f docker-compose.yml -f docker-compose.panel-lxc.yml up -d --no-deps frontend
+services:
+  frontend:
+    extra_hosts:
+      - "backend:${BACKEND_IP}"

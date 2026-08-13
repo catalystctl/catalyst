@@ -789,31 +789,9 @@ impl FileManager {
                 .map_err(|e| AgentError::FileSystemError(format!("tar -t failed: {}", e)))?;
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
-                // tar -tzvf format: drwxr-xr-x user/group  0 2024-01-01 00:00 path/to/dir/
-                let parts: Vec<&str> = line
-                    .splitn(6, char::is_whitespace)
-                    .filter(|s| !s.is_empty())
-                    .collect();
-                if parts.len() < 6 {
-                    continue;
+                if let Some(entry) = parse_tar_list_line(line) {
+                    entries.push(entry);
                 }
-                let is_dir = parts[0].starts_with('d') || parts[5].ends_with('/');
-                let name = parts[5].trim_end_matches('/').to_string();
-                if name.is_empty() || name == "." || name.starts_with("..") {
-                    continue;
-                }
-                let size: u64 = parts[2].parse().unwrap_or(0);
-                let modified = if parts.len() >= 5 {
-                    Some(format!("{}T{}:00Z", parts[3], parts[4]))
-                } else {
-                    None
-                };
-                entries.push(ArchiveEntry {
-                    name,
-                    size,
-                    is_dir,
-                    modified,
-                });
             }
         } else {
             return Err(AgentError::InvalidRequest(
@@ -845,6 +823,26 @@ pub struct ArchiveEntry {
     pub size: u64,
     pub is_dir: bool,
     pub modified: Option<String>,
+}
+
+/// Parse one `tar -tzvf` line. GNU tar pads the size column with spaces;
+/// `splitn(N, whitespace)` treats those as empty fields and drops the name.
+fn parse_tar_list_line(line: &str) -> Option<ArchiveEntry> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    if parts.len() < 6 {
+        return None;
+    }
+    let name = parts[5..].join(" ");
+    let name = name.trim_end_matches('/').to_string();
+    if name.is_empty() || name == "." || name.starts_with("..") {
+        return None;
+    }
+    Some(ArchiveEntry {
+        name,
+        size: parts[2].parse().unwrap_or(0),
+        is_dir: parts[0].starts_with('d') || parts.last().is_some_and(|n| n.ends_with('/')),
+        modified: Some(format!("{}T{}:00Z", parts[3], parts[4])),
+    })
 }
 
 #[cfg(test)]
@@ -956,5 +954,22 @@ mod tests {
         assert!(names.contains(&"broken-link"));
         // Directories first
         assert!(entries[0].is_dir, "directories should sort first");
+    }
+
+    #[test]
+    fn parses_gnu_tar_tzvf_padded_size() {
+        let line = "-rw-r--r-- root/root         1 2026-08-12 21:58 lab-explorer/note-renamed.txt";
+        let entry = parse_tar_list_line(line).expect("line should parse");
+        assert_eq!(entry.name, "lab-explorer/note-renamed.txt");
+        assert_eq!(entry.size, 1);
+        assert!(!entry.is_dir);
+    }
+
+    #[test]
+    fn parses_gnu_tar_tzvf_directory() {
+        let line = "drwxr-xr-x root/root         0 2026-08-12 21:58 lab-explorer/";
+        let entry = parse_tar_list_line(line).expect("dir should parse");
+        assert_eq!(entry.name, "lab-explorer");
+        assert!(entry.is_dir);
     }
 }

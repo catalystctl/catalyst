@@ -1,0 +1,12 @@
+# Panel-only stack. Nginx proxies /api and /ws to the backend LXC via extra_hosts.
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/catalystctl/catalyst-frontend:latest}
+    container_name: catalyst-frontend
+    restart: unless-stopped
+    extra_hosts:
+      - "backend:${BACKEND_IP}"
+    ports:
+      - "0.0.0.0:80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro

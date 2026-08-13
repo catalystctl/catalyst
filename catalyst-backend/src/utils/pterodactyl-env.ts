@@ -52,6 +52,18 @@ export function injectPterodactylCompatibilityVars(
 		env.STARTUP = options.startupCommand;
 	}
 
+	// Wine yolks' /entrypoint.sh only starts Xvfb when XVFB=1. Dedicated
+	// Windows servers (SotF, etc.) fail with "Failed to create batch mode
+	// window" otherwise. Do not override an explicit value.
+	const wineStartup = (env.STARTUP || "").toLowerCase().includes("wine");
+	if (
+		env.XVFB === undefined &&
+		(Boolean(env.WINEARCH || env.WINDOWS_INSTALL || env.WINETRICKS_RUN || env.WINEPREFIX) ||
+			wineStartup)
+	) {
+		env.XVFB = "1";
+	}
+
 	// ── Optional keys (only when already present / egg-defined) ──────────
 	if ("SERVER_NAME" in env) {
 		env.SERVER_NAME = server.name;
@@ -92,3 +104,4 @@ export function injectPterodactylCompatibilityVars(
 
 	return env;
 }
+

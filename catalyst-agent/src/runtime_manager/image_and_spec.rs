@@ -133,6 +133,24 @@ pub fn build_process_args(
     vec!["/bin/sh".to_string()]
 }
 
+/// Wine yolks only start Xvfb when `XVFB=1`. Without it, Unity dedicated
+/// servers exit with "Failed to create batch mode window".
+pub fn apply_wine_xvfb_default(image: &str, env: &mut HashMap<String, String>) {
+    if env.contains_key("XVFB") {
+        return;
+    }
+    let wine_image = image.to_ascii_lowercase().contains("wine");
+    let wine_env = env.contains_key("WINEARCH")
+        || env.contains_key("WINDOWS_INSTALL")
+        || env.contains_key("WINETRICKS_RUN")
+        || env
+            .get("STARTUP")
+            .is_some_and(|s| s.to_ascii_lowercase().contains("wine"));
+    if wine_image || wine_env {
+        env.insert("XVFB".to_string(), "1".to_string());
+    }
+}
+
 pub fn base_mounts(data_dir: &str) -> Vec<serde_json::Value> {
     vec![
         serde_json::json!({"destination":"/data","type":"bind","source":data_dir,"options":["rbind","rw"]}),
@@ -561,6 +579,7 @@ impl ContainerdRuntime {
         if !config.startup_command.is_empty() {
             env_map.insert("STARTUP".to_string(), config.startup_command.to_string());
         }
+        apply_wine_xvfb_default(config.image, &mut env_map);
         let env_list: Vec<String> = env_map
             .into_iter()
             .map(|(k, v)| format!("{}={}", k, v))
@@ -740,5 +759,26 @@ mod tests {
         assert_eq!(args[0], "/bin/sh");
         assert_eq!(args[1], "-c");
         assert!(args[2].contains("java -jar server.jar"));
+    }
+
+    #[test]
+    fn wine_image_defaults_xvfb() {
+        let mut env = HashMap::new();
+        apply_wine_xvfb_default("ghcr.io/ptero-eggs/yolks:wine_latest", &mut env);
+        assert_eq!(env.get("XVFB").map(String::as_str), Some("1"));
+    }
+
+    #[test]
+    fn explicit_xvfb_is_preserved() {
+        let mut env = HashMap::from([("XVFB".to_string(), "0".to_string())]);
+        apply_wine_xvfb_default("ghcr.io/ptero-eggs/yolks:wine_latest", &mut env);
+        assert_eq!(env.get("XVFB").map(String::as_str), Some("0"));
+    }
+
+    #[test]
+    fn java_image_does_not_set_xvfb() {
+        let mut env = HashMap::new();
+        apply_wine_xvfb_default("ghcr.io/ptero-eggs/yolks:java_25", &mut env);
+        assert!(!env.contains_key("XVFB"));
     }
 }

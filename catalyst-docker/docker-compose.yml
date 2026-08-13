@@ -101,12 +101,10 @@ services:
       FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
 
       # Public address used in deploy scripts, agent config, and email links.
-      # Defaults to PUBLIC_URL.
-      BACKEND_EXTERNAL_ADDRESS: ${PUBLIC_URL:-http://localhost}
-
-      # Internal URL override — used by the deploy token endpoint for curl one-liners.
-      # Defaults to PUBLIC_URL. Only change this if you have a split DNS setup.
-      BACKEND_URL: ${PUBLIC_URL:-http://localhost}
+      # Defaults to PUBLIC_URL. Override BACKEND_EXTERNAL_ADDRESS / BACKEND_URL
+      # for split panel/API hosts so agents skip the frontend proxy.
+      BACKEND_EXTERNAL_ADDRESS: ${BACKEND_EXTERNAL_ADDRESS:-${PUBLIC_URL:-http://localhost}}
+      BACKEND_URL: ${BACKEND_URL:-${PUBLIC_URL:-http://localhost}}
 
       # SFTP
       SFTP_ENABLED: ${SFTP_ENABLED:-true}

@@ -2,7 +2,7 @@ import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import cron from 'node-cron';
-import cronParser from 'cron-parser';
+import { CronExpressionParser } from 'cron-parser';
 import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
 
@@ -113,7 +113,7 @@ export async function taskRoutes(app: FastifyInstance) {
 
       let nextRunAt: Date | null = null;
       try {
-        const interval = (cronParser as any).parseExpression(schedule, {
+        const interval = CronExpressionParser.parse(schedule, {
           currentDate: new Date(),
           tz: process.env.TZ || 'UTC',
         });
@@ -256,7 +256,7 @@ export async function taskRoutes(app: FastifyInstance) {
       let nextRunAt: Date | undefined;
       if (schedule) {
         try {
-          const interval = (cronParser as any).parseExpression(schedule, {
+          const interval = CronExpressionParser.parse(schedule, {
             currentDate: new Date(),
             tz: process.env.TZ || 'UTC',
           });

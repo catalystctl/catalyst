@@ -1,0 +1,89 @@
+# Backend-only stack: postgres + redis + API. Frontend lives in catalyst-panel.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: catalyst-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: catalyst
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: catalyst_db
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - catalyst-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalyst -d catalyst_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: catalyst-redis
+    restart: unless-stopped
+    command: redis-server
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/catalystctl/catalyst-backend:latest}
+    container_name: catalyst-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      TZ: UTC
+      LOG_LEVEL: info
+      PORT: "3000"
+      DATABASE_URL: postgresql://catalyst:${POSTGRES_PASSWORD}@postgres:5432/catalyst_db
+      REDIS_URL: redis://redis:6379
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      BETTER_AUTH_URL: ${PUBLIC_URL}
+      PASSKEY_RP_ID: ${PASSKEY_RP_ID}
+      API_KEY_SECRET: ${BETTER_AUTH_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      FRONTEND_URL: ${PUBLIC_URL}
+      BACKEND_EXTERNAL_ADDRESS: ${BACKEND_EXTERNAL_ADDRESS}
+      BACKEND_URL: ${BACKEND_URL}
+      SFTP_ENABLED: "true"
+      SFTP_PORT: "2022"
+      SFTP_MAX_FILE_SIZE: "104857600"
+      SFTP_HOST_KEY: ""
+      SFTP_HOST_KEY_BASE64: ""
+      DEPLOY_SCRIPT_PATH: /scripts/deploy-agent.sh
+      SERVER_DATA_DIR: /var/lib/catalyst/servers
+      BACKUP_DIR: /var/lib/catalyst/backups
+      BACKUP_STORAGE_MODE: local
+      APP_NAME: ${APP_NAME:-Catalyst Lab}
+      ENABLE_COMPRESSION: "false"
+      PLUGINS_DIR: /var/lib/catalyst/plugins
+      AUTO_UPDATE_ENABLED: "false"
+    ports:
+      - "0.0.0.0:3000:3000"
+      - "0.0.0.0:2022:2022"
+    volumes:
+      - catalyst-server-data:/var/lib/catalyst/servers
+      - catalyst-backup-data:/var/lib/catalyst/backups
+      - catalyst-plugin-data:/var/lib/catalyst/plugins
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 90s
+
+volumes:
+  catalyst-postgres-data:
+  catalyst-server-data:
+  catalyst-backup-data:
+  catalyst-plugin-data:

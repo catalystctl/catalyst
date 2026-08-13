@@ -76,4 +76,32 @@ describe('injectPterodactylCompatibilityVars', () => {
 		const env = injectPterodactylCompatibilityVars({}, { ...baseServer, primaryIp: null });
 		expect(env.SERVER_IP).toBe('0.0.0.0');
 	});
+
+	it('defaults XVFB=1 for wine / Windows dedicated servers', () => {
+		const wine = injectPterodactylCompatibilityVars(
+			{ WINEARCH: 'win64', WINDOWS_INSTALL: '1' },
+			baseServer,
+		);
+		expect(wine.XVFB).toBe('1');
+
+		const fromStartup = injectPterodactylCompatibilityVars({}, baseServer, undefined, {
+			startupCommand: 'wine ./SonsOfTheForestDS.exe',
+		});
+		expect(fromStartup.XVFB).toBe('1');
+	});
+
+	it('does not override an explicit XVFB value', () => {
+		const env = injectPterodactylCompatibilityVars(
+			{ WINEARCH: 'win64', XVFB: '0' },
+			baseServer,
+		);
+		expect(env.XVFB).toBe('0');
+	});
+
+	it('does not set XVFB for non-wine servers', () => {
+		const env = injectPterodactylCompatibilityVars({}, baseServer, undefined, {
+			startupCommand: 'java -jar server.jar',
+		});
+		expect(env.XVFB).toBeUndefined();
+	});
 });

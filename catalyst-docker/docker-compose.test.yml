@@ -62,8 +62,8 @@ services:
       PASSKEY_RP_ID: ${PASSKEY_RP_ID:-localhost}
       CORS_ORIGIN: ${PUBLIC_URL:-http://localhost}
       FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
-      BACKEND_EXTERNAL_ADDRESS: ${PUBLIC_URL:-http://localhost}
-      BACKEND_URL: ${PUBLIC_URL:-http://localhost}
+      BACKEND_EXTERNAL_ADDRESS: ${BACKEND_EXTERNAL_ADDRESS:-${PUBLIC_URL:-http://localhost}}
+      BACKEND_URL: ${BACKEND_URL:-${PUBLIC_URL:-http://localhost}}
       SFTP_ENABLED: ${SFTP_ENABLED:-true}
       SFTP_PORT: "2022"
       SFTP_MAX_FILE_SIZE: ${SFTP_MAX_FILE_SIZE:-104857600}
