@@ -77,11 +77,11 @@ function formatTimestamp(ts: string): string {
 }
 
 const LOG_LEVEL_COLORS: Record<string, string> = {
-  error: 'text-red-400 bg-red-400/10 border-red-400/20',
-  warn: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-  info: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
-  debug: 'text-slate-400 bg-slate-400/10 border-slate-400/20',
-  trace: 'text-slate-500 bg-slate-500/10 border-slate-500/20',
+  error: 'text-danger bg-danger/10 border-danger/20',
+  warn: 'text-warning bg-warning/10 border-warning/20',
+  info: 'text-info bg-info/10 border-info/20',
+  debug: 'text-muted-foreground bg-surface-2 border-border/20',
+  trace: 'text-muted-foreground bg-surface-2 border-border/20',
 };
 
 // ── Main Component ──
@@ -520,7 +520,7 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
       {/* Log viewer */}
       <div
         ref={logContainerRef}
-        className="max-h-[400px] overflow-y-auto rounded-lg border border-border/30 bg-[#0d1117] p-3 font-mono text-[11px] leading-relaxed"
+        className="max-h-[400px] overflow-y-auto rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground"
       >
         {isLoading && logs.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground/40">
@@ -534,7 +534,7 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
           filteredLogs.map((entry, i) => (
             <div
               key={`${entry.timestamp}-${entry.target}-${i}`}
-              className="flex gap-2 border-b border-white/[0.03] py-0.5 hover:bg-white/[0.02]"
+              className="flex gap-2 border-b border-border/20 py-0.5 hover:bg-surface-1"
             >
               <span className="shrink-0 text-muted-foreground/30 tabular-nums w-[70px]">
                 {formatTimestamp(entry.timestamp)}
@@ -544,10 +544,10 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
               >
                 {entry.level.padEnd(5)}
               </span>
-              <span className="shrink-0 text-cyan-400/50 max-w-[180px] truncate" title={entry.target}>
+              <span className="shrink-0 text-info/70 max-w-[180px] truncate" title={entry.target}>
                 {entry.target.split('::').slice(-2).join('::')}
               </span>
-              <span className="text-gray-300 break-all">{entry.message}</span>
+              <span className="text-foreground break-all">{entry.message}</span>
             </div>
           ))
         )}
@@ -756,7 +756,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
           value={editContent ?? ''}
           onChange={(e) => setEditContent(e.target.value)}
           spellCheck={false}
-          className="w-full min-h-[320px] rounded-lg border border-border/30 bg-[#0d1117] p-3 font-mono text-[11px] leading-relaxed text-gray-300 focus:border-primary/30 focus:outline-none resize-y"
+          className="w-full min-h-[320px] rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground focus:border-primary/30 focus:outline-none resize-y"
         />
       )}
 
@@ -798,7 +798,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
       {showSaveConfirm && (
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-xl border border-warning/40 bg-card shadow-xl">
+            <div className="w-full max-w-md rounded-xl border border-warning/40 bg-card shadow-elevated">
               <div className="border-b border-warning/20 bg-warning/5 px-6 py-4">
                 <h2 className="text-lg font-semibold text-foreground">Apply Config Changes?</h2>
               </div>
@@ -976,7 +976,7 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
       {restartConfirm && (
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-xl border border-danger/40 bg-card shadow-xl">
+            <div className="w-full max-w-md rounded-xl border border-danger/40 bg-card shadow-elevated">
               <div className="border-b border-danger/20 bg-danger/5 px-6 py-4">
                 <h2 className="text-lg font-semibold text-foreground">Restart Agent?</h2>
               </div>

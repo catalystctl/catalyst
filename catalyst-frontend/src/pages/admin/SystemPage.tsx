@@ -14,16 +14,16 @@ import {
  ArrowUpCircle,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
-import StatGrid from '../../components/servers/tabs/StatGrid';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import SectionHeader from '../../components/servers/tabs/SectionHeader';
 
 import { useAdminHealth, useAdminStats, useDnsSettings, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
 import UpdateSettings from '../../components/admin/UpdateSettings';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Input } from '../../components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+
 
 // ── Section Wrapper ──
 function Section({
@@ -44,15 +44,11 @@ function Section({
  return (
  <ServerTabCard>
  <div className="border-b border-border/30 px-5 py-4">
- <div className="flex items-center gap-2.5">
- <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconColor || 'bg-primary/10'}`}>
- {icon}
- </div>
- <div>
- <h2 className="text-sm font-semibold text-foreground">{title}</h2>
- {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
- </div>
- </div>
+ <SectionHeader
+ icon={() => <span className={iconColor || 'text-primary'}>{icon}</span>}
+ title={title}
+ description={subtitle}
+ />
  </div>
  <div className="px-5 py-4">{children}</div>
  {footer && (
@@ -187,42 +183,15 @@ function SystemPage() {
  }
  }
 
- const healthItems = [
- {
- label: 'Status',
- value: health?.status ?? 'loading',
- },
- {
- label: 'Nodes',
- value: `${health?.nodes.online ?? 0} / ${health?.nodes.total ?? 0}`,
- },
- {
- label: 'System totals',
- value: stats?.servers ?? 0,
- },
- ];
 
- return (
- <div className="space-y-5">
- <TabHeader
- icon={Settings}
- title="System"
- description="Monitor platform health and manage global integrations."
- actions={
- <div className="flex items-center gap-2">
- <Badge variant="outline" className="text-xs">
- {stats?.users ?? 0} users
- </Badge>
- <Badge variant="outline" className="text-xs">
- {stats?.activeServers ?? 0} active
- </Badge>
- </div>
- }
- variant="default"
- />
+  return (
+    <div className="space-y-5">
+      <TabHeader
+        icon={Settings}
+        title="System"
+        description={`${health?.status ?? 'loading'} · ${health?.nodes.online ?? 0}/${health?.nodes.total ?? 0} nodes · ${stats?.servers ?? 0} servers`}
+      />
 
- {/* ── Health Stats ── */}
- <StatGrid items={healthItems} columns={3} />
 
  {/* ── SMTP Configuration ── */}
  <Section
@@ -402,8 +371,8 @@ function SystemPage() {
  <Section
  title="Auto Updater"
  subtitle="Check for new releases and trigger automatic updates."
- icon={<ArrowUpCircle className="h-4 w-4 text-emerald-600" />}
- iconColor="bg-emerald-100"
+ icon={<ArrowUpCircle className="h-4 w-4 text-success" />}
+ iconColor="bg-success/10"
  >
  <UpdateSettings />
  </Section>

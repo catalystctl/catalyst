@@ -100,7 +100,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
  return (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
- <div className="w-full max-w-lg rounded-xl border border-border/40 bg-card shadow-xl transition-all">
+ <div className="w-full max-w-lg rounded-xl border border-border/40 bg-card shadow-elevated transition-all">
  {/* Header */}
  <div className="flex items-center justify-between border-b border-border/30 px-6 py-4">
  <h2 className="text-lg font-semibold text-foreground">Assign Node</h2>

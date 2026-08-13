@@ -29,35 +29,36 @@ export default function DataField({
  );
  }, [value]);
 
- return (
- <div className="flex items-center justify-between gap-2 rounded-md border border-border/20 bg-surface-2/20 px-2.5 py-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/40">
- {label}
- </span>
- <div className="flex items-center gap-1">
- <code className="text-[11px] tabular-nums font-mono text-foreground">
- {concealable && !visible ? '••••••••' : value || '—'}
- </code>
- {concealable && (
- <button
- type="button"
- onClick={() => setVisible(!visible)}
- className="rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-foreground"
- >
- {visible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
- </button>
- )}
- {copyable && (
- <button
- type="button"
- onClick={copy}
- className="rounded p-0.5 text-muted-foreground/30 transition-colors hover:text-foreground"
- title="Copy"
- >
- <Copy className="h-3 w-3" />
- </button>
- )}
- </div>
- </div>
- );
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 py-2 last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-1">
+        <code className="type-numeric text-xs text-foreground">
+          {concealable && !visible ? '••••••••' : value || '—'}
+        </code>
+        {concealable && (
+          <button
+            type="button"
+            onClick={() => setVisible(!visible)}
+            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+            aria-label={visible ? 'Hide value' : 'Show value'}
+          >
+            {visible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+          </button>
+        )}
+        {copyable && (
+          <button
+            type="button"
+            onClick={copy}
+            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Copy"
+          >
+            <Copy className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+
 }

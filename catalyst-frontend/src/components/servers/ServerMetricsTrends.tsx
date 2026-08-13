@@ -75,7 +75,7 @@ function ServerMetricsTrends({
  label: 'Disk IO',
  value: formatBytes((latest?.diskIoMb ?? 0) * 1024 * 1024),
  color: 'text-warning',
- stroke: 'hsl(24 90% 50%)',
+ stroke: 'hsl(var(--warning))',
  data: toChartData(diskIoHistory),
  formatTooltip: (value) => formatBytes(value * 1024 * 1024),
  },

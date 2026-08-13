@@ -3,23 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useMutation, useQuery } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
 import {
- AlertTriangle,
- BarChart3,
- Container,
- Copy,
- Database,
- Info,
- Loader2,
- Network,
- RotateCcw,
- Server,
- Shield,
- Skull,
- Star,
- UserRoundCog,
- Zap,
- ChevronDown,
+  AlertTriangle,
+  BarChart3,
+  Container,
+  Loader2,
+  Network,
+  RotateCcw,
+  Server,
+  Shield,
+  Skull,
+  Star,
+  UserRoundCog,
+  Zap,
+  ChevronDown,
 } from 'lucide-react';
+
 import { serversApi } from '../../../services/api/servers';
 import Combobox from '@/components/ui/combobox';
 import { notifySuccess, notifyError } from '../../../utils/notify';
@@ -32,6 +30,8 @@ import TabHeader from './TabHeader';
 import TabEmptyState from './TabEmptyState';
 import SectionHeader from './SectionHeader';
 import DataField from './DataField';
+import SettingsRow from './SettingsRow';
+
 
 // ── Types ──
 
@@ -196,7 +196,7 @@ function ConfirmAction({
  className="absolute inset-0 bg-background/60 backdrop-blur-sm"
  onClick={onCancel}
  />
- <div className="relative w-full max-w-md rounded-xl border border-border/40 bg-card p-6 shadow-2xl">
+ <div className="relative w-full max-w-md rounded-xl border border-border/40 bg-card p-6 shadow-elevated">
  <h3 className="text-sm font-semibold text-foreground">{title}</h3>
  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
  {description}
@@ -227,16 +227,6 @@ function ConfirmAction({
  );
 }
 
-// ── Stat Chip ──
-
-function StatChip({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
- return (
- <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{label}</div>
- <div className={`text-sm font-semibold font-mono tabular-nums text-foreground ${mono ? 'font-mono' : ''}`}>{value}</div>
- </div>
- );
-}
 
 // ── Main Component ──
 
@@ -640,308 +630,224 @@ export default function ServerAdminTab({
  description="Server info, container management, resources, and danger zone actions."
  />
 
- {/* ── Server Information ── */}
- <ServerTabCard>
- <SectionHeader icon={Server} title="Server Information" />
+      <ServerTabCard>
+        <SectionHeader icon={Server} title="Identity" />
+        <DataField label="Server ID" value={server.id} copyable />
+        <DataField label="Node" value={server.node?.name ?? server.nodeName ?? server.nodeId} copyable />
+        <DataField label="Template" value={server.template?.name ?? server.templateId ?? '—'} copyable />
+        <DataField label="Primary port" value={String(server.primaryPort ?? '—')} copyable />
+        <DataField label="Connection" value={`${server.connection?.host ?? '—'}:${server.connection?.port ?? '—'}`} copyable />
+        <DataField label="Network" value={server.networkMode ?? 'bridge'} copyable />
 
- <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
- <DataField label="Server ID" value={server.id} copyable />
- <DataField
- label="Node"
- value={server.node?.name ?? server.nodeName ?? server.nodeId}
- copyable
- />
- <DataField
- label="Template"
- value={server.template?.name ?? server.templateId ?? '—'}
- copyable
- />
- <DataField label="Primary Port" value={String(server.primaryPort ?? '—')} copyable />
- <DataField label="Connection" value={`${server.connection?.host ?? '—'}:${server.connection?.port ?? '—'}`} copyable />
- <DataField label="Network Mode" value={server.networkMode ?? 'bridge'} copyable />
- </div>
 
- {/* Environment Variables — collapsible */}
- <div className="mt-4">
- <button
- type="button"
- className="flex w-full items-center justify-between rounded-lg border border-border/30 bg-surface-2/20 px-3 py-2 text-xs transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
- onClick={() => setEnvExpanded(!envExpanded)}
- >
- <span className="flex items-center gap-2 text-muted-foreground">
- <Database className="h-3.5 w-3.5 text-primary" />
- <span className="font-medium text-foreground">Environment Variables</span>
- <span className="text-muted-foreground">({Object.keys(server.environment ?? {}).length})</span>
- </span>
- <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${envExpanded ? 'rotate-180' : ''}`} />
- </button>
+        <button
+          type="button"
+          className="mt-3 flex w-full items-center justify-between py-2 text-sm"
+          onClick={() => setEnvExpanded(!envExpanded)}
+        >
+          <span className="text-sm font-medium text-foreground">
+            Environment
+            <span className="ml-2 type-meta">({Object.keys(server.environment ?? {}).length})</span>
+          </span>
+          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${envExpanded ? 'rotate-180' : ''}`} />
+        </button>
+        {envExpanded && (
+          <div className="mt-2 space-y-2">
+            {canAdminWrite ? (
+              <>
+                {envVars.length === 0 && (
+                  <p className="type-meta py-2">No environment variables.</p>
+                )}
+                {envVars.map((row, idx) => (
+                  <div key={idx} className="group flex items-center gap-2">
+                    <input
+                      className="w-[130px] shrink-0 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground focus:border-primary focus:outline-none"
+                      value={row.key}
+                      onChange={(e) => {
+                        const next = [...envVars];
+                        next[idx] = { ...next[idx], key: e.target.value };
+                        setEnvVars(next);
+                        setEnvDirty(true);
+                      }}
+                      placeholder="KEY"
+                      disabled={isSuspended}
+                    />
+                    <span className="text-[10px] text-muted-foreground">=</span>
+                    <input
+                      className="min-w-0 flex-1 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono text-[11px] text-foreground focus:border-primary focus:outline-none"
+                      value={row.value}
+                      onChange={(e) => {
+                        const next = [...envVars];
+                        next[idx] = { ...next[idx], value: e.target.value };
+                        setEnvVars(next);
+                        setEnvDirty(true);
+                      }}
+                      placeholder="value"
+                      disabled={isSuspended}
+                    />
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-danger"
+                      onClick={() => {
+                        setEnvVars(envVars.filter((_, i) => i !== idx));
+                        setEnvDirty(true);
+                      }}
+                      disabled={isSuspended}
+                      aria-label="Remove"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground"
+                    onClick={() => {
+                      setEnvVars([...envVars, { key: '', value: '' }]);
+                      setEnvDirty(true);
+                    }}
+                    disabled={isSuspended}
+                  >
+                    Add
+                  </button>
+                  {envDirty && (
+                    <button
+                      type="button"
+                      className="rounded-md bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground disabled:opacity-50"
+                      onClick={() => envMutation.mutate()}
+                      disabled={isSuspended || envMutation.isPending}
+                    >
+                      {envMutation.isPending ? 'Saving…' : 'Save'}
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div>
+                {server.environment && Object.keys(server.environment).length > 0 ? (
+                  Object.entries(server.environment).map(([key, value]) => (
+                    <DataField key={key} label={key} value={String(value)} />
+                  ))
+                ) : (
+                  <p className="type-meta py-2">No environment variables.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </ServerTabCard>
 
- {envExpanded && (
- <div className="mt-2 space-y-2">
- {canAdminWrite ? (
- <>
- {envVars.length === 0 && (
- <p className="py-3 text-center text-xs text-muted-foreground">
- No environment variables. Click "+ Add" to begin.
- </p>
- )}
- {envVars.map((row, idx) => (
- <div key={idx} className="group flex items-center gap-2">
- <input
- className="w-[130px] shrink-0 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary focus:outline-none"
- value={row.key}
- onChange={(e) => {
- const next = [...envVars];
- next[idx] = { ...next[idx], key: e.target.value };
- setEnvVars(next);
- setEnvDirty(true);
- }}
- placeholder="KEY"
- disabled={isSuspended}
- />
- <span className="text-[10px] text-foreground">=</span>
- <input
- className="min-w-0 flex-1 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary focus:outline-none"
- value={row.value}
- onChange={(e) => {
- const next = [...envVars];
- next[idx] = { ...next[idx], value: e.target.value };
- setEnvVars(next);
- setEnvDirty(true);
- }}
- placeholder="value"
- disabled={isSuspended}
- />
- <button
- type="button"
- className="shrink-0 rounded-md p-1 text-foreground opacity-0 transition-all group-hover:opacity-100 hover:text-danger"
- onClick={() => {
- setEnvVars(envVars.filter((_, i) => i !== idx));
- setEnvDirty(true);
- }}
- disabled={isSuspended}
- title="Remove"
- >
- <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
- <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
- </svg>
- </button>
- </div>
- ))}
- <div className="flex items-center gap-2 pt-1">
- <button
- type="button"
- className="rounded-md bg-surface-2/40 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/10 dark:hover:text-primary-400"
- onClick={() => {
- setEnvVars([...envVars, { key: '', value: '' }]);
- setEnvDirty(true);
- }}
- disabled={isSuspended}
- >
- + Add
- </button>
- {envDirty && (
- <button
- type="button"
- className="rounded-lg bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
- onClick={() => envMutation.mutate()}
- disabled={isSuspended || envMutation.isPending}
- >
- {envMutation.isPending ? 'Saving…' : 'Save'}
- </button>
- )}
- </div>
- </>
- ) : (
- <div className="divide-y divide-border">
- {server.environment && Object.keys(server.environment).length > 0 ? (
- Object.entries(server.environment).map(([key, value]) => (
- <div key={key} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
- <span className="font-mono text-[11px] uppercase text-muted-foreground">{key}</span>
- <span className="text-xs font-medium text-foreground">{String(value)}</span>
- </div>
- ))
- ) : (
- <p className="py-3 text-center text-xs text-muted-foreground">No environment variables set.</p>
- )}
- </div>
- )}
- </div>
- )}
- </div>
- </ServerTabCard>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ServerTabCard>
+          <SectionHeader icon={Container} title="Image" />
+          <DataField label="Image" value={currentResolvedImage} copyable />
+          {(currentImageVariant || activeVariantName) && (
+            <DataField
+              label="Variant"
+              value={
+                currentImageLabel !== 'Default'
+                  ? currentImageLabel
+                  : (templateImages.find((img) => img.name === activeVariantName)?.label ??
+                    templateImages.find((img) => img.name === activeVariantName)?.name ??
+                    'Default')
+              }
+            />
+          )}
+          {templateImages.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {templateImages.map((img) => {
+                const isActive = img.name === activeVariantName;
+                return (
+                  <button
+                    type="button"
+                    key={img.name}
+                    disabled={!canEdit || imageVariantPending || isActive}
+                    onClick={() =>
+                      setImageVariantConfirm({
+                        open: true,
+                        variantName: img.name,
+                        label: img.label ?? img.name,
+                        image: img.image,
+                      })
+                    }
+                    className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left ${
+                      isActive ? 'bg-primary/5' : 'hover:bg-surface-2'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-foreground">{img.label ?? img.name}</div>
+                      <div className="truncate font-mono text-[10px] text-muted-foreground">{img.image}</div>
+                    </div>
+                    {isActive ? (
+                      <span className="type-meta">Active</span>
+                    ) : canEdit ? (
+                      <span className="text-[10px] text-primary">Use</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </ServerTabCard>
 
- {/* ── Docker & Container — two-column grid ── */}
- <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
- {/* Image & Variant */}
- <ServerTabCard>
- <SectionHeader icon={Container} title="Container Image" description="Docker image used to run this server container." />
 
- <div className="space-y-3">
- <div className="rounded-lg border border-border/30 bg-surface-2/20 p-3">
- <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Current Image</div>
- <div className="mt-1 flex items-center gap-2">
- <code className="flex-1 truncate rounded bg-card px-2 py-1 font-mono text-[11px] text-foreground">
- {currentResolvedImage}
- </code>
- <button
- type="button"
- onClick={() => {
- navigator.clipboard.writeText(currentResolvedImage).then(() => notifySuccess('Copied')).catch(() => {});
- }}
- className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
- title="Copy image"
- >
- <Copy className="h-3.5 w-3.5" />
- </button>
- </div>
- {(currentImageVariant || activeVariantName) && (
- <div className="mt-2 text-[10px] text-muted-foreground">
- Variant:{' '}
- <span className="font-medium text-foreground">
- {currentImageLabel !== 'Default'
- ? currentImageLabel
- : (templateImages.find((img) => img.name === activeVariantName)?.label ??
- templateImages.find((img) => img.name === activeVariantName)?.name ??
- 'Default')}
- </span>
- </div>
- )}
- </div>
+        <ServerTabCard>
+          <SectionHeader icon={Zap} title="Container" />
+          <SettingsRow label="Rebuild" description="Recreate from the current image. Data is kept.">
+            <button
+              type="button"
+              onClick={() => setRebuildConfirm(true)}
+              disabled={!canEdit}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              Rebuild
+            </button>
+          </SettingsRow>
+          <SettingsRow label="Reinstall" description="Wipe files and re-run the install script.">
+            <button
+              type="button"
+              onClick={() => setReinstallConfirm(true)}
+              disabled={!canEditWhenStopped}
+              className="rounded-md border border-warning/30 px-3 py-1.5 text-xs font-semibold text-warning disabled:opacity-50"
+            >
+              Reinstall
+            </button>
+          </SettingsRow>
+          <SettingsRow label="Force kill" description="Immediate terminate. No graceful shutdown.">
+            <button
+              type="button"
+              onClick={() => setKillConfirm(true)}
+              disabled={server.status !== 'running' && server.status !== 'starting' && server.status !== 'stopping'}
+              className="rounded-md bg-danger px-3 py-1.5 text-xs font-semibold text-danger-foreground disabled:opacity-50"
+            >
+              Kill
+            </button>
+          </SettingsRow>
+        </ServerTabCard>
+      </div>
 
- {templateImages.length > 0 && (
- <div>
- <div className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">Available Variants</div>
- <div className="space-y-1">
- {templateImages.map((img) => {
- const isActive = img.name === activeVariantName;
- return (
- <button
- type="button"
- key={img.name}
- disabled={!canEdit || imageVariantPending || isActive}
- onClick={() =>
- setImageVariantConfirm({
- open: true,
- variantName: img.name,
- label: img.label ?? img.name,
- image: img.image,
- })
- }
- className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-default ${
- isActive
- ? 'border-primary/30 bg-primary/5'
- : canEdit
- ? 'border-border/30 bg-surface-2/20 hover:border-primary/30 hover:bg-primary/[0.03]'
- : 'border-border/30 bg-surface-2/20 opacity-70'
- }`}
- >
- <div className="min-w-0 flex-1">
- <div className="text-xs font-medium text-foreground">{img.label ?? img.name}</div>
- <div className="truncate font-mono text-[10px] text-muted-foreground">{img.image}</div>
- </div>
- {isActive ? (
- <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Active</span>
- ) : canEdit ? (
- <span className="ml-2 shrink-0 text-[10px] font-medium text-primary">Use</span>
- ) : null}
- </button>
- );
- })}
- </div>
- <p className="mt-2 flex items-start gap-1 text-[10px] text-muted-foreground">
- <Info className="mt-0.5 h-3 w-3 shrink-0" />
- Select a variant to update the image and rebuild the container. Server data is preserved.
- </p>
- </div>
- )}
- </div>
- </ServerTabCard>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ServerTabCard>
+          <SectionHeader icon={BarChart3} title="Resources" />
+          <DataField label="Memory" value={`${server.allocatedMemoryMb ?? 0} MB`} />
+          <DataField label="CPU" value={`${server.allocatedCpuCores ?? 0} cores`} />
+          <DataField label="Disk" value={`${server.allocatedDiskMb ?? 0} MB`} />
+          <DataField label="Swap" value={`${server.allocatedSwapMb ?? 0} MB`} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <UpdateServerModal serverId={serverId} disabled={isSuspended} />
+            <TransferServerModal serverId={serverId} disabled={isSuspended} />
+          </div>
+        </ServerTabCard>
 
- {/* Container Actions */}
- <ServerTabCard>
- <SectionHeader icon={Zap} title="Container Actions" description="Manage the server container lifecycle." />
+        <ServerTabCard>
+          <SectionHeader icon={Network} title="Ports" />
+          {allocationsError && (
+            <div className="mb-3 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
+              {allocationsError}
+            </div>
+          )}
 
- <div className="space-y-2">
- {/* Rebuild */}
- <div className="flex items-center justify-between rounded-lg border border-border/30 bg-surface-2/20 p-3">
- <div className="min-w-0">
- <div className="text-xs font-medium text-foreground">Rebuild Container</div>
- <div className="text-[10px] text-muted-foreground">Recreates from current image. Preserves all data.</div>
- </div>
- <button
- type="button"
- onClick={() => setRebuildConfirm(true)}
- disabled={!canEdit}
- className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
- >
- Rebuild
- </button>
- </div>
-
- {/* Reinstall */}
- <div className="flex items-center justify-between rounded-lg border border-warning/20 bg-warning/5 p-3">
- <div className="min-w-0">
- <div className="text-xs font-medium text-foreground">Reinstall</div>
- <div className="text-[10px] text-muted-foreground">Wipes all data, re-runs install script.</div>
- </div>
- <button
- type="button"
- onClick={() => setReinstallConfirm(true)}
- disabled={!canEditWhenStopped}
- className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-[10px] font-semibold text-foreground transition-all hover:bg-warning disabled:opacity-50"
- >
- Reinstall
- </button>
- </div>
-
- {/* Force Kill */}
- <div className="flex items-center justify-between rounded-lg border border-danger/20 bg-danger/5 p-3">
- <div className="min-w-0">
- <div className="text-xs font-medium text-foreground">Force Kill</div>
- <div className="text-[10px] text-muted-foreground">Terminates immediately, no graceful shutdown.</div>
- </div>
- <button
- type="button"
- onClick={() => setKillConfirm(true)}
- disabled={server.status !== 'running' && server.status !== 'starting' && server.status !== 'stopping'}
- className="shrink-0 rounded-md border border-danger/30 bg-danger px-3 py-1.5 text-[10px] font-semibold text-foreground transition-all hover:border-danger/50 disabled:opacity-50"
- >
- Kill
- </button>
- </div>
- </div>
- </ServerTabCard>
- </div>
-
- {/* ── Resources — two-column grid ── */}
- <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
- {/* Allocated Resources */}
- <ServerTabCard>
- <SectionHeader icon={BarChart3} title="Allocated Resources" description="Hardware resources assigned to this server." />
-
- <div className="grid grid-cols-2 gap-2">
- <StatChip label="Memory" value={`${server.allocatedMemoryMb ?? 0} MB`} />
- <StatChip label="CPU" value={`${server.allocatedCpuCores ?? 0} core${(server.allocatedCpuCores ?? 0) === 1 ? '' : 's'}`} />
- <StatChip label="Disk" value={`${server.allocatedDiskMb ?? 0} MB`} />
- <StatChip label="Swap" value={`${server.allocatedSwapMb ?? 0} MB`} />
- </div>
-
- <div className="mt-3 flex flex-wrap gap-2">
- <UpdateServerModal serverId={serverId} disabled={isSuspended} />
- <TransferServerModal serverId={serverId} disabled={isSuspended} />
- </div>
- </ServerTabCard>
-
- {/* Port Allocations */}
- <ServerTabCard>
- <SectionHeader icon={Network} title="Port Allocations" description="Claim node allocations and map them to container ports." />
-
- {allocationsError && (
- <div className="mb-3 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
- {allocationsError}
- </div>
- )}
 
  {/* Add form — node allocation dropdown (same pattern as create server) */}
  <div className="space-y-2">
@@ -1079,62 +985,59 @@ export default function ServerAdminTab({
  </div>
 
  {/* ── Crash Recovery ── */}
- <ServerTabCard>
- <SectionHeader icon={RotateCcw} title="Crash Recovery" description="Automatic restart behavior when the server process exits unexpectedly." />
+      <ServerTabCard>
+        <SectionHeader icon={RotateCcw} title="Crash recovery" />
+        <DataField label="Crashes" value={`${crashCount} / ${maxCrashCountValue}`} />
+        <DataField label="Policy" value={restartPolicy.replace('-', ' ')} />
+        <DataField label="Last crash" value={lastCrashAt ? new Date(lastCrashAt).toLocaleString() : 'Never'} />
+        <DataField label="Exit code" value={lastExitCode !== null && lastExitCode !== undefined ? String(lastExitCode) : '—'} />
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <div className="min-w-[160px] flex-1">
+            <label className="type-overline">Restart policy</label>
+            <select
+              className="mt-1 w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground focus:border-primary focus:outline-none"
+              value={restartPolicy}
+              onChange={(e) => onRestartPolicyChange(e.target.value as 'always' | 'on-failure' | 'never')}
+              disabled={isSuspended}
+            >
+              <option value="always">Always restart</option>
+              <option value="on-failure">Restart on failure</option>
+              <option value="never">Never restart</option>
+            </select>
+          </div>
+          <div className="min-w-[120px]">
+            <label className="type-overline">Max crashes</label>
+            <input
+              className="mt-1 w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground focus:border-primary focus:outline-none"
+              type="number"
+              min={0}
+              max={100}
+              value={maxCrashCount}
+              onChange={(e) => onMaxCrashCountChange(e.target.value)}
+              disabled={isSuspended}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              onClick={onSaveRestartPolicy}
+              disabled={isSuspended || restartPolicyPending}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground disabled:opacity-50"
+              onClick={onResetCrashCount}
+              disabled={isSuspended || resetCrashCountPending}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      </ServerTabCard>
 
- <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
- <StatChip label="Crashes" value={`${crashCount} / ${maxCrashCountValue}`} mono />
- <StatChip label="Policy" value={restartPolicy.replace('-', ' ')} />
- <StatChip label="Last Crash" value={lastCrashAt ? new Date(lastCrashAt).toLocaleString() : 'Never'} />
- <StatChip label="Exit Code" value={lastExitCode !== null && lastExitCode !== undefined ? String(lastExitCode) : '—'} mono />
- </div>
-
- <div className="mt-4 flex flex-wrap items-end gap-3">
- <div className="flex-1 min-w-[160px]">
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Restart Policy</label>
- <select
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
- value={restartPolicy}
- onChange={(e) => onRestartPolicyChange(e.target.value as 'always' | 'on-failure' | 'never')}
- disabled={isSuspended}
- >
- <option value="always">Always restart</option>
- <option value="on-failure">Restart on failure</option>
- <option value="never">Never restart</option>
- </select>
- </div>
- <div className="min-w-[120px]">
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Max Crash Count</label>
- <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
- type="number"
- min={0}
- max={100}
- value={maxCrashCount}
- onChange={(e) => onMaxCrashCountChange(e.target.value)}
- disabled={isSuspended}
- />
- </div>
- <div className="flex gap-2">
- <button
- type="button"
- className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
- onClick={onSaveRestartPolicy}
- disabled={isSuspended || restartPolicyPending}
- >
- Save
- </button>
- <button
- type="button"
- className="rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground disabled:opacity-50"
- onClick={onResetCrashCount}
- disabled={isSuspended || resetCrashCountPending}
- >
- Reset counter
- </button>
- </div>
- </div>
- </ServerTabCard>
 
  {/* ── Ownership & Suspension — two-column ── */}
  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

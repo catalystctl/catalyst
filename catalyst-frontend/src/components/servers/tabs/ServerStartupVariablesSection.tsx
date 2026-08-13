@@ -216,106 +216,84 @@ export default function ServerStartupVariablesSection({
  );
  };
 
- return (
- <div className="rounded-xl border border-border/30 bg-card/80 p-5 backdrop-blur-sm">
- <div className="flex items-start justify-between gap-4">
- <SectionHeader icon={Cog} title="Startup variables" description="Variables defined by the template. These are substituted into the startup command and available as environment variables inside the container." />
- {canEdit && !isSuspended && (
- <div className="flex items-center gap-2">
- {hasChanges && (
- <button
- type="button"
- className="flex items-center gap-1 rounded-md border border-border/40 px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-surface-2"
- onClick={handleReset}
- disabled={updateMutation.isPending}
- >
- <RotateCcw className="h-3 w-3" />
- Reset
- </button>
- )}
- <button
- type="button"
- className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
- onClick={handleSave}
- disabled={!hasChanges || isSuspended || updateMutation.isPending}
- >
- <Save className="h-3 w-3" />
- {updateMutation.isPending ? 'Saving…' : 'Save variables'}
- </button>
- </div>
- )}
- </div>
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <SectionHeader icon={Cog} title="Startup variables" />
+        {canEdit && !isSuspended && (
+          <div className="flex items-center gap-2">
+            {hasChanges && (
+              <button
+                type="button"
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-surface-2"
+                onClick={handleReset}
+                disabled={updateMutation.isPending}
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset
+              </button>
+            )}
+            <button
+              type="button"
+              className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              onClick={handleSave}
+              disabled={!hasChanges || isSuspended || updateMutation.isPending}
+            >
+              <Save className="h-3 w-3" />
+              {updateMutation.isPending ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        )}
+      </div>
 
- <div className="mt-4 space-y-3">
- {isLoading ? (
- <div className="space-y-2">
- {Array.from({ length: 3 }).map((_, i) => (
- <div key={i} className="h-12 animate-pulse rounded-lg bg-surface-2" />
- ))}
- </div>
- ) : isError ? (
- <div className="rounded-lg border border-danger/30 bg-danger-muted px-4 py-3 text-xs text-danger">
- <div className="flex items-center gap-2">
- <AlertCircle className="h-4 w-4" />
- <span>Failed to load startup variables</span>
- </div>
- </div>
- ) : variables.length === 0 ? (
- <p className="py-4 text-center text-xs text-muted-foreground">
- No startup variables defined for this template.
- </p>
- ) : (
- <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
- {variables.map((variable) => {
- const value = localValues[variable.name] ?? variable.value ?? '';
- const error = localErrors[variable.name] || (touched.has(variable.name) ? clientValidate(variable, value) : null);
- const changed = isDirty(variable);
+      <div className="mt-2">
+        {isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-10 animate-pulse rounded-md bg-surface-2" />
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="flex items-center gap-2 py-3 text-xs text-danger">
+            <AlertCircle className="h-4 w-4" />
+            Failed to load startup variables
+          </div>
+        ) : variables.length === 0 ? (
+          <p className="type-meta py-3">No startup variables on this template.</p>
+        ) : (
+          <div>
+            {variables.map((variable) => {
+              const value = localValues[variable.name] ?? variable.value ?? '';
+              const error = localErrors[variable.name] || (touched.has(variable.name) ? clientValidate(variable, value) : null);
+              const changed = isDirty(variable);
+              return (
+                <div
+                  key={variable.name}
+                  className={`flex flex-wrap items-center justify-between gap-3 border-b border-border/40 py-2.5 last:border-0 ${
+                    error ? 'bg-danger/5' : changed ? 'bg-primary/5' : ''
+                  }`}
+                >
+                  <div className="min-w-[10rem] flex-1">
+                    <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                      <span className="font-mono text-xs">{variable.name}</span>
+                      {variable.required && <span className="text-danger">*</span>}
+                      {changed && !error && <CheckCircle2 className="h-3 w-3 text-primary" />}
+                    </div>
+                    {error && (
+                      <p className="mt-0.5 flex items-center gap-1 text-[11px] text-danger">
+                        <AlertCircle className="h-3 w-3" />
+                        {error}
+                      </p>
+                    )}
+                  </div>
+                  <div className="w-full sm:w-64">{renderInput(variable)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
- return (
- <div
- key={variable.name}
- className={`rounded-lg border p-3 transition-all duration-300 ${
- error
- ? 'border-danger/40 bg-danger-muted/30'
- : changed
- ? 'border-primary/30 bg-primary-muted/20'
- : 'border-border bg-surface-2/40'
- }`}
- >
- <div className="flex items-center justify-between gap-2">
- <label className="text-xs font-semibold text-foreground">
- {variable.name}
- {variable.required && (
- <span className="ml-0.5 text-danger">*</span>
- )}
- </label>
- {changed && !error && (
- <CheckCircle2 className="h-3 w-3 text-primary" />
- )}
- </div>
- {variable.description && (
- <p className="mt-0.5 text-[10px] text-muted-foreground">
- {variable.description}
- </p>
- )}
- <div className="mt-2">{renderInput(variable)}</div>
- {error && (
- <p className="mt-1 flex items-center gap-1 text-[10px] text-danger">
- <AlertCircle className="h-3 w-3" />
- {error}
- </p>
- )}
- {variable.rules.length > 0 && !error && (
- <p className="mt-1 text-[10px] text-muted-foreground/70">
- Rules: {variable.rules.join(', ')}
- </p>
- )}
- </div>
- );
- })}
- </div>
- )}
- </div>
- </div>
- );
 }

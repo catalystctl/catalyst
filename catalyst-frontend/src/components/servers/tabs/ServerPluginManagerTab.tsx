@@ -40,6 +40,7 @@ import ConfirmDialog from '../../shared/ConfirmDialog';
 import UpdateConfirmModal, {
  type UpdateItem,
 } from './UpdateConfirmModal';
+import TabHeader from './TabHeader';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -543,24 +544,12 @@ export default function ServerPluginManagerTab({
  className="space-y-5"
  >
  {/* ── Header ── */}
- <motion.div
- variants={itemVariants}
- className="flex flex-wrap items-end justify-between gap-4"
- >
- <div className="space-y-1.5">
- <div className="flex items-center gap-3">
- <div className="relative">
- <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500 opacity-20 blur-sm" />
- <Puzzle className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
- </div>
- <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
- Plugins
- </h1>
- </div>
- <p className="ml-10 text-sm text-muted-foreground">
- Browse and install plugins for your server
- </p>
- </div>
+ <motion.div variants={itemVariants}>
+ <TabHeader
+ icon={Puzzle}
+ title="Plugins"
+ description="Browse and install plugins for your server."
+ actions={(
  <div className="flex items-center gap-2">
  {installedPlugins.length > 0 && (
  <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
@@ -575,6 +564,8 @@ export default function ServerPluginManagerTab({
  </Badge>
  )}
  </div>
+ )}
+ />
  </motion.div>
 
  {/* ── Sub-tab toggle ── */}
@@ -596,7 +587,7 @@ export default function ServerPluginManagerTab({
  {tab === 'browse' ? 'Browse' : 'Installed'}
  {tab === 'installed' && installedPlugins.length > 0 && (
  <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
- pluginSubTab === 'installed' ? 'bg-white/20' : 'bg-surface-2'
+ pluginSubTab === 'installed' ? 'bg-primary-foreground/20' : 'bg-surface-2'
  }`}>
  {installedPlugins.length}
  </span>

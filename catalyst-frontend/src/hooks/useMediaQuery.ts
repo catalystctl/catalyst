@@ -23,7 +23,8 @@ export function useMediaQuery(query: string): boolean {
   );
 }
 
-/** Convenience hook for the mobile breakpoint. Unblocks responsive work. */
+/** Convenience hook for the mobile/tablet drawer breakpoint. Matches AppLayout `lg`. */
 export function useIsMobile(): boolean {
-  return useMediaQuery('(max-width: 768px)');
+  return useMediaQuery('(max-width: 1023px)');
 }
+

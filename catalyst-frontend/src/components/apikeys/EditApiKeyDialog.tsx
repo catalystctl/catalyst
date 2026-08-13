@@ -89,12 +89,12 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
 
  return (
  <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 backdrop-blur-sm py-8">
+ <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-surface-0/70 backdrop-blur-sm py-8">
  <motion.div
  initial={{ opacity: 0, scale: 0.95 }}
  animate={{ opacity: 1, scale: 1 }}
  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
- className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-xl"
+ className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-elevated"
  >
  {/* Header */}
  <div className="border-b border-border px-6 py-4">

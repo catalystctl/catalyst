@@ -45,14 +45,14 @@ const buildDefaultRange = () => {
 // ── Level Color Helpers ──
 function levelColor(level: string) {
  if (level === 'critical') return 'border-destructive/40 text-destructive';
- if (level === 'error') return 'border-orange-400/40 text-orange-700';
+ if (level === 'error') return 'border-danger/40 text-danger';
  if (level === 'warn') return 'border-warning/40 text-warning';
  return 'border-border text-muted-foreground';
 }
 
 function levelBg(level: string) {
  if (level === 'critical') return 'bg-destructive/10';
- if (level === 'error') return 'bg-orange-100';
+ if (level === 'error') return 'bg-danger/10';
  if (level === 'warn') return 'bg-warning/10';
  return 'bg-surface-2/50';
 }
@@ -171,7 +171,7 @@ function ErrorDetailModal({
  return (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
- <div className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-border/30 bg-card shadow-xl">
+ <div className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-border/30 bg-card shadow-elevated">
  {/* Header */}
  <div className="border-b border-border/30 px-6 py-4">
  <div className="flex items-start justify-between gap-3">

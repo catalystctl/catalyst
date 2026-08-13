@@ -46,8 +46,8 @@ function DeleteBackupDialog({
  </button>
  {open ? (
  <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
- <div className="w-full max-w-sm rounded-xl border border-border/40 bg-card p-6 shadow-xl">
+ <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-0/70 px-4">
+ <div className="w-full max-w-sm rounded-xl border border-border/40 bg-card p-6 shadow-elevated">
  <div className="text-lg font-semibold text-foreground">Delete backup</div>
  <p className="mt-2 text-sm text-muted-foreground">
  Delete <span className="font-semibold">{backup.name}</span>? This action cannot be undone.

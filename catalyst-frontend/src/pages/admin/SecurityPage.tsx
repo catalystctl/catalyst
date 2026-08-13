@@ -16,6 +16,7 @@ import EmptyState from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { useAuthLockouts, useSecuritySettings } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -29,7 +30,6 @@ import {
 } from '../../components/ui/select';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
-import SectionHeader from '../../components/servers/tabs/SectionHeader';
 
 // ── Time Window Constants ──
 const TIME_WINDOWS = [
@@ -140,39 +140,25 @@ function RateLimitField({
 
 // ── Section Wrapper ──
 function Section({
- title,
- subtitle,
- icon,
- children,
- footer,
+  title,
+  children,
+  footer,
 }: {
- title: string;
- subtitle?: string;
- icon: React.ReactNode;
- children: React.ReactNode;
- footer?: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
 }) {
- return (
- <ServerTabCard>
- <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
- <div className="flex items-center gap-2.5">
- <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
- {icon}
- </div>
- <div>
- <SectionHeader icon={Info} title={title} />
- {subtitle && <p className="text-[11px] text-muted-foreground/60 -mt-2">{subtitle}</p>}
- </div>
- </div>
- <div className="mt-3">{children}</div>
- {footer && (
- <div className="mt-4 flex items-center justify-end border-t border-border/30 pt-3">
- {footer}
- </div>
- )}
- </ServerTabCard>
- );
+  return (
+    <ServerTabCard>
+      <h3 className="type-overline mb-2">{title}</h3>
+      {children}
+      {footer ? <div className="mt-3 flex justify-end">{footer}</div> : null}
+    </ServerTabCard>
+  );
 }
+
 
 // ── Lockout Row ──
 function LockoutRow({
@@ -396,28 +382,23 @@ function SecurityPage() {
  return (
  <div className="space-y-5">
  {/* ── Header ── */}
- <TabHeader
- icon={ShieldCheck}
- title="Security"
- description="Configure rate limits, lockout policy, and audit retention"
- variant="danger"
- actions={
- <Badge variant="outline" className="text-[11px]">
- {lockoutResponse?.pagination?.total ?? lockouts.length} lockouts
- </Badge>
- }
- />
+    <TabHeader
+      icon={ShieldCheck}
+      title="Security"
+      description="Rate limits, lockouts, and audit retention."
+      actions={
+        <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
+          {updateMutation.isPending ? 'Saving…' : 'Save'}
+        </Button>
+      }
+    />
+
 
  {/* ── Rate Limits Section ── */}
  <Section
  title="Rate Limits"
  subtitle="Adjust request counts and time windows to prevent abuse while allowing normal usage."
  icon={<Zap className="h-4 w-4 text-warning" />}
- footer={
- <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
- {updateMutation.isPending ? 'Saving…' : 'Save settings'}
- </Button>
- }
  >
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -493,42 +474,16 @@ function SecurityPage() {
  title="Email Verification"
  subtitle="Control whether new users must verify their email before signing in."
  icon={<MailCheck className="h-4 w-4 text-success" />}
- footer={
- <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
- {updateMutation.isPending ? 'Saving…' : 'Save settings'}
- </Button>
- }
  >
- <div className="flex items-center justify-between gap-4">
- <div className="space-y-1">
- <p className="text-sm font-medium text-foreground">
- Require email verification
- </p>
- <p className="text-xs text-muted-foreground">
- When enabled, new users must click a verification link in their email before they can sign in.
- When disabled, users can sign in immediately after registration without verifying their email.
- </p>
- </div>
- <button
- role="switch"
- aria-checked={requireEmailVerification}
- onClick={() => setRequireEmailVerification(!requireEmailVerification)}
- className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${requireEmailVerification ? 'bg-primary' : 'bg-surface-3'}`}
- >
- <span
- aria-hidden="true"
- className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white ring-0 transition-transform duration-200 ease-in-out ${requireEmailVerification ? 'translate-x-5' : 'translate-x-0'}`}
- />
- </button>
- </div>
- {!requireEmailVerification && (
- <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2">
- <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
- <p className="text-xs text-warning">
- Disabling email verification allows anyone to register with unverified email addresses. This may increase spam and abuse risk.
- </p>
- </div>
- )}
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-foreground">Require verified email before sign-in</p>
+        <Switch
+          checked={requireEmailVerification}
+          onCheckedChange={setRequireEmailVerification}
+          aria-label="Require email verification"
+        />
+      </div>
+
  </Section>
 
  {/* ── Lockout Policy ── */}
@@ -536,11 +491,6 @@ function SecurityPage() {
  title="Lockout Policy"
  subtitle="Failed login attempts trigger temporary lockouts per email + IP combination."
  icon={<Lock className="h-4 w-4 text-destructive" />}
- footer={
- <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
- {updateMutation.isPending ? 'Saving…' : 'Save settings'}
- </Button>
- }
  >
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
  <NumberField
@@ -571,11 +521,6 @@ function SecurityPage() {
  title="File Tunnel"
  subtitle="Limits for the agent file tunnel used for file operations."
  icon={<FolderSync className="h-4 w-4 text-info" />}
- footer={
- <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
- {updateMutation.isPending ? 'Saving…' : 'Save settings'}
- </Button>
- }
  >
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <RateLimitField
@@ -609,7 +554,6 @@ function SecurityPage() {
 
  {/* ── Auth Lockouts ── */}
  <ServerTabCard>
- <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
  <div className="flex flex-wrap items-center justify-between gap-3">
  <div className="flex items-center gap-2.5">
  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10">

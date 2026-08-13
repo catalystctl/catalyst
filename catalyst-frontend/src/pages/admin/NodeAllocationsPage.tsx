@@ -550,7 +550,7 @@ function NodeAllocationsPage() {
  {showCreatePortModal && (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
- <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-xl">
+ <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-elevated">
  <div className="flex items-center justify-between">
  <div>
  <h2 className="text-sm font-semibold text-foreground">Create Port Allocations</h2>
@@ -641,7 +641,7 @@ function NodeAllocationsPage() {
  {showCreatePoolModal && (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
- <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-xl">
+ <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-elevated">
  <div className="flex items-center justify-between">
  <div>
  <h2 className="text-sm font-semibold text-foreground">Create IP Pool</h2>

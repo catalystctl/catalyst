@@ -7,8 +7,9 @@ import {
  Globe, Monitor, Trash2, AlertTriangle, User, Mail, Calendar,
  Copy, Loader2, ExternalLink, LogOut, QrCode, RefreshCw,
  Eye, EyeOff, Plus, Camera, Pencil, X, Download,
- ChevronRight, History, Info, Check, MailCheck,
+ ChevronRight, History, Check, MailCheck,
 } from 'lucide-react';
+
 import { useProfile, useProfileSsoAccounts, useSessions, useAuditLog, useProfileApiKeys } from '../hooks/useProfile';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
@@ -21,7 +22,6 @@ import { ModalPortal } from '@/components/ui/modal-portal';
 import TabHeader from '../components/servers/tabs/TabHeader';
 import ServerTabCard from '../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../components/servers/tabs/SectionHeader';
-import StatGrid from '../components/servers/tabs/StatGrid';
 import TabLoadingState from '../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../components/servers/tabs/TabEmptyState';
 
@@ -326,19 +326,6 @@ export default function ProfilePage() {
  </div>
  </ServerTabCard>
 
- {/* Security Overview */}
- <ServerTabCard>
- <SectionHeader icon={Info} title="Security Overview" />
- <StatGrid
- columns={4}
- items={[
- { label: 'Last login', value: fmtRelative(profile?.lastSuccessfulLogin) || 'N/A' },
- { label: 'Failed attempts', value: profile?.failedLoginAttempts || 0 },
- { label: 'Active sessions', value: sessions?.length ?? 0 },
- { label: 'API keys', value: apiKeys?.length ?? 0 },
- ]}
- />
- </ServerTabCard>
 
  {/* Two-column grid */}
  <div className="grid gap-5 lg:grid-cols-2">
@@ -557,7 +544,7 @@ export default function ProfilePage() {
  {tfaModalOpen && (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
- <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+ <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-elevated">
  <div className="mb-4 flex items-center gap-2.5">
  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10"><ShieldCheck className="h-4 w-4 text-success" /></div>
  <div><h3 className="text-sm font-semibold text-foreground">Set Up Authenticator</h3><p className="text-[11px] text-muted-foreground">Scan the QR code</p></div>

@@ -394,15 +394,15 @@ export function NodeAssignmentsSelector({
  {inheritedAssignments.map(node => (
  <div
  key={node.nodeId || 'wildcard'}
- className="flex items-center justify-between rounded-md border border-purple-200 bg-purple-50 px-2 py-1.5 dark:border-purple-500/30 dark:bg-purple-500/10"
+ className="flex items-center justify-between rounded-md border border-primary/20 bg-primary-muted px-2 py-1.5"
  >
  <div className="flex items-center gap-2">
- <svg className="h-4 w-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <svg className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
  </svg>
  <span className="text-xs font-medium text-foreground">{node.nodeName}</span>
  {node.roleName && (
- <span className="text-[10px] text-purple-600 dark:text-purple-400">
+ <span className="text-[10px] text-primary">
  via {node.roleName}
  </span>
  )}
@@ -524,14 +524,14 @@ export function NodeAssignmentsSelector({
  key={node.id}
  className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs transition-all ${
  isSelected && isInherited
- ? 'border-purple-200 bg-purple-50 dark:border-purple-500/30 dark:bg-purple-500/10 cursor-default'
+ ? 'border-primary/20 bg-primary-muted cursor-default'
  : isSelected
- ? 'border-primary-200 bg-primary-50 dark:border-primary/30 dark:bg-primary-500/10 cursor-pointer'
- : 'border-border bg-card hover:border-primary hover:bg-surface-2 dark:border-border dark:bg-surface-0 dark:hover:border-primary/30 dark:hover:bg-surface-1 cursor-pointer'
+ ? 'border-primary/30 bg-primary/10 cursor-pointer'
+ : 'border-border bg-card hover:border-primary hover:bg-surface-2 cursor-pointer'
  }`}
  >
  {isInherited ? (
- <svg className="h-4 w-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <svg className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
  </svg>
  ) : (

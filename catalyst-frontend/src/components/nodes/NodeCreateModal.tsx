@@ -204,7 +204,7 @@ function NodeCreateModal(_props: Props) {
  {open ? (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10 backdrop-blur-sm">
- <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-xl">
+ <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-elevated">
  {/* ── Header ── */}
  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/30 px-6 py-5">
  <div>

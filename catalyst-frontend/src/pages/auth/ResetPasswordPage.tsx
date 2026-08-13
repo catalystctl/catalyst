@@ -7,6 +7,10 @@ import { getErrorMessage } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 function ResetPasswordPage() {
  const [searchParams] = useSearchParams();
@@ -83,14 +87,16 @@ function ResetPasswordPage() {
  if (isValidating) {
  return (
  <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
- <div className="w-full max-w-md rounded-xl border border-border/30 bg-card px-6 py-8 shadow-surface">
+ <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
+ <CardContent className="px-6 py-8 sm:px-8">
  <div className="flex flex-col items-center text-center">
- <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary-600" />
+ <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
  <p className="mt-4 text-sm text-muted-foreground">
  Validating reset link...
  </p>
  </div>
- </div>
+ </CardContent>
+ </Card>
  </div>
  );
  }
@@ -98,7 +104,8 @@ function ResetPasswordPage() {
  if (!token || !isValid) {
  return (
  <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
- <div className="w-full max-w-md rounded-xl border border-border/30 bg-card px-6 py-8 shadow-surface">
+ <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
+ <CardContent className="px-6 py-8 sm:px-8">
  <div className="flex flex-col items-center text-center">
  <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
  </div>
@@ -109,21 +116,20 @@ function ResetPasswordPage() {
  This password reset link is invalid or has expired. Please request a new one.
  </p>
  <div className="mt-6">
- <Link
- to="/forgot-password"
- className="block w-full rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
- >
- Request new reset link
- </Link>
+ <Button asChild className="w-full">
+ <Link to="/forgot-password">Request new reset link</Link>
+ </Button>
  </div>
- </div>
+ </CardContent>
+ </Card>
  </div>
  );
  }
 
  return (
  <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
- <div className="w-full max-w-md rounded-xl border border-border/30 bg-card px-6 py-8 shadow-surface">
+ <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
+ <CardContent className="px-6 py-8 sm:px-8">
  <div className="flex flex-col items-center text-center">
  <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
  <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
@@ -145,24 +151,18 @@ function ResetPasswordPage() {
  Your password has been reset successfully. You can now log in with your new password.
  </p>
  </div>
- <Link
- to="/login"
- className="block w-full rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
- >
- Continue to login
- </Link>
+ <Button asChild className="w-full">
+ <Link to="/login">Continue to login</Link>
+ </Button>
  </div>
  ) : (
  <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
  <div className="space-y-2">
- <label className="block text-sm text-muted-foreground" htmlFor="password">
- New password
- </label>
- <input
+ <Label htmlFor="password">New password</Label>
+ <Input
  id="password"
  type="password"
  autoComplete="new-password"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  placeholder="••••••••"
  value={password}
  onChange={(e) => setPassword(e.target.value)}
@@ -171,14 +171,11 @@ function ResetPasswordPage() {
  </div>
 
  <div className="space-y-2">
- <label className="block text-sm text-muted-foreground" htmlFor="confirmPassword">
- Confirm new password
- </label>
- <input
+ <Label htmlFor="confirmPassword">Confirm new password</Label>
+ <Input
  id="confirmPassword"
  type="password"
  autoComplete="new-password"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  placeholder="••••••••"
  value={confirmPassword}
  onChange={(e) => setConfirmPassword(e.target.value)}
@@ -188,25 +185,26 @@ function ResetPasswordPage() {
  )}
  </div>
 
- <button
+ <Button
  type="submit"
- className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70"
+ className="w-full"
  disabled={isLoading || (confirmPassword !== '' && password !== confirmPassword)}
  >
  {isLoading ? 'Resetting...' : 'Reset password'}
- </button>
+ </Button>
 
  <div className="text-center">
  <Link
  to="/login"
- className="text-sm font-medium text-primary-600 transition-colors hover:text-primary"
+ className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
  >
  Back to login
  </Link>
  </div>
  </form>
  )}
- </div>
+ </CardContent>
+ </Card>
  </div>
  );
 }

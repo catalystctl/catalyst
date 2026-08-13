@@ -7,6 +7,10 @@ import type { RegisterSchema } from '../../validators/auth';
 import { registerSchema } from '../../validators/auth';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 function RegisterPage() {
  const navigate = useNavigate();
@@ -44,7 +48,8 @@ function RegisterPage() {
 
  return (
  <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
- <div className="w-full max-w-md rounded-xl border border-border/30 bg-card px-6 py-8 shadow-surface">
+ <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
+ <CardContent className="px-6 py-8 sm:px-8">
  <h1 className="text-2xl font-semibold text-foreground">Create account</h1>
  <p className="mt-2 text-sm text-muted-foreground">
  Start managing your infrastructure.
@@ -58,13 +63,11 @@ function RegisterPage() {
 
  <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
  <div className="space-y-2">
- <label className="block text-sm text-muted-foreground" htmlFor="username">
- Username
- </label>
- <input
+ <Label htmlFor="username">Username</Label>
+ <Input
  id="username"
  type="text"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ autoComplete="username"
  placeholder="yourname"
  {...register('username')}
  />
@@ -74,13 +77,11 @@ function RegisterPage() {
  </div>
 
  <div className="space-y-2">
- <label className="block text-sm text-muted-foreground" htmlFor="email">
- Email
- </label>
- <input
+ <Label htmlFor="email">Email</Label>
+ <Input
  id="email"
  type="email"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ autoComplete="email"
  placeholder="you@example.com"
  {...register('email')}
  />
@@ -88,13 +89,11 @@ function RegisterPage() {
  </div>
 
  <div className="space-y-2">
- <label className="block text-sm text-muted-foreground" htmlFor="password">
- Password
- </label>
- <input
+ <Label htmlFor="password">Password</Label>
+ <Input
  id="password"
  type="password"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ autoComplete="new-password"
  placeholder="••••••••"
  {...register('password')}
  />
@@ -104,25 +103,22 @@ function RegisterPage() {
  ) : null}
  </div>
 
- <button
- type="submit"
- className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70"
- disabled={isLoading}
- >
+ <Button type="submit" className="w-full" disabled={isLoading}>
  {isLoading ? 'Creating…' : 'Create account'}
- </button>
+ </Button>
  </form>
 
  <p className="mt-4 text-center text-sm text-muted-foreground">
  Already have an account?{' '}
  <Link
  to="/login"
- className="font-medium text-primary-600 transition-colors hover:text-primary"
+ className="font-medium text-primary transition-colors hover:text-primary/80"
  >
  Sign in
  </Link>
  </p>
- </div>
+ </CardContent>
+ </Card>
  </div>
  );
 }

@@ -46,7 +46,7 @@ function RestoreBackupDialog({
  {open ? (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4">
- <div className="w-full max-w-sm rounded-xl border border-border/40 bg-card p-6 shadow-xl">
+ <div className="w-full max-w-sm rounded-xl border border-border/40 bg-card p-6 shadow-elevated">
  <div className="text-lg font-semibold text-foreground">Restore backup</div>
  <p className="mt-2 text-sm text-muted-foreground">
  Restore <span className="font-semibold">{backup.name}</span> to this server? The server must be stopped

@@ -22,19 +22,20 @@ export default function SectionHeader({
  ? 'text-warning'
  : 'text-primary';
 
- return (
- <div className="mb-3">
- <div className="flex items-center gap-2">
- <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
- <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
- {title}
- </h3>
- </div>
- {description && (
- <p className="mt-0.5 pl-5.5 text-[11px] text-muted-foreground/40">
- {description}
- </p>
- )}
- </div>
- );
+  return (
+    <div className="mb-3">
+      <div className="flex items-center gap-2">
+        <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
+        <h3 className="type-overline">
+          {title}
+        </h3>
+      </div>
+      {description && (
+        <p className="type-meta mt-0.5 pl-6">
+          {description}
+        </p>
+      )}
+    </div>
+  );
+
 }

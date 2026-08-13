@@ -43,6 +43,7 @@ import ConfirmDialog from '../../shared/ConfirmDialog';
 import UpdateConfirmModal, {
  type UpdateItem,
 } from './UpdateConfirmModal';
+import TabHeader from './TabHeader';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -633,24 +634,12 @@ export default function ServerModManagerTab({
  className="space-y-5"
  >
  {/* ── Header ── */}
- <motion.div
- variants={itemVariants}
- className="flex flex-wrap items-end justify-between gap-4"
- >
- <div className="space-y-1.5">
- <div className="flex items-center gap-3">
- <div className="relative">
- <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 opacity-20 blur-sm" />
- <Package className="relative h-7 w-7 text-warning dark:text-warning" />
- </div>
- <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
- Mods
- </h1>
- </div>
- <p className="ml-10 text-sm text-muted-foreground">
- Browse and install mods, datapacks, and modpacks
- </p>
- </div>
+ <motion.div variants={itemVariants}>
+ <TabHeader
+ icon={Package}
+ title="Mods"
+ description="Browse and install mods, datapacks, and modpacks."
+ actions={(
  <div className="flex items-center gap-2">
  {installedMods.length > 0 && (
  <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
@@ -665,6 +654,8 @@ export default function ServerModManagerTab({
  </Badge>
  )}
  </div>
+ )}
+ />
  </motion.div>
 
  {/* ── Sub-tab toggle ── */}
@@ -686,7 +677,7 @@ export default function ServerModManagerTab({
  {tab === 'browse' ? 'Browse' : 'Installed'}
  {tab === 'installed' && installedMods.length > 0 && (
  <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
- modSubTab === 'installed' ? 'bg-white/20' : 'bg-surface-2'
+ modSubTab === 'installed' ? 'bg-primary-foreground/20' : 'bg-surface-2'
  }`}>
  {installedMods.length}
  </span>

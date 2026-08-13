@@ -80,7 +80,7 @@ function ColorPicker({
  <div className="relative flex-shrink-0">
  <div
  className="h-8 w-8 cursor-pointer rounded-md ring-1 ring-black/10"
- style={{ backgroundColor: isValid ? value : '#71717a' }}
+ style={{ backgroundColor: isValid ? value : 'hsl(var(--muted-foreground))' }}
  />
  <input
  type="color"
@@ -121,7 +121,7 @@ function ColorPicker({
  <div className="relative flex-shrink-0">
  <div
  className="h-10 w-10 cursor-pointer rounded-lg ring-1 ring-black/10 transition-transform hover:scale-105"
- style={{ backgroundColor: isValid ? value : '#71717a' }}
+ style={{ backgroundColor: isValid ? value : 'hsl(var(--muted-foreground))' }}
  />
  <input
  type="color"
@@ -778,8 +778,9 @@ function ThemeSettingsPage() {
  </label>
  <div className="flex gap-2">
  {[
- { id: 'light', icon: Sun, color: 'text-amber-500' },
- { id: 'dark', icon: Moon, color: 'text-blue-400' },
+ { id: 'light', icon: Sun, color: 'text-warning' },
+ { id: 'dark', icon: Moon, color: 'text-info' },
+
  ].map(({ id, icon: Icon, color }) => (
  <label
  key={id}
@@ -821,7 +822,7 @@ function ThemeSettingsPage() {
  <div
  className="h-24 w-24 cursor-pointer rounded-2xl ring-1 ring-black/5 transition-all duration-300 group-hover:scale-105"
  style={{
- backgroundColor: isSeedValid ? seedColor : '#71717a',
+ backgroundColor: isSeedValid ? seedColor : 'hsl(var(--muted-foreground))',
  boxShadow: isSeedValid
  ? `0 12px 32px ${seedColor}30, 0 4px 12px ${seedColor}15`
  : '0 4px 12px rgba(0,0,0,0.15)',
@@ -829,7 +830,7 @@ function ThemeSettingsPage() {
  />
  <input
  type="color"
- value={isSeedValid ? seedColor : '#71717a'}
+ value={isSeedValid ? seedColor : DEFAULTS.primaryColor}
  onChange={(e) => setSeedColor(e.target.value)}
  className="absolute inset-0 h-full w-full cursor-pointer rounded-2xl opacity-0"
  />
@@ -1342,7 +1343,7 @@ function ThemeSettingsPage() {
  <div
  key={i}
  className="h-5 flex-1 rounded-sm"
- style={{ backgroundColor: c || '#888' }}
+ style={{ backgroundColor: c || 'hsl(var(--muted-foreground))' }}
  />
  ))}
  </div>
@@ -1369,7 +1370,7 @@ function ThemeSettingsPage() {
  <div
  key={i}
  className="h-5 flex-1 rounded-sm ring-1 ring-black/10"
- style={{ backgroundColor: c || '#888' }}
+ style={{ backgroundColor: c || 'hsl(var(--muted-foreground))' }}
  title={`Level ${i}`}
  />
  ))}

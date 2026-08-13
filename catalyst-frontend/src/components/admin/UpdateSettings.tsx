@@ -79,10 +79,7 @@ export default function UpdateSettings() {
  {isLoading ? (
  <Skeleton className="h-5 w-20" />
  ) : status?.updateAvailable ? (
- <Badge
- variant="default"
- className="bg-emerald-600 text-xs text-white hover:bg-emerald-700"
- >
+ <Badge variant="success" className="text-xs">
  Update available
  </Badge>
  ) : (
@@ -111,7 +108,7 @@ export default function UpdateSettings() {
  </div>
 
  {!isLoading && !status?.isDocker && (
- <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+ <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2 text-xs text-warning">
  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
  <span>
  Auto-update is only available when running in Docker. Please update
@@ -149,10 +146,7 @@ export default function UpdateSettings() {
  value={status?.latestVersion ?? 'Unknown'}
  badge={
  status?.updateAvailable ? (
- <Badge
- variant="default"
- className="bg-emerald-600 text-[10px] text-white hover:bg-emerald-700"
- >
+ <Badge variant="success" className="text-[10px]">
  New
  </Badge>
  ) : (

@@ -99,10 +99,15 @@ function ServerListItem({ server }: { server: Server }) {
  <MiniBar value={cpuBar} />
  </div>
  <div className="flex items-center gap-2">
- <MemoryStick className="h-3 w-3 text-muted-foreground/50" />
- <span className="w-8 text-right font-mono text-[10px] tabular-nums text-foreground">{formatPercent(memoryPercent)}</span>
- <MiniBar value={memoryBar} />
+  <MemoryStick className="h-3 w-3 text-muted-foreground" />
+  <span className="min-w-16 text-right type-numeric text-[10px] text-foreground">
+    {server.memoryUsageMb != null && server.allocatedMemoryMb
+      ? `${formatMB(server.memoryUsageMb)}/${formatMB(server.allocatedMemoryMb)}`
+      : formatPercent(memoryPercent)}
+  </span>
+  <MiniBar value={memoryBar} />
  </div>
+
  <div className="flex items-center gap-2">
  <HardDrive className="h-3 w-3 text-muted-foreground/50" />
  <span className="w-12 text-right font-mono text-[10px] tabular-nums text-foreground">

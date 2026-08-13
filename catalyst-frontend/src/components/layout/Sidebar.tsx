@@ -29,8 +29,9 @@ import {
   Bug,
   Ticket,
 } from 'lucide-react';
-import { useState, MouseEvent, useMemo } from 'react';
+import { useState, MouseEvent, useMemo, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { usePluginTabs, usePluginRoutes } from '../../plugins/hooks';
 import { PluginSlot } from '../../plugins/PluginSlot';
 import { PANEL_VERSION } from '../../utils/version';
@@ -213,21 +214,26 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
 
   if (collapsed) {
     return (
+      <Tooltip>
+        <TooltipTrigger asChild>
       <NavLink
         to={to}
         className={cn(
           'pressable relative flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200',
           isActive
-            ? 'bg-primary text-primary-foreground shadow-sm'
+            ? 'bg-primary/10 text-foreground'
             : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
         )}
-        title={label}
+        aria-label={label}
       >
         {isActive && (
-          <span className="absolute -left-1.5 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary-foreground/80" />
+          <span className="absolute -left-1.5 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
         )}
         <Icon className="h-4 w-4" />
       </NavLink>
+        </TooltipTrigger>
+        <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
     );
   }
 
@@ -237,12 +243,12 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
       className={cn(
         'pressable group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
         isActive
-          ? 'bg-primary text-primary-foreground shadow-sm'
+          ? 'bg-primary/10 text-foreground'
           : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
       )}
     >
       {isActive && (
-        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary-foreground/70" />
+        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
       )}
       <Icon className="h-4 w-4 flex-shrink-0 opacity-90" />
       <span className="truncate">{label}</span>
@@ -262,7 +268,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
   const location = useLocation();
 
   const hasActiveLink = links.some(
-    (link) => location.pathname === link.to || location.pathname.startsWith(`${link.to}/`),
+    (link) => location.pathname === link.to || (link.to !== '/admin' && location.pathname.startsWith(`${link.to}/`)),
   );
   const shouldExpand = isExpanded || hasActiveLink;
 
@@ -288,6 +294,8 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
       <button
         type="button"
         onClick={toggleExpanded}
+        aria-expanded={shouldExpand}
+        aria-controls={`section-${title.toLowerCase().replace(/\s+/g, '-')}`}
         className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80 transition-colors hover:text-foreground"
       >
         <span>{title}</span>
@@ -298,7 +306,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
         )}
       </button>
       {shouldExpand && (
-        <div className="relative space-y-0.5 border-l border-border/70 ml-3 pl-2.5">
+        <div id={`section-${title.toLowerCase().replace(/\s+/g, '-')}`} className="relative space-y-0.5 border-l border-border/70 ml-3 pl-2.5">
           {links.map((link) => (
             <MenuItem key={link.to} {...link} />
           ))}
@@ -316,6 +324,7 @@ function Sidebar() {
   const logout = useAuthStore((s) => s.logout);
   const themeSettings = useThemeStore((s) => s.themeSettings);
   const sidebarCollapsed = useThemeStore((s) => s.sidebarCollapsed);
+  const [isLargeViewport, setIsLargeViewport] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches);
   const toggleSidebar = useThemeStore((s) => s.toggleSidebar);
   const pluginTabs = usePluginTabs('admin');
   const pluginRoutes = usePluginRoutes();
@@ -362,23 +371,28 @@ function Sidebar() {
   const panelName = themeSettings?.panelName || 'Catalyst';
   const logoUrl = themeSettings?.logoUrl || '/logo.png';
 
+  useEffect(() => { const media = window.matchMedia('(min-width: 1024px)'); const update = () => setIsLargeViewport(media.matches); update(); media.addEventListener('change', update); return () => media.removeEventListener('change', update); }, []);
+  const collapsed = sidebarCollapsed && isLargeViewport;
+  const canViewVersion = hasAnyPermission(user?.permissions || [], ['admin.read', 'admin.write']);
+
   return (
+    <TooltipProvider>
     <aside
       className={cn(
-        'flex h-full flex-col border-r border-border/80 bg-card/70 shadow-panel backdrop-blur-xl transition-all duration-200 ease-standard',
-        sidebarCollapsed ? 'w-16' : 'w-60',
+        'flex h-full flex-col border-r border-border/80 bg-card shadow-panel transition-all duration-200 ease-standard',
+        collapsed ? 'w-60 lg:w-16' : 'w-60',
       )}
     >
       {/* Logo */}
       <div
         className={cn(
           'flex items-center border-b border-border/70',
-          sidebarCollapsed ? 'justify-center px-3 py-3.5' : 'gap-2.5 px-4 py-3.5',
+          collapsed ? 'justify-center px-3 py-3.5' : 'gap-2.5 px-4 py-3.5',
         )}
       >
         <Link
           to="/dashboard"
-          className={cn('flex items-center', sidebarCollapsed ? 'justify-center' : 'gap-2.5')}
+          className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-2.5')}
         >
           <img
             src={logoUrl}
@@ -388,8 +402,8 @@ function Sidebar() {
               e.currentTarget.style.display = 'none';
             }}
           />
-          {!sidebarCollapsed && (
-            <span className="font-display text-[15px] font-bold tracking-tight text-foreground">
+          {!collapsed && (
+            <span className="font-display text-[15px] font-semibold tracking-tight text-foreground">
               {panelName}
             </span>
           )}
@@ -397,20 +411,20 @@ function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <div className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'px-2 py-3' : 'px-3 py-3')}>
+      <div className={cn('flex-1 overflow-y-auto', collapsed ? 'px-2 py-3' : 'px-3 py-3')}>
         <div className="space-y-0.5">
           {mainLinks
             .filter((link) => link.to !== '/tickets' || hasUserTicketPage)
             .map((link) => (
-              <MenuItem key={link.to} {...link} collapsed={sidebarCollapsed} />
+              <MenuItem key={link.to} {...link} collapsed={collapsed} />
             ))}
         </div>
 
         {filteredSections.length > 0 && (
-          <div className={cn('border-t border-border/70 pt-3', sidebarCollapsed ? 'mt-3' : 'mt-4')}>
-            <div className={cn(sidebarCollapsed ? 'space-y-2' : 'space-y-2.5')}>
+          <div className={cn('border-t border-border/70 pt-3', collapsed ? 'mt-3' : 'mt-4')}>
+            <div className={cn(collapsed ? 'space-y-2' : 'space-y-2.5')}>
               {filteredSections.map((section) => (
-                <Section key={section.title} {...section} collapsed={sidebarCollapsed} />
+                <Section key={section.title} {...section} collapsed={collapsed} />
               ))}
             </div>
           </div>
@@ -418,21 +432,21 @@ function Sidebar() {
       </div>
 
       {/* User Section */}
-      <div className={cn('border-t border-border/70', sidebarCollapsed ? 'p-2' : 'p-3')}>
+      <div className={cn('border-t border-border/70', collapsed ? 'p-2' : 'p-3')}>
         <NavLink
           to="/profile"
           className={cn(
             'pressable flex items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-surface-2',
-            sidebarCollapsed && 'justify-center',
+            collapsed && 'justify-center',
           )}
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary text-xs font-semibold text-primary-foreground ring-1 ring-primary/30">
             {user?.image
-              ? <img src={user.image} alt="" className="h-full w-full object-cover" />
+              ? <img src={user.image} alt={displayName} className="h-full w-full object-cover" />
               : initials
             }
           </div>
-          {!sidebarCollapsed && (
+          {!collapsed && (
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-foreground">{displayName}</div>
               <div className="truncate text-[11px] text-muted-foreground">{user?.role || 'Member'}</div>
@@ -440,34 +454,37 @@ function Sidebar() {
           )}
         </NavLink>
 
-        <div className={cn('mt-2 flex', sidebarCollapsed ? 'flex-col gap-1' : 'gap-1.5')}>
+        <div className={cn('mt-2 flex', collapsed ? 'flex-col gap-1' : 'gap-1.5')}>
           <button
             type="button"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className={cn(
               'pressable flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground',
-              sidebarCollapsed ? 'w-8' : 'flex-1 px-2 text-[11px] font-medium',
+              collapsed ? 'w-8' : 'flex-1 px-2 text-[11px] font-medium',
             )}
+            aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
           >
             {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            {!sidebarCollapsed && (theme === 'dark' ? 'Light' : 'Dark')}
+            {!collapsed && (theme === 'dark' ? 'Light' : 'Dark')}
           </button>
           <button
             type="button"
             onClick={toggleSidebar}
             className="pressable flex h-8 w-8 items-center justify-center rounded-lg border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {sidebarCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
           </button>
           <button
             type="button"
             onClick={logout}
             className={cn(
-              'pressable flex h-8 items-center justify-center rounded-lg text-danger transition-colors hover:bg-danger/10',
-              sidebarCollapsed ? 'w-8' : 'w-8',
+              'pressable flex h-8 items-center justify-center rounded-lg border border-border/80 text-danger transition-colors hover:bg-danger/10',
+              collapsed ? 'w-8' : 'w-8',
             )}
+            aria-label="Logout"
             title="Logout"
           >
             <LogOut className="h-3.5 w-3.5" />
@@ -476,7 +493,7 @@ function Sidebar() {
       </div>
 
       {/* Plugin extension point */}
-      {!sidebarCollapsed && (
+      {!collapsed && (
         <PluginSlot
           name="sidebar-bottom"
           className="border-t border-border/70 px-3 py-2 space-y-1"
@@ -484,12 +501,12 @@ function Sidebar() {
       )}
 
       {/* Version + update status */}
-      <div className={cn('border-t border-border/70', sidebarCollapsed ? 'px-2 py-1.5' : 'px-3 py-2')}>
+      {canViewVersion && <div className={cn('border-t border-border/70', collapsed ? 'px-2 py-1.5' : 'px-3 py-2')}>
         <Link
           to="/admin/system"
           className={cn(
             'flex items-center justify-center gap-1.5 rounded-md font-mono transition-colors hover:text-foreground',
-            sidebarCollapsed ? 'text-[9px]' : 'text-[10px]',
+            collapsed ? 'text-[9px]' : 'text-[10px]',
             updateData?.updateAvailable
               ? 'text-warning hover:text-warning'
               : 'text-muted-foreground/55 hover:text-foreground/70',
@@ -497,26 +514,16 @@ function Sidebar() {
           title={
             updateData?.updateAvailable
               ? `v${updateData.currentVersion} - out of date (latest: v${updateData.latestVersion})`
-              : `Catalyst Panel v${PANEL_VERSION} - up to date`
+              : `Catalyst Panel v${PANEL_VERSION}`
           }
         >
           <span>v{PANEL_VERSION}</span>
-          {!sidebarCollapsed && (
-            <span className={cn(updateData?.updateAvailable ? 'text-warning' : 'text-success')}>
-              {updateData?.updateAvailable ? '(out of date)' : '(up to date)'}
-            </span>
-          )}
-          {sidebarCollapsed && (
-            <span
-              className={cn(
-                'inline-block h-1.5 w-1.5 rounded-full',
-                updateData?.updateAvailable ? 'bg-warning' : 'bg-success',
-              )}
-            />
-          )}
+          {!collapsed && updateData?.updateAvailable && <span className="text-warning">(out of date)</span>}
+          {collapsed && updateData?.updateAvailable && <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />}
         </Link>
-      </div>
+      </div>}
     </aside>
+    </TooltipProvider>
   );
 }
 

@@ -13,7 +13,8 @@
  *   Never treat "prefix of ids" as the signal — scrollback trim shifts the head
  *   and would force a full reset on every live line once the buffer is full.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
 import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
@@ -37,9 +38,15 @@ type XtermConsoleProps = {
   onRetry?: () => void;
   onClear?: () => void;
   serverId?: string;
-  /** Kept for API compatibility; xterm renders its own gutter. */
   showLineNumbers?: boolean;
 };
+
+export type XtermConsoleHandle = {
+  findNext: (query: string) => void;
+  findPrevious: (query: string) => void;
+  getSelection: () => string;
+};
+
 
 /**
  * Catalyst theme tokens are HSL *channels* (e.g. `240 12% 9%`), not full colors.
@@ -130,12 +137,13 @@ function readXtermTheme(): ITheme {
   };
 }
 
-/** Ensure each chunk ends with a newline so consecutive writes don't glue lines. */
+/** Keep lone CR so installer/progress lines overwrite instead of stacking. */
 function normalizeChunk(data: string): string {
-  let s = data.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  if (!s.endsWith('\n')) s += '\n';
+  let s = data.replace(/\r\n/g, '\n');
+  if (!s.endsWith('\n') && !s.endsWith('\r')) s += '\n';
   return s;
 }
+
 
 function streamPrefix(stream: string): string {
   switch (stream) {
@@ -165,8 +173,7 @@ function filterSignature(filter: Set<string> | undefined): string {
   if (!filter || filter.size === 0) return '';
   return [...filter].sort().join(',');
 }
-
-export default function XtermConsole({
+const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function XtermConsole({
   entries,
   autoScroll: autoScrollProp = true,
   scrollback = 2000,
@@ -178,11 +185,24 @@ export default function XtermConsole({
   isLoading,
   isError,
   onRetry,
-}: XtermConsoleProps) {
+}, ref) {
+
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
+  useImperativeHandle(ref, () => ({
+    findNext: (query: string) => {
+      if (!query) return;
+      searchRef.current?.findNext(query, { caseSensitive: false, incremental: false });
+    },
+    findPrevious: (query: string) => {
+      if (!query) return;
+      searchRef.current?.findPrevious(query, { caseSensitive: false, incremental: false });
+    },
+    getSelection: () => termRef.current?.getSelection() ?? '',
+  }), []);
+
   const isProgrammaticScroll = useRef(false);
   const autoScrollRef = useRef(autoScrollProp);
   autoScrollRef.current = autoScrollProp;
@@ -519,11 +539,15 @@ export default function XtermConsole({
   const hasContent = visibleEntries.length > 0;
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative flex min-h-0 flex-1 flex-col ${className}`}>
       <div
         ref={hostRef}
-        className="console-output xterm-console-host h-full min-h-[200px] w-full overflow-hidden bg-card [&_.xterm]:h-full [&_.xterm]:w-full"
+        role="log"
+        aria-label="Server console output"
+        aria-live="polite"
+        className="console-output xterm-console-host min-h-0 w-full flex-1 overflow-hidden bg-card [&_.xterm]:h-full [&_.xterm]:w-full"
       />
+
 
       {isLoading && !hasContent && (
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
@@ -563,4 +587,7 @@ export default function XtermConsole({
       )}
     </div>
   );
-}
+});
+
+export default XtermConsole;
+

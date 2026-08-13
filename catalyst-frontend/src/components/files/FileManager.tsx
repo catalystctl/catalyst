@@ -589,10 +589,8 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate="visible"
  >
  {/* Ambient background (subtle, panel-style) */}
- <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
- <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary-500/5 to-primary-300/5 blur-3xl dark:from-primary-500/10 dark:to-primary-300/10" />
- <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-primary-400/5 to-primary-200/5 blur-3xl dark:from-primary-400/10 dark:to-primary-200/10" />
- </div>
+
+
 
  {/* Mobile sidebar toggle */}
  <motion.button
@@ -964,7 +962,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.96, y: 8 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 flex h-[95vh] sm:h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-border bg-card shadow-2xl dark:border-border dark:bg-surface-1 p-2 sm:p-4"
+ className="relative z-10 flex h-[95vh] sm:h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-border bg-card shadow-elevated dark:border-border dark:bg-surface-1 p-2 sm:p-4"
  >
  <FileEditor
  file={activeFile}
@@ -1013,7 +1011,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.96, y: 8 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-2xl dark:border-border dark:bg-surface-1"
+ className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
  onSubmit={handlePermissionsSubmit}
  >
  <div className="flex items-center gap-2">
@@ -1095,13 +1093,13 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.96, y: 8 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 flex h-[95vh] sm:h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl dark:border-border dark:bg-surface-1"
+ className="relative z-10 flex h-[95vh] sm:h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-elevated dark:border-border dark:bg-surface-1"
  >
  {/* Header */}
  <div className="flex items-center justify-between border-b border-border px-3 sm:px-4 py-3">
  <div className="flex min-w-0 items-center gap-2">
- <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10">
- <Archive className="h-4 w-4 shrink-0 text-amber-500" />
+ <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10">
+ <Archive className="h-4 w-4 shrink-0 text-warning" />
  </div>
  <span className="truncate text-sm font-semibold text-foreground">
  {archiveBrowsePath.split('/').pop()}
@@ -1195,7 +1193,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.96, y: 8 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-6 shadow-xl dark:border-border dark:bg-surface-1"
+ className="relative w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-6 shadow-elevated dark:border-border dark:bg-surface-1"
  >
  <div className="mb-4 flex items-center gap-3">
  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-muted dark:bg-warning-muted/20">
@@ -1253,7 +1251,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.96, y: 8 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-lg rounded-xl border border-border bg-card p-4 sm:p-5 shadow-2xl dark:border-border dark:bg-surface-1"
+ className="relative z-10 w-full max-w-lg rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
  >
  <div className="flex items-center gap-2 mb-4">
  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
@@ -1306,7 +1304,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.96, y: 8 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-2xl dark:border-border dark:bg-surface-1"
+ className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
  onSubmit={handleCreateSubmit}
  >
  <div className="flex items-center gap-2">
@@ -1393,11 +1391,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.96, y: 8 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-2xl dark:border-border dark:bg-surface-1"
+ className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
  >
  <div className="flex items-center gap-2">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
- <Archive className="h-4 w-4 text-amber-500" />
+ <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning/10">
+ <Archive className="h-4 w-4 text-warning" />
  </div>
  <h3 className="text-sm font-semibold text-foreground">
  Compress {selectedEntries.length} item{selectedEntries.length !== 1 ? 's' : ''}
@@ -1468,11 +1466,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.96, y: 8 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-2xl dark:border-border dark:bg-surface-1"
+ className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
  >
  <div className="flex items-center gap-2">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
- <ArchiveRestore className="h-4 w-4 text-amber-500" />
+ <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning/10">
+ <ArchiveRestore className="h-4 w-4 text-warning" />
  </div>
  <h3 className="text-sm font-semibold text-foreground truncate mr-2">
  Extract Archive

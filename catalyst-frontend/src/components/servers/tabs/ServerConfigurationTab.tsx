@@ -12,7 +12,6 @@ import {
 import { getErrorMessage } from '../../../utils/errors';
 import { notifyError, notifySuccess } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
-import SectionDivider from './SectionDivider';
 import SectionHeader from './SectionHeader';
 
 import ServerStartupVariablesSection from './ServerStartupVariablesSection';
@@ -520,13 +519,11 @@ export default function ServerConfigurationTab({
  description="Manage startup command, environment variables, and config files."
  />
 
- {/* ── Startup & Environment ── */}
- {canEdit && (
- <ServerTabCard>
- <div className="flex items-start justify-between gap-4">
- <div>
- <SectionHeader icon={Terminal} title="Startup command" description="Executed when the server starts. {{MEMORY}}, {{PORT}} and other variables are substituted from the environment below." />
- </div>
+      {canEdit && (
+        <ServerTabCard>
+          <div className="flex items-start justify-between gap-4">
+            <SectionHeader icon={Terminal} title="Startup command" />
+
  {server.startupCommand && (
  <button
  type="button"
@@ -581,37 +578,28 @@ export default function ServerConfigurationTab({
  </ServerTabCard>
  )}
 
- {/* ── Startup Variables ── */}
- {serverId && (
- <section>
- <SectionDivider title="Startup Variables" />
- <ServerStartupVariablesSection
- serverId={serverId}
- isSuspended={isSuspended}
- canEdit={canEdit}
- />
- </section>
- )}
+      {serverId && (
+        <ServerTabCard>
+          <ServerStartupVariablesSection
+            serverId={serverId}
+            isSuspended={isSuspended}
+            canEdit={canEdit}
+          />
+        </ServerTabCard>
+      )}
 
- {/* ── Config Files ── */}
- <section>
- <SectionDivider title="Config files" />
- <ServerTabCard>
- <div className="flex flex-wrap items-center justify-between gap-3">
- <p className="text-xs text-muted-foreground">
- {combinedConfigPaths.length
- ? combinedConfigPaths.join(', ')
- : 'No config files defined in template.'}
- </p>
- </div>
- <div className="mt-3">
- <input
- className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
- placeholder="Search config keys or values…"
- value={configSearch}
- onChange={(event) => setConfigSearch(event.target.value)}
- />
- </div>
+
+      <ServerTabCard>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionHeader icon={Wrench} title="Config files" />
+          <input
+            className="w-full rounded-md border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none sm:w-64"
+            placeholder="Search keys…"
+            value={configSearch}
+            onChange={(event) => setConfigSearch(event.target.value)}
+          />
+        </div>
+
  <div className="mt-4 space-y-3">
  {!combinedConfigPaths.length ? (
  <p className="py-4 text-center text-xs text-muted-foreground">
@@ -971,7 +959,6 @@ export default function ServerConfigurationTab({
  )}
  </div>
  </ServerTabCard>
- </section>
  </div>
  );
 }

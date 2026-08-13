@@ -99,13 +99,13 @@ function FileContextMenu({
 
  {onCompress && (
  <button type="button" className={itemClass} onClick={wrap(onCompress)}>
- <Archive className={`${itemIconClass} text-amber-500`} />
+ <Archive className={`${itemIconClass} text-warning`} />
  <span className="flex-1 text-left">Compress</span>
  </button>
  )}
  {onDecompress && (
  <button type="button" className={itemClass} onClick={wrap(onDecompress)}>
- <ArchiveRestore className={`${itemIconClass} text-amber-500`} />
+ <ArchiveRestore className={`${itemIconClass} text-warning`} />
  <span className="flex-1 text-left">Extract</span>
  </button>
  )}

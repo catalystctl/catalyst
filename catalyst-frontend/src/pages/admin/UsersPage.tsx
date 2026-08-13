@@ -135,11 +135,11 @@ function ServerChip({ server, selected, onToggle }: { server: { id: string; name
  onClick={onToggle}
  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
  selected
- ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 shadow-sm shadow-cyan-500/10'
- : 'border-border/30 bg-card text-muted-foreground hover:border-cyan-500/20 hover:text-foreground'
+ ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
+ : 'border-border/30 bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground'
  }`}
  >
- <Server className={`h-3 w-3 ${selected ? 'text-cyan-600' : ''}`} />
+ <Server className={`h-3 w-3 ${selected ? 'text-primary' : ''}`} />
  {selected && <Check className="h-2.5 w-2.5" />}
  {server.name}
  </button>
@@ -200,8 +200,8 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  <div className="rounded-xl border border-border/30 bg-card p-4">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-3">
- <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${twoFactorEnabled ? 'bg-emerald-500/10' : 'bg-surface-2'}`}>
- <ShieldCheck className={`h-4 w-4 ${twoFactorEnabled ? 'text-emerald-600' : 'text-muted-foreground'}`} />
+ <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${twoFactorEnabled ? 'bg-success/10' : 'bg-surface-2'}`}>
+ <ShieldCheck className={`h-4 w-4 ${twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
  </div>
  <div>
  <div className="text-sm font-medium text-foreground">Two-Factor Authentication</div>
@@ -234,8 +234,8 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  <div className="rounded-xl border border-border/30 bg-card p-4">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-3">
- <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${passkeys.length > 0 ? 'bg-blue-500/10' : 'bg-surface-2'}`}>
- <Fingerprint className={`h-4 w-4 ${passkeys.length > 0 ? 'text-blue-600' : 'text-muted-foreground'}`} />
+ <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${passkeys.length > 0 ? 'bg-primary/10' : 'bg-surface-2'}`}>
+ <Fingerprint className={`h-4 w-4 ${passkeys.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
  </div>
  <div>
  <div className="text-sm font-medium text-foreground">Passkeys</div>
@@ -959,7 +959,7 @@ function UsersPage() {
  <Filter className="h-3.5 w-3.5" />
  Filters
  {hasActiveFilters && (
- <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+ <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground/20 text-[10px] font-bold">
  {[roleFilter, statusFilter].filter(Boolean).length}
  </span>
  )}
@@ -1370,13 +1370,13 @@ function UsersPage() {
  onClick={(e) => { if (e.target === e.currentTarget) { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); } }}
  >
  <div
- className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border/30 bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
+ className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border/30 bg-card shadow-elevated m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
  >
  {/* Header */}
  <div className="flex items-center justify-between border-b border-border/30 px-4 py-3 md:px-6 md:py-4">
  <div className="flex items-center gap-3">
- <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${editingUserId ? 'bg-amber-500/10' : 'bg-primary/10'}`}>
- {editingUserId ? <Pencil className="h-4 w-4 text-amber-600" /> : <UserPlus className="h-4 w-4 text-primary" />}
+ <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${editingUserId ? 'bg-warning/10' : 'bg-primary/10'}`}>
+ {editingUserId ? <Pencil className="h-4 w-4 text-warning" /> : <UserPlus className="h-4 w-4 text-primary" />}
  </div>
  <div>
  <h2 className="text-lg font-semibold text-foreground">
@@ -1524,10 +1524,10 @@ function UsersPage() {
  <div>
  <div className="flex items-center justify-between mb-3">
  <div className="flex items-center gap-2">
- <Server className="h-4 w-4 text-cyan-600" />
+ <Server className="h-4 w-4 text-primary" />
  <span className="text-sm font-semibold text-foreground">Server Access</span>
  {(editingUserId ? editServerIds : createServerIds).length > 0 && (
- <Badge className="tabular-nums text-[10px] border-cyan-500/30 bg-cyan-500/10 text-cyan-700">
+ <Badge className="tabular-nums text-[10px] border-primary/30 bg-primary/10 text-primary">
  {(editingUserId ? editServerIds : createServerIds).length}
  </Badge>
  )}
@@ -1655,12 +1655,10 @@ function UsersPage() {
  onClick={(e) => { if (e.target === e.currentTarget) setViewingUser(null); }}
  >
  <div
- className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border/30 bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
+ className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border/30 bg-card shadow-elevated m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
  >
  {/* Header with user identity */}
  <div className="relative overflow-hidden px-4 py-4 border-b border-border/30 md:px-6 md:py-5">
- {/* Decorative gradient */}
- <div className={`absolute inset-0 ${viewingUser.banned ? 'bg-gradient-to-br from-destructive/5 via-destructive/3 to-transparent' : 'bg-gradient-to-br from-primary/5 via-primary/3 to-transparent'}`} />
 
  <div className="relative flex items-start justify-between">
  <div className="flex items-center gap-3">
@@ -1707,13 +1705,13 @@ function UsersPage() {
  </div>
  {viewingUser.twoFactorEnabled && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
- <ShieldCheck className="h-3 w-3 text-emerald-500" />
- <span className="text-emerald-700">2FA Enabled</span>
+ <ShieldCheck className="h-3 w-3 text-success" />
+ <span className="text-success">2FA Enabled</span>
  </div>
  )}
  {(viewingUser.passkeys?.length ?? 0) > 0 && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
- <Fingerprint className="h-3 w-3 text-blue-500" />
+ <Fingerprint className="h-3 w-3 text-primary" />
  <span className="text-muted-foreground">Passkeys</span>
  <span className="font-semibold tabular-nums text-foreground">{viewingUser.passkeys?.length ?? 0}</span>
  </div>
@@ -1790,7 +1788,7 @@ function UsersPage() {
  {/* 2FA */}
  {has2fa && (
  <div className="flex items-center gap-2 rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
- <ShieldCheck className={`h-4 w-4 ${viewingUser.twoFactorEnabled ? 'text-emerald-500' : 'text-muted-foreground'}`} />
+ <ShieldCheck className={`h-4 w-4 ${viewingUser.twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
  <span className="text-foreground">Two-Factor Authentication</span>
  <Badge variant={viewingUser.twoFactorEnabled ? 'success' : 'outline'} className="text-[10px] ml-auto">
  {viewingUser.twoFactorEnabled ? 'Enforced' : 'Configured'}
@@ -1802,7 +1800,7 @@ function UsersPage() {
  {passkeys.length > 0 && (
  <div className="rounded-lg bg-surface-2/50 px-3 py-2">
  <div className="flex items-center gap-2 text-xs mb-2">
- <Fingerprint className="h-4 w-4 text-blue-500" />
+ <Fingerprint className="h-4 w-4 text-primary" />
  <span className="text-foreground">{passkeys.length} passkey{passkeys.length === 1 ? '' : 's'}</span>
  </div>
  <div className="space-y-1">

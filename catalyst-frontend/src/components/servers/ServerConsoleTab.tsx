@@ -1,510 +1,413 @@
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowDownLeft, ArrowUpRight, Check, Copy, Search, Trash2, X } from 'lucide-react';
-import XtermConsole from '../../components/console/XtermConsole';
-import { formatBytes } from '../../utils/formatters';
+import { ArrowDown, Check, Copy, Download, Search, Trash2, X } from 'lucide-react';
+
+
+import XtermConsole, { type XtermConsoleHandle } from '../../components/console/XtermConsole';
+import { storage } from '../../services/storage/localStorage';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
 
 interface Props {
- liveMetrics: {
- cpuPercent: number;
- memoryPercent: number;
- memoryUsageMb?: number;
- networkRxBytes?: number;
- networkTxBytes?: number;
- } | null;
- liveDiskUsageMb: number | null | undefined;
- liveDiskTotalMb: number | null | undefined;
- isConnected: boolean;
- canSend: boolean;
- entries: Array<{ stream: string; data: string; id: string }>;
- send: (command: string) => void;
- clearConsole: () => void;
- isLoading: boolean;
- isError: boolean;
- refetch: () => Promise<unknown>;
+  liveMetrics: {
+    cpuPercent: number;
+    memoryPercent: number;
+    memoryUsageMb?: number;
+    memoryLimitMb?: number;
+    networkRxBytes?: number;
+    networkTxBytes?: number;
+  } | null;
+  liveDiskUsageMb: number | null | undefined;
+  liveDiskTotalMb: number | null | undefined;
+  allocatedMemoryMb?: number | null;
+  allocatedDiskMb?: number | null;
+  isConnected: boolean;
+  streamStatus?: 'connected' | 'connecting' | 'reconnecting' | 'closed' | 'error';
+  canSend: boolean;
+  entries: Array<{ stream: string; data: string; id: string }>;
+  send: (command: string) => void;
+  clearConsole: () => void;
+  isLoading: boolean;
+  isError: boolean;
+  refetch: () => Promise<unknown>;
 }
 
 const ALL_STREAMS = ['stdout', 'stderr', 'system', 'stdin'] as const;
 
-const STREAM_STYLES: Record<string, { dot: string; active: string; inactive: string }> = {
- stdout: {
- dot: 'bg-success/50',
- active: 'bg-success/50/15 text-success dark:text-success border-success/30',
- inactive: 'border-transparent text-muted-foreground hover:bg-surface-2',
- },
- stderr: {
- dot: 'bg-destructive/50',
- active: 'bg-destructive/50/15 text-destructive dark:text-destructive border-destructive/30',
- inactive: 'border-transparent text-muted-foreground hover:bg-surface-2',
- },
- system: {
- dot: 'bg-sky-500',
- active: 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30',
- inactive: 'border-transparent text-muted-foreground hover:bg-surface-2',
- },
- stdin: {
- dot: 'bg-warning/50',
- active: 'bg-warning/50/15 text-warning dark:text-warning border-warning/30',
- inactive: 'border-transparent text-muted-foreground hover:bg-surface-2',
- },
+const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: string }> = {
+  stdout: {
+    dot: 'bg-success',
+    active: 'border-success/50 bg-success-muted text-success',
+    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
+  },
+  stderr: {
+    dot: 'bg-danger',
+    active: 'border-danger/50 bg-danger-muted text-danger',
+    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
+  },
+  system: {
+    dot: 'bg-info',
+    active: 'border-info/50 bg-info-muted text-info',
+    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
+  },
+  stdin: {
+    dot: 'bg-warning',
+    active: 'border-warning/50 bg-warning-muted text-warning',
+    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
+  },
 };
 
+const SCROLLBACK_OPTIONS = [500, 1000, 2000] as const;
+
+
+function connectionLabel(status?: Props['streamStatus'], isConnected?: boolean) {
+  if (status === 'reconnecting') return { label: 'Reconnecting', tone: 'text-warning' };
+  if (status === 'error' || status === 'closed') return { label: 'Disconnected', tone: 'text-muted-foreground' };
+  if (status === 'connecting' || !isConnected) return { label: 'Connecting', tone: 'text-warning' };
+  return { label: 'Live', tone: 'text-success' };
+}
+
 export default function ServerConsoleTab({
- liveMetrics,
- liveDiskUsageMb,
- liveDiskTotalMb,
- isConnected,
- canSend,
- entries,
- send,
- clearConsole,
- isLoading,
- isError,
- refetch,
+  isConnected,
+  streamStatus,
+  canSend,
+  entries,
+  send,
+  clearConsole,
+  isLoading,
+  isError,
+  refetch,
 }: Props) {
- const inputRef = useRef<HTMLInputElement>(null);
- const searchRef = useRef<HTMLInputElement>(null);
 
- const [autoScroll, setAutoScroll] = useState(true);
- const [searchOpen, setSearchOpen] = useState(false);
- const [searchQuery, setSearchQuery] = useState('');
- const [activeStreams, setActiveStreams] = useState<Set<string>>(() => new Set(ALL_STREAMS));
- const [commandHistory, setCommandHistory] = useState<string[]>([]);
- const [historyIndex, setHistoryIndex] = useState(-1);
- const [copied, setCopied] = useState(false);
- const [scrollback, setScrollback] = useState(() => {
- if (typeof window !== 'undefined') {
- const stored = window.localStorage.getItem('console.scrollback');
- if (stored) return Number(stored);
- }
- return 1000;
- });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const xtermRef = useRef<XtermConsoleHandle>(null);
+  const draftRef = useRef('');
 
- // scrollback is a client-side display window (XtermConsole slices entries).
- // Parent already loads a fixed initialLines budget — do not re-hit /logs here.
- // (A prior effect on [scrollback, refetch] spammed GET /logs every render when
- // refetch identity was unstable under csync.)
+  const [autoScroll, setAutoScroll] = useState(() => storage.get<boolean>('console.follow') ?? true);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeStreams, setActiveStreams] = useState<Set<string>>(() => new Set(ALL_STREAMS));
+  const [commandHistory, setCommandHistory] = useState<string[]>(() => storage.get<string[]>('console.history') ?? []);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [copied, setCopied] = useState(false);
 
- const handleSend = useCallback(
- (event: FormEvent<HTMLFormElement>) => {
- event.preventDefault();
- if (!canSend) return;
- const value = inputRef.current?.value ?? '';
- const trimmed = value.trim();
- if (!trimmed) return;
- send(trimmed);
- setCommandHistory((prev) => [...prev.slice(-49), trimmed]);
- if (inputRef.current) inputRef.current.value = '';
- setHistoryIndex(-1);
- setAutoScroll(true);
- },
- [canSend, send],
- );
 
- const copyText = useMemo(
- () =>
- entries
- .filter((e) => activeStreams.has(e.stream))
- .map((e) => e.data)
- .join(''),
- [entries, activeStreams],
- );
+  const [scrollback, setScrollback] = useState(() => {
+    const stored = storage.get<number>('console.scrollback');
+    if (stored && SCROLLBACK_OPTIONS.includes(stored as (typeof SCROLLBACK_OPTIONS)[number])) return stored;
+    return 1000;
+  });
 
- const searchMatchCount = useMemo(
- () =>
- searchQuery
- ? entries.filter(
- (e) =>
- activeStreams.has(e.stream) &&
- e.data.toLowerCase().includes(searchQuery.toLowerCase()),
- ).length
- : 0,
- [entries, activeStreams, searchQuery],
- );
 
- const handleCopy = useCallback(async () => {
- await navigator.clipboard.writeText(copyText);
- setCopied(true);
- setTimeout(() => setCopied(false), 2000);
- }, [copyText]);
+  const handleSend = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!canSend) return;
+      const value = inputRef.current?.value ?? '';
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      void Promise.resolve(send(trimmed)).catch(() => undefined);
+      setCommandHistory((prev) => {
+        const next = [...prev.filter((item) => item !== trimmed), trimmed].slice(-50);
+        storage.set('console.history', next);
+        return next;
+      });
+      if (inputRef.current) inputRef.current.value = '';
+      draftRef.current = '';
+      setHistoryIndex(-1);
+      setAutoScroll(true);
+      storage.set('console.follow', true);
+    },
+    [canSend, send],
+  );
 
- // Ctrl+F / Escape for search
- useEffect(() => {
- const onKeyDown = (e: globalThis.KeyboardEvent) => {
- if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
- e.preventDefault();
- setSearchOpen(true);
- setTimeout(() => searchRef.current?.focus(), 50);
- }
- if (e.key === 'Escape' && searchOpen) {
- setSearchOpen(false);
- setSearchQuery('');
- inputRef.current?.focus();
- }
- };
- window.addEventListener('keydown', onKeyDown);
- return () => window.removeEventListener('keydown', onKeyDown);
- }, [searchOpen]);
+  const visibleEntries = useMemo(
+    () => entries.filter((entry) => activeStreams.has(entry.stream)),
+    [entries, activeStreams],
+  );
 
- const diskPercent =
- liveDiskUsageMb != null && liveDiskTotalMb
- ? ((liveDiskUsageMb / liveDiskTotalMb) * 100).toFixed(1)
- : '0.0';
+  const copyText = useMemo(
+    () => visibleEntries.map((entry) => entry.data).join(''),
+    [visibleEntries],
+  );
 
- return (
- <>
- <div className="flex flex-row flex-nowrap gap-3 items-stretch">
- {/* Resource Stats */}
- <div className="flex flex-col gap-2 self-stretch w-44 lg:w-52 shrink-0">
- {liveMetrics ? (
- <>
- <StatCard
- label="CPU"
- value={`${liveMetrics.cpuPercent.toFixed(1)}%`}
- percent={liveMetrics.cpuPercent}
- color="text-primary"
- strokeColor="stroke-primary"
- />
- <StatCard
- label="Memory"
- value={`${liveMetrics.memoryPercent.toFixed(1)}%`}
- percent={liveMetrics.memoryPercent}
- color="text-success"
- strokeColor="stroke-emerald-500"
- subtext={`${liveMetrics.memoryUsageMb ?? 0} MB`}
- />
- <StatCard
- label="Disk"
- value={`${diskPercent}%`}
- percent={liveDiskUsageMb != null && liveDiskTotalMb ? (liveDiskUsageMb / liveDiskTotalMb) * 100 : 0}
- color="text-warning"
- strokeColor="stroke-amber-500"
- subtext={`${liveDiskUsageMb ?? 0} / ${liveDiskTotalMb ?? 0} MB`}
- />
- <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4 min-h-0">
- <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Network</span>
- <div className="flex items-center gap-2 text-[11px]">
- <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/50/10 text-success">
- <ArrowDownLeft className="h-3 w-3" />
- </span>
- <div className="flex min-w-0 flex-col">
- <span className="text-[10px] text-muted-foreground">RX</span>
- <span className="font-medium tabular-nums text-foreground">{formatBytes(Number(liveMetrics.networkRxBytes ?? 0))}</span>
- </div>
- </div>
- <div className="flex items-center gap-2 text-[11px]">
- <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-sky-500">
- <ArrowUpRight className="h-3 w-3" />
- </span>
- <div className="flex min-w-0 flex-col">
- <span className="text-[10px] text-muted-foreground">TX</span>
- <span className="font-medium tabular-nums text-foreground">{formatBytes(Number(liveMetrics.networkTxBytes ?? 0))}</span>
- </div>
- </div>
- </div>
- </>
- ) : (
- <>
- <StatSkeleton label="CPU" />
- <StatSkeleton label="Memory" />
- <StatSkeleton label="Disk" />
- <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4 min-h-0">
- <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Network</span>
- <div className="flex items-center gap-2 text-[11px]">
- <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/50/10 text-success">
- <ArrowDownLeft className="h-3 w-3" />
- </span>
- <div className="flex min-w-0 flex-col">
- <span className="text-[10px] text-muted-foreground">RX</span>
- <span className="inline-block h-3 w-12 animate-pulse rounded bg-surface-3" />
- </div>
- </div>
- <div className="flex items-center gap-2 text-[11px]">
- <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-sky-500">
- <ArrowUpRight className="h-3 w-3" />
- </span>
- <div className="flex min-w-0 flex-col">
- <span className="text-[10px] text-muted-foreground">TX</span>
- <span className="inline-block h-3 w-12 animate-pulse rounded bg-surface-3" />
- </div>
- </div>
- </div>
- </>
- )}
- </div>
+  const searchMatchCount = useMemo(
+    () =>
+      searchQuery
+        ? visibleEntries.filter((entry) => entry.data.toLowerCase().includes(searchQuery.toLowerCase())).length
+        : 0,
+    [visibleEntries, searchQuery],
+  );
 
- {/* Console */}
- <div className="flex flex-col overflow-hidden rounded-lg border border-border flex-1 min-w-0">
- {/* Toolbar */}
- <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-card px-2 py-1.5">
- {/* Left: Status + Streams */}
- <div className="flex items-center gap-1.5">
- <span className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${isConnected ? 'text-success dark:text-success' : 'text-warning dark:text-warning'}`}>
- <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'animate-pulse bg-success/50' : 'bg-warning/50'}`} />
- {isConnected ? 'Live' : 'Connecting'}
- </span>
+  const handleCopy = useCallback(async () => {
+    const selected = xtermRef.current?.getSelection().trim();
+    try {
+      await navigator.clipboard.writeText(selected || copyText);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }, [copyText]);
 
- <div className="h-3.5 w-px bg-border" />
+  const handleDownload = useCallback(() => {
+    const blob = new Blob([copyText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `console-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.log`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [copyText]);
 
- {/* Stream toggles */}
- {ALL_STREAMS.map((stream) => {
- const isActive = activeStreams.has(stream);
- const styles = STREAM_STYLES[stream];
- return (
- <button
- key={stream}
- type="button"
- onClick={() =>
- setActiveStreams((prev) => {
- const next = new Set(prev);
- if (next.has(stream)) {
- if (next.size > 1) next.delete(stream);
- } else next.add(stream);
- return next;
- })
- }
- className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium transition-colors ${isActive ? styles.active : styles.inactive}`}
- >
- <span className={`h-1.5 w-1.5 rounded-full ${isActive ? styles.dot : 'bg-muted-foreground'}`} />
- {stream}
- </button>
- );
- })}
- </div>
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'f') {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest('.xterm-console-host') || target === inputRef.current || target === searchRef.current) {
+          event.preventDefault();
+          setSearchOpen(true);
+          window.setTimeout(() => searchRef.current?.focus(), 50);
+        }
+      }
+      if (event.key === 'Escape' && searchOpen) {
+        setSearchOpen(false);
+        setSearchQuery('');
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [searchOpen]);
 
- {/* Center: Search */}
- {searchOpen ? (
- <div className="flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-0.5">
- <Search className="h-3 w-3 text-muted-foreground" />
- <input
- ref={searchRef}
- className="w-32 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted-foreground sm:w-40"
- value={searchQuery}
- onChange={(e) => setSearchQuery(e.target.value)}
- placeholder="Filter…"
- />
- {searchQuery ? (
- <span className="text-[10px] tabular-nums text-muted-foreground">{searchMatchCount}</span>
- ) : null}
- <button
- type="button"
- onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
- className="text-muted-foreground hover:text-foreground"
- >
- <X className="h-3 w-3" />
- </button>
- </div>
- ) : (
- <button
- type="button"
- title="Search (Ctrl+F)"
- onClick={() => { setSearchOpen(true); setTimeout(() => searchRef.current?.focus(), 50); }}
- className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- >
- <Search className="h-3.5 w-3.5" />
- </button>
- )}
 
- {/* Buffer select */}
- <select
- className="h-6 rounded border border-border bg-transparent px-1.5 text-[10px] text-muted-foreground outline-none hover:border-muted-foreground/40"
- value={scrollback}
- onChange={(e) => {
- const v = Number(e.target.value);
- setScrollback(v);
- if (typeof window !== 'undefined') window.localStorage.setItem('console.scrollback', String(v));
- }}
- title="Buffer size"
- >
- <option value={500}>500</option>
- <option value={1000}>1K</option>
- <option value={2000}>2K</option>
- <option value={5000}>5K</option>
- </select>
+  const connection = connectionLabel(streamStatus, isConnected);
+  const commandPlaceholder = !canSend
+    ? streamStatus === 'reconnecting'
+      ? 'Reconnecting…'
+      : 'Connect to send commands'
+    : 'Type a command…';
 
- <div className="flex-1" />
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/50 bg-card">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 bg-card px-2 py-1.5">
 
- {/* Right: Meta + Actions */}
- <span className="hidden text-[10px] tabular-nums text-muted-foreground sm:inline">{entries.length} lines</span>
 
- <div className="hidden h-3.5 w-px bg-border sm:block" />
 
- <button
- type="button"
- title={autoScroll ? 'Auto-scroll on' : 'Auto-scroll off'}
- onClick={() => setAutoScroll(!autoScroll)}
- className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${autoScroll ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'}`}
- >
- <ArrowDown className="h-3.5 w-3.5" />
- </button>
+          <span className={cn('flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium', connection.tone)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', isConnected ? 'animate-pulse bg-success' : 'bg-warning')} />
+            {connection.label}
+          </span>
 
- <button
- type="button"
- title={copied ? 'Copied!' : 'Copy output'}
- onClick={handleCopy}
- className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- >
- {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
- </button>
+          <div className="h-3.5 w-px bg-border" />
 
- <button
- type="button"
- title="Clear console"
- onClick={() => { clearConsole(); setAutoScroll(true); }}
- className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/50/10 hover:text-destructive"
- >
- <Trash2 className="h-3.5 w-3.5" />
- </button>
- </div>
+          {ALL_STREAMS.map((stream) => {
+            const isActive = activeStreams.has(stream);
+            const styles = STREAM_COLORS[stream];
+            return (
+              <button
+                key={stream}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() =>
+                  setActiveStreams((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(stream)) {
+                      if (next.size > 1) next.delete(stream);
+                    } else next.add(stream);
+                    return next;
+                  })
+                }
+                className={cn('flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium transition-colors', isActive ? styles.active : styles.inactive)}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', isActive ? styles.dot : 'bg-muted-foreground')} />
+                {stream}
+              </button>
+            );
+          })}
 
- {/* Console Output */}
- <XtermConsole
- entries={entries}
- searchQuery={searchQuery}
- scrollback={scrollback}
- autoScroll={autoScroll}
- streamFilter={activeStreams}
- isLoading={isLoading}
- isError={isError}
- onRetry={refetch}
- onUserScroll={() => setAutoScroll(false)}
- onAutoScrollResume={() => setAutoScroll(true)}
- className="h-[50vh] min-h-[280px]"
- />
+          {searchOpen ? (
+            <div className="flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-0.5">
+              <Search className="h-3 w-3 text-muted-foreground" />
+              <input
+                ref={searchRef}
+                className="w-32 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 sm:w-40"
+                value={searchQuery}
+                aria-label="Find in console"
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (event.shiftKey) xtermRef.current?.findPrevious(searchQuery);
+                    else xtermRef.current?.findNext(searchQuery);
+                  }
+                }}
+                placeholder="Find…"
+              />
+              {searchQuery ? (
+                <span className="type-numeric text-[10px] text-muted-foreground">{searchMatchCount}</span>
+              ) : null}
+              <button
+                type="button"
+                aria-label="Close find"
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery('');
+                }}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              aria-label="Find in console"
+              title="Find (Ctrl+F)"
+              onClick={() => {
+                setSearchOpen(true);
+                window.setTimeout(() => searchRef.current?.focus(), 50);
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              <Search className="h-3.5 w-3.5" />
+            </button>
+          )}
 
- {/* Command Input */}
- <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-border bg-card px-3 py-2">
- <span className="select-none font-mono text-sm font-bold text-primary">$</span>
- <input
- ref={inputRef}
- defaultValue=""
- className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
- onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
- if (e.key === 'ArrowUp') {
- e.preventDefault();
- if (commandHistory.length === 0) return;
- const next = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
- setHistoryIndex(next);
- if (inputRef.current) inputRef.current.value = commandHistory[next];
- } else if (e.key === 'ArrowDown') {
- e.preventDefault();
- if (historyIndex === -1) return;
- const next = historyIndex + 1;
- if (next >= commandHistory.length) {
- setHistoryIndex(-1);
- if (inputRef.current) inputRef.current.value = '';
- } else {
- setHistoryIndex(next);
- if (inputRef.current) inputRef.current.value = commandHistory[next];
- }
- }
- }}
- placeholder={canSend ? 'Type a command… (↑↓ for history)' : 'Connect to send commands'}
- disabled={!canSend}
- />
- <button
- type="submit"
- className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
- disabled={!canSend}
- >
- Send
- </button>
- </form>
- </div>
- </div>
- </>
- );
+          <label className="sr-only" htmlFor="console-scrollback">
+            Buffer size
+          </label>
+          <select
+            id="console-scrollback"
+            className="h-6 rounded-md border border-border bg-transparent px-1.5 text-[10px] text-muted-foreground outline-none hover:border-border"
+            value={scrollback}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              setScrollback(value);
+              storage.set('console.scrollback', value);
+            }}
+          >
+            {SCROLLBACK_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option === 1000 ? '1K' : option === 2000 ? '2K' : option}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex-1" />
+
+          <span className="type-numeric text-[10px] text-muted-foreground">{visibleEntries.length} lines</span>
+
+          <button
+            type="button"
+            aria-pressed={autoScroll}
+            aria-label={autoScroll ? 'Follow output on' : 'Follow output off'}
+            onClick={() => {
+              const next = !autoScroll;
+              setAutoScroll(next);
+              storage.set('console.follow', next);
+            }}
+            className={cn(
+              'flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium transition-colors',
+              autoScroll ? 'bg-primary-muted text-primary' : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+            )}
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Follow</span>
+          </button>
+
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={copied ? 'Copied' : 'Copy output'} onClick={() => void handleCopy()}>
+            {copied ? <Check className="text-success" /> : <Copy />}
+          </Button>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Download output" onClick={handleDownload}>
+            <Download />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Clear console"
+            onClick={() => {
+              clearConsole();
+              setAutoScroll(true);
+              storage.set('console.follow', true);
+            }}
+          >
+            <Trash2 />
+          </Button>
+        </div>
+
+        <XtermConsole
+          ref={xtermRef}
+          entries={entries}
+          searchQuery={searchQuery}
+          scrollback={scrollback}
+          autoScroll={autoScroll}
+          streamFilter={activeStreams}
+          isLoading={isLoading}
+          isError={isError}
+          onRetry={refetch}
+          onUserScroll={() => {
+            setAutoScroll(false);
+            storage.set('console.follow', false);
+          }}
+          onAutoScrollResume={() => {
+            setAutoScroll(true);
+            storage.set('console.follow', true);
+          }}
+          className="min-h-[280px] flex-1"
+        />
+
+        <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-border/70 bg-card px-3 py-2">
+          <span className="select-none font-mono text-sm font-semibold text-primary" aria-hidden>
+            $
+          </span>
+          <input
+            ref={inputRef}
+            defaultValue=""
+            aria-label="Console command"
+            className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
+            onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+              if (event.key === 'Tab' && commandHistory.length > 0) {
+                const prefix = inputRef.current?.value ?? '';
+                const match = [...commandHistory].reverse().find((item) => item.startsWith(prefix));
+                if (match) {
+                  event.preventDefault();
+                  if (inputRef.current) inputRef.current.value = match;
+                }
+                return;
+              }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (commandHistory.length === 0) return;
+                if (historyIndex === -1) draftRef.current = inputRef.current?.value ?? '';
+                const next = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
+                setHistoryIndex(next);
+                if (inputRef.current) inputRef.current.value = commandHistory[next];
+              } else if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (historyIndex === -1) return;
+                const next = historyIndex + 1;
+                if (next >= commandHistory.length) {
+                  setHistoryIndex(-1);
+                  if (inputRef.current) inputRef.current.value = draftRef.current;
+                } else {
+                  setHistoryIndex(next);
+                  if (inputRef.current) inputRef.current.value = commandHistory[next];
+                }
+              }
+            }}
+            placeholder={commandPlaceholder}
+            disabled={!canSend}
+          />
+          <Button type="submit" size="sm" disabled={!canSend}>
+            Send
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
 }
 
-// ── Stat card with ring gauge ──
-
-function StatCard({
- label,
- value,
- percent,
- color,
- strokeColor,
- subtext,
-}: {
- label: string;
- value: string;
- percent: number;
- color: string;
- strokeColor: string;
- subtext?: string;
-}) {
- const clamped = Math.min(100, Math.max(0, percent));
- const r = 16;
- const c = 2 * Math.PI * r;
- const dash = c - (clamped / 100) * c;
-
- return (
- <div className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 md:flex-1">
- {/* Mobile: horizontal compact */}
- <div className="flex w-full items-center justify-between md:hidden">
- <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
- <span className={`text-sm font-bold tabular-nums ${color}`}>{value}</span>
- </div>
- <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3 md:hidden">
- <div className={`h-full rounded-full ${strokeColor.replace('stroke-', 'bg-')} transition-all duration-300`} style={{ width: `${clamped}%` }} />
- </div>
- {subtext && <span className="w-full text-[10px] text-muted-foreground md:hidden">{subtext}</span>}
-
- {/* Desktop: ring gauge */}
- <div className="hidden flex-col items-center justify-center gap-2 md:flex md:flex-1">
- <div className="relative">
- <svg width="72" height="72" viewBox="0 0 36 36" className="-rotate-90">
- <circle cx="18" cy="18" r={r} fill="none" stroke="currentColor" className="text-surface-3" strokeWidth="3" />
- <circle
- cx="18"
- cy="18"
- r={r}
- fill="none"
- className={`${strokeColor} transition-all duration-500`}
- strokeWidth="3"
- strokeLinecap="round"
- strokeDasharray={c}
- strokeDashoffset={dash}
- />
- </svg>
- <div className="absolute inset-0 flex items-center justify-center">
- <span className={`text-sm font-bold tabular-nums ${color}`}>{value}</span>
- </div>
- </div>
- <div className="text-center">
- <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
- {subtext && <p className="text-[10px] tabular-nums text-muted-foreground">{subtext}</p>}
- </div>
- </div>
- </div>
- );
-}
-
-// ── Skeleton stat card ──
-
-function StatSkeleton({ label }: { label: string }) {
- return (
- <div className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 md:flex-1">
- {/* Mobile */}
- <div className="flex w-full items-center justify-between md:hidden">
- <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
- <span className="inline-block h-4 w-10 animate-pulse rounded bg-surface-3" />
- </div>
- <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3 md:hidden" />
-
- {/* Desktop */}
- <div className="hidden flex-col items-center justify-center gap-2 md:flex md:flex-1">
- <div className="relative">
- <svg width="72" height="72" viewBox="0 0 36 36" className="-rotate-90">
- <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" className="text-surface-3" strokeWidth="3" />
- </svg>
- <div className="absolute inset-0 flex items-center justify-center">
- <span className="inline-block h-3.5 w-10 animate-pulse rounded bg-surface-3" />
- </div>
- </div>
- <div className="text-center">
- <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
- </div>
- </div>
- </div>
- );
-}

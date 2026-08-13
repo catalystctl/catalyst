@@ -670,7 +670,7 @@ function TemplateCreateModal() {
  {/* ── Step 1: Nest Selection ── */}
  {step === 1 && (
  <div className="flex flex-col items-center px-6 py-10 text-center">
- <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/10 to-rose-500/10">
+ <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-warning/10 to-danger/10">
  <FolderOpen className="h-7 w-7 text-warning" />
  </div>
  <h3 className="text-base font-semibold text-foreground">

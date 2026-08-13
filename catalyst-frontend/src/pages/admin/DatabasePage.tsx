@@ -54,7 +54,7 @@ function ModalShell({
  return (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
- <div className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-xl">
+ <div className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-elevated">
  <div className="border-b border-border px-6 py-4">
  <h2 className="text-lg font-semibold text-foreground">{title}</h2>
  {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}

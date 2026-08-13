@@ -29,7 +29,7 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
  return (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
- <div className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-2xl">
+ <div className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-elevated">
  {/* Header */}
  <div className="flex items-center gap-3 border-b border-border px-6 py-5">
  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-muted">

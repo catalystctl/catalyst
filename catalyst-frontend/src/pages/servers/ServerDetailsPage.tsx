@@ -1,26 +1,29 @@
 import { useCallback, useMemo, useState, lazy, Suspense } from 'react';
+
 import { useNavigate, useParams } from 'react-router-dom';
 
 import {
- Package,
- Puzzle,
- Terminal,
- FolderOpen,
- HardDrive,
- Clock,
- Database,
- BarChart3,
- Bell,
- Wrench,
- Users,
- Settings,
- Shield,
- FolderSync,
- Activity,
- AlertTriangle,
- Copy,
- Plug,
+  Package,
+  Puzzle,
+  Terminal,
+  FolderOpen,
+  HardDrive,
+  Clock,
+  Database,
+  BarChart3,
+  Bell,
+  Wrench,
+  Users,
+  Settings,
+  Shield,
+  FolderSync,
+  Activity,
+  AlertTriangle,
+  Copy,
+  Plug,
 } from 'lucide-react';
+
+
 import { useServer } from '../../hooks/useServer';
 import { useServerMetrics } from '../../hooks/useServerMetrics';
 import {
@@ -49,6 +52,9 @@ import type {
 
 import ServerControls from '../../components/servers/ServerControls';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
+import ServerHeaderStats from '../../components/servers/ServerHeaderStats';
+import ServerTabBar, { type ServerNavTab } from '../../components/servers/ServerTabBar';
+
 import ErrorBoundary from '../../components/shared/ErrorBoundary';
 import FileManager from '../../components/files/FileManager';
 import BackupSection from '../../components/backups/BackupSection';
@@ -57,6 +63,10 @@ import PluginErrorBoundary from '../../plugins/PluginErrorBoundary';
 import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 import EulaModal from '../../components/servers/EulaModal';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
+
+
+
 
 const ServerConsoleTab = lazy(() => import('../../components/servers/ServerConsoleTab'));
 const ServerSftpTab = lazy(() => import('../../components/servers/tabs/ServerSftpTab'));
@@ -72,24 +82,25 @@ const ServerPluginManagerTab = lazy(() => import('../../components/servers/tabs/
 const ServerActivityLogTab = lazy(() => import('../../components/servers/tabs/ServerActivityLogTab'));
 const AlertsPage = lazy(() => import('../alerts/AlertsPage'));
 
-// ── Tab labels & icons ──
 const tabLabels = {
- console: 'Console',
- files: 'Files',
- sftp: 'SFTP',
- backups: 'Backups',
- tasks: 'Tasks',
- databases: 'Databases',
- metrics: 'Metrics',
- alerts: 'Alerts',
- activity: 'Activity',
- modManager: 'Mod Manager',
- pluginManager: 'Plugin Manager',
- configuration: 'Configuration',
- users: 'Users',
- settings: 'Settings',
- admin: 'Admin',
+  console: 'Console',
+  files: 'Files',
+  sftp: 'SFTP',
+  backups: 'Backups',
+  tasks: 'Tasks',
+  databases: 'Databases',
+  metrics: 'Metrics',
+  alerts: 'Alerts',
+  activity: 'Activity',
+  modManager: 'Mod Manager',
+  pluginManager: 'Plugin Manager',
+  configuration: 'Configuration',
+  users: 'Users',
+  settings: 'Settings',
+  admin: 'Admin',
 } as const;
+
+
 
 const tabIcons: Record<
  keyof typeof tabLabels,
@@ -894,33 +905,56 @@ function ServerDetailsPage() {
  });
  }, [serverPluginTabs, userPermissions, hasServerPerm]);
 
- // ── Error state (fatal — don't render anything) ──
- if (isError) {
- return (
- <div className="flex items-center justify-center p-8">
- <div className="rounded-lg border border-danger/30 bg-danger-muted px-6 py-4 text-center">
- <p className="text-sm text-danger">Unable to load server details.</p>
- <div className="mt-3 flex items-center justify-center gap-2">
- <button
- onClick={() => refetch()}
- className="rounded-md border border-border/40 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
- >
- Retry
- </button>
- <button
- onClick={() => navigate('/servers')}
- className="text-xs text-muted-foreground hover:text-foreground"
- >
- ← Back to servers
- </button>
- </div>
- </div>
- </div>
- );
- }
+  const navTabs = useMemo<ServerNavTab[]>(() => {
+    const id = server?.id;
+    const built: ServerNavTab[] = visibleTabs.map(([key, label]) => ({
+      key,
+      label,
+      icon: tabIcons[key as keyof typeof tabLabels],
+      active: !isPluginTab && activeTab === key,
+      onSelect: () => {
+        if (id) navigate(`/servers/${id}/${key}`);
+      },
+    }));
+    for (const ptab of filteredServerPluginTabs) {
+      const pluginTabKey = `plugin:${ptab.id}`;
+      built.push({
+        key: pluginTabKey,
+        label: ptab.label,
+        icon: Plug,
+        active: tab === pluginTabKey,
+        onSelect: () => {
+          if (id) navigate(`/servers/${id}/${pluginTabKey}`);
+        },
+      });
+    }
+    return built;
+  }, [
+    visibleTabs,
+    filteredServerPluginTabs,
+    isPluginTab,
+    activeTab,
+    tab,
+    server?.id,
+    navigate,
+  ]);
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <TabErrorState
+          message="Unable to load server details."
+          onRetry={() => {
+            void refetch();
+          }}
+        />
+      </div>
+    );
+  }
+
+
 
  // ── Derived values (nullable while server is loading) ──
- const nodeLabel = server?.node?.name ?? server?.nodeName ?? server?.nodeId ?? '…';
  const nodeIp =
  server?.connection?.host ??
  server?.primaryIp ??
@@ -932,168 +966,151 @@ function ServerDetailsPage() {
  const liveDiskUsageMb = liveMetrics?.diskUsageMb;
  const liveDiskTotalMb = liveMetrics?.diskTotalMb;
 
- return (
- <div>
- <div className="space-y-4">
- {/* ── Header ── */}
- <div>
- <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm ${
- isSuspended
- ? 'border-danger/20 bg-gradient-to-br from-danger/5 via-card/90 to-card/80'
- : server?.status === 'running'
- ? 'border-success/20 bg-gradient-to-br from-success/5 via-card/90 to-card/80'
- : 'border-border bg-card/80'
- }`}>
- {/* Subtle top accent */}
- <div className={`h-0.5 w-full ${
- isSuspended
- ? 'bg-gradient-to-r from-transparent via-danger/60 to-transparent'
- : server?.status === 'running'
- ? 'bg-gradient-to-r from-transparent via-success/60 to-transparent'
- : 'bg-gradient-to-r from-transparent via-muted-foreground/30 to-transparent'
- }`} />
+  const templateLabel = server?.template?.name;
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+      <div className={`min-w-0 overflow-hidden rounded-lg border ${
+        isSuspended
+          ? 'border-danger/25 bg-danger/5'
+          : server?.status === 'running'
+            ? 'border-success/20 bg-success/5'
+            : 'border-border/70 bg-card'
+      }`}>
 
- <div className="p-5">
- <div className="flex flex-wrap items-center justify-between gap-3">
- <div className="flex items-center gap-3 min-w-0">
- <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
- isSuspended
- ? 'border-danger/30 bg-danger/10 text-danger'
- : server?.status === 'running'
- ? 'border-success/30 bg-success/10 text-success'
- : 'border-border bg-surface-2 text-muted-foreground'
- }`}>
- <Terminal className="h-4.5 w-4.5" />
- </div>
- <div className="min-w-0">
- <div className="flex flex-wrap items-center gap-2.5">
- {isLoading ? (
- <div className="h-6 w-48 animate-pulse rounded-md bg-muted" />
- ) : server ? (
- <>
- <h1 className="font-display truncate text-xl font-bold tracking-tight text-foreground">
- {server.name}
- </h1>
- <ServerStatusBadge status={server.status} />
- </>
- ) : null}
- </div>
- <p className="mt-1 text-xs text-muted-foreground">
- {isLoading ? 'Loading…' : `${nodeLabel} · ${nodeIp}:${nodePort}`}
- </p>
- </div>
- </div>
- {server ? (
- <ServerControls
- serverId={server.id}
- status={server.status}
- permissions={server.effectivePermissions}
- />
- ) : (
- <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
- )}
- </div>
+        <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${
+              isSuspended
+                ? 'border-danger/30 bg-danger/10 text-danger'
+                : server?.status === 'running'
+                  ? 'border-success/30 bg-success/10 text-success'
+                  : 'border-border bg-surface-2 text-muted-foreground'
+            }`}>
+              <Terminal className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              {isLoading ? (
+                <div className="h-5 w-40 animate-pulse rounded-md bg-muted" />
+              ) : server ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">
+                      {server.name}
+                    </h1>
+                    <ServerStatusBadge
+                      status={server.status}
+                      operationStage={server.operationStage}
+                      operationProgress={server.operationProgress}
+                    />
+                  </div>
+                  <p className="type-meta mt-0.5 truncate">
+                    {[templateLabel, serverGameVersion].filter(Boolean).join(' · ') || '—'}
+                  </p>
+                  <button
+                    type="button"
+                    className="type-meta mt-0.5 inline-flex items-center gap-1 font-mono hover:text-foreground"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(`${nodeIp}:${nodePort}`).then(
+                        () => notifySuccess('Copied address'),
+                        () => notifyError('Failed to copy'),
+                      );
+                    }}
+                  >
+                    {nodeIp}:{nodePort}
+                    <Copy className="h-3 w-3" />
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
 
- {isSuspended && (
- <div className="mt-3 flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
- <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
- <span className="font-semibold">Suspended</span>
- {server?.suspensionReason && (
- <span className="text-danger/80">— {server.suspensionReason}</span>
- )}
- </div>
- )}
- {server?.status === 'cloning' && (
- <div className="mt-3 flex items-center gap-3 rounded-lg border border-info/30 bg-info-muted px-3 py-2 text-xs text-info">
- <Copy className="h-3.5 w-3.5 shrink-0 animate-pulse" />
- <span className="font-semibold">Cloning Files</span>
- <span className="text-info/80">— Server files are being copied from the source server. The server cannot be started until the copy completes.</span>
- <div className="ml-auto flex items-center gap-2">
- <div className="h-1.5 w-24 overflow-hidden rounded-full bg-info/20">
- <div className="h-full w-2/3 animate-pulse rounded-full bg-info/60" />
- </div>
- <span className="text-[10px] text-info/60">Copying...</span>
- </div>
- </div>
- )}
- </div>
- </div>
- </div>
+          <ServerHeaderStats
+            metrics={liveMetrics}
+            allocatedMemoryMb={server?.allocatedMemoryMb}
+            allocatedDiskMb={diskLimitMb}
+          />
 
- {/* ── Tab navigation ── */}
- <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 ">
- {visibleTabs.map(([key, label]) => {
- const isActive = !isPluginTab && activeTab === key;
- const Icon = tabIcons[key as keyof typeof tabLabels];
- return (
- <button
- key={key}
- type="button"
- title={label}
- className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
- isActive
- ? 'bg-primary text-primary-foreground '
- : 'text-muted-foreground hover:bg-surface-2/60 hover:text-foreground'
- }`}
- onClick={() => server && navigate(`/servers/${server.id}/${key}`)}
- >
- <Icon className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{label}</span>
- </button>
- );
- })}
- {filteredServerPluginTabs.map((ptab) => {
- const pluginTabKey = `plugin:${ptab.id}`;
- const isActive = tab === pluginTabKey;
- return (
- <button
- key={ptab.id}
- type="button"
- title={ptab.label}
- className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
- isActive
- ? 'bg-primary text-primary-foreground '
- : 'text-muted-foreground hover:bg-surface-2/60 hover:text-foreground'
- }`}
- onClick={() => server && navigate(`/servers/${server.id}/${pluginTabKey}`)}
- >
- <Plug className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{ptab.label}</span>
- </button>
- );
- })}
- </div>
+          <div className="ml-auto">
+            {server ? (
+              <ServerControls
+                serverId={server.id}
+                status={server.status}
+                permissions={server.effectivePermissions}
+              />
+            ) : null}
+          </div>
+        </div>
 
- {/* ── Tab Content ── */}
- {/* resetKey clears a tab-local crash so switching tabs works without full refresh */}
- <ErrorBoundary
- resetKey={tab ?? activeTab}
- fallback={
- <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-xl border border-border/40 bg-card px-4 py-10 text-center">
- <p className="text-sm font-medium text-foreground">This tab hit an error</p>
- <p className="max-w-md text-xs text-muted-foreground">
- Switch tabs or retry. The rest of the server page stays usable.
- </p>
- </div>
- }
- >
- <div>
- <Suspense fallback={<TabSkeleton />}>
- {!isPluginTab && activeTab === 'console' && (
- <ServerConsoleTab
- liveMetrics={liveMetrics}
- liveDiskUsageMb={liveDiskUsageMb}
- liveDiskTotalMb={liveDiskTotalMb}
- isConnected={isConnected}
- canSend={!!canSend}
- entries={entries}
- send={send}
- clearConsole={clearConsole}
- isLoading={consoleLoading}
- isError={consoleError}
- refetch={refetchConsole}
- />
- )}
+        {isSuspended && (
+          <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-danger/30 bg-danger-muted px-2.5 py-1 text-xs text-danger">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-semibold">Suspended</span>
+            {server?.suspensionReason && <span className="text-danger/80">— {server.suspensionReason}</span>}
+          </div>
+        )}
+
+        {server?.status === 'cloning' && (
+          <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-info/30 bg-info-muted px-2.5 py-1 text-xs text-info">
+            <Copy className="h-3.5 w-3.5 shrink-0 animate-pulse" />
+            <span className="font-semibold">Cloning</span>
+            <span className="text-info/80">Cannot start until copy completes.</span>
+          </div>
+        )}
+
+        {isLoading && navTabs.length === 0 ? (
+          <div className="flex items-center gap-0.5 border-t border-border/40 px-1.5 py-1">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="h-7 w-16 shrink-0 animate-pulse rounded-md bg-surface-3/60" />
+            ))}
+          </div>
+        ) : (
+          <ServerTabBar tabs={navTabs} />
+        )}
+
+      </div>
+
+
+
+      <ErrorBoundary
+        resetKey={tab ?? activeTab}
+        fallback={
+          <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-xl border border-border/40 bg-card px-4 py-10 text-center">
+            <p className="text-sm font-medium text-foreground">This tab hit an error</p>
+            <p className="type-meta max-w-md">
+              Switch tabs or retry. The rest of the server page stays usable.
+            </p>
+          </div>
+        }
+      >
+        <div
+          className={
+            !isPluginTab && activeTab === 'console'
+              ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
+              : 'min-h-0 flex-1 overflow-y-auto'
+          }
+        >
+
+
+          <Suspense fallback={<TabSkeleton />}>
+            {!isPluginTab && activeTab === 'console' && (
+              <ServerConsoleTab
+                liveMetrics={liveMetrics}
+                liveDiskUsageMb={liveDiskUsageMb}
+                liveDiskTotalMb={liveDiskTotalMb ?? diskLimitMb}
+                allocatedMemoryMb={server?.allocatedMemoryMb}
+                allocatedDiskMb={server?.allocatedDiskMb}
+                isConnected={isConnected}
+                streamStatus={streamStatus}
+                canSend={!!canSend}
+                entries={entries}
+                send={send}
+                clearConsole={clearConsole}
+                isLoading={consoleLoading}
+                isError={consoleError}
+                refetch={refetchConsole}
+              />
+            )}
+
 
  {!isPluginTab && activeTab === 'files' && server && (
  <ServerTabCard>
@@ -1329,7 +1346,6 @@ function ServerDetailsPage() {
  </Suspense>
  </div>
  </ErrorBoundary>
- </div>
 
  {eulaPrompt && (
  <EulaModal

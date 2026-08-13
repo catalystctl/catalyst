@@ -40,6 +40,11 @@
   --destructive: var(--danger);
   --destructive-foreground: 0 0% 100%;
   --ring: var(--accent-teal);
+  --primary-muted: var(--accent-teal-muted);
+  --success-foreground: 0 0% 100%;
+  --danger-foreground: 0 0% 100%;
+  --info-foreground: 0 0% 100%;
+
   --radius: 0.625rem;
 
   --primary-50: 174 80% 95%;
@@ -77,7 +82,8 @@
 
   --shadow-surface: 0 1px 2px 0 rgb(21 18 38 / 0.04);
   --shadow-elevated: 0 8px 24px -8px rgb(21 18 38 / 0.12), 0 2px 6px -2px rgb(21 18 38 / 0.06);
-  --shadow-panel: 0 0 0 1px rgb(21 18 38 / 0.04), 0 1px 2px rgb(21 18 38 / 0.04);
+  --shadow-panel: 0 0 0 1px hsl(var(--border) / 0.7);
+
 
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --duration-fast: 120ms;
@@ -114,6 +120,11 @@
   --destructive: var(--danger);
   --destructive-foreground: 0 0% 100%;
   --ring: var(--accent-teal);
+
+  --primary-muted: 174 80% 46% / 0.15;
+  --success-foreground: 240 10% 5%;
+  --danger-foreground: 0 0% 100%;
+  --info-foreground: 240 10% 5%;
 
   --surface-0: 240 12% 6%;
   --surface-1: 240 12% 9%;
@@ -194,30 +205,25 @@ body {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(1200px 600px at 0% -10%, hsl(var(--primary) / 0.07), transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, hsl(var(--primary) / 0.04), transparent 50%);
-  opacity: 0.9;
+    radial-gradient(1100px 520px at 0% -12%, hsl(var(--primary) / 0.045), transparent 58%);
+  opacity: 0.85;
 }
 
 .dark .app-shell::before {
   background:
-    radial-gradient(1100px 700px at 0% -15%, hsl(var(--primary) / 0.1), transparent 55%),
-    radial-gradient(800px 480px at 100% 0%, hsl(var(--primary) / 0.05), transparent 50%);
+    radial-gradient(1000px 580px at 0% -16%, hsl(var(--primary) / 0.07), transparent 58%);
   opacity: 1;
 }
 
+
 /* Content frame used by main workspace */
 .panel-frame {
-  border: 1px solid hsl(var(--border) / 0.8);
+  border: 1px solid hsl(var(--border) / 0.75);
   border-radius: calc(var(--radius) + 4px);
-  background: hsl(var(--card) / 0.72);
+  background: hsl(var(--card));
   box-shadow: var(--shadow-panel);
-  backdrop-filter: blur(8px);
 }
 
-.dark .panel-frame {
-  background: hsl(var(--card) / 0.82);
-}
 
 /* Page title block without forcing a heavy card wrapper */
 .page-title {
@@ -237,6 +243,28 @@ body {
   color: hsl(var(--muted-foreground));
   text-wrap: pretty;
 }
+
+/* Type roles — consume these instead of inventing sizes per page */
+.type-overline {
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.type-meta {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+}
+
+.type-numeric {
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', 'Fira Code', monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 
 /* ── Scrollbar ── */
 
@@ -302,7 +330,7 @@ select option {
 
 @-moz-document url-prefix() {
   select option {
-    background-color: white;
+    background-color: hsl(var(--card));
     color: hsl(var(--foreground));
   }
   .dark select option {
@@ -311,9 +339,10 @@ select option {
   }
   select option:checked {
     background-color: hsl(var(--primary));
-    color: white;
+    color: hsl(var(--primary-foreground));
   }
 }
+
 
 /* ── Console ── */
 
@@ -368,44 +397,36 @@ select option {
 }
 
 .console-line:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-.dark .console-line:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: hsl(var(--foreground) / 0.03);
 }
 
 .console-search-match {
-  background: rgba(250, 204, 21, 0.3);
-  color: #92400e;
+  background: hsl(var(--warning) / 0.28);
+  color: hsl(var(--foreground));
   border-radius: 2px;
   padding: 0 1px;
 }
 
 .dark .console-search-match {
-  background: rgba(250, 204, 21, 0.2);
-  color: #fde68a;
+  background: hsl(var(--warning) / 0.22);
+  color: hsl(var(--foreground));
 }
 
-/* Console syntax — light */
-.console-output .chl-error { color: #dc2626; font-weight: 600; }
-.console-output .chl-warn  { color: #d97706; font-weight: 600; }
-.console-output .chl-info  { color: #2563eb; }
-.console-output .chl-time  { color: #7c3aed; }
-.console-output .chl-uuid  { color: #8b5cf6; opacity: 0.7; }
-.console-output .chl-ip    { color: #059669; }
-.console-output .chl-url   { color: #0284c7; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: rgba(2, 132, 199, 0.3); }
-.console-output .chl-num   { color: #ea580c; }
+/* Console syntax — tokenized so custom themes can override */
+.console-output .chl-error { color: hsl(var(--danger)); font-weight: 600; }
+.console-output .chl-warn  { color: hsl(var(--warning)); font-weight: 600; }
+.console-output .chl-info  { color: hsl(var(--info)); }
+.console-output .chl-time  { color: hsl(var(--info)); }
+.console-output .chl-uuid  { color: hsl(var(--primary)); opacity: 0.75; }
+.console-output .chl-ip    { color: hsl(var(--success)); }
+.console-output .chl-url   { color: hsl(var(--info)); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: hsl(var(--info) / 0.3); }
+.console-output .chl-num   { color: hsl(var(--warning)); }
 
-/* Console syntax — dark */
-.dark .console-output .chl-error { color: #f87171; }
-.dark .console-output .chl-warn  { color: #fbbf24; }
-.dark .console-output .chl-info  { color: #60a5fa; }
-.dark .console-output .chl-time  { color: #818cf8; }
-.dark .console-output .chl-uuid  { color: #a78bfa; }
-.dark .console-output .chl-ip    { color: #34d399; }
-.dark .console-output .chl-url   { color: #38bdf8; text-decoration-color: rgba(56, 189, 248, 0.3); }
-.dark .console-output .chl-num   { color: #fb923c; }
+.xterm-console-host .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
+}
+
 
 /* ── Utilities ── */
 

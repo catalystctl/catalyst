@@ -138,8 +138,8 @@ export type MigrationPhaseId = (typeof MIGRATION_PHASES)[number]['id'];
 
 export const PHASE_STATUS_COLORS: Record<string, string> = {
   pending: 'text-muted-foreground',
-  running: 'text-blue-400',
-  completed: 'text-emerald-400',
-  failed: 'text-red-400',
+  running: 'text-info',
+  completed: 'text-success',
+  failed: 'text-danger',
   skipped: 'text-muted-foreground',
 };

@@ -49,26 +49,30 @@ function ServerCard({ server }: { server: Server }) {
  const diskBar = diskPercent ?? 0;
 
  const diskDisplay =
- server.diskUsageMb != null && diskTotalMb
- ? `${formatMB(server.diskUsageMb)} / ${formatMB(diskTotalMb)}`
- : formatPercent(diskPercent);
+  server.diskUsageMb != null && diskTotalMb
+    ? `${formatMB(server.diskUsageMb)} / ${formatMB(diskTotalMb)}`
+    : formatPercent(diskPercent);
+
+ const memoryDisplay =
+  server.memoryUsageMb != null && server.allocatedMemoryMb
+    ? `${formatMB(server.memoryUsageMb)} / ${formatMB(server.allocatedMemoryMb)}`
+    : formatPercent(memoryPercent);
 
  const barColor = (val: number) =>
- val > 80 ? 'bg-danger' : val > 60 ? 'bg-warning' : 'bg-primary';
+  val > 80 ? 'bg-danger' : val > 60 ? 'bg-warning' : 'bg-primary';
 
  const metrics = useMemo(
- () => [
- { label: 'CPU', value: cpuPercent, bar: cpuBar, display: formatPercent(cpuPercent) },
- { label: 'RAM', value: memoryPercent, bar: memoryBar, display: formatPercent(memoryPercent) },
- { label: 'Disk', value: diskPercent, bar: diskBar, display: diskDisplay },
- ],
- [cpuPercent, cpuBar, memoryPercent, memoryBar, diskPercent, diskBar, diskDisplay],
+  () => [
+    { label: 'CPU', value: cpuPercent, bar: cpuBar, display: formatPercent(cpuPercent) },
+    { label: 'RAM', value: memoryPercent, bar: memoryBar, display: memoryDisplay },
+    { label: 'Disk', value: diskPercent, bar: diskBar, display: diskDisplay },
+  ],
+  [cpuPercent, cpuBar, memoryPercent, memoryBar, diskPercent, diskBar, diskDisplay, memoryDisplay],
  );
 
+
  return (
- <div className="group relative overflow-hidden rounded-lg border border-border/30 bg-card transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
- {/* Left accent bar */}
- <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
+ <div className="group relative overflow-hidden rounded-xl border border-border/50 bg-card transition-colors hover:border-primary/20">
 
  <div className="p-5 pl-6">
  {/* Header */}
@@ -108,8 +112,9 @@ function ServerCard({ server }: { server: Server }) {
  {metrics.map((metric) => (
  <div key={metric.label} className="space-y-1.5">
  <div className="flex items-center justify-between">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{metric.label}</span>
- <span className="font-mono text-[11px] tabular-nums text-foreground">{metric.display}</span>
+        <span className="type-overline">{metric.label}</span>
+        <span className="type-numeric text-[11px] text-foreground">{metric.display}</span>
+
  </div>
  <div className="h-1.5 overflow-hidden rounded-full bg-surface-2/30">
  <div

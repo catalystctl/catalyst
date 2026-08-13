@@ -165,7 +165,7 @@ export default function ServerImportModal({
  return (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
- <div className="w-full max-w-3xl rounded-xl border border-warning/30 bg-card shadow-xl">
+ <div className="w-full max-w-3xl rounded-xl border border-warning/30 bg-card shadow-elevated">
  <div className="flex items-center justify-between border-b border-warning/30 bg-warning/5 px-6 py-4">
  <div className="flex items-center gap-2">
  <Download className="h-5 w-5 text-warning" />

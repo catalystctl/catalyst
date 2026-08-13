@@ -271,7 +271,7 @@ function LoginPage() {
  )}
 
  {ssoError === 'login_required' && !authStep && (
- <Alert className="mt-4 border-blue-500 bg-info/5 text-blue-900">
+ <Alert className="mt-4 border-info/40 bg-info/5 text-foreground">
  <AlertDescription>
  Please log in to your {ssoProvider === 'whmcs' ? 'WHMCS' : 'Paymenter'} account first, then click &quot;{ssoProvider === 'whmcs' ? 'Continue with WHMCS' : 'Continue with Paymenter'}&quot; again.
  </AlertDescription>

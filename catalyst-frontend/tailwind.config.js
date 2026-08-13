@@ -28,6 +28,7 @@ export default {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
+          muted: 'hsl(var(--primary-muted))',
           // Theme-store rewrites these at runtime for customization
           50: 'hsl(var(--primary-50))',
           100: 'hsl(var(--primary-100))',
@@ -41,6 +42,7 @@ export default {
           900: 'hsl(var(--primary-900))',
           950: 'hsl(var(--primary-950))',
         },
+
         'primary-foreground': 'hsl(var(--primary-foreground))',
         secondary: 'hsl(var(--secondary))',
         'secondary-foreground': 'hsl(var(--secondary-foreground))',
@@ -55,6 +57,7 @@ export default {
         success: {
           DEFAULT: 'hsl(var(--success))',
           muted: 'hsl(var(--success-muted))',
+          foreground: 'hsl(var(--success-foreground))',
         },
         warning: {
           DEFAULT: 'hsl(var(--warning))',
@@ -63,11 +66,14 @@ export default {
         danger: {
           DEFAULT: 'hsl(var(--danger))',
           muted: 'hsl(var(--danger-muted))',
+          foreground: 'hsl(var(--danger-foreground))',
         },
         info: {
           DEFAULT: 'hsl(var(--info))',
           muted: 'hsl(var(--info-muted))',
+          foreground: 'hsl(var(--info-foreground))',
         },
+
         surface: {
           DEFAULT: 'hsl(var(--surface-1))',
           0: 'hsl(var(--surface-0))',
@@ -89,10 +95,11 @@ export default {
           950: 'hsl(var(--zinc-950))',
         },
         gray: {
-          750: '#2d3748',
-          850: '#1a202c',
-          950: '#0d1117',
+          750: 'hsl(var(--surface-3))',
+          850: 'hsl(var(--surface-1))',
+          950: 'hsl(var(--surface-0))',
         },
+
       },
       borderRadius: {
         lg: 'var(--radius)',

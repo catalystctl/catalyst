@@ -31,13 +31,11 @@ interface ClusterResourcesChartProps {
 
 const COLORS = [
  'hsl(var(--primary))',
- 'hsl(270 70% 55%)',
- 'hsl(160 70% 40%)',
- 'hsl(38 90% 50%)',
- 'hsl(0 75% 55%)',
- 'hsl(220 80% 55%)',
- 'hsl(330 70% 50%)',
- 'hsl(80 60% 40%)',
+ 'hsl(var(--success))',
+ 'hsl(var(--warning))',
+ 'hsl(var(--info))',
+ 'hsl(var(--danger))',
+ 'hsl(var(--muted-foreground))',
 ];
 
 const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [

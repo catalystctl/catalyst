@@ -243,7 +243,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
  {open ? (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4">
- <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+ <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-elevated">
  <div className="flex items-center justify-between">
  <h2 className="text-lg font-semibold text-foreground">Update server</h2>
  <button

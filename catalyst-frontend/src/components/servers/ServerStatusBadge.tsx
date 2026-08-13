@@ -1,5 +1,6 @@
 import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban, Copy, HardDriveDownload, Archive, OctagonX } from 'lucide-react';
 import type { ServerStatus } from '../../types/server';
+import { SERVER_STATUS_LABELS } from '../../utils/constants';
 
 const colorMap: Record<ServerStatus, string> = {
   stopped: 'bg-surface-3 text-muted-foreground',
@@ -33,9 +34,18 @@ const iconMap: Record<ServerStatus, React.ReactNode> = {
   error: <OctagonX className="h-3 w-3" />,
 };
 
+const TRANSITIONAL: ServerStatus[] = [
+  'installing',
+  'transferring',
+  'cloning',
+  'restoring',
+  'creating_backup',
+  'starting',
+  'stopping',
+];
+
 type Props = {
   status: ServerStatus;
-  /** Optional soft progress from SSE (install/transfer/clone). */
   operationStage?: string | null;
   operationProgress?: number | null;
 };
@@ -44,26 +54,23 @@ function ServerStatusBadge({ status, operationStage, operationProgress }: Props)
   const showProgress =
     typeof operationProgress === 'number' &&
     operationProgress >= 0 &&
-    ['installing', 'transferring', 'cloning', 'restoring', 'creating_backup', 'starting', 'stopping'].includes(
-      status,
-    );
+    TRANSITIONAL.includes(status);
 
+  const statusLabel = SERVER_STATUS_LABELS[status] ?? status;
   const label = showProgress
-    ? `${status} ${Math.round(operationProgress)}%`
-    : operationStage && status !== 'running' && status !== 'stopped'
-      ? `${status}`
-      : status;
+    ? `${statusLabel} ${Math.round(operationProgress)}%`
+    : statusLabel;
 
   const title =
     operationStage || showProgress
       ? [operationStage, showProgress ? `${Math.round(operationProgress!)}%` : null]
           .filter(Boolean)
           .join(' · ')
-      : `Server status: ${status}`;
+      : `Server status: ${statusLabel}`;
 
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold ${colorMap[status]}`}
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold ${colorMap[status]}`}
       aria-label={title}
       title={title}
     >
@@ -71,7 +78,7 @@ function ServerStatusBadge({ status, operationStage, operationProgress }: Props)
       <span className="truncate">{label}</span>
       {showProgress && (
         <span
-          className="ml-0.5 h-1 w-8 overflow-hidden rounded-full bg-black/15 dark:bg-white/15"
+          className="ml-0.5 h-1 w-8 overflow-hidden rounded-full bg-foreground/15"
           aria-hidden
         >
           <span

@@ -19,8 +19,8 @@ import {
  Plug,
  Palette,
  Plus,
- Command,
  Loader2,
+
  Terminal,
  FolderOpen,
  FolderSync,
@@ -83,15 +83,15 @@ type SearchCategory =
  | 'Server Tabs';
 
 const CATEGORY_META: Record<SearchCategory, { label: string; icon: LucideIcon; color: string }> = {
- Navigation: { label: 'Pages', icon: LayoutDashboard, color: 'text-info' },
- Admin: { label: 'Admin', icon: Shield, color: 'text-violet-400' },
- Settings: { label: 'Settings & Config', icon: Settings, color: 'text-warning' },
- Servers: { label: 'Servers', icon: Server, color: 'text-success' },
- Nodes: { label: 'Nodes', icon: MonitorDot, color: 'text-cyan-400' },
- Templates: { label: 'Templates', icon: FileText, color: 'text-orange-400' },
- Profile: { label: 'Account', icon: Users, color: 'text-pink-400' },
- Actions: { label: 'Quick Actions', icon: Zap, color: 'text-teal-400' },
- 'Server Tabs': { label: 'Server Tabs', icon: Terminal, color: 'text-indigo-400' },
+ Navigation: { label: 'Pages', icon: LayoutDashboard, color: 'text-muted-foreground' },
+ Admin: { label: 'Admin', icon: Shield, color: 'text-muted-foreground' },
+ Settings: { label: 'Settings & Config', icon: Settings, color: 'text-muted-foreground' },
+ Servers: { label: 'Servers', icon: Server, color: 'text-muted-foreground' },
+ Nodes: { label: 'Nodes', icon: MonitorDot, color: 'text-muted-foreground' },
+ Templates: { label: 'Templates', icon: FileText, color: 'text-muted-foreground' },
+ Profile: { label: 'Account', icon: Users, color: 'text-muted-foreground' },
+ Actions: { label: 'Quick Actions', icon: Zap, color: 'text-muted-foreground' },
+ 'Server Tabs': { label: 'Server Tabs', icon: Terminal, color: 'text-muted-foreground' },
 };
 
 const CATEGORY_ORDER: SearchCategory[] = [
@@ -952,6 +952,23 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  prevIsOpenRef.current = isOpen;
  }, [isOpen]);
 
+ useEffect(() => {
+ if (!isOpen) return;
+ const handleWindowKeyDown = (event: KeyboardEvent) => {
+ if (event.key === 'Escape') { event.preventDefault(); onClose(); }
+ if (event.key === 'Tab') {
+ const root = inputRef.current?.closest('[role="dialog"]');
+ const focusable = root?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+ if (!focusable?.length) return;
+ const first = focusable[0]; const last = focusable[focusable.length - 1];
+ if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+ else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+ }
+ };
+ window.addEventListener('keydown', handleWindowKeyDown);
+ return () => window.removeEventListener('keydown', handleWindowKeyDown);
+ }, [isOpen, onClose]);
+
  // Reset selection when query/category changes
  useEffect(() => {
  // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -1033,11 +1050,11 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  animate={{ opacity: 1 }}
  exit={{ opacity: 0 }}
  transition={{ duration: 0.15 }}
- className="fixed inset-0 z-[100] overflow-y-auto p-4"
+ className="fixed inset-0 z-[100] overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label="Search"
  >
  {/* Backdrop */}
  <div
- className="fixed inset-0 bg-background/60 backdrop-blur-md"
+ className="fixed inset-0 bg-background/60"
  onClick={onClose}
  aria-hidden="true"
  />
@@ -1050,7 +1067,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
  className="relative mx-auto max-w-2xl mt-[8vh]"
  >
- <div className="overflow-hidden rounded-2xl border border-border bg-surface-0/95 shadow-2xl backdrop-blur-xl">
+ <div className="overflow-hidden rounded-xl border border-border bg-card shadow-elevated">
  {/* ── Search Input ── */}
  <div className="flex items-center border-b border-border px-4">
  <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -1069,6 +1086,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  <button
  type="button"
  onClick={onClose}
+ aria-label="Close search"
  className="ml-2 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <X className="h-4 w-4" />
@@ -1077,7 +1095,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
  {/* ── Category Pills (visible when no query) ── */}
  {!query.trim() && availableCategories.length > 1 && (
- <div className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto border-b border-border bg-surface-0/80 px-4 py-2 backdrop-blur-xl scrollbar-none">
+ <div className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto border-b border-border bg-card px-4 py-2 scrollbar-none">
  <button
  type="button"
  onClick={() => handleCategoryClick('All')}
@@ -1132,7 +1150,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  return (
  <div key={category}>
  {/* Group header */}
- <div className="sticky top-0 z-10 flex items-center gap-2 bg-surface-0/80 px-4 py-1.5 backdrop-blur-xl">
+ <div className="sticky top-0 z-10 flex items-center gap-2 bg-card px-4 py-1.5">
  <CatIcon className={cn('h-3 w-3', meta.color)} />
  <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">
  {meta.label}
@@ -1211,7 +1229,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  <div className="flex items-center gap-3 text-[11px] text-muted-foreground/60">
  <span className="flex items-center gap-1">
  <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">
- <Command className="inline h-2.5 w-2.5" />K
+ {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘K' : 'Ctrl+K'}
  </kbd>
  open
  </span>

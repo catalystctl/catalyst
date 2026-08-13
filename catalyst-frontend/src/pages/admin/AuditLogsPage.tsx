@@ -219,7 +219,7 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm" onClick={onClose}>
  <div
  onClick={(e) => e.stopPropagation()}
- className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-xl max-h-[85vh] flex flex-col"
+ className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-elevated max-h-[85vh] flex flex-col"
  >
  {/* ── Header ── */}
  <div className={`relative overflow-hidden border-b border-border px-6 py-4 ${ts.bg}`}>

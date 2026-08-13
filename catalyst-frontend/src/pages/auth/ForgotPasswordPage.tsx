@@ -6,6 +6,10 @@ import { getErrorMessage } from '../../utils/errors';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { BrandFooter } from '../../components/shared/BrandFooter';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 function ForgotPasswordPage() {
  const [email, setEmail] = useState('');
@@ -42,7 +46,8 @@ function ForgotPasswordPage() {
 
  return (
  <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
- <div className="w-full max-w-md rounded-xl border border-border/30 bg-card px-6 py-8 shadow-surface">
+ <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
+ <CardContent className="px-6 py-8 sm:px-8">
  <div className="flex flex-col items-center text-center">
  <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
  <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
@@ -65,49 +70,40 @@ function ForgotPasswordPage() {
  Please check your inbox (and spam folder).
  </p>
  </div>
- <Link
- to="/login"
- className="block w-full rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
- >
- Back to login
- </Link>
+ <Button asChild className="w-full">
+ <Link to="/login">Back to login</Link>
+ </Button>
  </div>
  ) : (
  <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
  <div className="space-y-2">
- <label className="block text-sm text-muted-foreground" htmlFor="email">
- Email address
- </label>
- <input
+ <Label htmlFor="email">Email address</Label>
+ <Input
  id="email"
  type="email"
  autoComplete="email"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  placeholder="you@example.com"
  value={email}
  onChange={(e) => setEmail(e.target.value)}
  />
  </div>
 
- <button
- type="submit"
- className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70"
- disabled={isLoading}
- >
+ <Button type="submit" className="w-full" disabled={isLoading}>
  {isLoading ? 'Sending...' : 'Send reset link'}
- </button>
+ </Button>
 
  <div className="text-center">
  <Link
  to="/login"
- className="text-sm font-medium text-primary-600 transition-colors hover:text-primary"
+ className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
  >
  Back to login
  </Link>
  </div>
  </form>
  )}
- </div>
+ </CardContent>
+ </Card>
  <BrandFooter />
  </div>
  );

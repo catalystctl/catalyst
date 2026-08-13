@@ -161,31 +161,53 @@ export default function ServerUsersTab({
  )}
  </div>
 
- {entry.userId !== ownerId && (
- <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
- {permissionOptions.map((perm) => (
- <label key={`${entry.id}-${perm}`} className="flex items-center gap-2 text-[11px] text-muted-foreground">
- <input
- type="checkbox"
- className="h-3.5 w-3.5 rounded border-border/40 bg-card text-primary-600"
- checked={(accessPermissions[entry.userId] ?? entry.permissions).includes(perm)}
- onChange={(e) => {
- if (entry.userId === ownerId) return;
- const next = new Set(accessPermissions[entry.userId] ?? entry.permissions);
- if (e.target.checked) next.add(perm);
- else next.delete(perm);
- onAccessPermissionsChange({
- ...accessPermissions,
- [entry.userId]: Array.from(next),
- });
- }}
- disabled={entry.userId === ownerId}
- />
- <span className="font-mono text-[10px]">{perm}</span>
- </label>
- ))}
- </div>
- )}
+                {entry.userId !== ownerId && (
+                  <div className="mt-3 space-y-2">
+                    {Array.from(
+                      permissionOptions.reduce((groups, perm) => {
+                        const group = perm.split('.')[0] ?? perm;
+                        const list = groups.get(group) ?? [];
+                        list.push(perm);
+                        groups.set(group, list);
+                        return groups;
+                      }, new Map<string, string[]>()),
+                    ).map(([group, perms]) => {
+                      const selected = accessPermissions[entry.userId] ?? entry.permissions;
+                      return (
+                        <div key={group} className="flex flex-wrap items-center gap-1.5">
+                          <span className="type-overline w-16">{group}</span>
+                          {perms.map((perm) => {
+                            const on = selected.includes(perm);
+                            const short = perm.slice(group.length + 1) || perm;
+                            return (
+                              <button
+                                key={`${entry.id}-${perm}`}
+                                type="button"
+                                className={`rounded-md border px-1.5 py-0.5 font-mono text-[10px] ${
+                                  on
+                                    ? 'border-primary/30 bg-primary/10 text-foreground'
+                                    : 'border-border text-muted-foreground'
+                                }`}
+                                onClick={() => {
+                                  const next = new Set(selected);
+                                  if (on) next.delete(perm);
+                                  else next.add(perm);
+                                  onAccessPermissionsChange({
+                                    ...accessPermissions,
+                                    [entry.userId]: Array.from(next),
+                                  });
+                                }}
+                              >
+                                {short}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
 
  {entry.userId !== ownerId && (
  <div className="mt-3">

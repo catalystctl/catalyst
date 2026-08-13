@@ -44,10 +44,10 @@ const PERMISSION_CATEGORIES = [
  {
  label: 'Server',
  icon: Server,
- color: 'from-blue-500/20 to-cyan-500/20',
- accent: 'text-blue-600',
- border: 'border-blue-500/20',
- bg: 'bg-blue-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: [
  'server.read', 'server.create', 'server.start', 'server.stop',
  'server.delete', 'server.suspend', 'server.transfer', 'server.schedule',
@@ -56,10 +56,10 @@ const PERMISSION_CATEGORIES = [
  {
  label: 'Node',
  icon: Zap,
- color: 'from-amber-500/20 to-yellow-500/20',
- accent: 'text-amber-600',
- border: 'border-amber-500/20',
- bg: 'bg-amber-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: [
  'node.read', 'node.create', 'node.update', 'node.delete',
  'node.view_stats', 'node.manage_allocation', 'node.assign',
@@ -68,91 +68,91 @@ const PERMISSION_CATEGORIES = [
  {
  label: 'Location',
  icon: Globe,
- color: 'from-emerald-500/20 to-teal-500/20',
- accent: 'text-emerald-600',
- border: 'border-emerald-500/20',
- bg: 'bg-emerald-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['location.read', 'location.create', 'location.update', 'location.delete'],
  },
  {
  label: 'Template',
  icon: Info,
- color: 'from-violet-500/20 to-purple-500/20',
- accent: 'text-violet-600',
- border: 'border-violet-500/20',
- bg: 'bg-violet-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['template.read', 'template.create', 'template.update', 'template.delete'],
  },
  {
  label: 'User Management',
  icon: Users,
- color: 'from-rose-500/20 to-pink-500/20',
- accent: 'text-rose-600',
- border: 'border-rose-500/20',
- bg: 'bg-rose-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['user.read', 'user.create', 'user.update', 'user.delete', 'user.ban', 'user.unban', 'user.set_roles'],
  },
  {
  label: 'Role Management',
  icon: Shield,
- color: 'from-orange-500/20 to-red-500/20',
- accent: 'text-orange-600',
- border: 'border-orange-500/20',
- bg: 'bg-orange-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['role.read', 'role.create', 'role.update', 'role.delete'],
  },
  {
  label: 'Backup',
  icon: Shield,
- color: 'from-sky-500/20 to-indigo-500/20',
- accent: 'text-sky-600',
- border: 'border-sky-500/20',
- bg: 'bg-sky-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['backup.read', 'backup.create', 'backup.delete', 'backup.restore'],
  },
  {
  label: 'File Management',
  icon: Info,
- color: 'from-lime-500/20 to-green-500/20',
- accent: 'text-lime-600',
- border: 'border-lime-500/20',
- bg: 'bg-lime-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['file.read', 'file.write'],
  },
  {
  label: 'Console',
  icon: Info,
- color: 'from-fuchsia-500/20 to-pink-500/20',
- accent: 'text-fuchsia-600',
- border: 'border-fuchsia-500/20',
- bg: 'bg-fuchsia-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['console.read', 'console.write'],
  },
  {
  label: 'Database',
  icon: Info,
- color: 'from-teal-500/20 to-cyan-500/20',
- accent: 'text-teal-600',
- border: 'border-teal-500/20',
- bg: 'bg-teal-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['database.create', 'database.read', 'database.delete', 'database.rotate'],
  },
  {
  label: 'Alerts',
  icon: Info,
- color: 'from-red-500/20 to-orange-500/20',
- accent: 'text-red-600',
- border: 'border-red-500/20',
- bg: 'bg-red-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['alert.read', 'alert.create', 'alert.update', 'alert.delete'],
  },
  {
  label: 'System Administration',
  icon: Lock,
- color: 'from-slate-500/20 to-gray-500/20',
- accent: 'text-slate-600',
- border: 'border-slate-500/20',
- bg: 'bg-slate-500/5',
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
  permissions: ['admin.read', 'admin.write', 'apikey.manage'],
  },
 ];
@@ -161,12 +161,12 @@ const PERMISSION_CATEGORIES = [
 const PERMISSION_PRESETS = [
  {
  key: 'administrator', label: 'Administrator', description: 'Full unrestricted system access',
- icon: KeyRound, color: 'from-amber-500/20 to-orange-500/20',
+ icon: KeyRound, color: 'bg-primary/10',
  permissions: ['*'],
  },
  {
  key: 'moderator', label: 'Moderator', description: 'Manage servers, files, console — not users/roles',
- icon: Shield, color: 'from-blue-500/20 to-cyan-500/20',
+ icon: Shield, color: 'bg-primary/10',
  permissions: [
  'node.read', 'node.update', 'node.view_stats', 'node.assign',
  'location.read', 'template.read', 'user.read', 'server.read',
@@ -177,12 +177,12 @@ const PERMISSION_PRESETS = [
  },
  {
  key: 'user', label: 'User', description: 'Basic access to own servers',
- icon: Users, color: 'from-emerald-500/20 to-green-500/20',
+ icon: Users, color: 'bg-primary/10',
  permissions: ['server.read'],
  },
  {
  key: 'support', label: 'Support', description: 'Read-only access for support staff',
- icon: Eye, color: 'from-violet-500/20 to-purple-500/20',
+ icon: Eye, color: 'bg-primary/10',
  permissions: [
  'node.read', 'node.view_stats', 'location.read', 'template.read',
  'server.read', 'file.read', 'console.read', 'alert.read', 'user.read',
@@ -224,7 +224,7 @@ function formatPermission(perm: string): string {
 }
 
 function getPermissionCategories(permissions: string[]) {
- if (permissions.includes('*')) return [{ category: 'All Permissions', count: 1, icon: KeyRound, color: 'from-amber-500/20 to-orange-500/20', accent: 'text-amber-600', border: 'border-amber-500/20' }];
+ if (permissions.includes('*')) return [{ category: 'All Permissions', count: 1, icon: KeyRound, color: 'bg-primary/10', accent: 'text-primary', border: 'border-primary/20' }];
  const categoryMap = new Map<string, { count: number; icon: typeof Shield; color: string; accent: string; border: string }>();
  for (const perm of permissions) {
  const prefix = perm.split('.')[0];
@@ -234,9 +234,9 @@ function getPermissionCategories(permissions: string[]) {
  categoryMap.set(label, {
  count: 0,
  icon: cat?.icon || Shield,
- color: cat?.color || 'from-slate-500/20 to-gray-500/20',
- accent: cat?.accent || 'text-slate-600',
- border: cat?.border || 'border-slate-500/20',
+ color: cat?.color || 'bg-primary/10',
+ accent: cat?.accent || 'text-primary',
+ border: cat?.border || 'border-primary/20',
  });
  }
  categoryMap.get(label)!.count++;
@@ -276,13 +276,10 @@ function RoleCard({
  : 'border-border bg-card hover:border-primary/20'
  }`}
  >
- {/* Decorative gradient strip */}
- <div className={`absolute top-0 left-0 right-0 h-0.5 ${isWildcard ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-primary/40 to-primary/20'}`} />
-
- <div className="flex items-start justify-between gap-3">
+  <div className="flex items-start justify-between gap-3">
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2.5">
- <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isWildcard ? 'bg-amber-500/10 text-amber-600' : 'bg-primary/10 text-primary'}`}>
+ <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isWildcard ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}`}>
  {isWildcard ? <KeyRound className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
  </div>
  <div className="min-w-0">
@@ -327,7 +324,7 @@ function RoleCard({
  {/* Permission preview chips */}
  <div className="mt-4 flex flex-wrap gap-1.5">
  {isWildcard ? (
- <Badge className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700">
+ <Badge className="gap-1 border-warning/30 bg-warning/10 text-warning">
  <Zap className="h-3 w-3" /> Full Admin
  </Badge>
  ) : (
@@ -424,7 +421,7 @@ function PermissionChip({
  compact ? 'px-1.5 py-0.5 text-[10px]' : ''
  } ${
  selected
- ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
+ ? 'border-primary/30 bg-primary/10 text-primary '
  : 'border-border bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground'
  }`}
  >
@@ -470,7 +467,7 @@ function PermissionCategoryCard({
  onClick={() => onToggleCategory(category.permissions, !allSelected)}
  >
  <div className="flex items-center gap-2.5">
- <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${category.color}`}>
+ <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${category.color}`}>
  <Icon className={`h-3.5 w-3.5 ${category.accent}`} />
  </div>
  <span className="text-sm font-semibold text-foreground">{category.label}</span>
@@ -483,7 +480,7 @@ function PermissionCategoryCard({
  <div className={`flex h-5 w-9 items-center rounded-full transition-all duration-200 ${
  allSelected ? 'bg-primary' : someSelected ? 'bg-primary/40' : 'bg-surface-3'
  }`}>
- <div className={`h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-all duration-200 ${
+ <div className={`h-3.5 w-3.5 rounded-full bg-card  transition-all duration-200 ${
  allSelected ? 'translate-x-[18px]' : someSelected ? 'translate-x-[10px]' : 'translate-x-[2px]'
  }`} />
  </div>
@@ -520,7 +517,7 @@ function PermissionCategoryReadCard({
  <div className={`rounded-xl border ${category.border}`}>
  <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
  <div className="flex items-center gap-2.5">
- <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${category.color}`}>
+ <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${category.color}`}>
  <Icon className={`h-3.5 w-3.5 ${category.accent}`} />
  </div>
  <span className="text-sm font-semibold text-foreground">{category.category}</span>
@@ -559,12 +556,12 @@ function PresetCard({
  onClick={onApply}
  className={`group flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition-all duration-200 ${
  isActive
- ? 'border-primary/40 bg-primary/5 shadow-sm'
+ ? 'border-primary/40 bg-primary/5 '
  : 'border-border bg-card hover:border-primary/20'
  }`}
  >
  <div className="flex items-center gap-2.5 w-full">
- <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${preset.color}`}>
+ <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${preset.color}`}>
  <Icon className="h-4 w-4 text-foreground/80" />
  </div>
  <div className="min-w-0 flex-1">
@@ -574,7 +571,7 @@ function PresetCard({
  </div>
  <div className="flex flex-wrap gap-1">
  {isWildcard ? (
- <Badge className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 text-[9px]">
+ <Badge className="gap-1 border-warning/30 bg-warning/10 text-warning text-[9px]">
  <Zap className="h-2.5 w-2.5" /> All Permissions
  </Badge>
  ) : (
@@ -870,7 +867,7 @@ function RolesPage() {
  className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
  onClick={(e) => { if (e.target === e.currentTarget) { resetForm(); setIsCreateOpen(false); setEditingRole(null); } }}
  >
- <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]">
+ <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-elevated m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]">
  {/* Header */}
  <div className="flex items-center justify-between border-b border-border px-4 py-3 md:px-6 md:py-4">
  <div>
@@ -908,7 +905,7 @@ function RolesPage() {
  {!editingRole && (
  <div>
  <div className="flex items-center gap-2 mb-3">
- <Sparkles className="h-4 w-4 text-amber-500" />
+ <Sparkles className="h-4 w-4 text-warning" />
  <span className="text-sm font-semibold text-foreground">Quick start from a preset</span>
  </div>
  <div className="grid grid-cols-2 gap-3">
@@ -968,21 +965,21 @@ function RolesPage() {
  onClick={() => togglePermission('*')}
  className={`flex items-center gap-3 rounded-xl border p-4 w-full transition-all duration-200 ${
  selectedPermissions.has('*')
- ? 'border-amber-500/30 bg-amber-500/5'
- : 'border-border bg-card hover:border-amber-500/20'
+ ? 'border-warning/30 bg-warning/5'
+ : 'border-border bg-card hover:border-warning/20'
  }`}
  >
- <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/20">
- <Zap className="h-4 w-4 text-amber-600" />
+ <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10">
+ <Zap className="h-4 w-4 text-warning" />
  </div>
  <div className="text-left flex-1">
- <div className="text-sm font-semibold text-amber-700">Wildcard — All Permissions</div>
+ <div className="text-sm font-semibold text-warning">Wildcard — All Permissions</div>
  <div className="text-[11px] text-muted-foreground">Grants unrestricted access to every system permission</div>
  </div>
  <div className={`flex h-6 w-11 items-center rounded-full transition-all duration-200 ${
- selectedPermissions.has('*') ? 'bg-amber-500' : 'bg-surface-3'
+ selectedPermissions.has('*') ? 'bg-warning' : 'bg-surface-3'
  }`}>
- <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-all duration-200 ${
+ <div className={`h-4 w-4 rounded-full bg-card  transition-all duration-200 ${
  selectedPermissions.has('*') ? 'translate-x-6' : 'translate-x-1'
  }`} />
  </div>
@@ -1075,18 +1072,18 @@ function RolesPage() {
  className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
  onClick={(e) => { if (e.target === e.currentTarget) setViewingRole(null); }}
  >
- <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]">
+ <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-elevated m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]">
  {/* Header with role identity */}
  <div className={`relative overflow-hidden px-4 py-4 border-b border-border md:px-6 md:py-5 ${
  viewingRole.permissions?.includes('*')
- ? 'bg-amber-500/[0.03]'
+ ? 'bg-warning/[0.03]'
  : 'bg-primary/[0.02]'
  }`}>
  <div className="relative flex items-start justify-between">
  <div className="flex items-center gap-3">
  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
  viewingRole.permissions?.includes('*')
- ? 'bg-amber-500/10 text-amber-600'
+ ? 'bg-warning/10 text-warning'
  : 'bg-primary/10 text-primary'
  }`}>
  {viewingRole.permissions?.includes('*') ? (
@@ -1134,13 +1131,13 @@ function RolesPage() {
  {/* Permission body */}
  <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5 space-y-4">
  {viewingRole.permissions?.includes('*') ? (
- <div className="flex flex-col items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-6 text-center">
- <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20">
- <Zap className="h-6 w-6 text-amber-600" />
+ <div className="flex flex-col items-center gap-3 rounded-xl border border-warning/20 bg-warning/5 p-6 text-center">
+ <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/20">
+ <Zap className="h-6 w-6 text-warning" />
  </div>
  <div>
- <div className="text-base font-semibold text-amber-700">Full Administrator Access</div>
- <div className="text-xs text-amber-600/70">This role has unrestricted access to all system permissions.</div>
+ <div className="text-base font-semibold text-warning">Full Administrator Access</div>
+ <div className="text-xs text-warning/70">This role has unrestricted access to all system permissions.</div>
  </div>
  </div>
  ) : (

@@ -161,7 +161,8 @@ const TONE_BADGE: Record<ActionTone, string> = {
   success: 'bg-success/15 text-success border-success/25',
   danger: 'bg-destructive/15 text-destructive border-destructive/25',
   warning: 'bg-warning/15 text-warning border-warning/25',
-  info: 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/25',
+  info: 'bg-info/15 text-info border-info/25',
+
   neutral: 'bg-surface-2 text-muted-foreground border-border/50',
 };
 
@@ -169,7 +170,8 @@ const TONE_AVATAR: Record<ActionTone, string> = {
   success: 'bg-success/15 text-success',
   danger: 'bg-destructive/15 text-destructive',
   warning: 'bg-warning/15 text-warning',
-  info: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+  info: 'bg-info/15 text-info',
+
   neutral: 'bg-primary/10 text-primary',
 };
 

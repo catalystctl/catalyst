@@ -70,7 +70,7 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
  {open ? (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
- <div className="w-full max-w-sm rounded-xl border border-border/40 bg-card p-6 shadow-xl">
+ <div className="w-full max-w-sm rounded-xl border border-border/40 bg-card p-6 shadow-elevated">
  <div className="text-lg font-semibold text-foreground">Delete node</div>
  <p className="mt-2 text-sm text-muted-foreground">
  Are you sure you want to delete <span className="font-semibold">{nodeName}</span>? This

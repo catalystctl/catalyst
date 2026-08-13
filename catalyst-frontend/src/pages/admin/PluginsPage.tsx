@@ -3,17 +3,12 @@ import { useQuery, useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
- Puzzle,
- Power,
- PowerOff,
- RefreshCw,
- Settings,
- AlertCircle,
- Loader2,
- User,
- Code,
- Shield,
+  Puzzle,
+  RefreshCw,
+  Settings,
+  Loader2,
 } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,117 +55,43 @@ function PluginCard({
  onReload: () => void;
  onSettings: () => void;
 }) {
- const permissions = plugin.permissions ?? [];
 
- return (
- <ServerTabCard>
- <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
- {/* Header */}
- <div className="flex items-start justify-between gap-3">
- <div className="flex items-start gap-3 min-w-0 flex-1">
- <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
- plugin.enabled
- ? 'bg-success/10'
- : plugin.error
- ? 'bg-destructive/10'
- : 'bg-surface-3'
- }`}>
- <Puzzle className={`h-4 w-4 ${
- plugin.enabled
- ? 'text-success'
- : plugin.error
- ? 'text-destructive'
- : 'text-muted-foreground'
- }`} />
- </div>
- <div className="min-w-0">
- <div className="flex items-center gap-2 flex-wrap">
- <span className="font-semibold text-foreground text-sm">{plugin.displayName}</span>
- <Badge variant={statusBadgeVariant(plugin.status, plugin.error)} className="text-[10px]">
- {statusText(plugin.status)}
- </Badge>
- </div>
- <p className="mt-0.5 text-[11px] text-muted-foreground font-mono">{plugin.name}@v{plugin.version}</p>
- </div>
- </div>
- </div>
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-b border-border/40 py-3 last:border-0">
+      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+        plugin.enabled ? 'bg-success/10 text-success' : plugin.error ? 'bg-danger/10 text-danger' : 'bg-surface-2 text-muted-foreground'
+      }`}>
+        <Puzzle className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-foreground">{plugin.displayName}</span>
+          <Badge variant={statusBadgeVariant(plugin.status, plugin.error)} className="text-[10px]">
+            {statusText(plugin.status)}
+          </Badge>
+          <span className="type-meta font-mono">{plugin.name}@{plugin.version}</span>
+        </div>
+        {plugin.error && <p className="mt-0.5 text-[11px] text-danger">{plugin.error}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Button
+          variant={plugin.enabled ? 'outline' : 'default'}
+          size="sm"
+          onClick={onToggle}
+          disabled={isProcessing || plugin.status === 'error'}
+        >
+          {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : plugin.enabled ? 'Disable' : 'Enable'}
+        </Button>
+        <Button variant="ghost" size="icon-sm" onClick={onReload} disabled={isProcessing} aria-label="Reload">
+          <RefreshCw className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon-sm" onClick={onSettings} aria-label="Settings">
+          <Settings className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
 
- {/* Description */}
- {plugin.description && (
- <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{plugin.description}</p>
- )}
-
- {/* Error */}
- {plugin.error && (
- <div className="mt-2 flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2">
- <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
- <p className="text-[11px] text-destructive">{plugin.error}</p>
- </div>
- )}
-
- {/* Meta */}
- <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
- <span className="flex items-center gap-1">
- <User className="h-3 w-3" />
- {plugin.author}
- </span>
- <span className="flex items-center gap-1">
- <Code className="h-3 w-3" />
- {plugin.hasBackend ? 'Backend' : null}
- {plugin.hasBackend && plugin.hasFrontend ? ' + ' : null}
- {plugin.hasFrontend ? 'Frontend' : null}
- </span>
- {permissions.length > 0 && (
- <Badge variant="secondary" className="flex items-center gap-1 text-[9px]">
- <Shield className="h-2.5 w-2.5" />
- {permissions.length} perm{permissions.length === 1 ? '' : 's'}
- </Badge>
- )}
- </div>
-
- {/* Actions */}
- <div className="mt-4 flex items-center gap-2">
- <Button
- variant={plugin.enabled ? 'destructive' : 'default'}
- size="sm"
- className="flex-1 gap-1.5"
- onClick={onToggle}
- disabled={isProcessing || plugin.status === 'error'}
- >
- {isProcessing ? (
- <Loader2 className="h-3.5 w-3.5 animate-spin" />
- ) : plugin.enabled ? (
- <>
- <PowerOff className="h-3.5 w-3.5" />
- Disable
- </>
- ) : (
- <>
- <Power className="h-3.5 w-3.5" />
- Enable
- </>
- )}
- </Button>
- <Button
- variant="outline"
- size="sm"
- onClick={onReload}
- disabled={isProcessing}
- title="Reload"
- >
- <RefreshCw className="h-3.5 w-3.5" />
- </Button>
- <Button
- variant="outline"
- size="sm"
- onClick={onSettings}
- title="Settings"
- >
- <Settings className="h-3.5 w-3.5" />
- </Button>
- </div>
- </ServerTabCard>
- );
 }
 
 // ── Plugin Settings Modal ──
@@ -269,7 +190,7 @@ function PluginSettingsModal({
  return (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm px-4">
- <div className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-xl">
+ <div className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-elevated">
  <div className="border-b border-border/50 px-6 py-4">
  <div className="flex items-center gap-2.5">
  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -483,45 +404,34 @@ export default function PluginsPage() {
  />
 
  {/* ── Plugin Grid ── */}
- {isLoading ? (
- <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
- {[1, 2, 3].map((i) => (
- <div key={i} className="rounded-xl border border-border bg-card p-5">
- <div className="flex items-start gap-3">
- <div className="h-10 w-10 animate-pulse rounded-lg bg-surface-3" />
- <div className="flex-1 space-y-2">
- <div className="h-4 w-28 animate-pulse rounded bg-surface-3" />
- <div className="h-3 w-40 animate-pulse rounded bg-surface-2 font-mono" />
- <div className="h-3 w-full animate-pulse rounded bg-surface-2" />
- </div>
- </div>
- <div className="mt-4 flex gap-2">
- <div className="h-8 w-24 animate-pulse rounded-md bg-surface-2" />
- <div className="h-8 w-8 animate-pulse rounded-md bg-surface-2" />
- <div className="h-8 w-8 animate-pulse rounded-md bg-surface-2" />
- </div>
- </div>
- ))}
- </div>
- ) : !plugins || plugins.length === 0 ? (
- <TabEmptyState
- title="No Plugins Installed"
- description="Place plugins in the catalyst-plugins/ directory to get started."
- />
- ) : (
- <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
- {plugins.map((plugin) => (
- <PluginCard
- key={plugin.name}
- plugin={plugin}
- isProcessing={processingPlugin === plugin.name}
- onToggle={() => toggleMutation.mutate({ name: plugin.name, enabled: !plugin.enabled })}
- onReload={() => reloadMutation.mutate(plugin.name)}
- onSettings={() => setSettingsPlugin(plugin.name)}
- />
- ))}
- </div>
- )}
+        {isLoading ? (
+          <ServerTabCard>
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-12 animate-pulse rounded-md bg-surface-2" />
+              ))}
+            </div>
+          </ServerTabCard>
+        ) : !plugins || plugins.length === 0 ? (
+          <TabEmptyState
+            title="No plugins"
+            description="Place plugins in catalyst-plugins/."
+          />
+        ) : (
+          <ServerTabCard>
+            {plugins.map((plugin) => (
+              <PluginCard
+                key={plugin.name}
+                plugin={plugin}
+                isProcessing={processingPlugin === plugin.name}
+                onToggle={() => toggleMutation.mutate({ name: plugin.name, enabled: !plugin.enabled })}
+                onReload={() => reloadMutation.mutate(plugin.name)}
+                onSettings={() => setSettingsPlugin(plugin.name)}
+              />
+            ))}
+          </ServerTabCard>
+        )}
+
 
  {/* ── Settings Modal ── */}
  <PluginSettingsModal

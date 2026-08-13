@@ -496,9 +496,9 @@ export function ApiKeysPage() {
 
  {deleteKey && (
  <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+ <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-0/70 backdrop-blur-sm">
  <div
- className={`mx-4 w-full max-w-md rounded-xl border bg-card p-6 shadow-xl ${
+ className={`mx-4 w-full max-w-md rounded-xl border bg-card p-6 shadow-elevated ${
  isAgentKey(deleteKey) ? 'border-danger/50' : 'border-border'
  }`}
  >

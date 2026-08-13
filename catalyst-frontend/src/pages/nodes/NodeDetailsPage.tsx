@@ -54,7 +54,7 @@ function ModalShell({
     <ModalPortal>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
         <div
-          className={`w-full max-w-2xl min-w-0 overflow-hidden rounded-xl border bg-card shadow-xl ${
+          className={`w-full max-w-2xl min-w-0 overflow-hidden rounded-xl border bg-card shadow-elevated ${
             variant === 'danger' ? 'border-destructive/50' : 'border-border/40'
           }`}
         >

@@ -265,95 +265,6 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  );
 }
 
-// ── What Gets Migrated Card ──
-function WhatGetsMigratedCard() {
- const sections = [
- {
- title: 'Server Configuration',
- items: [
- 'Name, description, and container name (identifier)',
- 'All egg variable values (environment)',
- 'Startup command override',
- 'Docker image override',
- 'Memory, CPU, disk, swap, and IO weight limits',
- 'Port allocations from Catalyst node',
- 'Suspension status',
- ],
- },
- {
- title: 'Users & Permissions',
- items: [
- 'User accounts (email, name, admin status)',
- 'Subusers with permission mapping',
- 'Server ownership (owner gets full access)',
- 'Passwords reset (cannot import bcrypt hashes)',
- ],
- },
- {
- title: 'Templates & Config',
- 'items': [
- 'Nests and eggs (auto-converted to Catalyst templates)',
- 'Config file editor support (from egg definition)',
- 'Install image and scripts',
- ],
- },
- {
- title: 'Data & Files',
- items: [
- 'Server files (via Pterodactyl backup system)',
- 'SHA1 checksum validation on file transfer',
- 'Databases and database hosts (preserves passwords)',
- ],
- },
- {
- title: 'Schedules & Tasks',
- items: [
- 'Scheduled tasks (cron jobs) with time offsets',
- 'Power actions and command sequences',
- ],
- },
- {
- title: 'Not Migrated',
- items: [
- 'API keys (users create fresh ones)',
- 'User passwords (must be reset after migration)',
- 'Activity logs and audit history',
- 'Node allocations (uses Catalyst\'s allocation system)',
- ],
- dim: true,
- },
- ];
-
- return (
- <ServerTabCard>
- <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
- <ArrowRightLeft className="h-4 w-4 text-primary" />
- What Gets Migrated
- </h3>
- <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
- {sections.map(section => (
- <div key={section.title}>
- <div className={`text-xs font-semibold uppercase tracking-wider mb-1.5 ${section.dim ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
- {section.title}
- </div>
- <ul className="space-y-1">
- {section.items.map(item => (
- <li key={item} className="flex items-start gap-1.5 text-xs">
- {section.dim ? (
- <XCircle className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
- ) : (
- <CheckCircle2 className="h-3 w-3 text-success/50 mt-0.5 flex-shrink-0" />
- )}
- <span className={section.dim ? 'text-muted-foreground' : 'text-muted-foreground'}>{item}</span>
- </li>
- ))}
- </ul>
- </div>
- ))}
- </div>
- </ServerTabCard>
- );
-}
 
 // ── Server Import Summary ──
 function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
@@ -990,14 +901,13 @@ export default function MigrationPage() {
 
  {/* TAB: New Migration */}
  {activeTab === 'new' && (
- <div>
- <WhatGetsMigratedCard />
- <ServerTabCard className="mt-5">
- <h2 className="text-lg font-semibold text-foreground mb-1">Connect to Pterodactyl</h2>
- <p className="text-sm text-muted-foreground mb-6">
- Enter your Pterodactyl panel URL and Application API key. After connecting,
- you will map Pterodactyl nodes or servers to <strong>existing online Catalyst nodes</strong>.
- </p>
+      <div>
+      <ServerTabCard>
+        <h2 className="font-display text-sm font-semibold text-foreground">Connect</h2>
+        <p className="type-meta mb-4 mt-1">
+          Panel URL and application API key. Map onto existing online Catalyst nodes.
+        </p>
+
 
  <div className="space-y-4">
  {/* Panel URL */}

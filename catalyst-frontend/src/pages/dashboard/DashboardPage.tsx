@@ -10,19 +10,19 @@ import {
  Activity,
  Cpu,
  MemoryStick,
- Network,
  ArrowRight,
  Zap,
  Shield,
  Clock,
- Sparkles,
  BarChart3,
+ LayoutDashboard,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import { PluginSlot } from '../../plugins/PluginSlot';
 
 function DashboardPage() {
@@ -37,16 +37,10 @@ function DashboardPage() {
  user?.permissions?.includes('admin.write') ||
  user?.permissions?.includes('admin.read');
 
- const { data: stats, isLoading: statsLoading } = useDashboardStats();
- const { data: activities, isLoading: activitiesLoading } = useDashboardActivity(5);
- const { data: resources, isLoading: resourcesLoading } = useResourceStats();
+ const { data: stats, isLoading: statsLoading, isError: statsError } = useDashboardStats();
+ const { data: activities, isLoading: activitiesLoading, isError: activitiesError } = useDashboardActivity(5);
+ const { data: resources, isLoading: resourcesLoading, isError: resourcesError } = useResourceStats();
 
- const getGreeting = () => {
- const hour = new Date().getHours();
- if (hour < 12) return 'Good morning';
- if (hour < 18) return 'Good afternoon';
- return 'Good evening';
- };
 
  const serversOnline = stats?.serversOnline ?? 0;
  const serversTotal = stats?.servers ?? 0;
@@ -70,15 +64,8 @@ function DashboardPage() {
  color: 'text-success',
  bg: 'bg-success',
  },
- {
- label: 'Network',
- value: resources?.networkThroughput ?? 0,
- icon: Network,
- color: 'text-warning',
- bg: 'bg-warning',
- },
  ],
- [resources?.cpuUtilization, resources?.memoryUtilization, resources?.networkThroughput],
+ [resources?.cpuUtilization, resources?.memoryUtilization],
  );
 
  const quickActions = useMemo(
@@ -89,8 +76,7 @@ function DashboardPage() {
  description: 'Deploy a new game server',
  icon: Plus,
  href: '/servers',
- color: 'bg-primary',
- textColor: 'text-primary-foreground',
+ iconClass: 'bg-primary/10 text-primary',
  show: canCreateServer,
  },
  {
@@ -98,8 +84,7 @@ function DashboardPage() {
  description: 'Manage your servers',
  icon: Server,
  href: '/servers',
- color: 'bg-primary',
- textColor: 'text-primary-foreground',
+ iconClass: 'bg-primary/10 text-primary',
  show: !canCreateServer,
  },
  {
@@ -107,8 +92,7 @@ function DashboardPage() {
  description: 'Add infrastructure',
  icon: HardDrive,
  href: '/admin/nodes',
- color: 'bg-primary',
- textColor: 'text-primary-foreground',
+ iconClass: 'bg-primary/10 text-primary',
  show: isAdmin,
  },
  {
@@ -116,8 +100,7 @@ function DashboardPage() {
  description: alertsUnacked > 0 ? `${alertsUnacked} need attention` : 'All clear',
  icon: Shield,
  href: isAdmin ? '/admin/alerts' : '/profile',
- color: alertsUnacked > 0 ? 'bg-danger' : 'bg-muted-foreground',
- textColor: alertsUnacked > 0 ? 'text-destructive-foreground' : 'text-primary-foreground',
+ iconClass: alertsUnacked > 0 ? 'bg-warning/10 text-warning' : 'bg-surface-2 text-muted-foreground',
  show: isAdmin,
  },
  {
@@ -125,8 +108,7 @@ function DashboardPage() {
  description: 'Manage your account',
  icon: Activity,
  href: '/profile',
- color: 'bg-muted-foreground',
- textColor: 'text-primary-foreground',
+ iconClass: 'bg-surface-2 text-muted-foreground',
  show: !isAdmin,
  },
  ].filter((action) => action.show),
@@ -136,23 +118,24 @@ function DashboardPage() {
  return (
  <div className="space-y-4">
  <TabHeader
- icon={Sparkles}
- title={`${getGreeting()}, ${user?.firstName || user?.lastName
+ icon={LayoutDashboard}
+ title="Dashboard"
+ description={`Infrastructure overview for ${user?.firstName || user?.lastName
  ? [user.firstName, user.lastName].filter(Boolean).join(' ')
- : user?.username || 'there'}`}
- description="Overview of your infrastructure at a glance."
- actions={
- <div className="flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
- <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
- System healthy
+ : user?.username || 'your account'}.`}
+ actions={alertsUnacked > 0 ? (
+ <div className="rounded-full border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs font-medium text-warning">
+ {alertsUnacked} unacknowledged alert{alertsUnacked === 1 ? '' : 's'}
  </div>
- }
+ ) : undefined}
  />
 
  <ServerTabCard>
  <SectionHeader icon={BarChart3} title="Overview" />
  {statsLoading ? (
  <TabLoadingState rows={3} />
+ ) : statsError ? (
+ <TabErrorState title="Unable to load overview" description="Dashboard counts could not be loaded." />
  ) : (
  <div className={`grid grid-cols-1 gap-3 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
  <Link
@@ -163,7 +146,7 @@ function DashboardPage() {
  <Server className="h-4 w-4" />
  </div>
  <div className="flex-1">
- <div className="text-xl font-bold text-foreground">{serversTotal}</div>
+ <div className="type-numeric text-xl font-bold text-foreground">{serversTotal}</div>
  <div className="text-xs text-muted-foreground">{serversOnline} running</div>
  </div>
  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
@@ -178,7 +161,7 @@ function DashboardPage() {
  <HardDrive className="h-4 w-4" />
  </div>
  <div className="flex-1">
- <div className="text-xl font-bold text-foreground">{nodesTotal}</div>
+ <div className="type-numeric text-xl font-bold text-foreground">{nodesTotal}</div>
  <div className="text-xs text-muted-foreground">{nodesOnline} connected</div>
  </div>
  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
@@ -194,7 +177,7 @@ function DashboardPage() {
  <AlertTriangle className="h-4 w-4" />
  </div>
  <div className="flex-1">
- <div className="text-xl font-bold text-foreground">{stats?.alerts ?? 0}</div>
+ <div className="type-numeric text-xl font-bold text-foreground">{stats?.alerts ?? 0}</div>
  <div className="text-xs text-muted-foreground">
  {alertsUnacked > 0 ? `${alertsUnacked} unacknowledged` : 'All resolved'}
  </div>
@@ -230,7 +213,7 @@ function DashboardPage() {
  to={action.href}
  className="group flex items-center gap-3 rounded-lg border border-border/30 bg-card p-4 transition-colors hover:border-primary/30"
  >
- <div className={`flex h-9 w-9 items-center justify-center rounded-md ${action.color} ${action.textColor}`}>
+ <div className={`flex h-9 w-9 items-center justify-center rounded-md ${action.iconClass}`}>
  <action.icon className="h-4 w-4" />
  </div>
  <div className="flex-1">
@@ -245,16 +228,12 @@ function DashboardPage() {
  {/* Metrics + Activity */}
  <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
  <ServerTabCard className="lg:col-span-3">
- <div className="flex items-center justify-between">
- <SectionHeader icon={Activity} title="Resource Utilization" description="Live metrics across all nodes" />
- <div className="flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 text-[11px] font-medium text-success">
- <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
- Live
- </div>
- </div>
+ <SectionHeader icon={Activity} title="Resource Utilization" description="Latest metrics across all nodes" />
 
  {resourcesLoading ? (
- <TabLoadingState rows={3} />
+ <TabLoadingState rows={2} />
+ ) : resourcesError ? (
+ <TabErrorState title="Unable to load resources" description="Resource utilization is currently unavailable." />
  ) : (
  <div className="mt-6 space-y-5">
  {resourceMetrics.map((metric) => (
@@ -266,7 +245,7 @@ function DashboardPage() {
  </div>
  <span className="text-sm font-medium text-foreground">{metric.label}</span>
  </div>
- <span className="text-sm font-semibold text-foreground">{metric.value}%</span>
+ <span className="type-numeric text-sm font-semibold text-foreground">{metric.value}%</span>
  </div>
  <div className="h-2 overflow-hidden rounded-full bg-surface-2">
  <div
@@ -296,6 +275,8 @@ function DashboardPage() {
 
  {activitiesLoading ? (
  <TabLoadingState rows={3} />
+ ) : activitiesError ? (
+ <TabErrorState title="Unable to load activity" description="Recent activity could not be loaded." />
  ) : activities && activities.length > 0 ? (
  <div className="mt-4 space-y-1">
  {activities.map((item) => (
@@ -322,7 +303,7 @@ function DashboardPage() {
  </div>
  ) : (
  <div className="mt-4">
- <TabEmptyState title="No recent activity" description="Check back later for updates." />
+ <TabEmptyState title="No recent activity" description="No recorded actions in this window." />
  </div>
  )}
  </ServerTabCard>

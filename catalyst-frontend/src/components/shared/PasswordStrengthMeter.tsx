@@ -30,10 +30,10 @@ function calculateStrength(password: string): { score: number; label: string; co
 
  const levels = [
  { label: 'Weak', color: 'bg-destructive/50' },
- { label: 'Fair', color: 'bg-orange-500' },
- { label: 'Good', color: 'bg-yellow-500' },
- { label: 'Strong', color: 'bg-green-400' },
- { label: 'Very Strong', color: 'bg-green-600' },
+ { label: 'Fair', color: 'bg-danger' },
+ { label: 'Good', color: 'bg-warning' },
+ { label: 'Strong', color: 'bg-success/70' },
+ { label: 'Very Strong', color: 'bg-success' },
  ];
 
  return {
@@ -56,8 +56,8 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
  className={cn(
  'font-medium',
  strength.score <= 1 && 'text-destructive',
- strength.score === 2 && 'text-orange-600',
- strength.score === 3 && 'text-yellow-600',
+ strength.score === 2 && 'text-danger',
+ strength.score === 3 && 'text-warning',
  strength.score >= 4 && 'text-success'
  )}
  >
