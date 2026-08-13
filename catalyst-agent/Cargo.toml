@@ -1,6 +1,6 @@
 [package]
 name = "catalyst-agent"
-version = "1.19.11"
+version = "1.19.12"
 edition = "2021"
 
 [dependencies]
