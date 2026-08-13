@@ -14,6 +14,7 @@
 #   ./scripts/lxc-lab/lab.sh servers
 #   ./scripts/lxc-lab/lab.sh files
 #   ./scripts/lxc-lab/lab.sh ops
+#   ./scripts/lxc-lab/lab.sh live
 #   ./scripts/lxc-lab/lab.sh status
 #   ./scripts/lxc-lab/lab.sh destroy
 set -euo pipefail
@@ -679,7 +680,6 @@ stage_all() {
   stage_updates
   stage_status
 }
-
 # shellcheck disable=SC1091
 source "$LAB_DIR/server-ops.sh"
 # shellcheck disable=SC1091
@@ -690,6 +690,8 @@ source "$LAB_DIR/admin-ops.sh"
 source "$LAB_DIR/everything.sh"
 # shellcheck disable=SC1091
 source "$LAB_DIR/updates.sh"
+# shellcheck disable=SC1091
+source "$LAB_DIR/live.sh"
 
 cmd="${1:-all}"
 case "$cmd" in
@@ -711,13 +713,14 @@ case "$cmd" in
   admin) stage_admin ;;
   everything) stage_everything ;;
   updates) stage_updates ;;
+  live) stage_live ;;
   full) stage_full ;;
   status) stage_status ;;
   destroy) stage_destroy ;;
   all) stage_all ;;
   --tcp-proxy) ;;
   *)
-    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|alerts|automations|apis|admin|everything|updates|full|status|destroy}"
+    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|alerts|automations|apis|admin|everything|updates|live|full|status|destroy}"
     exit 2
     ;;
 esac

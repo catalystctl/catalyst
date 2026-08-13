@@ -253,5 +253,6 @@ stage_full() {
   stage_admin
   stage_everything
   stage_updates
+  stage_live
   stage_status
 }
