@@ -152,6 +152,9 @@ export class WebSocketGateway {
   // Track the last agent update version requested per node to avoid spamming.
   // Maps nodeId → target version string that was already sent.
   private readonly agentUpdateSent = new Map<string, string>();
+  // After a failed update, wait before sending update_agent again.
+  private readonly agentUpdateRetryAfter = new Map<string, number>();
+  private static readonly AGENT_UPDATE_RETRY_MS = 15 * 60 * 1000;
   private heartbeatInterval?: ReturnType<typeof setInterval>;
   private subscriberSweepInterval?: ReturnType<typeof setInterval>;
 
@@ -1113,12 +1116,10 @@ export class WebSocketGateway {
           progress: typeof message.progress === 'number' ? message.progress : 0,
           timestamp: new Date().toISOString(),
         });
-        // The agent will exec() the new binary and reconnect.
-        // No further update commands needed for this node until reconnect.
       } else if (message.type === "agent_update_failed") {
         this.logger.warn(
           { nodeId, error: message.error },
-          'Agent reported update failure — clearing tracking so next health_report retries',
+          'Agent reported update failure — backing off before retry',
         );
         this.pushToAdminSubscribers('agent_update_failed', {
           type: 'agent_update_failed',
@@ -1126,9 +1127,10 @@ export class WebSocketGateway {
           error: message.error ?? 'Update failed',
           timestamp: new Date().toISOString(),
         });
-        // Clear the tracking entry so the next health_report will
-        // re-trigger the update_agent command instead of silently
-        // skipping it because "we already sent that version".
+        this.agentUpdateRetryAfter.set(
+          nodeId,
+          Date.now() + WebSocketGateway.AGENT_UPDATE_RETRY_MS,
+        );
         this.agentUpdateSent.delete(nodeId);
       } else if (message.type === "agent_update_progress") {
         this.pushToAdminSubscribers('agent_update_progress', {
@@ -3519,8 +3521,13 @@ export class WebSocketGateway {
     }
 
     if (!agentBehind) {
-      // Agent is up to date — clear any stale tracking entry.
       this.agentUpdateSent.delete(nodeId);
+      this.agentUpdateRetryAfter.delete(nodeId);
+      return;
+    }
+
+    const retryAfter = this.agentUpdateRetryAfter.get(nodeId);
+    if (retryAfter && Date.now() < retryAfter) {
       return;
     }
 

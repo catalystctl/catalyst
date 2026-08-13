@@ -148,15 +148,18 @@ export function getComposePath(): string {
 }
 
 export function formatDockerUpdateError(error: unknown): string {
-	const err = error as NodeJS.ErrnoException;
-	if (err?.code === "ENOENT") {
+	const code =
+		error && typeof error === "object" && "code" in error
+			? error.code
+			: undefined;
+	if (code === "ENOENT") {
 		return (
 			"docker CLI is not available in the backend container (spawn docker ENOENT). " +
 			"Use a backend image that includes docker-cli, mount /var/run/docker.sock, " +
 			"and set AUTO_UPDATE_DOCKER_COMPOSE_PATH to the compose file bind-mounted at the same host path."
 		);
 	}
-	return err?.message || "Docker update failed";
+	return error instanceof Error ? error.message : "Docker update failed";
 }
 
 function spawnCompose(
@@ -229,11 +232,36 @@ export async function performUpdate(logger?: {
 				});
 			});
 
-			// Fire and forget the up -d since this container may restart
-			const up = spawnCompose(composePath, ["up", "-d"], { detached: true });
-
-			up.on("error", (err) => {
-				logger?.error?.({ err }, "docker compose up -d failed");
+			// `compose up -d` recreates this container. Running it in-process
+			// dies mid-recreate and leaves postgres/redis/backend Created.
+			// A sibling container on the host socket survives the restart.
+			const composeDir = path.dirname(composePath);
+			const apply = spawn(
+				process.env.DOCKER_BIN || "docker",
+				[
+					"run",
+					"-d",
+					"--rm",
+					"--name",
+					"catalyst-apply-update",
+					"-v",
+					"/var/run/docker.sock:/var/run/docker.sock",
+					"-v",
+					`${composeDir}:${composeDir}`,
+					"docker:cli",
+					"compose",
+					"-f",
+					composePath,
+					"--project-directory",
+					composeDir,
+					"up",
+					"-d",
+				],
+				{ stdio: "pipe", detached: true, env: process.env },
+			);
+			apply.unref();
+			apply.on("error", (err) => {
+				logger?.error?.({ err }, "failed to start compose apply helper");
 			});
 
 			return {
