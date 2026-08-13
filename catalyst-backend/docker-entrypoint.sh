@@ -6,13 +6,38 @@ set -e
 
 echo "==> Catalyst Backend starting..."
 
+# Join the docker.sock group so the panel Update button can talk to the host
+# daemon after we drop root. No-op when the socket is not mounted.
+if [ "$(id -u)" = "0" ] && [ -S /var/run/docker.sock ]; then
+    sock_gid="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)"
+    if [ -n "$sock_gid" ]; then
+        if ! getent group "$sock_gid" >/dev/null 2>&1; then
+            addgroup -g "$sock_gid" docker >/dev/null
+        fi
+        sock_group="$(getent group "$sock_gid" | cut -d: -f1)"
+        addgroup catalyst "$sock_group" >/dev/null 2>&1 || true
+    fi
+    # Image /root is 0700. A same-path bind of /root/catalyst-docker is
+    # unreachable unless parents are traversable by user catalyst.
+    compose_path="${AUTO_UPDATE_DOCKER_COMPOSE_PATH:-}"
+    if [ -n "$compose_path" ]; then
+        dir=$(dirname "$compose_path")
+        while [ "$dir" != "/" ]; do
+            chmod o+x "$dir" 2>/dev/null || true
+            dir=$(dirname "$dir")
+        done
+    fi
+fi
+
 # Ensure data directories exist (volumes may be mounted over the Dockerfile-created dirs)
 mkdir -p /var/lib/catalyst/servers \
          /var/lib/catalyst/backups \
          /var/lib/catalyst/plugins \
          /tmp/catalyst-backup-stream \
          /tmp/catalyst-backup-transfer
-
+if [ "$(id -u)" = "0" ]; then
+    chown -R catalyst:catalyst /var/lib/catalyst /tmp/catalyst-backup-stream /tmp/catalyst-backup-transfer 2>/dev/null || true
+fi
 # Run pending migrations (non-destructive — safe to run on every start).
 # NEVER fall back to `prisma db push --accept-data-loss` unless the operator
 # explicitly sets ALLOW_DATA_LOSS=1 (destructive schema repair only).
@@ -51,5 +76,8 @@ else
     echo "==> Warning: DATABASE_URL not set, skipping migrations."
 fi
 
-# Execute the main command
+# Drop to catalyst after migrations. docker.sock membership is already applied.
+if [ "$(id -u)" = "0" ]; then
+    exec su-exec catalyst "$@"
+fi
 exec "$@"

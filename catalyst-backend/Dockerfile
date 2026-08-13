@@ -101,11 +101,11 @@ RUN set -eu; \
     test -d ./prisma; \
     du -sh ./node_modules
 
-# Stage 2: Runtime - clean image without build tools
 FROM node:22-alpine
 
-# Install curl for Docker healthcheck
-RUN apk add --no-cache curl
+# curl: healthcheck. docker-cli + compose: panel Update button talks to the
+# mounted docker.sock. su-exec: drop root after joining the socket group.
+RUN apk add --no-cache curl docker-cli docker-cli-compose su-exec
 
 WORKDIR /app
 
@@ -142,8 +142,7 @@ LABEL org.opencontainers.image.source="https://github.com/catalystctl/catalyst" 
       org.opencontainers.image.description="Catalyst backend API (pnpm deploy production tree)" \
       org.opencontainers.image.licenses="MIT"
 
-USER catalyst
-
+# Stay root so the entrypoint can join docker.sock's group, then su-exec.
 # Expose port
 EXPOSE 3000 2022
 

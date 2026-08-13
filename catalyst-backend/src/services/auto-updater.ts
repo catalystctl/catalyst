@@ -147,28 +147,64 @@ export function getComposePath(): string {
 	return candidates[0]!;
 }
 
-export async function performUpdate(logger?: any): Promise<{
+export function formatDockerUpdateError(error: unknown): string {
+	const err = error as NodeJS.ErrnoException;
+	if (err?.code === "ENOENT") {
+		return (
+			"docker CLI is not available in the backend container (spawn docker ENOENT). " +
+			"Use a backend image that includes docker-cli, mount /var/run/docker.sock, " +
+			"and set AUTO_UPDATE_DOCKER_COMPOSE_PATH to the compose file bind-mounted at the same host path."
+		);
+	}
+	return err?.message || "Docker update failed";
+}
+
+function spawnCompose(
+	composePath: string,
+	args: string[],
+	options: { detached?: boolean } = {},
+) {
+	const composeDir = path.dirname(composePath);
+	const dockerBin = process.env.DOCKER_BIN || "docker";
+	return spawn(
+		dockerBin,
+		["compose", "-f", composePath, "--project-directory", composeDir, ...args],
+		{
+			stdio: "pipe",
+			detached: options.detached === true,
+			cwd: composeDir,
+			env: process.env,
+		},
+	);
+}
+
+export async function performUpdate(logger?: {
+	info?: (obj: unknown, msg?: string) => void;
+	error?: (obj: unknown, msg?: string) => void;
+	warn?: (msg: string) => void;
+}): Promise<{
 	success: boolean;
 	message: string;
 }> {
-	const inDocker = isDocker();
+	const inDocker =
+		process.env.AUTO_UPDATE_FORCE_DOCKER === "true" || isDocker();
 
 	if (inDocker) {
 		const composePath = getComposePath();
 
-		if (logger) {
-			logger.info({ composePath }, "Initiating Docker-based auto-update");
+		if (!fs.existsSync(composePath)) {
+			const message =
+				`docker-compose.yml not found at ${composePath}. ` +
+				"Set AUTO_UPDATE_DOCKER_COMPOSE_PATH to the host compose file and bind-mount that directory at the same path.";
+			logger?.error?.({ composePath }, message);
+			return { success: false, message };
 		}
+
+		logger?.info?.({ composePath }, "Initiating Docker-based auto-update");
 
 		try {
 			await new Promise<void>((resolve, reject) => {
-				const pull = spawn(
-					"docker",
-					["compose", "-f", composePath, "pull"],
-					{
-						stdio: "pipe",
-					},
-				);
+				const pull = spawnCompose(composePath, ["pull"]);
 
 				let stderr = "";
 
@@ -194,19 +230,10 @@ export async function performUpdate(logger?: any): Promise<{
 			});
 
 			// Fire and forget the up -d since this container may restart
-			const up = spawn(
-				"docker",
-				["compose", "-f", composePath, "up", "-d"],
-				{
-					stdio: "pipe",
-					detached: true,
-				},
-			);
+			const up = spawnCompose(composePath, ["up", "-d"], { detached: true });
 
 			up.on("error", (err) => {
-				if (logger) {
-					logger.error({ err }, "docker compose up -d failed");
-				}
+				logger?.error?.({ err }, "docker compose up -d failed");
 			});
 
 			return {
@@ -214,16 +241,16 @@ export async function performUpdate(logger?: any): Promise<{
 				message:
 					"Update initiated: images pulled and containers restarting. The panel may be briefly unavailable.",
 			};
-		} catch (error: any) {
-			const message = error?.message || "Docker update failed";
-			if (logger) {
+		} catch (error: unknown) {
+			const message = formatDockerUpdateError(error);
+			if (logger?.error) {
 				logger.error({ err: error }, "Docker update failed");
 			}
 			captureSystemError({
 				level: "error",
 				component: "AutoUpdater",
 				message,
-				stack: error?.stack,
+				stack: error instanceof Error ? error.stack : undefined,
 				metadata: { context: "perform_update" },
 			}).catch(() => {});
 			return { success: false, message };
@@ -232,9 +259,7 @@ export async function performUpdate(logger?: any): Promise<{
 
 	const message =
 		"Direct-mode auto-update requires manual restart. Please update Catalyst manually.";
-	if (logger) {
-		logger.warn(message);
-	}
+	logger?.warn?.(message);
 	return { success: false, message };
 }
 

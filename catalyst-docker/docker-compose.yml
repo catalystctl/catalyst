@@ -163,6 +163,9 @@ services:
       AUTO_UPDATE_ENABLED: ${AUTO_UPDATE_ENABLED:-false}
       AUTO_UPDATE_INTERVAL_MS: ${AUTO_UPDATE_INTERVAL_MS:-3600000}
       AUTO_UPDATE_AUTO_TRIGGER: ${AUTO_UPDATE_AUTO_TRIGGER:-false}
+      # Host path of this compose project, bind-mounted at the same path so
+      # `docker compose -f ...` inside the container is valid to the host daemon.
+      AUTO_UPDATE_DOCKER_COMPOSE_PATH: ${AUTO_UPDATE_DOCKER_COMPOSE_PATH:-${CATALYST_COMPOSE_DIR:-/opt/catalyst-docker}/docker-compose.yml}
 
       # Misc tuning (unlikely to need changing)
       CONSOLE_OUTPUT_BYTE_LIMIT_BYTES: ${CONSOLE_OUTPUT_BYTE_LIMIT_BYTES:-524288}
@@ -175,6 +178,7 @@ services:
       - catalyst-backup-data:/var/lib/catalyst/backups
       - catalyst-plugin-data:/var/lib/catalyst/plugins
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${CATALYST_COMPOSE_DIR:-/opt/catalyst-docker}:${CATALYST_COMPOSE_DIR:-/opt/catalyst-docker}:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
       interval: 15s

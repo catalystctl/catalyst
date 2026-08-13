@@ -187,6 +187,16 @@ patch_official_env() {
     else
       printf '\\nCORS_ORIGIN=%s\\n' '${LAB_CORS_ORIGINS}' >> \"\$ENV\"
     fi
+    if grep -q '^CATALYST_COMPOSE_DIR=' \"\$ENV\"; then
+      sed -i 's~^CATALYST_COMPOSE_DIR=.*~CATALYST_COMPOSE_DIR=/root/catalyst-docker~' \"\$ENV\"
+    else
+      printf '\\nCATALYST_COMPOSE_DIR=/root/catalyst-docker\\n' >> \"\$ENV\"
+    fi
+    if grep -q '^AUTO_UPDATE_DOCKER_COMPOSE_PATH=' \"\$ENV\"; then
+      sed -i 's~^AUTO_UPDATE_DOCKER_COMPOSE_PATH=.*~AUTO_UPDATE_DOCKER_COMPOSE_PATH=/root/catalyst-docker/docker-compose.yml~' \"\$ENV\"
+    else
+      printf 'AUTO_UPDATE_DOCKER_COMPOSE_PATH=/root/catalyst-docker/docker-compose.yml\\n' >> \"\$ENV\"
+    fi
     # No Caddy/Traefik — leave DOMAIN empty.
   "
 }
@@ -198,13 +208,16 @@ stage_deploy_backend() {
   # talk to this LXC directly instead of hairpinning through the panel proxy.
   lxc_exec "$BACKEND_LXC" bash -lc "
     set -euo pipefail
-    cat > /root/catalyst-docker/docker-compose.backend-lxc.yml <<'EOF'
+    cat > /root/catalyst-docker/docker-compose.backend-lxc.yml <<EOF
 services:
   backend:
     environment:
       BACKEND_EXTERNAL_ADDRESS: ${BACKEND_PUBLIC}
       BACKEND_URL: ${BACKEND_PUBLIC}
       CORS_ORIGIN: ${LAB_CORS_ORIGINS}
+      AUTO_UPDATE_DOCKER_COMPOSE_PATH: /root/catalyst-docker/docker-compose.yml
+    volumes:
+      - /root/catalyst-docker:/root/catalyst-docker:ro
 EOF
   "
   log "Starting official postgres/redis/backend in $BACKEND_LXC"
