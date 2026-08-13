@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import fetch from "node-fetch";
 import { captureSystemError } from "./error-logger";
 import { getCurrentVersion } from "../lib/panel-version";
@@ -129,22 +129,28 @@ export function isDocker(): boolean {
 }
 
 export function getComposePath(): string {
-	const envPath = process.env.AUTO_UPDATE_DOCKER_COMPOSE_PATH;
-	if (envPath) return envPath;
+	return resolveComposeContext()?.composePath ?? "/app/docker-compose.yml";
+}
 
-	const candidates = [
-		"/app/docker-compose.yml",
-		path.resolve(process.cwd(), "..", "catalyst-docker", "docker-compose.yml"),
-		path.resolve(process.cwd(), "docker-compose.yml"),
-	];
+export function composePathFromLabels(
+	labels: Record<string, string> | null | undefined,
+): string | null {
+	return composeFilesFromLabels(labels)[0] ?? null;
+}
 
-	for (const candidate of candidates) {
-		if (fs.existsSync(candidate)) {
-			return candidate;
-		}
+export function composeFilesFromLabels(
+	labels: Record<string, string> | null | undefined,
+): string[] {
+	if (!labels) return [];
+	const files = labels["com.docker.compose.project.config_files"];
+	if (files) {
+		return files
+			.split(",")
+			.map((file) => file.trim())
+			.filter(Boolean);
 	}
-
-	return candidates[0]!;
+	const dir = labels["com.docker.compose.project.working_dir"];
+	return dir ? [path.join(dir, "docker-compose.yml")] : [];
 }
 
 export function formatDockerUpdateError(error: unknown): string {
@@ -155,27 +161,137 @@ export function formatDockerUpdateError(error: unknown): string {
 	if (code === "ENOENT") {
 		return (
 			"docker CLI is not available in the backend container (spawn docker ENOENT). " +
-			"Use a backend image that includes docker-cli, mount /var/run/docker.sock, " +
-			"and set AUTO_UPDATE_DOCKER_COMPOSE_PATH to the compose file bind-mounted at the same host path."
+			"Use a backend image that includes docker-cli and mount /var/run/docker.sock."
 		);
 	}
 	return error instanceof Error ? error.message : "Docker update failed";
 }
 
-function spawnCompose(
-	composePath: string,
+function dockerBin(): string {
+	return process.env.DOCKER_BIN || "docker";
+}
+
+function readContainerId(): string | null {
+	try {
+		const cgroup = fs.readFileSync("/proc/self/cgroup", "utf-8");
+		const match = cgroup.match(/([0-9a-f]{64})/);
+		if (match?.[1]) return match[1];
+	} catch {
+		// cgroup may be missing outside Linux
+	}
+	try {
+		const hostname = fs.readFileSync("/etc/hostname", "utf-8").trim();
+		if (hostname) return hostname;
+	} catch {
+		return null;
+	}
+	return null;
+}
+
+export function inspectComposePathFromDocker(): string | null {
+	return composePathFromLabels(inspectSelfLabels());
+}
+
+function inspectSelfLabels(): Record<string, string> | null {
+	const id = readContainerId();
+	if (!id) return null;
+	const result = spawnSync(
+		dockerBin(),
+		["inspect", "--format", "{{json .Config.Labels}}", id],
+		{ encoding: "utf-8", timeout: 8000 },
+	);
+	if (result.status !== 0 || !result.stdout) return null;
+	try {
+		return JSON.parse(result.stdout) as Record<string, string>;
+	} catch {
+		return null;
+	}
+}
+
+function resolveComposeContext(): {
+	composePath: string;
+	composeDir: string;
+	composeFiles: string[];
+} | null {
+	const envPath = process.env.AUTO_UPDATE_DOCKER_COMPOSE_PATH;
+	if (envPath && fs.existsSync(envPath)) {
+		return {
+			composePath: envPath,
+			composeDir: path.dirname(envPath),
+			composeFiles: [envPath],
+		};
+	}
+
+	const candidates = [
+		"/app/docker-compose.yml",
+		path.resolve(process.cwd(), "..", "catalyst-docker", "docker-compose.yml"),
+		path.resolve(process.cwd(), "docker-compose.yml"),
+	];
+	for (const candidate of candidates) {
+		if (fs.existsSync(candidate)) {
+			return {
+				composePath: candidate,
+				composeDir: path.dirname(candidate),
+				composeFiles: [candidate],
+			};
+		}
+	}
+
+	const labels = inspectSelfLabels();
+	const labeledFiles = composeFilesFromLabels(labels);
+	if (labeledFiles[0]) {
+		const composeDir =
+			labels?.["com.docker.compose.project.working_dir"] ||
+			path.dirname(labeledFiles[0]);
+		return {
+			composePath: labeledFiles[0],
+			composeDir,
+			composeFiles: labeledFiles,
+		};
+	}
+
+	if (envPath) {
+		return {
+			composePath: envPath,
+			composeDir: path.dirname(envPath),
+			composeFiles: [envPath],
+		};
+	}
+	return null;
+}
+
+function spawnComposeHelper(
+	context: { composePath: string; composeDir: string; composeFiles: string[] },
 	args: string[],
 	options: { detached?: boolean } = {},
 ) {
-	const composeDir = path.dirname(composePath);
-	const dockerBin = process.env.DOCKER_BIN || "docker";
+	const fileArgs = context.composeFiles.flatMap((file) => ["-f", file]);
+	const nameArgs = options.detached
+		? ["--name", "catalyst-apply-update"]
+		: [];
 	return spawn(
-		dockerBin,
-		["compose", "-f", composePath, "--project-directory", composeDir, ...args],
+		dockerBin(),
+		[
+			"run",
+			...(options.detached ? ["-d"] : []),
+			"--rm",
+			...nameArgs,
+			"-v",
+			"/var/run/docker.sock:/var/run/docker.sock",
+			"-v",
+			`${context.composeDir}:${context.composeDir}`,
+			"-w",
+			context.composeDir,
+			"docker:cli",
+			"compose",
+			...fileArgs,
+			"--project-directory",
+			context.composeDir,
+			...args,
+		],
 		{
 			stdio: "pipe",
 			detached: options.detached === true,
-			cwd: composeDir,
 			env: process.env,
 		},
 	);
@@ -193,21 +309,21 @@ export async function performUpdate(logger?: {
 		process.env.AUTO_UPDATE_FORCE_DOCKER === "true" || isDocker();
 
 	if (inDocker) {
-		const composePath = getComposePath();
-
-		if (!fs.existsSync(composePath)) {
+		const context = resolveComposeContext();
+		if (!context) {
 			const message =
-				`docker-compose.yml not found at ${composePath}. ` +
-				"Set AUTO_UPDATE_DOCKER_COMPOSE_PATH to the host compose file and bind-mount that directory at the same path.";
-			logger?.error?.({ composePath }, message);
+				"Could not find docker-compose.yml. The backend was not started by Docker Compose " +
+				"(no com.docker.compose.project.working_dir label) and AUTO_UPDATE_DOCKER_COMPOSE_PATH is unset.";
+			logger?.error?.({ composePath: null }, message);
 			return { success: false, message };
 		}
+		const { composePath } = context;
 
 		logger?.info?.({ composePath }, "Initiating Docker-based auto-update");
 
 		try {
 			await new Promise<void>((resolve, reject) => {
-				const pull = spawnCompose(composePath, ["pull"]);
+				const pull = spawnComposeHelper(context, ["pull"]);
 
 				let stderr = "";
 
@@ -232,33 +348,11 @@ export async function performUpdate(logger?: {
 				});
 			});
 
-			// `compose up -d` recreates this container. Running it in-process
-			// dies mid-recreate and leaves postgres/redis/backend Created.
-			// A sibling container on the host socket survives the restart.
-			const composeDir = path.dirname(composePath);
-			const apply = spawn(
-				process.env.DOCKER_BIN || "docker",
-				[
-					"run",
-					"-d",
-					"--rm",
-					"--name",
-					"catalyst-apply-update",
-					"-v",
-					"/var/run/docker.sock:/var/run/docker.sock",
-					"-v",
-					`${composeDir}:${composeDir}`,
-					"docker:cli",
-					"compose",
-					"-f",
-					composePath,
-					"--project-directory",
-					composeDir,
-					"up",
-					"-d",
-				],
-				{ stdio: "pipe", detached: true, env: process.env },
-			);
+			// Recreating this container kills in-process compose. A sibling
+			// docker:cli container bind-mounts the host compose dir and survives.
+			const apply = spawnComposeHelper(context, ["up", "-d"], {
+				detached: true,
+			});
 			apply.unref();
 			apply.on("error", (err) => {
 				logger?.error?.({ err }, "failed to start compose apply helper");
