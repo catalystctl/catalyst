@@ -29,6 +29,21 @@ impl StorageManager {
         fs::create_dir_all(self.images_dir()).await?;
         fs::create_dir_all(mount_dir).await?;
 
+        // Reinstall/start used to return early when the image was already
+        // mounted, so a panel disk change (10 GB → 80 GB) never grew the
+        // loop. SteamCMD then hit 0x202 after ~30 GB.
+        if image_path.exists() {
+            let current_mb = self.image_size_mb(&image_path).await?;
+            if image_needs_grow(current_mb, size_mb) {
+                info!(
+                    "Growing storage for {} from {} MB to {} MB",
+                    server_uuid, current_mb, size_mb
+                );
+                self.grow_image(&image_path, mount_dir, size_mb, true)
+                    .await?;
+            }
+        }
+
         // Host (PID 1) mount table is what containerd bind-mounts. A loop image
         // mounted only in the agent's ProtectSystem mount NS is invisible to
         // containers and produces an empty file explorer / empty /data.
@@ -302,6 +317,10 @@ impl StorageManager {
 
     fn images_dir(&self) -> PathBuf {
         self.data_dir.join("images")
+    }
+
+    pub async fn image_quota_mb(&self, server_uuid: &str) -> AgentResult<u64> {
+        self.image_size_mb(&self.image_path(server_uuid)).await
     }
 
     fn image_path(&self, server_uuid: &str) -> PathBuf {
@@ -750,6 +769,10 @@ async fn move_children_except(from: &Path, to: &Path, except: &[&str]) -> AgentR
 
 /// Parse /proc/mounts (or /proc/1/mounts) for `mount_dir`.
 /// Returns Some((true, noexec)) when the exact mount point is present.
+pub(crate) fn image_needs_grow(current_mb: u64, requested_mb: u64) -> bool {
+    requested_mb > current_mb
+}
+
 pub(crate) fn parse_mount_info(contents: &str, mount_dir: &Path) -> Option<(bool, bool)> {
     let target = mount_dir.to_string_lossy();
     for line in contents.lines() {
@@ -786,6 +809,13 @@ mod tests {
 /dev/loop0 /var/lib/catalyst/srv-1 ext4 rw,relatime,errors=remount-ro 0 0\n\
 /dev/loop1 /var/lib/catalyst/old ext4 ro,noexec,nodev,nosuid 0 0\n\
 /dev/loop2 /var/lib/catalyst/with\\040space ext4 rw,exec 0 0\n";
+
+    #[test]
+    fn image_needs_grow_when_requested_is_larger() {
+        assert!(image_needs_grow(10240, 81920));
+        assert!(!image_needs_grow(81920, 81920));
+        assert!(!image_needs_grow(81920, 10240));
+    }
 
     #[test]
     fn parse_mount_info_finds_exact_mount() {

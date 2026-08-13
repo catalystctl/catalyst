@@ -269,6 +269,14 @@ impl WebSocketHandler {
         self.storage_manager
             .ensure_mounted(server_uuid, &server_dir_path, disk_mb)
             .await?;
+        if let Ok(actual_mb) = self.storage_manager.image_quota_mb(server_uuid).await {
+            self.emit_console_output(
+                server_id,
+                "system",
+                &format!("[Catalyst] Disk image is {actual_mb} MB (requested {disk_mb} MB).\n"),
+            )
+            .await?;
+        }
 
         let server_dir_path = std::path::PathBuf::from(&host_server_dir);
 
