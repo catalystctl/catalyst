@@ -159,7 +159,7 @@ The server details page organizes features into tabs:
 | **SFTP** | Generate SFTP connection tokens |
 | **Backups** | Create, download, restore, and delete backups |
 | **Tasks** | Create and manage scheduled tasks (cron jobs) |
-| **Databases** | Create and manage server databases |
+| **Databases** | Create and manage server databases. Hidden when no database hosts are configured on the panel, or the server has no database allocation. |
 | **Metrics** | View historical CPU, memory, and disk usage charts |
 | **Alerts** | Configure alert rules for this server |
 | **Mod Manager** | Browse and install mods (CurseForge, Modrinth, Paper) |

@@ -4,6 +4,19 @@ import { createAuditLog } from '../../middleware/audit.js';
 import { DatabaseProvisioningError, dropDatabase, ensureDatabasePermission, generateSafeIdentifier, isValidDatabaseIdentifier, provisionDatabase, rotateDatabasePassword, toDatabaseIdentifier } from './_helpers.js';
 
 export async function serverDatabasesRoutes(app: FastifyInstance) {
+  // Static path — must not be captured by GET /:serverId
+  app.get(
+    "/database-hosts",
+    { onRequest: [app.authenticate] },
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      const hosts = await prisma.databaseHost.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, host: true, port: true },
+      });
+      reply.send({ success: true, data: hosts });
+    }
+  );
+
   app.get(
     "/:serverId/databases",
     { onRequest: [app.authenticate] },

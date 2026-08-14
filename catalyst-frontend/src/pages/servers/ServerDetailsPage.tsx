@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, lazy, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -31,8 +31,7 @@ import {
  type MetricsTimeRange,
 } from '../../hooks/useServerMetricsHistory';
 import { useTasks, normalizeTasks } from '../../hooks/useTasks';
-import { useServerDatabases } from '../../hooks/useServerDatabases';
-import { useDatabaseHosts } from '../../hooks/useAdmin';
+import { useServerDatabases, useAvailableDatabaseHosts } from '../../hooks/useServerDatabases';
 import { useAuthStore } from '../../stores/authStore';
 import { useConsole } from '../../hooks/useConsole';
 import { useEulaPrompt } from '../../hooks/useEulaPrompt';
@@ -44,6 +43,7 @@ import { databasesApi } from '../../services/api/databases';
 import { tasksApi } from '../../services/api/tasks';
 import { getErrorMessage } from '../../utils/errors';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { canShowServerDatabasesTab } from '../../utils/serverTabs';
 import { reportSystemError } from '../../services/api/systemErrors';
 import type {
  ServerInvite,
@@ -240,7 +240,7 @@ function ServerDetailsPage() {
  isLoading: databasesLoading,
  isError: databasesError,
  } = useServerDatabases(serverId);
- const { data: databaseHosts = [] } = useDatabaseHosts();
+ const { data: databaseHosts = [], isFetched: databaseHostsFetched } = useAvailableDatabaseHosts();
  const canManageDatabases =
  user?.permissions?.includes('*') ||
  user?.permissions?.includes('admin.read') ||
@@ -857,7 +857,12 @@ function ServerDetailsPage() {
  if (key === 'console') return hasServerPerm('console.read');
  if (key === 'files') return hasServerPerm('file.read');
  if (key === 'backups') return hasServerPerm('backup.read');
- if (key === 'databases') return hasServerPerm('database.read');
+ if (key === 'databases')
+ return canShowServerDatabasesTab({
+ hasDatabaseRead: hasServerPerm('database.read'),
+ databaseAllocation,
+ hostCount: databaseHosts.length,
+ });
  // Tab key is `tasks` (not legacy `schedules`)
  if (key === 'tasks') return hasServerPerm('server.schedule');
  if (key === 'sftp') return hasServerPerm('file.read');
@@ -894,6 +899,8 @@ function ServerDetailsPage() {
  isAdmin,
  modManagerConfig,
  pluginManagerConfig,
+ databaseAllocation,
+ databaseHosts.length,
  ]);
 
  const filteredServerPluginTabs = useMemo(() => {
@@ -938,6 +945,34 @@ function ServerDetailsPage() {
     server?.id,
     navigate,
   ]);
+
+ useEffect(() => {
+ if (!server?.id || isPluginTab || activeTab !== 'databases') return;
+ if (databaseAllocation <= 0) {
+ navigate(`/servers/${server.id}/console`, { replace: true });
+ return;
+ }
+ if (!databaseHostsFetched) return;
+ if (
+ canShowServerDatabasesTab({
+ hasDatabaseRead: hasServerPerm('database.read'),
+ databaseAllocation,
+ hostCount: databaseHosts.length,
+ })
+ ) {
+ return;
+ }
+ navigate(`/servers/${server.id}/console`, { replace: true });
+ }, [
+ server?.id,
+ isPluginTab,
+ activeTab,
+ hasServerPerm,
+ databaseAllocation,
+ databaseHosts.length,
+ databaseHostsFetched,
+ navigate,
+ ]);
 
   if (isError) {
     return (

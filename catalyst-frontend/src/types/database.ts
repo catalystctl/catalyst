@@ -1,3 +1,10 @@
+export interface AvailableDatabaseHost {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+}
+
 export interface ServerDatabase {
   id: string;
   name: string;

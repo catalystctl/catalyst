@@ -2,7 +2,6 @@ import { createReadStream, createWriteStream } from "fs";
 import * as fs from "fs/promises";
 import path from "path";
 import type { Readable } from "stream";
-import { PassThrough } from "stream";
 import crypto from "crypto";
 import { Client as SftpClient } from "ssh2";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
@@ -301,43 +300,21 @@ export const streamAgentBackupToS3 = async (
   server?: { backupS3Config?: any },
 ) => {
   const { client, bucket } = resolveS3Config(server);
-  const passThrough = new PassThrough();
-  const upload = client.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: storageKey,
-      Body: passThrough,
-      ContentType: "application/gzip",
-    }),
-  );
-
-  const response = await gateway.requestFromAgent(nodeId, {
-    type: "download_backup_start",
-    serverId,
-    serverUuid,
-    backupPath: agentPath,
-  });
-  const requestId = response?.requestId as string | undefined;
-  if (!requestId) {
-    passThrough.destroy();
-    await upload.catch(() => {});
-    throw new Error("Missing download requestId");
-  }
-
+  const tmpPath = path.join(TRANSFER_DIR, serverUuid, path.basename(storageKey));
+  await streamAgentBackupToLocal(gateway, nodeId, serverId, serverUuid, agentPath, tmpPath);
   try {
-    await gateway.streamBinaryFromAgent(
-      nodeId,
-      { type: "download_backup", serverId, serverUuid, backupPath: agentPath, requestId },
-      (chunk) => {
-        passThrough.write(chunk);
-      },
+    const stats = await fs.stat(tmpPath);
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: storageKey,
+        Body: createReadStream(tmpPath),
+        ContentLength: stats.size,
+        ContentType: "application/gzip",
+      }),
     );
-    passThrough.end();
-    await upload;
-  } catch (err) {
-    passThrough.destroy(err instanceof Error ? err : new Error(String(err)));
-    await upload.catch(() => {}); // drain the promise to avoid unhandled rejection
-    throw err;
+  } finally {
+    await fs.unlink(tmpPath).catch(() => {});
   }
 };
 
@@ -348,68 +325,54 @@ export const streamAgentBackupToSftp = async (
   serverUuid: string,
   agentPath: string,
   storageKey: string,
-  server?: { backupSftpConfig?: any },
+  server?: { backupSftpConfig?: unknown },
 ) => {
   const config = resolveSftpConfig(server);
-  const response = await gateway.requestFromAgent(nodeId, {
-    type: "download_backup_start",
-    serverId,
-    serverUuid,
-    backupPath: agentPath,
-  });
-  const requestId = response?.requestId as string | undefined;
-  if (!requestId) {
-    throw new Error("Missing download requestId");
-  }
-
+  const tmpPath = path.join(TRANSFER_DIR, serverUuid, path.basename(storageKey));
+  await streamAgentBackupToLocal(gateway, nodeId, serverId, serverUuid, agentPath, tmpPath);
   const sftp = await connectSftp(config);
-
-  const ensureDir = async (dirPath: string) => {
-    const parts = dirPath.split("/").filter(Boolean);
-    let current = "";
-    for (const part of parts) {
-      current = `${current}/${part}`;
-      // Check existence to avoid masking permission errors.
-      const exists = await new Promise<boolean>((resolve, reject) => {
-        sftp.sftp.stat(current, (err) => {
-          if (!err) return resolve(true);
-          if ((err as any).code === 2) return resolve(false);
-          return reject(err);
-        });
-      });
-      if (exists) continue;
-      await new Promise<void>((resolve, reject) => {
-        sftp.sftp.mkdir(current, (err) => {
-          if (err && (err as any).code !== 4 && (err as any).code !== 11) {
-            return reject(err);
-          }
-          resolve();
-        });
-      });
+  const sftpErrCode = (err: unknown): number | undefined => {
+    if (err && typeof err === "object" && "code" in err && typeof err.code === "number") {
+      return err.code;
     }
+    return undefined;
   };
-
-  const directory = path.posix.dirname(storageKey);
-  await ensureDir(directory);
-  const writeStream = sftp.sftp.createWriteStream(storageKey);
   try {
-    await gateway.streamBinaryFromAgent(
-      nodeId,
-      { type: "download_backup", serverId, serverUuid, backupPath: agentPath, requestId },
-      (chunk) => {
-        writeStream.write(chunk);
-      },
-    );
-    writeStream.end();
+    const ensureDir = async (dirPath: string) => {
+      const parts = dirPath.split("/").filter(Boolean);
+      let current = "";
+      for (const part of parts) {
+        current = `${current}/${part}`;
+        const exists = await new Promise<boolean>((resolve, reject) => {
+          sftp.sftp.stat(current, (err: unknown) => {
+            if (!err) return resolve(true);
+            if (sftpErrCode(err) === 2) return resolve(false);
+            reject(err);
+          });
+        });
+        if (exists) continue;
+        await new Promise<void>((resolve, reject) => {
+          sftp.sftp.mkdir(current, (err: unknown) => {
+            const code = sftpErrCode(err);
+            if (err && code !== 4 && code !== 11) {
+              reject(err);
+              return;
+            }
+            resolve();
+          });
+        });
+      }
+    };
+    await ensureDir(path.posix.dirname(storageKey));
     await new Promise<void>((resolve, reject) => {
-      writeStream.on("finish", () => resolve());
-      writeStream.on("error", reject);
+      sftp.sftp.fastPut(tmpPath, storageKey, (err: Error | undefined) => {
+        if (err) reject(err);
+        else resolve();
+      });
     });
-  } catch (err) {
-    writeStream.destroy();
-    throw err;
   } finally {
     sftp.client.end();
+    await fs.unlink(tmpPath).catch(() => {});
   }
 };
 

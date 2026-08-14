@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { ServerDatabase } from '../../types/database';
+import type { AvailableDatabaseHost, ServerDatabase } from '../../types/database';
 
 type ApiResponse<T> = {
   success: boolean;
@@ -8,6 +8,12 @@ type ApiResponse<T> = {
 };
 
 export const databasesApi = {
+  listHosts: async () => {
+    const data = await apiClient.get<ApiResponse<AvailableDatabaseHost[]>>(
+      '/api/servers/database-hosts',
+    );
+    return Array.isArray(data.data) ? data.data : [];
+  },
   list: async (serverId: string) => {
     const data = await apiClient.get<ApiResponse<ServerDatabase[]>>(
       `/api/servers/${serverId}/databases`,

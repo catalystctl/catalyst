@@ -52,6 +52,8 @@ import { hasAnyPermission } from '../auth/ProtectedRoute';
 import { useServers } from '../../hooks/useServers';
 import { useNodes } from '../../hooks/useNodes';
 import { useTemplates } from '../../hooks/useTemplates';
+import { useAvailableDatabaseHosts } from '../../hooks/useServerDatabases';
+import { canShowServerDatabasesTab } from '../../utils/serverTabs';
 import { cn } from '../../lib/utils';
 
 // ══════════════════════════════════════════════════════════════
@@ -765,6 +767,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  const { data: servers, isLoading: serversLoading } = useServers();
  const { data: nodes, isLoading: nodesLoading } = useNodes();
  const { data: templates, isLoading: templatesLoading } = useTemplates();
+ const { data: databaseHosts = [] } = useAvailableDatabaseHosts();
 
  const [query, setQuery] = useState('');
  const [selectedIndex, setSelectedIndex] = useState(0);
@@ -803,6 +806,20 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  });
 
  for (const tab of SERVER_TABS) {
+ if (
+ tab.key === 'databases' &&
+ !canShowServerDatabasesTab({
+ hasDatabaseRead:
+ server.effectivePermissions?.includes('database.read') ||
+ user?.permissions?.includes('*') ||
+ user?.permissions?.includes('admin.write') ||
+ false,
+ databaseAllocation: server.databaseAllocation,
+ hostCount: databaseHosts.length,
+ })
+ ) {
+ continue;
+ }
  items.push({
  id: `server-${server.id}-tab-${tab.key}`,
  label: `${server.name} — ${tab.label}`,
@@ -877,7 +894,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  }
 
  return items;
- }, [servers, nodes, templates]);
+ }, [servers, nodes, templates, databaseHosts.length, user?.permissions]);
 
  // ── Combined ──
 

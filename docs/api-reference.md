@@ -1083,6 +1083,7 @@ Set the primary port for this server. The primary port is used for server identi
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
+| `GET` | `/api/servers/database-hosts` | authenticated | List available database hosts (id, name, host, port). Used to hide the Databases tab when none are configured |
 | `GET` | `/api/servers/:id/databases` | `database.read` | List databases |
 | `POST` | `/api/servers/:id/databases` | `database.create` | Create a database (returns 201). `hostId` required. `name` optional (auto-generated if <3 chars). 403 if databaseAllocation is 0, 409 if limit reached |
 | `POST` | `/api/servers/:id/databases/:databaseId/rotate` | `database.rotate` | Rotate database password |

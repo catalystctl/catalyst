@@ -15,6 +15,7 @@
 #   ./scripts/lxc-lab/lab.sh files
 #   ./scripts/lxc-lab/lab.sh ops
 #   ./scripts/lxc-lab/lab.sh live
+#   ./scripts/lxc-lab/lab.sh storage-backups
 #   ./scripts/lxc-lab/lab.sh status
 #   ./scripts/lxc-lab/lab.sh destroy
 set -euo pipefail
@@ -198,7 +199,14 @@ patch_official_env() {
     else
       printf 'AUTO_UPDATE_DOCKER_COMPOSE_PATH=/root/catalyst-docker/docker-compose.yml\\n' >> \"\$ENV\"
     fi
-    # No Caddy/Traefik — leave DOMAIN empty.
+    if ! grep -q '^BACKUP_CREDENTIALS_ENCRYPTION_KEY=' \"\$ENV\"; then
+      printf 'BACKUP_CREDENTIALS_ENCRYPTION_KEY=%s\\n' \"\$(openssl rand -base64 32)\" >> \"\$ENV\"
+    fi
+    if grep -q '^WS_MAX_PAYLOAD_BYTES=' \"\$ENV\"; then
+      sed -i 's~^WS_MAX_PAYLOAD_BYTES=.*~WS_MAX_PAYLOAD_BYTES=8388608~' \"\$ENV\"
+    else
+      printf 'WS_MAX_PAYLOAD_BYTES=8388608\\n' >> \"\$ENV\"
+    fi
   "
 }
 
@@ -217,6 +225,8 @@ services:
       BACKEND_URL: ${BACKEND_PUBLIC}
       CORS_ORIGIN: ${LAB_CORS_ORIGINS}
       AUTO_UPDATE_DOCKER_COMPOSE_PATH: /root/catalyst-docker/docker-compose.yml
+      BACKUP_CREDENTIALS_ENCRYPTION_KEY: \${BACKUP_CREDENTIALS_ENCRYPTION_KEY}
+      WS_MAX_PAYLOAD_BYTES: \"8388608\"
     volumes:
       - /root/catalyst-docker:/root/catalyst-docker:ro
 EOF
@@ -251,7 +261,57 @@ patch_published_cron_parser() {
     docker restart catalyst-backend
   '
   wait_http "http://${BACKEND_IP}:3000/api/health" 40 || true
+  patch_published_ws_payload
 }
+
+patch_published_ws_payload() {
+  # Published image still uses 64 KiB WS frames; agent backup chunks are 256 KiB.
+  log "Raising published backend WebSocket maxPayload if needed"
+  lxc_exec "$BACKEND_LXC" bash -lc '
+    set -euo pipefail
+    docker exec -u root catalyst-backend node -e "
+      const fs = require(\"fs\");
+      const p = \"/app/dist/index.js\";
+      let s = fs.readFileSync(p, \"utf8\");
+      const old = \"maxPayload: 64 * 1024\";
+      const neu = \"maxPayload: 8 * 1024 * 1024\";
+      const old2 = \"maxPayload: 65536\";
+      let c = 0;
+      if (s.includes(old)) { s = s.split(old).join(neu); c += 1; }
+      if (s.includes(old2)) { s = s.split(old2).join(\"maxPayload: 8388608\"); c += 1; }
+      if (!c) { console.log(\"ws maxPayload already raised\"); process.exit(0); }
+      fs.writeFileSync(p, s);
+      console.log(\"patched ws maxPayload replacements:\", c);
+    "
+    docker restart catalyst-backend
+  '
+  patch_published_s3_upload
+}
+
+patch_published_s3_upload() {
+  # Published image PutObject's a PassThrough with no ContentLength; AWS SDK
+  # then crashes on x-amz-decoded-content-length=undefined against MinIO.
+  log "Patching published S3 backup upload to use a sized temp file"
+  lxc_exec "$BACKEND_LXC" bash -lc '
+    set -euo pipefail
+    docker exec -u root catalyst-backend node -e "
+      const fs = require(\"fs\");
+      const p = \"/app/dist/services/backup-storage.js\";
+      let s = fs.readFileSync(p, \"utf8\");
+      if (s.includes(\"ContentLength: stats.size\")) { console.log(\"s3 upload already patched\"); process.exit(0); }
+      const start = s.indexOf(\"streamAgentBackupToS3 = async\");
+      const end = s.indexOf(\"export const streamAgentBackupToSftp\");
+      if (start < 0 || end < 0) { console.log(\"s3 upload markers missing\"); process.exit(0); }
+      const neu = \"streamAgentBackupToS3 = async (gateway, nodeId, serverId, serverUuid, agentPath, storageKey, server) => {\\n    const { client, bucket } = resolveS3Config(server);\\n    const tmpPath = path.join(TRANSFER_DIR, serverUuid, path.basename(storageKey));\\n    await streamAgentBackupToLocal(gateway, nodeId, serverId, serverUuid, agentPath, tmpPath);\\n    try {\\n        const stats = await fs.stat(tmpPath);\\n        await client.send(new PutObjectCommand({\\n            Bucket: bucket,\\n            Key: storageKey,\\n            Body: createReadStream(tmpPath),\\n            ContentLength: stats.size,\\n            ContentType: \\\"application/gzip\\\",\\n        }));\\n    } finally {\\n        await fs.unlink(tmpPath).catch(() => {});\\n    }\\n};\\nexport const \";
+      s = s.slice(0, start) + neu + s.slice(end + \"export const \".length);
+      fs.writeFileSync(p, s);
+      console.log(\"patched streamAgentBackupToS3\");
+    "
+    docker restart catalyst-backend
+  '
+  wait_http "http://${BACKEND_IP}:3000/health" 40 || true
+}
+
 
 stage_deploy_panel() {
   run_official_install_sh "$PANEL_LXC"
@@ -672,6 +732,7 @@ stage_all() {
   stage_ops
   stage_sftp
   stage_backups
+  stage_storage_backups
   stage_alerts
   stage_automations
   stage_apis
@@ -687,6 +748,8 @@ source "$LAB_DIR/panel-ops.sh"
 source "$LAB_DIR/server-apis.sh"
 # shellcheck disable=SC1091
 source "$LAB_DIR/admin-ops.sh"
+# shellcheck disable=SC1091
+source "$LAB_DIR/storage-backups.sh"
 source "$LAB_DIR/everything.sh"
 # shellcheck disable=SC1091
 source "$LAB_DIR/updates.sh"
@@ -706,6 +769,7 @@ case "$cmd" in
   files) stage_files ;;
   ops) stage_ops ;;
   sftp) stage_sftp ;;
+  storage-backups) stage_storage_backups ;;
   backups) stage_backups ;;
   alerts) stage_alerts ;;
   automations) stage_automations ;;
@@ -721,7 +785,7 @@ case "$cmd" in
   all) stage_all ;;
   --tcp-proxy) ;;
   *)
-    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|alerts|automations|apis|admin|everything|updates|live|eggs|full|status|destroy}"
+    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|storage-backups|alerts|automations|apis|admin|everything|updates|live|eggs|full|status|destroy}"
     exit 2
     ;;
 esac

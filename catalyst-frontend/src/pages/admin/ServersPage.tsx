@@ -41,6 +41,7 @@ import {
  DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import UpdateServerModal from '../../components/servers/UpdateServerModal';
+import CreateServerModal from '../../components/servers/CreateServerModal';
 import DeleteServerDialog from '../../components/servers/DeleteServerDialog';
 import { useAdminNodes, useAdminServers } from '../../hooks/useAdmin';
 import { useTemplates } from '../../hooks/useTemplates';
@@ -276,6 +277,7 @@ function AdminServersPage() {
  description="Monitor and manage every server across all nodes"
  actions={
  <div className="flex flex-wrap gap-2">
+ <CreateServerModal />
  {isLoading ? (
  <>
  <div className="h-8 w-24 animate-pulse rounded-lg bg-surface-3" />
@@ -758,7 +760,7 @@ function AdminServersPage() {
  description={
  search.trim() || hasActiveFilters
  ? 'Try adjusting your search or filters.'
- : 'Servers will appear here once created.'
+ : 'Create a server to start managing it from this list.'
  }
  action={
  hasActiveFilters ? (
@@ -766,7 +768,9 @@ function AdminServersPage() {
  <X className="mr-1.5 h-3.5 w-3.5" />
  Clear filters
  </Button>
- ) : undefined
+ ) : (
+ <CreateServerModal />
+ )
  }
  />
  </div>

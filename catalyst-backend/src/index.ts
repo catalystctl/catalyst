@@ -708,8 +708,9 @@ async function bootstrap() {
 			},
 		});
 
+		const wsMaxPayload = Number(process.env.WS_MAX_PAYLOAD_BYTES) || 8 * 1024 * 1024;
 		await app.register(fastifyWebsocket, {
-			options: { maxPayload: 64 * 1024 },
+			options: { maxPayload: Number.isFinite(wsMaxPayload) && wsMaxPayload > 0 ? wsMaxPayload : 8 * 1024 * 1024 },
 			errorHandler: (error) => {
 				captureSystemError({
 					level: 'error',

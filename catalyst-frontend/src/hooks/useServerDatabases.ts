@@ -18,3 +18,12 @@ export function useServerDatabases(serverId?: string) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export function useAvailableDatabaseHosts() {
+  return useQuery({
+    queryKey: qk.databaseHosts(),
+    queryFn: databasesApi.listHosts,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
+}

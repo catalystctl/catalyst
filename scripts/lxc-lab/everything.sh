@@ -247,6 +247,7 @@ stage_full() {
   stage_ops
   stage_sftp
   stage_backups
+  stage_storage_backups
   stage_alerts
   stage_automations
   stage_apis
