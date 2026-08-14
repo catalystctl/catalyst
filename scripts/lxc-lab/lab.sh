@@ -16,6 +16,7 @@
 #   ./scripts/lxc-lab/lab.sh ops
 #   ./scripts/lxc-lab/lab.sh live
 #   ./scripts/lxc-lab/lab.sh storage-backups
+#   ./scripts/lxc-lab/lab.sh refresh
 #   ./scripts/lxc-lab/lab.sh status
 #   ./scripts/lxc-lab/lab.sh destroy
 set -euo pipefail
@@ -213,11 +214,22 @@ patch_official_env() {
 stage_deploy_backend() {
   run_official_install_sh "$BACKEND_LXC"
   patch_official_env "$BACKEND_LXC" "0.0.0.0:3000"
+  write_backend_overlay
+  pull_backend_images
+  patch_published_cron_parser
+}
+
+sync_official_compose() {
+  local name="$1"
+  push_file "$name" "$REPO_ROOT/catalyst-docker/docker-compose.yml" /root/catalyst-docker/docker-compose.yml
+}
+
+write_backend_overlay() {
   # Official compose binds BACKEND_* to PUBLIC_URL. Agents on the LAN should
   # talk to this LXC directly instead of hairpinning through the panel proxy.
-  lxc_exec "$BACKEND_LXC" bash -lc "
-    set -euo pipefail
-    cat > /root/catalyst-docker/docker-compose.backend-lxc.yml <<EOF
+  local tmp
+  tmp="$(mktemp)"
+  cat > "$tmp" <<EOF
 services:
   backend:
     environment:
@@ -226,19 +238,37 @@ services:
       CORS_ORIGIN: ${LAB_CORS_ORIGINS}
       AUTO_UPDATE_DOCKER_COMPOSE_PATH: /root/catalyst-docker/docker-compose.yml
       BACKUP_CREDENTIALS_ENCRYPTION_KEY: \${BACKUP_CREDENTIALS_ENCRYPTION_KEY}
-      WS_MAX_PAYLOAD_BYTES: \"8388608\"
+      WS_MAX_PAYLOAD_BYTES: "8388608"
     volumes:
       - /root/catalyst-docker:/root/catalyst-docker:ro
 EOF
-  "
-  log "Starting official postgres/redis/backend in $BACKEND_LXC"
+  push_file "$BACKEND_LXC" "$tmp" /root/catalyst-docker/docker-compose.backend-lxc.yml
+  rm -f "$tmp"
+}
+
+pull_backend_images() {
+  log "Pulling latest postgres/redis/backend in $BACKEND_LXC"
   lxc_exec "$BACKEND_LXC" bash -lc "
     set -euo pipefail
     cd /root/catalyst-docker
     docker compose -f docker-compose.yml -f docker-compose.backend-lxc.yml pull postgres redis backend
     docker compose -f docker-compose.yml -f docker-compose.backend-lxc.yml up -d postgres redis backend
   "
-  patch_published_cron_parser
+}
+
+pull_panel_images() {
+  push_file "$PANEL_LXC" "$LAB_DIR/compose/docker-compose.panel-lxc.yml" /root/catalyst-docker/docker-compose.panel-lxc.yml
+  lxc_exec "$PANEL_LXC" bash -lc "
+    set -euo pipefail
+    cd /root/catalyst-docker
+    if grep -q '^BACKEND_IP=' .env; then
+      sed -i 's~^BACKEND_IP=.*~BACKEND_IP=${BACKEND_IP}~' .env
+    else
+      printf '\nBACKEND_IP=%s\n' '${BACKEND_IP}' >> .env
+    fi
+    docker compose -f docker-compose.yml -f docker-compose.panel-lxc.yml pull frontend
+    docker compose -f docker-compose.yml -f docker-compose.panel-lxc.yml up -d --no-deps frontend
+  "
 }
 
 patch_published_cron_parser() {
@@ -260,7 +290,7 @@ patch_published_cron_parser() {
     "
     docker restart catalyst-backend
   '
-  wait_http "http://${BACKEND_IP}:3000/api/health" 40 || true
+  wait_http "http://${BACKEND_IP}:3000/health" 40 || true
   patch_published_ws_payload
 }
 
@@ -316,19 +346,7 @@ patch_published_s3_upload() {
 stage_deploy_panel() {
   run_official_install_sh "$PANEL_LXC"
   patch_official_env "$PANEL_LXC" "127.0.0.1:3000"
-  push_file "$PANEL_LXC" "$LAB_DIR/compose/docker-compose.panel-lxc.yml" /root/catalyst-docker/docker-compose.panel-lxc.yml
-  lxc_exec "$PANEL_LXC" bash -lc "
-    set -euo pipefail
-    cd /root/catalyst-docker
-    # Keep the installer-generated .env; only inject the backend LXC address.
-    if grep -q '^BACKEND_IP=' .env; then
-      sed -i 's~^BACKEND_IP=.*~BACKEND_IP=${BACKEND_IP}~' .env
-    else
-      printf '\nBACKEND_IP=%s\n' '${BACKEND_IP}' >> .env
-    fi
-    docker compose -f docker-compose.yml -f docker-compose.panel-lxc.yml pull frontend
-    docker compose -f docker-compose.yml -f docker-compose.panel-lxc.yml up -d --no-deps frontend
-  "
+  pull_panel_images
   log "Waiting for panel nginx at http://${PANEL_IP}:8080/"
   wait_http "http://${PANEL_IP}:8080/" 40 || fail "panel nginx never became ready"
   start_host_forwards
@@ -358,6 +376,28 @@ start_host_forwards() {
 stage_deploy() {
   stage_deploy_backend
   stage_deploy_panel
+}
+
+stage_refresh() {
+  have_lxc "$BACKEND_LXC" || fail "backend LXC missing — run create/deploy first"
+  have_lxc "$PANEL_LXC" || fail "panel LXC missing — run create/deploy first"
+  lxc_running "$BACKEND_LXC" || fail "backend LXC not running"
+  lxc_running "$PANEL_LXC" || fail "panel LXC not running"
+
+  log "Refreshing lab compose files and GHCR :latest images"
+  sync_official_compose "$BACKEND_LXC"
+  sync_official_compose "$PANEL_LXC"
+  patch_official_env "$BACKEND_LXC" "0.0.0.0:3000"
+  patch_official_env "$PANEL_LXC" "127.0.0.1:3000"
+  write_backend_overlay
+  pull_backend_images
+  pull_panel_images
+  patch_published_cron_parser
+  start_host_forwards
+  wait_http "http://${BACKEND_IP}:3000/health" 40 || fail "backend /health never came up after refresh"
+  wait_http "http://${PANEL_IP}:8080/" 40 || fail "panel nginx never came up after refresh"
+  wait_http "${PUBLIC_URL}/" 20 || warn "host publish ${PUBLIC_URL} not reachable yet (panel still at http://${PANEL_IP}:8080/)"
+  log "Lab images refreshed"
 }
 
 login_or_setup() {
@@ -776,6 +816,7 @@ case "$cmd" in
   apis) stage_apis ;;
   admin) stage_admin ;;
   everything) stage_everything ;;
+  refresh) stage_refresh ;;
   updates) stage_updates ;;
   live) stage_live ;;
   eggs) python3 "$LAB_DIR/egg-inventory.py" ;;
@@ -785,7 +826,7 @@ case "$cmd" in
   all) stage_all ;;
   --tcp-proxy) ;;
   *)
-    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|storage-backups|alerts|automations|apis|admin|everything|updates|live|eggs|full|status|destroy}"
+    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|storage-backups|alerts|automations|apis|admin|everything|updates|refresh|live|eggs|full|status|destroy}"
     exit 2
     ;;
 esac

@@ -1,6 +1,7 @@
-# Panel auto-update + agent self-update from the panel APIs.
+# Pull latest GHCR images, then exercise panel auto-update + agent self-update.
 
 stage_updates() {
+  stage_refresh
   load_state
   [[ -n "${AUTH_TOKEN:-}" ]] || login_or_setup
   [[ -n "${NODE_ID:-}" ]] || fail "NODE_ID missing"
