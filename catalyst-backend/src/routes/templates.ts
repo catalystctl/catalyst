@@ -2,6 +2,7 @@ import { prisma } from "../db.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { hasPermission } from "../lib/permissions";
 import { serialize } from "../utils/serialize";
+import { githubRawFileUrl, githubRepoTreeUrl, parseGithubOwnerRepo } from "../lib/github-repo";
 import { importPterodactylEgg as convertEgg, importPterodactylEggSafe, importPterodactylEggsBatch, convertStartupCommand, convertInstallScript, parseStopCommand } from "../utils/egg-import";
 import type { ImportError, ImportSafeResult, BatchImportResult, ImportedEggResult } from "../utils/egg-import";
 
@@ -600,22 +601,30 @@ export async function templateRoutes(app: FastifyInstance) {
 				}
 			}
 
-			const GITHUB_REPO = repoUrl || "pterodactyl/game-eggs";
+			let GITHUB_REPO: string;
+			try {
+				GITHUB_REPO = parseGithubOwnerRepo(repoUrl);
+			} catch {
+				return reply.status(400).send({
+					error: "Invalid GitHub repository. Expected owner/repo (e.g. pterodactyl/game-eggs).",
+				});
+			}
 			const BRANCH = "main";
 
-			// 1. Fetch the repo tree
+			// 1. Fetch the repo tree — host is pinned to api.github.com
 			request.log.info({ repo: GITHUB_REPO }, "Fetching Pterodactyl eggs repo tree");
 			let treeEntries: Array<{ path: string }>;
 			try {
-				const treeRes = await fetch(
-					`https://api.github.com/repos/${GITHUB_REPO}/git/trees/${BRANCH}?recursive=1`,
-					{
-						headers: {
-							"User-Agent": "Catalyst-Panel",
-							Accept: "application/vnd.github.v3+json",
-						},
+				const treeUrl = githubRepoTreeUrl(GITHUB_REPO, BRANCH);
+				if (treeUrl.protocol !== "https:" || treeUrl.hostname !== "api.github.com") {
+					throw new Error("Refusing non-GitHub API URL");
+				}
+				const treeRes = await fetch(treeUrl, {
+					headers: {
+						"User-Agent": "Catalyst-Panel",
+						Accept: "application/vnd.github.v3+json",
 					},
-				);
+				});
 				if (!treeRes.ok) {
 					throw new Error(`GitHub API returned ${treeRes.status}`);
 				}
@@ -640,8 +649,11 @@ export async function templateRoutes(app: FastifyInstance) {
 				const batch = treeEntries.slice(i, i + BATCH_SIZE);
 				const batchResults = await Promise.all(
 					batch.map(async (entry) => {
-						const rawUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/${BRANCH}/${entry.path}`;
 						try {
+							const rawUrl = githubRawFileUrl(GITHUB_REPO, BRANCH, entry.path);
+							if (rawUrl.protocol !== "https:" || rawUrl.hostname !== "raw.githubusercontent.com") {
+								throw new Error("Refusing non-GitHub raw URL");
+							}
 							const eggRes = await fetch(rawUrl, {
 								headers: { "User-Agent": "Catalyst-Panel" },
 							});

@@ -6,7 +6,7 @@ import type { Logger } from 'pino';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { WebSocketGateway } from '../websocket/gateway';
 import type { PluginManifest, PluginBackend, LoadedPlugin, PluginStatus } from './types';
-import { validateManifest, isVersionCompatible, validateDependencies } from './validator';
+import { validateManifest, isVersionCompatible, validateDependencies, isValidPluginName } from './validator';
 import { createPluginContext, runMiddleware } from './context';
 import { captureSystemError } from '../services/error-logger';
 import { PluginRegistry } from './registry';
@@ -247,16 +247,30 @@ export class PluginLoader {
   }
 
   /**
+   * Resolve a plugin directory and refuse anything outside pluginsDir.
+   */
+  private resolvePluginDir(pluginPath: string): string {
+    const pluginName = path.basename(pluginPath);
+    const resolvedPath = path.resolve(pluginPath);
+    const canonicalBase = path.resolve(this.pluginsDir);
+    const rel = path.relative(canonicalBase, resolvedPath);
+    if (
+      !rel ||
+      rel === '..' ||
+      rel.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(rel)
+    ) {
+      throw new Error(`Plugin path escapes plugins directory: ${pluginName}`);
+    }
+    return resolvedPath;
+  }
+
+  /**
    * Load a plugin from directory
    */
   async loadPlugin(pluginPath: string): Promise<void> {
     const pluginName = path.basename(pluginPath);
-    // Prevent path traversal: ensure resolved path is within plugins directory
-    const resolvedPath = path.resolve(pluginPath);
-    const canonicalBase = path.resolve(this.pluginsDir);
-    if (!resolvedPath.startsWith(canonicalBase + path.sep) && resolvedPath !== canonicalBase) {
-      throw new Error(`Plugin path escapes plugins directory: ${pluginName}`);
-    }
+    const resolvedPath = this.resolvePluginDir(pluginPath);
     this.logger.info({ plugin: pluginName }, 'Loading plugin');
 
     try {
@@ -714,6 +728,9 @@ export class PluginLoader {
    * Reload a plugin (hot-reload)
    */
   async reloadPlugin(name: string): Promise<void> {
+    if (!isValidPluginName(name)) {
+      throw new Error(`Invalid plugin name: ${name}`);
+    }
     this.logger.info({ plugin: name }, 'Reloading plugin');
 
     const plugin = this.registry.get(name);
@@ -722,7 +739,7 @@ export class PluginLoader {
     }
 
     const wasEnabled = plugin.status === 'enabled';
-    const pluginPath = path.join(this.pluginsDir, name);
+    const pluginPath = this.resolvePluginDir(path.join(this.pluginsDir, name));
 
     // Unload existing plugin
     await this.unloadPlugin(name);

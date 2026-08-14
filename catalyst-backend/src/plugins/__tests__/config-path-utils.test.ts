@@ -127,4 +127,16 @@ describe('path-utils', () => {
     expect(doc.status).toBe('closed');
     expect(doc['sla.b']).toBeUndefined();
   });
+
+  it('rejects prototype-polluting path segments', () => {
+    const doc: any = { sla: { a: 1 } };
+    setByPath(doc, '__proto__.polluted', true);
+    setByPath(doc, 'constructor.prototype.polluted', true);
+    setByPath(doc, 'sla.__proto__.x', true);
+    applyUpdateOperators(doc, { $set: { '__proto__.admin': true } });
+    expect(getByPath(doc, '__proto__.polluted')).toBeUndefined();
+    expect(({} as any).polluted).toBeUndefined();
+    expect(({} as any).admin).toBeUndefined();
+    expect(doc.sla).toEqual({ a: 1 });
+  });
 });

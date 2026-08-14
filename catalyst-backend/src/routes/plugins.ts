@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { PluginLoader } from '../plugins/loader';
 import { z } from 'zod';
 import { getWsGateway } from '../websocket/gateway';
+import { isValidPluginName } from '../plugins/validator';
 
 const EnablePluginSchema = z.object({
   enabled: z.boolean(),
@@ -182,6 +183,12 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       const isAdmin = ensureAdmin(request, reply, 'admin.write');
       if (!isAdmin) return;
       const { name } = request.params as { name: string };
+      if (!isValidPluginName(name)) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Invalid plugin name',
+        });
+      }
 
       try {
         await pluginLoader.reloadPlugin(name);

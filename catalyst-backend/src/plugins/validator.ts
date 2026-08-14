@@ -8,6 +8,13 @@ const CONFIG_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,50}$/;
 // Dependency version validation - must be valid semver
 const VERSION_REGEX = /^\d+\.\d+\.\d+$/;
 
+/** Plugin directory / route names: lowercase alphanumeric with hyphens. */
+export const PLUGIN_NAME_REGEX = /^[a-z0-9-]+$/;
+
+export function isValidPluginName(name: string): boolean {
+  return typeof name === 'string' && name.length > 0 && name.length <= 50 && PLUGIN_NAME_REGEX.test(name);
+}
+
 /**
  * Zod schema for plugin manifest validation
  */
@@ -16,7 +23,7 @@ export const PluginManifestSchema = z.object({
     .string()
     .min(1)
     .max(50)
-    .regex(/^[a-z0-9-]+$/, 'Plugin name must be lowercase alphanumeric with hyphens'),
+    .regex(PLUGIN_NAME_REGEX, 'Plugin name must be lowercase alphanumeric with hyphens'),
   version: z.string().regex(/^\d+\.\d+\.\d+$/, 'Version must follow semver (e.g., 1.0.0)'),
   displayName: z.string().min(1).max(100),
   description: z.string().min(1).max(500),

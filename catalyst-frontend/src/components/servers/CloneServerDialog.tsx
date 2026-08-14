@@ -310,7 +310,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 <p className="text-xs text-muted-foreground">
                   No available allocations.{' '}
                   <a
-                    href={`/admin/nodes/${nodeId}/allocations`}
+                    href={`/admin/nodes/${encodeURIComponent(nodeId)}/allocations`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-primary hover:underline"

@@ -6,6 +6,7 @@
  */
 
 import type { Page } from '@playwright/test';
+import { randomUUID } from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
@@ -31,7 +32,7 @@ export interface TestUser {
  */
 export async function createTestUser(page: Page): Promise<TestUser> {
   const timestamp = Date.now();
-  const randomId = Math.random().toString(36).substring(7);
+  const randomId = randomUUID().slice(0, 8);
   
   const credentials: TestUser = {
     email: `e2e-test-${timestamp}-${randomId}@test.local`,

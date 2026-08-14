@@ -3,13 +3,27 @@
  * Supports Mongo-style dotted paths (`sla.resolutionBreached`).
  */
 
+function isUnsafePathSegment(part: string): boolean {
+  return !part || part === '__proto__' || part === 'constructor' || part === 'prototype';
+}
+
+function splitSafePath(path: string): string[] | null {
+  if (!path) return null;
+  const parts = path.split('.');
+  for (const part of parts) {
+    if (isUnsafePathSegment(part)) return null;
+  }
+  return parts;
+}
+
 /** Read a value from a document by top-level or dotted path. */
 export function getByPath(doc: any, path: string): unknown {
   if (!doc || typeof doc !== 'object') return undefined;
-  if (!path.includes('.')) return doc[path];
-  const parts = path.split('.');
+  const parts = splitSafePath(path);
+  if (!parts) return undefined;
   let cur: any = doc;
   for (const part of parts) {
+    if (part === '__proto__' || part === 'constructor' || part === 'prototype') return undefined;
     if (cur === null || cur === undefined || typeof cur !== 'object') return undefined;
     cur = cur[part];
   }
@@ -18,36 +32,39 @@ export function getByPath(doc: any, path: string): unknown {
 
 /** Set a value on a document by top-level or dotted path (mutates). */
 export function setByPath(doc: any, path: string, value: unknown): void {
-  if (!path.includes('.')) {
-    doc[path] = value;
-    return;
-  }
-  const parts = path.split('.');
+  if (!doc || typeof doc !== 'object') return;
+  const parts = splitSafePath(path);
+  if (!parts) return;
   let cur: any = doc;
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i];
+    if (part === '__proto__' || part === 'constructor' || part === 'prototype') return;
     if (cur[part] === null || cur[part] === undefined || typeof cur[part] !== 'object' || Array.isArray(cur[part])) {
       cur[part] = {};
     }
     cur = cur[part];
   }
-  cur[parts[parts.length - 1]] = value;
+  const last = parts[parts.length - 1];
+  if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
+  cur[last] = value;
 }
 
 /** Delete a value on a document by top-level or dotted path (mutates). */
 export function unsetByPath(doc: any, path: string): void {
-  if (!path.includes('.')) {
-    delete doc[path];
-    return;
-  }
-  const parts = path.split('.');
+  if (!doc || typeof doc !== 'object') return;
+  const parts = splitSafePath(path);
+  if (!parts) return;
   let cur: any = doc;
   for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (part === '__proto__' || part === 'constructor' || part === 'prototype') return;
     if (cur === null || cur === undefined || typeof cur !== 'object') return;
-    cur = cur[parts[i]];
+    cur = cur[part];
   }
+  const last = parts[parts.length - 1];
+  if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
   if (cur && typeof cur === 'object') {
-    delete cur[parts[parts.length - 1]];
+    delete cur[last];
   }
 }
 

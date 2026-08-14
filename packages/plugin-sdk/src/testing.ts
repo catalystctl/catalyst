@@ -36,11 +36,26 @@ export interface MockContext {
   requirePermission: (...required: string[]) => (request: any, reply: any) => Promise<any>;
 }
 
+function isUnsafePathSegment(part: string): boolean {
+  return !part || part === '__proto__' || part === 'constructor' || part === 'prototype';
+}
+
+function splitSafePath(path: string): string[] | null {
+  if (!path) return null;
+  const parts = path.split('.');
+  for (const part of parts) {
+    if (isUnsafePathSegment(part)) return null;
+  }
+  return parts;
+}
+
 function getByPath(doc: any, path: string): unknown {
   if (!doc || typeof doc !== 'object') return undefined;
-  if (!path.includes('.')) return doc[path];
+  const parts = splitSafePath(path);
+  if (!parts) return undefined;
   let cur: any = doc;
-  for (const part of path.split('.')) {
+  for (const part of parts) {
+    if (part === '__proto__' || part === 'constructor' || part === 'prototype') return undefined;
     if (cur == null || typeof cur !== 'object') return undefined;
     cur = cur[part];
   }
@@ -48,17 +63,19 @@ function getByPath(doc: any, path: string): unknown {
 }
 
 function setByPath(doc: any, path: string, value: unknown): void {
-  if (!path.includes('.')) {
-    doc[path] = value;
-    return;
-  }
-  const parts = path.split('.');
+  if (!doc || typeof doc !== 'object') return;
+  const parts = splitSafePath(path);
+  if (!parts) return;
   let cur: any = doc;
   for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (part === '__proto__' || part === 'constructor' || part === 'prototype') return;
     if (cur[parts[i]] == null || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
     cur = cur[parts[i]];
   }
-  cur[parts[parts.length - 1]] = value;
+  const last = parts[parts.length - 1];
+  if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
+  cur[last] = value;
 }
 
 function matchFilter(doc: any, filter: any): boolean {
@@ -109,12 +126,26 @@ function applyUpdate(target: any, update: any): void {
   }
   if (update.$unset) {
     for (const k of Object.keys(update.$unset)) {
-      if (!k.includes('.')) delete target[k];
-      else {
-        const parts = k.split('.');
-        let cur = target;
-        for (let i = 0; i < parts.length - 1; i++) cur = cur?.[parts[i]];
-        if (cur && typeof cur === 'object') delete cur[parts[parts.length - 1]];
+      const parts = splitSafePath(k);
+      if (!parts) continue;
+      if (parts.length === 1) {
+        const last = parts[0];
+        if (last === '__proto__' || last === 'constructor' || last === 'prototype') continue;
+        delete target[last];
+        continue;
+      }
+      let cur = target;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (part === '__proto__' || part === 'constructor' || part === 'prototype') {
+          cur = undefined;
+          break;
+        }
+        cur = cur?.[part];
+      }
+      const last = parts[parts.length - 1];
+      if (cur && typeof cur === 'object' && last !== '__proto__' && last !== 'constructor' && last !== 'prototype') {
+        delete cur[last];
       }
     }
   }
