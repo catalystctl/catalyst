@@ -118,6 +118,9 @@ export function useQuery<TData = unknown, TError = Error>(
     const staleTime =
       optionsRef.current.staleTime ?? client.getDefaultOptions().queries?.staleTime ?? 60_000;
     const hasData = query.state.data !== undefined;
+    // Fetch on mount / key change / invalidation. Do NOT list dataUpdatedAt as a
+    // dep: a successful fetch updates that field, and staleTime: 0 makes
+    // `Date.now() - dataUpdatedAt >= 0` always true → infinite refetch (12GB).
     const isStale =
       query.state.isInvalidated ||
       !hasData ||
@@ -129,7 +132,7 @@ export function useQuery<TData = unknown, TError = Error>(
 
     client.setupRefetchInterval(query as unknown as Query);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, query, enabled, queryKeyHash, state.isInvalidated, state.dataUpdatedAt]);
+  }, [client, query, enabled, queryKeyHash, state.isInvalidated]);
 
   const placeholder = options.placeholderData;
   const select = options.select;
@@ -175,7 +178,8 @@ export function useQuery<TData = unknown, TError = Error>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, queryKeyHash]);
 
-  const result: UseQueryResult<TData, TError> = {
+  const resultRef = useRef<UseQueryResult<TData, TError> | null>(null);
+  const next: UseQueryResult<TData, TError> = {
     data,
     error: state.error as TError | null,
     isLoading,
@@ -189,6 +193,25 @@ export function useQuery<TData = unknown, TError = Error>(
     refetch,
     failureCount: 0,
   };
+  // Reuse the previous result object when fields are unchanged so effects that
+  // list the whole useQuery() return (against the documented rule) do not loop.
+  const prev = resultRef.current;
+  const result =
+    prev &&
+    prev.data === next.data &&
+    prev.error === next.error &&
+    prev.isLoading === next.isLoading &&
+    prev.isPending === next.isPending &&
+    prev.isFetching === next.isFetching &&
+    prev.isError === next.isError &&
+    prev.isSuccess === next.isSuccess &&
+    prev.isFetched === next.isFetched &&
+    prev.status === next.status &&
+    prev.fetchStatus === next.fetchStatus &&
+    prev.refetch === next.refetch
+      ? prev
+      : next;
+  resultRef.current = result;
 
   useDebugValue(result);
   return result;

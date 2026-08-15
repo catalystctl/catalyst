@@ -138,90 +138,90 @@ function DashboardPage() {
  <TabErrorState title="Unable to load overview" description="Dashboard counts could not be loaded." />
  ) : (
  <div className={`grid grid-cols-1 gap-3 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
- <Link
- to="/servers"
- className="group flex items-center gap-3 rounded-lg border border-border/30 bg-card p-3 transition-colors hover:border-primary/30"
- >
- <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
- <Server className="h-4 w-4" />
- </div>
- <div className="flex-1">
- <div className="type-numeric text-xl font-bold text-foreground">{serversTotal}</div>
- <div className="text-xs text-muted-foreground">{serversOnline} running</div>
- </div>
- <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
- </Link>
+                <Link
+                  to="/servers"
+                  className="group flex items-center gap-2.5 rounded-lg border border-border/70 bg-card px-3 py-2.5"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface-2 text-primary">
+                    <Server className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="type-numeric text-sm font-semibold text-foreground">{serversTotal}</div>
+                    <div className="type-meta">{serversOnline} running</div>
+                  </div>
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                </Link>
 
- {isAdmin && (
- <Link
- to="/admin/nodes"
- className="group flex items-center gap-3 rounded-lg border border-border/30 bg-card p-3 transition-colors hover:border-primary/30"
- >
- <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
- <HardDrive className="h-4 w-4" />
- </div>
- <div className="flex-1">
- <div className="type-numeric text-xl font-bold text-foreground">{nodesTotal}</div>
- <div className="text-xs text-muted-foreground">{nodesOnline} connected</div>
- </div>
- <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
- </Link>
- )}
+                {isAdmin && (
+                  <Link
+                    to="/admin/nodes"
+                    className="group flex items-center gap-2.5 rounded-lg border border-border/70 bg-card px-3 py-2.5"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface-2 text-primary">
+                      <HardDrive className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="type-numeric text-sm font-semibold text-foreground">{nodesTotal}</div>
+                      <div className="type-meta">{nodesOnline} connected</div>
+                    </div>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                  </Link>
+                )}
 
- {isAdmin && (
- <Link
- to="/admin/alerts"
- className="group flex items-center gap-3 rounded-lg border border-border/30 bg-card p-3 transition-colors hover:border-primary/30"
- >
- <div className="flex h-9 w-9 items-center justify-center rounded-md bg-warning/10 text-warning">
- <AlertTriangle className="h-4 w-4" />
- </div>
- <div className="flex-1">
- <div className="type-numeric text-xl font-bold text-foreground">{stats?.alerts ?? 0}</div>
- <div className="text-xs text-muted-foreground">
- {alertsUnacked > 0 ? `${alertsUnacked} unacknowledged` : 'All resolved'}
- </div>
- </div>
- <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
- </Link>
- )}
+                {isAdmin && (
+                  <Link
+                    to="/admin/alerts"
+                    className="group flex items-center gap-2.5 rounded-lg border border-border/70 bg-card px-3 py-2.5"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md border border-warning/30 bg-warning/10 text-warning">
+                      <AlertTriangle className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="type-numeric text-sm font-semibold text-foreground">{stats?.alerts ?? 0}</div>
+                      <div className="type-meta">
+                        {alertsUnacked > 0 ? `${alertsUnacked} unacknowledged` : 'All resolved'}
+                      </div>
+                    </div>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                  </Link>
+                )}
 
- {!isAdmin && (
- <Link
- to="/profile"
- className="group flex items-center gap-3 rounded-lg border border-border/30 bg-card p-3 transition-colors hover:border-primary/30"
- >
- <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
- <Activity className="h-4 w-4" />
- </div>
- <div className="flex-1">
- <div className="text-xl font-bold text-foreground">Account</div>
- <div className="text-xs text-muted-foreground">Manage your profile</div>
- </div>
- <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
- </Link>
- )}
- </div>
- )}
+                {!isAdmin && (
+                  <Link
+                    to="/profile"
+                    className="group flex items-center gap-2.5 rounded-lg border border-border/70 bg-card px-3 py-2.5"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface-2 text-primary">
+                      <Activity className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold tracking-tight text-foreground">Account</div>
+                      <div className="type-meta">Manage your profile</div>
+                    </div>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                  </Link>
+                )}
+              </div>
+            )}
  </ServerTabCard>
 
  {/* Quick Actions */}
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
  {quickActions.map((action) => (
- <Link
- key={action.title}
- to={action.href}
- className="group flex items-center gap-3 rounded-lg border border-border/30 bg-card p-4 transition-colors hover:border-primary/30"
- >
- <div className={`flex h-9 w-9 items-center justify-center rounded-md ${action.iconClass}`}>
- <action.icon className="h-4 w-4" />
- </div>
- <div className="flex-1">
- <div className="text-sm font-semibold text-foreground">{action.title}</div>
- <div className="text-xs text-muted-foreground">{action.description}</div>
- </div>
- <ArrowRight className="h-4 w-4 text-muted-foreground transition-all group-hover:text-primary group-hover:translate-x-0.5" />
- </Link>
+          <Link
+            key={action.title}
+            to={action.href}
+            className="group flex items-center gap-2.5 rounded-lg border border-border/70 bg-card px-3 py-2.5"
+          >
+            <div className={`flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface-2 ${action.iconClass}`}>
+              <action.icon className="h-4 w-4" />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold tracking-tight text-foreground">{action.title}</div>
+              <div className="type-meta">{action.description}</div>
+            </div>
+            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+          </Link>
  ))}
  </div>
 

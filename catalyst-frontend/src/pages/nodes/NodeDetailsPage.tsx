@@ -14,8 +14,6 @@ import {
   AlertTriangle,
   Shield,
   Download,
-  CheckCircle,
-  Clock,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -34,6 +32,7 @@ import { ModalPortal } from '@/components/ui/modal-portal';
 import AgentControlPanel from '../../components/nodes/AgentControlPanel';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import WorkspaceHeader from '../../components/layout/WorkspaceHeader';
 
 // ── Inline Modal Shell ──
 function ModalShell({
@@ -221,87 +220,38 @@ function NodeDetailsPage() {
         Back to Nodes
       </Link>
 
-      {/* ══════════════════════════════════════════════════════════════════
-          NODE IDENTITY BAR
-          Compact strip: name + status pill + metadata + actions.
-          No duplicated agent info — that lives in AgentControlPanel.
-      ══════════════════════════════════════════════════════════════════ */}
-      <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
-        {/* Top accent — green if online, muted if not */}
-        <div className={`h-[3px] ${
-          node.isOnline
-            ? 'bg-gradient-to-r from-success/0 via-success/70 to-success/0'
-            : 'bg-gradient-to-r from-muted-foreground/0 via-muted-foreground/20 to-muted-foreground/0'
-        }`} />
-
-        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          {/* Left: identity */}
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Status dot — replaces the big icon box */}
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
-              {node.isOnline && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
-              )}
-              <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${
-                node.isOnline ? 'bg-success' : 'bg-muted-foreground/40'
-              }`} />
-            </span>
-
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="font-display text-xl font-bold tracking-tight text-foreground truncate">
-                  {node.name}
-                </h1>
-                <Badge
-                  variant={node.isOnline ? 'success' : 'secondary'}
-                  className="shrink-0 text-[10px] gap-1"
-                >
-                  {node.isOnline ? 'Online' : 'Offline'}
-                </Badge>
-                {node.agentVersion && stats?.agentUpdateAvailable && (
-                  <Badge variant="warning" className="shrink-0 text-[10px] gap-1 font-mono">
-                    <AlertTriangle className="h-2.5 w-2.5" />
-                    v{node.agentVersion} → v{stats.latestAgentVersion}
-                  </Badge>
-                )}
-              </div>
-
-              {/* Compact metadata line */}
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground/60">
-                {node.hostname && <span className="font-mono">{node.hostname}</span>}
-                {node.publicAddress && (
-                  <>
-                    <span className="text-border/40">·</span>
-                    <span>{node.publicAddress}</span>
-                  </>
-                )}
-                {node.location && (
-                  <>
-                    <span className="text-border/40">·</span>
-                    <span>{node.location.name}</span>
-                  </>
-                )}
-                <span className="text-border/40">·</span>
-                <span className="inline-flex items-center gap-0.5">
-                  <Clock className="h-2.5 w-2.5" />
-                  {node.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : 'n/a'}
-                </span>
-                {node.agentVersion && !stats?.agentUpdateAvailable && (
-                  <>
-                    <span className="text-border/40">·</span>
-                    <span className="inline-flex items-center gap-0.5 text-success/60">
-                      <CheckCircle className="h-2.5 w-2.5" />
-                      Agent v{node.agentVersion}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Right: actions */}
-          {canWrite && (
-            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+      <WorkspaceHeader
+        icon={Server}
+        variant={node.isOnline ? 'success' : 'default'}
+        title={node.name}
+        titleAddon={
+          <>
+            <Badge
+              variant={node.isOnline ? 'success' : 'secondary'}
+              className="shrink-0 gap-1 text-[10px]"
+            >
+              {node.isOnline ? 'Online' : 'Offline'}
+            </Badge>
+            {node.agentVersion && stats?.agentUpdateAvailable && (
+              <Badge variant="warning" className="shrink-0 gap-1 font-mono text-[10px]">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                v{node.agentVersion} → v{stats.latestAgentVersion}
+              </Badge>
+            )}
+          </>
+        }
+        description={[
+          node.hostname,
+          node.publicAddress,
+          node.location?.name,
+          node.lastSeenAt ? `Seen ${new Date(node.lastSeenAt).toLocaleString()}` : 'Never seen',
+          node.agentVersion && !stats?.agentUpdateAvailable ? `Agent v${node.agentVersion}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        actions={
+          canWrite ? (
+            <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 variant={apiKeyStatus?.exists ? 'outline' : 'default'}
                 size="sm"
@@ -314,8 +264,8 @@ function NodeDetailsPage() {
                   {apiKeyMutation.isPending
                     ? 'Generating…'
                     : apiKeyStatus?.exists
-                    ? 'Regenerate Key'
-                    : 'Generate Key'}
+                      ? 'Regenerate Key'
+                      : 'Generate Key'}
                 </span>
               </Button>
               <Button
@@ -326,7 +276,9 @@ function NodeDetailsPage() {
                 className="gap-1.5"
               >
                 <Terminal className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{deployMutation.isPending ? 'Generating…' : 'Deploy'}</span>
+                <span className="hidden sm:inline">
+                  {deployMutation.isPending ? 'Generating…' : 'Deploy'}
+                </span>
               </Button>
               <Button asChild size="sm" variant="outline">
                 <Link to={`/admin/nodes/${node.id}/allocations`} className="gap-1.5">
@@ -346,14 +298,14 @@ function NodeDetailsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowDeleteModal(true)}
-                className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30"
+                className="gap-1.5 text-destructive hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {/* ══════════════════════════════════════════════════════════════════
           AGENT CONTROL PANEL
@@ -367,7 +319,7 @@ function NodeDetailsPage() {
           SERVERS ON NODE
           Compact server list with count badge.
       ══════════════════════════════════════════════════════════════════ */}
-      <div className="rounded-xl border border-border/40 bg-card px-5 py-4 transition-all duration-200 hover:border-primary/15">
+      <div className="overflow-hidden rounded-lg border border-border/70 bg-card px-3 py-2.5">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Server className="h-3.5 w-3.5 text-primary" />
@@ -423,7 +375,7 @@ function NodeDetailsPage() {
           DISCOVERED SERVERS
       ══════════════════════════════════════════════════════════════════ */}
       {canWrite && unregisteredContainers.length > 0 && (
-        <div className="rounded-xl border border-warning/30 bg-card px-5 py-4 transition-all duration-200">
+        <div className="overflow-hidden rounded-lg border border-warning/30 bg-card px-3 py-2.5">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Download className="h-3.5 w-3.5 text-warning" />

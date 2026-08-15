@@ -1,11 +1,14 @@
 import { useEffect } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
+import { Puzzle } from 'lucide-react';
 import { usePluginTabs } from '../plugins/hooks';
 import { usePluginContext } from '../plugins/usePluginContext';
 import PluginErrorBoundary from '../plugins/PluginErrorBoundary';
 import { useAuthStore } from '../stores/authStore';
 import { hasAnyPermission } from '../components/auth/ProtectedRoute';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
+import TabHeader from '../components/servers/tabs/TabHeader';
+import TabEmptyState from '../components/servers/tabs/TabEmptyState';
 
 interface PluginTabPageProps {
   location: 'admin' | 'server';
@@ -32,13 +35,13 @@ export default function PluginTabPage({ location, serverId }: PluginTabPageProps
 
   if (!tab) {
     return (
-      <div className="rounded-lg border border-border bg-card p-12 text-center">
-        <h2 className="mb-2 text-xl font-semibold text-foreground">
-          Plugin Tab Not Found
-        </h2>
-        <p className="text-muted-foreground">
-          The requested plugin tab could not be found or is not enabled.
-        </p>
+      <div className="space-y-3">
+        <TabHeader
+          icon={Puzzle}
+          title="Plugin tab not found"
+          description="The requested plugin tab could not be found or is not enabled."
+        />
+        <TabEmptyState title="This plugin tab is unavailable." />
       </div>
     );
   }

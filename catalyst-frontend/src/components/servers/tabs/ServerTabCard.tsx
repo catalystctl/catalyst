@@ -10,7 +10,7 @@ export default function ServerTabCard({
   className = '',
 }: ServerTabCardProps) {
   return (
-    <div className={`rounded-xl border border-border/50 bg-card px-5 py-4 ${className}`}>
+    <div className={`overflow-hidden rounded-lg border border-border/70 bg-card px-3 py-2.5 ${className}`}>
       {children}
     </div>
   );

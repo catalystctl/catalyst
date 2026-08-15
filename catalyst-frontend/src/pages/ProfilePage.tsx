@@ -264,36 +264,36 @@ export default function ProfilePage() {
 
  {/* Profile Card */}
  <ServerTabCard>
- <div className="flex flex-wrap items-center gap-5">
- <div className="relative group">
- {profile?.image ? (
- <img src={profile.image} alt="" className="h-16 w-16 rounded-2xl object-cover border border-border shadow-sm" />
- ) : (
- <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-primary/10 text-xl font-bold text-primary shadow-sm">{initials}</div>
- )}
- <button onClick={() => fileRef.current?.click()} className="absolute inset-0 flex items-center justify-center rounded-2xl bg-background/60 opacity-0 transition-opacity group-hover:opacity-100">
- <Camera className="h-5 w-5 text-foreground" />
- </button>
- <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) avatarMutation.mutate(f); e.target.value = ''; }} />
- </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative group">
+            {profile?.image ? (
+              <img src={profile.image} alt="" className="h-8 w-8 rounded-md border border-border object-cover" />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface-2 text-[11px] font-semibold text-primary">{initials}</div>
+            )}
+            <button onClick={() => fileRef.current?.click()} className="absolute inset-0 flex items-center justify-center rounded-md bg-background/60 opacity-0 transition-opacity group-hover:opacity-100">
+              <Camera className="h-3.5 w-3.5 text-foreground" />
+            </button>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) avatarMutation.mutate(f); e.target.value = ''; }} />
+          </div>
 
- <div className="flex-1 min-w-0">
- {editingProfile ? (
- <div className="space-y-2">
- <div className="flex gap-2">
- <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} placeholder="Username" className="h-8 text-xs w-36" />
- <Input value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} placeholder="First name" className="h-8 text-xs w-32" />
- <Input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} placeholder="Last name" className="h-8 text-xs w-32" />
- <Button size="sm" onClick={() => updateProfileMutation.mutate()} disabled={updateProfileMutation.isPending} className="h-8 text-xs">
- {updateProfileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
- </Button>
- <Button size="sm" variant="ghost" onClick={() => setEditingProfile(false)} className="h-8 text-xs"><X className="h-3.5 w-3.5" /></Button>
- </div>
- </div>
- ) : (
- <>
- <div className="flex items-center gap-2">
- <span className="text-xl font-bold text-foreground">{profile?.username || 'User'}</span>
+          <div className="flex-1 min-w-0">
+            {editingProfile ? (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} placeholder="Username" className="h-8 text-xs w-36" />
+                  <Input value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} placeholder="First name" className="h-8 text-xs w-32" />
+                  <Input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} placeholder="Last name" className="h-8 text-xs w-32" />
+                  <Button size="sm" onClick={() => updateProfileMutation.mutate()} disabled={updateProfileMutation.isPending} className="h-8 text-xs">
+                    {updateProfileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingProfile(false)} className="h-8 text-xs"><X className="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold tracking-tight text-foreground">{profile?.username || 'User'}</span>
  {authUser?.permissions?.includes('*') && <Badge className="border-warning/40 bg-warning/5 text-warning text-[10px]">Super Admin</Badge>}
  <button onClick={startEditProfile} className="rounded-md p-1 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
  </div>

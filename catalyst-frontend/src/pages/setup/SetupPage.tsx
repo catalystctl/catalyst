@@ -592,7 +592,7 @@ function SetupPage() {
  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
  <div className="group relative flex-shrink-0">
  <div
- className="h-20 w-20 cursor-pointer rounded-2xl ring-1 ring-black/5 transition-all duration-300 group-hover:scale-105"
+ className="h-20 w-20 cursor-pointer rounded-lg ring-1 ring-black/5 transition-all duration-300 group-hover:scale-105"
  style={{
  backgroundColor: isSeedValid ? seedColor : '#71717a',
  boxShadow: isSeedValid
@@ -604,7 +604,7 @@ function SetupPage() {
  type="color"
  value={isSeedValid ? seedColor : '#71717a'}
  onChange={(e) => setSeedColor(e.target.value)}
- className="absolute inset-0 h-full w-full cursor-pointer rounded-2xl opacity-0"
+ className="absolute inset-0 h-full w-full cursor-pointer rounded-lg opacity-0"
  />
  </div>
  <div className="flex-1 space-y-3">

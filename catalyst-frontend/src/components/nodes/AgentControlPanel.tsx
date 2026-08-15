@@ -173,7 +173,7 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
 function AgentOfflineState() {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/30 bg-surface-2">
+      <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-border/30 bg-surface-2">
         <WifiOff className="h-6 w-6 text-muted-foreground/40" />
       </div>
       <p className="mt-3 text-sm font-medium text-muted-foreground">
@@ -344,7 +344,8 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
     queryKey: qk.agentLogs(nodeId, { lines: 200 }),
     queryFn: () => agentApi.getLogs(nodeId, { lines: 200 }),
     enabled: true,
-    staleTime: 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   // Load initial logs once

@@ -23,14 +23,16 @@ export function AdminTab() {
  setCounter(data.requestCount);
  };
 
- return (
- <div className="space-y-6">
- <div>
- <h2 className="text-2xl font-bold mb-2">Example Plugin Admin Tab</h2>
- <p className="text-gray-400">
- This tab was injected by the example plugin to demonstrate tab functionality.
- </p>
- </div>
+  return (
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
+        <div className="px-3 py-2.5">
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">Example Plugin Admin Tab</h2>
+          <p className="type-meta mt-0.5">
+            This tab was injected by the example plugin to demonstrate tab functionality.
+          </p>
+        </div>
+      </div>
 
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
@@ -119,17 +121,17 @@ export function ServerTab({ serverId }: { serverId: string }) {
  setMessage('');
  };
 
- return (
- <div className="space-y-6">
- <div>
- <h2 className="text-2xl font-bold mb-2">Example Plugin Server Tab</h2>
- <p className="text-gray-400">
- This tab was injected into the server details page by the example plugin.
- </p>
- <p className="text-sm text-gray-500 mt-1">
- Server ID: <code className="bg-gray-800 px-2 py-0.5 rounded">{serverId}</code>
- </p>
- </div>
+  return (
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
+        <div className="px-3 py-2.5">
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">Example Plugin Server Tab</h2>
+          <p className="type-meta mt-0.5">
+            Injected into the server details page. Server ID:{' '}
+            <code className="font-mono">{serverId}</code>
+          </p>
+        </div>
+      </div>
 
  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
  <h3 className="text-lg font-semibold mb-4">Echo Test</h3>

@@ -1093,27 +1093,28 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.96, y: 8 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 flex h-[95vh] sm:h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-elevated dark:border-border dark:bg-surface-1"
- >
- {/* Header */}
- <div className="flex items-center justify-between border-b border-border px-3 sm:px-4 py-3">
- <div className="flex min-w-0 items-center gap-2">
- <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10">
- <Archive className="h-4 w-4 shrink-0 text-warning" />
- </div>
- <span className="truncate text-sm font-semibold text-foreground">
- {archiveBrowsePath.split('/').pop()}
- </span>
- <span className="hidden sm:inline text-xs text-muted-foreground/50">· read-only preview</span>
- </div>
- <button
- type="button"
- className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={() => setArchiveBrowsePath(null)}
- >
- <X className="h-4 w-4" />
- </button>
- </div>
+          className="relative z-10 flex h-[95vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-elevated sm:h-[80vh]"
+        >
+          <div className="flex items-center justify-between border-b border-border/70 px-3 py-2.5">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-warning/30 bg-warning/10 text-warning">
+                <Archive className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="truncate text-sm font-semibold tracking-tight text-foreground">
+                  {archiveBrowsePath.split('/').pop()}
+                </h2>
+                <p className="type-meta mt-0.5">Read-only preview</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              onClick={() => setArchiveBrowsePath(null)}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
  {/* Breadcrumbs */}
  <div className="flex items-center gap-1 border-b border-border px-3 sm:px-4 py-2 text-xs overflow-x-auto scrollbar-hide">

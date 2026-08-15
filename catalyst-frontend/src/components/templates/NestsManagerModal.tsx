@@ -212,7 +212,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  <>
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10">
- <div className="flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-border/40 bg-card shadow-sm transition-colors">
+ <div className="flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-lg border border-border/40 bg-card shadow-sm transition-colors">
  {/* Header */}
  <div className="flex items-center justify-between border-b border-border px-6 py-4">
  <div className="flex items-center gap-3">

@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@/csync';
 import { serversApi } from '../../services/api/servers';
 import { qk } from '../../lib/queryKeys';
 
-import { optimisticSet, optimisticInvalidate } from '../../lib/queryUtils';
+import { optimisticInvalidate, patchServerListStatus } from '../../lib/queryUtils';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -42,15 +42,14 @@ function ServerControls({ serverId, status, permissions }: Props) {
   async function snapshotAndOptimistic(nextStatus: ServerStatus) {
     await queryClient.cancelQueries({ queryKey: qk.server(serverId) });
     await queryClient.cancelQueries({ queryKey: qk.servers() });
-    const prevServer = queryClient.getQueryData(qk.server(serverId));
-    optimisticSet(queryClient, qk.server(serverId), (srv: Server) =>
+    const prevServer = queryClient.getQueryData<Server>(qk.server(serverId));
+    // Exact detail write — never prefix-match. A `{ ...srv }` updater on
+    // every `['servers', …]` query spreads Server[] into a non-array and
+    // the list page then renders empty until a hard refresh.
+    queryClient.setQueryData(qk.server(serverId), (srv: Server | undefined) =>
       srv ? { ...srv, status: nextStatus, lastExitCode: undefined } : srv,
     );
-    optimisticSet(queryClient, qk.servers(), (servers: Server[]) =>
-      Array.isArray(servers)
-        ? servers.map((s) => (s.id === serverId ? { ...s, status: nextStatus } : s))
-        : servers,
-    );
+    patchServerListStatus(queryClient, serverId, nextStatus);
     return prevServer;
   }
 

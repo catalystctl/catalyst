@@ -1,45 +1,46 @@
 /**
- * Helper to set a single field optimistically across all matching queries.
- * Useful for status changes (e.g. server start/stop).
+ * Optimistic cache helpers for power-state (and similar) updates.
  *
- * @param queryClient - QueryClient instance
- * @param queryKeys - Array of query keys to update
- * @param updater - Partial data to merge into cached values
+ * The second argument is a single query-key prefix, e.g. `qk.servers()` or
+ * `qk.server(id)`. It is NOT a list of independent prefixes — iterating
+ * `['servers', id]` as `'servers'` + `id` matches every servers query and
+ * lets a detail updater `{ ...srv }` turn a Server[] list into a non-array.
  */
+import type { Query, QueryClient, QueryKey } from '@/csync';
+
+export function isServerListQueryKey(queryKey: QueryKey | readonly unknown[]): boolean {
+  if (!Array.isArray(queryKey) || queryKey[0] !== 'servers') return false;
+  // ['servers'] — unfiltered list
+  if (queryKey.length === 1) return true;
+  // ['servers', null] legacy
+  if (queryKey.length === 2 && queryKey[1] === null) return true;
+  // ['servers', { status: 'running' }] — filtered lists
+  return queryKey.length >= 2 && typeof queryKey[1] === 'object' && queryKey[1] !== null;
+}
+
 export function optimisticSet<T>(
-  queryClient: any,
-  queryKeys: readonly unknown[],
+  queryClient: QueryClient,
+  queryKey: QueryKey,
   updater: (cached: T) => T,
 ) {
-  queryClient.setQueriesData(
-    { predicate: (q: any) => matchQueryKeys(q.queryKey, queryKeys) },
-    updater,
-  );
+  // Exact key only. Prefix setQueriesData + `{ ...entity }` corrupts list caches.
+  queryClient.setQueryData(queryKey, updater);
 }
 
-export function optimisticInvalidate(
-  queryClient: any,
-  queryKeys: readonly unknown[],
+export function optimisticInvalidate(queryClient: QueryClient, queryKey: QueryKey) {
+  void queryClient.invalidateQueries({ queryKey });
+}
+
+export function patchServerListStatus(
+  queryClient: QueryClient,
+  serverId: string,
+  status: string,
 ) {
-  queryKeys.forEach((key) => {
-    queryClient.invalidateQueries({ queryKey: key });
-  });
-}
-
-/**
- * Lightweight key matcher — checks if queryKey starts with any of the given prefixes.
- *
- * Collection keys like `qk.servers()` now return `['servers']` (no null suffix),
- * so prefix matching works naturally with Catalyst Sync v5.
- */
-function matchQueryKeys(queryKey: readonly unknown[], prefixes: readonly unknown[]): boolean {
-  return prefixes.some((p) => {
-    if (Array.isArray(p)) {
-      return (
-        queryKey.length >= p.length &&
-        p.every((k, i) => k === queryKey[i])
-      );
-    }
-    return queryKey[0] === p;
-  });
+  queryClient.setQueriesData(
+    { predicate: (query: Query) => isServerListQueryKey(query.queryKey) },
+    (servers: unknown) =>
+      Array.isArray(servers)
+        ? servers.map((s: { id?: string }) => (s?.id === serverId ? { ...s, status } : s))
+        : servers,
+  );
 }

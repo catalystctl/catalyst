@@ -250,19 +250,21 @@ function LoginPage() {
  return (
  <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated backdrop-blur-sm">
- <CardContent className="px-6 py-8 sm:px-8">
- <div className="flex flex-col items-center text-center">
- <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12 rounded-xl ring-1 ring-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
- <span className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
- {panelName}
- </span>
- </div>
- <h1 className="mt-5 font-display text-2xl font-bold tracking-tight text-foreground sm:text-[1.75rem]">
- Welcome back
- </h1>
- <p className="mt-2 text-sm text-muted-foreground">
- Sign in to manage your servers.
- </p>
+        <CardContent className="px-3 py-4 sm:px-4">
+          <div className="flex items-start gap-2.5">
+            <img
+              src={logoUrl}
+              alt={`${panelName} logo`}
+              className="h-8 w-8 rounded-md border border-border/70"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/logo.png';
+              }}
+            />
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold tracking-tight text-foreground">Welcome back</h1>
+              <p className="type-meta mt-0.5">Sign in to manage your servers on {panelName}.</p>
+            </div>
+          </div>
 
  {error && !authStep && (
  <Alert variant="destructive" className="mt-4">

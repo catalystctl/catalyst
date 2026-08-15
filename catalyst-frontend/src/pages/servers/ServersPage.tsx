@@ -110,7 +110,7 @@ function ServersPage() {
  <div className="space-y-3">
  {/* Access filter tabs + View toggle */}
  <div className="flex flex-wrap items-center justify-between gap-3">
- <div className="flex items-center gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 ">
+          <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-surface-2/40 p-1">
  <AccessTab
  active={accessFilter === 'all'}
  onClick={() => setAccessFilter('all')}
@@ -137,7 +137,7 @@ function ServersPage() {
  </div>
 
  {/* View mode toggle */}
- <div className="flex items-center gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 ">
+          <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-surface-2/40 p-1">
  <button
  type="button"
  onClick={() => setServerViewMode('card')}

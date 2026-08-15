@@ -7,6 +7,8 @@ import { notifyError } from '../utils/notify';
 import { normalizePath } from '../utils/filePaths';
 import { reportSystemError } from '../services/api/systemErrors';
 
+const EMPTY_FILES: FileEntry[] = [];
+
 type ActiveFile = {
   path: string;
   name: string;
@@ -81,7 +83,7 @@ export function useFileManager(serverId?: string, initialPath = '/') {
   return {
     path,
     setPath,
-    files: listQuery.data?.files ?? [],
+    files: listQuery.data?.files ?? EMPTY_FILES,
     message: listQuery.data?.message,
     isLoading: listQuery.isLoading,
     isError: listQuery.isError,

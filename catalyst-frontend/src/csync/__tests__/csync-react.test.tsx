@@ -180,6 +180,75 @@ describe('csync react hooks', () => {
     expect((result.current.data as any)!.find((t: any) => t.id === 'c')).toEqual({ id: 'c' });
   });
 
+  it('useQuery with staleTime 0 does not refetch in a loop after success', async () => {
+    // Regression: fetch effect listed dataUpdatedAt as a dep. After each success
+    // that field changes, and staleTime: 0 makes isStale always true → infinite
+    // GET loop that retained response bodies until the tab hit multi-GB RSS.
+    const queryFn = vi.fn(async () => ({ n: 1 }));
+    const { result } = renderHook(
+      () =>
+        useQuery({
+          queryKey: ['stale-zero-loop'],
+          queryFn,
+          staleTime: 0,
+        }),
+      { wrapper: createWrapper(client) },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(queryFn).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80));
+    });
+    expect(queryFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('useQuery refetches once when invalidated, then stops', async () => {
+    const queryFn = vi.fn(async () => ({ n: 1 }));
+    const { result } = renderHook(
+      () =>
+        useQuery({
+          queryKey: ['invalidate-once'],
+          queryFn,
+          staleTime: 60_000,
+        }),
+      { wrapper: createWrapper(client) },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(queryFn).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['invalidate-once'] });
+    });
+    await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(queryFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('useQuery result object identity is stable across no-op re-renders', async () => {
+    const queryFn = vi.fn(async () => ({ n: 1 }));
+    const { result, rerender } = renderHook(
+      () =>
+        useQuery({
+          queryKey: ['stable-result'],
+          queryFn,
+          staleTime: 60_000,
+        }),
+      { wrapper: createWrapper(client) },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const first = result.current;
+    rerender();
+    rerender();
+    expect(result.current).toBe(first);
+  });
+
   it('setQueryData triggers useQuery observers', async () => {
     const { result } = renderHook(
       () =>

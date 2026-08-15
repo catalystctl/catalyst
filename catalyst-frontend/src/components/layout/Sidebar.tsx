@@ -387,7 +387,7 @@ function Sidebar() {
       <div
         className={cn(
           'flex items-center border-b border-border/70',
-          collapsed ? 'justify-center px-3 py-3.5' : 'gap-2.5 px-4 py-3.5',
+          collapsed ? 'justify-center px-3 py-2.5' : 'gap-2.5 px-3 py-2.5',
         )}
       >
         <Link
@@ -397,13 +397,13 @@ function Sidebar() {
           <img
             src={logoUrl}
             alt={`${panelName} logo`}
-            className="h-7 w-7 rounded-lg ring-1 ring-border/60"
+            className="h-8 w-8 rounded-md border border-border/70"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
           />
           {!collapsed && (
-            <span className="font-display text-[15px] font-semibold tracking-tight text-foreground">
+            <span className="text-sm font-semibold tracking-tight text-foreground">
               {panelName}
             </span>
           )}

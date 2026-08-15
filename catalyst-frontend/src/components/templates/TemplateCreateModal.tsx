@@ -617,7 +617,7 @@ function TemplateCreateModal() {
  {open ? (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10">
- <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border/40 bg-card shadow-sm transition-colors">
+ <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-lg border border-border/40 bg-card shadow-sm transition-colors">
  {/* ── Header ── */}
  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5">
  <div>
@@ -670,7 +670,7 @@ function TemplateCreateModal() {
  {/* ── Step 1: Nest Selection ── */}
  {step === 1 && (
  <div className="flex flex-col items-center px-6 py-10 text-center">
- <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-warning/10 to-danger/10">
+ <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-gradient-to-br from-warning/10 to-danger/10">
  <FolderOpen className="h-7 w-7 text-warning" />
  </div>
  <h3 className="text-base font-semibold text-foreground">
@@ -842,7 +842,7 @@ function TemplateCreateModal() {
  placeholder="Template summary"
  />
  </label>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
  Runtime images
  </div>
@@ -981,7 +981,7 @@ function TemplateCreateModal() {
  )}
  </div>
  </div>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
  Commands & config
  </div>
@@ -1069,7 +1069,7 @@ function TemplateCreateModal() {
  />
  </label>
  </div>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
  Resources & ports
  </div>
@@ -1112,7 +1112,7 @@ function TemplateCreateModal() {
  </label>
  </div>
  </div>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="flex flex-wrap items-center justify-between gap-2">
  <h3 className="text-sm font-semibold text-foreground">
  Variables
@@ -1271,7 +1271,7 @@ function TemplateCreateModal() {
  </div>
  ))}
  </div>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
  Advanced features
  </div>
@@ -1403,7 +1403,7 @@ function TemplateCreateModal() {
  {importModalOpen && (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10">
- <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border/40 bg-card shadow-sm">
+ <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border/40 bg-card shadow-sm">
  <div className="flex items-center justify-between border-b border-border px-6 py-4">
  <div>
  <h2 className="text-base font-semibold text-foreground">

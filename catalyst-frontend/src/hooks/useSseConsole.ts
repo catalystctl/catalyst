@@ -73,8 +73,9 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     batchBuffer.current = [];
 
     if (!historyAppliedRef.current) {
-      // Hold live output until history seeds the buffer.
-      pendingLiveRef.current.push(...batch);
+      // Hold live output until history seeds the buffer. Cap so a hung/never-
+      // applied history request cannot grow unbounded (busy servers → GBs).
+      pendingLiveRef.current = trim(pendingLiveRef.current.concat(batch));
       return;
     }
 

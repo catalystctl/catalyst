@@ -451,7 +451,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  {open ? (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10">
- <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border/40 bg-card shadow-sm transition-colors">
+ <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-lg border border-border/40 bg-card shadow-sm transition-colors">
  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5">
  <div>
  <h2 className="text-lg font-semibold text-foreground">
@@ -589,7 +589,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  onChange={(event) => setDescription(event.target.value)}
  />
  </label>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
  Runtime images
  </div>
@@ -722,7 +722,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  )}
  </div>
  </div>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
  Commands & config
  </div>
@@ -805,7 +805,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  </div>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
  Resources & ports
  </div>
@@ -847,7 +847,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </label>
  </div>
  </div>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="flex flex-wrap items-center justify-between gap-2">
  <h3 className="text-sm font-semibold text-foreground">
  Variables
@@ -1006,7 +1006,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </div>
  ))}
  </div>
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
  Advanced features
  </div>

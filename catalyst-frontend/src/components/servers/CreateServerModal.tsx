@@ -409,25 +409,30 @@ function CreateServerModal() {
  {open ? (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-2 sm:px-4 backdrop-blur-sm">
- <div className="modal-enter w-full max-w-4xl max-h-[100dvh] sm:max-h-[90vh] rounded-none sm:rounded-2xl border-0 sm:border border-border bg-card shadow-2xl flex flex-col overflow-hidden dark:border-border dark:bg-card">
+ <div className="modal-enter w-full max-w-4xl max-h-[100dvh] sm:max-h-[90vh] rounded-none sm:rounded-lg border-0 sm:border border-border bg-card shadow-2xl flex flex-col overflow-hidden dark:border-border dark:bg-card">
 
  {/* Header */}
- <div className="shrink-0 flex items-start justify-between gap-4 border-b border-border bg-gradient-to-r from-primary-500/[0.04] to-transparent px-5 sm:px-8 py-5 sm:py-6 dark:border-border">
- <div className="min-w-0">
- <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground dark:text-white">
- Create New Server
- </h2>
- <p className="mt-1 text-xs sm:text-sm text-muted-foreground dark:text-muted-foreground">
- Deploy a new game server in just a few steps
- </p>
- </div>
- <button
- className="shrink-0 rounded-lg border border-border bg-card px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-muted-foreground transition-all duration-200 hover:border-danger/30 hover:bg-danger-muted hover:text-danger dark:border-border"
- onClick={() => setOpen(false)}
- >
- Cancel
- </button>
- </div>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-primary">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold tracking-tight text-foreground">
+                Create New Server
+              </h2>
+              <p className="type-meta mt-0.5 truncate">Deploy a new game server in a few steps</p>
+            </div>
+          </div>
+          <button
+            className="shrink-0 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-danger/30 hover:bg-danger-muted hover:text-danger"
+            onClick={() => setOpen(false)}
+          >
+            Cancel
+          </button>
+        </div>
 
  {/* Progress Stepper */}
  <div className="shrink-0 border-b border-border bg-muted/30 px-5 sm:px-8 py-3.5 dark:border-border dark:bg-muted/20">

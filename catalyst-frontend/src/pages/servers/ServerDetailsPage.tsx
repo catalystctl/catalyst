@@ -54,6 +54,7 @@ import ServerControls from '../../components/servers/ServerControls';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
 import ServerHeaderStats from '../../components/servers/ServerHeaderStats';
 import ServerTabBar, { type ServerNavTab } from '../../components/servers/ServerTabBar';
+import WorkspaceHeader from '../../components/layout/WorkspaceHeader';
 
 import ErrorBoundary from '../../components/shared/ErrorBoundary';
 import FileManager from '../../components/files/FileManager';
@@ -1004,105 +1005,95 @@ function ServerDetailsPage() {
   const templateLabel = server?.template?.name;
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
-      <div className={`min-w-0 overflow-hidden rounded-lg border ${
-        isSuspended
-          ? 'border-danger/25 bg-danger/5'
-          : server?.status === 'running'
-            ? 'border-success/20 bg-success/5'
-            : 'border-border/70 bg-card'
-      }`}>
-
-        <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${
-              isSuspended
-                ? 'border-danger/30 bg-danger/10 text-danger'
-                : server?.status === 'running'
-                  ? 'border-success/30 bg-success/10 text-success'
-                  : 'border-border bg-surface-2 text-muted-foreground'
-            }`}>
-              <Terminal className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              {isLoading ? (
-                <div className="h-5 w-40 animate-pulse rounded-md bg-muted" />
-              ) : server ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">
-                      {server.name}
-                    </h1>
-                    <ServerStatusBadge
-                      status={server.status}
-                      operationStage={server.operationStage}
-                      operationProgress={server.operationProgress}
-                    />
-                  </div>
-                  <p className="type-meta mt-0.5 truncate">
-                    {[templateLabel, serverGameVersion].filter(Boolean).join(' · ') || '—'}
-                  </p>
-                  <button
-                    type="button"
-                    className="type-meta mt-0.5 inline-flex items-center gap-1 font-mono hover:text-foreground"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(`${nodeIp}:${nodePort}`).then(
-                        () => notifySuccess('Copied address'),
-                        () => notifyError('Failed to copy'),
-                      );
-                    }}
-                  >
-                    {nodeIp}:{nodePort}
-                    <Copy className="h-3 w-3" />
-                  </button>
-                </>
-              ) : null}
-            </div>
-          </div>
-
+      <WorkspaceHeader
+        icon={Terminal}
+        variant={isSuspended ? 'danger' : server?.status === 'running' ? 'success' : 'default'}
+        title={
+          isLoading ? (
+            <div className="h-5 w-40 animate-pulse rounded-md bg-muted" />
+          ) : (
+            server?.name ?? 'Server'
+          )
+        }
+        titleAddon={
+          server ? (
+            <ServerStatusBadge
+              status={server.status}
+              operationStage={server.operationStage}
+              operationProgress={server.operationProgress}
+            />
+          ) : null
+        }
+        description={
+          server
+            ? [templateLabel, serverGameVersion].filter(Boolean).join(' · ') || '—'
+            : undefined
+        }
+        extra={
+          server ? (
+            <button
+              type="button"
+              className="type-meta mt-0.5 inline-flex items-center gap-1 font-mono hover:text-foreground"
+              onClick={() => {
+                void navigator.clipboard.writeText(`${nodeIp}:${nodePort}`).then(
+                  () => notifySuccess('Copied address'),
+                  () => notifyError('Failed to copy'),
+                );
+              }}
+            >
+              {nodeIp}:{nodePort}
+              <Copy className="h-3 w-3" />
+            </button>
+          ) : null
+        }
+        stats={
           <ServerHeaderStats
             metrics={liveMetrics}
             allocatedMemoryMb={server?.allocatedMemoryMb}
             allocatedDiskMb={diskLimitMb}
           />
-
-          <div className="ml-auto">
-            {server ? (
-              <ServerControls
-                serverId={server.id}
-                status={server.status}
-                permissions={server.effectivePermissions}
-              />
-            ) : null}
-          </div>
-        </div>
-
-        {isSuspended && (
-          <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-danger/30 bg-danger-muted px-2.5 py-1 text-xs text-danger">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            <span className="font-semibold">Suspended</span>
-            {server?.suspensionReason && <span className="text-danger/80">— {server.suspensionReason}</span>}
-          </div>
-        )}
-
-        {server?.status === 'cloning' && (
-          <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-info/30 bg-info-muted px-2.5 py-1 text-xs text-info">
-            <Copy className="h-3.5 w-3.5 shrink-0 animate-pulse" />
-            <span className="font-semibold">Cloning</span>
-            <span className="text-info/80">Cannot start until copy completes.</span>
-          </div>
-        )}
-
-        {isLoading && navTabs.length === 0 ? (
-          <div className="flex items-center gap-0.5 border-t border-border/40 px-1.5 py-1">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="h-7 w-16 shrink-0 animate-pulse rounded-md bg-surface-3/60" />
-            ))}
-          </div>
-        ) : (
-          <ServerTabBar tabs={navTabs} />
-        )}
-
-      </div>
+        }
+        actions={
+          server ? (
+            <ServerControls
+              serverId={server.id}
+              status={server.status}
+              permissions={server.effectivePermissions}
+            />
+          ) : null
+        }
+        banners={
+          <>
+            {isSuspended && (
+              <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-danger/30 bg-danger-muted px-2.5 py-1 text-xs text-danger">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <span className="font-semibold">Suspended</span>
+                {server?.suspensionReason && (
+                  <span className="text-danger/80">— {server.suspensionReason}</span>
+                )}
+              </div>
+            )}
+            {server?.status === 'cloning' && (
+              <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-info/30 bg-info-muted px-2.5 py-1 text-xs text-info">
+                <Copy className="h-3.5 w-3.5 shrink-0 animate-pulse" />
+                <span className="font-semibold">Cloning</span>
+                <span className="text-info/80">Cannot start until copy completes.</span>
+              </div>
+            )}
+          </>
+        }
+        toolbar={
+          isLoading && navTabs.length === 0 ? (
+            <div className="flex items-center gap-0.5 border-t border-border/40 px-1.5 py-1">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="h-7 w-16 shrink-0 animate-pulse rounded-md bg-surface-3/60" />
+              ))}
+            </div>
+          ) : (
+            <ServerTabBar tabs={navTabs} />
+          )
+        }
+      />
 
 
 

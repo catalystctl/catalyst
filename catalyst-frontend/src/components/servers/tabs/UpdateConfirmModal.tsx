@@ -36,20 +36,21 @@ export default function UpdateConfirmModal({
  return (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
- <div className="mx-4 w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-elevated">
- <div className="mb-4 flex items-center gap-3">
- <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-muted">
- <ArrowUpCircle className="h-5 w-5 text-warning" />
- </div>
- <div>
- <h3 className="text-base font-semibold text-foreground">
- Confirm {itemType} Update{items.length > 1 ? 's' : ''}
- </h3>
- <p className="text-xs text-muted-foreground">
- {items.length} {pluralized} will be updated
- </p>
- </div>
- </div>
+    <div className="mx-4 w-full max-w-md overflow-hidden rounded-lg border border-border/70 bg-card shadow-elevated">
+      <div className="flex items-start gap-2.5 border-b border-border/70 px-3 py-2.5">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-warning/30 bg-warning/10 text-warning">
+          <ArrowUpCircle className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">
+            Confirm {itemType} Update{items.length > 1 ? 's' : ''}
+          </h3>
+          <p className="type-meta mt-0.5">
+            {items.length} {pluralized} will be updated
+          </p>
+        </div>
+      </div>
+      <div className="p-3">
 
  <div className="mb-4 rounded-lg border border-warning/30 bg-warning-muted p-3">
  <p className="text-xs text-warning">{warningMessage}</p>
@@ -97,8 +98,9 @@ export default function UpdateConfirmModal({
  : `Update ${items.length > 1 ? 'All' : itemType}`}
  </button>
  </div>
- </div>
- </div>
- </ModalPortal>
+      </div>
+    </div>
+  </div>
+  </ModalPortal>
  );
 }

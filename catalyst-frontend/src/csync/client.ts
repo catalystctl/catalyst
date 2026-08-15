@@ -270,6 +270,9 @@ export class QueryClient {
     });
     this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<any, any> });
     this.indexTags(query as unknown as QueryClass<any, any>);
+    // SSE / optimistic writers can create unobserved entries. Without this they
+    // live forever (scheduleGc only ran after fetch or last-observer unsubscribe).
+    this.scheduleGc(query as unknown as QueryClass<any, any>);
     return data;
   }
 
@@ -290,6 +293,7 @@ export class QueryClient {
         });
         this.queryCache.notify({ type: 'updated', query });
         this.indexTags(query);
+        this.scheduleGc(query);
         result.push([query.queryKey, data]);
       } else {
         result.push([query.queryKey, query.state.data as TData | undefined]);

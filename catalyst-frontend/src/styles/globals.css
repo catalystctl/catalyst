@@ -225,21 +225,20 @@ body {
 }
 
 
-/* Page title block without forcing a heavy card wrapper */
+/* Page title block — same scale as WorkspaceHeader */
 .page-title {
-  font-family: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
-  font-size: clamp(1.35rem, 1.1rem + 0.8vw, 1.75rem);
-  font-weight: 650;
+  font-size: 0.875rem;
+  font-weight: 600;
   letter-spacing: -0.025em;
-  line-height: 1.15;
+  line-height: 1.25;
   color: hsl(var(--foreground));
   text-wrap: balance;
 }
 
 .page-subtitle {
   max-width: 65ch;
-  font-size: 0.875rem;
-  line-height: 1.5;
+  font-size: 0.75rem;
+  line-height: 1.4;
   color: hsl(var(--muted-foreground));
   text-wrap: pretty;
 }

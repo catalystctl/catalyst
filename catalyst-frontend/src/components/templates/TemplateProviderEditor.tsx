@@ -53,7 +53,7 @@ function TemplateProviderEditor({
  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all duration-200 select-none';
 
  return (
- <div className="space-y-3 rounded-2xl border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
  Mod &amp; Plugin Providers
  </div>

@@ -1,5 +1,6 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { reportSystemError } from '../../services/api/systemErrors';
 
 interface Props {
@@ -57,21 +58,32 @@ class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) {
         return this.props.fallback;
       }
-      return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-surface-2 px-4 text-center text-foreground">
-          <h1 className="text-2xl font-semibold">Something went wrong</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {this.state.message ?? 'Unexpected error encountered.'}
-          </p>
-          <button
-            type="button"
-            onClick={this.handleRetry}
-            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90"
-          >
-            Try again
-          </button>
-        </div>
-      );
+        return (
+          <div className="flex min-h-screen items-center justify-center bg-background px-4">
+            <div className="w-full max-w-md overflow-hidden rounded-lg border border-danger/25 bg-danger/5">
+              <div className="flex items-start gap-2.5 px-3 py-2.5">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-danger/30 bg-danger/10 text-danger">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-sm font-semibold tracking-tight text-foreground">Something went wrong</h1>
+                  <p className="type-meta mt-0.5">
+                    {this.state.message ?? 'Unexpected error encountered.'}
+                  </p>
+                </div>
+              </div>
+              <div className="border-t border-border/40 px-3 py-2">
+                <button
+                  type="button"
+                  onClick={this.handleRetry}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        );
     }
 
     return this.props.children;

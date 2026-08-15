@@ -88,13 +88,11 @@ function ResetPasswordPage() {
  return (
  <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
- <CardContent className="px-6 py-8 sm:px-8">
- <div className="flex flex-col items-center text-center">
- <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
- <p className="mt-4 text-sm text-muted-foreground">
- Validating reset link...
- </p>
- </div>
+        <CardContent className="px-3 py-4 sm:px-4">
+          <div className="flex flex-col items-center text-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
+            <p className="type-meta mt-3">Validating reset link...</p>
+          </div>
  </CardContent>
  </Card>
  </div>
@@ -105,16 +103,16 @@ function ResetPasswordPage() {
  return (
  <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
- <CardContent className="px-6 py-8 sm:px-8">
- <div className="flex flex-col items-center text-center">
- <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
- </div>
- <h1 className="mt-6 text-2xl font-semibold text-foreground">
- Invalid link
- </h1>
- <p className="mt-2 text-sm text-muted-foreground">
- This password reset link is invalid or has expired. Please request a new one.
- </p>
+        <CardContent className="px-3 py-4 sm:px-4">
+          <div className="flex items-start gap-2.5">
+            <img src={logoUrl} alt={`${panelName} logo`} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold tracking-tight text-foreground">Invalid link</h1>
+              <p className="type-meta mt-0.5">
+                This reset link is invalid or expired. Request a new one.
+              </p>
+            </div>
+          </div>
  <div className="mt-6">
  <Button asChild className="w-full">
  <Link to="/forgot-password">Request new reset link</Link>
@@ -129,20 +127,14 @@ function ResetPasswordPage() {
  return (
  <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
- <CardContent className="px-6 py-8 sm:px-8">
- <div className="flex flex-col items-center text-center">
- <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
- <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
- {panelName} Panel
- </span>
- </div>
-
- <h1 className="mt-6 text-2xl font-semibold text-foreground">
- Reset your password
- </h1>
- <p className="mt-2 text-sm text-muted-foreground">
- Enter a new password for your account.
- </p>
+        <CardContent className="px-3 py-4 sm:px-4">
+          <div className="flex items-start gap-2.5">
+            <img src={logoUrl} alt={`${panelName} logo`} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold tracking-tight text-foreground">Reset your password</h1>
+              <p className="type-meta mt-0.5">Choose a new password for your account.</p>
+            </div>
+          </div>
 
  {isReset ? (
  <div className="mt-6 space-y-4">

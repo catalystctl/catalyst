@@ -49,9 +49,9 @@ function RegisterPage() {
  return (
  <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
- <CardContent className="px-6 py-8 sm:px-8">
- <h1 className="text-2xl font-semibold text-foreground">Create account</h1>
- <p className="mt-2 text-sm text-muted-foreground">
+ <CardContent className="px-3 py-4 sm:px-4">
+ <h1 className="text-sm font-semibold tracking-tight text-foreground">Create account</h1>
+ <p className="type-meta mt-0.5">
  Start managing your infrastructure.
  </p>
 

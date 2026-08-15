@@ -269,7 +269,7 @@ function NodeCreateModal(_props: Props) {
  {/* ── Step 1: Location Selection ── */}
  {step === 1 && (
  <div className="flex flex-col items-center px-6 py-10 text-center">
- <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-success/10">
+ <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-success/10">
  <MapPin className="h-7 w-7 text-success" />
  </div>
  <h3 className="text-base font-semibold text-foreground">
@@ -649,7 +649,7 @@ function NodeCreateModal(_props: Props) {
  {step === 3 && (
  <>
  <div className="flex flex-col items-center px-6 py-8 text-center">
- <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-success/10">
+ <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-success/10">
  <CheckCircle className="h-7 w-7 text-success" />
  </div>
  <h3 className="text-base font-semibold text-foreground">

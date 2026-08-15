@@ -68,6 +68,14 @@ describe('csync core', () => {
     expect(client.getQueryData(['servers', '1'])).toEqual({ id: '1', status: 'running' });
   });
 
+  it('setQueryData on an unobserved query schedules GC', () => {
+    client.setQueryData(['orphan-sse'], { v: 1 });
+    const query = client.getQueryCache().get(hashQueryKey(['orphan-sse']));
+    expect(query).toBeDefined();
+    expect(query!.observers).toBe(0);
+    expect(query!.gcTimer).not.toBeNull();
+  });
+
   it('setQueriesData patches all list views by predicate (SSE fan-out)', () => {
     client.setQueryData(['servers'], [
       { id: 'a', status: 'stopped' },

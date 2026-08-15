@@ -43,27 +43,27 @@ function AppLayout() {
       )}
 
       {/* Mobile header */}
-      <div className="fixed top-0 left-0 right-0 z-30 flex h-14 items-center justify-between border-b border-border/80 bg-card px-4 shadow-panel lg:hidden">
+      <div className="fixed top-0 left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 shadow-panel lg:hidden">
         <button
           type="button"
           onClick={() => setIsMobileSidebarOpen(true)}
-          className="pressable flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+          className="pressable flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
           aria-label="Open menu"
           aria-expanded={isMobileSidebarOpen}
           aria-controls="mobile-sidebar"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-4 w-4" />
         </button>
-        <span className="font-display text-base font-semibold tracking-tight text-foreground">
+        <span className="text-sm font-semibold tracking-tight text-foreground">
           {panelName}
         </span>
         <button
           type="button"
           onClick={() => setIsSearchOpen(true)}
-          className="pressable flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+          className="pressable flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
           aria-label="Search"
         >
-          <Search className="h-5 w-5" />
+          <Search className="h-4 w-4" />
         </button>
       </div>
 

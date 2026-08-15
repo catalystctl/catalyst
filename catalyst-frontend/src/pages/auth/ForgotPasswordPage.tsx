@@ -47,20 +47,16 @@ function ForgotPasswordPage() {
  return (
  <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
- <CardContent className="px-6 py-8 sm:px-8">
- <div className="flex flex-col items-center text-center">
- <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
- <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
- {panelName} Panel
- </span>
- </div>
-
- <h1 className="mt-6 text-2xl font-semibold text-foreground">
- Forgot password?
- </h1>
- <p className="mt-2 text-sm text-muted-foreground">
- Enter your email address and we'll send you a link to reset your password.
+ <CardContent className="px-3 py-4 sm:px-4">
+ <div className="flex items-start gap-2.5">
+ <img src={logoUrl} alt={`${panelName} logo`} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+ <div className="min-w-0">
+ <h1 className="text-sm font-semibold tracking-tight text-foreground">Forgot password?</h1>
+ <p className="type-meta mt-0.5">
+ Enter your email and we'll send a reset link.
  </p>
+ </div>
+ </div>
 
  {isSubmitted ? (
  <div className="mt-6 space-y-4">
