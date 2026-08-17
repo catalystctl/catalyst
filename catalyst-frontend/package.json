@@ -20,7 +20,7 @@
 		"build:analyze": "vite build --mode analyze"
 	},
 	"dependencies": {
-		"@better-auth/passkey": "~1.6.26",
+		"@better-auth/passkey": "~1.6.28",
 		"@fontsource-variable/dm-sans": "^5.3.0",
 		"@fontsource-variable/jetbrains-mono": "^5.3.0",
 		"@fontsource-variable/outfit": "^5.3.0",
@@ -46,7 +46,7 @@
 		"@xterm/addon-search": "^0.16.0",
 		"@xterm/addon-web-links": "^0.12.0",
 		"@xterm/xterm": "^6.0.0",
-		"better-auth": "~1.6.26",
+		"better-auth": "~1.6.28",
 		"class-variance-authority": "~0.7.1",
 		"clsx": "~2.1.1",
 		"cmdk": "~1.1.1",
@@ -62,7 +62,7 @@
 		"sonner": "~2.0.8",
 		"tailwind-merge": "~3.6.0",
 		"zod": "~4.4.1",
-		"zustand": "~5.0.14"
+		"zustand": "~5.0.15"
 	},
 	"devDependencies": {
 		"@eslint/js": "~10.0.1",
