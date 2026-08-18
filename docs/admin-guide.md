@@ -861,7 +861,7 @@ Navigate to **Admin → Security** to configure security policies.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `fileTunnelRateLimitMax` | 100 | Max file tunnel requests per window |
-| `fileTunnelMaxUploadMb` | 100 | Max single file upload size (MB) |
+| `fileTunnelMaxUploadMb` | 500 | Single max file size (MB) for the file browser and SFTP on every agent |
 | `fileTunnelMaxPendingPerNode` | 50 | Max pending file operations per node |
 | `fileTunnelConcurrentMax` | 10 | Max concurrent file transfers per node |
 
@@ -1084,6 +1084,8 @@ Catalyst provides a built-in migration tool to import servers, nodes, and data f
 1. At least one Catalyst node must be **online**.
 2. Pterodactyl **Application API key** (`ptla_*`) — required.
 3. Pterodactyl **Client API key** (`ptlc_*`) — required for backup and file migration.
+
+For a local, reproducible source panel (separate `ptero-panel` / `ptero-wings` LXCs, official images, seeded `ptla_*`/`ptlc_*` keys, and a Catalyst `migration/test` + `migration/start` check), see [`scripts/lxc-lab/PTERO.md`](../scripts/lxc-lab/PTERO.md).
 
 ### Migration Process
 

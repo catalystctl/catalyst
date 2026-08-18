@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
  Dialog,
+ DialogBody,
  DialogContent,
  DialogHeader,
  DialogTitle,
@@ -370,16 +371,15 @@ function LoginPage() {
  )}
  </CardContent>
  </Card>
-
  <Dialog open={authStep === 'passkey'} onOpenChange={() => setAuthStep(null)}>
- <DialogContent>
+ <DialogContent size="sm">
  <DialogHeader>
  <DialogTitle>Passkey required</DialogTitle>
  <DialogDescription>
  This account requires a passkey. Use your saved passkey to continue.
  </DialogDescription>
  </DialogHeader>
- <div className="space-y-3">
+ <DialogBody className="space-y-3">
  <Button className="w-full" onClick={handlePasskeySignIn} disabled={passkeySubmitting}>
  {passkeySubmitting ? 'Waiting for passkey…' : 'Use passkey'}
  </Button>
@@ -396,24 +396,23 @@ function LoginPage() {
  >
  Use another way
  </Button>
- </div>
+ </DialogBody>
  </DialogContent>
  </Dialog>
-
  <Dialog open={authStep === 'totp'} onOpenChange={() => setAuthStep(null)}>
- <DialogContent>
+ <DialogContent size="sm">
  <DialogHeader>
  <DialogTitle>Two-factor verification</DialogTitle>
  <DialogDescription>
  Enter the code from your authenticator app or backup code.
  </DialogDescription>
  </DialogHeader>
+ <DialogBody className="space-y-3">
  {totpError && (
  <Alert variant="destructive">
  <AlertDescription>{totpError}</AlertDescription>
  </Alert>
  )}
- <div className="space-y-3">
  <Input
  type="text"
  inputMode="numeric"
@@ -435,7 +434,7 @@ function LoginPage() {
  <Button className="w-full" onClick={handleTotpSubmit} disabled={totpSubmitting}>
  {totpSubmitting ? 'Verifying…' : 'Verify'}
  </Button>
- </div>
+ </DialogBody>
  </DialogContent>
  </Dialog>
  <BrandFooter />

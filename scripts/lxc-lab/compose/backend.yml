@@ -57,7 +57,6 @@ services:
       BACKEND_URL: ${BACKEND_URL}
       SFTP_ENABLED: "true"
       SFTP_PORT: "2022"
-      SFTP_MAX_FILE_SIZE: "104857600"
       SFTP_HOST_KEY: ""
       SFTP_HOST_KEY_BASE64: ""
       DEPLOY_SCRIPT_PATH: /scripts/deploy-agent.sh

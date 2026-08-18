@@ -14,7 +14,16 @@ import {
  SelectTrigger,
  SelectValue,
 } from '../../components/ui/select';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import { Button } from '@/components/ui/button';
+import {
+ Dialog,
+ DialogBody,
+ DialogContent,
+ DialogDescription,
+ DialogFooter,
+ DialogHeader,
+ DialogTitle,
+} from '@/components/ui/dialog';
 
 type Props = {
  node: NodeInfo;
@@ -131,22 +140,13 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  Update
  </button>
  )}
- {open ? (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
- <div className="w-full max-w-lg rounded-xl border border-border/40 bg-card shadow-elevated transition-all">
- <div className="flex items-center justify-between border-b border-border/30 px-6 py-4">
- <h2 className="text-lg font-semibold text-foreground">
- Update node
- </h2>
- <button
- className="rounded-md border border-border/40 px-2 py-1 text-xs text-muted-foreground transition-all hover:border-primary/50"
- onClick={() => setOpen(false)}
- >
- Close
- </button>
- </div>
- <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground">
+ <Dialog open={open} onOpenChange={setOpen}>
+ <DialogContent size="lg">
+ <DialogHeader>
+ <DialogTitle>Update node</DialogTitle>
+ <DialogDescription>Change this node's identity, capacity, and agent paths.</DialogDescription>
+ </DialogHeader>
+ <DialogBody className="space-y-3 text-sm text-muted-foreground">
  <label className="block space-y-1">
  <span className="text-muted-foreground">Name</span>
  <input
@@ -448,26 +448,21 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </div>
  )}
  </div>
- </div>
- <div className="flex justify-end gap-2 border-t border-border/30 px-6 py-4 text-xs">
- <button
- className="rounded-md border border-border/40 px-3 py-1 font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground"
- onClick={() => setOpen(false)}
- >
+ </DialogBody>
+ <DialogFooter>
+ <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
  Cancel
- </button>
- <button
- className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-60"
+ </Button>
+ <Button
+ size="sm"
  onClick={() => mutation.mutate()}
  disabled={mutation.isPending}
  >
- {mutation.isPending ? 'Saving...' : 'Save changes'}
- </button>
- </div>
- </div>
- </div>
- </ModalPortal>
- ) : null}
+ {mutation.isPending ? 'Saving…' : 'Save changes'}
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
  </>
  );
 }

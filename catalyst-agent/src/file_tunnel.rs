@@ -19,7 +19,6 @@ const POLL_CONCURRENCY: usize = 4;
 const MAX_CONCURRENT_REQUESTS: usize = 50; // Max concurrent file operations
 const RETRY_DELAY: Duration = Duration::from_secs(2);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
-const MAX_INSTALL_URL_BYTES: u64 = 100 * 1024 * 1024; // 100MB cap to prevent memory/disk exhaustion
 const MAX_INSTALL_URL_REDIRECTS: usize = 10;
 
 #[derive(Debug, Deserialize)]
@@ -317,7 +316,7 @@ async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelReques
         .get(&upload_url)
         .header("X-Node-Id", ctx.node_id)
         .header("X-Node-Api-Key", ctx.api_key)
-        .timeout(Duration::from_secs(300))
+        .timeout(Duration::from_secs(8 * 60 * 60))
         .send()
         .await
     {
@@ -647,15 +646,16 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
             return;
         }
 
+        let max_bytes = fm.max_file_size();
         if let Some(len) = response.content_length() {
-            if len > MAX_INSTALL_URL_BYTES {
+            if len > max_bytes {
                 send_json_response(
                     ctx,
                     false,
                     None,
                     Some(format!(
                         "Download too large: {} bytes (max {} bytes)",
-                        len, MAX_INSTALL_URL_BYTES
+                        len, max_bytes
                     )),
                 )
                 .await;
@@ -691,7 +691,7 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
             };
 
             written = written.saturating_add(chunk.len() as u64);
-            if written > MAX_INSTALL_URL_BYTES {
+            if written > max_bytes {
                 drop(file);
                 let _ = tokio::fs::remove_file(&target_path).await;
                 send_json_response(
@@ -700,7 +700,7 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
                     None,
                     Some(format!(
                         "Download too large: exceeded max {} bytes",
-                        MAX_INSTALL_URL_BYTES
+                        max_bytes
                     )),
                 )
                 .await;

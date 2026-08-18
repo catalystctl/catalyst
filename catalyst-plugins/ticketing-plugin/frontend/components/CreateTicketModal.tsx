@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -16,8 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
   Loader2,
-  FONT_DISPLAY,
-  cn,
 } from '@/plugins/plugin-ui';
 import { CATEGORIES, PRIORITIES, PRIORITY_CONFIG } from '../constants';
 import type {
@@ -105,15 +104,16 @@ export function CreateTicketModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg gap-0 p-0">
-        <DialogHeader className="space-y-1 border-b border-border px-5 py-4">
-          <DialogTitle className={cn('text-base', FONT_DISPLAY)}>New ticket</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            Capture the issue clearly — title for the queue, description for the assignee.
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>New ticket</DialogTitle>
+          <DialogDescription>
+            Capture the issue clearly: a title for the queue, a description for the assignee.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <DialogBody className="space-y-4">
           {templates.length > 0 && (
             <div className="space-y-1.5">
               <Label className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
@@ -254,14 +254,15 @@ export function CreateTicketModal({
             </p>
           )}
 
-          <DialogFooter className="gap-2 border-t border-border px-0 pb-0 pt-4 sm:space-x-2">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+          </DialogBody>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? (
                 <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Creating…
                 </>
               ) : (

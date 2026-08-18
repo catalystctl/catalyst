@@ -5,7 +5,6 @@ import {
  RotateCcw,
  Eye,
  Clock,
- X,
  CheckCircle2,
  Radio,
  Copy,
@@ -28,7 +27,15 @@ import {
 import { useSystemErrors, useResolveSystemError } from '../../hooks/useAdmin';
 import type { SystemError } from '../../types/admin';
 import Pagination from '../../components/shared/Pagination';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 const pageSize = 50;
 
@@ -168,36 +175,18 @@ function ErrorDetailModal({
  const { copiedId, copy } = useCopyToClipboard();
  const isCopied = copiedId === error.id;
 
- return (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
- <div className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-border/30 bg-card shadow-elevated">
- {/* Header */}
- <div className="border-b border-border/30 px-6 py-4">
- <div className="flex items-start justify-between gap-3">
- <div className="flex items-start gap-3">
- <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${levelBg(error.level)}`}>
- <Bug className="h-4 w-4" />
- </div>
- <div className="min-w-0">
- <h2 className="text-base font-semibold text-foreground">
- {error.component}
- </h2>
- <p className="truncate text-xs text-muted-foreground">{error.id}</p>
- </div>
- </div>
- <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={onClose}
+return (
+ <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+ <DialogContent size="xl">
+ <DialogHeader
+ icon={<Bug className="h-4 w-4" />}
+ iconClassName={levelBg(error.level)}
  >
- <X className="h-4 w-4" />
- </button>
- </div>
- </div>
+ <DialogTitle>{error.component}</DialogTitle>
+ <DialogDescription>{error.id}</DialogDescription>
+ </DialogHeader>
 
- {/* Body */}
- <div className="space-y-5 overflow-y-auto px-6 py-5">
- {/* Level + Status */}
+ <DialogBody className="space-y-5">
  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
  <div className="space-y-1">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Level</span>
@@ -238,7 +227,6 @@ function ErrorDetailModal({
  </div>
  </div>
 
- {/* Timestamp */}
  <div className="space-y-1">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Timestamp</span>
  <div className="flex items-center gap-2 text-sm text-foreground">
@@ -247,7 +235,6 @@ function ErrorDetailModal({
  </div>
  </div>
 
- {/* Message */}
  <div className="space-y-1">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Message</span>
  <div className="rounded-lg border border-border/30 bg-surface-2/40 px-3 py-2 text-sm text-foreground">
@@ -255,7 +242,6 @@ function ErrorDetailModal({
  </div>
  </div>
 
- {/* Stack Trace */}
  {error.stack && (
  <div className="space-y-1">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Stack Trace</span>
@@ -265,7 +251,6 @@ function ErrorDetailModal({
  </div>
  )}
 
- {/* Metadata */}
  {hasMetadata && (
  <div className="space-y-2">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -299,10 +284,9 @@ function ErrorDetailModal({
  No metadata recorded for this error.
  </div>
  )}
- </div>
+ </DialogBody>
 
- {/* Footer */}
- <div className="flex justify-end gap-2 border-t border-border/30 px-6 py-3">
+ <DialogFooter>
  <Button
  variant="outline"
  size="sm"
@@ -315,11 +299,11 @@ function ErrorDetailModal({
  <Button variant="outline" size="sm" onClick={onClose}>
  Close
  </Button>
- </div>
- </div>
- </div>
- </ModalPortal>
- );
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
+);
+
 }
 
 // ── Error Row ──

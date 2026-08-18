@@ -9,7 +9,6 @@ import {
  Globe,
  Clock,
  Hash,
- X,
  Activity,
  Server,
  Shield,
@@ -37,7 +36,15 @@ import { useAuditLogs } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import type { AuditLogEntry } from '../../types/admin';
 import Pagination from '../../components/shared/Pagination';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Link } from 'react-router-dom';
 
 const pageSize = 50;
@@ -214,33 +221,25 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  const resourceLink = log.resource === 'server' && log.resourceId ? `/servers/${log.resourceId}` :
  log.resource === 'node' && log.resourceId ? `/admin/nodes/${log.resourceId}` : null;
 
- return (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm" onClick={onClose}>
- <div
- onClick={(e) => e.stopPropagation()}
- className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-elevated max-h-[85vh] flex flex-col"
+return (
+ <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+ <DialogContent size="xl">
+ <DialogHeader
+ icon={<ResourceIcon resource={log.resource} className="h-4 w-4" />}
+ iconClassName={`${ts.bg} ${ts.text} ${ts.border}`}
  >
- {/* ── Header ── */}
- <div className={`relative overflow-hidden border-b border-border px-6 py-4 ${ts.bg}`}>
- <div className="absolute inset-0 bg-gradient-to-r ${tone === 'danger' ? 'from-destructive/5 to-transparent' : tone === 'warning' ? 'from-warning/5 to-transparent' : tone === 'success' ? 'from-success/5 to-transparent' : 'from-primary/5 to-transparent'}" />
+ <DialogTitle>{formatAction(log.action)}</DialogTitle>
+ <DialogDescription>
+ {log.resource}{log.resourceId ? ` · ${log.resourceId.slice(0, 12)}…` : ''}
+ </DialogDescription>
+ </DialogHeader>
 
- <div className="relative flex items-start justify-between gap-3">
- <div className="flex items-start gap-3">
- <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${ts.bg} ${ts.text}`}>
- <ResourceIcon resource={log.resource} className="h-5 w-5" />
- </div>
- <div>
- <div className="flex items-center gap-2.5">
- <h2 className="text-base font-semibold text-foreground">
- {formatAction(log.action)}
- </h2>
+ <DialogBody className="space-y-5">
+ <div className="flex flex-wrap items-center gap-2">
  <span className={`h-2 w-2 rounded-full ${ts.dot}`} />
  <Badge variant="outline" className={`text-[10px] ${ts.border} ${ts.text}`}>
  {log.action}
  </Badge>
- </div>
- <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
  <Badge variant="secondary" className="gap-1 text-[10px]">
  <ResourceIcon resource={log.resource} className="h-2.5 w-2.5" />
  {log.resource}
@@ -256,17 +255,7 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  )
  )}
  </div>
- </div>
- </div>
- <button className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={onClose}>
- <X className="h-4 w-4" />
- </button>
- </div>
- </div>
 
- {/* ── Body (scrollable) ── */}
- <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
- {/* Who & When */}
  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
  <div className="space-y-1.5">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actor</span>
@@ -296,7 +285,6 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  </div>
  </div>
 
- {/* Quick facts */}
  <div className="flex flex-wrap items-center gap-2">
  {requestIp && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
@@ -322,7 +310,6 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  )}
  </div>
 
- {/* Details / Metadata */}
  {hasDetails ? (
  <div className="space-y-2">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -348,16 +335,15 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  No details recorded for this event.
  </div>
  )}
- </div>
+ </DialogBody>
 
- {/* ── Footer ── */}
- <div className="flex justify-end border-t border-border px-6 py-3">
+ <DialogFooter>
  <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
- </div>
- </div>
- </div>
- </ModalPortal>
- );
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
+);
+
 }
 
 // ── Main Page ──

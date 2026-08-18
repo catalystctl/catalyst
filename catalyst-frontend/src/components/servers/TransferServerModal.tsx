@@ -7,119 +7,122 @@ import type { BackupStorageMode } from '../../types/server';
 import { useNodes } from '../../hooks/useNodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import { Label } from '@/components/ui/label';
 import {
- Select,
- SelectContent,
- SelectItem,
- SelectTrigger,
- SelectValue,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 
 type Props = {
- serverId: string;
- disabled?: boolean;
+  serverId: string;
+  disabled?: boolean;
 };
 
 function TransferServerModal({ serverId, disabled = false }: Props) {
- const [open, setOpen] = useState(false);
- const [targetNodeId, setTargetNodeId] = useState('');
- const [transferMode, setTransferMode] = useState<BackupStorageMode>('local');
- const { data: nodes = [], isLoading: nodesLoading } = useNodes();
- const selectedTargetNodeId = targetNodeId || nodes[0]?.id || '';
+  const [open, setOpen] = useState(false);
+  const [targetNodeId, setTargetNodeId] = useState('');
+  const [transferMode, setTransferMode] = useState<BackupStorageMode>('local');
+  const { data: nodes = [], isLoading: nodesLoading } = useNodes();
+  const selectedTargetNodeId = targetNodeId || nodes[0]?.id || '';
 
- const mutation = useMutation({
- mutationFn: () => serversApi.transfer(serverId, {
- targetNodeId: selectedTargetNodeId,
- transferMode,
- }),
- onSuccess: () => {
- notifySuccess('Transfer started');
- setOpen(false);
- },
- onSettled: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: qk.servers() });
- },
- onError: () => notifyError('Failed to transfer server'),
- });
+  const mutation = useMutation({
+    mutationFn: () => serversApi.transfer(serverId, {
+      targetNodeId: selectedTargetNodeId,
+      transferMode,
+    }),
+    onSuccess: () => {
+      notifySuccess('Transfer started');
+      setOpen(false);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
+    },
+    onError: () => notifyError('Failed to transfer server'),
+  });
 
- return (
- <div>
- <Button
- variant="outline"
- size="sm"
- onClick={() => { if (!disabled) setOpen(true); }}
- disabled={disabled}
- >
- Transfer
- </Button>
- {open ? (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
- <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-elevated">
- <div className="flex items-center justify-between">
- <h2 className="text-lg font-semibold text-foreground">Transfer server</h2>
- <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Close</Button>
- </div>
- <div className="mt-4 space-y-3 text-sm text-muted-foreground">
- <label className="block space-y-1">
- <span className="text-xs font-medium">Target node</span>
- <Select
- value={selectedTargetNodeId}
- onValueChange={setTargetNodeId}
- disabled={nodesLoading || !nodes.length}
- >
- <SelectTrigger className="w-full">
- <SelectValue placeholder="Select node" />
- </SelectTrigger>
- <SelectContent>
- {!nodes.length && <SelectItem value="__none" disabled>No nodes available</SelectItem>}
- {nodes.map((n) => (
- <SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>
- ))}
- </SelectContent>
- </Select>
- </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium">Transfer storage</span>
- <Select
- value={transferMode}
- onValueChange={(v) => setTransferMode(v as BackupStorageMode)}
- disabled={disabled}
- >
- <SelectTrigger className="w-full">
- <SelectValue />
- </SelectTrigger>
- <SelectContent>
- <SelectItem value="local">Shared filesystem</SelectItem>
- <SelectItem value="s3">S3</SelectItem>
- <SelectItem value="stream">Stream</SelectItem>
- </SelectContent>
- </Select>
- </label>
- <p className="text-xs text-muted-foreground">
- Transferring will reschedule workloads on the selected node.
- </p>
- </div>
- <div className="mt-4 flex justify-end gap-2 text-xs">
- <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
- Cancel
- </Button>
- <Button
- size="sm"
- onClick={() => mutation.mutate()}
- disabled={mutation.isPending || !selectedTargetNodeId || !nodes.length || disabled}
- >
- Transfer
- </Button>
- </div>
- </div>
- </div>
- </ModalPortal>
- ) : null}
- </div>
- );
+  return (
+    <div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => { if (!disabled) setOpen(true); }}
+        disabled={disabled}
+      >
+        Transfer
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>Transfer server</DialogTitle>
+            <DialogDescription>
+              Transferring will reschedule workloads on the selected node.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="space-y-2">
+              <Label>Target node</Label>
+              <Select
+                value={selectedTargetNodeId}
+                onValueChange={setTargetNodeId}
+                disabled={nodesLoading || !nodes.length}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select node" />
+                </SelectTrigger>
+                <SelectContent>
+                  {!nodes.length && <SelectItem value="__none" disabled>No nodes available</SelectItem>}
+                  {nodes.map((n) => (
+                    <SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Transfer storage</Label>
+              <Select
+                value={transferMode}
+                onValueChange={(v) => setTransferMode(v as BackupStorageMode)}
+                disabled={disabled}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="local">Shared filesystem</SelectItem>
+                  <SelectItem value="s3">S3</SelectItem>
+                  <SelectItem value="stream">Stream</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isPending || !selectedTargetNodeId || !nodes.length || disabled}
+            >
+              Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
 
 export default TransferServerModal;

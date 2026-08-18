@@ -34,6 +34,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use libc::ENOSPC;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use russh::server::{Auth, ChannelOpenHandle, Msg, Server, Session};
@@ -65,8 +66,6 @@ pub struct SftpConfig {
     pub api_key: String,
     /// Node ID for authenticating with the backend.
     pub node_id: String,
-    /// Maximum file size for SFTP write operations (bytes).
-    pub max_file_size: u64,
 }
 
 impl SftpConfig {
@@ -102,10 +101,6 @@ impl SftpConfig {
             backend_url: backend_http,
             api_key: config.server.api_key.clone(),
             node_id: config.server.node_id.clone(),
-            max_file_size: std::env::var("SFTP_MAX_FILE_SIZE")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(100 * 1024 * 1024),
         }
     }
 }
@@ -199,7 +194,6 @@ struct CatalystSftpHandler {
     file_manager: Arc<FileManager>,
     server_id: String,
     permissions: Vec<String>,
-    max_file_size: u64,
     /// Directory handles opened by this session; cleared on Drop so
     /// DIR_READ_STATE does not leak if the client disconnects without close.
     open_dir_handles: Arc<std::sync::Mutex<HashSet<String>>>,
@@ -246,17 +240,11 @@ fn reject_password() -> Auth {
 }
 
 impl CatalystSftpHandler {
-    fn new(
-        file_manager: Arc<FileManager>,
-        server_id: String,
-        permissions: Vec<String>,
-        max_file_size: u64,
-    ) -> Self {
+    fn new(file_manager: Arc<FileManager>, server_id: String, permissions: Vec<String>) -> Self {
         Self {
             file_manager,
             server_id,
             permissions,
-            max_file_size,
             open_dir_handles: Arc::new(std::sync::Mutex::new(HashSet::new())),
         }
     }
@@ -472,7 +460,6 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
         let permissions = self.permissions.clone();
-        let max_file_size = self.max_file_size;
         let path = Self::path_from_handle(&handle).unwrap_or_default();
 
         async move {
@@ -481,11 +468,8 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             }
 
             // Stream: seek directly to the offset and write the chunk.
-            // Avoids O(n²) read-modify-write of the entire file per chunk.
-            if offset.saturating_add(data.len() as u64) > max_file_size {
-                return Err(SftpError("File too large".into()));
-            }
-
+            // Cap is remaining space on the server's disk (loop quota / host FS),
+            // not the panel web-upload limit.
             let full_path = fm
                 .resolve_path(&server_id, &path)
                 .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
@@ -496,7 +480,13 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                     .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
             }
 
-            // truncate(false): random-access seek+write; CREATE alone must not wipe.
+            if let Err(e) = fm
+                .ensure_write_fits(&full_path, offset, data.len() as u64)
+                .await
+            {
+                return Err(SftpError(e.to_string()));
+            }
+
             let mut file = tokio::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -509,9 +499,13 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                 .await
                 .map_err(|e| SftpError(format!("Write seek failed: {}", e)))?;
 
-            file.write_all(&data)
-                .await
-                .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
+            file.write_all(&data).await.map_err(|e| {
+                if e.raw_os_error() == Some(ENOSPC) {
+                    SftpError("No space left on device".into())
+                } else {
+                    SftpError(format!("Write failed: {}", e))
+                }
+            })?;
 
             Ok(Self::status_ok(id))
         }
@@ -1063,15 +1057,10 @@ impl russh::server::Handler for SshSession {
         let server_id = self.server_id.clone().unwrap_or_default();
         let file_manager = self.file_manager.clone();
         let permissions = self.permissions.clone();
-        let max_file_size = self.config.max_file_size;
-
         tracing::info!("SFTP subsystem started for server {}", server_id);
 
-        // Convert the SSH channel into an AsyncRead+AsyncWrite stream,
-        // then hand it off to the russh-sftp server loop.
         let stream = channel.into_stream();
-        let handler =
-            CatalystSftpHandler::new(file_manager, server_id.clone(), permissions, max_file_size);
+        let handler = CatalystSftpHandler::new(file_manager, server_id.clone(), permissions);
 
         tracing::info!(
             "SFTP: calling russh_sftp::server::run for server {}",

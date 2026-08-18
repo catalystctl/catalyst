@@ -52,6 +52,7 @@ import type {
  PterodactylTestResult,
  MigrationScope,
  CatalystNodeOption,
+ PterodactylNodeInfo,
  PterodactylServerInfo,
 } from '../../types/migration';
 import { MIGRATION_PHASES } from '../../types/migration';
@@ -301,6 +302,28 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  </div>
 
  {/* What gets imported */}
+ <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Allocations</div>
+ {server.allocations && server.allocations.length > 0 ? (
+ <div className="flex flex-wrap gap-1.5">
+ {server.allocations.map(allocation => (
+ <span
+ key={allocation.id}
+ className="inline-flex max-w-full items-center gap-1 rounded border border-border/50 bg-surface-2 px-2 py-1 font-mono text-[11px] text-foreground"
+ >
+ <span className="truncate">{allocation.alias || allocation.ip}:{allocation.port}</span>
+ {allocation.primary && (
+ <span className="font-sans text-[10px] text-muted-foreground">primary</span>
+ )}
+ </span>
+ ))}
+ </div>
+ ) : (
+ <div className="flex items-center gap-1.5 text-xs text-warning">
+ <AlertTriangle className="h-3 w-3" />
+ No allocation details returned by Pterodactyl
+ </div>
+ )}
+
  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Imports</div>
  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
  {/* Always imported */}
@@ -368,7 +391,7 @@ function NodeMappingSection({
  onlineNodes,
  scope,
 }: {
- nodes: Array<{ id: number; name: string; fqdn: string; memory: number; serverCount: number }>;
+ nodes: PterodactylNodeInfo[];
  servers: PterodactylServerInfo[];
  nodeMappings: Record<string, string>;
  setNodeMappings: React.Dispatch<React.SetStateAction<Record<string, string>>>;
@@ -440,12 +463,48 @@ function NodeMappingSection({
  </Select>
  </div>
  </div>
- {expanded && nodeServers.length > 0 && (
+ {expanded && (
  <div className="border-t border-border/50 bg-surface-1/50">
- <div className="px-4 py-2">
+ <div className="px-4 py-2 space-y-3">
+ <div>
+ <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
+ Node configuration
+ </div>
+ <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
+ <div><dt className="inline text-muted-foreground">Endpoint: </dt><dd className="inline text-foreground">{node.scheme || 'https'}://{node.fqdn}:{node.daemonListen ?? 'unknown'}</dd></div>
+ <div><dt className="inline text-muted-foreground">Location: </dt><dd className="inline text-foreground">{node.locationName || 'Unknown'}</dd></div>
+ <div><dt className="inline text-muted-foreground">SFTP port: </dt><dd className="inline text-foreground">{node.daemonSftp ?? 'unknown'}</dd></div>
+ <div><dt className="inline text-muted-foreground">Data directory: </dt><dd className="inline break-all text-foreground">{node.daemonBase || 'unknown'}</dd></div>
+ <div><dt className="inline text-muted-foreground">Memory: </dt><dd className="inline text-foreground">{node.memory} MB ({node.memoryOverallocate ?? 0}% overallocation)</dd></div>
+ <div><dt className="inline text-muted-foreground">Disk: </dt><dd className="inline text-foreground">{node.disk ?? 0} MB ({node.diskOverallocate ?? 0}% overallocation)</dd></div>
+ <div><dt className="inline text-muted-foreground">Upload limit: </dt><dd className="inline text-foreground">{node.uploadSize ?? 0} MB</dd></div>
+ <div><dt className="inline text-muted-foreground">Proxy: </dt><dd className="inline text-foreground">{node.behindProxy ? 'Behind proxy' : 'Direct'}</dd></div>
+ <div><dt className="inline text-muted-foreground">Maintenance: </dt><dd className="inline text-foreground">{node.maintenanceMode ? 'Enabled' : 'Disabled'}</dd></div>
+ </dl>
+ {node.allocations && node.allocations.length > 0 && (
+ <div className="mt-3">
+ <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
+ Node allocations ({node.allocations.length})
+ </div>
+ <div className="flex flex-wrap gap-1.5">
+ {node.allocations.map(allocation => (
+ <span
+ key={allocation.id}
+ className="inline-flex max-w-full items-center gap-1 rounded border border-border/50 bg-surface-2 px-2 py-1 font-mono text-[11px] text-foreground"
+ >
+ <span className="truncate">{allocation.alias || allocation.ip}:{allocation.port}</span>
+ <span className="font-sans text-[10px] text-muted-foreground">{allocation.assigned ? 'assigned' : 'free'}</span>
+ </span>
+ ))}
+ </div>
+ </div>
+ )}
+ </div>
+ <div>
  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
  Servers on this node ({nodeServers.length})
  </div>
+ {nodeServers.length > 0 ? (
  <div className="space-y-3">
  {nodeServers.map(s => (
  <div key={s.id} className="rounded-md border border-border/50 bg-surface-1 px-3 py-2">
@@ -459,6 +518,10 @@ function NodeMappingSection({
  <ServerImportSummary server={s} />
  </div>
  ))}
+ </div>
+ ) : (
+ <p className="text-xs text-muted-foreground">No servers on this node.</p>
+ )}
  </div>
  </div>
  </div>

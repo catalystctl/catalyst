@@ -28,7 +28,15 @@ import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { useDatabaseHosts, useDatabaseHostPing, useDbStatus } from '../../hooks/useAdmin';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+ Dialog,
+ DialogBody,
+ DialogContent,
+ DialogDescription,
+ DialogFooter,
+ DialogHeader,
+ DialogTitle,
+} from '@/components/ui/dialog';
 import type { DbStatusResult } from '../../types/admin';
 
 // ── Helpers ──
@@ -40,34 +48,33 @@ function formatBytes(bytes: number): string {
  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-// ── Modal Shell ──
-function ModalShell({
- open, title, subtitle, children, footer,
+// ── Host dialog ──
+function HostDialog({
+ open,
+ title,
+ subtitle,
+ children,
+ footer,
+ onOpenChange,
 }: {
  open: boolean;
  title: string;
- subtitle?: string;
+ subtitle: string;
  children: React.ReactNode;
- footer?: React.ReactNode;
+ footer: React.ReactNode;
+ onOpenChange: (open: boolean) => void;
 }) {
- if (!open) return null;
  return (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
- <div className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-elevated">
- <div className="border-b border-border px-6 py-4">
- <h2 className="text-lg font-semibold text-foreground">{title}</h2>
- {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
- </div>
- <div className="px-6 py-5">{children}</div>
- {footer && (
- <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
- {footer}
- </div>
- )}
- </div>
- </div>
- </ModalPortal>
+ <Dialog open={open} onOpenChange={onOpenChange}>
+ <DialogContent size="lg">
+ <DialogHeader icon={<Database className="h-4 w-4" />}>
+ <DialogTitle>{title}</DialogTitle>
+ <DialogDescription>{subtitle}</DialogDescription>
+ </DialogHeader>
+ <DialogBody>{children}</DialogBody>
+ <DialogFooter>{footer}</DialogFooter>
+ </DialogContent>
+ </Dialog>
  );
 }
 
@@ -536,8 +543,14 @@ function DatabasePage() {
  )}
 
  {/* ── Create Modal ── */}
- <ModalShell
+ <HostDialog
  open={isCreateOpen}
+ onOpenChange={(next) => {
+ if (!next) {
+ resetForm();
+ setIsCreateOpen(false);
+ }
+ }}
  title="Add database host"
  subtitle="Register a MySQL host used to provision per-server databases."
  footer={
@@ -549,7 +562,6 @@ function DatabasePage() {
  size="sm"
  disabled={!canSubmit || createMutation.isPending}
  onClick={() => createMutation.mutate()}
- className=""
  >
  {createMutation.isPending ? 'Creating…' : 'Create host'}
  </Button>
@@ -557,11 +569,17 @@ function DatabasePage() {
  }
  >
  {formFields}
- </ModalShell>
+ </HostDialog>
 
  {/* ── Edit Modal ── */}
- <ModalShell
+ <HostDialog
  open={!!editingHost}
+ onOpenChange={(next) => {
+ if (!next) {
+ setEditingHost(null);
+ resetForm();
+ }
+ }}
  title="Edit database host"
  subtitle="Update connection details for this database host."
  footer={
@@ -573,7 +591,6 @@ function DatabasePage() {
  size="sm"
  disabled={updateMutation.isPending}
  onClick={() => editingHost && updateMutation.mutate({ hostId: editingHost.id })}
- className=""
  >
  {updateMutation.isPending ? 'Saving…' : 'Save changes'}
  </Button>
@@ -581,7 +598,7 @@ function DatabasePage() {
  }
  >
  {formFields}
- </ModalShell>
+ </HostDialog>
 
  {/* ── Delete Confirmation ── */}
  <ConfirmDialog

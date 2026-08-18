@@ -579,6 +579,16 @@ impl WebSocketHandler {
         *status = connected;
     }
 
+    fn apply_panel_upload_limit(&self, msg: &Value) {
+        let Some(bytes) = msg.get("maxUploadBytes").and_then(|v| v.as_u64()) else {
+            return;
+        };
+        if bytes == 0 {
+            return;
+        }
+        self.file_manager.set_max_file_size(bytes);
+    }
+
     pub async fn report_error(
         &self,
         level: ErrorLevel,
@@ -1956,7 +1966,11 @@ impl WebSocketHandler {
             Some("decline_eula") => self.handle_eula_response(&msg, false).await?,
             Some("node_handshake_response") => {
                 info!("Handshake accepted by backend");
+                self.apply_panel_upload_limit(&msg);
                 self.set_backend_connected(true).await;
+            }
+            Some("file_upload_limit") => {
+                self.apply_panel_upload_limit(&msg);
             }
             Some("error") => {
                 let error_type = msg["error"].as_str().unwrap_or("unknown");

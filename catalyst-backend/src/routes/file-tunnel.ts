@@ -224,13 +224,14 @@ export function fileTunnelRoutes(
       if (!nodeId) return;
 
       const { requestId } = request.params as { requestId: string };
-      const data = fileTunnel.getUploadData(requestId, nodeId);
+      const upload = fileTunnel.getUploadStream(requestId, nodeId);
 
-      if (!data) {
+      if (!upload) {
         return reply.status(404).send({ error: "Upload data not found or expired" });
       }
 
-      reply.type("application/octet-stream").send(data);
+      reply.header("content-length", upload.size);
+      return reply.type("application/octet-stream").send(upload.stream);
     }
   );
 }

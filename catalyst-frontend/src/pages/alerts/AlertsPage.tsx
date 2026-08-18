@@ -27,7 +27,16 @@ import { useAuthStore } from '../../stores/authStore';
 import type { AlertRule, AlertSeverity, AlertType } from '../../types/alert';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogToolbar,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
@@ -561,20 +570,24 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </ServerTabCard>
 
   {/* ── Rule Create/Edit Modal ── */}
- {showRuleModal && (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
- <div className="mx-4 w-full max-w-2xl rounded-xl border border-border/40 bg-card shadow-elevated">
- <div className="border-b border-border px-6 py-4">
- <h2 className="text-lg font-semibold text-foreground ">
- {editingRule ? 'Edit alert rule' : 'Create alert rule'}
- </h2>
- <p className="text-xs text-muted-foreground">Configure thresholds and notification targets.</p>
- </div>
+<Dialog
+ open={showRuleModal}
+ onOpenChange={(open) => {
+ if (!open) {
+ setShowRuleModal(false);
+ setEditingRule(null);
+ resetRuleForm();
+ }
+ }}
+>
+ <DialogContent size="2xl">
+ <DialogHeader icon={<Bell className="h-4 w-4" />}>
+ <DialogTitle>{editingRule ? 'Edit alert rule' : 'Create alert rule'}</DialogTitle>
+ <DialogDescription>Configure thresholds and notification targets.</DialogDescription>
+ </DialogHeader>
 
- <div className="px-6 py-5">
- {/* Step navigation */}
- <div className="mb-5 flex gap-1 rounded-lg border border-border/30 bg-surface-2/20 p-1">
+ <DialogToolbar>
+ <div className="flex gap-1 rounded-lg border border-border/30 bg-surface-2/20 p-1">
  {ruleStepOrder.map((key, index) => {
  const isActive = ruleStep === key;
  const canNav = canNavigateRuleStep(index);
@@ -599,8 +612,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  );
  })}
  </div>
+ </DialogToolbar>
 
- {/* Step content */}
+ <DialogBody>
  {ruleStep === 'details' && (
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -733,10 +747,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </div>
  </div>
  )}
- </div>
+ </DialogBody>
 
- {/* Footer */}
- <div className="flex items-center justify-between border-t border-border px-6 py-4">
+ <DialogFooter className="sm:justify-between">
  <Button variant="outline" size="sm" onClick={() => { setShowRuleModal(false); setEditingRule(null); resetRuleForm(); }}>
  Cancel
  </Button>
@@ -772,11 +785,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </Button>
  )}
  </div>
- </div>
- </div>
- </div>
- </ModalPortal>
- )}
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* ── Delete Rule Confirmation ── */}
  <ConfirmDialog

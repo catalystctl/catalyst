@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   BarChart3,
   Container,
-  Loader2,
   Network,
   RotateCcw,
   Server,
@@ -25,6 +24,7 @@ import { reportSystemError } from '../../../services/api/systemErrors';
 import UpdateServerModal from '../UpdateServerModal';
 import TransferServerModal from '../TransferServerModal';
 import DeleteServerDialog from '../DeleteServerDialog';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
 import TabEmptyState from './TabEmptyState';
@@ -158,73 +158,6 @@ interface Props {
 
  // Permissions
  canDelete: boolean;
-}
-
-// ── Confirm Dialog ──
-
-function ConfirmAction({
- open,
- title,
- description,
- confirmLabel,
- variant = 'danger',
- pending,
- onConfirm,
- onCancel,
-}: {
- open: boolean;
- title: string;
- description: string;
- confirmLabel: string;
- variant?: 'danger' | 'warning' | 'primary';
- pending?: boolean;
- onConfirm: () => void;
- onCancel: () => void;
-}) {
- if (!open) return null;
-
- const btnClass =
- variant === 'danger'
- ? 'bg-danger hover:bg-danger text-foreground '
- : variant === 'warning'
- ? 'bg-warning hover:bg-warning text-foreground '
- : 'bg-primary hover:bg-primary/90 text-primary-foreground ';
-
- return (
- <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
- <div
- className="absolute inset-0 bg-background/60 backdrop-blur-sm"
- onClick={onCancel}
- />
- <div className="relative w-full max-w-md rounded-xl border border-border/40 bg-card p-6 shadow-elevated">
- <h3 className="text-sm font-semibold text-foreground">{title}</h3>
- <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
- {description}
- </p>
- <div className="mt-5 flex items-center justify-end gap-2">
- <button
- type="button"
- onClick={onCancel}
- className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
- >
- Cancel
- </button>
- <button
- type="button"
- onClick={onConfirm}
- disabled={pending}
- className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-60 ${btnClass}`}
- >
- {pending ? (
- <Loader2 className="h-3.5 w-3.5 animate-spin" />
- ) : (
- confirmLabel
- )}
- </button>
- </div>
- </div>
- </div>
- );
 }
 
 
@@ -1164,67 +1097,67 @@ export default function ServerAdminTab({
  </div>
 
  {/* ── Confirm dialogs ── */}
- <ConfirmAction
+ <ConfirmDialog
  open={rebuildConfirm}
- title="Rebuild Container"
- description="This will stop the server (if running), remove the container, and recreate it from the current image. All server data will be preserved. The server will not automatically start after rebuilding."
- confirmLabel="Rebuild"
- variant="primary"
- pending={rebuildPending}
+ title="Rebuild container"
+ message="This will stop the server if it is running, remove the container, and recreate it from the current image. Server data is preserved. The server will not start automatically after rebuilding."
+ confirmText="Rebuild"
+ variant="default"
+ loading={rebuildPending}
  onConfirm={handleRebuild}
  onCancel={() => setRebuildConfirm(false)}
  />
- <ConfirmAction
+ <ConfirmDialog
  open={Boolean(imageVariantConfirm?.open)}
- title="Change Container Image"
- description={
+ title="Change container image"
+ message={
  imageVariantConfirm
- ? `Switch to "${imageVariantConfirm.label}" (${imageVariantConfirm.image})? This updates IMAGE_VARIANT and rebuilds the container. Server data is preserved; the server will not automatically start after rebuilding.`
+ ? `Switch to "${imageVariantConfirm.label}" (${imageVariantConfirm.image})? This updates IMAGE_VARIANT and rebuilds the container. Server data is preserved; the server will not start automatically after rebuilding.`
  : ''
  }
- confirmLabel="Change & rebuild"
- variant="primary"
- pending={imageVariantPending}
+ confirmText="Change and rebuild"
+ variant="default"
+ loading={imageVariantPending}
  onConfirm={handleChangeImageVariant}
  onCancel={() => setImageVariantConfirm(null)}
  />
- <ConfirmAction
+ <ConfirmDialog
  open={killConfirm}
- title="Force Kill Server"
- description="This will immediately terminate the server process without a graceful shutdown. Players may lose unsaved progress. This cannot be undone."
- confirmLabel="Kill process"
+ title="Force kill server"
+ message="This will immediately terminate the server process without a graceful shutdown. Players may lose unsaved progress. This cannot be undone."
+ confirmText="Kill process"
  variant="danger"
- pending={killPending}
+ loading={killPending}
  onConfirm={handleKill}
  onCancel={() => setKillConfirm(false)}
  />
- <ConfirmAction
+ <ConfirmDialog
  open={reinstallConfirm}
- title="Reinstall Server"
- description="This will wipe ALL server data and re-run the template install script. World files, configurations, and plugins will be permanently deleted. This cannot be undone."
- confirmLabel="Reinstall"
+ title="Reinstall server"
+ message="This will wipe all server data and re-run the template install script. World files, configurations, and plugins will be permanently deleted. This cannot be undone."
+ confirmText="Reinstall"
  variant="warning"
- pending={reinstallPending}
+ loading={reinstallPending}
  onConfirm={handleReinstall}
  onCancel={() => setReinstallConfirm(false)}
  />
- <ConfirmAction
+ <ConfirmDialog
  open={transferOwnerConfirm}
- title="Transfer Ownership"
- description={`Transfer ownership of "${serverName}" to ${newOwnerLabel || newOwnerId.trim()}. The new owner will receive full management access. You will retain your current access permissions.`}
- confirmLabel="Transfer ownership"
+ title="Transfer ownership"
+ message={`Transfer ownership of "${serverName}" to ${newOwnerLabel || newOwnerId.trim()}. The new owner will receive full management access. You will retain your current access permissions.`}
+ confirmText="Transfer ownership"
  variant="warning"
- pending={transferOwnerPending}
+ loading={transferOwnerPending}
  onConfirm={handleTransferOwnership}
  onCancel={() => setTransferOwnerConfirm(false)}
  />
- <ConfirmAction
+ <ConfirmDialog
  open={removeAllocationConfirm.open}
- title="Remove Allocation from Running Server"
- description="This server is currently running. Removing an allocation will immediately close the firewall rule for this port, making it unreachable. Players connected through this port will be disconnected. This cannot be undone while the server is running."
- confirmLabel="Remove allocation"
+ title="Remove allocation from running server"
+ message="This server is currently running. Removing an allocation will immediately close the firewall rule for this port, making it unreachable. Players connected through this port will be disconnected."
+ confirmText="Remove allocation"
  variant="danger"
- pending={removeAllocationHotPending}
+ loading={removeAllocationHotPending}
  onConfirm={confirmRemoveAllocation}
  onCancel={() => setRemoveAllocationConfirm({ open: false, containerPort: null })}
  />

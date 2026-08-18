@@ -60,7 +60,16 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 import type { AdminUser } from '../../types/admin';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogToolbar,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 const pageSize = 20;
 
@@ -1363,52 +1372,41 @@ function UsersPage() {
  </div>
 
  {/* ── Create/Edit User Wizard Modal ── */}
- <ModalPortal>
- {isModalOpen && (
- <div
- className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
- onClick={(e) => { if (e.target === e.currentTarget) { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); } }}
+<Dialog
+ open={isModalOpen}
+ onOpenChange={(open) => {
+ if (!open) {
+ resetCreateForm();
+ setIsCreateOpen(false);
+ resetEditForm();
+ }
+ }}
+>
+ <DialogContent size="2xl">
+ <DialogHeader
+ icon={editingUserId ? <Pencil className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+ iconClassName={editingUserId
+ ? 'border-warning/20 bg-warning/10 text-warning'
+ : 'border-primary/20 bg-primary/10 text-primary'}
  >
- <div
- className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border/30 bg-card shadow-elevated m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
- >
- {/* Header */}
- <div className="flex items-center justify-between border-b border-border/30 px-4 py-3 md:px-6 md:py-4">
- <div className="flex items-center gap-3">
- <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${editingUserId ? 'bg-warning/10' : 'bg-primary/10'}`}>
- {editingUserId ? <Pencil className="h-4 w-4 text-warning" /> : <UserPlus className="h-4 w-4 text-primary" />}
- </div>
- <div>
- <h2 className="text-lg font-semibold text-foreground">
- {editingUserId ? 'Edit user' : 'Create user'}
- </h2>
- <p className="text-xs text-muted-foreground">
+ <DialogTitle>{editingUserId ? 'Edit user' : 'Create user'}</DialogTitle>
+ <DialogDescription>
  {editingUserId
  ? editingUser ? `${editingUser.username} · ${editingUser.email}` : 'Update user details and access.'
  : 'Set up a new account with roles and server access.'}
- </p>
- </div>
- </div>
- <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={() => { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); }}
- >
- <X className="h-4 w-4" />
- </button>
- </div>
+ </DialogDescription>
+ </DialogHeader>
 
- {/* Step indicator */}
- <div className="border-b border-border/50 px-4 py-2.5 md:px-6 md:py-3 overflow-x-auto">
+ <DialogToolbar className="overflow-x-auto">
  <StepIndicator
  steps={currentSteps}
  currentStep={wizardStep}
  onStepClick={goToStep}
  canNavigate={canNavigateStep}
  />
- </div>
+ </DialogToolbar>
 
- {/* Step content */}
- <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6 md:py-5">
+ <DialogBody>
  {/* Step 0: Account Details */}
  {wizardStep === 0 && (
  <div
@@ -1591,10 +1589,9 @@ function UsersPage() {
  />
  </div>
  )}
- </div>
+ </DialogBody>
 
- {/* Footer with navigation */}
- <div className="flex items-center justify-between border-t border-border/30 px-4 py-3 md:px-6 md:py-4">
+ <DialogFooter className="sm:justify-between">
  <div className="text-xs text-muted-foreground">
  {wizardStep === 0 && !editingUserId && 'All fields are required'}
  {wizardStep === 0 && editingUserId && 'Leave password blank to keep current'}
@@ -1641,37 +1638,32 @@ function UsersPage() {
  Cancel
  </Button>
  </div>
- </div>
- </div>
- </div>
- )}
- </ModalPortal>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* ── View User Modal ── */}
- <ModalPortal>
- {!!viewingUser && !editingUserId && !isCreateOpen && (
- <div
- className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
- onClick={(e) => { if (e.target === e.currentTarget) setViewingUser(null); }}
+<Dialog
+ open={!!viewingUser && !editingUserId && !isCreateOpen}
+ onOpenChange={(open) => {
+ if (!open) setViewingUser(null);
+ }}
+>
+ <DialogContent size="xl">
+ <DialogHeader
+ icon={<User className="h-4 w-4" />}
+ iconClassName={viewingUser?.banned
+ ? 'border-destructive/20 bg-destructive/10 text-destructive'
+ : 'border-primary/20 bg-primary/10 text-primary'}
  >
- <div
- className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border/30 bg-card shadow-elevated m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
- >
- {/* Header with user identity */}
- <div className="relative overflow-hidden px-4 py-4 border-b border-border/30 md:px-6 md:py-5">
+ <DialogTitle>{viewingUser?.username ?? 'User details'}</DialogTitle>
+ <DialogDescription>{viewingUser?.email ?? 'Account details and access.'}</DialogDescription>
+ </DialogHeader>
 
- <div className="relative flex items-start justify-between">
- <div className="flex items-center gap-3">
- <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
- viewingUser.banned
- ? 'bg-destructive/10 text-destructive'
- : 'bg-primary/10 text-primary'
- }`}>
- <User className="h-5 w-5" />
- </div>
- <div>
- <div className="flex items-center gap-2.5">
- <h2 className="text-lg font-semibold text-foreground">{viewingUser.username}</h2>
+ <DialogBody className="space-y-4">
+ {viewingUser && (
+ <>
+ <div className="flex flex-wrap items-center gap-2">
  {viewingUser.banned ? (
  <Badge variant="destructive" className="gap-1 text-[11px]">
  <Ban className="h-2.5 w-2.5" /> Banned
@@ -1682,22 +1674,8 @@ function UsersPage() {
  </Badge>
  )}
  </div>
- <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
- <Mail className="h-3 w-3" />
- {viewingUser.email}
- </div>
- </div>
- </div>
- <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={() => setViewingUser(null)}
- >
- <X className="h-4 w-4" />
- </button>
- </div>
 
- {/* Quick stats */}
- <div className="relative mt-3 md:mt-4 flex flex-wrap gap-2 md:gap-3">
+ <div className="flex flex-wrap gap-2 md:gap-3">
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
  <Shield className="h-3 w-3 text-primary" />
  <span className="text-muted-foreground">Roles</span>
@@ -1736,11 +1714,7 @@ function UsersPage() {
  </div>
  )}
  </div>
- </div>
 
- {/* Body */}
- <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5 space-y-4">
- {/* Roles */}
  {viewingUser.roles.length > 0 && (
  <div className="rounded-xl border border-border/30 p-4">
  <div className="flex items-center gap-2 mb-3">
@@ -1758,7 +1732,6 @@ function UsersPage() {
  </div>
  )}
 
- {/* Accounts & Authentication */}
  {(() => {
  const accounts = viewingUser.accounts ?? [];
  const passkeys = viewingUser.passkeys ?? [];
@@ -1785,7 +1758,6 @@ function UsersPage() {
  <span className="text-sm font-semibold text-foreground">Authentication</span>
  </div>
 
- {/* 2FA */}
  {has2fa && (
  <div className="flex items-center gap-2 rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
  <ShieldCheck className={`h-4 w-4 ${viewingUser.twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
@@ -1796,7 +1768,6 @@ function UsersPage() {
  </div>
  )}
 
- {/* Passkeys */}
  {passkeys.length > 0 && (
  <div className="rounded-lg bg-surface-2/50 px-3 py-2">
  <div className="flex items-center gap-2 text-xs mb-2">
@@ -1814,7 +1785,6 @@ function UsersPage() {
  </div>
  )}
 
- {/* Linked accounts */}
  {accounts.length > 0 && (
  <div className="rounded-lg bg-surface-2/50 px-3 py-2">
  <div className="flex items-center gap-2 text-xs mb-2">
@@ -1841,17 +1811,20 @@ function UsersPage() {
  );
  })()}
 
- {/* Metadata */}
  <div className="space-y-1 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
  <div>User ID: <span className="font-mono">{viewingUser.id}</span></div>
  {viewingUser.updatedAt !== viewingUser.createdAt && (
  <div>Updated: {new Date(viewingUser.updatedAt).toLocaleDateString()} at {new Date(viewingUser.updatedAt).toLocaleTimeString()}</div>
  )}
  </div>
- </div>
+ </>
+ )}
+ </DialogBody>
 
- {/* Actions */}
- <div className="flex items-center gap-2 border-t border-border/30 px-4 py-3 md:px-6 md:py-4">
+ <DialogFooter className="sm:justify-between">
+ <div className="flex items-center gap-2">
+ {viewingUser && (
+ <>
  <Button variant="outline" size="sm" onClick={() => { startView(viewingUser); handleEditUser(viewingUser); }} className="gap-1.5">
  <Pencil className="h-3.5 w-3.5" />
  Edit user
@@ -1868,15 +1841,15 @@ function UsersPage() {
  <Button variant="destructive" size="sm" onClick={() => setDeletingUser({ id: viewingUser.id, username: viewingUser.username })} disabled={deleteMutation.isPending} className="gap-1.5">
  <Trash2 className="h-3.5 w-3.5" /> Delete
  </Button>
- <div className="flex-1" />
+ </>
+ )}
+ </div>
  <Button variant="ghost" size="sm" onClick={() => setViewingUser(null)}>
  Close
  </Button>
- </div>
- </div>
- </div>
- )}
- </ModalPortal>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* ── Ban Confirmation Dialog ── */}
  <ConfirmDialog

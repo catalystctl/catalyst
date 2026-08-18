@@ -15,6 +15,7 @@ import {
   type PterodactylUser,
   type PterodactylServer,
   type PterodactylAllocation,
+  type PterodactylResource,
   type PterodactylDatabase,
   type PterodactylDatabaseHost,
   type PterodactylSchedule,
@@ -22,9 +23,47 @@ import {
   type PterodactylBackup,
   type PterodactylSubuser,
 } from "./types";
+import { getPterodactylAllocationServerId } from "./pterodactyl-client";
 
 /** Maps Pterodactyl location IDs → Catalyst location IDs */
 export type IdMap = Map<number, string>;
+
+export interface IndexedPterodactylAllocation {
+  id: number;
+  ip: string;
+  port: number;
+  serverId?: number;
+}
+
+export function indexPterodactylAllocations(
+  allocations: Iterable<PterodactylAllocation | PterodactylResource<PterodactylAllocation>>
+): {
+  byId: Map<number, IndexedPterodactylAllocation>;
+  byServer: Map<number, IndexedPterodactylAllocation[]>;
+} {
+  const byId = new Map<number, IndexedPterodactylAllocation>();
+  const byServer = new Map<number, IndexedPterodactylAllocation[]>();
+
+  for (const allocation of allocations) {
+    const resource = "attributes" in allocation
+      ? allocation
+      : { attributes: allocation };
+    const indexed = {
+      id: resource.attributes.id,
+      ip: resource.attributes.ip,
+      port: resource.attributes.port,
+      serverId: getPterodactylAllocationServerId(resource),
+    };
+    byId.set(indexed.id, indexed);
+    if (indexed.serverId !== undefined) {
+      const serverAllocations = byServer.get(indexed.serverId) || [];
+      serverAllocations.push(indexed);
+      byServer.set(indexed.serverId, serverAllocations);
+    }
+  }
+
+  return { byId, byServer };
+}
 
 export class EntityMapper {
   private idMaps: {
@@ -67,8 +106,10 @@ export class EntityMapper {
   pteroServerUuidMap: Map<number, string> = new Map();
   /** Pterodactyl node ID → Pterodactyl location ID (servers don't have location directly in v1.x) */
   pteroNodeLocationMap: Map<number, number> = new Map();
-  /** Pterodactyl allocation ID → { ip, port } (fetched from node allocation endpoints) */
-  pteroAllocationMap: Map<number, { ip: string; port: number }> = new Map();
+  /** Pterodactyl allocation ID → allocation (fetched from node allocation endpoints) */
+  pteroAllocationMap: Map<number, IndexedPterodactylAllocation> = new Map();
+  /** Pterodactyl server ID → assigned node allocations */
+  pteroServerAllocationMap: Map<number, IndexedPterodactylAllocation[]> = new Map();
 
   // ========================================================================
   // LOCATION
@@ -307,8 +348,12 @@ export class EntityMapper {
       }
     }
 
-    // Also try ptero.allocations if present (non-v1.12.x or if populated)
-    const allocations = ptero.allocations || [];
+    // Node allocation endpoints retain the full server assignment inventory in
+    // Pterodactyl 1.12, where server.allocations is commonly null.
+    const allocations = [
+      ...(this.pteroServerAllocationMap.get(ptero.id) || []),
+      ...(ptero.allocations || []),
+    ];
     for (const alloc of allocations) {
       if (alloc.port) {
         portBindings[alloc.port] = alloc.port;

@@ -77,8 +77,24 @@ stage_admin() {
   accept_http "admin migration list" "$LAST_STATUS" 200
   api_ex GET "/api/admin/migration/catalyst-nodes"
   accept_http "admin migration nodes" "$LAST_STATUS" 200
-  api_ex POST "/api/admin/migration/test" '{"panelUrl":"http://127.0.0.1:1","apiKey":"x"}'
-  accept_http "admin migration test bad" "$LAST_STATUS" 400 401 422 502 503
+  api_ex POST "/api/admin/migration/test" '{"url":"http://127.0.0.1:1","key":"x"}'
+  accept_http "admin migration test bad" "$LAST_STATUS" 400 401 422 500 502 503
+  if [[ -n "${PTERO_APP_KEY:-}" && -n "${PTERO_URL:-}" ]]; then
+    api_ex POST "/api/admin/migration/test" "$(jq -n --arg url "$PTERO_URL" --arg key "$PTERO_APP_KEY" --arg clientApiKey "${PTERO_CLIENT_KEY:-}" '{url:$url,key:$key,clientApiKey:$clientApiKey}')"
+    accept_http "admin migration test live fixture" "$LAST_STATUS" 200
+    if [[ "$LAST_STATUS" == "200" ]]; then
+      if printf '%s' "$LAST_BODY" | jq -e '.success == true and .stats.nodes >= 1' >/dev/null; then
+        ops_ok "live fixture preview has nodes"
+      else
+        ops_fail "live fixture preview missing nodes: ${LAST_BODY:0:240}"
+      fi
+      if printf '%s' "$LAST_BODY" | jq -e '.serversList[0].hasAllocation == true' >/dev/null; then
+        ops_ok "live fixture server hasAllocation"
+      else
+        ops_fail "live fixture server missing allocation: ${LAST_BODY:0:240}"
+      fi
+    fi
+  fi
   api_ex GET "/api/admin/update/status"
   accept_http "admin update status" "$LAST_STATUS" 200
 

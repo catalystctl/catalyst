@@ -157,7 +157,7 @@ SFTP_ENABLED=true
 # SFTP_HOST_KEY is left empty — backend auto-generates from SFTP_HOST_KEY_BASE64
 SFTP_HOST_KEY=
 SFTP_HOST_KEY_BASE64=${sftp_host_key_base64}
-SFTP_MAX_FILE_SIZE=104857600
+
 
 # --- Backups -----------------------------------------------------------------
 BACKUP_STORAGE_MODE=local

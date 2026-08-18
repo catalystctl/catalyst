@@ -6,7 +6,16 @@ import { FolderOpen, Plus, Pencil, Trash2, X } from 'lucide-react';
 import { nestsApi, type Nest } from '../../services/api/nests';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import ConfirmDialog from '../shared/ConfirmDialog';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import { Button } from '@/components/ui/button';
+import {
+ Dialog,
+ DialogBody,
+ DialogContent,
+ DialogDescription,
+ DialogFooter,
+ DialogHeader,
+ DialogTitle,
+} from '@/components/ui/dialog';
 
 /**
  * Maps a `returnTo` identifier (sent by the opening modal) to the
@@ -204,39 +213,18 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  updateMutation.mutate({ id: editingNest.id, ...payload });
  };
 
- if (!open) return null;
 
  const isFormActive = isCreating || !!editingNest;
 
  return (
  <>
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10">
- <div className="flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-lg border border-border/40 bg-card shadow-sm transition-colors">
- {/* Header */}
- <div className="flex items-center justify-between border-b border-border px-6 py-4">
- <div className="flex items-center gap-3">
-          <FolderOpen className="h-5 w-5 text-warning" />
-
- <div>
- <h2 className="text-base font-semibold text-foreground">
- Manage Nests
- </h2>
- <p className="text-xs text-muted-foreground">
- Organize templates into categories.
- </p>
- </div>
- </div>
- <button
- className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary"
- onClick={() => onOpenChange(false)}
- >
- Close
- </button>
- </div>
-
- {/* Body */}
- <div className="flex-1 overflow-y-auto px-6 py-4">
+ <Dialog open={open} onOpenChange={onOpenChange}>
+ <DialogContent size="xl">
+ <DialogHeader icon={<FolderOpen className="h-4 w-4" />} iconClassName="border-warning/20 bg-warning/10 text-warning">
+ <DialogTitle>Manage nests</DialogTitle>
+ <DialogDescription>Organize templates into categories.</DialogDescription>
+ </DialogHeader>
+ <DialogBody>
  {/* Inline form */}
  {isFormActive && (
  <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
@@ -354,16 +342,14 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  ))}
  </div>
  )}
- </div>
-
- {/* Footer */}
+ </DialogBody>
  {!isFormActive && (
- <div className="flex items-center justify-between border-t border-border px-6 py-3">
+ <DialogFooter className="sm:justify-between">
  <span className="text-xs text-muted-foreground">
  {nests.length} nest{nests.length !== 1 ? 's' : ''}
  </span>
- <button
- className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+ <Button
+ size="sm"
  onClick={() => {
  setEditingNest(null);
  setIsCreating(true);
@@ -371,12 +357,11 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  >
  <Plus className="h-3.5 w-3.5" />
  Add nest
- </button>
- </div>
+ </Button>
+ </DialogFooter>
  )}
- </div>
- </div>
- </ModalPortal>
+ </DialogContent>
+ </Dialog>
 
  {/* Delete confirmation */}
  <ConfirmDialog

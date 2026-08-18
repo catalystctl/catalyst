@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
  Dialog,
+ DialogBody,
  DialogContent,
  DialogHeader,
  DialogTitle,
@@ -200,73 +201,69 @@ export default function UpdateNotification() {
  </motion.div>
  )}
  </AnimatePresence>
+  <Dialog open={showModal} onOpenChange={setShowModal}>
+  <DialogContent size="sm">
+  <DialogHeader icon={<BellOff className="h-4 w-4" />}>
+  <DialogTitle>Dismiss update notification</DialogTitle>
+  <DialogDescription>
+  Choose how to handle the update banner for version{' '}
+  <span className="font-medium text-foreground">v{updateData?.latestVersion}</span>.
+  </DialogDescription>
+  </DialogHeader>
 
- <Dialog open={showModal} onOpenChange={setShowModal}>
- <DialogContent className="sm:max-w-md">
- <DialogHeader>
- <div className="flex items-center gap-2">
- <BellOff className="h-5 w-5 text-muted-foreground" />
- <DialogTitle>Dismiss update notification</DialogTitle>
- </div>
- <DialogDescription>
- Choose how to handle the update banner for version{' '}
- <span className="font-medium text-foreground">v{updateData?.latestVersion}</span>.
- </DialogDescription>
- </DialogHeader>
+  <DialogBody className="grid gap-3">
+  {/* 1. Dismiss — just for a bit */}
+  <button
+  type="button"
+  onClick={() => handleDismissChoice('session')}
+  className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+  >
+  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
+  <Clock className="h-3.5 w-3.5" />
+  </div>
+  <div className="flex flex-col gap-0.5">
+  <span className="text-sm font-medium text-foreground">Dismiss</span>
+  <span className="text-xs text-muted-foreground">
+  Hide for now. The banner will reappear on the next page reload or sign-in.
+  </span>
+  </div>
+  </button>
 
- <div className="grid gap-3 py-2">
- {/* 1. Dismiss — just for a bit */}
- <button
- type="button"
- onClick={() => handleDismissChoice('session')}
- className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
- >
- <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
- <Clock className="h-3.5 w-3.5" />
- </div>
- <div className="flex flex-col gap-0.5">
- <span className="text-sm font-medium text-foreground">Dismiss</span>
- <span className="text-xs text-muted-foreground">
- Hide for now. The banner will reappear on the next page reload or sign-in.
- </span>
- </div>
- </button>
+  {/* 2. Dismiss this update — stored per version */}
+  <button
+  type="button"
+  onClick={() => handleDismissChoice('version')}
+  className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+  >
+  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
+  <BellRing className="h-3.5 w-3.5" />
+  </div>
+  <div className="flex flex-col gap-0.5">
+  <span className="text-sm font-medium text-foreground">Dismiss this update</span>
+  <span className="text-xs text-muted-foreground">
+  Remember my choice for v{updateData?.latestVersion}. You&apos;ll be notified again
+  when the next version is released.
+  </span>
+  </div>
+  </button>
 
- {/* 2. Dismiss this update — stored per version */}
- <button
- type="button"
- onClick={() => handleDismissChoice('version')}
- className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
- >
- <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
- <BellRing className="h-3.5 w-3.5" />
- </div>
- <div className="flex flex-col gap-0.5">
- <span className="text-sm font-medium text-foreground">Dismiss this update</span>
- <span className="text-xs text-muted-foreground">
- Remember my choice for v{updateData?.latestVersion}. You&apos;ll be notified again
- when the next version is released.
- </span>
- </div>
- </button>
-
- {/* 3. Don't remind me again — global */}
- <button
- type="button"
- onClick={() => handleDismissChoice('global')}
- className="flex items-start gap-3 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-left transition-colors hover:bg-warning/10"
- >
- <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
- <Ban className="h-3.5 w-3.5" />
- </div>
- <div className="flex flex-col gap-0.5">
- <span className="text-sm font-medium text-foreground">Don&apos;t remind me again</span>
- <span className="text-xs text-muted-foreground">
- Permanently hide all update notifications. Re-enable by clearing site data / localStorage.
- </span>
- </div>
- </button>
- </div>
+  {/* 3. Don't remind me again — global */}
+  <button
+  type="button"
+  onClick={() => handleDismissChoice('global')}
+  className="flex items-start gap-3 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-left transition-colors hover:bg-warning/10"
+  >
+  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
+  <Ban className="h-3.5 w-3.5" />
+  </div>
+  <div className="flex flex-col gap-0.5">
+  <span className="text-sm font-medium text-foreground">Don&apos;t remind me again</span>
+  <span className="text-xs text-muted-foreground">
+  Permanently hide all update notifications. Re-enable by clearing site data / localStorage.
+  </span>
+  </div>
+  </button>
+  </DialogBody>
 
  <DialogFooter>
  <Button size="sm" variant="outline" onClick={() => setShowModal(false)}>

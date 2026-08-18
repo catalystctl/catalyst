@@ -1,12 +1,19 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { Settings, Server, Loader2 } from 'lucide-react';
 import { useUpdateApiKey } from '../../hooks/useApiKeys';
 import { type ApiKey } from '../../services/apiKeys';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+ Dialog,
+ DialogBody,
+ DialogContent,
+ DialogDescription,
+ DialogFooter,
+ DialogHeader,
+ DialogTitle,
+} from '@/components/ui/dialog';
 import { reportSystemError } from '../../services/api/systemErrors';
 
 interface EditApiKeyDialogProps {
@@ -85,52 +92,30 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  }
  };
 
- if (!open) return null;
-
  return (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-surface-0/70 backdrop-blur-sm py-8">
- <motion.div
- initial={{ opacity: 0, scale: 0.95 }}
- animate={{ opacity: 1, scale: 1 }}
- transition={{ type: 'spring', stiffness: 400, damping: 30 }}
- className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-elevated"
- >
- {/* Header */}
- <div className="border-b border-border px-6 py-4">
- <div className="flex items-center gap-2.5">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/30">
- <Settings className="h-4 w-4 text-primary-600 dark:text-primary-400" />
- </div>
- <div>
- <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
- Edit API Key
- </h2>
- <p className="text-xs text-muted-foreground">
- Update settings for &quot;{apiKey.name || 'Unnamed Key'}&quot;.
- </p>
- </div>
- </div>
+ <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+ <DialogContent size="lg">
+ <DialogHeader icon={<Settings className="h-4 w-4" />}>
+ <DialogTitle>Edit API key</DialogTitle>
+ <DialogDescription>Update settings for &quot;{apiKey.name || 'Unnamed Key'}&quot;.</DialogDescription>
+ </DialogHeader>
+ <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+ <DialogBody className="space-y-5">
  {isAgentKey && (
- <div className="mt-2 flex items-center gap-1.5 rounded-md border border-warning/30/40 bg-warning/5 px-3 py-1.5 dark:border-warning/20 dark:bg-warning/15">
+ <div className="flex items-center gap-1.5 rounded-md border border-warning/30/40 bg-warning/5 px-3 py-1.5 dark:border-warning/20 dark:bg-warning/15">
  <Server className="h-3.5 w-3.5 shrink-0 text-warning dark:text-warning" />
  <span className="text-xs text-warning dark:text-warning">
  Agent key — editing name and status is safe; rate limits affect agent behavior.
  </span>
  </div>
  )}
- </div>
 
- <div className="px-6 py-5">
- <form onSubmit={handleSubmit} className="space-y-5">
- {/* Error display */}
  {error && (
  <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive dark:border-destructive/20 dark:bg-destructive/15 dark:text-destructive">
  {error}
  </div>
  )}
 
- {/* Name */}
  <div className="space-y-1.5">
  <label className="text-xs font-medium text-foreground dark:text-foreground">Name *</label>
  <Input
@@ -143,7 +128,6 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <p className="text-[11px] text-muted-foreground">A descriptive name to identify this API key.</p>
  </div>
 
- {/* Enabled toggle */}
  <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2/50 px-4 py-3 dark:bg-surface-2/30">
  <div>
  <span className="text-sm font-medium text-foreground dark:text-foreground">Enabled</span>
@@ -157,7 +141,6 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  />
  </div>
 
- {/* Rate Limit */}
  <div className="space-y-1.5">
  <label className="text-xs font-medium text-foreground dark:text-foreground">Rate Limit</label>
  <div className="flex items-center gap-2">
@@ -183,7 +166,6 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <p className="text-[11px] text-muted-foreground">Maximum requests allowed in the given time window.</p>
  </div>
 
- {/* Permissions — API update schema does not accept permission changes */}
  <div className="rounded-lg border border-border/50 bg-surface-2/40 px-4 py-3 dark:bg-surface-2/20">
  <div className="flex items-center justify-between gap-2">
  <span className="text-xs font-medium text-foreground">Permissions</span>
@@ -207,9 +189,8 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <p className="mt-2 text-[11px] text-muted-foreground">Expires: {new Date(apiKey.expiresAt).toLocaleString()}</p>
  )}
  </div>
-
- {/* Actions */}
- <div className="flex justify-end gap-2 border-t border-border/50 pt-4">
+ </DialogBody>
+ <DialogFooter>
  <Button variant="outline" size="sm" type="button" onClick={onClose}>Cancel</Button>
  <Button size="sm" type="submit" disabled={updateApiKey.isPending}>
  {updateApiKey.isPending ? (
@@ -218,14 +199,12 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  Saving…
  </>
  ) : (
- 'Save Changes'
+ 'Save changes'
  )}
  </Button>
- </div>
+ </DialogFooter>
  </form>
- </div>
- </motion.div>
- </div>
- </ModalPortal>
+ </DialogContent>
+ </Dialog>
  );
 }

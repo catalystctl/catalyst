@@ -193,7 +193,7 @@ export const filesApi = {
           formData.append('file', file);
 
           const xhr = new XMLHttpRequest();
-          xhr.timeout = 300_000; // 5-minute timeout
+          xhr.timeout = 8 * 60 * 60 * 1000; // 8 hours — matches 100GB transfer budget
 
           xhr.upload.addEventListener('progress', (e) => {
             if (e.lengthComputable && onProgress) {
@@ -242,7 +242,7 @@ export const filesApi = {
 
           xhr.addEventListener('timeout', () => {
             const err = new Error(
-              'Upload timed out (server did not respond in 5 minutes)',
+              'Upload timed out (server did not respond in 8 hours)',
             );
             reportSystemError({
               level: 'error',

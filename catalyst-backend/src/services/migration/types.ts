@@ -25,6 +25,7 @@ export interface PterodactylListResponse<T> {
 
 export interface PterodactylResource<T> {
   attributes: T;
+  relationships?: Record<string, PterodactylResource<unknown>>;
 }
 
 export interface PterodactylSingleResponse<T> {
@@ -170,7 +171,11 @@ export interface PterodactylAllocation {
   port: number;
   ip_alias?: string;
   server_id?: number;
+  assigned?: boolean;
   notes?: string;
+  relationships?: {
+    server?: PterodactylResource<{ id: number }>;
+  };
 }
 
 export interface PterodactylServer {
@@ -202,6 +207,7 @@ export interface PterodactylServer {
     backups: number;
   };
   allocation: number | {
+    id?: number;
     ip: string;
     port: number;
     ip_alias?: string;

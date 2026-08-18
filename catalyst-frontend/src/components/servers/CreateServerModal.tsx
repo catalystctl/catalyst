@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import { Plus } from 'lucide-react';
+import {
+ Dialog,
+ DialogContent,
+ DialogHeader,
+ DialogToolbar,
+ DialogBody,
+ DialogFooter,
+ DialogTitle,
+ DialogDescription,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
@@ -391,51 +402,25 @@ function CreateServerModal() {
  <>
  <style>{`
  @keyframes step-enter { from { opacity:0; transform:translateX(12px) } to { opacity:1; transform:translateX(0) } }
- @keyframes modal-in { from { opacity:0; transform:scale(0.97) translateY(10px) } to { opacity:1; transform:scale(1) translateY(0) } }
- .modal-enter { animation: modal-in .2s cubic-bezier(.16,1,.3,1) forwards }
  .step-content-enter { animation: step-enter .25s cubic-bezier(.16,1,.3,1) forwards }
  `}</style>
 
- <button
- className="flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:bg-primary-500"
+ <Button
  onClick={() => { setStep('details'); setOpen(true); }}
  >
- <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
- <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
- </svg>
- New Server
- </button>
+ <Plus className="h-4 w-4" />
+ New server
+ </Button>
 
- {open ? (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-2 sm:px-4 backdrop-blur-sm">
- <div className="modal-enter w-full max-w-4xl max-h-[100dvh] sm:max-h-[90vh] rounded-none sm:rounded-lg border-0 sm:border border-border bg-card shadow-2xl flex flex-col overflow-hidden dark:border-border dark:bg-card">
-
- {/* Header */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-primary">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold tracking-tight text-foreground">
-                Create New Server
-              </h2>
-              <p className="type-meta mt-0.5 truncate">Deploy a new game server in a few steps</p>
-            </div>
-          </div>
-          <button
-            className="shrink-0 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-danger/30 hover:bg-danger-muted hover:text-danger"
-            onClick={() => setOpen(false)}
-          >
-            Cancel
-          </button>
-        </div>
+ <Dialog open={open} onOpenChange={setOpen}>
+ <DialogContent size="2xl">
+ <DialogHeader icon={<Plus className="h-4 w-4" />}>
+ <DialogTitle>Create new server</DialogTitle>
+ <DialogDescription>Deploy a new game server in a few steps.</DialogDescription>
+ </DialogHeader>
 
  {/* Progress Stepper */}
- <div className="shrink-0 border-b border-border bg-muted/30 px-5 sm:px-8 py-3.5 dark:border-border dark:bg-muted/20">
+ <DialogToolbar>
  <div className="flex items-center">
  {stepOrder.map((key, index) => {
  const isActive = step === key;
@@ -474,11 +459,11 @@ function CreateServerModal() {
  );
  })}
  </div>
- </div>
+ </DialogToolbar>
 
  {/* Content Area */}
- <div className="flex-1 overflow-y-auto">
- <div key={step} className="step-content-enter px-5 sm:px-8 py-5 sm:py-6">
+ <DialogBody>
+ <div key={step} className="step-content-enter">
  <div className="mx-auto max-w-2xl space-y-5">
 
  {/* --- DETAILS STEP --- */}
@@ -672,37 +657,31 @@ function CreateServerModal() {
 
  </div>
  </div>
- </div>
+ </DialogBody>
 
- {/* Footer */}
- <div className="shrink-0 border-t border-border bg-muted/30 px-5 sm:px-8 py-4 dark:border-border dark:bg-muted/20">
- <div className="flex items-center justify-between gap-3">
- <button className="rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-all duration-200 hover:border-danger/30 hover:bg-danger-muted hover:text-danger dark:border-border" onClick={() => setOpen(false)}>
+ <DialogFooter className="sm:justify-between">
+ <Button variant="outline" onClick={() => setOpen(false)}>
  Cancel
- </button>
- <div className="flex items-center gap-2.5">
+ </Button>
+ <div className="flex items-center gap-2">
  {stepIndex > 0 ? (
- <button className="rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-all duration-200 hover:border-primary/30 hover:bg-primary-muted hover:text-primary dark:border-border" onClick={() => setStep(stepOrder[stepIndex - 1])}>
+ <Button variant="outline" onClick={() => setStep(stepOrder[stepIndex - 1])}>
  Back
- </button>
+ </Button>
  ) : null}
  {stepIndex < stepOrder.length - 1 ? (
- <button className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-primary-500 disabled:opacity-50" onClick={() => setStep(stepOrder[stepIndex + 1])} disabled={!canGoNext}>
- Next →
- </button>
+ <Button onClick={() => setStep(stepOrder[stepIndex + 1])} disabled={!canGoNext}>
+ Next
+ </Button>
  ) : (
- <button className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-primary-500 disabled:opacity-50" onClick={() => mutation.mutate()} disabled={disableSubmit}>
- {mutation.isPending ? 'Creating...' : 'Create Server'}
- </button>
+ <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
+ {mutation.isPending ? 'Creating...' : 'Create server'}
+ </Button>
  )}
  </div>
- </div>
- </div>
-
- </div>
- </div>
- </ModalPortal>
- ) : null}
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
  </>
  );
 }

@@ -18,6 +18,7 @@ import { ServerStateMachine } from "../services/state-machine";
 import { normalizeHostIp } from "../utils/ipam";
 import { captureSystemError } from "../services/error-logger";
 import { injectPterodactylCompatibilityVars } from "../utils/pterodactyl-env.js";
+import { getSecuritySettings, maxUploadBytesFromMb } from "../services/mailer";
 
 /**
  * Simple capped Map that evicts the oldest entries when max size is reached.
@@ -497,11 +498,13 @@ export class WebSocketGateway {
       timestamp: Date.now(),
     });
     this.logger.info(`Agent connected: ${node.id} (${node.hostname})`);
+    const security = await getSecuritySettings();
     agent.socket.send(
       JSON.stringify({
         type: "node_handshake_response",
         success: true,
         backendAddress: process.env.BACKEND_EXTERNAL_ADDRESS || "http://localhost:3000",
+        maxUploadBytes: maxUploadBytesFromMb(security.fileTunnelMaxUploadMb),
       })
     );
     await this.resumeConsoleStreams(node.id);
@@ -3122,6 +3125,24 @@ export class WebSocketGateway {
       this.logger.error(err, `Error sending message to agent ${nodeId}`);
       return false;
     }
+  }
+
+  /** Push a JSON message to every authenticated agent. */
+  broadcastToAgents(message: Record<string, unknown>): number {
+    let sent = 0;
+    const payload = JSON.stringify(message);
+    for (const [nodeId, agent] of this.agents) {
+      if (!agent.authenticated || agent.socket.readyState !== 1) {
+        continue;
+      }
+      try {
+        agent.socket.send(payload);
+        sent++;
+      } catch (err) {
+        this.logger.warn({ err, nodeId }, "Failed to broadcast to agent");
+      }
+    }
+    return sent;
   }
 
   /** Send a raw binary payload to an agent (used for efficient backup streaming). */

@@ -12,7 +12,7 @@ import SectionHeader from '../servers/tabs/SectionHeader';
 import StatGrid from '../servers/tabs/StatGrid';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { ModalPortal } from '../ui/modal-portal';
+import ConfirmDialog from '../shared/ConfirmDialog';
 import {
   Activity,
   AlertTriangle,
@@ -795,45 +795,25 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
         </div>
       </div>
 
-      {/* Save confirm modal */}
-      {showSaveConfirm && (
-        <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-xl border border-warning/40 bg-card shadow-elevated">
-              <div className="border-b border-warning/20 bg-warning/5 px-6 py-4">
-                <h2 className="text-lg font-semibold text-foreground">Apply Config Changes?</h2>
-              </div>
-              <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground">
-                <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>
-                    Saving the config file will overwrite the agent's <code className="rounded bg-warning/10 px-1">config.toml</code>.
-                    The agent must be restarted for changes to take effect.
-                  </span>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 border-t border-border/30 px-6 py-4 text-xs">
-                <Button variant="outline" size="sm" onClick={() => setShowSaveConfirm(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => {
-                    saveMutation.mutate();
-                    setShowSaveConfirm(false);
-                  }}
-                  disabled={saveMutation.isPending}
-                  className="gap-1.5"
-                >
-                  {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-                  Save Config
-                </Button>
-              </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
+      <ConfirmDialog
+        open={showSaveConfirm}
+        title="Apply config changes?"
+        message={
+          <>
+            Saving the config file will overwrite the agent's{' '}
+            <code className="rounded bg-warning/10 px-1">config.toml</code>. The agent must be
+            restarted for changes to take effect.
+          </>
+        }
+        confirmText="Save config"
+        variant="warning"
+        loading={saveMutation.isPending}
+        onConfirm={() => {
+          saveMutation.mutate();
+          setShowSaveConfirm(false);
+        }}
+        onCancel={() => setShowSaveConfirm(false)}
+      />
     </div>
   );
 }
@@ -973,48 +953,26 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
         );
       })}
 
-      {/* Restart confirmation modal */}
-      {restartConfirm && (
-        <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-xl border border-danger/40 bg-card shadow-elevated">
-              <div className="border-b border-danger/20 bg-danger/5 px-6 py-4">
-                <h2 className="text-lg font-semibold text-foreground">Restart Agent?</h2>
-              </div>
-              <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground">
-                <p>
-                  This will send a restart command to the agent on <strong className="text-foreground">{node.name}</strong>.
-                </p>
-                <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>
-                    The agent will temporarily disconnect. Running game servers will continue operating.
-                    The agent should reconnect within 10-30 seconds.
-                  </span>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 border-t border-border/30 px-6 py-4 text-xs">
-                <Button variant="outline" size="sm" onClick={() => setRestartConfirm(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => {
-                    restartMutation.mutate();
-                    setRestartConfirm(false);
-                  }}
-                  disabled={restartMutation.isPending}
-                  className="gap-1.5 bg-danger hover:bg-danger/90"
-                >
-                  {restartMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Power className="h-3 w-3" />}
-                  Restart Agent
-                </Button>
-              </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
+      <ConfirmDialog
+        open={restartConfirm}
+        title="Restart agent?"
+        message={
+          <>
+            This will send a restart command to the agent on{' '}
+            <span className="font-semibold text-foreground">{node.name}</span>. The agent will
+            temporarily disconnect. Running game servers will continue operating. The agent should
+            reconnect within 10-30 seconds.
+          </>
+        }
+        confirmText="Restart agent"
+        variant="danger"
+        loading={restartMutation.isPending}
+        onConfirm={() => {
+          restartMutation.mutate();
+          setRestartConfirm(false);
+        }}
+        onCancel={() => setRestartConfirm(false)}
+      />
     </div>
   );
 }

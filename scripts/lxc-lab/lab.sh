@@ -19,6 +19,9 @@
 #   ./scripts/lxc-lab/lab.sh refresh
 #   ./scripts/lxc-lab/lab.sh status
 #   ./scripts/lxc-lab/lab.sh destroy
+#   ./scripts/lxc-lab/lab.sh ptero            # panel+Wings LXCs + seed
+#   ./scripts/lxc-lab/lab.sh ptero-migrate    # Catalyst import against the fixture
+#   ./scripts/lxc-lab/lab.sh ptero-destroy
 set -euo pipefail
 
 LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -744,16 +747,22 @@ stage_status() {
   echo "Panel:   ${PUBLIC_URL}  (also http://${PANEL_IP}:8080/)"
   echo "Backend: ${BACKEND_PUBLIC}"
   echo "Login:   ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}"
+  if have_lxc "${PTERO_PANEL_LXC:-ptero-panel}" || have_lxc "${PTERO_WINGS_LXC:-ptero-wings}" || have_lxc "${PTERO_BULK_WINGS_LXCS%%,*}"; then
+    echo
+    stage_ptero_status
+  fi
 }
 
 stage_destroy() {
-  warn "Destroying lab LXCs $BACKEND_LXC $PANEL_LXC and host forwards"
+  local -a extra_wings=()
+  ptero_parse_csv extra_wings "${PTERO_BULK_WINGS_LXCS:-}"
+  warn "Destroying lab LXCs $BACKEND_LXC $PANEL_LXC ${PTERO_PANEL_LXC:-ptero-panel} ${PTERO_WINGS_LXC:-ptero-wings} ${extra_wings[*]} and host forwards"
   for pidfile in "$STATE_DIR"/run/fwd-*.pid; do
     [[ -f "$pidfile" ]] || continue
     kill "$(cat "$pidfile")" 2>/dev/null || true
     rm -f "$pidfile"
   done
-  for name in "$BACKEND_LXC" "$PANEL_LXC"; do
+  for name in "$BACKEND_LXC" "$PANEL_LXC" "${PTERO_PANEL_LXC:-ptero-panel}" "${PTERO_WINGS_LXC:-ptero-wings}" "${extra_wings[@]}"; do
     if have_lxc "$name"; then
       lxc-stop -n "$name" -k || true
       lxc-destroy -n "$name" -f || true
@@ -795,6 +804,8 @@ source "$LAB_DIR/everything.sh"
 source "$LAB_DIR/updates.sh"
 # shellcheck disable=SC1091
 source "$LAB_DIR/live.sh"
+# shellcheck disable=SC1091
+source "$LAB_DIR/ptero.sh"
 
 cmd="${1:-all}"
 case "$cmd" in
@@ -823,10 +834,19 @@ case "$cmd" in
   full) stage_full ;;
   status) stage_status ;;
   destroy) stage_destroy ;;
+  ptero) stage_ptero ;;
+  ptero-create) stage_ptero_create ;;
+  ptero-docker) stage_ptero_docker ;;
+  ptero-deploy) stage_ptero_deploy ;;
+  ptero-seed) stage_ptero_seed ;;
+  ptero-status) stage_ptero_status ;;
+  ptero-bulk) ptero_bulk_seed ;;
+  ptero-migrate) stage_ptero_migrate ;;
+  ptero-destroy) stage_ptero_destroy ;;
   all) stage_all ;;
   --tcp-proxy) ;;
   *)
-    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|storage-backups|alerts|automations|apis|admin|everything|updates|refresh|live|eggs|full|status|destroy}"
+    echo "Usage: $0 {all|create|docker|deploy|bootstrap|agent|servers|files|ops|sftp|backups|storage-backups|alerts|automations|apis|admin|everything|updates|refresh|live|eggs|full|status|destroy|ptero|ptero-create|ptero-docker|ptero-deploy|ptero-seed|ptero-status|ptero-bulk|ptero-migrate|ptero-destroy}"
     exit 2
     ;;
 esac

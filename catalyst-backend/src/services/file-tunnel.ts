@@ -44,9 +44,18 @@ interface WaitingPoller {
 
 const REQUEST_TIMEOUT_MS = 60_000;
 const POLL_TIMEOUT_MS = 30_000;
-const UPLOAD_TTL_MS = 5 * 60_000;
+export const MAX_UPLOAD_TRANSFER_MS = 8 * 60 * 60 * 1000;
 const MAX_QUEUE_PER_NODE = 100;
 const MAX_POLLERS_PER_NODE = 10;
+
+/** Worst-case transfer budget so a 100GB pull does not die at 60s. */
+export function uploadTransferTimeoutMs(sizeBytes: number): number {
+  const assumedBps = 1 * 1024 * 1024;
+  return Math.min(
+    MAX_UPLOAD_TRANSFER_MS,
+    Math.max(REQUEST_TIMEOUT_MS, Math.ceil(sizeBytes / assumedBps) * 1000 + REQUEST_TIMEOUT_MS),
+  );
+}
 
 export class FileTunnelService {
   /** Pending requests waiting for agent response, keyed by requestId */
@@ -55,8 +64,7 @@ export class FileTunnelService {
   private queues = new Map<string, FileTunnelRequest[]>();
   /** Agents currently long-polling, keyed by nodeId */
   private pollers = new Map<string, WaitingPoller[]>();
-  /** Upload temp files keyed by requestId - includes nodeId for validation */
-  private uploads = new Map<string, { filePath: string; size: number; nodeId: string; createdAt: number }>();
+  private uploads = new Map<string, { filePath: string; size: number; nodeId: string; createdAt: number; expiresAt: number }>();
   private logger: Logger;
   private cleanupTimer: ReturnType<typeof setInterval>;
   private tempDir: string;
@@ -72,6 +80,9 @@ export class FileTunnelService {
     }
     this.cleanupTimer = setInterval(() => this.cleanup(), 60_000);
   }
+  createStagingPath(): string {
+    return path.join(this.tempDir, `${randomUUID()}.bin`);
+  }
 
   /**
    * Queue a file operation for an agent and wait for the response.
@@ -84,7 +95,7 @@ export class FileTunnelService {
     filePath: string,
     data?: Record<string, unknown>,
     uploadData?: Buffer,
-    options?: { bypassToken?: string }
+    options?: { bypassToken?: string; stagedFile?: { filePath: string; size: number } }
   ): Promise<FileTunnelResponse> {
     const settings = await getSecuritySettings();
 
@@ -100,11 +111,11 @@ export class FileTunnelService {
       throw new Error(`File tunnel queue full for node ${nodeId}`);
     }
 
-    // Check upload size limit
-    if (uploadData) {
+    const staged = options?.stagedFile;
+    const uploadSize = staged?.size ?? uploadData?.length ?? 0;
+    if (uploadSize > 0) {
       const maxSizeBytes = settings.fileTunnelMaxUploadMb * 1024 * 1024;
-      if (uploadData.length > maxSizeBytes) {
-        // Allow bypass only with a valid migration token
+      if (uploadSize > maxSizeBytes) {
         if (options?.bypassToken) {
           const valid = await prisma.migrationJob.findFirst({
             where: {
@@ -115,15 +126,15 @@ export class FileTunnelService {
           });
           if (!valid) {
             throw new Error(
-              `Upload size ${uploadData.length} exceeds limit ${maxSizeBytes} and migration bypass token is invalid or expired`
+              `Upload size ${uploadSize} exceeds limit ${maxSizeBytes} and migration bypass token is invalid or expired`
             );
           }
           this.logger.warn(
-            { nodeId, sizeBytes: uploadData.length, maxSizeBytes, jobId: valid.id },
+            { nodeId, sizeBytes: uploadSize, maxSizeBytes, jobId: valid.id },
             "File tunnel upload bypassing size limit (active migration job)"
           );
         } else {
-          throw new Error(`Upload size ${uploadData.length} exceeds limit ${maxSizeBytes}`);
+          throw new Error(`Upload size ${uploadSize} exceeds limit ${maxSizeBytes}`);
         }
       }
     }
@@ -138,11 +149,29 @@ export class FileTunnelService {
       data,
     };
 
-    if (uploadData) {
-      const filePath = path.join(this.tempDir, `${requestId}.bin`);
+    const now = Date.now();
+    const timeoutMs = uploadSize > 0 ? uploadTransferTimeoutMs(uploadSize) : REQUEST_TIMEOUT_MS;
+    const expiresAt = now + timeoutMs + 60_000;
+
+    if (staged) {
+      this.uploads.set(requestId, {
+        filePath: staged.filePath,
+        size: staged.size,
+        nodeId,
+        createdAt: now,
+        expiresAt,
+      });
+    } else if (uploadData) {
+      const stagedPath = path.join(this.tempDir, `${requestId}.bin`);
       try {
-        fs.writeFileSync(filePath, uploadData);
-        this.uploads.set(requestId, { filePath, size: uploadData.length, nodeId, createdAt: Date.now() });
+        fs.writeFileSync(stagedPath, uploadData);
+        this.uploads.set(requestId, {
+          filePath: stagedPath,
+          size: uploadData.length,
+          nodeId,
+          createdAt: now,
+          expiresAt,
+        });
       } catch (err) {
         captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to write upload temp file', stack: err instanceof Error ? err.stack : undefined, metadata: { requestId } }).catch(() => {});
         this.logger.error({ err, requestId }, "Failed to write upload temp file");
@@ -155,7 +184,7 @@ export class FileTunnelService {
         this.pending.delete(requestId);
         this.uploads.delete(requestId);
         reject(new Error("Agent file operation timed out"));
-      }, REQUEST_TIMEOUT_MS);
+      }, timeoutMs);
 
       this.pending.set(requestId, {
         request,
@@ -228,10 +257,30 @@ export class FileTunnelService {
       }
     });
   }
+  /**
+   * Stream staged upload bytes to the requesting agent.
+   */
+  getUploadStream(requestId: string, nodeId: string): { stream: fs.ReadStream; size: number } | null {
+    const entry = this.uploads.get(requestId);
+    if (!entry) {
+      return null;
+    }
+    if (entry.nodeId !== nodeId) {
+      this.logger.warn({ requestId, expectedNodeId: entry.nodeId, actualNodeId: nodeId },
+        "Node attempted to access upload destined for another node");
+      return null;
+    }
+    try {
+      return { stream: fs.createReadStream(entry.filePath), size: entry.size };
+    } catch (err) {
+      captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to open upload temp file', stack: err instanceof Error ? err.stack : undefined, metadata: { requestId, filePath: entry.filePath } }).catch(() => {});
+      this.logger.error({ err, requestId, filePath: entry.filePath }, "Failed to open upload temp file");
+      return null;
+    }
+  }
 
   /**
    * Agent sends the result of a file operation.
-   * Now validates that the responding node matches the request's target node.
    */
   resolveRequest(requestId: string, nodeId: string, response: FileTunnelResponse): boolean {
     const pending = this.pending.get(requestId);
@@ -239,14 +288,11 @@ export class FileTunnelService {
       this.logger.warn({ requestId }, "Received response for unknown request");
       return false;
     }
-
-    // Verify the responding node matches the request's target node
     if (pending.nodeId !== nodeId) {
       this.logger.warn({ requestId, expectedNodeId: pending.nodeId, actualNodeId: nodeId },
         "Node attempted to resolve request destined for another node");
       return false;
     }
-
     clearTimeout(pending.timer);
     this.pending.delete(requestId);
     const uploadEntry = this.uploads.get(requestId);
@@ -256,33 +302,6 @@ export class FileTunnelService {
     }
     pending.resolve(response);
     return true;
-  }
-
-  /**
-   * Get upload data for a request (agent pulls upload content).
-   * Now validates that the requesting node matches the upload's target node.
-   * Reads from the temporary disk file instead of keeping data in memory.
-   */
-  getUploadData(requestId: string, nodeId: string): Buffer | null {
-    const entry = this.uploads.get(requestId);
-    if (!entry) {
-      return null;
-    }
-
-    // Verify the requesting node matches the upload's target node
-    if (entry.nodeId !== nodeId) {
-      this.logger.warn({ requestId, expectedNodeId: entry.nodeId, actualNodeId: nodeId },
-        "Node attempted to access upload destined for another node");
-      return null;
-    }
-
-    try {
-      return fs.readFileSync(entry.filePath);
-    } catch (err) {
-      captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to read upload temp file', stack: err instanceof Error ? err.stack : undefined, metadata: { requestId, filePath: entry.filePath } }).catch(() => {});
-      this.logger.error({ err, requestId, filePath: entry.filePath }, "Failed to read upload temp file");
-      return null;
-    }
   }
 
   /**
@@ -307,19 +326,18 @@ export class FileTunnelService {
 
   private cleanup() {
     const now = Date.now();
-    // Clean expired uploads
     for (const [id, entry] of this.uploads) {
-      if (now - entry.createdAt > UPLOAD_TTL_MS) {
+      const expired = now >= entry.expiresAt;
+      if (expired) {
         try { fs.unlinkSync(entry.filePath); } catch { /* no-op */ }
         this.uploads.delete(id);
       }
     }
-
-    // Clean expired pending requests (those that have timed out but weren't cleaned)
     for (const [id, pending] of this.pending) {
-      if (now - pending.createdAt > REQUEST_TIMEOUT_MS * 2) {
+      const uploadEntry = this.uploads.get(id);
+      const limit = uploadEntry ? MAX_UPLOAD_TRANSFER_MS + 60_000 : REQUEST_TIMEOUT_MS * 2;
+      if (now - pending.createdAt > limit) {
         this.pending.delete(id);
-        const uploadEntry = this.uploads.get(id);
         if (uploadEntry) {
           try { fs.unlinkSync(uploadEntry.filePath); } catch { /* no-op */ }
           this.uploads.delete(id);

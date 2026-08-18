@@ -199,7 +199,9 @@ Do not commit OAuth secrets to version control. Use secret managers, Docker secr
 | `SERVER_DATA_DIR` | Filesystem path | `/var/lib/catalyst/servers` | Root directory for server data. All server files live under this path. |
 | `SFTP_HOST_KEY` | Filesystem path | `./sftp_host_key` | Path to SSH host private key for SFTP authentication. |
 | `SFTP_HOST_KEY_BASE64` | Base64 string | — | Alternative to `SFTP_HOST_KEY`. Provide a base64-encoded private key directly. Useful for Docker/Kubernetes secrets. |
-| `SFTP_MAX_FILE_SIZE` | Integer (bytes) | `104857600` (100 MB) | Maximum single file upload size for SFTP uploads. |
+
+SFTP file size is the panel Admin → Security **Max upload size**, not an environment variable.
+
 
 ::: tip Docker SFTP Key
 In Docker Compose, set `SFTP_HOST_KEY=` (empty) to let the backend auto-generate a host key on first startup, or set `SFTP_HOST_KEY_BASE64` with the key contents.
@@ -565,7 +567,7 @@ These settings are **hardcoded** in the source code and **cannot** be changed vi
 | `auditRetentionDays` | `90` | Same | Audit log retention period |
 | `maxBufferMb` | `50` | Same | Max buffer size per server |
 | `fileTunnelRateLimitMax` | `100` | Same | File tunnel request rate limit |
-| `fileTunnelMaxUploadMb` | `100` | Same | Max upload size per tunnel request |
+| `fileTunnelMaxUploadMb` | `500` | Same | Max single-file size for the file browser and SFTP on every agent |
 | `fileTunnelMaxPendingPerNode` | `50` | Same | Max pending tunnel requests per node |
 | `fileTunnelConcurrentMax` | `10` | Same | Max concurrent tunnels per node |
 | JWT expiration | `7 days` | `auth.ts` | Better Auth JWT token lifetime |

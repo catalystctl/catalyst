@@ -8,7 +8,15 @@ import { templatesApi } from '../../services/api/templates';
 import { adminApi } from '../../services/api/admin';
 import { qk } from '../../lib/queryKeys';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+ Dialog,
+ DialogContent,
+ DialogHeader,
+ DialogBody,
+ DialogFooter,
+ DialogTitle,
+ DialogDescription,
+} from '@/components/ui/dialog';
 import Combobox from '@/components/ui/combobox';
 
 export interface UnregisteredContainer {
@@ -124,7 +132,6 @@ export default function ServerImportModal({
  },
  });
 
- if (!open) return null;
 
  const fetchSuggestions = async (containerId: string) => {
  try {
@@ -163,25 +170,19 @@ export default function ServerImportModal({
  };
 
  return (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
- <div className="w-full max-w-3xl rounded-xl border border-warning/30 bg-card shadow-elevated">
- <div className="flex items-center justify-between border-b border-warning/30 bg-warning/5 px-6 py-4">
- <div className="flex items-center gap-2">
- <Download className="h-5 w-5 text-warning" />
- <h2 className="text-lg font-semibold text-foreground">
- Import Discovered Servers
- </h2>
- </div>
- <button
- className="rounded-md border border-border/40 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
- onClick={onClose}
+ <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+ <DialogContent size="xl">
+ <DialogHeader
+ icon={<Download className="h-4 w-4" />}
+ iconClassName="border-warning/30 bg-warning/10 text-warning"
  >
- Close
- </button>
- </div>
+ <DialogTitle>Import discovered servers</DialogTitle>
+ <DialogDescription>
+ Import unregistered containers on this node as Catalyst servers.
+ </DialogDescription>
+ </DialogHeader>
 
- <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
+ <DialogBody>
  <div className="mb-4 text-sm text-muted-foreground">
  {containers.length} container(s) found on this node that are not registered as servers.
  Select a container and fill in the required details to import it.
@@ -417,9 +418,14 @@ export default function ServerImportModal({
  })}
  </div>
  )}
- </div>
- </div>
- </div>
- </ModalPortal>
+ </DialogBody>
+
+ <DialogFooter>
+ <Button variant="outline" onClick={onClose}>
+ Cancel
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
  );
 }

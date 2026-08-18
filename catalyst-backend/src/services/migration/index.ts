@@ -4,8 +4,8 @@
 
 import { EventEmitter } from "node:events";
 import type { PrismaClient } from "@prisma/client";
-import { PterodactylClient, PterodactylClientError } from "./pterodactyl-client";
-import { EntityMapper } from "./entity-mapper";
+import { PterodactylClient, PterodactylClientError, backupMigrationSkipReason } from "./pterodactyl-client";
+import { EntityMapper, indexPterodactylAllocations } from "./entity-mapper";
 import { MigrationStateManager } from "./migration-state";
 import type { MigrationPhase } from "./types";
 import { MIGRATION_PHASES } from "./types";
@@ -47,6 +47,17 @@ interface MigrationEvents {
   log: [data: { jobId: string; level: string; message: string; phase?: string }];
 }
 
+export function filterPterodactylServersByScope<T extends { attributes: { id: number; node: number } }>(
+  servers: T[],
+  scope: "full" | "node" | "server",
+  serverIds: Set<number>,
+  nodeIds: Set<number>,
+): T[] {
+  if (scope === "server") return servers.filter((server) => serverIds.has(server.attributes.id));
+  if (nodeIds.size === 0) return servers;
+  return servers.filter((server) => nodeIds.has(server.attributes.node));
+}
+
 export class MigrationService extends EventEmitter<MigrationEvents> {
   private activeJobs = new Map<string, { cancelled: boolean }>();
   private app: any;
@@ -81,8 +92,8 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
       users: number;
       servers: number;
     };
-    nodesList?: Array<{ id: number; name: string; fqdn: string; memory: number; serverCount: number }>;
-    serversList?: Array<{ id: number; uuid: string; name: string; nodeId: number; nodeName: string; state: string; eggName: string; nestName: string }>;
+    nodesList?: import("./pterodactyl-client").MigrationPreviewNode[];
+    serversList?: import("./pterodactyl-client").MigrationPreviewServer[];
     error?: string;
   }> {
     // Migration often targets panels with self-signed certs — explicitly opt out of strict validation
@@ -270,14 +281,15 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
 
     // Build set of allowed Ptero server IDs based on scope
     const allowedPteroServerIds = new Set<number>();
+    const allowedPteroNodeIds = new Set<number>();
     if (scope === 'full' && nodeMappings) {
       // Full scope: include all servers from mapped nodes
       for (const pteroNodeId of Object.keys(nodeMappings)) {
-        allowedPteroServerIds.add(Number(pteroNodeId)); // will match by node below
+        allowedPteroNodeIds.add(Number(pteroNodeId));
       }
     } else if (scope === 'node' && nodeMappings) {
       for (const pteroNodeId of Object.keys(nodeMappings)) {
-        allowedPteroServerIds.add(Number(pteroNodeId));
+        allowedPteroNodeIds.add(Number(pteroNodeId));
       }
     } else if (scope === 'server' && serverMappings) {
       for (const pteroServerId of Object.keys(serverMappings)) {
@@ -285,6 +297,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
       }
     }
     config._allowedPteroServerIds = allowedPteroServerIds;
+    config._allowedPteroNodeIds = allowedPteroNodeIds;
 
     // Determine which phases to run
     const phasesToRun: MigrationPhase[] = config.phases?.length
@@ -819,21 +832,20 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
   ) {
     const servers = await client.listServers();
     const scope = config.scope || 'full';
-    const allowedIds = config._allowedPteroServerIds as Set<number> | undefined;
+    const allowedServerIds = config._allowedPteroServerIds as Set<number> | undefined;
+    const allowedNodeIds = config._allowedPteroNodeIds as Set<number> | undefined;
     let completed = 0;
     let failed = 0;
 
-    // Filter servers based on scope
-    let filteredServers = servers;
-    if (allowedIds && allowedIds.size > 0) {
-      if (scope === 'server') {
-        // Per-server: filter by server ID
-        filteredServers = servers.filter((s) => allowedIds.has(s.attributes.id));
-      } else {
-        // Full/node: allowedIds contains node IDs — filter servers by their node
-        filteredServers = servers.filter((s) => allowedIds.has(s.attributes.node));
-      }
-    }
+    // Filter servers based on scope. Full/node scopes start with node IDs;
+    // publish the resolved server IDs for later per-server phases.
+    const filteredServers = filterPterodactylServersByScope(
+      servers,
+      scope,
+      allowedServerIds ?? new Set<number>(),
+      allowedNodeIds ?? new Set<number>(),
+    );
+    config._allowedPteroServerIds = new Set(filteredServers.map((s) => s.attributes.id));
 
     // Build ptero node→location map (v1.x servers don't have location directly,
     // must resolve through node.location_id)
@@ -857,9 +869,15 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
         for (const nodeRes of pteroNodes) {
           try {
             const allocs = await client.getNodeAllocations(nodeRes.attributes.id);
-            for (const allocRes of allocs) {
-              const a = allocRes.attributes;
-              mapper.pteroAllocationMap.set(a.id, { ip: a.ip, port: a.port });
+            const indexed = indexPterodactylAllocations(allocs);
+            for (const [allocationId, allocation] of indexed.byId) {
+              mapper.pteroAllocationMap.set(allocationId, allocation);
+            }
+            for (const [serverId, allocations] of indexed.byServer) {
+              mapper.pteroServerAllocationMap.set(serverId, [
+                ...(mapper.pteroServerAllocationMap.get(serverId) || []),
+                ...allocations,
+              ]);
             }
           } catch {
             // Some nodes may not have allocation endpoint
@@ -1627,10 +1645,12 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
           backups = await client.getServerBackups(pteroUuid);
           this.logger.info({ serverId: server.pteroServerId, count: backups.length }, "Found backups");
         } catch (err: any) {
-          this.logger.warn({ serverId: server.pteroServerId, error: err.message }, "Could not list backups");
+          const skipReason = backupMigrationSkipReason(err);
+          if (!skipReason) throw err;
+          this.logger.info({ serverId: server.pteroServerId, reason: skipReason, error: err.message }, "Skipping backup listing");
           await state.updateStepStatus(step.id, "skipped", {
             durationMs: Date.now() - start,
-            metadata: { reason: "Could not list backups" },
+            metadata: { reason: skipReason, statusCode: err.statusCode, code: err.code },
           });
           completed++;
           continue;

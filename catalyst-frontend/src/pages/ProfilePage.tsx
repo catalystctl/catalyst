@@ -18,7 +18,15 @@ import { notifyError, notifySuccess } from '../utils/notify';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+ Dialog,
+ DialogBody,
+ DialogContent,
+ DialogDescription,
+ DialogFooter,
+ DialogHeader,
+ DialogTitle,
+} from '@/components/ui/dialog';
 import TabHeader from '../components/servers/tabs/TabHeader';
 import ServerTabCard from '../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../components/servers/tabs/SectionHeader';
@@ -541,14 +549,21 @@ export default function ProfilePage() {
  <DangerZone />
 
  {/* 2FA QR Modal */}
- {tfaModalOpen && (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
- <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-elevated">
- <div className="mb-4 flex items-center gap-2.5">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10"><ShieldCheck className="h-4 w-4 text-success" /></div>
- <div><h3 className="text-sm font-semibold text-foreground">Set Up Authenticator</h3><p className="text-[11px] text-muted-foreground">Scan the QR code</p></div>
- </div>
+ <Dialog
+ open={tfaModalOpen}
+ onOpenChange={(next) => {
+ if (!next) {
+ setTfaModalOpen(false);
+ setTfaSetup(null);
+ }
+ }}
+ >
+ <DialogContent size="md">
+ <DialogHeader icon={<ShieldCheck className="h-4 w-4" />} iconClassName="border-success/20 bg-success/10 text-success">
+ <DialogTitle>Set up authenticator</DialogTitle>
+ <DialogDescription>Scan the QR code with your authenticator app.</DialogDescription>
+ </DialogHeader>
+ <DialogBody>
  {qrValue && <div className="mb-4 flex justify-center"><img src={qrValue} alt="QR" className="rounded-lg border border-border bg-card p-3" /></div>}
  {tfaSetup?.otpAuthUrl && <a href={tfaSetup.otpAuthUrl} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary"><ExternalLink className="h-3 w-3" /> Open in app</a>}
  {tfaSetup?.secret && (
@@ -564,11 +579,12 @@ export default function ProfilePage() {
  <div className="grid grid-cols-2 gap-1.5">{tfaSetup!.backupCodes!.map((code) => <code key={code} className="rounded bg-card px-2 py-1 text-center text-[11px] font-mono">{code}</code>)}</div>
  </div>
  )}
- <Button size="sm" onClick={() => { setTfaModalOpen(false); setTfaSetup(null); }} className="w-full">Done</Button>
- </div>
- </div>
- </ModalPortal>
- )}
+ </DialogBody>
+ <DialogFooter>
+ <Button size="sm" onClick={() => { setTfaModalOpen(false); setTfaSetup(null); }}>Done</Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
  </div>
  );
 }

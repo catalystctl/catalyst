@@ -1,18 +1,15 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { createWriteStream } from "fs";
+import { unlink } from "fs/promises";
+import { Transform } from "stream";
+import { pipeline } from "stream/promises";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { captureSystemError, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, getSecuritySettings, isArchiveName, path, validateAndNormalizePath } from './_helpers.js';
+import { captureSystemError, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, isArchiveName, path, validateAndNormalizePath } from './_helpers.js';
+import { getSecuritySettings, MAX_UPLOAD_MB_CEILING, maxUploadBytesFromMb } from "../../services/mailer.js";
 
 export async function serverFilesRoutes(app: FastifyInstance) {
-  // Compute per-route body limit for upload (mirrors index.ts file-tunnel pattern)
-  const uploadSettings = await getSecuritySettings();
-  const uploadBodyLimit = Math.max(
-    5 * 1024 * 1024, // 5MB minimum
-    Math.min(
-      uploadSettings.fileTunnelMaxUploadMb * 1024 * 1024,
-      500 * 1024 * 1024,
-    ),
-  );
+  const uploadBodyLimit = MAX_UPLOAD_MB_CEILING * 1024 * 1024;
   const fileTunnel = (app as any).fileTunnel as import("../../services/file-tunnel").FileTunnelService;
   const tunnelFileOp = async (
     nodeId: string,
@@ -234,17 +231,35 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       }
 
       try {
-        // Buffer the upload data and send to agent
-        const chunks: Buffer[] = [];
-        for await (const chunk of upload.file) {
-          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        const settings = await getSecuritySettings();
+        const maxBytes = maxUploadBytesFromMb(settings.fileTunnelMaxUploadMb);
+        const stagedPath = fileTunnel.createStagingPath();
+        let size = 0;
+        try {
+          await pipeline(
+            upload.file,
+            new Transform({
+              transform(chunk, _enc, cb) {
+                size += chunk.length;
+                if (size > maxBytes) {
+                  cb(new Error(`Upload size ${size} exceeds limit ${maxBytes}`));
+                  return;
+                }
+                cb(null, chunk);
+              },
+            }),
+            createWriteStream(stagedPath),
+          );
+        } catch (stageErr) {
+          await unlink(stagedPath).catch(() => {});
+          throw stageErr;
         }
-        const uploadData = Buffer.concat(chunks);
 
-        const result = await tunnelFileOp(
+        const result = await fileTunnel.queueRequest(
           server.nodeId, "upload", server.uuid, filePath,
           { filename: safeFilename },
-          uploadData
+          undefined,
+          { stagedFile: { filePath: stagedPath, size } },
         );
         if (!result.success) {
           return reply.status(400).send({ error: result.error || "Failed to upload file" });
@@ -252,9 +267,11 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         notifyFileChange(server.id, server.status, 'upload', filePath);
         reply.send({ success: true });
       } catch (error: any) {
-        // Prefer shared tunnel mapping; keep route-specific fallback message.
         if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
           return replyTunnelError(reply, error);
+        }
+        if (error?.message?.includes("exceeds limit")) {
+          return reply.status(413).send({ error: error.message });
         }
         return reply.status(400).send({ error: error?.message || "Failed to upload file" });
       }

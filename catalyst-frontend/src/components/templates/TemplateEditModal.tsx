@@ -17,7 +17,17 @@ import { nestsApi } from '../../services/api/nests';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { normalizeTemplateImport, parseEggContent } from '../../utils/pterodactylImport';
 import TemplateProviderEditor, { extractProviderIds } from './TemplateProviderEditor';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+ Dialog,
+ DialogContent,
+ DialogHeader,
+ DialogToolbar,
+ DialogBody,
+ DialogFooter,
+ DialogTitle,
+ DialogDescription,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { reportSystemError } from '../../services/api/systemErrors';
 
 type VariableDraft = {
@@ -448,32 +458,23 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  Edit
  </button>
  )}
- {open ? (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10">
- <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-lg border border-border/40 bg-card shadow-sm transition-colors">
- <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5">
- <div>
- <h2 className="text-lg font-semibold text-foreground">
- Edit template
- </h2>
- <p className="text-xs text-muted-foreground">
+ <Dialog open={open} onOpenChange={setOpen}>
+ <DialogContent size="2xl">
+ <DialogHeader>
+ <DialogTitle>Edit template</DialogTitle>
+ <DialogDescription>
  Update images, resources, and startup configuration.
- </p>
- </div>
+ </DialogDescription>
+ </DialogHeader>
+ <DialogToolbar>
  <div className="flex flex-wrap items-center gap-2">
- <button
- className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+ <Button
+ variant="outline"
+ size="sm"
  onClick={() => importFileRef.current?.click()}
  >
  Import
- </button>
- <button
- className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary"
- onClick={() => setOpen(false)}
- >
- Close
- </button>
+ </Button>
  <input
  ref={importFileRef}
  type="file"
@@ -482,8 +483,8 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  className="hidden"
  />
  </div>
- </div>
- <div className="space-y-6 overflow-y-auto px-6 py-5 text-sm text-muted-foreground">
+ </DialogToolbar>
+ <DialogBody className="space-y-6 text-sm text-muted-foreground">
  {importError ? (
  <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
  {importError}
@@ -1076,8 +1077,8 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  pluginProviders={pluginProviders}
  onPluginProvidersChange={setPluginProviders}
  />
- </div>
- <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs">
+ </DialogBody>
+ <DialogFooter className="sm:justify-between">
  <div className="space-y-1">
  {missingFields.length > 0 ? (
  <div className="text-xs">
@@ -1095,25 +1096,16 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  )}
  </div>
  <div className="flex gap-2">
- <button
- className="rounded-full border border-border/40 px-4 py-2 font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
- onClick={() => setOpen(false)}
- >
+ <Button variant="outline" onClick={() => setOpen(false)}>
  Cancel
- </button>
- <button
- className="rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
- onClick={() => mutation.mutate()}
- disabled={disableSubmit}
- >
+ </Button>
+ <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
  {mutation.isPending ? 'Saving...' : 'Save changes'}
- </button>
+ </Button>
  </div>
- </div>
- </div>
- </div>
- </ModalPortal>
- ) : null}
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
  </>
  );
 }

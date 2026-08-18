@@ -6,7 +6,18 @@ import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
 import { reportSystemError } from '../../services/api/systemErrors';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export type NodeAssignmentWithExpiration = {
  nodeId: string | null; // null for wildcard (*)
@@ -551,42 +562,54 @@ export function NodeAssignmentsSelector({
  )}
  </div>
 
- {/* Expiration date modal */}
- {expirationNodeId && (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
- <div className="w-full max-w-sm rounded-xl border border-border bg-card p-4 shadow-surface-light dark:shadow-surface-dark dark:border-border dark:bg-surface-1">
- <h3 className="text-sm font-semibold text-foreground mb-3">
- Set Expiration for {nodes.find(n => n.id === expirationNodeId)?.name}
- </h3>
- <input
- type="datetime-local"
- value={expirationDate}
- onChange={(e) => setExpirationDate(e.target.value)}
- min={new Date().toISOString().slice(0, 16)}
- className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
- />
- <div className="mt-4 flex justify-end gap-2">
- <button
- onClick={() => updateExpiration(expirationNodeId, expirationDate)}
- className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90"
- >
- Save
- </button>
- <button
- onClick={() => {
- setExpirationNodeId(null);
- setExpirationDate('');
- }}
- className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
- >
- Cancel
- </button>
- </div>
- </div>
- </div>
- </ModalPortal>
- )}
+        <Dialog
+          open={expirationNodeId !== null}
+          onOpenChange={(next) => {
+            if (!next) {
+              setExpirationNodeId(null);
+              setExpirationDate('');
+            }
+          }}
+        >
+          <DialogContent size="sm">
+            <DialogHeader>
+              <DialogTitle>Set expiration</DialogTitle>
+              <DialogDescription>
+                Choose when access to {nodes.find((n) => n.id === expirationNodeId)?.name} expires.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody>
+              <div className="space-y-2">
+                <Label htmlFor="node-assignment-expiration">Expires at</Label>
+                <Input
+                  id="node-assignment-expiration"
+                  type="datetime-local"
+                  value={expirationDate}
+                  onChange={(e) => setExpirationDate(e.target.value)}
+                  min={new Date().toISOString().slice(0, 16)}
+                />
+              </div>
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setExpirationNodeId(null);
+                  setExpirationDate('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (expirationNodeId) updateExpiration(expirationNodeId, expirationDate);
+                }}
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
  </>
  )}
  </div>

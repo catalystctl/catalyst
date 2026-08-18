@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  X,
   Download,
   Loader2,
   Check,
@@ -14,13 +13,14 @@ import {
 import { reportSystemError } from '@/services/api/systemErrors';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   Badge,
   Button,
-  ScrollArea,
   Skeleton,
 } from '@/plugins/plugin-ui';
 import { IMAGE_FAMILIES } from '../constants';
@@ -84,14 +84,12 @@ export function EggDetailModal({ egg, open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 p-0 sm:rounded-xl">
-        <div className={`h-1.5 w-full shrink-0 ${fam.bg}`} />
-
-        <DialogHeader className="px-6 pb-0 pt-5">
-          <div className="flex items-start justify-between gap-3">
+      <DialogContent size="xl">
+        <DialogHeader>
+          <div className="flex items-start justify-between gap-3 pr-2">
             <div className="min-w-0 flex-1">
-              <DialogTitle className="text-xl dark:text-white">{egg.name}</DialogTitle>
-              <DialogDescription className="mt-1 line-clamp-2">
+              <DialogTitle>{egg.name}</DialogTitle>
+              <DialogDescription className="line-clamp-2">
                 {egg.description || 'No description provided.'}
               </DialogDescription>
             </div>
@@ -102,7 +100,7 @@ export function EggDetailModal({ egg, open, onClose }: Props) {
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6 py-4">
+        <DialogBody className="space-y-5">
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span>
@@ -201,21 +199,21 @@ export function EggDetailModal({ egg, open, onClose }: Props) {
               </div>
             )}
           </div>
-        </ScrollArea>
+        </DialogBody>
 
-        <div className="border-t border-border bg-surface-1/50 px-6 py-4">
+        <DialogFooter className="sm:justify-between">
           {installed ? (
             <div className="flex items-center gap-2 text-sm font-medium text-success">
               <Check className="h-4 w-4" />
-              Template imported successfully!
+              Template imported
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-3">
+            <>
               {nests.length > 0 && (
                 <select
                   value={selectedNestId}
                   onChange={(e) => setSelectedNestId(e.target.value)}
-                  className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 dark:bg-zinc-800 dark:text-zinc-200"
+                  className="h-9 rounded-md border border-border bg-surface-0/60 px-3 text-sm text-foreground"
                 >
                   <option value="">No nest</option>
                   {nests.map((n) => (
@@ -223,22 +221,24 @@ export function EggDetailModal({ egg, open, onClose }: Props) {
                   ))}
                 </select>
               )}
-              <Button onClick={handleInstall} disabled={installing} className="gap-2">
-                {installing ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Importing…</>
-                ) : (
-                  <><Download className="h-4 w-4" /> Import as Template</>
+              <div className="flex flex-wrap items-center gap-3">
+                {error && (
+                  <div className="flex items-center gap-1.5 text-xs text-danger">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {error}
+                  </div>
                 )}
-              </Button>
-              {error && (
-                <div className="flex items-center gap-1.5 text-xs text-danger">
-                  <AlertCircle className="h-3.5 w-3.5" />
-                  {error}
-                </div>
-              )}
-            </div>
+                <Button onClick={handleInstall} disabled={installing}>
+                  {installing ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Importing…</>
+                  ) : (
+                    <><Download className="h-4 w-4" /> Import as template</>
+                  )}
+                </Button>
+              </div>
+            </>
           )}
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

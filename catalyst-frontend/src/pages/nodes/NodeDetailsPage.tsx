@@ -27,55 +27,54 @@ import { useAuthStore } from '../../stores/authStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import ServerImportModal from '../../components/nodes/ServerImportModal';
 import { reportSystemError } from '../../services/api/systemErrors';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 import AgentControlPanel from '../../components/nodes/AgentControlPanel';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import WorkspaceHeader from '../../components/layout/WorkspaceHeader';
 
-// ── Inline Modal Shell ──
 function ModalShell({
   open,
   onClose,
   title,
+  description,
   children,
   variant,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  description: string;
   children: React.ReactNode;
   variant?: 'default' | 'danger';
 }) {
-  if (!open) return null;
   return (
-    <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
-        <div
-          className={`w-full max-w-2xl min-w-0 overflow-hidden rounded-xl border bg-card shadow-elevated ${
-            variant === 'danger' ? 'border-destructive/50' : 'border-border/40'
-          }`}
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+      <DialogContent size="lg">
+        <DialogHeader
+          icon={variant === 'danger' ? <AlertTriangle className="h-4 w-4" /> : <Key className="h-4 w-4" />}
+          iconClassName={variant === 'danger'
+            ? 'border-destructive/20 bg-destructive/10 text-destructive'
+            : 'border-primary/20 bg-primary/10 text-primary'}
         >
-          <div
-            className={`flex items-center justify-between border-b px-6 py-4 ${
-              variant === 'danger' ? 'border-destructive/30 bg-destructive/5' : 'border-border/30'
-            }`}
-          >
-            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-            <button
-              className="rounded-md border border-border/40 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-              onClick={onClose}
-            >
-              Close
-            </button>
-          </div>
-          <div className="min-w-0 space-y-3 overflow-x-hidden px-6 py-4 text-sm text-muted-foreground">
-            {children}
-          </div>
-        </div>
-      </div>
-    </ModalPortal>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="space-y-3">{children}</DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -447,8 +446,12 @@ function NodeDetailsPage() {
       ══════════════════════════════════════════════════════════════════ */}
 
       {/* Deploy Script Modal */}
-      <ModalShell open={!!deployInfo} onClose={() => setDeployInfo(null)} title="Deploy agent">
-        <div>Run this on the node to install and register the agent (valid for 24 hours).</div>
+      <ModalShell
+        open={!!deployInfo}
+        onClose={() => setDeployInfo(null)}
+        title="Deploy agent"
+        description="Run this on the node to install and register the agent (valid for 24 hours)."
+      >
         <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
           <code className="block max-w-full break-all whitespace-pre-wrap">
             {deployInfo
@@ -476,18 +479,14 @@ function NodeDetailsPage() {
             Copy
           </Button>
         </div>
-        <div className="flex justify-end gap-2 border-t border-border/30 pt-4 text-xs">
-          <Button variant="outline" size="sm" onClick={() => setDeployInfo(null)}>
-            Done
-          </Button>
-        </div>
       </ModalShell>
 
       {/* API Key Modal */}
       <ModalShell
         open={!!generatedApiKey}
         onClose={() => setGeneratedApiKey(null)}
-        title="Agent API Key"
+        title="Agent API key"
+        description="Add this key to the agent's config.toml. It will not be shown again."
       >
         {apiKeyStatus?.exists && (
           <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-xs text-warning">
@@ -499,10 +498,6 @@ function NodeDetailsPage() {
             </span>
           </div>
         )}
-        <div>
-          Add this API key to your agent's{' '}
-          <code className="rounded bg-surface-2 px-1">config.toml</code> file:
-        </div>
         <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
           <code className="block max-w-full break-all whitespace-pre-wrap">
             api_key = &quot;{generatedApiKey}&quot;
@@ -512,7 +507,7 @@ function NodeDetailsPage() {
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <strong>Important:</strong> Save this key now. It will not be shown again.
         </div>
-        <div className="flex justify-end gap-2 border-t border-border/30 pt-4 text-xs">
+        <div className="flex justify-end">
           <Button
             variant="outline"
             size="sm"
@@ -526,9 +521,6 @@ function NodeDetailsPage() {
           >
             <Copy className="h-3 w-3" />
             Copy
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setGeneratedApiKey(null)}>
-            Done
           </Button>
         </div>
       </ModalShell>

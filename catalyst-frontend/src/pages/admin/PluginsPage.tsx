@@ -16,7 +16,15 @@ import { fetchPlugins, togglePlugin, reloadPlugin, fetchPluginDetails, updatePlu
 import { toast } from 'sonner';
 import { usePluginContext } from '../../plugins/usePluginContext';
 import type { PluginManifest } from '../../plugins/types';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+ Dialog,
+ DialogBody,
+ DialogContent,
+ DialogDescription,
+ DialogFooter,
+ DialogHeader,
+ DialogTitle,
+} from '@/components/ui/dialog';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 
@@ -185,27 +193,16 @@ function PluginSettingsModal({
  return result;
  };
 
- if (!open) return null;
-
  return (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm px-4">
- <div className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-elevated">
- <div className="border-b border-border/50 px-6 py-4">
- <div className="flex items-center gap-2.5">
- <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
- <Settings className="h-4 w-4 text-primary" />
- </div>
- <div>
- <h2 className="text-sm font-semibold text-foreground">Plugin Settings</h2>
- <p className="text-[11px] text-muted-foreground">
- Configure <span className="font-medium text-foreground">{pluginDetails?.displayName}</span>
- </p>
- </div>
- </div>
- </div>
-
- <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+ <Dialog open={open} onOpenChange={onOpenChange}>
+ <DialogContent size="lg">
+ <DialogHeader icon={<Settings className="h-4 w-4" />}>
+ <DialogTitle>Plugin settings</DialogTitle>
+ <DialogDescription>
+ Configure {pluginDetails?.displayName || pluginName}.
+ </DialogDescription>
+ </DialogHeader>
+ <DialogBody>
  {isLoading ? (
  <div className="flex items-center justify-center py-12">
  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -322,9 +319,8 @@ function PluginSettingsModal({
  })}
  </div>
  )}
- </div>
-
- <div className="flex items-center justify-end gap-2 border-t border-border/50 px-6 py-3">
+ </DialogBody>
+ <DialogFooter>
  <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
  <Button
  size="sm"
@@ -332,12 +328,11 @@ function PluginSettingsModal({
  disabled={updateMutation.isPending}
  >
  {updateMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
- Save Changes
+ Save changes
  </Button>
- </div>
- </div>
- </div>
- </ModalPortal>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
  );
 }
 

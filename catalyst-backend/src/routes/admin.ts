@@ -26,6 +26,9 @@ import {
   upsertSecuritySettings,
   upsertSmtpSettings,
   isValidTimeWindowMs,
+  MAX_UPLOAD_MB_CEILING,
+  sanitizeMaxUploadMb,
+  maxUploadBytesFromMb,
 } from '../services/mailer';
 import { serialize } from '../utils/serialize';
 import { withRegistrationBypass } from '../lib/registration-gate.js';
@@ -2281,6 +2284,11 @@ export async function adminRoutes(app: FastifyInstance) {
       if (numericFields.some((value) => !Number.isFinite(value) || Number(value) <= 0)) {
         return reply.status(400).send({ error: 'Security settings must be positive numbers' });
       }
+      if (Number(fileTunnelMaxUploadMb) > MAX_UPLOAD_MB_CEILING) {
+        return reply.status(400).send({
+          error: `Max upload size cannot exceed ${MAX_UPLOAD_MB_CEILING}MB`,
+        });
+      }
 
       const windowFields = [authRateLimitWindowMs, fileRateLimitWindowMs, consoleRateLimitWindowMs, fileTunnelRateLimitWindowMs];
       if (windowFields.some((value) => !Number.isFinite(value) || !isValidTimeWindowMs(Number(value)))) {
@@ -2306,7 +2314,7 @@ export async function adminRoutes(app: FastifyInstance) {
         maxBufferMb: Number(maxBufferMb),
         fileTunnelRateLimitMax: Number(fileTunnelRateLimitMax),
         fileTunnelRateLimitWindowMs: Number(fileTunnelRateLimitWindowMs),
-        fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
+        fileTunnelMaxUploadMb: sanitizeMaxUploadMb(Number(fileTunnelMaxUploadMb)),
         fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
         fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
         requireEmailVerification: Boolean(requireEmailVerification),
@@ -2346,9 +2354,10 @@ export async function adminRoutes(app: FastifyInstance) {
 
       try {
         const wsGateway = (app as any).wsGateway;
+        const maxUploadBytes = maxUploadBytesFromMb(Number(fileTunnelMaxUploadMb));
+        wsGateway?.broadcastToAgents?.({ type: 'file_upload_limit', maxUploadBytes });
         wsGateway?.pushToAdminSubscribers('security_settings_updated', { updatedBy: user.userId });
       } catch { /* ignore — WS push is best-effort */ }
-
       reply.send({ success: true });
     }
   );

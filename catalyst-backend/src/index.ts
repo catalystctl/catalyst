@@ -47,7 +47,7 @@ import {
 } from "./services/api-key-service";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { AlertService } from "./services/alert-service";
-import { getSecuritySettings } from "./services/mailer";
+import { getSecuritySettings, MAX_UPLOAD_MB_CEILING } from "./services/mailer";
 import {
 	bootstrapCluster,
 	shouldRunBackgroundJobs,
@@ -645,7 +645,7 @@ async function bootstrap() {
 
 		await app.register(fastifyMultipart, {
 			limits: {
-				fileSize: 524288000, // 500MB max — per-route bodyLimit on upload routes is the actual control
+				fileSize: MAX_UPLOAD_MB_CEILING * 1024 * 1024,
 			},
 			attachFieldsToBody: false,
 		});
@@ -935,16 +935,9 @@ async function bootstrap() {
 		await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
 		await app.register(apiKeyRoutes);
 		await app.register((app) => pluginRoutes(app, pluginLoader));
-		// File tunnel routes need higher body limit for upload/stream endpoints.
-		// Read the configured limit from security settings (admin-adjustable).
-		const initialSecuritySettings = await getSecuritySettings();
-		const fileTunnelBodyLimit = Math.max(
-			5 * 1024 * 1024, // 5MB minimum
-			Math.min(
-				initialSecuritySettings.fileTunnelMaxUploadMb * 1024 * 1024,
-				500 * 1024 * 1024,
-			), // 500MB hard cap
-		);
+		// File tunnel routes need a high body limit; the panel setting is
+		// enforced in FileTunnelService so changing it does not require a restart.
+		const fileTunnelBodyLimit = MAX_UPLOAD_MB_CEILING * 1024 * 1024;
 		await app.register(
 			(app) => fileTunnelRoutes(app, prisma, logger, fileTunnel),
 			{ bodyLimit: fileTunnelBodyLimit },

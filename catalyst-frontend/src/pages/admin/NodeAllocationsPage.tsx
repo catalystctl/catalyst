@@ -17,7 +17,18 @@ import apiClient from '../../services/api/client';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { useNodes } from '../../hooks/useNodes';
 import { adminApi } from '../../services/api/admin';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import StatGrid from '../../components/servers/tabs/StatGrid';
@@ -547,26 +558,14 @@ function NodeAllocationsPage() {
  )}
 
  {/* Create Port Allocations Modal */}
- {showCreatePortModal && (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
- <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-elevated">
- <div className="flex items-center justify-between">
- <div>
- <h2 className="text-sm font-semibold text-foreground">Create Port Allocations</h2>
- <p className="mt-0.5 text-[11px] text-muted-foreground">
- Bulk create IP:Port allocations for this node
- </p>
- </div>
- <button
- onClick={() => setShowCreatePortModal(false)}
- className="rounded p-1 text-muted-foreground/40 hover:text-foreground transition-colors"
- >
- <ArrowLeft className="h-4 w-4" />
- </button>
- </div>
+<Dialog open={showCreatePortModal} onOpenChange={setShowCreatePortModal}>
+ <DialogContent size="lg">
+ <DialogHeader icon={<Plug className="h-4 w-4" />}>
+ <DialogTitle>Create port allocations</DialogTitle>
+ <DialogDescription>Bulk create IP:Port allocations for this node.</DialogDescription>
+ </DialogHeader>
 
- <div className="mt-5 space-y-4">
+ <DialogBody className="space-y-4">
  <ServerTabCard className="!bg-surface-2/20 !border-border/20">
  <p className="text-[11px] text-muted-foreground leading-relaxed">
  <strong>IP format:</strong> Single IP (192.168.1.100), multiple IPs (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24)
@@ -578,86 +577,62 @@ function NodeAllocationsPage() {
 
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">IP Address(es)</span>
- <input
+ <Input
  type="text"
  value={ipInput}
  onChange={(e) => setIpInput(e.target.value)}
  placeholder="192.168.1.100, 2001:db8::1, or 192.168.1.0/24"
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </label>
 
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Port(s)</span>
- <input
+ <Input
  type="text"
  value={portsInput}
  onChange={(e) => setPortsInput(e.target.value)}
  placeholder="25565-25664 or 25565, 25566"
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </label>
 
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Alias (optional)</span>
- <input
+ <Input
  type="text"
  value={aliasInput}
  onChange={(e) => setAliasInput(e.target.value)}
  placeholder="e.g., Main network"
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </label>
 
- <button
- onClick={handleQuickFillPorts}
- className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
- >
+ <Button variant="link" className="h-auto p-0 text-[11px]" onClick={handleQuickFillPorts}>
  Quick fill: Use node IP + ports 25565-25664
- </button>
- </div>
+ </Button>
+ </DialogBody>
 
- <div className="mt-6 flex justify-end gap-2">
- <button
- onClick={() => setShowCreatePortModal(false)}
- className="rounded-lg border border-border/40 bg-card px-4 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
- >
+ <DialogFooter>
+ <Button variant="outline" onClick={() => setShowCreatePortModal(false)}>
  Cancel
- </button>
- <button
+ </Button>
+ <Button
  onClick={() => createPortMutation.mutate()}
  disabled={!ipInput.trim() || !portsInput.trim() || createPortMutation.isPending}
- className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
  >
- {createPortMutation.isPending ? 'Creating...' : 'Create Allocations'}
- </button>
- </div>
- </div>
- </div>
- </ModalPortal>
- )}
+ {createPortMutation.isPending ? 'Creating…' : 'Create allocations'}
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* Create IP Pool Modal */}
- {showCreatePoolModal && (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
- <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-elevated">
- <div className="flex items-center justify-between">
- <div>
- <h2 className="text-sm font-semibold text-foreground">Create IP Pool</h2>
- <p className="mt-0.5 text-[11px] text-muted-foreground">
- Configure MACVLAN network with automatic IPAM
- </p>
- </div>
- <button
- onClick={() => setShowCreatePoolModal(false)}
- className="rounded p-1 text-muted-foreground/40 hover:text-foreground transition-colors"
- >
- <ArrowLeft className="h-4 w-4" />
- </button>
- </div>
+ <Dialog open={showCreatePoolModal} onOpenChange={setShowCreatePoolModal}>
+ <DialogContent size="xl">
+ <DialogHeader icon={<Globe className="h-4 w-4" />}>
+ <DialogTitle>Create IP pool</DialogTitle>
+ <DialogDescription>Configure MACVLAN network with automatic IPAM.</DialogDescription>
+ </DialogHeader>
 
- <div className="mt-5 space-y-4">
+ <DialogBody className="space-y-4">
  <ServerTabCard className="!bg-surface-2/20 !border-border/20">
  <p className="text-[11px] text-muted-foreground leading-relaxed">
  IP pools enable servers to get dedicated IP addresses on the network via MACVLAN. Each server automatically receives one IP from the pool.
@@ -666,110 +641,99 @@ function NodeAllocationsPage() {
 
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Network Name</span>
- <input
+ <Input
  type="text"
  value={networkName}
  onChange={(e) => setNetworkName(e.target.value)}
  placeholder="mc-lan"
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </label>
 
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">CIDR</span>
- <input
+ <Input
  type="text"
  value={cidr}
  onChange={(e) => setCidr(e.target.value)}
  placeholder="192.168.50.0/24 or 2001:db8::/64"
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </label>
 
  <div className="grid grid-cols-2 gap-4">
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Gateway</span>
- <input
+ <Input
  type="text"
  value={gateway}
  onChange={(e) => setGateway(e.target.value)}
  placeholder="192.168.50.1"
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </label>
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Start IP (optional)</span>
- <input
+ <Input
  type="text"
  value={startIp}
  onChange={(e) => setStartIp(e.target.value)}
  placeholder="192.168.50.10"
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </label>
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">End IP (optional)</span>
- <input
+ <Input
  type="text"
  value={endIp}
  onChange={(e) => setEndIp(e.target.value)}
  placeholder="192.168.50.200"
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </label>
  <div className="flex items-end">
- <button
+ <Button
+ variant="outline"
  onClick={handleAutoFillPool}
  disabled={!autoFillIp.trim()}
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/20 disabled:opacity-50"
+ className="h-8 w-full"
  >
  Autofill /24
- </button>
+ </Button>
  </div>
  </div>
 
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Quick Setup IP</span>
- <input
+ <Input
  type="text"
  value={autoFillIp}
  onChange={(e) => setAutoFillIp(e.target.value)}
  placeholder={node?.publicAddress || '0.0.0.0'}
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </label>
 
  <label className="block space-y-1.5">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Reserved IPs (optional, comma-separated)</span>
- <textarea
+ <Textarea
  value={reserved}
  onChange={(e) => setReserved(e.target.value)}
  rows={2}
  placeholder="192.168.50.20, 192.168.50.21"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none resize-none"
+ className="resize-none"
  />
  </label>
- </div>
+ </DialogBody>
 
- <div className="mt-6 flex justify-end gap-2">
- <button
- onClick={() => setShowCreatePoolModal(false)}
- className="rounded-lg border border-border/40 bg-card px-4 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
- >
+ <DialogFooter>
+ <Button variant="outline" onClick={() => setShowCreatePoolModal(false)}>
  Cancel
- </button>
- <button
+ </Button>
+ <Button
  onClick={() => createPoolMutation.mutate()}
  disabled={!networkName || !cidr || createPoolMutation.isPending}
- className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
  >
- {createPoolMutation.isPending ? 'Creating...' : 'Create Pool'}
- </button>
- </div>
- </div>
- </div>
- </ModalPortal>
- )}
+ {createPoolMutation.isPending ? 'Creating…' : 'Create pool'}
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
  </div>
  );
 }

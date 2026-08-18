@@ -25,6 +25,8 @@ export {
  DialogTrigger,
  DialogContent,
  DialogHeader,
+ DialogToolbar,
+ DialogBody,
  DialogTitle,
  DialogDescription,
  DialogFooter,

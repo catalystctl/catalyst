@@ -346,7 +346,7 @@ If you already run Nginx, Apache, HAProxy, or another proxy:
        ssl_certificate     /etc/letsencrypt/live/panel.example.com/fullchain.pem;
        ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
 
-       client_max_body_size 100m;
+       client_max_body_size 0;
 
        location / {
            proxy_pass http://127.0.0.1:8080;

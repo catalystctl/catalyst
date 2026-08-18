@@ -251,7 +251,7 @@ function SecurityPage() {
  // ── File tunnel settings ──
  const [fileTunnelRateLimitMax, setFileTunnelRateLimitMax] = useState('100');
  const [fileTunnelRateLimitWindowMs, setFileTunnelRateLimitWindowMs] = useState('60000');
- const [fileTunnelMaxUploadMb, setFileTunnelMaxUploadMb] = useState('100');
+ const [fileTunnelMaxUploadMb, setFileTunnelMaxUploadMb] = useState('500');
  const [fileTunnelMaxPendingPerNode, setFileTunnelMaxPendingPerNode] = useState('50');
  const [fileTunnelConcurrentMax, setFileTunnelConcurrentMax] = useState('10');
  const [requireEmailVerification, setRequireEmailVerification] = useState(true);
@@ -284,7 +284,7 @@ function SecurityPage() {
  setMaxBufferMb(String(settings.maxBufferMb));
  setFileTunnelRateLimitMax(String(settings.fileTunnelRateLimitMax ?? 100));
  setFileTunnelRateLimitWindowMs(String(settings.fileTunnelRateLimitWindowMs ?? 60000));
- setFileTunnelMaxUploadMb(String(settings.fileTunnelMaxUploadMb ?? 100));
+ setFileTunnelMaxUploadMb(String(settings.fileTunnelMaxUploadMb ?? 500));
  setFileTunnelMaxPendingPerNode(String(settings.fileTunnelMaxPendingPerNode ?? 50));
  setFileTunnelConcurrentMax(String(settings.fileTunnelConcurrentMax ?? 10));
  setRequireEmailVerification(settings.requireEmailVerification ?? true);
@@ -516,10 +516,9 @@ function SecurityPage() {
  </div>
  </Section>
 
- {/* ── File Tunnel Settings ── */}
  <Section
- title="File Tunnel"
- subtitle="Limits for the agent file tunnel used for file operations."
+ title="File uploads"
+ subtitle="One max size for the file browser and SFTP on every agent."
  icon={<FolderSync className="h-4 w-4 text-info" />}
  >
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -535,7 +534,8 @@ function SecurityPage() {
  label="Max upload size (MB)"
  value={fileTunnelMaxUploadMb}
  onChange={setFileTunnelMaxUploadMb}
- tooltip="Maximum file upload size in megabytes for file tunnel operations."
+ tooltip="Maximum single-file size for the file browser on every agent (up to 102400 MB). SFTP is limited by the server's remaining disk only."
+ max="102400"
  />
  <NumberField
  label="Max pending per node"

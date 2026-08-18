@@ -19,7 +19,6 @@ import {
  Pencil,
  Clock,
  Users,
- X,
  Sparkles,
  Globe,
 } from 'lucide-react';
@@ -32,7 +31,16 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogToolbar,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
@@ -861,43 +869,34 @@ function RolesPage() {
  )}
 
  {/* ── Create/Edit Wizard Modal ── */}
- <ModalPortal>
- {isModalOpen && (
- <div
- className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
- onClick={(e) => { if (e.target === e.currentTarget) { resetForm(); setIsCreateOpen(false); setEditingRole(null); } }}
- >
- <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-elevated m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]">
- {/* Header */}
- <div className="flex items-center justify-between border-b border-border px-4 py-3 md:px-6 md:py-4">
- <div>
- <h2 className="text-lg font-semibold text-foreground">
- {editingRole ? 'Edit role' : 'Create role'}
- </h2>
- <p className="text-xs text-muted-foreground">
+<Dialog
+ open={isModalOpen}
+ onOpenChange={(open) => {
+ if (!open) {
+ resetForm();
+ setIsCreateOpen(false);
+ setEditingRole(null);
+ }
+ }}
+>
+ <DialogContent size="2xl">
+ <DialogHeader icon={<Shield className="h-4 w-4" />}>
+ <DialogTitle>{editingRole ? 'Edit role' : 'Create role'}</DialogTitle>
+ <DialogDescription>
  {editingRole ? 'Update role name, description, and permissions.' : 'Define a new role with specific permissions.'}
- </p>
- </div>
- <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={() => { resetForm(); setIsCreateOpen(false); setEditingRole(null); }}
- >
- <X className="h-4 w-4" />
- </button>
- </div>
+ </DialogDescription>
+ </DialogHeader>
 
- {/* Step indicator */}
- <div className="border-b border-border/50 px-4 py-2.5 md:px-6 md:py-3 overflow-x-auto">
+ <DialogToolbar className="overflow-x-auto">
  <StepIndicator
  steps={wizardSteps}
  currentStep={wizardStep}
  onStepClick={goToStep}
  canNavigate={canNavigateStep}
  />
- </div>
+ </DialogToolbar>
 
- {/* Step content */}
- <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6 md:py-5">
+ <DialogBody>
  {/* Step 0: Details */}
  {wizardStep === 0 && (
  <div className="space-y-6">
@@ -1014,10 +1013,9 @@ function RolesPage() {
  />
  </div>
  )}
- </div>
+ </DialogBody>
 
- {/* Footer with navigation */}
- <div className="flex items-center justify-between border-t border-border px-4 py-3 md:px-6 md:py-4">
+ <DialogFooter className="sm:justify-between">
  <div className="text-xs text-muted-foreground">
  {selectedPermissions.size > 0 && (
  <span>{selectedPermissions.size} permission{selectedPermissions.size === 1 ? '' : 's'} selected</span>
@@ -1059,46 +1057,34 @@ function RolesPage() {
  Cancel
  </Button>
  </div>
- </div>
- </div>
- </div>
- )}
- </ModalPortal>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* ── View Detail Modal ── */}
- <ModalPortal>
- {!!viewingRole && !editingRole && !isCreateOpen && (
- <div
- className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
- onClick={(e) => { if (e.target === e.currentTarget) setViewingRole(null); }}
+ <Dialog
+ open={!!viewingRole && !editingRole && !isCreateOpen}
+ onOpenChange={(open) => {
+ if (!open) setViewingRole(null);
+ }}
+>
+ <DialogContent size="xl">
+ <DialogHeader
+ icon={viewingRole?.permissions?.includes('*') ? <KeyRound className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
+ iconClassName={viewingRole?.permissions?.includes('*')
+ ? 'border-warning/20 bg-warning/10 text-warning'
+ : 'border-primary/20 bg-primary/10 text-primary'}
  >
- <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-elevated m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]">
- {/* Header with role identity */}
- <div className={`relative overflow-hidden px-4 py-4 border-b border-border md:px-6 md:py-5 ${
- viewingRole.permissions?.includes('*')
- ? 'bg-warning/[0.03]'
- : 'bg-primary/[0.02]'
- }`}>
- <div className="relative flex items-start justify-between">
- <div className="flex items-center gap-3">
- <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
- viewingRole.permissions?.includes('*')
- ? 'bg-warning/10 text-warning'
- : 'bg-primary/10 text-primary'
- }`}>
- {viewingRole.permissions?.includes('*') ? (
- <KeyRound className="h-5 w-5" />
- ) : (
- <Shield className="h-5 w-5" />
- )}
- </div>
- <div>
- <h2 className="text-lg font-semibold text-foreground">{viewingRole.name}</h2>
- {viewingRole.description && (
- <p className="text-xs text-muted-foreground">{viewingRole.description}</p>
- )}
+ <DialogTitle>{viewingRole?.name ?? 'Role details'}</DialogTitle>
+ <DialogDescription>
+ {viewingRole?.description || 'Role permissions and metadata.'}
+ </DialogDescription>
+ </DialogHeader>
 
- <div className="mt-3 flex flex-wrap gap-2 md:gap-3">
+ <DialogBody className="space-y-4">
+ {viewingRole && (
+ <>
+ <div className="flex flex-wrap gap-2 md:gap-3">
  <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
  <Shield className="h-3 w-3 text-primary" />
  <span className="text-muted-foreground">Permissions</span>
@@ -1117,19 +1103,7 @@ function RolesPage() {
  <span className="font-medium text-foreground">{viewingRole.createdAt ? new Date(viewingRole.createdAt).toLocaleDateString() : '—'}</span>
  </div>
  </div>
- </div>
- </div>
- <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={() => setViewingRole(null)}
- >
- <X className="h-4 w-4" />
- </button>
- </div>
- </div>
 
- {/* Permission body */}
- <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5 space-y-4">
  {viewingRole.permissions?.includes('*') ? (
  <div className="flex flex-col items-center gap-3 rounded-xl border border-warning/20 bg-warning/5 p-6 text-center">
  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/20">
@@ -1158,36 +1132,37 @@ function RolesPage() {
  </div>
  )}
 
- {/* Metadata */}
  <div className="space-y-1 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
  <div>Role ID: <span className="font-mono">{viewingRole.id}</span></div>
  {viewingRole.updatedAt !== viewingRole.createdAt && (
  <div>Updated: {new Date(viewingRole.updatedAt).toLocaleDateString()} at {new Date(viewingRole.updatedAt).toLocaleTimeString()}</div>
  )}
  </div>
- </div>
+ </>
+ )}
+ </DialogBody>
 
- {/* Actions */}
- <div className="flex items-center gap-2 border-t border-border px-4 py-3 md:px-6 md:py-4">
+ <DialogFooter className="sm:justify-between">
+ <div className="flex items-center gap-2">
+ {viewingRole && (
  <Button variant="outline" size="sm" onClick={() => startEdit(viewingRole)} className="gap-1.5">
  <Pencil className="h-3.5 w-3.5" />
  Edit role
  </Button>
- {viewingRole.userCount === 0 && (
+ )}
+ {viewingRole && viewingRole.userCount === 0 && (
  <Button variant="destructive" size="sm" onClick={() => setDeletingRole(viewingRole)} disabled={deleteMutation.isPending} className="gap-1.5">
  <Trash2 className="h-3.5 w-3.5" />
  {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
  </Button>
  )}
- <div className="flex-1" />
+ </div>
  <Button variant="ghost" size="sm" onClick={() => setViewingRole(null)}>
  Close
  </Button>
- </div>
- </div>
- </div>
- )}
- </ModalPortal>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* ── Delete Confirmation ── */}
  <ConfirmDialog

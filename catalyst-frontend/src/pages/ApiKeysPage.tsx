@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
  Key,
  Search,
@@ -22,7 +22,7 @@ import { EditApiKeyDialog } from '../components/apikeys/EditApiKeyDialog';
 import { Input } from '../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import TabHeader from '../components/servers/tabs/TabHeader';
 import ServerTabCard from '../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../components/servers/tabs/SectionHeader';
@@ -291,6 +291,7 @@ export function ApiKeysPage() {
  const [editKey, setEditKey] = useState<ApiKey | null>(null);
  const [deleteKey, setDeleteKey] = useState<ApiKey | null>(null);
  const [confirmAgentDelete, setConfirmAgentDelete] = useState(false);
+ const skipCancelRef = useRef(false);
  const [search, setSearch] = useState('');
  const [showAgentKeys, setShowAgentKeys] = useState(false);
  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled' | 'expired'>('all');
@@ -298,6 +299,7 @@ export function ApiKeysPage() {
  const handleDelete = () => {
  if (deleteKey) {
  if (isAgentKey(deleteKey) && !confirmAgentDelete) {
+ skipCancelRef.current = true;
  setConfirmAgentDelete(true);
  return;
  }
@@ -308,6 +310,10 @@ export function ApiKeysPage() {
  };
 
  const handleCancelDelete = () => {
+ if (skipCancelRef.current) {
+ skipCancelRef.current = false;
+ return;
+ }
  setDeleteKey(null);
  setConfirmAgentDelete(false);
  };
@@ -494,67 +500,61 @@ export function ApiKeysPage() {
  />
  )}
 
- {deleteKey && (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-0/70 backdrop-blur-sm">
- <div
- className={`mx-4 w-full max-w-md rounded-xl border bg-card p-6 shadow-elevated ${
- isAgentKey(deleteKey) ? 'border-danger/50' : 'border-border'
- }`}
- >
- <h3 className="text-lg font-semibold text-foreground">
- {confirmAgentDelete ? '⚠️ Final Warning' : 'Revoke API Key'}
- </h3>
-
- {isAgentKey(deleteKey) && !confirmAgentDelete ? (
- <>
- <div className="mt-3 rounded-lg border border-danger/30 bg-danger-muted p-4">
- <p className="text-sm font-semibold text-danger">
- ⚠️ This is an Agent API Key
- </p>
- <p className="mt-1 text-sm text-danger/80">
- Revoking this key will <strong>immediately disconnect the agent</strong> and
- prevent it from communicating with Catalyst. The node will become unmanageable
- until a new API key is generated and configured.
- </p>
- </div>
- <p className="mt-3 text-sm text-muted-foreground">
- Are you sure you want to revoke &quot;{deleteKey.name}&quot;?
- </p>
- </>
- ) : confirmAgentDelete ? (
- <>
- <div className="mt-3 rounded-lg border border-danger/50 bg-danger-muted p-4">
- <p className="text-sm font-bold text-danger">
- This will render the node&apos;s agent USELESS!
- </p>
- <p className="mt-1 text-sm text-danger/80">
- You will need physical or remote access to the node to reconfigure it with a new API key.
- </p>
- </div>
- <p className="mt-3 text-sm text-muted-foreground">
- Type the node ID to confirm: <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">{getNodeId(deleteKey)?.slice(0, 8)}…</code>
- </p>
- </>
- ) : (
- <p className="mt-3 text-sm text-muted-foreground">
- Are you sure you want to revoke &quot;{deleteKey.name}&quot;? This action cannot be undone
- and any applications using this key will immediately lose access.
- </p>
- )}
-
- <div className="mt-5 flex justify-end gap-2">
- <Button variant="outline" size="sm" onClick={handleCancelDelete}>
- Cancel
- </Button>
- <Button variant="destructive" size="sm" onClick={handleDelete}>
- {confirmAgentDelete ? 'Yes, Revoke Agent Key' : isAgentKey(deleteKey) ? 'Continue' : 'Revoke'}
- </Button>
- </div>
- </div>
- </div>
- </ModalPortal>
- )}
+      <ConfirmDialog
+        open={!!deleteKey}
+        title={confirmAgentDelete ? 'Final warning' : 'Revoke API key'}
+        message={
+          deleteKey && isAgentKey(deleteKey) && !confirmAgentDelete ? (
+            <>
+              <div className="rounded-lg border border-danger/30 bg-danger-muted p-4">
+                <p className="text-sm font-semibold text-danger">This is an agent API key</p>
+                <p className="mt-1 text-sm text-danger/80">
+                  Revoking this key will <strong>immediately disconnect the agent</strong> and
+                  prevent it from communicating with Catalyst. The node will become unmanageable
+                  until a new API key is generated and configured.
+                </p>
+              </div>
+              <p className="mt-3">
+                Are you sure you want to revoke &quot;{deleteKey.name}&quot;?
+              </p>
+            </>
+          ) : deleteKey && confirmAgentDelete ? (
+            <>
+              <div className="rounded-lg border border-danger/50 bg-danger-muted p-4">
+                <p className="text-sm font-bold text-danger">
+                  This will render the node&apos;s agent USELESS!
+                </p>
+                <p className="mt-1 text-sm text-danger/80">
+                  You will need physical or remote access to the node to reconfigure it with a new
+                  API key.
+                </p>
+              </div>
+              <p className="mt-3">
+                Type the node ID to confirm:{' '}
+                <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">
+                  {getNodeId(deleteKey)?.slice(0, 8)}…
+                </code>
+              </p>
+            </>
+          ) : (
+            <>
+              Are you sure you want to revoke &quot;{deleteKey?.name}&quot;? This action cannot be
+              undone and any applications using this key will immediately lose access.
+            </>
+          )
+        }
+        confirmText={
+          confirmAgentDelete
+            ? 'Yes, revoke agent key'
+            : deleteKey && isAgentKey(deleteKey)
+              ? 'Continue'
+              : 'Revoke'
+        }
+        variant="danger"
+        loading={deleteApiKey.isPending}
+        onConfirm={handleDelete}
+        onCancel={handleCancelDelete}
+      />
  </div>
  );
 }

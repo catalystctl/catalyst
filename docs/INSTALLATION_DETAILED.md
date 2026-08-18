@@ -700,7 +700,7 @@ If you already run Nginx, Apache, HAProxy, or another proxy:
        add_header X-Content-Type-Options "nosniff" always;
        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-       client_max_body_size 100m;
+       client_max_body_size 0;
 
        location / {
            proxy_pass http://catalyst;
@@ -1259,7 +1259,9 @@ This section explains every variable in `.env.example` in detail.
 | `SFTP_ENABLED` | `true` | No | Enable/disable the built-in SFTP server. |
 | `SFTP_HOST_KEY` | *(empty)* | No | Path to SSH host private key. Leave empty to auto-generate. |
 | `SFTP_HOST_KEY_BASE64` | *(empty)* | No | Base64-encoded host key. Alternative to `SFTP_HOST_KEY`. |
-| `SFTP_MAX_FILE_SIZE` | `104857600` | No | Max upload size in bytes (100 MB). |
+
+File size is the panel Admin → Security **Max upload size**.
+
 
 ### Backups
 

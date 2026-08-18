@@ -1,0 +1,48 @@
+services:
+  database:
+    image: mariadb:10.5
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_DATABASE: panel
+      MYSQL_USER: pterodactyl
+      MYSQL_PASSWORD: ${PTERO_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${PTERO_DB_ROOT_PASSWORD}
+    volumes:
+      - /srv/pterodactyl/database:/var/lib/mysql
+
+  cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  panel:
+    image: ${PTERO_PANEL_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      - database
+      - cache
+    ports:
+      - "80:80"
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${PTERO_URL}
+      APP_TIMEZONE: UTC
+      APP_SERVICE_AUTHOR: ${PTERO_ADMIN_EMAIL}
+      APP_ENVIRONMENT_ONLY: "true"
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: cache
+      DB_HOST: database
+      DB_PORT: "3306"
+      DB_DATABASE: panel
+      DB_USERNAME: pterodactyl
+      DB_PASSWORD: ${PTERO_DB_PASSWORD}
+      MAIL_MAILER: log
+      MAIL_FROM_ADDRESS: ${PTERO_ADMIN_EMAIL}
+      MAIL_FROM_NAME: Pterodactyl Lab
+    volumes:
+      - /srv/pterodactyl/var:/app/var
+      - /srv/pterodactyl/nginx:/etc/nginx/http.d
+      - /srv/pterodactyl/logs:/app/storage/logs

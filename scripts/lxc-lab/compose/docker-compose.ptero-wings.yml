@@ -1,0 +1,19 @@
+services:
+  wings:
+    image: ${PTERO_WINGS_IMAGE}
+    restart: unless-stopped
+    network_mode: host
+    tty: true
+    environment:
+      TZ: UTC
+      WINGS_UID: "988"
+      WINGS_GID: "988"
+      WINGS_USERNAME: pterodactyl
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers
+      - /etc/pterodactyl:/etc/pterodactyl
+      - /var/lib/pterodactyl:/var/lib/pterodactyl
+      - /var/log/pterodactyl:/var/log/pterodactyl
+      - /tmp/pterodactyl:/tmp/pterodactyl
+      - /etc/ssl/certs:/etc/ssl/certs:ro

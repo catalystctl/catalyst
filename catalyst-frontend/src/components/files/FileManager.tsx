@@ -36,7 +36,20 @@ import type { FileEntry } from '../../types/file';
 import { formatFileMode } from '../../utils/formatters';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import { buildBreadcrumbs, getParentPath, joinPath, normalizePath } from '../../utils/filePaths';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+ Dialog,
+ DialogContent,
+ DialogHeader,
+ DialogToolbar,
+ DialogBody,
+ DialogFooter,
+ DialogTitle,
+ DialogDescription,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { reportSystemError } from '../../services/api/systemErrors';
 
 type CreatePayload = {
@@ -578,8 +591,6 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  'inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 text-muted-foreground transition-all hover:bg-surface-2 hover:text-foreground hover:border-border hover:shadow-sm disabled:opacity-40 dark:border-border/40 dark:hover:bg-surface-2 dark:hover:text-foreground';
  const tbtnDanger =
  'inline-flex items-center gap-1.5 rounded-lg border border-danger/20 px-2.5 py-1.5 text-xs font-medium text-danger transition-all hover:bg-danger-muted hover:border-danger/30 disabled:opacity-40 dark:border-danger/20 dark:text-danger dark:hover:bg-danger-muted';
- const tbtnPrimary =
- 'inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50';
 
  return (
  <motion.div
@@ -943,27 +954,24 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </motion.div>
 
  {/* File editor overlay */}
- <AnimatePresence>
+ <Dialog
+ open={!!activeFile}
+ onOpenChange={(open) => {
+ if (!open) closeActiveFile();
+ }}
+ >
+ <DialogContent
+ size="full"
+ showClose={false}
+ className="h-[92dvh]"
+ onOpenAutoFocus={(event) => event.preventDefault()}
+ >
+ <DialogTitle className="sr-only">Edit file</DialogTitle>
+ <DialogDescription className="sr-only">
+ {activeFile ? activeFile.path : 'File editor'}
+ </DialogDescription>
+ <DialogBody className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-4">
  {activeFile && (
- <ModalPortal>
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- transition={{ duration: 0.2 }}
- className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6"
- >
- <div
- className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
- onClick={closeActiveFile}
- />
- <motion.div
- initial={{ opacity: 0, scale: 0.96, y: 8 }}
- animate={{ opacity: 1, scale: 1, y: 0 }}
- exit={{ opacity: 0, scale: 0.96, y: 8 }}
- transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 flex h-[95vh] sm:h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-border bg-card shadow-elevated dark:border-border dark:bg-surface-1 p-2 sm:p-4"
- >
  <FileEditor
  file={activeFile}
  isLoading={isFileLoading}
@@ -985,142 +993,93 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onClose={closeActiveFile}
  isSuspended={isSuspended || !canWrite}
  />
- </motion.div>
- </motion.div>
- </ModalPortal>
  )}
- </AnimatePresence>
+ </DialogBody>
+ </DialogContent>
+ </Dialog>
 
  {/* Permissions modal */}
- <AnimatePresence>
- {permissionsEntry && (
- <ModalPortal>
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- transition={{ duration: 0.2 }}
- className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+ <Dialog
+ open={!!permissionsEntry}
+ onOpenChange={(open) => {
+ if (!open) setPermissionsEntry(null);
+ }}
  >
- <div
- className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
- onClick={() => setPermissionsEntry(null)}
- />
- <motion.form
- initial={{ opacity: 0, scale: 0.96, y: 8 }}
- animate={{ opacity: 1, scale: 1, y: 0 }}
- exit={{ opacity: 0, scale: 0.96, y: 8 }}
- transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
- onSubmit={handlePermissionsSubmit}
+ <DialogContent size="sm">
+ <form onSubmit={handlePermissionsSubmit} className="flex min-h-0 flex-1 flex-col">
+ <DialogHeader
+ icon={<Shield className="h-4 w-4" />}
+ iconClassName="border-success/20 bg-success/10 text-success"
  >
- <div className="flex items-center gap-2">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10">
- <Shield className="h-4 w-4 text-success" />
- </div>
- <h3 className="text-sm font-semibold text-foreground">
- Edit Permissions
- </h3>
- </div>
- <p className="mt-1 truncate text-xs text-muted-foreground">
- {permissionsEntry.path}
- </p>
- <div className="mt-4">
- <label className="space-y-1">
- <span className="text-xs font-medium text-muted-foreground">
- Mode (octal)
- </span>
- <input
- className="w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/20 dark:border-border dark:bg-surface-2"
+ <DialogTitle>Edit permissions</DialogTitle>
+ <DialogDescription className="truncate">
+ {permissionsEntry?.path ?? 'Set the octal mode for this path.'}
+ </DialogDescription>
+ </DialogHeader>
+ <DialogBody className="space-y-3">
+ <div className="space-y-1.5">
+ <Label htmlFor="file-permissions-mode">Mode (octal)</Label>
+ <Input
+ id="file-permissions-mode"
+ className="font-mono"
  value={permissionsValue}
  onChange={(e) => {
  setPermissionsValue(e.target.value);
  setPermissionsError(null);
  }}
- placeholder={permissionsEntry.isDirectory ? '755' : '644'}
+ placeholder={permissionsEntry?.isDirectory ? '755' : '644'}
  autoFocus
  />
- </label>
- <p className="mt-1.5 text-[11px] text-muted-foreground/70">
- Three or four digits. Example: <span className="font-mono text-foreground/80">644</span> for files,{' '}
+ <p className="text-[11px] text-muted-foreground/70">
+ Three or four digits. Example:{' '}
+ <span className="font-mono text-foreground/80">644</span> for files,{' '}
  <span className="font-mono text-foreground/80">755</span> for folders.
  </p>
  </div>
  {permissionsError && (
- <div className="mt-3 rounded-lg border border-danger/20 bg-danger-muted px-3 py-2 text-xs text-danger dark:border-danger/15 dark:bg-danger-muted/30">
+ <div className="rounded-lg border border-danger/20 bg-danger-muted px-3 py-2 text-xs text-danger dark:border-danger/15 dark:bg-danger-muted/30">
  {permissionsError}
  </div>
  )}
- <div className="mt-4 flex flex-col-reverse sm:flex-row justify-end gap-2">
- <button type="button" className={tbtn} onClick={() => setPermissionsEntry(null)}>
+ </DialogBody>
+ <DialogFooter>
+ <Button type="button" variant="outline" onClick={() => setPermissionsEntry(null)}>
  Cancel
- </button>
- <button
- type="submit"
- className={tbtnPrimary}
- disabled={permissionsMutation.isPending || writeDisabled}
- >
+ </Button>
+ <Button type="submit" disabled={permissionsMutation.isPending || writeDisabled}>
  {permissionsMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />
  ) : (
- 'Update'
+ 'Update permissions'
  )}
- </button>
- </div>
- </motion.form>
- </motion.div>
- </ModalPortal>
- )}
- </AnimatePresence>
+ </Button>
+ </DialogFooter>
+ </form>
+ </DialogContent>
+ </Dialog>
 
  {/* Archive browser modal */}
- <AnimatePresence>
- {archiveBrowsePath && (
- <ModalPortal>
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- transition={{ duration: 0.2 }}
- className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6"
+ <Dialog
+ open={!!archiveBrowsePath}
+ onOpenChange={(open) => {
+ if (!open) setArchiveBrowsePath(null);
+ }}
  >
- <div
- className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
- onClick={() => setArchiveBrowsePath(null)}
- />
- <motion.div
- initial={{ opacity: 0, scale: 0.96, y: 8 }}
- animate={{ opacity: 1, scale: 1, y: 0 }}
- exit={{ opacity: 0, scale: 0.96, y: 8 }}
- transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          className="relative z-10 flex h-[95vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-elevated sm:h-[80vh]"
-        >
-          <div className="flex items-center justify-between border-b border-border/70 px-3 py-2.5">
-            <div className="flex min-w-0 items-start gap-2.5">
-              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-warning/30 bg-warning/10 text-warning">
-                <Archive className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold tracking-tight text-foreground">
-                  {archiveBrowsePath.split('/').pop()}
-                </h2>
-                <p className="type-meta mt-0.5">Read-only preview</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-              onClick={() => setArchiveBrowsePath(null)}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
- {/* Breadcrumbs */}
- <div className="flex items-center gap-1 border-b border-border px-3 sm:px-4 py-2 text-xs overflow-x-auto scrollbar-hide">
+ <DialogContent size="xl" className="h-[min(80dvh,40rem)]">
+ <DialogHeader
+ icon={<Archive className="h-4 w-4" />}
+ iconClassName="border-warning/30 bg-warning/10 text-warning"
+ >
+ <DialogTitle className="truncate">
+ {archiveBrowsePath?.split('/').pop() || 'Archive'}
+ </DialogTitle>
+ <DialogDescription>Read-only preview</DialogDescription>
+ </DialogHeader>
+ <DialogToolbar>
+ <div className="flex items-center gap-1 overflow-x-auto text-xs scrollbar-hide">
  <button
  type="button"
- className="rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground shrink-0"
+ className="shrink-0 rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  onClick={() => setArchiveBrowseDir('/')}
  >
  <Home className="inline h-3 w-3" />
@@ -1129,11 +1088,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  archiveBrowseDir.split('/').filter(Boolean).map((seg, i, arr) => {
  const segPath = '/' + arr.slice(0, i + 1).join('/');
  return (
- <span key={segPath} className="flex items-center gap-1 shrink-0">
+ <span key={segPath} className="flex shrink-0 items-center gap-1">
  <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
  <button
  type="button"
- className="rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground whitespace-nowrap"
+ className="whitespace-nowrap rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  onClick={() => setArchiveBrowseDir(segPath)}
  >
  {seg}
@@ -1142,9 +1101,8 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  );
  })}
  </div>
-
- {/* Content */}
- <div className="min-h-0 flex-1 overflow-y-auto">
+ </DialogToolbar>
+ <DialogBody className="p-0">
  {archiveLoading ? (
  <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
  <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1157,119 +1115,74 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onNavigate={setArchiveBrowseDir}
  />
  )}
- </div>
-
- {/* Footer */}
- <div className="flex items-center justify-between border-t border-border px-3 sm:px-4 py-2">
+ </DialogBody>
+ <DialogFooter className="sm:justify-between">
  <span className="text-[11px] text-muted-foreground">
  {archiveEntries.length} entries total
  </span>
- <button type="button" className={tbtn} onClick={() => setArchiveBrowsePath(null)}>
+ <Button type="button" variant="outline" onClick={() => setArchiveBrowsePath(null)}>
  Close
- </button>
- </div>
- </motion.div>
- </motion.div>
- </ModalPortal>
- )}
- </AnimatePresence>
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* Buffer error modal */}
- <AnimatePresence>
- {bufferError && (
- <ModalPortal>
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- transition={{ duration: 0.2 }}
- className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+ <Dialog
+ open={!!bufferError}
+ onOpenChange={(open) => {
+ if (!open) setBufferError(null);
+ }}
  >
- <div
- className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
- onClick={() => setBufferError(null)}
- />
- <motion.div
- initial={{ opacity: 0, scale: 0.96, y: 8 }}
- animate={{ opacity: 1, scale: 1, y: 0 }}
- exit={{ opacity: 0, scale: 0.96, y: 8 }}
- transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-6 shadow-elevated dark:border-border dark:bg-surface-1"
+ <DialogContent size="sm">
+ <DialogHeader
+ icon={<AlertTriangle className="h-4 w-4" />}
+ iconClassName="border-warning/20 bg-warning/10 text-warning"
  >
- <div className="mb-4 flex items-center gap-3">
- <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-muted dark:bg-warning-muted/20">
- <AlertTriangle className="h-5 w-5 text-warning" />
- </div>
- <h3 className="text-base sm:text-lg font-semibold text-foreground">Buffer Limit Exceeded</h3>
- </div>
- <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+ <DialogTitle>Buffer limit exceeded</DialogTitle>
+ <DialogDescription>
  This operation produced more output than the current buffer limit allows. This typically
  happens with large archives containing many files.
- </p>
- <div className="mb-4 rounded-lg border border-border bg-surface-2 p-3 dark:border-border dark:bg-surface-2">
+ </DialogDescription>
+ </DialogHeader>
+ <DialogBody className="space-y-3">
+ <div className="rounded-lg border border-border bg-surface-2 p-3 dark:border-border dark:bg-surface-2">
  <div className="flex justify-between text-sm">
  <span className="text-muted-foreground">Current limit</span>
- <span className="font-medium text-foreground">{bufferError.currentMaxBufferMb} MB</span>
+ <span className="font-medium text-foreground">
+ {bufferError?.currentMaxBufferMb} MB
+ </span>
  </div>
  <div className="mt-1 flex justify-between text-sm">
  <span className="text-muted-foreground">Recommended</span>
- <span className="font-medium text-primary">{bufferError.recommendedMaxBufferMb} MB</span>
+ <span className="font-medium text-primary">
+ {bufferError?.recommendedMaxBufferMb} MB
+ </span>
  </div>
  </div>
- <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+ <p className="text-xs leading-relaxed text-muted-foreground">
  An admin can increase the <span className="font-medium text-foreground">Max buffer (MB)</span> setting
  under <span className="font-medium text-foreground">Admin → Security</span> to resolve this.
  </p>
- <button
- onClick={() => setBufferError(null)}
- className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
- >
+ </DialogBody>
+ <DialogFooter>
+ <Button type="button" onClick={() => setBufferError(null)}>
  Got it
- </button>
- </motion.div>
- </motion.div>
- </ModalPortal>
- )}
- </AnimatePresence>
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* Upload modal */}
- <AnimatePresence>
- {showUpload && (
- <ModalPortal>
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- transition={{ duration: 0.2 }}
- className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
- >
- <div
- className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
- onClick={() => setShowUpload(false)}
- />
- <motion.div
- initial={{ opacity: 0, scale: 0.96, y: 8 }}
- animate={{ opacity: 1, scale: 1, y: 0 }}
- exit={{ opacity: 0, scale: 0.96, y: 8 }}
- transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-lg rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
- >
- <div className="flex items-center gap-2 mb-4">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
- <Upload className="h-4 w-4 text-primary" />
- </div>
- <div>
- <h3 className="text-sm font-semibold text-foreground">Upload Files</h3>
- <p className="text-[11px] text-muted-foreground">Target: <span className="font-mono">{path}</span></p>
- </div>
- <button
- type="button"
- className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={() => setShowUpload(false)}
- >
- <X className="h-4 w-4" />
- </button>
- </div>
+ <Dialog open={showUpload} onOpenChange={setShowUpload}>
+ <DialogContent size="md">
+ <DialogHeader icon={<Upload className="h-4 w-4" />}>
+ <DialogTitle>Upload files</DialogTitle>
+ <DialogDescription>
+ Target: <span className="font-mono">{path}</span>
+ </DialogDescription>
+ </DialogHeader>
+ <DialogBody>
  <FileUploader
  path={path}
  isUploading={uploadMutation.isPending}
@@ -1279,155 +1192,117 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onClose={() => setShowUpload(false)}
  inModal
  />
- </motion.div>
- </motion.div>
- </ModalPortal>
- )}
- </AnimatePresence>
+ </DialogBody>
+ <DialogFooter>
+ <Button type="button" variant="outline" onClick={() => setShowUpload(false)}>
+ Close
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* Create file/folder modal */}
- <AnimatePresence>
- {createMode && (
- <ModalPortal>
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- transition={{ duration: 0.2 }}
- className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+ <Dialog
+ open={!!createMode}
+ onOpenChange={(open) => {
+ if (!open) setCreateMode(null);
+ }}
  >
- <div
- className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
- onClick={() => setCreateMode(null)}
- />
- <motion.form
- initial={{ opacity: 0, scale: 0.96, y: 8 }}
- animate={{ opacity: 1, scale: 1, y: 0 }}
- exit={{ opacity: 0, scale: 0.96, y: 8 }}
- transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
- onSubmit={handleCreateSubmit}
- >
- <div className="flex items-center gap-2">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
- {createMode === 'directory' ? (
- <FolderPlus className="h-4 w-4 text-primary" />
+ <DialogContent size={createMode === 'file' ? 'md' : 'sm'}>
+ <form onSubmit={handleCreateSubmit} className="flex min-h-0 flex-1 flex-col">
+ <DialogHeader
+ icon={
+ createMode === 'directory' ? (
+ <FolderPlus className="h-4 w-4" />
  ) : (
- <FilePlus className="h-4 w-4 text-primary" />
- )}
- </div>
- <h3 className="text-sm font-semibold text-foreground">
- {createMode === 'directory' ? 'Create Folder' : 'Create File'}
- </h3>
- <button
- type="button"
- className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={() => setCreateMode(null)}
+ <FilePlus className="h-4 w-4" />
+ )
+ }
  >
- <X className="h-4 w-4" />
- </button>
- </div>
- <div className="mt-4 space-y-3">
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Name</span>
- <input
- className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/20 dark:border-border dark:bg-surface-2"
+ <DialogTitle>
+ {createMode === 'directory' ? 'Create folder' : 'Create file'}
+ </DialogTitle>
+ <DialogDescription>
+ {createMode === 'directory'
+ ? 'Add a new folder in the current directory.'
+ : 'Add a new file in the current directory.'}
+ </DialogDescription>
+ </DialogHeader>
+ <DialogBody className="space-y-3">
+ <div className="space-y-1.5">
+ <Label htmlFor="create-entry-name">Name</Label>
+ <Input
+ id="create-entry-name"
  value={createName}
  onChange={(e) => setCreateName(e.target.value)}
  placeholder={createMode === 'directory' ? 'configs' : 'server.properties'}
  autoFocus
  />
- </label>
+ </div>
  {createMode === 'file' && (
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Initial content</span>
- <textarea
- className="h-24 w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/20 dark:border-border dark:bg-surface-2"
+ <div className="space-y-1.5">
+ <Label htmlFor="create-file-content">Initial content</Label>
+ <Textarea
+ id="create-file-content"
+ className="h-24 font-mono"
  value={createContent}
  onChange={(e) => setCreateContent(e.target.value)}
  placeholder="# New file"
  />
- </label>
- )}
  </div>
- <div className="mt-4 flex justify-end gap-2">
- <button type="button" className={tbtn} onClick={() => setCreateMode(null)}>
+ )}
+ </DialogBody>
+ <DialogFooter>
+ <Button type="button" variant="outline" onClick={() => setCreateMode(null)}>
  Cancel
- </button>
- <button
+ </Button>
+ <Button
  type="submit"
- className={tbtnPrimary}
  disabled={!createName.trim() || createMutation.isPending || writeDisabled}
  >
  {createMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+ ) : createMode === 'directory' ? (
+ 'Create folder'
  ) : (
- 'Create'
+ 'Create file'
  )}
- </button>
- </div>
- </motion.form>
- </motion.div>
- </ModalPortal>
- )}
- </AnimatePresence>
+ </Button>
+ </DialogFooter>
+ </form>
+ </DialogContent>
+ </Dialog>
 
  {/* Compress modal */}
- <AnimatePresence>
- {showCompress && (
- <ModalPortal>
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- transition={{ duration: 0.2 }}
- className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+ <Dialog open={showCompress} onOpenChange={setShowCompress}>
+ <DialogContent size="sm">
+ <DialogHeader
+ icon={<Archive className="h-4 w-4" />}
+ iconClassName="border-warning/20 bg-warning/10 text-warning"
  >
- <div
- className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
- onClick={() => setShowCompress(false)}
- />
- <motion.div
- initial={{ opacity: 0, scale: 0.96, y: 8 }}
- animate={{ opacity: 1, scale: 1, y: 0 }}
- exit={{ opacity: 0, scale: 0.96, y: 8 }}
- transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
- >
- <div className="flex items-center gap-2">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning/10">
- <Archive className="h-4 w-4 text-warning" />
- </div>
- <h3 className="text-sm font-semibold text-foreground">
+ <DialogTitle>
  Compress {selectedEntries.length} item{selectedEntries.length !== 1 ? 's' : ''}
- </h3>
- <button
- type="button"
- className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={() => setShowCompress(false)}
- >
- <X className="h-4 w-4" />
- </button>
- </div>
- <div className="mt-4">
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Archive name</span>
- <input
- className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/20 dark:border-border dark:bg-surface-2"
+ </DialogTitle>
+ <DialogDescription>Create an archive from the selected files.</DialogDescription>
+ </DialogHeader>
+ <DialogBody>
+ <div className="space-y-1.5">
+ <Label htmlFor="compress-archive-name">Archive name</Label>
+ <Input
+ id="compress-archive-name"
  value={archiveName}
  onChange={(e) => setArchiveName(e.target.value)}
  placeholder="archive.tar.gz"
  autoFocus
  />
- </label>
  </div>
- <div className="mt-4 flex justify-end gap-2">
- <button type="button" className={tbtn} onClick={() => setShowCompress(false)}>
+ </DialogBody>
+ <DialogFooter>
+ <Button type="button" variant="outline" onClick={() => setShowCompress(false)}>
  Cancel
- </button>
- <button
+ </Button>
+ <Button
  type="button"
- className={tbtnPrimary}
  onClick={handleCompress}
  disabled={!selectedEntries.length || compressMutation.isPending || writeDisabled}
  >
@@ -1436,74 +1311,47 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  ) : (
  <>
  <Archive className="h-3.5 w-3.5" />
- Create Archive
+ Create archive
  </>
  )}
- </button>
- </div>
- </motion.div>
- </motion.div>
- </ModalPortal>
- )}
- </AnimatePresence>
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
 
  {/* Decompress modal */}
- <AnimatePresence>
- {showDecompress && selectedArchive && (
- <ModalPortal>
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- transition={{ duration: 0.2 }}
- className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+ <Dialog
+ open={showDecompress && !!selectedArchive}
+ onOpenChange={setShowDecompress}
  >
- <div
- className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
- onClick={() => setShowDecompress(false)}
- />
- <motion.div
- initial={{ opacity: 0, scale: 0.96, y: 8 }}
- animate={{ opacity: 1, scale: 1, y: 0 }}
- exit={{ opacity: 0, scale: 0.96, y: 8 }}
- transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-elevated dark:border-border dark:bg-surface-1"
+ <DialogContent size="sm">
+ <DialogHeader
+ icon={<ArchiveRestore className="h-4 w-4" />}
+ iconClassName="border-warning/20 bg-warning/10 text-warning"
  >
- <div className="flex items-center gap-2">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning/10">
- <ArchiveRestore className="h-4 w-4 text-warning" />
- </div>
- <h3 className="text-sm font-semibold text-foreground truncate mr-2">
- Extract Archive
- </h3>
- <button
- type="button"
- className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- onClick={() => setShowDecompress(false)}
- >
- <X className="h-4 w-4" />
- </button>
- </div>
- <p className="mt-1 text-xs text-muted-foreground truncate">{selectedArchive.name}</p>
- <div className="mt-4">
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Target path</span>
- <input
- className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/20 dark:border-border dark:bg-surface-2"
+ <DialogTitle>Extract archive</DialogTitle>
+ <DialogDescription className="truncate">
+ {selectedArchive?.name ?? 'Choose a destination for the extracted files.'}
+ </DialogDescription>
+ </DialogHeader>
+ <DialogBody>
+ <div className="space-y-1.5">
+ <Label htmlFor="decompress-target-path">Target path</Label>
+ <Input
+ id="decompress-target-path"
  value={decompressTarget}
  onChange={(e) => setDecompressTarget(e.target.value)}
  placeholder="/"
  autoFocus
  />
- </label>
  </div>
- <div className="mt-4 flex justify-end gap-2">
- <button type="button" className={tbtn} onClick={() => setShowDecompress(false)}>
+ </DialogBody>
+ <DialogFooter>
+ <Button type="button" variant="outline" onClick={() => setShowDecompress(false)}>
  Cancel
- </button>
- <button
+ </Button>
+ <Button
  type="button"
- className={tbtnPrimary}
  onClick={handleDecompress}
  disabled={decompressMutation.isPending || writeDisabled}
  >
@@ -1512,16 +1360,13 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  ) : (
  <>
  <ArchiveRestore className="h-3.5 w-3.5" />
- Extract
+ Extract archive
  </>
  )}
- </button>
- </div>
- </motion.div>
- </motion.div>
- </ModalPortal>
- )}
- </AnimatePresence>
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
  </motion.div>
  );
 }

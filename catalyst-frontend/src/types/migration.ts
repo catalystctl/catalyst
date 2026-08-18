@@ -73,12 +73,35 @@ export interface PterodactylTestResult {
   error?: string;
 }
 
+export interface PterodactylAllocationInfo {
+  id: number;
+  ip: string;
+  port: number;
+  alias?: string;
+  assigned?: boolean;
+  serverId?: number;
+  primary?: boolean;
+}
+
 export interface PterodactylNodeInfo {
   id: number;
   name: string;
   fqdn: string;
+  scheme?: string;
+  behindProxy?: boolean;
+  locationId?: number;
+  locationName?: string;
   memory: number;
+  memoryOverallocate?: number;
+  disk?: number;
+  diskOverallocate?: number;
+  uploadSize?: number;
+  daemonBase?: string;
+  daemonSftp?: number;
+  daemonListen?: number;
+  maintenanceMode?: boolean;
   serverCount: number;
+  allocations?: PterodactylAllocationInfo[];
 }
 
 export interface PterodactylServerInfo {
@@ -96,6 +119,7 @@ export interface PterodactylServerInfo {
   databases: number;
   schedules: number;
   subusers: number;
+  allocations?: PterodactylAllocationInfo[];
   hasAllocation: boolean;
   memory: number;
   disk: number;

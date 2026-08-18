@@ -251,9 +251,11 @@ All config lives in `.env` inside `catalyst-docker/`. Copy `.env.example` as a s
 | Variable | Default | Description |
 |---|---|---|
 | `SFTP_ENABLED` | `true` | Enable/disable built-in SFTP server |
-| `SFTP_MAX_FILE_SIZE` | `104857600` | Max upload size in bytes (100 MB) |
 | `SFTP_HOST_KEY` | *(auto-generate)* | SSH host key path. Leave empty to auto-generate. |
 | `SFTP_HOST_KEY_BASE64` | *(empty)* | Base64-encoded host key (alternative) |
+
+File size is the panel Admin → Security **Max upload size**.
+
 
 > **Podman:** set `SFTP_HOST_KEY=` and `SFTP_HOST_KEY_BASE64=` explicitly in `.env` to avoid interpolation issues.
 
@@ -345,7 +347,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/panel.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
 
-    client_max_body_size 100m;
+    client_max_body_size 0;
 
     location / {
         proxy_pass http://127.0.0.1:80;

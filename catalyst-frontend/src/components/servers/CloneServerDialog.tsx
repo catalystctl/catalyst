@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import Combobox from '@/components/ui/combobox';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -213,16 +214,16 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           Clone
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent size="md">
         <DialogHeader>
-          <DialogTitle>Clone Server</DialogTitle>
+          <DialogTitle>Clone server</DialogTitle>
           <DialogDescription>
             Create a new server with the same configuration as {server.name}.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Warning banner */}
-        <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
+        <DialogBody className="space-y-4">
+        <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <span className="text-muted-foreground">
             {copyFiles
@@ -231,7 +232,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           </span>
         </div>
 
-        <div className="grid gap-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="grid gap-4">
           {/* Name */}
           <div className="grid gap-2">
             <label htmlFor="clone-name" className="text-xs font-medium text-foreground">
@@ -419,7 +420,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
             </div>
           </div>
         </div>
-
+        </DialogBody>
         <DialogFooter>
           <Button
             variant="outline"

@@ -57,6 +57,19 @@ export const DEFAULT_CONSOLE_OUTPUT_BYTE_LIMIT = 256 * 1024; // 256KB/s per serv
 export const MIN_CONSOLE_OUTPUT_BYTE_LIMIT = 64 * 1024;
 export const MAX_CONSOLE_OUTPUT_BYTE_LIMIT = 2 * 1024 * 1024;
 
+/** Hard ceiling: 100 GiB. Panel setting is the product limit. */
+export const MAX_UPLOAD_MB_CEILING = 100 * 1024;
+
+export const sanitizeMaxUploadMb = (value: number | null | undefined): number => {
+  if (!Number.isFinite(value) || Number(value) <= 0) {
+    return DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb;
+  }
+  return Math.min(MAX_UPLOAD_MB_CEILING, Math.max(1, Math.floor(Number(value))));
+};
+
+export const maxUploadBytesFromMb = (mb: number): number =>
+  sanitizeMaxUploadMb(mb) * 1024 * 1024;
+
 const resolveConsoleOutputByteLimitDefault = () => {
   const raw = Number.parseInt(process.env.CONSOLE_OUTPUT_BYTE_LIMIT_BYTES ?? '', 10);
   if (!Number.isFinite(raw) || raw <= 0) {
@@ -209,6 +222,7 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
     lockoutDurationMinutes:
       settings.lockoutDurationMinutes ?? DEFAULT_SECURITY_SETTINGS.lockoutDurationMinutes,
     auditRetentionDays: settings.auditRetentionDays ?? DEFAULT_SECURITY_SETTINGS.auditRetentionDays,
+    fileTunnelMaxUploadMb: sanitizeMaxUploadMb(settings.fileTunnelMaxUploadMb),
     maxBufferMb: settings.maxBufferMb ?? DEFAULT_SECURITY_SETTINGS.maxBufferMb,
     requireEmailVerification: settings.requireEmailVerification ?? DEFAULT_SECURITY_SETTINGS.requireEmailVerification,
     // Prefer explicit env override; otherwise DB (default false — invite/admin only).
@@ -221,7 +235,6 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
     })(),
     fileTunnelRateLimitMax: settings.fileTunnelRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitMax,
     fileTunnelRateLimitWindowMs: resolveWindow(settings.fileTunnelRateLimitWindowMs, DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitWindowMs),
-    fileTunnelMaxUploadMb: settings.fileTunnelMaxUploadMb ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
     fileTunnelMaxPendingPerNode: settings.fileTunnelMaxPendingPerNode ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
     fileTunnelConcurrentMax: settings.fileTunnelConcurrentMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
   };

@@ -1,20 +1,91 @@
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, info, warn};
 
 use crate::{AgentError, AgentResult};
 
-const MAX_FILE_SIZE: u64 = 500 * 1024 * 1024; // 500MB
+/// Default matches the panel `fileTunnelMaxUploadMb` default (500MB).
+/// Overridden at runtime from the panel via handshake / file_upload_limit.
+pub const DEFAULT_MAX_FILE_SIZE: u64 = 500 * 1024 * 1024;
 
 pub struct FileManager {
     data_dir: PathBuf,
+    max_file_size: AtomicU64,
 }
 
 impl FileManager {
     pub fn new(data_dir: PathBuf) -> Self {
-        Self { data_dir }
+        Self {
+            data_dir,
+            max_file_size: AtomicU64::new(DEFAULT_MAX_FILE_SIZE),
+        }
+    }
+
+    pub fn max_file_size(&self) -> u64 {
+        self.max_file_size.load(Ordering::Relaxed)
+    }
+
+    /// Apply the panel-wide upload cap. Zero is ignored.
+    pub fn set_max_file_size(&self, bytes: u64) {
+        if bytes == 0 {
+            return;
+        }
+        self.max_file_size.store(bytes, Ordering::Relaxed);
+        info!(
+            max_upload_bytes = bytes,
+            max_upload_mb = bytes / 1024 / 1024,
+            "Applied panel file upload limit"
+        );
+    }
+
+    /// Free bytes on the filesystem that backs `path` (loop image or host dir).
+    pub fn available_bytes(path: &Path) -> AgentResult<u64> {
+        let probe = if path.exists() {
+            path
+        } else {
+            path.parent().filter(|p| p.exists()).unwrap_or(path)
+        };
+        let stat = nix::sys::statvfs::statvfs(probe).map_err(|e| {
+            AgentError::FileSystemError(format!("statvfs failed for {}: {e}", probe.display()))
+        })?;
+        Ok((stat.blocks_available() as u64).saturating_mul(stat.fragment_size() as u64))
+    }
+
+    /// Extra bytes a write at `offset` of `write_len` would grow `path` by.
+    pub fn write_growth_bytes(current_len: u64, offset: u64, write_len: u64) -> u64 {
+        offset.saturating_add(write_len).saturating_sub(current_len)
+    }
+
+    /// Reject a write that would grow the file past free space on its filesystem.
+    pub async fn ensure_write_fits(
+        &self,
+        path: &Path,
+        offset: u64,
+        write_len: u64,
+    ) -> AgentResult<()> {
+        let current = match fs::metadata(path).await {
+            Ok(m) => m.len(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
+            Err(e) => {
+                return Err(AgentError::FileSystemError(format!(
+                    "Cannot access file: {e}"
+                )));
+            }
+        };
+        let extra = Self::write_growth_bytes(current, offset, write_len);
+        if extra == 0 {
+            return Ok(());
+        }
+        let avail = Self::available_bytes(path)?;
+        if extra > avail {
+            return Err(AgentError::FileSystemError(format!(
+                "No space left on device: need {extra} more bytes, {avail} available"
+            )));
+        }
+        Ok(())
     }
 
     /// Validate and resolve a path within the container's data directory
@@ -135,11 +206,12 @@ impl FileManager {
             .await
             .map_err(|e| AgentError::FileSystemError(format!("Cannot access file: {}", e)))?;
 
-        if metadata.len() > MAX_FILE_SIZE {
+        let max = self.max_file_size();
+        if metadata.len() > max {
             return Err(AgentError::FileSystemError(format!(
                 "File too large: {} > {}MB",
                 metadata.len(),
-                MAX_FILE_SIZE / 1024 / 1024
+                max / 1024 / 1024
             )));
         }
 
@@ -182,11 +254,12 @@ impl FileManager {
         }
 
         // Check size limit before writing
-        if data.len() as u64 > MAX_FILE_SIZE {
+        let max = self.max_file_size();
+        if data.len() as u64 > max {
             return Err(AgentError::FileSystemError(format!(
                 "File too large: {} > {}MB",
                 data.len(),
-                MAX_FILE_SIZE / 1024 / 1024
+                max / 1024 / 1024
             )));
         }
 
@@ -380,11 +453,12 @@ impl FileManager {
             data.len()
         );
 
-        if data.len() as u64 > MAX_FILE_SIZE {
+        let max = self.max_file_size();
+        if data.len() as u64 > max {
             return Err(AgentError::FileSystemError(format!(
                 "File too large: {} > {}MB",
                 data.len(),
-                MAX_FILE_SIZE / 1024 / 1024
+                max / 1024 / 1024
             )));
         }
 
@@ -433,11 +507,11 @@ impl FileManager {
             .map_err(|e| AgentError::FileSystemError(format!("Failed to read chunk: {}", e)))?
         {
             total += chunk.len() as u64;
-            if total > MAX_FILE_SIZE {
+            if total > self.max_file_size() {
                 let _ = fs::remove_file(&full_path).await;
                 return Err(AgentError::FileSystemError(format!(
                     "File too large: exceeds {}MB",
-                    MAX_FILE_SIZE / 1024 / 1024
+                    self.max_file_size() / 1024 / 1024
                 )));
             }
             file.write_all(&chunk).await.map_err(|e| {
@@ -971,5 +1045,57 @@ mod tests {
         let entry = parse_tar_list_line(line).expect("dir should parse");
         assert_eq!(entry.name, "lab-explorer");
         assert!(entry.is_dir);
+    }
+
+    #[tokio::test]
+    async fn write_file_bytes_respects_runtime_limit() {
+        let fm = make_fm();
+        fm.set_max_file_size(8);
+        let err = fm
+            .write_file_bytes("srv1", "big.bin", b"0123456789")
+            .await
+            .expect_err("over-limit write must fail");
+        assert!(
+            err.to_string().to_lowercase().contains("too large"),
+            "{err}"
+        );
+        fm.set_max_file_size(32);
+        fm.write_file_bytes("srv1", "ok.bin", b"0123456789")
+            .await
+            .expect("under-limit write must succeed");
+        assert_eq!(fm.max_file_size(), 32);
+    }
+
+    #[test]
+    fn set_max_file_size_ignores_zero() {
+        let fm = make_fm();
+        let before = fm.max_file_size();
+        fm.set_max_file_size(0);
+        assert_eq!(fm.max_file_size(), before);
+    }
+
+    #[test]
+    fn write_growth_only_counts_extension() {
+        assert_eq!(FileManager::write_growth_bytes(100, 0, 50), 0);
+        assert_eq!(FileManager::write_growth_bytes(100, 90, 20), 10);
+        assert_eq!(FileManager::write_growth_bytes(0, 0, 25), 25);
+    }
+
+    #[tokio::test]
+    async fn ensure_write_fits_rejects_more_than_free_space() {
+        let fm = make_fm();
+        let path = fm.resolve_path("srv1", "huge.bin").unwrap();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        // Use a write size that can never fit regardless of small statvfs
+        // races between the two available_bytes() probes (~free-space jitter).
+        let avail = FileManager::available_bytes(path.parent().unwrap()).unwrap();
+        let huge = avail.checked_add(1024 * 1024 * 1024).unwrap_or(u64::MAX);
+        let err = fm
+            .ensure_write_fits(&path, 0, huge)
+            .await
+            .expect_err("over-capacity write must fail");
+        assert!(err.to_string().to_lowercase().contains("no space"), "{err}");
     }
 }

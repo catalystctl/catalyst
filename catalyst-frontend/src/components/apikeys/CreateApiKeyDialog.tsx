@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { Copy, CheckCircle2, AlertTriangle, Key, Shield, ShieldCheck, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useCreateApiKey, usePermissionsCatalog, useMyPermissions } from '../../hooks/useApiKeys';
 import { CreateApiKeyRequest, PermissionCategory } from '../../services/apiKeys';
@@ -8,7 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+ Dialog,
+ DialogBody,
+ DialogContent,
+ DialogDescription,
+ DialogFooter,
+ DialogHeader,
+ DialogTitle,
+} from '@/components/ui/dialog';
 
 interface CreateApiKeyDialogProps {
  open: boolean;
@@ -143,40 +150,21 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  }
  }, [open]);
 
- if (!open) return null;
 
  return (
- <ModalPortal>
- <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-surface-0/70 backdrop-blur-sm py-8">
- <motion.div
- initial={{ opacity: 0, scale: 0.95 }}
- animate={{ opacity: 1, scale: 1 }}
- transition={{ type: 'spring', stiffness: 400, damping: 30 }}
- className="mx-4 w-full max-w-2xl min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-elevated"
- >
- {/* Header */}
- <div className="border-b border-border px-6 py-4">
- <div className="flex items-center gap-2.5">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/30">
- <Key className="h-4 w-4 text-primary-600 dark:text-primary-400" />
- </div>
- <div>
- <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
- {createdKey ? 'API Key Created' : 'Create API Key'}
- </h2>
- <p className="text-xs text-muted-foreground">
+ <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
+ <DialogContent size="lg">
+ <DialogHeader icon={<Key className="h-4 w-4" />}>
+ <DialogTitle>{createdKey ? 'API key created' : 'Create API key'}</DialogTitle>
+ <DialogDescription>
  {createdKey
  ? 'Copy your API key now — it won\'t be shown again.'
  : 'Generate a new key for automated access to Catalyst.'}
- </p>
- </div>
- </div>
- </div>
-
- <div className="px-6 py-5">
+ </DialogDescription>
+ </DialogHeader>
  {!createdKey ? (
- <form onSubmit={handleSubmit} className="space-y-5">
- {/* Name */}
+ <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+ <DialogBody className="space-y-5">
  <div className="space-y-1.5">
  <label className="text-xs font-medium text-foreground dark:text-foreground">Name *</label>
  <Input
@@ -189,7 +177,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  <p className="text-[11px] text-muted-foreground">A descriptive name to identify this API key.</p>
  </div>
 
- {/* Permissions */}
  <div className="space-y-2">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2">
@@ -203,7 +190,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  )}
  </div>
 
- {/* All permissions toggle */}
  <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2/50 px-4 py-3 dark:bg-surface-2/30">
  <div className="flex items-center gap-2.5">
  <ShieldCheck className="h-4 w-4 text-success dark:text-success" />
@@ -222,7 +208,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  />
  </div>
 
- {/* Category-based permission selector */}
  {!formData.allPermissions && (
  <div className="rounded-lg border border-border overflow-hidden">
  <div className="max-h-64 overflow-y-auto">
@@ -244,7 +229,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
 
  return (
  <div key={cat.id} className="border-b border-border/50 last:border-b-0">
- {/* Category header */}
  <button
  type="button"
  onClick={() => toggleCategory(cat.id)}
@@ -271,7 +255,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  )}
  </button>
 
- {/* Expanded permissions */}
  {expanded && (
  <div className="border-t border-border/30 bg-surface-1/50 px-4 pb-2 pt-1 dark:bg-surface-1/30">
  {cat.permissions.map((perm) => (
@@ -306,7 +289,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  )}
  </div>
 
- {/* Expiration */}
  <div className="space-y-1.5">
  <label className="text-xs font-medium text-foreground dark:text-foreground">Expiration</label>
  <select
@@ -320,7 +302,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </select>
  </div>
 
- {/* Rate Limit */}
  <div className="space-y-1.5">
  <label className="text-xs font-medium text-foreground dark:text-foreground">Rate Limit</label>
  <div className="flex items-center gap-2">
@@ -336,18 +317,17 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </div>
  <p className="text-[11px] text-muted-foreground">Maximum requests allowed per minute.</p>
  </div>
-
- {/* Actions */}
- <div className="flex justify-end gap-2 border-t border-border/50 pt-4">
+ </DialogBody>
+ <DialogFooter>
  <Button variant="outline" size="sm" type="button" onClick={handleClose}>Cancel</Button>
  <Button size="sm" type="submit" disabled={createApiKey.isPending || (!formData.allPermissions && formData.permissions.length === 0)}>
- {createApiKey.isPending ? 'Creating…' : 'Create API Key'}
+ {createApiKey.isPending ? 'Creating…' : 'Create API key'}
  </Button>
- </div>
+ </DialogFooter>
  </form>
  ) : (
- <div className="space-y-4">
- {/* Warning */}
+ <>
+ <DialogBody className="space-y-4">
  <div className="flex items-start gap-2.5 rounded-lg border border-warning/30/40 bg-warning/5 p-3 dark:border-warning/20 dark:bg-warning/15">
  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning dark:text-warning" />
  <p className="text-sm text-warning dark:text-warning">
@@ -355,7 +335,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </p>
  </div>
 
- {/* Key display */}
  <div className="space-y-1.5">
  <label className="text-xs font-medium text-foreground dark:text-foreground">Your API Key</label>
  <div className="flex min-w-0 gap-2">
@@ -378,7 +357,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </div>
  </div>
 
- {/* Usage example */}
  <div className="min-w-0 rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
  <h4 className="mb-2 text-xs font-semibold text-foreground dark:text-foreground">Usage Example</h4>
  <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all text-xs text-foreground dark:text-foreground">
@@ -386,15 +364,13 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  ${window.location.origin}/api/servers`}</code>
  </pre>
  </div>
-
- <div className="flex justify-end border-t border-border/50 pt-4">
+ </DialogBody>
+ <DialogFooter>
  <Button size="sm" onClick={handleClose}>Done</Button>
- </div>
- </div>
+ </DialogFooter>
+ </>
  )}
- </div>
- </motion.div>
- </div>
- </ModalPortal>
+ </DialogContent>
+ </Dialog>
  );
 }

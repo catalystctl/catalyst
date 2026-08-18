@@ -28,6 +28,16 @@ import type {
   PterodactylBackup,
 } from "./types";
 
+export function backupMigrationSkipReason(error: unknown): string | null {
+  const err = error as { statusCode?: number; code?: string; message?: string };
+  if (err.statusCode === 404 || err.code === "NOT_FOUND") return "Backups endpoint not available";
+  if (err.statusCode === 401 || err.statusCode === 403) return "Client API key cannot access backups";
+  if (err.statusCode === 409 && /installation|installing|state conflict/i.test(err.message || "")) {
+    return "Server has not completed installation on its Wings node";
+  }
+  return null;
+}
+
 export class PterodactylClientError extends Error {
   constructor(
     public code: string,
@@ -38,6 +48,173 @@ export class PterodactylClientError extends Error {
     this.name = "PterodactylClientError";
   }
 }
+
+/**
+ * True when an HTTP/2 connect error should fall back to HTTP/1.1.
+ * OpenSSL 3 reports ALPN failures as `tls_parse_stoc_alpn` / `no application
+ * protocol` — not the uppercase "ALPN" substring the old matcher required.
+ */
+export function shouldFallbackFromHttp2(message: string): boolean {
+  const msg = message.toLowerCase();
+  return (
+    msg.includes("alpn") ||
+    msg.includes("no application protocol") ||
+    msg.includes("bad extension") ||
+    msg.includes("nghttp2") ||
+    msg.includes("err_http2") ||
+    msg.includes("ssl routines") ||
+    msg.includes("eproto") ||
+    msg.includes("authority")
+  );
+}
+
+export function getPterodactylAllocationServerId(
+  allocation: PterodactylResource<PterodactylAllocation> | PterodactylAllocation
+): number | undefined {
+  const attributes = "attributes" in allocation ? allocation.attributes : allocation;
+  if (typeof attributes.server_id === "number") {
+    return attributes.server_id;
+  }
+
+  const resourceRelationships = "relationships" in allocation ? allocation.relationships : undefined;
+  const related = resourceRelationships?.server?.attributes ?? attributes.relationships?.server?.attributes;
+  const serverId = (related as { id?: unknown } | undefined)?.id;
+  return typeof serverId === "number" ? serverId : undefined;
+}
+
+export interface MigrationPreviewAllocation {
+  id: number;
+  ip: string;
+  port: number;
+  alias?: string;
+  assigned: boolean;
+  serverId?: number;
+  primary?: boolean;
+}
+
+export interface MigrationPreviewNode {
+  id: number;
+  name: string;
+  fqdn: string;
+  scheme: string;
+  behindProxy: boolean;
+  locationId: number;
+  locationName: string;
+  memory: number;
+  memoryOverallocate: number;
+  disk: number;
+  diskOverallocate: number;
+  uploadSize: number;
+  daemonBase: string;
+  daemonSftp: number;
+  daemonListen: number;
+  maintenanceMode: boolean;
+  serverCount: number;
+  allocations: MigrationPreviewAllocation[];
+}
+
+export interface MigrationPreviewServer {
+  id: number;
+  uuid: string;
+  name: string;
+  nodeId: number;
+  nodeName: string;
+  state: string;
+  eggName: string;
+  nestName: string;
+  backupSlots: number;
+  currentBackups: number;
+  databases: number;
+  schedules: number;
+  subusers: number;
+  allocations: Array<MigrationPreviewAllocation & { primary: boolean }>;
+  hasAllocation: boolean;
+  memory: number;
+  disk: number;
+  cpu: number;
+  suspended: boolean;
+}
+
+export function buildPreviewNodeAllocations(
+  allocations: Array<PterodactylResource<PterodactylAllocation> | PterodactylAllocation>
+): MigrationPreviewAllocation[] {
+  return allocations
+    .map((allocation) => {
+      const attributes = "attributes" in allocation ? allocation.attributes : allocation;
+      const serverId = getPterodactylAllocationServerId(allocation);
+      return {
+        id: attributes.id,
+        ip: attributes.ip,
+        port: attributes.port,
+        alias: attributes.ip_alias,
+        assigned: serverId !== undefined || attributes.assigned === true,
+        serverId,
+      };
+    })
+    .sort((a, b) => a.ip.localeCompare(b.ip) || a.port - b.port);
+}
+
+export function buildPreviewServerAllocations(
+  server: PterodactylServer,
+  nodeAllocations: Array<PterodactylResource<PterodactylAllocation> | PterodactylAllocation> = []
+): Array<MigrationPreviewAllocation & { primary: boolean }> {
+  const primaryAllocationId = typeof server.allocation === "number"
+    ? server.allocation
+    : server.allocation?.id;
+  const indexedAllocations = buildPreviewNodeAllocations(nodeAllocations);
+  const allocations = indexedAllocations
+    .filter((allocation) => allocation.serverId === server.id || allocation.id === primaryAllocationId)
+    .map((allocation) => ({
+      ...allocation,
+      primary: allocation.id === primaryAllocationId,
+    }))
+    .sort((a, b) => Number(b.primary) - Number(a.primary) || a.port - b.port);
+
+  if (allocations.length === 0 && typeof server.allocation === "object") {
+    allocations.push({
+      id: primaryAllocationId || 0,
+      ip: server.allocation.ip,
+      port: server.allocation.port,
+      alias: server.allocation.ip_alias,
+      assigned: true,
+      serverId: server.id,
+      primary: true,
+    });
+  }
+
+  return allocations;
+}
+
+export function buildPreviewNode(
+  node: PterodactylNode,
+  options: {
+    serverCount: number;
+    locationName?: string;
+    allocations?: Array<PterodactylResource<PterodactylAllocation> | PterodactylAllocation>;
+  }
+): MigrationPreviewNode {
+  return {
+    id: node.id,
+    name: node.name,
+    fqdn: node.fqdn,
+    scheme: node.scheme,
+    behindProxy: !!node.behind_proxy,
+    locationId: node.location_id,
+    locationName: options.locationName || "Unknown",
+    memory: node.memory,
+    memoryOverallocate: node.memory_overallocate || 0,
+    disk: node.disk,
+    diskOverallocate: node.disk_overallocate || 0,
+    uploadSize: node.upload_size,
+    daemonBase: node.daemon_base,
+    daemonSftp: node.daemon_sftp,
+    daemonListen: node.daemon_listen,
+    maintenanceMode: !!node.maintenance_mode,
+    serverCount: options.serverCount,
+    allocations: buildPreviewNodeAllocations(options.allocations || []),
+  };
+}
+
 
 interface RequestOptions {
   path: string;
@@ -184,22 +361,21 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
       session.on("error", (err: Error) => {
         this.logger?.error?.({ err }, "Pterodactyl HTTP/2 session error");
 
-        // Detect protocol error — server doesn't speak HTTP/2, fall back to HTTP/1.1
-        const isProtocolError =
-          err.message.includes("NGHTTP2_PROTOCOL_ERROR") ||
-          err.message.includes("ERR_HTTP2_SESSION_ERROR") ||
-          err.message.includes("authority") ||
-          err.message.includes("ALPN");
-
-        if (isProtocolError && !this.useHttp1) {
+        if (!this.useHttp1 && shouldFallbackFromHttp2(err.message)) {
           this.logger?.info?.(
-            "Pterodactyl server does not support HTTP/2, falling back to HTTP/1.1"
+            { err: err.message },
+            "HTTP/2 session failed, falling back to HTTP/1.1",
           );
+          try {
+            session.close();
+          } catch {
+            /* already dead */
+          }
           this.useHttp1 = true;
           this.session = null;
           this.ensureHttp1Agent();
           this.reconnectAttempt = 0;
-          resolve(); // Connection "succeeded" via fallback
+          resolve();
           return;
         }
 
@@ -315,6 +491,7 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
           keepAlive: true,
           maxSockets: 4,
           rejectUnauthorized: this.rejectUnauthorized,
+          ALPNProtocols: ["http/1.1"],
         });
       } else {
         this.http1Agent = new http.Agent({
@@ -619,21 +796,8 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
     nests: number;
     users: number;
     servers: number;
-    nodesList: Array<{ id: number; name: string; fqdn: string; memory: number; serverCount: number }>;
-    serversList: Array<{
-      id: number; uuid: string; name: string; nodeId: number; nodeName: string;
-      state: string; eggName: string; nestName: string;
-      backupSlots: number; currentBackups: number;
-      /** Per-server migration summary */
-      databases: number;
-      schedules: number;
-      subusers: number;
-      hasAllocation: boolean;
-      memory: number;
-      disk: number;
-      cpu: number;
-      suspended: boolean;
-    }>;
+    nodesList: MigrationPreviewNode[];
+    serversList: MigrationPreviewServer[];
   }> {
     const [locations, nodes, nests, users, servers] = await Promise.all([
       this.listAll<PterodactylLocation>("/api/application/locations"),
@@ -650,12 +814,27 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
       nodeServerCounts.set(nid, (nodeServerCounts.get(nid) || 0) + 1);
     }
 
-    const nodesList = nodes.map(n => ({
-      id: n.attributes.id,
-      name: n.attributes.name,
-      fqdn: n.attributes.fqdn,
-      memory: n.attributes.memory,
+    const nodeAllocations = new Map<number, PterodactylResource<PterodactylAllocation>[]>();
+    await Promise.all(nodes.map(async (n) => {
+      try {
+        nodeAllocations.set(n.attributes.id, await this.getNodeAllocations(n.attributes.id));
+      } catch {
+        nodeAllocations.set(n.attributes.id, []);
+      }
+    }));
+
+    const locationNameMap = new Map<number, string>();
+    for (const location of locations) {
+      locationNameMap.set(
+        location.attributes.id,
+        location.attributes.long || location.attributes.short
+      );
+    }
+
+    const nodesList = nodes.map(n => buildPreviewNode(n.attributes, {
       serverCount: nodeServerCounts.get(n.attributes.id) || 0,
+      locationName: locationNameMap.get(n.attributes.location_id),
+      allocations: nodeAllocations.get(n.attributes.id) || [],
     }));
 
     const nodeNameMap = new Map<number, string>();
@@ -687,6 +866,11 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
       } else {
         eggName = eggNameMap.get(serverAttrs.egg) || eggName;
       }
+      const allocations = buildPreviewServerAllocations(
+        serverAttrs,
+        nodeAllocations.get(serverAttrs.node) || []
+      );
+
       return {
         id: serverAttrs.id,
         uuid: serverAttrs.uuid,
@@ -702,7 +886,8 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
         databases: 0,
         schedules: 0,
         subusers: 0,
-        hasAllocation: !!serverAttrs.allocation,
+        allocations,
+        hasAllocation: allocations.length > 0,
         memory: serverAttrs.limits?.memory || 0,
         disk: serverAttrs.limits?.disk || 0,
         cpu: serverAttrs.limits?.cpu || 0,
@@ -847,7 +1032,8 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
     nodeId: number
   ): Promise<PterodactylResource<PterodactylAllocation>[]> {
     return this.listAll<PterodactylAllocation>(
-      `/api/application/nodes/${nodeId}/allocations`
+      `/api/application/nodes/${nodeId}/allocations`,
+      { include: "server" }
     );
   }
 
