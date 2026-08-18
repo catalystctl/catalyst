@@ -88,7 +88,7 @@ jobs:
             .commits[-5:][] |
             "• [`" + (.id[0:7]) + "`](<" + $srv + "/" + $repo + "/commit/" + .id + ">) " +
             (.message | split("\n")[0] | if length > 80 then .[0:80] + "…" else . end) +
-            " — " + .author.username
+            " — " + (.author.username // .author.name // "unknown")
           ' < "$GITHUB_EVENT_PATH")
 
           DESCRIPTION="${COMMITS}"
@@ -101,6 +101,7 @@ jobs:
           INITIAL_TITLE="🟡 CI/CD — Catalyst • Running — \`${BRANCH}\` — ${COMMIT_COUNT} commit(s)"
           INITIAL_DESC="${DESCRIPTION}"$'\n\n'"⏳ Workflow queued — waiting for **CI/CD — Catalyst** to start…"$'\n'"[View commit](<${COMMIT_URL}>) • \`${SHORT_SHA}\` • by \`${GITHUB_ACTOR}\`"
           INITIAL_COLOR=16776960
+          FOOTER_LIVE="${REPO} • live — auto-updating"
 
           PAYLOAD=$(jq -n \
             --arg username "Catalyst CI" \
@@ -109,7 +110,7 @@ jobs:
             --arg description "${INITIAL_DESC}" \
             --arg url "${COMMIT_URL}" \
             --argjson color "${INITIAL_COLOR}" \
-            --arg repo "${REPO}" \
+            --arg footer_text "${FOOTER_LIVE}" \
             '{
               username: $username,
               avatar_url: $avatar_url,
@@ -118,14 +119,15 @@ jobs:
                 description: $description,
                 url: $url,
                 color: $color,
-                footer: { text: $repo + " • live — auto-updating" },
+                footer: { text: $footer_text },
                 timestamp: now | todateiso8601
               }]
             }')
 
           echo "→ Posting initial running embed…"
           RESP=$(curl -s -w "\n%{http_code}" -H "Content-Type: application/json" -X POST "${DISCORD_WEBHOOK_URL}?wait=true" -d "${PAYLOAD}" || true)
-          HTTP_CODE=$(echo "${RESP}" | tail -n1)
+          HTTP_CODE=$(echo "${RESP}" | tail -n1 | tr -cd '0-9')
+          HTTP_CODE=${HTTP_CODE:-0}
           BODY=$(echo "${RESP}" | sed '$d')
 
           if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -ge 300 ]; then
@@ -189,19 +191,20 @@ jobs:
             FINAL_DESC="${DESCRIPTION}"$'\n\n'"⚠️ Could not locate the **CI/CD — Catalyst** run for \`${SHORT_SHA}\`."$'\n'"[View commit](<${COMMIT_URL}>)"
             FINAL_COLOR=9807270
             FINAL_URL="${COMMIT_URL}"
+            FOOTER_UNKNOWN="${REPO} • $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             jq -n \
               --arg title "${FINAL_TITLE}" \
               --arg description "${FINAL_DESC}" \
               --arg url "${FINAL_URL}" \
               --argjson color "${FINAL_COLOR}" \
-              --arg repo "${REPO}" \
+              --arg footer_text "${FOOTER_UNKNOWN}" \
               '{
                 embeds: [{
                   title: $title,
                   description: $description,
                   url: $url,
                   color: $color,
-                  footer: { text: $repo + " • " + (now | todateiso8601) },
+                  footer: { text: $footer_text },
                   timestamp: now | todateiso8601
                 }]
               }' | curl -sf -H "Content-Type: application/json" -X PATCH "${EDIT_URL}" -d @- > /dev/null || true
@@ -219,14 +222,14 @@ jobs:
             --arg description "${RUNNING_DESC}" \
             --arg url "${RUN_URL}" \
             --argjson color "${RUNNING_COLOR}" \
-            --arg repo "${REPO}" \
+            --arg footer_text "${FOOTER_LIVE}" \
             '{
               embeds: [{
                 title: $title,
                 description: $description,
                 url: $url,
                 color: $color,
-                footer: { text: $repo + " • live — auto-updating" },
+                footer: { text: $footer_text },
                 timestamp: now | todateiso8601
               }]
             }' | curl -sf -H "Content-Type: application/json" -X PATCH "${EDIT_URL}" -d @- > /dev/null || true
@@ -330,7 +333,7 @@ jobs:
                 footer: { text: $repo },
                 timestamp: now | todateiso8601
               }]
-            }' | curl -sf -H "Content-Type: application/json" -X PATCH "${EDIT_URL}" -d @- > /dev/null
+            }' | curl -sf -H "Content-Type: application/json" -X PATCH "${EDIT_URL}" -d @- > /dev/null || true
 
           echo "✅ Live embed finalized — ${FINAL_LABEL}"
 
