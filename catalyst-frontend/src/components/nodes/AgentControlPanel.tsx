@@ -612,7 +612,7 @@ function AgentUpdateTab({
         <div className="flex-1 rounded-lg border border-border/30 bg-surface-2/30 px-4 py-3">
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40">Current</div>
           <div className="mt-1 font-mono text-lg font-bold text-foreground">
-            v{agentVersion ?? '?'}
+            v{String(agentVersion ?? '?').replace(/^v/i, '')}
           </div>
         </div>
         <div className="flex flex-col items-center gap-1">
@@ -627,7 +627,7 @@ function AgentUpdateTab({
         }`}>
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40">Latest</div>
           <div className="mt-1 font-mono text-lg font-bold text-foreground">
-            v{latestVersion ?? '?'}
+            v{String(latestVersion ?? '?').replace(/^v/i, '')}
           </div>
         </div>
       </div>
