@@ -45,6 +45,13 @@ interface BetterAuthResponse {
   valid?: boolean;
 }
 
+// Single-flight + backoff state for /me — concurrent callers (useProfileSync,
+// init, SSE handlers) previously fired parallel requests and 429/500 triggered
+// tight retry storms. Never retries 401/403.
+let refreshInFlight: Promise<{ user: User }> | null = null;
+let refreshCooldownUntil = 0;
+let refreshFailureCount = 0;
+
 function extractResponse(response: unknown): BetterAuthResponse {
   if (response && typeof response === 'object') {
     // better-fetch returns { data: ..., error: ... } on failures (data may be null)
@@ -219,29 +226,77 @@ export const authApi = {
   },
 
   async refresh(): Promise<{ user: User }> {
-    const data = await apiClient.get<{ success: boolean; data?: { id: string; email: string; username: string; name?: string; firstName?: string; lastName?: string; image?: string; role?: string; permissions?: string[] }; error?: string }>('/api/auth/me');
-    if (!data?.success || !data?.data) {
-      reportSystemError({
-        level: 'error',
-        component: 'ApiAuth',
-        message: data?.error || 'Refresh failed',
-        metadata: { action: 'refresh' },
-      });
-      throw new Error(data?.error || 'Refresh failed');
+    // Deduplicate concurrent callers
+    if (refreshInFlight) return refreshInFlight;
+    // Cooldown after transient failure — never retry 401/403 via this path
+    const now = Date.now();
+    if (now < refreshCooldownUntil) {
+      const err = new Error('Refresh cooldown active') as Error & { status?: number; retryAfterMs?: number };
+      err.status = 429;
+      err.retryAfterMs = refreshCooldownUntil - now;
+      throw err;
     }
-    return {
-      user: {
-        id: data.data.id,
-        email: data.data.email,
-        username: data.data.username,
-        name: data.data.name,
-        firstName: data.data.firstName,
-        lastName: data.data.lastName,
-        image: data.data.image,
-        role: (data.data.role as User['role']) || 'user',
-        permissions: data.data.permissions ?? [],
-      },
+
+    const doFetch = async (): Promise<{ user: User }> => {
+      const data = await apiClient.get<{ success: boolean; data?: { id: string; email: string; username: string; name?: string; firstName?: string; lastName?: string; image?: string; role?: string; permissions?: string[] }; error?: string }>('/api/auth/me');
+      if (!data?.success || !data?.data) {
+        reportSystemError({
+          level: 'error',
+          component: 'ApiAuth',
+          message: data?.error || 'Refresh failed',
+          metadata: { action: 'refresh' },
+        });
+        throw new Error(data?.error || 'Refresh failed');
+      }
+      return {
+        user: {
+          id: data.data.id,
+          email: data.data.email,
+          username: data.data.username,
+          name: data.data.name,
+          firstName: data.data.firstName,
+          lastName: data.data.lastName,
+          image: data.data.image,
+          role: (data.data.role as User['role']) || 'user',
+          permissions: data.data.permissions ?? [],
+        },
+      };
     };
+
+    const maxAttempts = 3;
+    refreshInFlight = (async () => {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          const res = await doFetch();
+          refreshFailureCount = 0;
+          refreshCooldownUntil = 0;
+          return res;
+        } catch (err: unknown) {
+          const e = err as { status?: number; response?: { status?: number; headers?: Record<string, string> }; retryAfterMs?: number; message?: string };
+          const status = e.status ?? e.response?.status;
+          if (status === 401 || status === 403) {
+            refreshFailureCount = 0;
+            throw err;
+          }
+          const isTransient = status === 429 || status === 408 || (typeof status === 'number' && status >= 500) || status === undefined;
+          if (!isTransient || attempt === maxAttempts - 1) {
+            refreshFailureCount++;
+            const backoffMs = Math.min(1000 * 2 ** refreshFailureCount, 30_000);
+            const retryAfter = typeof e.retryAfterMs === 'number' ? e.retryAfterMs : undefined;
+            refreshCooldownUntil = Date.now() + (retryAfter ?? backoffMs);
+            throw err;
+          }
+          const retryAfterMs = typeof e.retryAfterMs === 'number' ? e.retryAfterMs : undefined;
+          const backoffMs = retryAfterMs ?? Math.min(500 * 2 ** attempt, 8000);
+          const jitter = Math.floor(Math.random() * 250);
+          await new Promise<void>((resolve) => setTimeout(resolve, backoffMs + jitter));
+        }
+      }
+      throw new Error('Refresh failed');
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+    return refreshInFlight;
   },
 
   async verifyTwoFactor(payload: {

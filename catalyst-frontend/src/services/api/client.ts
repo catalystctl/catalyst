@@ -25,7 +25,7 @@ const normalizeBaseUrl = (value?: string) => {
 
 const BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL) || '';
 
-interface ApiError {
+export interface ApiError {
   response?: {
     status?: number;
     data?: {
@@ -33,8 +33,28 @@ interface ApiError {
       message?: string;
       error?: string;
     };
+    headers?: Record<string, string>;
   };
+  status?: number;
+  retryAfterMs?: number;
   message?: string;
+}
+
+function parseRetryAfterMs(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const t = value.trim();
+  if (!t) return undefined;
+  if (/^\d+(\.\d+)?$/.test(t)) {
+    const s = Number(t);
+    if (Number.isFinite(s) && s >= 0) return Math.min(s * 1000, 5 * 60 * 1000);
+  }
+  const d = Date.parse(t);
+  if (!Number.isNaN(d)) {
+    const diff = d - Date.now();
+    if (diff > 0) return Math.min(diff, 5 * 60 * 1000);
+    return 0;
+  }
+  return undefined;
 }
 
 class ApiClient {
@@ -180,10 +200,17 @@ class ApiClient {
         });
       }
 
+      const retryAfterMs = parseRetryAfterMs(response.headers.get('Retry-After'));
+      const hdr: Record<string, string> = {};
+      const raw = response.headers.get('Retry-After');
+      if (raw) hdr['retry-after'] = raw;
       const error: ApiError = {
+        status: response.status,
+        retryAfterMs,
         response: {
           status: response.status,
           data: errorData,
+          headers: Object.keys(hdr).length ? hdr : undefined,
         },
         message: errorData.message || errorData.error || `HTTP ${response.status}`,
       };

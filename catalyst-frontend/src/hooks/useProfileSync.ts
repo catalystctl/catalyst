@@ -20,10 +20,14 @@ import { authApi } from '../services/api/auth';
 
 /** Longer interval — profile fields change rarely; avoid hammering /auth/me. */
 const SYNC_INTERVAL = 60_000;
+/** Backoff after failed poll — retry slower until success. */
+const FAILED_SYNC_INTERVAL = 5 * 60_000;
 
 export function useProfileSync() {
   const queryClient = useQueryClient();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inFlightRef = useRef(false);
+  const failedRef = useRef(false);
 
   useEffect(() => {
     // ── 1. React to ['profile'] query cache changes (instant when on /profile) ──
@@ -41,10 +45,13 @@ export function useProfileSync() {
     // ── 2. Focused-tab poll as fallback (works on every page) ────────────
     // Only patches display fields. Does NOT call store.refresh() so a 401
     // here is swallowed and cannot wipe isAuthenticated / permissions.
+    // Skips if a poll is in-flight and backs off after failures.
     const pollProfile = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
         return;
       }
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       try {
         const { user } = await authApi.refresh();
         const store = useAuthStore.getState();
@@ -56,21 +63,36 @@ export function useProfileSync() {
           username: user.username,
           image: user.image,
         });
+        // Success — restore normal interval
+        if (failedRef.current) {
+          failedRef.current = false;
+          restartInterval(SYNC_INTERVAL);
+        }
       } catch {
         // Transient network/auth blip — leave session alone.
-        // Global 401 interceptor still handles true session death on other calls.
+        // Back off to FAILED_SYNC_INTERVAL until next success.
+        if (!failedRef.current) {
+          failedRef.current = true;
+          restartInterval(FAILED_SYNC_INTERVAL);
+        }
+      } finally {
+        inFlightRef.current = false;
       }
     };
 
-    const startInterval = () => {
+    const startInterval = (ms: number = failedRef.current ? FAILED_SYNC_INTERVAL : SYNC_INTERVAL) => {
       if (intervalRef.current) return;
-      intervalRef.current = setInterval(pollProfile, SYNC_INTERVAL);
+      intervalRef.current = setInterval(pollProfile, ms);
     };
     const stopInterval = () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+    };
+    const restartInterval = (ms: number) => {
+      stopInterval();
+      intervalRef.current = setInterval(pollProfile, ms);
     };
 
     const onVisibility = () => {

@@ -164,14 +164,25 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           error: null,
         });
       } catch (error: unknown) {
-        // If login is in-flight, the 401 is from the OLD session being replaced.
-        // Do NOT clear auth state — login() will set it once it completes.
         const { loginGuard } = await import('../services/api/client');
         if (loginGuard.active) {
           (set as AuthSet)({ isRefreshing: false, isReady: true });
-          return; // silently swallow — login() owns the auth state now
+          return;
         }
-        // Clean up any remaining localStorage items from previous token-based auth
+        const e = error as { status?: number; response?: { status?: number }; retryAfterMs?: number; message?: string };
+        const status = e.status ?? e.response?.status;
+        const isTransient = status === 429 || status === 408 || (typeof status === 'number' && status >= 500) || status === undefined;
+        const isCooldown = e.message === 'Refresh cooldown active';
+        if (isTransient || isCooldown) {
+          (set as AuthSet)({ isRefreshing: false, isReady: true });
+          reportSystemError({
+            level: 'warn',
+            component: 'AuthStore:refresh',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+          throw error;
+        }
         localStorage.removeItem('catalyst-auth-token');
         localStorage.removeItem('catalyst-session-token');
         sessionStorage.removeItem('catalyst-auth-token');
