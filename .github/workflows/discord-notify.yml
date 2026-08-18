@@ -9,34 +9,30 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   notify:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Send Discord webhook
+      - name: Send live Discord embed (auto-updating)
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            COMMIT_COUNT=$(jq '.commits | length' < "$GITHUB_EVENT_PATH")
+          set -euo pipefail
 
-            # Build commit list (max 5 shown)
-            COMMITS=$(jq -r '
-              .commits[-5:][] |
-              "• [`" + (.id[0:7]) + "`](<" + $ENV.GITHUB_SERVER_URL + "/" + $ENV.GITHUB_REPOSITORY + "/commit/" + .id + ">) " +
-              (.message | split("\n")[0])
-            ' < "$GITHUB_EVENT_PATH")
+          if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
+            echo "⊘ DISCORD_WEBHOOK_URL not set — skipping"
+            exit 0
+          fi
 
-            DESCRIPTION="$COMMITS"
-            if [ "$COMMIT_COUNT" -gt 5 ]; then
-              DESCRIPTION="$DESCRIPTION"$'\n'"… and $((COMMIT_COUNT - 5)) more"
-            fi
+          ACTOR_AVATAR="https://github.com/${GITHUB_ACTOR}.png"
+          REPO="${GITHUB_REPOSITORY}"
+          SERVER_URL="${GITHUB_SERVER_URL:-https://github.com}"
 
-            EMBED_TITLE="Push to \`$(echo "$GITHUB_REF" | sed 's|refs/heads/||')\` — $COMMIT_COUNT commit(s)"
-            EMBED_COLOR=5814783
-
-          elif [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          # ── PR events: single fire-and-forget embed (no CI to follow) ──
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
             ACTION=$(jq -r '.action' < "$GITHUB_EVENT_PATH")
             PR_NUM=$(jq -r '.pull_request.number' < "$GITHUB_EVENT_PATH")
             PR_TITLE=$(jq -r '.pull_request.title' < "$GITHUB_EVENT_PATH")
@@ -45,42 +41,297 @@ jobs:
             PR_STATE=$(jq -r '.pull_request.state' < "$GITHUB_EVENT_PATH")
             PR_MERGED=$(jq -r '.pull_request.merged' < "$GITHUB_EVENT_PATH")
 
-            EMBED_TITLE="PR #$PR_NUM $ACTION: $PR_TITLE"
-            DESCRIPTION="by \`$PR_AUTHOR\` — $PR_STATE"
-            EMBED_URL="$PR_URL"
+            EMBED_TITLE="PR #${PR_NUM} ${ACTION}: ${PR_TITLE}"
+            DESCRIPTION="by \`${PR_AUTHOR}\` — ${PR_STATE}"
+            EMBED_URL="${PR_URL}"
 
-            if [ "$ACTION" = "closed" ]; then
-              if [ "$PR_MERGED" = "true" ]; then
-                EMBED_COLOR=5763719  # green = merged
+            if [ "${ACTION}" = "closed" ]; then
+              if [ "${PR_MERGED}" = "true" ]; then
+                EMBED_COLOR=5763719
               else
-                EMBED_COLOR=15158332  # red = closed without merge
+                EMBED_COLOR=15158332
               fi
             else
-              EMBED_COLOR=5814783  # blurple = opened
+              EMBED_COLOR=5814783
             fi
+
+            jq -n \
+              --arg username "GitHub" \
+              --arg avatar_url "${ACTOR_AVATAR}" \
+              --arg title "${EMBED_TITLE}" \
+              --arg description "${DESCRIPTION}" \
+              --arg url "${EMBED_URL}" \
+              --argjson color "${EMBED_COLOR}" \
+              --arg repo "${REPO}" \
+              '{
+                username: $username,
+                avatar_url: $avatar_url,
+                embeds: [{
+                  title: $title,
+                  description: $description,
+                  url: $url,
+                  color: $color,
+                  footer: { text: $repo },
+                  timestamp: now | todateiso8601
+                }]
+              }' | curl -sf -H "Content-Type: application/json" -X POST "${DISCORD_WEBHOOK_URL}" -d @- > /dev/null
+
+            echo "✅ PR Discord notification sent"
+            exit 0
           fi
 
-          ACTOR_AVATAR="https://github.com/$GITHUB_ACTOR.png"
+          # ── Push: live CI/CD — Catalyst embed (post once, PATCH to final) ──
+          BRANCH=$(echo "${GITHUB_REF}" | sed 's|refs/heads/||')
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          COMMIT_COUNT=$(jq '.commits | length' < "$GITHUB_EVENT_PATH")
+          COMMITS=$(jq -r --arg srv "$SERVER_URL" --arg repo "$REPO" '
+            .commits[-5:][] |
+            "• [`" + (.id[0:7]) + "`](<" + $srv + "/" + $repo + "/commit/" + .id + ">) " +
+            (.message | split("\n")[0] | if length > 80 then .[0:80] + "…" else . end) +
+            " — " + .author.username
+          ' < "$GITHUB_EVENT_PATH")
 
-          jq -n \
-            --arg username "GitHub" \
-            --arg avatar_url "$ACTOR_AVATAR" \
-            --arg title "$EMBED_TITLE" \
-            --arg description "$DESCRIPTION" \
-            --arg url "${EMBED_URL:-}" \
-            --argjson color "${EMBED_COLOR:-5814783}" \
-            --arg repo "$GITHUB_REPOSITORY" \
+          DESCRIPTION="${COMMITS}"
+          if [ "${COMMIT_COUNT}" -gt 5 ]; then
+            DESCRIPTION="${DESCRIPTION}"$'\n'"… and $((COMMIT_COUNT - 5)) more"
+          fi
+
+          COMMIT_URL="${SERVER_URL}/${REPO}/commit/${GITHUB_SHA}"
+          # Initial running embed — yellow, patched to green/red on completion.
+          INITIAL_TITLE="🟡 CI/CD — Catalyst • Running — \`${BRANCH}\` — ${COMMIT_COUNT} commit(s)"
+          INITIAL_DESC="${DESCRIPTION}"$'\n\n'"⏳ Workflow queued — waiting for **CI/CD — Catalyst** to start…"$'\n'"[View commit](<${COMMIT_URL}>) • \`${SHORT_SHA}\` • by \`${GITHUB_ACTOR}\`"
+          INITIAL_COLOR=16776960
+
+          PAYLOAD=$(jq -n \
+            --arg username "Catalyst CI" \
+            --arg avatar_url "${ACTOR_AVATAR}" \
+            --arg title "${INITIAL_TITLE}" \
+            --arg description "${INITIAL_DESC}" \
+            --arg url "${COMMIT_URL}" \
+            --argjson color "${INITIAL_COLOR}" \
+            --arg repo "${REPO}" \
             '{
               username: $username,
               avatar_url: $avatar_url,
               embeds: [{
                 title: $title,
                 description: $description,
-                url: (if $url != "" then $url else null end),
+                url: $url,
+                color: $color,
+                footer: { text: $repo + " • live — auto-updating" },
+                timestamp: now | todateiso8601
+              }]
+            }')
+
+          echo "→ Posting initial running embed…"
+          RESP=$(curl -s -w "\n%{http_code}" -H "Content-Type: application/json" -X POST "${DISCORD_WEBHOOK_URL}?wait=true" -d "${PAYLOAD}" || true)
+          HTTP_CODE=$(echo "${RESP}" | tail -n1)
+          BODY=$(echo "${RESP}" | sed '$d')
+
+          if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -ge 300 ]; then
+            echo "⚠️ Initial Discord POST failed (HTTP ${HTTP_CODE}): ${BODY}"
+            echo "${BODY}"
+            exit 0
+          fi
+
+          MESSAGE_ID=$(echo "${BODY}" | jq -r '.id // empty')
+          if [ -z "${MESSAGE_ID}" ]; then
+            echo "⚠️ No message id in Discord response — cannot auto-update. Body: ${BODY}"
+            exit 0
+          fi
+
+          echo "✅ Initial embed posted — message id ${MESSAGE_ID}"
+          EDIT_URL="${DISCORD_WEBHOOK_URL}/messages/${MESSAGE_ID}"
+
+          # ── Discover the CI/CD — Catalyst run for this SHA ──
+          API_BASE="${GITHUB_API_URL:-https://api.github.com}"
+          CI_RUN_ID=""
+          echo "→ Searching for CI/CD — Catalyst run for ${SHORT_SHA}…"
+          for attempt in $(seq 1 18); do
+            # GH API: list runs for this repo, filter by head_sha + workflow name.
+            RUNS_JSON=$(curl -sf \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "${API_BASE}/repos/${REPO}/actions/runs?per_page=100&event=push&branch=${BRANCH}" || true)
+
+            if [ -n "${RUNS_JSON}" ]; then
+              CI_RUN_ID=$(echo "${RUNS_JSON}" | jq -r --arg sha "${GITHUB_SHA}" '
+                .workflow_runs // [] | map(select(.head_sha == $sha and .name == "CI/CD — Catalyst")) | .[0].id // empty
+              ')
+              if [ -n "${CI_RUN_ID}" ] && [ "${CI_RUN_ID}" != "null" ]; then
+                echo "→ Found CI run ${CI_RUN_ID} (attempt ${attempt})"
+                break
+              fi
+            fi
+
+            # Also try without branch filter (forks / detached edge)
+            if [ -z "${CI_RUN_ID}" ] && [ $((attempt % 3)) -eq 0 ]; then
+              RUNS_JSON=$(curl -sf \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                "${API_BASE}/repos/${REPO}/actions/runs?per_page=100&event=push" || true)
+              CI_RUN_ID=$(echo "${RUNS_JSON}" | jq -r --arg sha "${GITHUB_SHA}" '
+                .workflow_runs // [] | map(select(.head_sha == $sha and .name == "CI/CD — Catalyst")) | .[0].id // empty
+              ' 2>/dev/null || true)
+              if [ -n "${CI_RUN_ID}" ] && [ "${CI_RUN_ID}" != "null" ]; then
+                echo "→ Found CI run ${CI_RUN_ID} via unfiltered search"
+                break
+              fi
+            fi
+
+            echo "  …not found yet (attempt ${attempt}/18) — waiting 10s"
+            sleep 10
+          done
+
+          if [ -z "${CI_RUN_ID}" ] || [ "${CI_RUN_ID}" = "null" ]; then
+            echo "⚠️ No CI/CD — Catalyst run found for ${SHORT_SHA} after ~3min — marking embed as unknown"
+            FINAL_TITLE="⚪ CI/CD — Catalyst • Unknown — \`${BRANCH}\`"
+            FINAL_DESC="${DESCRIPTION}"$'\n\n'"⚠️ Could not locate the **CI/CD — Catalyst** run for \`${SHORT_SHA}\`."$'\n'"[View commit](<${COMMIT_URL}>)"
+            FINAL_COLOR=9807270
+            FINAL_URL="${COMMIT_URL}"
+            jq -n \
+              --arg title "${FINAL_TITLE}" \
+              --arg description "${FINAL_DESC}" \
+              --arg url "${FINAL_URL}" \
+              --argjson color "${FINAL_COLOR}" \
+              --arg repo "${REPO}" \
+              '{
+                embeds: [{
+                  title: $title,
+                  description: $description,
+                  url: $url,
+                  color: $color,
+                  footer: { text: $repo + " • " + (now | todateiso8601) },
+                  timestamp: now | todateiso8601
+                }]
+              }' | curl -sf -H "Content-Type: application/json" -X PATCH "${EDIT_URL}" -d @- > /dev/null || true
+            exit 0
+          fi
+
+          RUN_URL="${SERVER_URL}/${REPO}/actions/runs/${CI_RUN_ID}"
+
+          # Patch once to “running + linked” so the embed is immediately clickable.
+          RUNNING_TITLE="🟡 CI/CD — Catalyst • Running — \`${BRANCH}\`"
+          RUNNING_DESC="${DESCRIPTION}"$'\n\n'"⏳ **CI/CD — Catalyst** is running…"$'\n'"[View commit](<${COMMIT_URL}>) • [View workflow](<${RUN_URL}>) • \`${SHORT_SHA}\`"
+          RUNNING_COLOR=16776960
+          jq -n \
+            --arg title "${RUNNING_TITLE}" \
+            --arg description "${RUNNING_DESC}" \
+            --arg url "${RUN_URL}" \
+            --argjson color "${RUNNING_COLOR}" \
+            --arg repo "${REPO}" \
+            '{
+              embeds: [{
+                title: $title,
+                description: $description,
+                url: $url,
+                color: $color,
+                footer: { text: $repo + " • live — auto-updating" },
+                timestamp: now | todateiso8601
+              }]
+            }' | curl -sf -H "Content-Type: application/json" -X PATCH "${EDIT_URL}" -d @- > /dev/null || true
+          echo "→ Embed linked to run ${RUN_URL}"
+
+          # ── Poll until completed (max ~30 min) ──
+          CONCLUSION=""
+          STATUS=""
+          ELAPSED=0
+          MAX_WAIT=180
+          for _ in $(seq 1 ${MAX_WAIT}); do
+            RUN_JSON=$(curl -sf \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "${API_BASE}/repos/${REPO}/actions/runs/${CI_RUN_ID}" || true)
+
+            if [ -n "${RUN_JSON}" ]; then
+              STATUS=$(echo "${RUN_JSON}" | jq -r '.status // empty')
+              CONCLUSION=$(echo "${RUN_JSON}" | jq -r '.conclusion // empty')
+              if [ "${STATUS}" = "completed" ]; then
+                echo "→ CI completed — conclusion=${CONCLUSION}"
+                break
+              fi
+            fi
+
+            ELAPSED=$((ELAPSED + 10))
+            # Light heartbeat every 2 min so Discord doesn't look frozen
+            if [ $((ELAPSED % 120)) -eq 0 ]; then
+              echo "  …still ${STATUS:-unknown} after ${ELAPSED}s"
+            fi
+            sleep 10
+          done
+
+          if [ "${STATUS}" != "completed" ]; then
+            echo "⚠️ Poll timed out after ~30min (last status=${STATUS})"
+            CONCLUSION="timed_out"
+          fi
+
+          # ── Fetch job summary for final embed ──
+          JOBS_JSON=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${API_BASE}/repos/${REPO}/actions/runs/${CI_RUN_ID}/jobs?per_page=100" || echo '{"jobs":[]}')
+
+          JOBS_MD=$(echo "${JOBS_JSON}" | jq -r '
+            .jobs // [] |
+            map(
+              (if .conclusion == "success" then "✅"
+               elif .conclusion == "failure" then "❌"
+               elif .conclusion == "cancelled" then "⚪"
+               elif .conclusion == "skipped" then "⊘"
+               elif .conclusion == null then "⏳"
+               else "•" end)
+              + " " + .name
+              + " — " + (.conclusion // .status)
+            ) | join("\n")
+          ')
+
+          # Truncate jobs block to keep embed under 4096 chars
+          if [ ${#JOBS_MD} -gt 800 ]; then
+            JOBS_MD=$(echo "${JOBS_MD}" | head -c 800)
+            JOBS_MD="${JOBS_MD}…"
+          fi
+
+          # ── Final color / title by conclusion ──
+          case "${CONCLUSION}" in
+            success)
+              FINAL_ICON="✅"; FINAL_LABEL="Passed"; FINAL_COLOR=5763719 ;;
+            failure)
+              FINAL_ICON="❌"; FINAL_LABEL="Failed"; FINAL_COLOR=15158332 ;;
+            cancelled)
+              FINAL_ICON="⚪"; FINAL_LABEL="Cancelled"; FINAL_COLOR=9807270 ;;
+            timed_out)
+              FINAL_ICON="⏱️"; FINAL_LABEL="Timed out"; FINAL_COLOR=15158332 ;;
+            *)
+              FINAL_ICON="⚪"; FINAL_LABEL="${CONCLUSION:-unknown}"; FINAL_COLOR=9807270 ;;
+          esac
+
+          FINAL_TITLE="${FINAL_ICON} CI/CD — Catalyst • ${FINAL_LABEL} — \`${BRANCH}\`"
+          FINAL_DESC="${DESCRIPTION}"$'\n\n'"${FINAL_ICON} **${FINAL_LABEL}** — [View workflow](<${RUN_URL}>) • \`${SHORT_SHA}\`"$'\n'"[View commit](<${COMMIT_URL}>)"$'\n\n'"**Jobs:**"$'\n'"${JOBS_MD}"
+
+          # Discord embed description limit is 4096; cap safely.
+          if [ ${#FINAL_DESC} -gt 4000 ]; then
+            FINAL_DESC=$(echo "${FINAL_DESC}" | head -c 4000)
+            FINAL_DESC="${FINAL_DESC}…"
+          fi
+
+          echo "→ Patching final embed: ${FINAL_LABEL} (color ${FINAL_COLOR})"
+          jq -n \
+            --arg title "${FINAL_TITLE}" \
+            --arg description "${FINAL_DESC}" \
+            --arg url "${RUN_URL}" \
+            --argjson color "${FINAL_COLOR}" \
+            --arg repo "${REPO}" \
+            '{
+              embeds: [{
+                title: $title,
+                description: $description,
+                url: $url,
                 color: $color,
                 footer: { text: $repo },
                 timestamp: now | todateiso8601
               }]
-            }' | curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK_URL" -d @-
+            }' | curl -sf -H "Content-Type: application/json" -X PATCH "${EDIT_URL}" -d @- > /dev/null
+
+          echo "✅ Live embed finalized — ${FINAL_LABEL}"
 
         if: env.DISCORD_WEBHOOK_URL != ''
