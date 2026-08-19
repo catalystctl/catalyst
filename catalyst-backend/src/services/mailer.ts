@@ -196,6 +196,32 @@ export const upsertSmtpSettings = async (payload: SmtpSettings) => {
 };
 
 export const getSecuritySettings = async (): Promise<SecuritySettings> => {
+  // Benchmark fair mode: return inflated limits to disable DB-driven throttles
+  const fairMode =
+    process.env.DISABLE_RATE_LIMIT === "1" ||
+    process.env.DISABLE_RATE_LIMIT === "true" ||
+    process.env.BENCHMARK_DISABLE_RATE_LIMIT === "1" ||
+    process.env.BENCHMARK_DISABLE_RATE_LIMIT === "true" ||
+    process.env.BENCHMARK_FAIR === "1" ||
+    process.env.BENCHMARK_FAIR === "true";
+  if (fairMode) {
+    return {
+      ...DEFAULT_SECURITY_SETTINGS,
+      authRateLimitMax: 1_000_000,
+      authRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
+      fileRateLimitMax: 1_000_000,
+      fileRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
+      consoleRateLimitMax: 1_000_000,
+      consoleRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
+      agentMessageMax: 1_000_000,
+      agentMetricsMax: 1_000_000,
+      serverMetricsMax: 1_000_000,
+      fileTunnelRateLimitMax: 1_000_000,
+      fileTunnelRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
+      fileTunnelMaxPendingPerNode: 500,
+      fileTunnelConcurrentMax: 100,
+    };
+  }
   const settings = await prisma.systemSetting.findUnique({ where: { id: SECURITY_SETTING_ID } });
   if (!settings) {
     return { ...DEFAULT_SECURITY_SETTINGS };

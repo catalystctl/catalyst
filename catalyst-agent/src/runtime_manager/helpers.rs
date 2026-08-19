@@ -562,12 +562,28 @@ pub async fn read_cgroup_cpu_usage(path: &str) -> Option<u64> {
 }
 
 pub async fn read_cgroup_memory(path: &str) -> Option<u64> {
-    tokio::fs::read_to_string(format!("{}/memory.current", path))
+    let current_str = tokio::fs::read_to_string(format!("{}/memory.current", path))
         .await
-        .ok()?
-        .trim()
-        .parse()
-        .ok()
+        .ok()?;
+    let current: u64 = current_str.trim().parse().ok()?;
+    // cgroup v2 `memory.current` includes reclaimable page cache. Reporting
+    // it directly inflates the bar (e.g. 1019 MiB vs 264 MiB working set).
+    // Derive working set = current - inactive_file (v1: total_inactive_file),
+    // matching `docker stats` / cAdvisor / Kubernetes `workingSetBytes`.
+    if let Ok(stat) = tokio::fs::read_to_string(format!("{}/memory.stat", path)).await {
+        for line in stat.lines() {
+            let mut parts = line.split_whitespace();
+            match parts.next() {
+                Some("inactive_file") | Some("total_inactive_file") => {
+                    if let Some(v) = parts.next().and_then(|s| s.parse::<u64>().ok()) {
+                        return Some(current.saturating_sub(v));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    Some(current)
 }
 
 pub async fn read_cgroup_memory_limit(path: &str) -> Option<u64> {

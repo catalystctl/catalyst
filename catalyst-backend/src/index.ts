@@ -555,11 +555,27 @@ async function bootstrap() {
 					: false,
 		});
 
+		// --- Benchmark fair mode: disable rate limiting for max-throughput tests ---
+		// Set DISABLE_RATE_LIMIT=1, BENCHMARK_DISABLE_RATE_LIMIT=1, or BENCHMARK_FAIR=1
+		// to bypass all rate limiting (global + per-route). Also disables external
+		// polling (auto-updater) and background retention noise for fair comparisons.
+		const fairMode =
+			process.env.DISABLE_RATE_LIMIT === "1" ||
+			process.env.DISABLE_RATE_LIMIT === "true" ||
+			process.env.BENCHMARK_DISABLE_RATE_LIMIT === "1" ||
+			process.env.BENCHMARK_DISABLE_RATE_LIMIT === "true" ||
+			process.env.BENCHMARK_FAIR === "1" ||
+			process.env.BENCHMARK_FAIR === "true";
+		if (fairMode) {
+			logger.warn("BENCHMARK FAIR MODE active: rate limiting disabled, external polling suppressed");
+		}
+
 		await app.register(fastifyRateLimit, {
 			global: true,
-			max: 1200, // Per-user/per-IP limit — raised from 600 to accommodate power
-			               // users with multiple tabs polling at 10–30s intervals.
+			max: fairMode ? 1_000_000 : 1200, // 1M/min in fair mode = effectively disabled; 1200 normal
 			timeWindow: "1 minute",
+			// In fair mode, never block on errors — ensure max throughput
+			skipOnError: fairMode ? true : false,
 			errorResponseBuilder: (_req, context) => {
 				const err = new Error("Too many requests. Please try again later.");
 				(err as any).statusCode = context.statusCode;
@@ -599,6 +615,9 @@ async function bootstrap() {
 				return `ip:${ip}`;
 			},
 			allowList: async (request) => {
+				// Benchmark fair mode: bypass ALL rate limiting for max throughput
+				if (fairMode) return true;
+
 				// Only bypass rate limiting for internal/agent endpoints.
 				// User-facing endpoints are rate-limited even when agent headers are present,
 				// to prevent abuse if an agent API key is compromised.
@@ -640,7 +659,6 @@ async function bootstrap() {
 				}
 				return verifyAgentApiKey(prisma, nodeId as string, token);
 			},
-			skipOnError: false,
 		});
 
 		await app.register(fastifyMultipart, {
@@ -1720,13 +1738,16 @@ async function bootstrap() {
 			await alertService.start();
 			logger.info("Alert monitoring service started");
 
-			// Start auto-updater
-			if (process.env.AUTO_UPDATE_ENABLED === "true") {
+			// Start auto-updater — disabled in benchmark fair mode to eliminate
+			// external GitHub polling that steals network/CPU from throughput test
+			if (process.env.AUTO_UPDATE_ENABLED === "true" && !fairMode) {
 				const { scheduleUpdateCheck } = await import("./services/auto-updater");
 				scheduleUpdateCheck(
 					parseInt(process.env.AUTO_UPDATE_INTERVAL_MS || "3600000"),
 					logger,
 				);
+			} else if (fairMode) {
+				logger.info("Benchmark fair mode: auto-update polling disabled");
 			}
 
 			const retentionJitter = () => Math.floor(Math.random() * 60_000);

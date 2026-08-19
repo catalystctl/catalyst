@@ -159,16 +159,28 @@ export function initAuth() {
     },
     trustedOrigins: buildTrustedOrigins(),
     database: prismaAdapter(prisma, { provider: "postgresql" }),
-    rateLimit: {
-      enabled: true,
-      window: 60,
-      max: 30,
-      customRules: {
-        '/sign-in/email': { window: 60, max: 5 },
-        '/sign-up/email': { window: 60, max: 5 },
-        '/request-password-reset': { window: 300, max: 3 },
-      },
-    },
+    rateLimit: (() => {
+      const fairMode =
+        process.env.DISABLE_RATE_LIMIT === "1" ||
+        process.env.DISABLE_RATE_LIMIT === "true" ||
+        process.env.BENCHMARK_DISABLE_RATE_LIMIT === "1" ||
+        process.env.BENCHMARK_DISABLE_RATE_LIMIT === "true" ||
+        process.env.BENCHMARK_FAIR === "1" ||
+        process.env.BENCHMARK_FAIR === "true";
+      if (fairMode) {
+        return { enabled: false, window: 60, max: 1_000_000 };
+      }
+      return {
+        enabled: true,
+        window: 60,
+        max: 30,
+        customRules: {
+          '/sign-in/email': { window: 60, max: 5 },
+          '/sign-up/email': { window: 60, max: 5 },
+          '/request-password-reset': { window: 300, max: 3 },
+        },
+      };
+    })(),
     emailAndPassword: {
       enabled: true,
       // Dynamic — reads from the admin-configurable security setting.

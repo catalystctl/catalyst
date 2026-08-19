@@ -68,3 +68,9 @@ image.png
 
 # Catalyst Code harness local state
 .catalyst-code/
+
+# Benchmark results (local only — not for commit)
+benchmarks/
+SESSION_BRIDGE_CATCODE_OPENCODE.md
+.mythos.yml
+.sphinx/

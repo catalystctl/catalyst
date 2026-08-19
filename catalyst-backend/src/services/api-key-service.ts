@@ -242,8 +242,15 @@ export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | nu
     return null;
   }
 
-  // Rate limit check and refill
-  if (apiKeyRecord.rateLimitEnabled && apiKeyRecord.remaining !== null) {
+  // Rate limit check and refill — bypass in benchmark fair mode
+  const fairMode =
+    process.env.DISABLE_RATE_LIMIT === "1" ||
+    process.env.DISABLE_RATE_LIMIT === "true" ||
+    process.env.BENCHMARK_DISABLE_RATE_LIMIT === "1" ||
+    process.env.BENCHMARK_DISABLE_RATE_LIMIT === "true" ||
+    process.env.BENCHMARK_FAIR === "1" ||
+    process.env.BENCHMARK_FAIR === "true";
+  if (!fairMode && apiKeyRecord.rateLimitEnabled && apiKeyRecord.remaining !== null) {
     const now = new Date();
     const lastRefill = apiKeyRecord.lastRefillAt ? new Date(apiKeyRecord.lastRefillAt) : now;
     const elapsed = now.getTime() - lastRefill.getTime();
