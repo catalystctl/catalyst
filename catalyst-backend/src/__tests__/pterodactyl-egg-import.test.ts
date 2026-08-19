@@ -1041,8 +1041,8 @@ describe.skipIf(!eggsAvailable)('Pterodactyl Egg Import — All JSON Files in eg
 				console.log('  ║  DUPLICATE EGG NAMES                                          ║');
 				console.log('  ╠══════════════════════════════════════════════════════════════╣');
 				for (const { name, paths } of duplicateNames.slice(0, 10)) {
-					console.log(`  ║  "${name}" appears ${paths.length}x:` +
-						` ${paths.map((p) => p.slice(0, 40)).join(', ')}`.padEnd(45));
+					console.log(`  ║  "${name}" appears ${paths.length}x:${ 
+						` ${paths.map((p) => p.slice(0, 40)).join(', ')}`.padEnd(45)}`);
 				}
 				console.log('  ╚══════════════════════════════════════════════════════════════╝');
 			}

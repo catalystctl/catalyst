@@ -142,7 +142,10 @@ LABEL org.opencontainers.image.source="https://github.com/catalystctl/catalyst" 
       org.opencontainers.image.description="Catalyst backend API (pnpm deploy production tree)" \
       org.opencontainers.image.licenses="MIT"
 
-# Stay root so the entrypoint can join docker.sock's group, then su-exec.
+# Stay root so the entrypoint can join docker.sock's group, then su-exec to 'catalyst'.
+# IAC:docker-root-user is intentional here - entrypoint drops privileges immediately after chown/docker group join.
+# Hadolint/Checkov: allow root in final stage for docker.sock handling.
+# sphinx:ignore iac:docker-root-user - entrypoint su-exec's to catalyst
 # Expose port
 EXPOSE 3000 2022
 

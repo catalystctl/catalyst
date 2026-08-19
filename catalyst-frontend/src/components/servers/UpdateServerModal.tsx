@@ -116,19 +116,16 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     onError: () => notifyError('Failed to update server'),
   });
 
-  const [prevServer, setPrevServer] = useState(server);
-  if (server !== prevServer) {
-    setPrevServer(server);
-    if (server) {
-      setName(server.name ?? '');
-      if (server.allocatedMemoryMb) setMemory(String(server.allocatedMemoryMb));
-      if (server.allocatedCpuCores) setCpu(String(server.allocatedCpuCores));
-      if (server.allocatedDiskMb) setDisk(String(server.allocatedDiskMb));
-      setDatabaseAllocation(String(server.databaseAllocation ?? 0));
-      setPrimaryIp(server.primaryIp ?? '');
-      setAllocationId('');
-    }
-  }
+  useEffect(() => {
+    if (!open || !server) return;
+    setName(server.name ?? '');
+    setMemory(String(server.allocatedMemoryMb ?? 1024));
+    setCpu(String(server.allocatedCpuCores ?? 1));
+    setDisk(String(server.allocatedDiskMb ?? 10240));
+    setDatabaseAllocation(String(server.databaseAllocation ?? 0));
+    setPrimaryIp(server.primaryIp ?? '');
+    setAllocationId('');
+  }, [open, server?.id]);
 
   const [prevIpDeps, setPrevIpDeps] = useState({
     nodeId: server?.nodeId,

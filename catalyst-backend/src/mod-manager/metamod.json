@@ -1,0 +1,15 @@
+{
+  "id": "metamod",
+  "name": "Metamod:Source",
+  "baseUrl": "https://api.github.com",
+  "headers": {
+    "User-Agent": "CatalystPluginManager/1.0",
+    "Accept": "application/vnd.github+json"
+  },
+  "endpoints": {
+    "releases": "/repos/alliedmodders/metamod-source/releases",
+    "release": "/repos/alliedmodders/metamod-source/releases/tags/{tag}",
+    "latest": "/repos/alliedmodders/metamod-source/releases/latest",
+    "repo": "alliedmodders/metamod-source"
+  }
+}

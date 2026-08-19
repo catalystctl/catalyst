@@ -98,6 +98,7 @@ export const provisionDatabase = async (
 ) => {
   try {
     await withDatabaseConnection(host, async (connection) => {
+      // sphinx:ignore sql-injection - identifiers/values escaped via mysql.escapeId/mysql.escape (no placeholders for DDL)
       const databaseId = mysql.escapeId(databaseName);
       const escapedUser = mysql.escape(username);
       const escapedPassword = mysql.escape(password);
@@ -184,6 +185,7 @@ export const dropDatabase = async (
 ) => {
   try {
     await withDatabaseConnection(host, async (connection) => {
+      // sphinx:ignore sql-injection - escaped via mysql.escapeId/mysql.escape, DDL cannot use ? placeholders
       const databaseId = mysql.escapeId(databaseName);
       const escapedUser = mysql.escape(username);
       await connection.execute(`DROP DATABASE IF EXISTS ${databaseId}`);

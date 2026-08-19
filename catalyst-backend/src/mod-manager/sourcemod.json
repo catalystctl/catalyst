@@ -1,0 +1,15 @@
+{
+  "id": "sourcemod",
+  "name": "SourceMod",
+  "baseUrl": "https://api.github.com",
+  "headers": {
+    "User-Agent": "CatalystPluginManager/1.0",
+    "Accept": "application/vnd.github+json"
+  },
+  "endpoints": {
+    "releases": "/repos/alliedmodders/sourcemod/releases",
+    "release": "/repos/alliedmodders/sourcemod/releases/tags/{tag}",
+    "latest": "/repos/alliedmodders/sourcemod/releases/latest",
+    "repo": "alliedmodders/sourcemod"
+  }
+}

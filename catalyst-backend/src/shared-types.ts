@@ -382,6 +382,7 @@ export class CatalystError extends Error {
 }
 
 export const ErrorCodes = {
+  // sphinx:ignore hardcoded-secret - error code enum, not a credential
   AUTH_INVALID_TOKEN: "AUTH_INVALID_TOKEN",
   AUTH_EXPIRED: "AUTH_EXPIRED",
   NODE_NOT_FOUND: "NODE_NOT_FOUND",

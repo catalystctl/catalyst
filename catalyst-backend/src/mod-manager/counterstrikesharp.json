@@ -1,0 +1,15 @@
+{
+  "id": "counterstrikesharp",
+  "name": "CounterStrikeSharp",
+  "baseUrl": "https://api.github.com",
+  "headers": {
+    "User-Agent": "CatalystPluginManager/1.0",
+    "Accept": "application/vnd.github+json"
+  },
+  "endpoints": {
+    "releases": "/repos/roflmuffin/CounterStrikeSharp/releases",
+    "release": "/repos/roflmuffin/CounterStrikeSharp/releases/tags/{tag}",
+    "latest": "/repos/roflmuffin/CounterStrikeSharp/releases/latest",
+    "repo": "roflmuffin/CounterStrikeSharp"
+  }
+}

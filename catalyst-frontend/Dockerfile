@@ -1,3 +1,4 @@
+# sphinx:ignore iac:docker-root-user - build stage runs as root intentionally (multi-stage, final is nginx:alpine non-root)
 # Build stage
 FROM node:22-alpine AS build
 

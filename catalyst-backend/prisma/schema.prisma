@@ -206,6 +206,7 @@ model ServerAccess {
 
   @@unique([userId, serverId])
   @@index([serverId, userId])
+  @@index([userId])
 }
 
 model ServerAccessInvite {
@@ -496,6 +497,10 @@ model ServerTemplate {
   updatedAt   DateTime  @updatedAt
 
   servers Server[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([nestId])
+  @@index([nestId, createdAt(sort: Desc)])
 }
 
 // ============================================================================
@@ -578,6 +583,9 @@ model Server {
   @@index([locationId])
   @@index([templateId])
   @@index([status, nodeId])
+  @@index([updatedAt(sort: Desc)])
+  @@index([ownerId, updatedAt(sort: Desc)])
+  @@index([nodeId, updatedAt(sort: Desc)])
 }
 
 // ============================================================================

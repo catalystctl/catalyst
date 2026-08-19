@@ -1,0 +1,47 @@
+{
+  "frameworks": [
+    {
+      "id": "metamod",
+      "name": "Metamod:Source",
+      "description": "Core plugin layer required by CounterStrikeSharp and SourceMod. Automatically patches gameinfo.gi.",
+      "provider": "metamod",
+      "repo": "alliedmodders/metamod-source",
+      "assetPattern": "linux\\.tar\\.gz$",
+      "assetExcludePattern": "windows",
+      "installPath": "game/csgo",
+      "dependencies": [],
+      "configPatches": ["gameinfo.gi"],
+      "docsUrl": "https://wiki.alliedmods.net/Metamod:Source"
+    },
+    {
+      "id": "counterstrikesharp",
+      "name": "CounterStrikeSharp",
+      "description": "Modern .NET framework for CS2 plugins. Requires Metamod:Source.",
+      "provider": "counterstrikesharp",
+      "repo": "roflmuffin/CounterStrikeSharp",
+      "assetPattern": "with-runtime-linux.*\\.zip$",
+      "assetExcludePattern": "windows",
+      "installPath": "game/csgo",
+      "dependencies": ["metamod"],
+      "configPatches": ["metaplugins.ini"],
+      "docsUrl": "https://docs.cssharp.dev"
+    },
+    {
+      "id": "sourcemod",
+      "name": "SourceMod",
+      "description": "SourceMod for Source2 (experimental). Requires Metamod:Source.",
+      "provider": "sourcemod",
+      "repo": "alliedmodders/sourcemod",
+      "assetPattern": "linux\\.tar\\.gz$",
+      "assetExcludePattern": "windows",
+      "installPath": "game/csgo",
+      "dependencies": ["metamod"],
+      "configPatches": [],
+      "docsUrl": "https://wiki.alliedmods.net/SourceMod"
+    }
+  ],
+  "pluginPath": "game/csgo/addons/counterstrikesharp/plugins",
+  "gameInfoPath": "game/csgo/gameinfo.gi",
+  "metapluginsPath": "game/csgo/addons/metamod/metaplugins.ini",
+  "metamodVdfPaths": ["game/csgo/addons/metamod.vdf", "game/csgo/addons/metamod_x64.vdf"]
+}

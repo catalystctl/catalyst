@@ -99,9 +99,9 @@ export const formatIpv6 = (value: bigint): string => {
     const before = parts.slice(0, bestStart).join(":");
     const after = parts.slice(bestStart + bestLen).join(":");
     if (!before && !after) return "::";
-    if (!before) return "::" + after;
-    if (!after) return before + "::";
-    return before + "::" + after;
+    if (!before) return `::${  after}`;
+    if (!after) return `${before  }::`;
+    return `${before  }::${  after}`;
   }
 
   return parts.join(":");

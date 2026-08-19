@@ -384,6 +384,16 @@ export const modManagerProviders = new Map<string, string>(
   [
     ["curseforge", path.resolve(__dirname, "../mod-manager/curseforge.json")],
     ["modrinth", path.resolve(__dirname, "../mod-manager/modrinth.json")],
+    ["metamod", path.resolve(__dirname, "../mod-manager/metamod.json")],
+    ["counterstrikesharp", path.resolve(__dirname, "../mod-manager/counterstrikesharp.json")],
+    ["sourcemod", path.resolve(__dirname, "../mod-manager/sourcemod.json")],
+  ] as const
+);
+export const cs2FrameworkProviders = new Map<string, string>(
+  [
+    ["metamod", path.resolve(__dirname, "../mod-manager/metamod.json")],
+    ["counterstrikesharp", path.resolve(__dirname, "../mod-manager/counterstrikesharp.json")],
+    ["sourcemod", path.resolve(__dirname, "../mod-manager/sourcemod.json")],
   ] as const
 );
 export const pluginManagerProviders = new Map<string, string>(
@@ -508,6 +518,20 @@ export const ensureServerAccess = async (
 
 export const loadProviderConfig = async (provider: string) => {
   const configPath = modManagerProviders.get(provider);
+  if (!configPath) {
+    return null;
+  }
+  const raw = await fs.readFile(configPath, "utf8");
+  return JSON.parse(raw) as {
+    id: string;
+    name: string;
+    baseUrl: string;
+    headers: Record<string, string>;
+    endpoints: Record<string, string>;
+  };
+};
+export const loadCs2ProviderConfig = async (provider: string) => {
+  const configPath = cs2FrameworkProviders.get(provider);
   if (!configPath) {
     return null;
   }
@@ -913,6 +937,28 @@ export const ensureModManagerEnabled = (server: any, reply: FastifyReply) => {
   }
   return modManager;
 };
+export const ensureCs2FrameworkEnabled = (server: any, reply: FastifyReply) => {
+  const templateName = String(server.template?.name || "").toLowerCase();
+  const isCs2 =
+    templateName.includes("counter-strike 2") ||
+    templateName.includes("counter strike 2") ||
+    templateName.includes("cs2") ||
+    templateName.includes("counter--strike2");
+  if (!isCs2) {
+    const mm = resolveEnabledModManager(server.template?.features?.modManager);
+    if (mm) {
+      const hasCs2 = mm.providers.some((p) => cs2FrameworkProviders.has(p.id));
+      if (!hasCs2) {
+        reply.status(409).send({ error: "CS2 framework manager not enabled for this template" });
+        return null;
+      }
+      return mm;
+    }
+    reply.status(409).send({ error: "CS2 framework manager not enabled for this template" });
+    return null;
+  }
+  return { providers: [{ id: "metamod" }, { id: "counterstrikesharp" }, { id: "sourcemod" }] } as any;
+};
 export const ensurePluginManagerEnabled = (server: any, reply: FastifyReply) => {
   const pluginManager = server.template?.features?.pluginManager;
   if (
@@ -946,7 +992,6 @@ export const extractGameVersion = (environment: any) => {
   }
   return null;
 };
-
 export const resolveTemplatePath = (pathValue?: string, target?: string) => {
   if (pathValue) {
     return normalizeRequestPath(pathValue);
@@ -978,7 +1023,6 @@ export const resolveSpigotDownload = async (
   const safeName = sanitizeFilename(String(versionId));
   return { downloadUrl, filename: `spigot-${projectId}-${safeName}.jar` };
 };
-
 /**
  * Resolve actual download URL + filename for Paper (Hangar) resources.
  * Many Hangar plugins have downloadUrl: null with only externalUrl pointing to GitHub release pages.
@@ -1046,6 +1090,57 @@ export const resolvePaperDownload = async (
   }
 
   return { downloadUrl, filename };
+};
+
+export const resolveGitHubAsset = async (
+  repo: string,
+  tag: string,
+  assetPattern: string,
+  assetExcludePattern?: string
+): Promise<{ downloadUrl: string; filename: string; tagName: string }> => {
+  const apiUrl = `https://api.github.com/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`;
+  const res = await fetch(apiUrl, {
+    headers: { "User-Agent": "CatalystPluginManager/1.0", Accept: "application/vnd.github+json" },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`GitHub release lookup failed for ${repo}@${tag}: ${body}`);
+  }
+  const data = (await res.json()) as any;
+  const assets: any[] = data?.assets || [];
+  const pattern = new RegExp(assetPattern, "i");
+  const exclude = assetExcludePattern ? new RegExp(assetExcludePattern, "i") : null;
+  let match = assets.find((a: any) => pattern.test(a.name || "") && (!exclude || !exclude.test(a.name || "")));
+  if (!match) {
+    match = assets.find((a: any) => !exclude || !exclude.test(a.name || ""));
+  }
+  if (!match?.browser_download_url || !match?.name) {
+    throw new Error(`No matching asset for ${repo}@${tag} (pattern ${assetPattern})`);
+  }
+  return { downloadUrl: match.browser_download_url as string, filename: match.name as string, tagName: data.tag_name as string };
+};
+
+export const fetchGitHubReleases = async (
+  repo: string,
+  page: number,
+  perPage: number,
+  search?: string
+): Promise<{ releases: any[]; totalCount?: number }> => {
+  const params = new URLSearchParams({ per_page: String(perPage), page: String(page) });
+  const url = `https://api.github.com/repos/${repo}/releases?${params.toString()}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "CatalystPluginManager/1.0", Accept: "application/vnd.github+json" },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`GitHub releases lookup failed for ${repo}: ${body}`);
+  }
+  let releases: any[] = (await res.json()) as any[];
+  if (search) {
+    const needle = search.toLowerCase();
+    releases = releases.filter((r: any) => String(r.tag_name || "").toLowerCase().includes(needle) || String(r.name || "").toLowerCase().includes(needle) || String(r.body || "").toLowerCase().includes(needle));
+  }
+  return { releases, totalCount: releases.length };
 };
 
 /**

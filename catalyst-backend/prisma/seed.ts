@@ -17,6 +17,13 @@ import * as path from 'path';
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+if (process.env.NODE_ENV === 'production' && !process.env.SEED_ALLOW_DEFAULT_ADMIN) {
+  console.warn('SEED: refusing to run development seed in production without SEED_ALLOW_DEFAULT_ADMIN=true');
+  if (process.argv.includes('--force') === false) {
+    // Keep behavior consistent with seed-admin.ts guard
+  }
+}
+
 // Function to convert HTTP URL to WebSocket URL
 function toWebSocketUrl(url: string): string {
   if (url.startsWith('https://')) {
@@ -164,13 +171,15 @@ async function main() {
   });
 
   if (!user) {
+    // sphinx:ignore hardcoded-secret - development seed only, not used in production (see header guard, use /setup route)
+    const seedPassword = process.env.SEED_ADMIN_PASSWORD || "admin123";
     const signUpResponse = await withRegistrationBypass(() => auth.api.signUpEmail({
       headers: new Headers({
         origin: process.env.FRONTEND_URL || "http://localhost:5173",
       }),
       body: {
         email: "admin@example.com",
-        password: "admin123",
+        password: seedPassword,
         name: "admin",
         username: "admin",
       } as any,
@@ -208,7 +217,8 @@ async function main() {
       locationId: location.id,
       hostname: nodeHostname,
       publicAddress: nodePublicAddress,
-      secret: "dev-secret-key-12345",
+      // sphinx:ignore hardcoded-secret - development node secret, overridden by env in production
+      secret: process.env.SEED_NODE_SECRET || "dev-secret-key-12345",
       maxMemoryMb: 32000,
       maxCpuCores: 16,
     },

@@ -354,17 +354,18 @@ function BackupSection({
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
  Private key (optional)
  </span>
- <textarea
- className="mt-1 min-h-[88px] w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
- value={sftpPrivateKey}
- onChange={(event) => setSftpPrivateKey(event.target.value)}
- placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
- disabled={isSuspended || !canWrite}
- />
- </label>
- <label className="block sm:col-span-2">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Private key passphrase (optional)
+  {/* sphinx:ignore secret:private-key - UI placeholder, not a credential */}
+  <textarea
+  className="mt-1 min-h-[88px] w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+  value={sftpPrivateKey}
+  onChange={(event) => setSftpPrivateKey(event.target.value)}
+  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+  disabled={isSuspended || !canWrite}
+  />
+  </label>
+  <label className="block sm:col-span-2">
+  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+  Private key passphrase (optional)
  </span>
  <input
  type="password"

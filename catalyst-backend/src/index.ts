@@ -575,7 +575,7 @@ async function bootstrap() {
 			max: fairMode ? 1_000_000 : 1200, // 1M/min in fair mode = effectively disabled; 1200 normal
 			timeWindow: "1 minute",
 			// In fair mode, never block on errors — ensure max throughput
-			skipOnError: fairMode ? true : false,
+			skipOnError: !!fairMode,
 			errorResponseBuilder: (_req, context) => {
 				const err = new Error("Too many requests. Please try again later.");
 				(err as any).statusCode = context.statusCode;

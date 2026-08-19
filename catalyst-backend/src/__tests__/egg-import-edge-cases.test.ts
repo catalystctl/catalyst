@@ -187,7 +187,7 @@ describe('importPterodactylEggSafe — unknown meta version', () => {
 describe('importPterodactylEggSafe — oversized install script', () => {
 	it('reports INSTALL_SCRIPT_TOO_LARGE when script exceeds 1 MiB', () => {
 		// Create a script larger than 1 MiB
-		const hugeScript = '#!/bin/bash\necho ' + 'A'.repeat(1024 * 1024 + 100);
+		const hugeScript = `#!/bin/bash\necho ${  'A'.repeat(1024 * 1024 + 100)}`;
 		const egg = {
 			...VALID_EGG,
 			scripts: {

@@ -1,0 +1,12 @@
+# mythos-agent ignore rules
+# Suppress findings matching these patterns
+
+# Ignore test files (usually false positives)
+# severity:info
+
+# Example: ignore a specific rule everywhere
+# rule:express-no-helmet
+
+# Example: ignore a file pattern
+# test/**
+# __mocks__/**
