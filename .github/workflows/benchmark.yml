@@ -1,0 +1,155 @@
+# Benchmark — Catalyst vs Pterodactyl
+# Automated harness: HTTP suites (bench.mjs) + operational ops (ops.mjs) + comparison (compare.mjs)
+# Orchestrated by scripts/benchmark/run.sh and wired into LXC lab via `bash scripts/lxc-lab/lab.sh benchmark`.
+#
+# Triggers:
+#   - workflow_dispatch: manual run (choose duration/connections, opt-in migration)
+#   - schedule: weekly Monday 03:00 UTC (smoke, no migration)
+#   - push to main when harness changes (validate only, no live bench)
+#
+# Live bench requires a self-hosted runner with the LXC lab already up
+# (catalyst-backend + ptero-panel/wings from `lab.sh ptero` + `lab.sh ptero-bulk`).
+# The `live` job only runs if a runner with label `benchmark` is available;
+# otherwise the `validate` job still checks the harness syntax and publishes a mock report.
+
+name: Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: "Seconds per HTTP suite"
+        required: false
+        default: "15"
+        type: string
+      connections:
+        description: "Concurrent connections per suite"
+        required: false
+        default: "20"
+        type: string
+      include_migration:
+        description: "Include destructive 50-server migration bench (overwrites Catalyst servers)"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC
+  push:
+    branches: [main]
+    paths:
+      - "scripts/benchmark/**"
+      - "scripts/lxc-lab/benchmark.sh"
+      - "scripts/lxc-lab/lab.sh"
+      - ".github/workflows/benchmark.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate harness
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Syntax check
+        run: |
+          node --check scripts/benchmark/bench.mjs
+          node --check scripts/benchmark/ops.mjs
+          node --check scripts/benchmark/compare.mjs
+          echo "✓ all mjs parse"
+
+      - name: Validate scenarios.json
+        run: |
+          node -e "const j=require('./scripts/benchmark/scenarios.json'); console.log('suites', j.suites.length, 'ops', j.ops.length); if(!j.suites.length) throw new Error('no suites');"
+
+      - name: Help smoke
+        run: |
+          node scripts/benchmark/bench.mjs --help
+          node scripts/benchmark/ops.mjs --help 2>&1 | head -n 40 || true
+          node scripts/benchmark/compare.mjs 2>&1 | head -n 20 || true
+
+      - name: Mock comparison (no live services)
+        run: |
+          mkdir -p /tmp/bench-mock
+          node -e "
+          import {writeFileSync} from 'fs';
+          const now=new Date().toISOString();
+          const mk=(id,rps,p95)=>({suite:id, rps, completed: Math.round(rps*15), duration:15, errorRate:0, statusCodes:{'200': Math.round(rps*15)}, latency:{p50:p95*0.6,p95,p99:p95*1.4,mean:p95*0.7,min:p95*0.3,max:p95*1.6,p75:p95*0.8,p90:p95*0.95,p999:p95*1.8,stddev:p95*0.2,count:Math.round(rps*15)}, target:'http://mock', method:'GET', connections:20});
+          const cat={meta:{url:'http://catalyst.mock', timestamp:now, node:process.version}, results:[mk('api-list-servers',850,18),mk('api-get-server',1200,9),mk('api-file-list',420,45),mk('api-dashboard',900,12)]};
+          const ptero={meta:{url:'http://ptero.mock', timestamp:now, node:process.version}, results:[mk('api-list-servers',620,27),mk('api-get-server',980,14),mk('api-file-list',380,52),mk('api-dashboard',0,0)]};
+          writeFileSync('/tmp/bench-mock/catalyst.json', JSON.stringify(cat,null,2));
+          writeFileSync('/tmp/bench-mock/ptero.json', JSON.stringify(ptero,null,2));
+          "
+          node scripts/benchmark/compare.mjs --catalyst /tmp/bench-mock/catalyst.json --pterodactyl /tmp/bench-mock/ptero.json --out /tmp/bench-mock/report.md --json /tmp/bench-mock/comparison.json
+          cat /tmp/bench-mock/report.md
+          mkdir -p benchmarks/results/mock
+          cp /tmp/bench-mock/* benchmarks/results/mock/ || true
+
+      - name: Upload mock report
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-mock-report
+          path: |
+            /tmp/bench-mock/report.md
+            /tmp/bench-mock/comparison.json
+            benchmarks/results/mock/*
+          if-no-files-found: warn
+
+  live:
+    name: Live benchmark (LXC lab)
+    # Self-hosted runner with the LXC lab on the host. Falls back to skip if unavailable.
+    runs-on: [self-hosted, benchmark]
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check lab state
+        id: lab
+        run: |
+          STATE_FILE="$HOME/.local/share/catalyst-lxc-lab/state.env"
+          if [[ ! -f "$STATE_FILE" ]]; then
+            echo "state_missing=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::No $STATE_FILE — run lab.sh bootstrap + ptero-seed first"
+            exit 0
+          fi
+          echo "state_missing=false" >> "$GITHUB_OUTPUT"
+          cat "$STATE_FILE" | head -n 40 || true
+          ls -l benchmarks/results || true
+
+      - name: Run benchmark
+        if: steps.lab.outputs.state_missing == 'false'
+        env:
+          BENCH_DURATION: ${{ inputs.duration || '15' }}
+          BENCH_CONNECTIONS: ${{ inputs.connections || '20' }}
+          BENCH_INCLUDE_MIGRATION: ${{ inputs.include_migration && '1' || '0' }}
+        run: |
+          bash scripts/benchmark/run.sh --duration "$BENCH_DURATION" --connections "$BENCH_CONNECTIONS"
+          echo "=== report preview ==="
+          ls -lh benchmarks/results/*/* 2>/dev/null | head -n 40 || true
+          cat benchmarks/results/*/report.md 2>/dev/null | head -n 120 || true
+
+      - name: Upload live results
+        if: steps.lab.outputs.state_missing == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            benchmarks/results/*/*.json
+            benchmarks/results/*/*.md
+          if-no-files-found: warn

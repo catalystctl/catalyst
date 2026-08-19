@@ -37,7 +37,7 @@ export function patchServerListStatus(
   status: string,
 ) {
   queryClient.setQueriesData(
-    { predicate: (query: Query) => isServerListQueryKey(query.queryKey) },
+    { predicate: (query: Query<unknown, unknown>) => isServerListQueryKey(query.queryKey) },
     (servers: unknown) =>
       Array.isArray(servers)
         ? servers.map((s: { id?: string }) => (s?.id === serverId ? { ...s, status } : s))

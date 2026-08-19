@@ -94,49 +94,106 @@ export function useQuery<TData = unknown, TError = Error>(
       ...optionsRef.current,
       queryKey,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, queryKeyHash]);
 
-  query.options = {
+  // Per-observer ownership: share queryFn/meta via query.options, keep enabled/interval/select/placeholder
+  // on the observer entry so two hooks on same key don't clobber. Never write enabled/interval to shared query.
+  (query.options as { queryFn: unknown }).queryFn = options.queryFn;
+  (query.options as { meta: unknown }).meta = options.meta;
+
+  const observerOptionsRef = useRef<QueryOptions<TData, TError>>(options as QueryOptions<TData, TError>);
+  observerOptionsRef.current = {
     ...client.getDefaultOptions().queries,
     ...options,
     queryKey,
   } as QueryOptions<TData, TError>;
 
+  // Keep observer entry in sync when enabled/interval changes
+  const observerIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (observerIdRef.current != null) {
+      const live = (client.getQueryCache().get(query.queryHash) as unknown as Query | undefined) ?? query;
+      const entry = (live as unknown as { observerEntries: Map<number, { options: unknown }> }).observerEntries.get(observerIdRef.current);
+      if (entry) {
+        entry.options = observerOptionsRef.current as unknown as Record<string, unknown>;
+        (client as unknown as { updateRefetchInterval?: (q: unknown) => void }).updateRefetchInterval?.(live as unknown as Query);
+      }
+    }
+  }, [client, query, enabled, (options.refetchInterval as unknown)]);
+  // must rebind to the new Query instance when cache.get(hash) identity changes.
+  // liveHash in deps forces resubscribe when identity changes (added/removed).
+  const liveHash = client.getQueryCache().get(query.queryHash)?.queryHash ?? query.queryHash;
   const subscribe = useCallback(
-    (onStoreChange: () => void) => client.subscribeQuery(query as unknown as Query, onStoreChange),
-    [client, query],
+    (onStoreChange: () => void) => {
+      const current = (client.getQueryCache().get(query.queryHash) as unknown as Query | undefined) ?? query;
+      const unsub = (client as unknown as { subscribeQuery: (q: unknown, cb: () => void, opts?: unknown) => () => void }).subscribeQuery(
+        current as unknown as Query,
+        onStoreChange,
+        observerOptionsRef.current as unknown as Record<string, unknown>,
+      );
+      const qAny = current as unknown as { observerEntries: Map<number, unknown> };
+      let maxId = 0;
+      for (const k of qAny.observerEntries.keys()) if (k > maxId) maxId = k;
+      observerIdRef.current = maxId;
+      let resubscribed = false;
+      const maybeResubscribe = (event: { type: string; query: { queryHash: string } }): void => {
+        if (resubscribed) return;
+        if (event.type !== 'added' && event.type !== 'removed') return;
+        if (event.query.queryHash !== query.queryHash) return;
+        const fresh = client.getQueryCache().get(query.queryHash) as unknown as Query | undefined;
+        if (!fresh || fresh === current) return;
+        resubscribed = true;
+        // Migrate observer to fresh instance and re-notify
+        const oldEntry = (current as unknown as { observerEntries: Map<number, { options: unknown }> }).observerEntries.get(maxId);
+        if (oldEntry) {
+          (fresh as unknown as { observerEntries: Map<number, { options: unknown }> }).observerEntries.set(maxId, oldEntry);
+          (current as unknown as { observerEntries: Map<number, unknown> }).observerEntries.delete(maxId);
+        }
+        fresh.observers = Math.max(fresh.observers, 1);
+        (current as unknown as { observers: number }).observers = Math.max(0, current.observers - 1);
+        (client as unknown as { setupRefetchInterval: (q: unknown) => void }).setupRefetchInterval(fresh as unknown as Query);
+        onStoreChange();
+      };
+      const cacheUnsub = client.getQueryCache().subscribe(maybeResubscribe as unknown as (e: import('./types').QueryCacheNotifyEvent) => void);
+      return () => {
+        observerIdRef.current = null;
+        cacheUnsub();
+        unsub();
+      };
+    },
+    [client, query, liveHash],
   );
 
-  const getSnapshot = useCallback(() => query.state, [query]);
+  const getSnapshot = useCallback(() => {
+    const current = client.getQueryCache().get(query.queryHash) as unknown as Query | undefined;
+    return (current ?? query).state;
+  }, [client, query]);
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   useEffect(() => {
     if (!enabled) return;
     if (!optionsRef.current.queryFn) return;
 
+    const current = (client.getQueryCache().get(query.queryHash) as unknown as Query | undefined) ?? query;
+    if (current.state.fetchStatus === 'fetching') return;
+
     const staleTime =
       optionsRef.current.staleTime ?? client.getDefaultOptions().queries?.staleTime ?? 60_000;
-    const hasData = query.state.data !== undefined;
-    // Fetch on mount / key change / invalidation. Do NOT list dataUpdatedAt as a
-    // dep: a successful fetch updates that field, and staleTime: 0 makes
-    // `Date.now() - dataUpdatedAt >= 0` always true → infinite refetch (12GB).
+    const hasData = current.state.data !== undefined;
     const isStale =
-      query.state.isInvalidated ||
+      current.state.isInvalidated ||
       !hasData ||
-      Date.now() - query.state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
+      Date.now() - current.state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
 
     if (isStale) {
-      void client.fetchQuery({ ...optionsRef.current, queryKey });
+      void client.fetchQuery({ ...optionsRef.current, queryKey }).catch(() => {});
     }
-
-    client.setupRefetchInterval(query as unknown as Query);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, query, enabled, queryKeyHash, state.isInvalidated]);
 
   const placeholder = options.placeholderData;
   const select = options.select;
   let data = state.data as TData | undefined;
+  let isPlaceholderData = false;
   const prevDataRef = useRef<TData | undefined>(undefined);
   if (state.data !== undefined) {
     prevDataRef.current = state.data as TData;
@@ -146,36 +203,36 @@ export function useQuery<TData = unknown, TError = Error>(
       typeof placeholder === 'function'
         ? (placeholder as (p: TData | undefined) => TData | undefined)(prevDataRef.current)
         : (placeholder as TData);
+    if (data !== undefined) isPlaceholderData = true;
   }
-  // Apply select on every read so cache writers (SSE/setQueryData) cannot leak
-  // raw shapes to consumers. Runs after placeholder resolution.
-  // Memoize by input reference: select([]) must not allocate a fresh [] every
-  // render (React 19 prev-state sync loops on unstable empty arrays).
   const selectInputRef = useRef<TData | undefined>(undefined);
   const selectOutputRef = useRef<TData | undefined>(undefined);
+  const selectFnRef = useRef<typeof select>(undefined);
   if (data !== undefined && typeof select === 'function') {
-    if (selectInputRef.current !== data) {
+    if (selectInputRef.current !== data || selectFnRef.current !== select) {
       selectInputRef.current = data;
+      selectFnRef.current = select;
       selectOutputRef.current = select(data);
     }
     data = selectOutputRef.current;
   } else {
     selectInputRef.current = undefined;
     selectOutputRef.current = undefined;
+    selectFnRef.current = undefined;
   }
 
-  const isPending =
-    enabled && state.data === undefined && data === undefined && state.status === 'pending';
+  // isLoading: pending with no data, irrespective of isPlaceholderData
+  const isPending = enabled && state.data === undefined && !isPlaceholderData && state.status === 'pending';
   const isFetching = state.fetchStatus === 'fetching';
-  const isLoading = Boolean(isPending && isFetching);
-  const isError = state.status === 'error' && state.data === undefined;
-  const isSuccess = state.data !== undefined && state.error === null;
+  // Initial isLoading should be true for empty enabled query before fetch starts (fix first-render false)
+  const isLoading = Boolean(isPending && (isFetching || state.data === undefined));
+  // If placeholder data is present, treat as success for derived flags (TanStack placeholder semantics)
+  const effectiveStatus = isPlaceholderData ? 'success' as const : state.status;
+  const isError = !isPlaceholderData && state.status === 'error' && state.error !== null;
+  const isSuccess = isPlaceholderData || (state.data !== undefined && state.error === null && effectiveStatus === 'success');
 
-  // Depend on queryKeyHash — queryKey arrays are recreated every render and would
-  // churn refetch identity, which re-fires every effect that lists refetch as a dep.
   const refetch = useCallback(() => {
     return client.fetchQuery({ ...optionsRef.current, queryKey: optionsRef.current.queryKey });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, queryKeyHash]);
 
   const resultRef = useRef<UseQueryResult<TData, TError> | null>(null);
@@ -188,13 +245,11 @@ export function useQuery<TData = unknown, TError = Error>(
     isError,
     isSuccess,
     isFetched: state.dataUpdatedAt > 0 || state.errorUpdatedAt > 0,
-    status: state.status,
+    status: isPlaceholderData ? 'success' : state.status,
     fetchStatus: state.fetchStatus,
     refetch,
-    failureCount: 0,
+    failureCount: state.failureCount,
   };
-  // Reuse the previous result object when fields are unchanged so effects that
-  // list the whole useQuery() return (against the documented rule) do not loop.
   const prev = resultRef.current;
   const result =
     prev &&
@@ -208,6 +263,7 @@ export function useQuery<TData = unknown, TError = Error>(
     prev.isFetched === next.isFetched &&
     prev.status === next.status &&
     prev.fetchStatus === next.fetchStatus &&
+    prev.failureCount === next.failureCount &&
     prev.refetch === next.refetch
       ? prev
       : next;
@@ -283,13 +339,22 @@ export function useMutation<
     failureCount: 0,
   });
 
+  const generationRef = useRef(0);
+  const resetGenerationRef = useRef(0);
+
   const mutateAsync = useCallback(
     async (
       variables?: TVariables,
       mutateOpts?: MutateOpts<TData, TError, TVariables, TContext>,
     ): Promise<TData> => {
       const vars = variables as TVariables;
-      const opts = optionsRef.current;
+      // Merge client defaults for mutations (e.g. retry: 0)
+      const clientDefaults = (client.getDefaultOptions().mutations ?? {}) as Partial<MutationOptions<TData, TError, TVariables, TContext>>;
+      const opts: MutationOptions<TData, TError, TVariables, TContext> = {
+        ...clientDefaults,
+        ...optionsRef.current,
+      };
+      const myGen = ++generationRef.current;
       let context: TContext | undefined;
 
       setState((s) => ({
@@ -300,53 +365,95 @@ export function useMutation<
         failureCount: 0,
       }));
 
-      try {
-        if (opts.onMutate) {
-          context = await opts.onMutate(vars);
+      const resolveRetry = (retry: unknown): number | ((failureCount: number, error: unknown) => boolean) => {
+        if (retry === false) return 0;
+        if (retry === true) return Infinity;
+        if (typeof retry === 'number' || typeof retry === 'function') return retry as number | ((failureCount: number, error: unknown) => boolean);
+        return 0;
+      };
+
+      const mutationFn = opts.mutationFn;
+      if (!mutationFn) throw new Error('Missing mutationFn');
+
+      // Resolve retry semantics (include client defaults)
+      const retryOpt = (opts.retry ?? clientDefaults.retry) as unknown;
+      const maxRetries = resolveRetry(retryOpt);
+
+      let failureCount = 0;
+      for (;;) {
+        // If reset happened after we started, abandon
+        if (resetGenerationRef.current >= myGen && generationRef.current > myGen) {
+          throw new DOMException('Mutation reset', 'AbortError');
         }
-        setState((s) => ({ ...s, context }));
+        try {
+          if (failureCount === 0 && opts.onMutate) {
+            context = await opts.onMutate(vars);
+            if (generationRef.current !== myGen) throw new DOMException('Mutation superseded', 'AbortError');
+            setState((s) => (generationRef.current === myGen ? { ...s, context } : s));
+          }
 
-        const mutationFn = opts.mutationFn;
-        if (!mutationFn) throw new Error('Missing mutationFn');
+          const data = await mutationFn(vars);
+          if (generationRef.current !== myGen) throw new DOMException('Mutation superseded', 'AbortError');
 
-        const data = await mutationFn(vars);
+          await opts.onSuccess?.(data, vars, context);
+          // Only fire per-call callbacks if still latest generation
+          if (generationRef.current === myGen) await mutateOpts?.onSuccess?.(data, vars, context);
+          await opts.onSettled?.(data, null, vars, context);
+          if (generationRef.current === myGen) await mutateOpts?.onSettled?.(data, null, vars, context);
 
-        await opts.onSuccess?.(data, vars, context);
-        await mutateOpts?.onSuccess?.(data, vars, context);
-        await opts.onSettled?.(data, null, vars, context);
-        await mutateOpts?.onSettled?.(data, null, vars, context);
+          if (generationRef.current === myGen) {
+            setState({
+              data,
+              error: null,
+              status: 'success',
+              variables: vars,
+              context,
+              failureCount: 0,
+            });
+          }
+          return data;
+        } catch (err) {
+          if (err instanceof DOMException && (err.name === 'AbortError' || err.message === 'Mutation superseded' || err.message === 'Mutation reset')) {
+            throw err;
+          }
+          const canRetry =
+            typeof maxRetries === 'function'
+              ? (maxRetries as (n: number, e: unknown) => boolean)(failureCount, err as TError)
+              : (maxRetries as number) === Infinity
+                ? true
+                : failureCount < (maxRetries as number);
+          if (!canRetry) {
+            if (generationRef.current !== myGen) throw err as TError;
+            const error = err as TError;
+            client.getMutationCache().notifyError({
+              error,
+              variables: vars,
+              context,
+              mutation: { options: opts as unknown as MutationOptions<unknown, unknown, unknown, unknown> },
+            });
+            await opts.onError?.(error, vars, context);
+            if (generationRef.current === myGen) await mutateOpts?.onError?.(error, vars, context);
+            await opts.onSettled?.(undefined, error, vars, context);
+            if (generationRef.current === myGen) await mutateOpts?.onSettled?.(undefined, error, vars, context);
 
-        setState({
-          data,
-          error: null,
-          status: 'success',
-          variables: vars,
-          context,
-          failureCount: 0,
-        });
-        return data;
-      } catch (err) {
-        const error = err as TError;
-        client.getMutationCache().notifyError({
-          error,
-          variables: vars,
-          context,
-          mutation: { options: opts as MutationOptions<any, any, any, any> },
-        });
-        await opts.onError?.(error, vars, context);
-        await mutateOpts?.onError?.(error, vars, context);
-        await opts.onSettled?.(undefined, error, vars, context);
-        await mutateOpts?.onSettled?.(undefined, error, vars, context);
-
-        setState((s) => ({
-          data: s.data,
-          error,
-          status: 'error',
-          variables: vars,
-          context,
-          failureCount: s.failureCount + 1,
-        }));
-        throw error;
+            if (generationRef.current === myGen) {
+              setState((s) => ({
+                data: s.data,
+                error,
+                status: 'error',
+                variables: vars,
+                context,
+                failureCount: s.failureCount + 1,
+              }));
+            }
+            throw error;
+          }
+          failureCount++;
+          if (generationRef.current === myGen) {
+            setState((s) => (generationRef.current === myGen ? { ...s, failureCount } : s));
+          }
+          await new Promise<void>((r) => setTimeout(r, Math.min(1000 * 2 ** (failureCount - 1), 8000)));
+        }
       }
     },
     [client],
@@ -354,14 +461,14 @@ export function useMutation<
 
   const mutate = useCallback(
     (variables?: TVariables, mutateOpts?: MutateOpts<TData, TError, TVariables, TContext>) => {
-      void mutateAsync(variables, mutateOpts).catch(() => {
-        /* surfaced via state + onError */
-      });
+      void mutateAsync(variables, mutateOpts).catch(() => {});
     },
     [mutateAsync],
   );
 
   const reset = useCallback(() => {
+    generationRef.current++;
+    resetGenerationRef.current = generationRef.current;
     setState({
       data: undefined,
       error: null,

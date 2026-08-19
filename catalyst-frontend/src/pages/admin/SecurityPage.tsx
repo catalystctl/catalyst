@@ -20,6 +20,7 @@ import { Switch } from '@/components/ui/switch';
 import { useAuthLockouts, useSecuritySettings } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import type { AuthLockout } from '../../types/admin';
 import Pagination from '../../components/shared/Pagination';
 import {
  Select,
@@ -39,6 +40,20 @@ const TIME_WINDOWS = [
  { value: '86400000', label: 'day' },
  { value: '2592000000', label: 'month' },
 ] as const;
+function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (error !== null && typeof error === 'object' && 'response' in error) {
+    const response = error.response;
+    if (response !== null && typeof response === 'object' && 'data' in response) {
+      const data = response.data;
+      if (data !== null && typeof data === 'object' && 'error' in data) {
+        const candidate = data.error;
+        if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+      }
+    }
+  }
+  return fallback;
+}
+
 
 // ── Tooltip Helper ──
 function Tooltip({ text }: { text: string }) {
@@ -166,11 +181,13 @@ function LockoutRow({
  onClear,
  isClearing,
 }: {
- lockout: any;
+ lockout: AuthLockout;
  onClear: () => void;
  isClearing: boolean;
 }) {
  const isActive = !lockout.lockedUntil;
+ const isIpLockout = lockout.email.startsWith('__ip__:');
+ const displayEmail = isIpLockout ? 'IP rate limit' : lockout.email;
  return (
  <div className="group flex flex-wrap items-center gap-4 border-b border-border/30 px-5 py-3.5 last:border-b-0 transition-colors hover:bg-surface-2/30">
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -182,7 +199,7 @@ function LockoutRow({
  )}
  </div>
  <div className="min-w-0">
- <div className="truncate text-sm font-medium text-foreground">{lockout.email}</div>
+ <div className="truncate text-sm font-medium text-foreground">{displayEmail}</div>
  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
  <span className="font-mono">{lockout.ipAddress}</span>
  <span>·</span>
@@ -364,7 +381,7 @@ function SecurityPage() {
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminSecuritySettings() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update security settings'),
+ onError: (error: unknown) => notifyError(getApiErrorMessage(error, 'Failed to update security settings')),
  });
 
  const clearMutation = useMutation({
@@ -373,7 +390,7 @@ function SecurityPage() {
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminAuthLockouts() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to clear lockout'),
+ onError: (error: unknown) => notifyError(getApiErrorMessage(error, 'Failed to clear lockout')),
  });
 
  const lockouts = lockoutResponse?.lockouts ?? [];
@@ -591,7 +608,7 @@ function SecurityPage() {
  ) : lockouts.length > 0 ? (
  <>
  <div>
- {lockouts.map((lockout: any) => (
+ {lockouts.map((lockout) => (
  <LockoutRow
  key={lockout.id}
  lockout={lockout}

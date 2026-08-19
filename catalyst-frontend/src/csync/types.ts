@@ -7,7 +7,7 @@ export type FetchStatus = 'fetching' | 'paused' | 'idle';
 
 export type QueryFilters = {
   queryKey?: QueryKey;
-  predicate?: (query: Query) => boolean;
+  predicate?: (query: Query<unknown, unknown>) => boolean;
   exact?: boolean;
   type?: 'active' | 'inactive' | 'all';
 };
@@ -20,11 +20,13 @@ export type QueryState<TData = unknown, TError = Error> = {
   dataUpdatedAt: number;
   errorUpdatedAt: number;
   isInvalidated: boolean;
+  failureCount: number;
+  isPlaceholderData: boolean;
 };
 
 export type QueryOptions<TData = unknown, TError = Error> = {
   queryKey: QueryKey;
-  queryFn?: () => Promise<TData>;
+  queryFn?: (context: { signal: AbortSignal; queryKey: QueryKey; meta?: Record<string, unknown> }) => Promise<TData>;
   enabled?: boolean;
   staleTime?: number;
   gcTime?: number;
@@ -37,11 +39,6 @@ export type QueryOptions<TData = unknown, TError = Error> = {
   refetchOnWindowFocus?: boolean | 'always';
   refetchOnReconnect?: boolean | 'always';
   placeholderData?: TData | ((previousData: TData | undefined) => TData | undefined);
-  /**
-   * Transform cached data on every read (RQ-compatible).
-   * Use this when cache writers (SSE/setQueryData) may store a different shape
-   * than consumers expect — e.g. normalize `{ tasks: [] }` → `Task[]`.
-   */
   select?: (data: TData) => TData;
   meta?: Record<string, unknown>;
 };
@@ -58,7 +55,7 @@ export type MutationOptions<TData = unknown, TError = Error, TVariables = void, 
     variables: TVariables,
     context: TContext | undefined,
   ) => unknown;
-  retry?: number | boolean;
+  retry?: number | boolean | ((failureCount: number, error: TError) => boolean);
   meta?: Record<string, unknown>;
 };
 
@@ -67,18 +64,26 @@ export type DefaultOptions = {
   mutations?: Partial<MutationOptions>;
 };
 
-/** Lightweight query handle used by predicates and cache subscribers. */
+/** Per-observer configuration. Query owns shared cache/fetch state; Observer owns enabled/select/placeholder/stale/interval. */
+export type ObserverOptions<TData = unknown, TError = Error> = QueryOptions<TData, TError>;
+
+/** Minimal observer handle for polling/enabled ownership */
+export type QueryObserverEntry = {
+  id: number;
+  options: ObserverOptions<unknown, unknown>;
+};
+
 export class Query<TData = unknown, TError = Error> {
   queryKey: QueryKey;
   queryHash: string;
   state: QueryState<TData, TError>;
   options: QueryOptions<TData, TError>;
-  /** Active observer count */
   observers = 0;
-  /** In-flight promise (dedupe) */
+  /** Per-observer entries for interval/enabled ownership */
+  observerEntries: Map<number, QueryObserverEntry> = new Map();
   promise: Promise<TData> | null = null;
-  /** Cancel flag for in-flight fetch */
-  cancelled = false;
+  abortController: AbortController | null = null;
+  fetchId = 0;
   gcTimer: ReturnType<typeof setTimeout> | null = null;
   refetchTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -94,25 +99,58 @@ export class Query<TData = unknown, TError = Error> {
       dataUpdatedAt: 0,
       errorUpdatedAt: 0,
       isInvalidated: false,
+      failureCount: 0,
+      isPlaceholderData: false,
     };
   }
 
-  setState( partial: Partial<QueryState<TData, TError>>) {
+  setState(partial: Partial<QueryState<TData, TError>>): void {
     this.state = { ...this.state, ...partial };
+  }
+
+  /** True if any observer is enabled */
+  hasEnabledObserver(): boolean {
+    if (this.observers === 0) return false;
+    if (this.observerEntries.size === 0) return (this.options.enabled ?? true) !== false;
+    for (const e of this.observerEntries.values()) {
+      if ((e.options.enabled ?? true) !== false) return true;
+    }
+    return false;
+  }
+
+  /** Resolve effective refetchInterval from enabled observers */
+  effectiveRefetchInterval(): number | false | undefined {
+    if (this.observerEntries.size === 0) {
+      const raw = this.options.refetchInterval;
+      if (raw === undefined || raw === false) return raw as false | undefined;
+      if (typeof raw === 'function') return (raw as (q: Query<unknown, unknown>) => number | false | undefined)(this as unknown as Query<unknown, unknown>);
+      return raw as number | false | undefined;
+    }
+    let best: number | false | undefined = undefined;
+    for (const e of this.observerEntries.values()) {
+      if ((e.options.enabled ?? true) === false) continue;
+      const raw = (e.options as unknown as QueryOptions<unknown, unknown>).refetchInterval;
+      if (raw === undefined || raw === false) continue;
+      const ms = typeof raw === 'function' ? (raw as (q: Query<unknown, unknown>) => number | false | undefined)(this as unknown as Query<unknown, unknown>) : (raw as number);
+      if (ms === false || ms === undefined || ms <= 0) continue;
+      if (best === undefined || (typeof ms === 'number' && typeof best === 'number' && ms < best)) {
+        best = ms;
+      }
+    }
+    return best;
   }
 }
 
 export type QueryCacheNotifyEvent =
-  | { type: 'added'; query: Query }
-  | { type: 'removed'; query: Query }
-  | { type: 'updated'; query: Query }
-  | { type: 'observerAdded'; query: Query }
-  | { type: 'observerRemoved'; query: Query };
+  | { type: 'added'; query: Query<unknown, unknown> }
+  | { type: 'removed'; query: Query<unknown, unknown> }
+  | { type: 'updated'; query: Query<unknown, unknown> }
+  | { type: 'observerAdded'; query: Query<unknown, unknown> }
+  | { type: 'observerRemoved'; query: Query<unknown, unknown> };
 
 export function hashQueryKey(queryKey: QueryKey): string {
   return JSON.stringify(queryKey, (_k, v) => {
     if (v && typeof v === 'object' && !Array.isArray(v)) {
-      // stable object key order
       return Object.keys(v as object)
         .sort()
         .reduce<Record<string, unknown>>((acc, key) => {
@@ -124,17 +162,43 @@ export function hashQueryKey(queryKey: QueryKey): string {
   });
 }
 
-/** v5-style partial key match: filter key is a prefix of query key (deep equal per segment). */
+/** v5-style partial key match: filter key is a prefix of query key. Object segments use subset semantics. */
 export function partialMatchKey(queryKey: QueryKey, filterKey: QueryKey): boolean {
   if (filterKey.length > queryKey.length) return false;
   for (let i = 0; i < filterKey.length; i++) {
-    if (!deepEqual(queryKey[i], filterKey[i])) return false;
+    if (!isSubsetEqual(queryKey[i], filterKey[i])) return false;
   }
   return true;
 }
 
-export function matchQuery(filters: QueryFilters, query: Query): boolean {
-  const { queryKey, exact, predicate } = filters;
+function isSubsetEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (a == null || b == null) return false;
+  if (typeof a !== typeof b) return false;
+  if (a && b && typeof a === 'object') {
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      return a.every((v, i) => isSubsetEqual(v, (b as unknown[])[i]));
+    }
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    const aObj = a as Record<string, unknown>;
+    const bObj = b as Record<string, unknown>;
+    for (const k of Object.keys(bObj)) {
+      if (!(k in aObj)) return false;
+      if (!isSubsetEqual(aObj[k], bObj[k])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+export function matchQuery(filters: QueryFilters, query: Query<unknown, unknown>): boolean {
+  const { queryKey, exact, predicate, type } = filters;
+  if (type && type !== 'all') {
+    const isActive = query.observers > 0;
+    if (type === 'active' && !isActive) return false;
+    if (type === 'inactive' && isActive) return false;
+  }
   if (queryKey !== undefined) {
     if (exact) {
       if (hashQueryKey(query.queryKey) !== hashQueryKey(queryKey)) return false;
@@ -146,19 +210,19 @@ export function matchQuery(filters: QueryFilters, query: Query): boolean {
   return true;
 }
 
-function deepEqual(a: unknown, b: unknown): boolean {
+export function deepEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (typeof a !== typeof b) return false;
   if (a && b && typeof a === 'object') {
     if (Array.isArray(a) !== Array.isArray(b)) return false;
     if (Array.isArray(a) && Array.isArray(b)) {
       if (a.length !== b.length) return false;
-      return a.every((v, i) => deepEqual(v, b[i]));
+      return a.every((v, i) => deepEqual(v, (b as unknown[])[i]));
     }
     const ak = Object.keys(a as object);
     const bk = Object.keys(b as object);
     if (ak.length !== bk.length) return false;
-    return ak.every((k) => deepEqual((a as any)[k], (b as any)[k]));
+    return ak.every((k) => deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
   }
   return false;
 }

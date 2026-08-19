@@ -1,0 +1,150 @@
+{
+  "_comment": "Catalyst vs Pterodactyl benchmark suites. Each suite has catalyst + pterodactyl specs. Runner picks appropriate base+auth per target.",
+  "defaults": {
+    "connections": 20,
+    "duration": 15,
+    "warmup": 2
+  },
+  "suites": [
+    {
+      "id": "api-list-servers",
+      "label": "List servers",
+      "description": "GET server list — primary pagination path. Catalyst: /api/servers filtered by user access. Ptero: Application API paginated list.",
+      "catalyst": { "path": "/api/servers", "method": "GET" },
+      "pterodactyl": { "path": "/api/application/servers", "method": "GET", "key": "app" }
+    },
+    {
+      "id": "api-get-server",
+      "label": "Get single server",
+      "description": "GET one server by id. Requires PAPER_SERVER_ID / PTERO_SERVER_ID from state.env.",
+      "catalyst": { "path": "/api/servers/:paperId", "method": "GET" },
+      "pterodactyl": { "path": "/api/application/servers/:pteroId", "method": "GET", "key": "app" }
+    },
+    {
+      "id": "api-list-nodes",
+      "label": "List nodes",
+      "description": "GET node list.",
+      "catalyst": { "path": "/api/nodes", "method": "GET" },
+      "pterodactyl": { "path": "/api/application/nodes", "method": "GET", "key": "app" }
+    },
+    {
+      "id": "api-list-users",
+      "label": "List users (admin)",
+      "description": "Admin user list. Catalyst: /api/admin/users. Ptero: /api/application/users.",
+      "catalyst": { "path": "/api/admin/users", "method": "GET" },
+      "pterodactyl": { "path": "/api/application/users", "method": "GET", "key": "app" }
+    },
+    {
+      "id": "api-dashboard",
+      "label": "Dashboard stats",
+      "description": "Dashboard aggregated counts — permission-gated.",
+      "catalyst": { "path": "/api/dashboard/stats", "method": "GET" },
+      "pterodactyl": null
+    },
+    {
+      "id": "api-auth-me",
+      "label": "Auth session check",
+      "description": "GET /api/auth/session or /api/auth/me — token validation cost.",
+      "catalyst": { "path": "/api/auth/session", "method": "GET" },
+      "pterodactyl": null
+    },
+    {
+      "id": "api-server-activity",
+      "label": "Server activity log",
+      "description": "GET paginated audit/activity for a server.",
+      "catalyst": { "path": "/api/servers/:paperId/activity", "method": "GET" },
+      "pterodactyl": { "path": "/api/application/servers/:pteroId/activity", "method": "GET", "key": "app" }
+    },
+    {
+      "id": "api-stats-history",
+      "label": "Stats history (1h)",
+      "description": "Time-series metrics read — DB + retention query.",
+      "catalyst": { "path": "/api/servers/:paperId/stats/history?range=1h", "method": "GET" },
+      "pterodactyl": null
+    },
+    {
+      "id": "api-permissions",
+      "label": "Server permissions",
+      "description": "GET effective permissions for server.",
+      "catalyst": { "path": "/api/servers/:paperId/permissions", "method": "GET" },
+      "pterodactyl": null
+    },
+    {
+      "id": "api-file-list",
+      "label": "File list (root)",
+      "description": "File explorer root listing — tunnels through agent (includes node-online check). Ptero: Wings file list via panel proxy.",
+      "catalyst": { "path": "/api/servers/:paperId/files?path=%2F", "method": "GET" },
+      "pterodactyl": { "path": "/api/client/servers/:pteroUuid/files/list?directory=%2F", "method": "GET", "key": "client" }
+    },
+    {
+      "id": "api-allocations",
+      "label": "List allocations",
+      "description": "GET server network allocations.",
+      "catalyst": { "path": "/api/servers/:paperId/allocations", "method": "GET" },
+      "pterodactyl": { "path": "/api/application/servers/:pteroId", "method": "GET", "key": "app" }
+    },
+    {
+      "id": "api-templates",
+      "label": "List templates / eggs",
+      "description": "GET template/egg catalog.",
+      "catalyst": { "path": "/api/templates", "method": "GET" },
+      "pterodactyl": { "path": "/api/application/nests/:nestId/eggs", "method": "GET", "key": "app" }
+    }
+  ],
+  "ops": [
+    {
+      "id": "op-file-write",
+      "label": "File write (1KB) + readback",
+      "description": "POST /files/write small file then GET download via file tunnel. Measures agent round-trip.",
+      "iterations": 20
+    },
+    {
+      "id": "op-file-upload",
+      "label": "File upload (256KB multipart)",
+      "description": "Multipart upload via /files/upload — includes Fastify multipart + agent streaming.",
+      "iterations": 10
+    },
+    {
+      "id": "op-server-create-burst",
+      "label": "Server create burst (10 creates)",
+      "description": "Create 10 stopped servers sequentially vs Wings — measures API + DB + allocation.",
+      "iterations": 1
+    },
+    {
+      "id": "op-lifecycle-start",
+      "label": "Lifecycle: start→running",
+      "description": "Start a stopped server and time to 'running' (containerd vs Docker). Requires a stopped bench server.",
+      "iterations": 3
+    },
+    {
+      "id": "op-sse-connect",
+      "label": "SSE connect (first event ms)",
+      "description": "Time to first byte on /api/servers/:id/events SSE stream. 20 parallel connects.",
+      "iterations": 20
+    },
+    {
+      "id": "op-ws-agent-roundtrip",
+      "label": "WS console echo (agent round-trip)",
+      "description": "Send console command via WS/SSE and measure echo. Requires running server.",
+      "iterations": 10
+    },
+    {
+      "id": "op-backup-create",
+      "label": "Backup create (tiny server)",
+      "description": "Create a backup of a tiny fixture server. Measures snapshot + storage path.",
+      "iterations": 3
+    },
+    {
+      "id": "op-migration-50",
+      "label": "Migration import (50 servers)",
+      "description": "Full Pterodactyl import of the 50-server bulk fixture via /api/admin/migration. End-to-end wall time.",
+      "iterations": 1
+    },
+    {
+      "id": "op-sftp-throughput",
+      "label": "SFTP throughput (1MB)",
+      "description": "SFTP put/get 1MB file via ssh2. Requires SFTP token + running node.",
+      "iterations": 5
+    }
+  ]
+}

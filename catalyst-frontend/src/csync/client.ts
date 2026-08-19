@@ -32,26 +32,25 @@ type MutationGlobalListener = (args: {
 }) => void;
 
 export class QueryCache {
-  private queries = new Map<string, QueryClass<any, any>>();
+  private queries = new Map<string, QueryClass<unknown, unknown>>();
   private listeners = new Set<CacheListener>();
-
-  getAll(): QueryClass<any, any>[] {
+  getAll(): QueryClass<unknown, unknown>[] {
     return [...this.queries.values()];
   }
 
-  find(filters: QueryFilters): QueryClass<any, any> | undefined {
-    return this.getAll().find((q) => matchQuery(filters, q));
+  find(filters: QueryFilters): QueryClass<unknown, unknown> | undefined {
+    return this.getAll().find((q) => matchQuery(filters, q as unknown as import('./types').Query<unknown, unknown>));
   }
 
-  findAll(filters: QueryFilters = {}): QueryClass<any, any>[] {
-    return this.getAll().filter((q) => matchQuery(filters, q));
+  findAll(filters: QueryFilters = {}): QueryClass<unknown, unknown>[] {
+    return this.getAll().filter((q) => matchQuery(filters, q as unknown as import('./types').Query<unknown, unknown>));
   }
 
-  get(queryHash: string): QueryClass<any, any> | undefined {
+  get(queryHash: string): QueryClass<unknown, unknown> | undefined {
     return this.queries.get(queryHash);
   }
 
-  build(_client: QueryClient, options: QueryOptions): QueryClass<any, any> {
+  build(_client: QueryClient, options: QueryOptions<unknown, unknown>): QueryClass<unknown, unknown> {
     const hash = hashQueryKey(options.queryKey);
     let query = this.queries.get(hash);
     if (!query) {
@@ -59,12 +58,16 @@ export class QueryCache {
       this.queries.set(hash, query);
       this.notify({ type: 'added', query });
     } else {
-      query.options = { ...query.options, ...options, queryKey: options.queryKey };
+      query.queryKey = options.queryKey;
+      query.queryHash = hash;
+      if (options.queryFn) {
+        (query.options as { queryFn: unknown }).queryFn = options.queryFn;
+        if (options.meta !== undefined) (query.options as { meta: unknown }).meta = options.meta;
+      }
     }
     return query;
   }
-
-  remove(query: QueryClass<any, any>) {
+  remove(query: QueryClass<unknown, unknown>) {
     if (this.queries.get(query.queryHash) === query) {
       this.queries.delete(query.queryHash);
       if (query.refetchTimer) {
@@ -74,6 +77,10 @@ export class QueryCache {
       if (query.gcTimer) {
         clearTimeout(query.gcTimer);
         query.gcTimer = null;
+      }
+      if (query.abortController) {
+        try { query.abortController.abort(); } catch { /* abort is best-effort */ }
+        query.abortController = null;
       }
       this.notify({ type: 'removed', query });
     }
@@ -236,7 +243,7 @@ export class QueryClient {
     options: QueryOptions<TData, TError>,
   ): QueryClass<TData, TError> {
     const merged = this.mergeQueryOptions(options);
-    return this.queryCache.build(this, merged as QueryOptions) as unknown as QueryClass<TData, TError>;
+    return this.queryCache.build(this, merged as unknown as QueryOptions<unknown, unknown>) as unknown as QueryClass<TData, TError>;
   }
 
   getQueryData<TData = unknown>(queryKey: QueryKey): TData | undefined {
@@ -254,26 +261,27 @@ export class QueryClient {
     queryKey: QueryKey,
     updater: Updater<TData>,
   ): TData | undefined {
-    const query = this.ensureQuery<TData>({ queryKey });
-    const prev = query.state.data;
+    const hash = hashQueryKey(queryKey);
+    const existing = this.queryCache.get(hash) as unknown as QueryClass<TData, unknown> | undefined;
+    const prev = existing?.state.data as TData | undefined;
     const data = resolveUpdater(updater, prev);
-    if (typeof data === 'undefined') {
-      return prev;
-    }
+    if (typeof data === 'undefined') return prev;
+    const query = this.ensureQuery<TData>({ queryKey }) as unknown as QueryClass<TData, unknown>;
+    const resolved = data as TData;
     query.setState({
-      data,
+      data: resolved,
       status: 'success',
       error: null,
       dataUpdatedAt: Date.now(),
       fetchStatus: query.state.fetchStatus === 'fetching' ? 'fetching' : 'idle',
       isInvalidated: false,
+      failureCount: 0,
+      isPlaceholderData: false,
     });
-    this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<any, any> });
-    this.indexTags(query as unknown as QueryClass<any, any>);
-    // SSE / optimistic writers can create unobserved entries. Without this they
-    // live forever (scheduleGc only ran after fetch or last-observer unsubscribe).
-    this.scheduleGc(query as unknown as QueryClass<any, any>);
-    return data;
+    this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<unknown, unknown> });
+    this.indexTags(query as unknown as QueryClass<unknown, unknown>);
+    this.scheduleGc(query as unknown as QueryClass<unknown, unknown>);
+    return resolved;
   }
 
   setQueriesData<TData>(
@@ -290,6 +298,8 @@ export class QueryClient {
           error: null,
           dataUpdatedAt: Date.now(),
           isInvalidated: false,
+          failureCount: 0,
+          isPlaceholderData: false,
         });
         this.queryCache.notify({ type: 'updated', query });
         this.indexTags(query);
@@ -319,8 +329,16 @@ export class QueryClient {
 
   async cancelQueries(filters: QueryFilters = {}): Promise<void> {
     for (const query of this.queryCache.findAll(filters)) {
-      query.cancelled = true;
+      query.fetchId++;
       query.promise = null;
+      if (query.abortController) {
+        try {
+          query.abortController.abort();
+        } catch {
+          // ignore abort errors
+        }
+        query.abortController = null;
+      }
       if (query.state.fetchStatus === 'fetching') {
         query.setState({ fetchStatus: 'idle' });
         this.queryCache.notify({ type: 'updated', query });
@@ -339,9 +357,20 @@ export class QueryClient {
       query.setState({ isInvalidated: true });
       this.queryCache.notify({ type: 'updated', query });
       const shouldRefetch =
-        refetchType === 'all' || (refetchType === 'active' && query.observers > 0);
+        refetchType === 'all' || (refetchType === 'active' && query.hasEnabledObserver());
       if (shouldRefetch && query.options.queryFn) {
-        fetches.push(this.fetchQuery({ ...query.options, queryKey: query.queryKey }));
+        if (query.state.fetchStatus === 'fetching') {
+          query.fetchId++;
+          if (query.abortController) {
+            try { query.abortController.abort(); } catch { /* abort is best-effort */ }
+            query.abortController = null;
+          }
+          query.promise = null;
+          query.setState({ fetchStatus: 'idle' });
+          this.queryCache.notify({ type: 'updated', query });
+        }
+        const p = this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>);
+        fetches.push(p);
       }
     }
     await Promise.allSettled(fetches);
@@ -357,32 +386,40 @@ export class QueryClient {
       if (set) for (const h of set) hashes.add(h);
     }
     for (const query of this.queryCache.getAll()) {
-      if (typeof query.queryKey[0] === 'string' && tags.includes(query.queryKey[0])) {
+      if (typeof query.queryKey[0] === 'string' && tags.includes(query.queryKey[0] as string)) {
         hashes.add(query.queryHash);
       }
       const metaTags = (query.options.meta?.tags as string[] | undefined) ?? [];
       if (metaTags.some((t) => tags.includes(t))) hashes.add(query.queryHash);
     }
-    await this.invalidateQueries(
-      { predicate: (q) => hashes.has(q.queryHash) },
-      opts,
-    );
+    await this.invalidateQueries({ predicate: (q) => hashes.has(q.queryHash) }, opts);
   }
 
   async fetchQuery<TData = unknown, TError = Error>(
     options: QueryOptions<TData, TError>,
   ): Promise<TData> {
     const query = this.ensureQuery(options);
+    if ((options.enabled ?? true) === false) {
+      if (query.state.data !== undefined) return query.state.data as TData;
+      return Promise.reject(new Error(`Query disabled for ${query.queryHash}`));
+    }
+    const staleTime = query.options.staleTime ?? 60_000;
+    const isStale =
+      query.state.isInvalidated ||
+      query.state.data === undefined ||
+      query.state.dataUpdatedAt === 0 ||
+      Date.now() - query.state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
+    if (!isStale && query.state.data !== undefined) return query.state.data as TData;
     return this.executeFetch(query);
   }
-
   async prefetchQuery<TData = unknown, TError = Error>(
     options: QueryOptions<TData, TError>,
   ): Promise<void> {
     try {
       await this.fetchQuery(options);
     } catch {
-      /* prefetch swallows */
+      const q = this.queryCache.get(hashQueryKey(options.queryKey));
+      if (q) this.scheduleGc(q);
     }
   }
 
@@ -391,27 +428,46 @@ export class QueryClient {
   ): Promise<TData> {
     const query = this.ensureQuery(options);
     const staleTime = options.staleTime ?? this.defaultOptions.queries?.staleTime ?? 60_000;
-    const isStale =
-      query.state.isInvalidated ||
-      query.state.dataUpdatedAt === 0 ||
-      Date.now() - query.state.dataUpdatedAt > (typeof staleTime === 'number' ? staleTime : 0);
-    if (query.state.data !== undefined && !isStale) {
+    if (query.state.data !== undefined) {
+      const isStale =
+        query.state.isInvalidated ||
+        query.state.dataUpdatedAt === 0 ||
+        Date.now() - query.state.dataUpdatedAt > (typeof staleTime === 'number' ? staleTime : 0);
+      if (!isStale) return query.state.data as TData;
+      if (query.options.queryFn) void this.executeFetch(query).catch(() => {});
       return query.state.data as TData;
     }
     return this.executeFetch(query);
   }
 
   private async executeFetch<TData, TError>(query: QueryClass<TData, TError>): Promise<TData> {
-    if (query.promise) return query.promise;
-
-    const queryFn = query.options.queryFn;
-    if (!queryFn) {
+    if (query.promise && query.state.fetchStatus === 'fetching') return query.promise;
+    const rawFn = query.options.queryFn;
+    if (!rawFn) {
       return Promise.reject(new Error(`Missing queryFn for ${query.queryHash}`));
     }
 
-    query.cancelled = false;
-    query.setState({ fetchStatus: 'fetching' });
-    this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<any, any> });
+    const fetchId = ++query.fetchId;
+    const abortController = new AbortController();
+    query.abortController = abortController;
+    const hasData = query.state.data !== undefined;
+    query.setState({
+      fetchStatus: 'fetching',
+      error: null,
+      failureCount: 0,
+      status: hasData ? query.state.status : 'pending',
+      isPlaceholderData: false,
+    });
+    this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<unknown, unknown> });
+
+    const callQueryFn = (): Promise<TData> => {
+      const fnWithSignal = rawFn as unknown as (ctx: { signal: AbortSignal; queryKey: QueryKey; meta?: Record<string, unknown> }) => Promise<TData>;
+      // Support both legacy () => Promise and ({signal, queryKey}) signatures
+      if (fnWithSignal.length === 0) {
+        return (rawFn as unknown as () => Promise<TData>)();
+      }
+      return fnWithSignal({ signal: abortController.signal, queryKey: query.queryKey, meta: query.options.meta });
+    };
 
     const run = async (): Promise<TData> => {
       const maxRetries = resolveRetry(
@@ -419,11 +475,18 @@ export class QueryClient {
       );
       let failureCount = 0;
       for (;;) {
+        if (abortController.signal.aborted || query.fetchId !== fetchId) {
+          throw new DOMException('Query cancelled', 'AbortError');
+        }
         try {
-          const data = await queryFn();
-          if (query.cancelled) {
+          const data = await callQueryFn();
+          if (query.fetchId !== fetchId || abortController.signal.aborted) {
             throw new DOMException('Query cancelled', 'AbortError');
           }
+          if (typeof data === 'undefined') {
+            throw new Error('Query data cannot be undefined');
+          }
+          if (query.fetchId !== fetchId) throw new DOMException('Query cancelled', 'AbortError');
           query.setState({
             data,
             error: null,
@@ -431,40 +494,63 @@ export class QueryClient {
             fetchStatus: 'idle',
             dataUpdatedAt: Date.now(),
             isInvalidated: false,
+            failureCount: 0,
+            isPlaceholderData: false,
           });
-          this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<any, any> });
-          this.indexTags(query as unknown as QueryClass<any, any>);
-          this.scheduleGc(query as unknown as QueryClass<any, any>);
+          this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<unknown, unknown> });
+          this.indexTags(query as unknown as QueryClass<unknown, unknown>);
+          this.scheduleGc(query as unknown as QueryClass<unknown, unknown>);
           return data;
         } catch (err) {
-          if (query.cancelled) {
-            query.setState({ fetchStatus: 'idle' });
-            this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<any, any> });
+          if (query.fetchId !== fetchId || abortController.signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+            if (query.fetchId === fetchId) {
+              query.setState({ fetchStatus: 'idle' });
+              this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<unknown, unknown> });
+            }
             throw err;
           }
-          failureCount++;
           const canRetry =
             typeof maxRetries === 'function'
               ? maxRetries(failureCount, err as TError)
-              : failureCount <= (maxRetries as number);
+              : (maxRetries as number) === Infinity
+                ? true
+                : failureCount < (maxRetries as number);
           if (!canRetry) {
-            query.setState({
-              error: err as TError,
-              status: query.state.data !== undefined ? query.state.status : 'error',
-              fetchStatus: 'idle',
-              errorUpdatedAt: Date.now(),
-            });
-            this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<any, any> });
+            if (query.fetchId === fetchId) {
+              query.setState({
+                error: err as TError,
+                status: hasData ? query.state.status : 'error',
+                fetchStatus: 'idle',
+                errorUpdatedAt: Date.now(),
+                failureCount,
+                isPlaceholderData: false,
+              });
+              this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<unknown, unknown> });
+              this.scheduleGc(query as unknown as QueryClass<unknown, unknown>);
+            }
             throw err;
           }
-          await sleep(Math.min(1000 * 2 ** (failureCount - 1), 8000));
+          const delay = Math.min(1000 * 2 ** failureCount, 8000);
+          failureCount++;
+          if (query.fetchId === fetchId) {
+            query.setState({ failureCount });
+            this.queryCache.notify({ type: 'updated', query: query as unknown as QueryClass<unknown, unknown> });
+          }
+          await sleepWithSignal(delay, abortController.signal);
         }
       }
     };
-
-    query.promise = run().finally(() => {
-      query.promise = null;
-    });
+    const p = run();
+    // Attach catch immediately to prevent unhandledrejection if caller doesn't await
+    p.catch(() => {});
+    query.promise = p as Promise<TData>;
+    const clearIfCurrent = (): void => {
+      if (query.fetchId === fetchId) {
+        query.promise = null;
+        query.abortController = null;
+      }
+    };
+    p.then(clearIfCurrent, clearIfCurrent);
     return query.promise;
   }
 
@@ -479,39 +565,86 @@ export class QueryClient {
     this.tagIndex.clear();
   }
 
-  subscribeQuery(query: QueryClass<any, any>, onStoreChange: () => void): () => void {
+  private observerSeq = 0;
+
+  subscribeQuery(query: QueryClass<unknown, unknown>, onStoreChange: () => void, observerOptions?: Record<string, unknown>): () => void {
+    const obsId = ++this.observerSeq;
+    if (observerOptions) {
+      query.observerEntries.set(obsId, { id: obsId, options: observerOptions as unknown as QueryOptions<unknown, unknown> });
+    }
     query.observers++;
     if (query.gcTimer) {
       clearTimeout(query.gcTimer);
       query.gcTimer = null;
     }
-    this.queryCache.notify({ type: 'observerAdded', query });
-    this.setupRefetchInterval(query);
+    this.queryCache.notify({ type: 'observerAdded', query: query as unknown as QueryClass<unknown, unknown> });
+    // Only poll if any observer is enabled
+    if (query.hasEnabledObserver()) {
+      this.setupRefetchInterval(query as unknown as QueryClass<unknown, unknown>);
+    }
 
+
+    const hash = query.queryHash;
     const unsubCache = this.queryCache.subscribe((event) => {
-      if (event.query === query && (event.type === 'updated' || event.type === 'removed')) {
+      const relevant = event.query === query || event.query.queryHash === hash;
+      if (relevant && (event.type === 'updated' || event.type === 'removed' || event.type === 'added')) {
         this.scheduler.schedule(onStoreChange);
       }
     });
 
     return () => {
       unsubCache();
+      query.observerEntries.delete(obsId);
       query.observers = Math.max(0, query.observers - 1);
-      this.queryCache.notify({ type: 'observerRemoved', query });
+      this.queryCache.notify({ type: 'observerRemoved', query: query as unknown as QueryClass<unknown, unknown> });
       if (query.observers === 0) {
         if (query.refetchTimer) {
           clearInterval(query.refetchTimer);
           query.refetchTimer = null;
         }
-        this.scheduleGc(query);
+        this.scheduleGc(query as unknown as QueryClass<unknown, unknown>);
+      } else {
+        const stillActive = query.hasEnabledObserver();
+        if (!stillActive && query.refetchTimer) {
+          clearInterval(query.refetchTimer);
+          query.refetchTimer = null;
+        } else if (stillActive) {
+          this.setupRefetchInterval(query as unknown as QueryClass<unknown, unknown>);
+        }
       }
     };
   }
 
-  setupRefetchInterval(query: QueryClass<any, any>) {
+  setupRefetchInterval(query: QueryClass<unknown, unknown>): void {
     if (query.refetchTimer) {
       clearInterval(query.refetchTimer);
       query.refetchTimer = null;
+    }
+    if (!query.hasEnabledObserver() && (query.options.enabled ?? true) === false) return;
+    // Use per-observer effective interval
+    const effective = query.effectiveRefetchInterval();
+    if (effective === undefined || effective === false) {
+      // Fallback to single-observer path if no per-observer interval
+      if (query.observerEntries.size === 0) return;
+      return;
+    }
+    // If we have an effective interval, handle it below; otherwise fall through to raw handling
+    if (query.observerEntries.size > 0 && typeof effective === 'number') {
+      const ms = effective;
+      query.refetchTimer = setInterval(() => {
+        if (query.observers <= 0) return;
+        const inBg = (() => {
+          for (const e of query.observerEntries.values()) {
+            if ((e.options.enabled ?? true) !== false && (e.options as unknown as Record<string, unknown>).refetchIntervalInBackground) return false;
+          }
+          return typeof document !== 'undefined' && document.visibilityState === 'hidden';
+        })();
+        if (inBg) return;
+        if (query.options.queryFn) {
+          void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
+        }
+      }, ms);
+      return;
     }
     const raw = query.options.refetchInterval;
     if (raw === undefined || raw === false) return;
@@ -529,18 +662,20 @@ export class QueryClient {
     if (typeof raw === 'number' && raw > 0) {
       query.refetchTimer = setInterval(() => {
         if (query.observers <= 0) return;
+        if (!query.hasEnabledObserver()) return;
         if (shouldSkipBackground()) return;
         if (query.options.queryFn) {
-          void this.fetchQuery({ ...query.options, queryKey: query.queryKey });
+          void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
         }
       }, raw);
       return;
     }
 
     if (typeof raw === 'function') {
-      let last = 0;
+      let last = Date.now();
       query.refetchTimer = setInterval(() => {
         if (query.observers <= 0) return;
+        if (!query.hasEnabledObserver()) return;
         if (shouldSkipBackground()) return;
         const ms = resolveMs();
         if (ms === false || ms === undefined || ms <= 0) return;
@@ -548,21 +683,40 @@ export class QueryClient {
         if (now - last >= ms) {
           last = now;
           if (query.options.queryFn) {
-            void this.fetchQuery({ ...query.options, queryKey: query.queryKey });
+            void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
           }
         }
       }, 500);
     }
   }
 
-  private scheduleGc(query: QueryClass<any, any>) {
+  updateRefetchInterval(query: QueryClass<unknown, unknown>): void {
+    if (!query.hasEnabledObserver() && query.observers > 0) {
+      if (query.refetchTimer) {
+        clearInterval(query.refetchTimer);
+        query.refetchTimer = null;
+      }
+      return;
+    }
+    if (query.observers <= 0) {
+      if (query.refetchTimer) {
+        clearInterval(query.refetchTimer);
+        query.refetchTimer = null;
+      }
+      return;
+    }
+    this.setupRefetchInterval(query);
+  }
+
+  private scheduleGc(query: QueryClass<unknown, unknown>): void {
     if (query.observers > 0) return;
+    if (query.state.fetchStatus === 'fetching') return;
     if (query.gcTimer) clearTimeout(query.gcTimer);
     const gcTime = query.options.gcTime ?? this.defaultOptions.queries?.gcTime ?? 10 * 60_000;
     if (gcTime === Infinity) return;
     query.gcTimer = setTimeout(
       () => {
-        if (query.observers === 0) {
+        if (query.observers === 0 && query.state.fetchStatus !== 'fetching') {
           this.queryCache.remove(query);
           this.dropTags(query);
         }
@@ -571,10 +725,11 @@ export class QueryClient {
     );
   }
 
-  private refetchOnWindowFocus() {
+  private refetchOnWindowFocus(): void {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     for (const query of this.queryCache.getAll()) {
       if (query.observers <= 0) continue;
+      if (!query.hasEnabledObserver()) continue;
       const flag = query.options.refetchOnWindowFocus ?? false;
       if (!flag) continue;
       const staleTime = query.options.staleTime ?? 60_000;
@@ -583,18 +738,24 @@ export class QueryClient {
         query.state.isInvalidated ||
         Date.now() - query.state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
       if (stale && query.options.queryFn) {
-        void this.fetchQuery({ ...query.options, queryKey: query.queryKey });
+        void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
       }
     }
   }
 
-  private refetchOnReconnect() {
+  private refetchOnReconnect(): void {
     for (const query of this.queryCache.getAll()) {
       if (query.observers <= 0) continue;
+      if (!query.hasEnabledObserver()) continue;
       const flag = query.options.refetchOnReconnect ?? true;
       if (!flag) continue;
-      if (query.options.queryFn) {
-        void this.fetchQuery({ ...query.options, queryKey: query.queryKey });
+      const staleTime = query.options.staleTime ?? 60_000;
+      const stale =
+        flag === 'always' ||
+        query.state.isInvalidated ||
+        Date.now() - query.state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
+      if (stale && query.options.queryFn) {
+        void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
       }
     }
   }
@@ -639,11 +800,21 @@ function resolveRetry(
   retry: number | boolean | ((failureCount: number, error: any) => boolean) | undefined,
 ): number | ((failureCount: number, error: any) => boolean) {
   if (retry === false) return 0;
-  if (retry === true) return 3;
+  if (retry === true) return Infinity;
   if (typeof retry === 'number' || typeof retry === 'function') return retry;
   return 2;
 }
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+function sleepWithSignal(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => { resolve = r; });
+  const timer = setTimeout(resolve, ms);
+  const onAbort = (): void => {
+    clearTimeout(timer);
+    resolve();
+  };
+  signal.addEventListener('abort', onAbort, { once: true });
+  void promise.finally(() => signal.removeEventListener('abort', onAbort));
+  return promise;
 }

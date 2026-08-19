@@ -191,8 +191,8 @@ describe('csync core', () => {
     expect(exact.length).toBe(1);
     expect(
       matchQuery(
-        { predicate: (q) => q.queryKey[0] === 'servers' },
-        client.getQueryCache().getAll()[0],
+        { predicate: (q: import('../types').Query<unknown, unknown>) => q.queryKey[0] === 'servers' },
+        client.getQueryCache().getAll()[0] as unknown as import('../types').Query<unknown, unknown>,
       ),
     ).toBe(true);
   });
