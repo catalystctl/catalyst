@@ -7,10 +7,7 @@
 use crate::{AgentError, AgentResult};
 use regex::Regex;
 use std::path::{Component, Path};
-use std::sync::OnceLock;
-
-/// Shell-escape a value for safe interpolation into a bash script.
-/// Wraps the value in single quotes and escapes any embedded single quotes.
+use std::sync::LazyLock;
 pub fn shell_escape_value(value: &str) -> String {
     // Single-quoting in bash prevents all interpretation except for single quotes themselves.
     // To include a literal single quote: end the single-quoted string, add an escaped quote, restart.
@@ -30,10 +27,9 @@ pub fn requires_bash(command: &str) -> bool {
         return true;
     }
     // Array syntax: var=( ... ) or ${arr[@]}
-    static ARRAY_RE: OnceLock<Regex> = OnceLock::new();
-    let re =
-        ARRAY_RE.get_or_init(|| Regex::new(r"\w+=\(|\$\{\w+\[@]\}").expect("valid array regex"));
-    if re.is_match(command) {
+    static ARRAY_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\w+=\(|\$\{\w+\[@]\}").expect("valid array regex"));
+    if ARRAY_RE.is_match(command) {
         return true;
     }
     false
@@ -42,19 +38,49 @@ pub fn requires_bash(command: &str) -> bool {
 /// Normalize common bash arithmetic condition syntax so startup commands run under /bin/sh.
 /// Example: `((1))` -> `[ $((1)) -ne 0 ]`
 pub fn normalize_startup_for_sh(command: &str) -> String {
-    static ARITH_COND_RE: OnceLock<Regex> = OnceLock::new();
-    let re = ARITH_COND_RE.get_or_init(|| {
+    static ARITH_COND_RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"\(\(\s*([^()]*)\s*\)\)").expect("valid arithmetic condition regex")
     });
-    re.replace_all(command, |caps: &regex::Captures<'_>| {
-        let expr = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
-        if expr.is_empty() {
-            "[ 0 -ne 0 ]".to_string()
-        } else {
-            format!("[ $(( {} )) -ne 0 ]", expr)
-        }
-    })
-    .into_owned()
+    ARITH_COND_RE
+        .replace_all(command, |caps: &regex::Captures<'_>| {
+            let expr = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
+            if expr.is_empty() {
+                "[ 0 -ne 0 ]".to_string()
+            } else {
+                format!("[ $(( {} )) -ne 0 ]", expr)
+            }
+        })
+        .into_owned()
+}
+
+/// Log-only visibility helper: strip/neutralize explicit `-Xmx`/`-Xms`/`MaxRAMPercentage`
+/// literals from startup strings so operators can see clamping in logs. The real
+/// enforcement is via `_JAVA_OPTIONS` env (which overrides argfile values), not this.
+pub fn normalize_java_heap_args(command: &str) -> String {
+    static HEAP_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)\s+-Xm[sx]\s*\d+[mMgGkK]?\b").expect("valid heap regex"));
+    let mut out = HEAP_RE.replace_all(command, " ").into_owned();
+    static PERCENT_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?i)-XX:MaxRAMPercentage=\s*\d+(\.\d+)?").expect("valid pct regex")
+    });
+    out = PERCENT_RE
+        .replace_all(&out, |caps: &regex::Captures<'_>| {
+            let raw = caps.get(0).unwrap().as_str();
+            let val = raw
+                .split('=')
+                .nth(1)
+                .and_then(|s| s.trim().parse::<f64>().ok())
+                .unwrap_or(0.0);
+            if val > 75.0 {
+                "-XX:MaxRAMPercentage=75.0".to_string()
+            } else {
+                raw.to_string()
+            }
+        })
+        .into_owned();
+    static WS_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\s{2,}").expect("valid ws regex"));
+    WS_RE.replace_all(out.trim(), " ").into_owned()
 }
 
 /// Split terminal output into complete lines and a trailing partial fragment.
@@ -157,6 +183,28 @@ mod tests {
         );
         // No arithmetic condition → unchanged
         assert_eq!(normalize_startup_for_sh("echo hello"), "echo hello");
+    }
+
+    #[test]
+    fn test_normalize_java_heap_args() {
+        assert_eq!(
+            normalize_java_heap_args("java -Xms1G -Xmx2G -jar server.jar --nogui"),
+            "java -jar server.jar --nogui"
+        );
+        assert_eq!(
+            normalize_java_heap_args(
+                "java -Xms512M -Xmx1024M -XX:MaxRAMPercentage=95.0 -jar foo.jar"
+            ),
+            "java -XX:MaxRAMPercentage=75.0 -jar foo.jar"
+        );
+        assert_eq!(
+            normalize_java_heap_args("java -XX:MaxRAMPercentage=60.0 -jar foo.jar"),
+            "java -XX:MaxRAMPercentage=60.0 -jar foo.jar"
+        );
+        assert_eq!(
+            normalize_java_heap_args("java -jar server.jar --nogui"),
+            "java -jar server.jar --nogui"
+        );
     }
 
     #[test]

@@ -308,9 +308,15 @@ impl WebSocketHandler {
                                     .get_container_exit_code(&monitor_container_id)
                                     .await
                                     .unwrap_or(None);
-                                let reason = match exit_code {
-                                    Some(code) => format!("Container exited with code {}", code),
-                                    None => "Container exited".to_string(),
+                                let reason = if exit_code == Some(137) {
+                                    "Killed by system OOM killer (cgroup memory limit exceeded — heap was ~100% of cgroup; next start auto-clamped via _JAVA_OPTIONS to 75% of allocation)".to_string()
+                                } else {
+                                    match exit_code {
+                                        Some(code) => {
+                                            format!("Container exited with code {}", code)
+                                        }
+                                        None => "Container exited".to_string(),
+                                    }
                                 };
                                 monitor_handler
                                     .handle_container_exit(
@@ -344,9 +350,13 @@ impl WebSocketHandler {
                             .get_container_exit_code(&monitor_container_id)
                             .await
                             .unwrap_or(None);
-                        let reason = match exit_code {
-                            Some(code) => format!("Container exited with code {}", code),
-                            None => "Container exited".to_string(),
+                        let reason = if exit_code == Some(137) {
+                            "Killed by system OOM killer (cgroup memory limit exceeded — heap was ~100% of cgroup; next start auto-clamped via _JAVA_OPTIONS to 75% of allocation)".to_string()
+                        } else {
+                            match exit_code {
+                                Some(code) => format!("Container exited with code {}", code),
+                                None => "Container exited".to_string(),
+                            }
                         };
                         monitor_handler
                             .handle_container_exit(
@@ -490,6 +500,15 @@ impl WebSocketHandler {
                             &format!("[Catalyst] Auto-restart failed: {}\n", e),
                         )
                         .await;
+                    if exit_code == Some(137) {
+                        let _ = self
+                            .emit_console_output(
+                                server_id,
+                                "system",
+                                "[Catalyst] Killed by system OOM killer — heap exceeded cgroup limit. Next start will auto-clamp via _JAVA_OPTIONS to 75% of allocation. If this repeats, increase Memory allocation.\n",
+                            )
+                            .await;
+                    }
                     // Still emit crashed since auto-restart failed
                     let _ = self
                         .emit_server_state_update(
@@ -503,6 +522,15 @@ impl WebSocketHandler {
                 }
             } else {
                 // No stored start message — fall back to normal crash reporting
+                if exit_code == Some(137) {
+                    let _ = self
+                        .emit_console_output(
+                            server_id,
+                            "system",
+                            "[Catalyst] Killed by system OOM killer — heap exceeded cgroup limit. Next start will auto-clamp via _JAVA_OPTIONS to 75% of allocation. If this repeats, increase Memory allocation.\n",
+                        )
+                        .await;
+                }
                 let _ = self
                     .emit_server_state_update(
                         server_id,
@@ -539,6 +567,16 @@ impl WebSocketHandler {
                         server_id,
                         "system",
                         "[Catalyst] Auto-restart skipped: rate limit reached (too many crashes in window).\n",
+                    )
+                    .await;
+            }
+
+            if exit_code == Some(137) {
+                let _ = self
+                    .emit_console_output(
+                        server_id,
+                        "system",
+                        "[Catalyst] Killed by system OOM killer — heap exceeded cgroup limit. Next start will auto-clamp via _JAVA_OPTIONS to 75% of allocation. If this repeats, increase Memory allocation.\n",
                     )
                     .await;
             }

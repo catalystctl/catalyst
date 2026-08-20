@@ -877,6 +877,55 @@ impl WebSocketHandler {
             // Some templates use bash-style arithmetic tests like ((1)); convert for /bin/sh.
             final_startup_command = shell_utils::normalize_startup_for_sh(&final_startup_command);
 
+            // ── Transparent Java heap clamp ──────────────────────────────────────────
+            // Leaf example: -Xms1G -Xmx2G on 2048M cgroup => heap == limit, off-heap
+            // (+Metaspace/CodeCache/threads/Direct) -> cgroup OOM -> SIGKILL 137.
+            // CLI rewrites miss @user_jvm_args.txt/@unix_args.txt (CurseForge/Forge) and
+            // run.sh wrappers. CLI -XX:MaxRAMPercentage is expanded before @argfiles so
+            // argfile -Xmx wins; JAVA_TOOL_OPTIONS is prepended so egg -Xmx still wins.
+            // _JAVA_OPTIONS is appended last by HotSpot and inherited by child JVMs, so it
+            // overrides both CLI and argfiles. Inject there without requiring operator edits.
+            let java_fix_enabled =
+                env_map.get("CATALYST_JAVA_MEMORY_FIX").map(|v| v.as_str()) != Some("0");
+            if java_fix_enabled {
+                // 75% of limit leaves ~25% for off-heap. Never let Xmx meet the cgroup
+                // limit and keep headroom for tiny servers. Advised: (m*75/100).max(128)
+                // .min(m.saturating_sub(256).max(128)) so Xmx < limit.
+                let raw_heap = memory_mb * 75 / 100;
+                let headroom_floor = memory_mb.saturating_sub(256).max(128);
+                let clamped_heap = raw_heap.max(128).min(headroom_floor);
+                let parsed_xms = env_map
+                    .get("MEMORY_XMS")
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(memory_mb / 2);
+                let clamped_xms = parsed_xms.min(clamped_heap).max(128);
+                if memory_mb >= 256 && clamped_heap >= 128 {
+                    // Preserve operator-provided _JAVA_OPTIONS (prepend/merge).
+                    let existing = env_map.get("_JAVA_OPTIONS").cloned().unwrap_or_default();
+                    let injected = format!(
+                        "-Xms{}M -Xmx{}M -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError",
+                        clamped_xms, clamped_heap
+                    );
+                    let merged = if existing.trim().is_empty() {
+                        injected
+                    } else {
+                        format!("{} {}", existing.trim(), injected)
+                    };
+                    env_map.insert("_JAVA_OPTIONS".to_string(), merged);
+                    // Also normalize visible startup for logs: strip literal -Xmx/-Xms and
+                    // excessive MaxRAMPercentage so logs don't mislead, but don't rely on it
+                    // for enforcement — _JAVA_OPTIONS is the enforcer.
+                    // This is log-only; actual clamp is via env.
+                    final_startup_command = crate::shell_utils::normalize_java_heap_args(
+                        &final_startup_command,
+                    );
+                    info!(
+                        "Java heap clamped via _JAVA_OPTIONS: -Xms{}M -Xmx{}M (limit {}M, orig startup: {})",
+                        clamped_xms, clamped_heap, memory_mb, startup_command
+                    );
+                }
+            }
+
             info!("Final startup command: {}", final_startup_command);
 
             // Apply Pterodactyl egg config.files (properties/json/ini/yaml/xml/file)
@@ -988,9 +1037,13 @@ impl WebSocketHandler {
                     .get_container_exit_code(server_id)
                     .await
                     .unwrap_or(None);
-                let reason = match exit_code {
-                    Some(code) => format!("Container exited immediately with code {}", code),
-                    None => "Container exited immediately after start".to_string(),
+                let reason = if exit_code == Some(137) {
+                    format!("Container exited immediately with code 137 (OOM killed — cgroup {}M limit exceeded; next start will use _JAVA_OPTIONS=Xmx{}M ~75% of limit)", memory_mb, memory_mb * 75 / 100)
+                } else {
+                    match exit_code {
+                        Some(code) => format!("Container exited immediately with code {}", code),
+                        None => "Container exited immediately after start".to_string(),
+                    }
                 };
                 if let Ok(logs) = self.runtime.get_logs(server_id, Some(100)).await {
                     if !logs.trim().is_empty() {
