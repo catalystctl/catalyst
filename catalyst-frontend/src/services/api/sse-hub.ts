@@ -25,11 +25,18 @@ type SharedStream = {
   nativeHandlers: Map<string, (e: MessageEvent) => void>;
   /** This tab currently owns the socket for this URL */
   isLeader: boolean;
+  /** Last announced leader tabId for this URL (per-URL election). */
+  knownLeader: string | null;
+  /** Fallback self-promotion if no leader/status arrives (orphan streams). */
+  takeoverTimer: number | null;
+  /** Safety net: connecting → error so polling isn't stuck. */
+  connectingTimer: number | null;
 };
 
 type BcEnvelope =
   | { kind: 'hello'; tabId: string; ts: number }
   | { kind: 'leader'; tabId: string; url: string; ts: number }
+  | { kind: 'release'; tabId: string; url: string; ts: number }
   | { kind: 'event'; url: string; type: string; data: Record<string, unknown> }
   | { kind: 'status'; url: string; status: StreamStatus }
   | { kind: 'bye'; tabId: string };
@@ -44,12 +51,39 @@ const streams = new Map<string, SharedStream>();
 const BC_NAME = 'catalyst-sse-hub';
 let bc: BroadcastChannel | null = null;
 let bcReady = false;
-/** Known peer tabs (for crude leader election: lowest tabId wins) */
+/** Known peer tabs (for diagnostics/bye handling; election is per-URL). */
 const peers = new Set<string>([TAB_ID]);
-let electionTimer: ReturnType<typeof setTimeout> | null = null;
 
 function canUseBroadcastChannel(): boolean {
   return typeof BroadcastChannel !== 'undefined';
+}
+
+function clearTakeover(stream: SharedStream): void {
+  if (stream.takeoverTimer !== null) {
+    clearTimeout(stream.takeoverTimer);
+    stream.takeoverTimer = null;
+  }
+}
+
+function clearConnectingTimer(stream: SharedStream): void {
+  if (stream.connectingTimer !== null) {
+    clearTimeout(stream.connectingTimer);
+    stream.connectingTimer = null;
+  }
+}
+
+function scheduleTakeover(stream: SharedStream): void {
+  if (stream.isLeader || stream.es) return;
+  if (stream.takeoverTimer !== null) return;
+  const jitter = Math.floor(Math.random() * 300);
+  const delay = 900 + jitter;
+  stream.takeoverTimer = window.setTimeout(() => {
+    stream.takeoverTimer = null;
+    if (stream.isLeader || stream.es) return;
+    if (stream.status === 'connected') return;
+    if (stream.knownLeader !== null && stream.knownLeader < TAB_ID) return;
+    promoteLeader(stream);
+  }, delay) as unknown as number;
 }
 
 function ensureBroadcast() {
@@ -67,30 +101,48 @@ function ensureBroadcast() {
     switch (msg.kind) {
       case 'hello':
         peers.add(msg.tabId);
-        // Reply so the new tab learns about us
-        try {
-          bc?.postMessage({ kind: 'hello', tabId: TAB_ID, ts: Date.now() } satisfies BcEnvelope);
-        } catch {
-          /* ignore */
-        }
-        scheduleElection();
         break;
       case 'bye':
         peers.delete(msg.tabId);
-        scheduleElection();
-        break;
-      case 'leader':
-        // Another tab claimed leadership for a URL — if we had the socket, drop it
-        if (msg.tabId !== TAB_ID) {
-          const stream = streams.get(msg.url);
-          if (stream?.isLeader && stream.es) {
-            demoteLeader(stream);
+        for (const s of streams.values()) {
+          if (s.knownLeader === msg.tabId) {
+            s.knownLeader = null;
+            if (!s.isLeader && !s.es && s.refCount > 0) scheduleTakeover(s);
           }
         }
         break;
+      case 'leader': {
+        if (msg.tabId === TAB_ID) break;
+        const stream = streams.get(msg.url);
+        if (!stream) break;
+        if (stream.knownLeader === null || msg.tabId < stream.knownLeader) {
+          stream.knownLeader = msg.tabId;
+        }
+        clearTakeover(stream);
+        clearConnectingTimer(stream);
+        if (stream.isLeader && msg.tabId < TAB_ID) {
+          demoteLeader(stream);
+        } else if (!stream.isLeader && !stream.es && TAB_ID < msg.tabId) {
+          promoteLeader(stream);
+        }
+        break;
+      }
+      case 'release': {
+        if (msg.tabId === TAB_ID) break;
+        const stream = streams.get(msg.url);
+        if (!stream) break;
+        if (stream.knownLeader === msg.tabId) {
+          stream.knownLeader = null;
+          clearTakeover(stream);
+          if (!stream.isLeader && !stream.es && stream.refCount > 0) scheduleTakeover(stream);
+        }
+        break;
+      }
       case 'event': {
         const stream = streams.get(msg.url);
-        if (!stream || stream.isLeader) return; // leader already dispatched locally
+        if (!stream || stream.isLeader) return;
+        clearTakeover(stream);
+        if (stream.knownLeader === null) stream.knownLeader = '__remote__';
         for (const l of stream.eventListeners) {
           try {
             l(msg.type, msg.data);
@@ -103,7 +155,9 @@ function ensureBroadcast() {
       case 'status': {
         const stream = streams.get(msg.url);
         if (!stream || stream.isLeader) return;
-        setStatus(stream, msg.status, /*broadcast*/ false);
+        clearTakeover(stream);
+        if (stream.knownLeader === null) stream.knownLeader = '__remote__';
+        setStatus(stream, msg.status, false);
         break;
       }
       default:
@@ -128,36 +182,9 @@ function ensureBroadcast() {
   }
 }
 
-function isElectedLeader(): boolean {
-  // Lowest tabId among known peers wins (stable, deterministic).
-  let min = TAB_ID;
-  for (const id of peers) {
-    if (id < min) min = id;
-  }
-  return min === TAB_ID;
-}
-
-function scheduleElection() {
-  if (electionTimer) clearTimeout(electionTimer);
-  electionTimer = setTimeout(() => {
-    electionTimer = null;
-    runElection();
-  }, 50);
-}
-
-function runElection() {
-  const shouldLead = !canUseBroadcastChannel() || !bc || isElectedLeader();
-  for (const stream of streams.values()) {
-    if (shouldLead && !stream.isLeader) {
-      promoteLeader(stream);
-    } else if (!shouldLead && stream.isLeader) {
-      demoteLeader(stream);
-    }
-  }
-}
-
 function setStatus(stream: SharedStream, status: StreamStatus, broadcast = true) {
   stream.status = status;
+  if (status === 'connected') clearConnectingTimer(stream);
   for (const l of stream.statusListeners) {
     try {
       l(status);
@@ -181,7 +208,6 @@ function setStatus(stream: SharedStream, status: StreamStatus, broadcast = true)
 function attachEventType(stream: SharedStream, type: string) {
   if (stream.eventTypes.has(type)) return;
   stream.eventTypes.add(type);
-  // If we already have an ES, attach now; otherwise promoteLeader will attach all.
   if (stream.es) {
     bindNativeHandler(stream, type);
   }
@@ -223,11 +249,26 @@ function bindNativeHandler(stream: SharedStream, type: string) {
 function promoteLeader(stream: SharedStream) {
   if (stream.es) return;
   stream.isLeader = true;
+  stream.knownLeader = TAB_ID;
+  clearTakeover(stream);
+  clearConnectingTimer(stream);
   const es = new EventSource(stream.url, { withCredentials: true });
   stream.es = es;
   stream.nativeHandlers.clear();
-  es.onopen = () => setStatus(stream, 'connected');
+  // Safety net: don't leave badge stuck at "Connecting" forever (proxy buffering / 401 / 503 hidden).
+  // Transition to error so useSseConsole fallback polling (which only runs on closed/error) can take over.
+  stream.connectingTimer = window.setTimeout(() => {
+    stream.connectingTimer = null;
+    if (stream.status === 'connecting' && stream.isLeader) {
+      setStatus(stream, 'error');
+    }
+  }, 8000) as unknown as number;
+  es.onopen = () => {
+    clearConnectingTimer(stream);
+    setStatus(stream, 'connected');
+  };
   es.onerror = () => {
+    clearConnectingTimer(stream);
     if (es.readyState === EventSource.CONNECTING) setStatus(stream, 'reconnecting');
     else if (es.readyState === EventSource.CLOSED) setStatus(stream, 'closed');
     else setStatus(stream, 'error');
@@ -249,6 +290,8 @@ function promoteLeader(stream: SharedStream) {
 
 function demoteLeader(stream: SharedStream) {
   stream.isLeader = false;
+  clearConnectingTimer(stream);
+  clearTakeover(stream);
   if (stream.es) {
     try {
       stream.es.close();
@@ -258,8 +301,8 @@ function demoteLeader(stream: SharedStream) {
     stream.es = null;
   }
   stream.nativeHandlers.clear();
-  // Followers show connecting until leader sends status
-  setStatus(stream, 'connecting', /*broadcast*/ false);
+  setStatus(stream, 'connecting', false);
+  scheduleTakeover(stream);
 }
 
 /**
@@ -285,6 +328,9 @@ export function subscribeSharedEventSource(
       es: null,
       nativeHandlers: new Map(),
       isLeader: false,
+      knownLeader: null,
+      takeoverTimer: null,
+      connectingTimer: null,
     };
     streams.set(url, stream);
   }
@@ -302,14 +348,17 @@ export function subscribeSharedEventSource(
 
   for (const t of eventTypes) attachEventType(stream, t);
 
-  // Elect / open socket
   if (!canUseBroadcastChannel() || !bc) {
-    // No cross-tab: this tab always owns the socket
     if (!stream.es) promoteLeader(stream);
-  } else {
-    scheduleElection();
-    // Optimistic: if we already know we're leader, open immediately
-    if (isElectedLeader() && !stream.es) promoteLeader(stream);
+  } else if (!stream.es && !stream.isLeader) {
+    if (stream.knownLeader === null) {
+      promoteLeader(stream);
+    } else if (TAB_ID < stream.knownLeader) {
+      promoteLeader(stream);
+    } else {
+      scheduleTakeover(stream);
+    }
+    if (!stream.isLeader && !stream.es) scheduleTakeover(stream);
   }
 
   let closed = false;
@@ -320,8 +369,12 @@ export function subscribeSharedEventSource(
     if (!s) return;
     s.eventListeners.delete(onEvent);
     if (onStatus) s.statusListeners.delete(onStatus);
+    const wasLeaderForUrl = s.isLeader && s.knownLeader === TAB_ID;
     s.refCount = Math.max(0, s.refCount - 1);
     if (s.refCount === 0) {
+      clearTakeover(s);
+      clearConnectingTimer(s);
+      const closingUrl = s.url;
       if (s.es) {
         try {
           s.es.close();
@@ -330,6 +383,13 @@ export function subscribeSharedEventSource(
         }
       }
       streams.delete(url);
+      if (wasLeaderForUrl && bc) {
+        try {
+          bc.postMessage({ kind: 'release', tabId: TAB_ID, url: closingUrl, ts: Date.now() } satisfies BcEnvelope);
+        } catch {
+          /* ignore */
+        }
+      }
     }
   };
 }
@@ -356,13 +416,20 @@ export function __resetSharedEventSources() {
         /* ignore */
       }
     }
+    if (s.takeoverTimer !== null) clearTimeout(s.takeoverTimer);
+    if (s.connectingTimer !== null) clearTimeout(s.connectingTimer);
   }
   streams.clear();
   peers.clear();
   peers.add(TAB_ID);
-  if (electionTimer) {
-    clearTimeout(electionTimer);
-    electionTimer = null;
+  if (bc) {
+    try {
+      bc.close();
+    } catch {
+      /* ignore */
+    }
+    bc = null;
+    bcReady = false;
   }
 }
 

@@ -254,9 +254,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
       cursorStyle: 'bar',
       cursorInactiveStyle: 'none',
       theme: readXtermTheme(),
-      // Solid background — transparency forces expensive compositing on every write.
       allowTransparency: false,
-      // Smooths rapid write bursts (SSE can dump dozens of lines per frame).
       smoothScrollDuration: 0,
     });
 
@@ -268,8 +266,6 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
     term.loadAddon(links);
     term.open(host);
 
-    // Kill xterm.css's hardcoded #000 viewport immediately (theme effect also
-    // re-applies after first paint / theme changes).
     const initialBg = readXtermTheme().background || resolveThemeColor('--card', '#0b0f14');
     host.style.backgroundColor = initialBg;
     const initialViewport = host.querySelector('.xterm-viewport') as HTMLElement | null;
@@ -277,28 +273,67 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
     const initialXterm = host.querySelector('.xterm') as HTMLElement | null;
     if (initialXterm) initialXterm.style.backgroundColor = initialBg;
 
-    // Hide the block cursor entirely for a log viewer (display-only).
     term.write('\x1b[?25l');
 
-    const fitSoon = () => {
+    let cancelled = false;
+    let fitRaf: number | undefined;
+    let fitTimer: number | undefined;
+
+    const tryFit = () => {
+      if (cancelled) return;
+      if (!host.isConnected) return;
+      // Host is flex:1 inside a lazy Suspense tab — first paint can be 0×0.
+      // Retry next frame instead of locking cols/rows to 0 and never repainting.
+      if (host.clientWidth === 0 || host.clientHeight === 0) {
+        fitRaf = window.requestAnimationFrame(tryFit);
+        return;
+      }
       try {
         fit.fit();
+        // Font metrics changed (JetBrains Mono Variable is async) — force
+        // renderer to re-measure cell size or the canvas stays blank/0-cols.
+        try {
+          term.refresh(0, term.rows - 1);
+        } catch {
+          /* rows may be 0 during first fit */
+        }
       } catch {
         /* host may be display:none */
       }
     };
-    fitSoon();
-    // Debounce resize fits — raw ResizeObserver fires during layout and
-    // causes visible reflow flicker while output is streaming.
-    let fitTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Debounce ResizeObserver fits — raw fires during layout and causes flicker.
     const scheduleFit = () => {
-      if (fitTimer) clearTimeout(fitTimer);
-      fitTimer = setTimeout(() => {
-        fitTimer = null;
-        fitSoon();
+      window.clearTimeout(fitTimer);
+      fitTimer = window.setTimeout(() => {
+        fitTimer = undefined;
+        tryFit();
       }, 50);
     };
-    const fitRaf = requestAnimationFrame(fitSoon);
+
+    // Initial sizing: immediate + next frame (flex layout settles after paint).
+    tryFit();
+    fitRaf = window.requestAnimationFrame(tryFit);
+
+    // Self-hosted fonts load async (see main.tsx @fontsource-variable). xterm
+    // measures the fallback font if we fit before the variable font arrives —
+    // cols/rows freeze at wrong geometry and output looks "not loaded" (issue
+    // screenshot: network has logs but canvas is empty). Re-fit once fonts settle.
+    let fontsDone = false;
+    const onFontsReady = () => {
+      if (fontsDone) return;
+      fontsDone = true;
+      tryFit();
+    };
+    const fonts: FontFaceSet | undefined = typeof document !== 'undefined' ? document.fonts : undefined;
+    if (fonts?.ready) {
+      fonts.ready.then(onFontsReady).catch(() => {});
+      // Fires when any @font-face finishes (covers variable-font swap after rAF).
+      fonts.addEventListener('loadingdone', onFontsReady);
+    } else {
+      // Fallback for environments without FontFaceSet (tests / old webviews).
+      window.addEventListener('load', onFontsReady, { once: true });
+    }
 
     const onScroll = () => {
       if (isProgrammaticScroll.current) {
@@ -335,8 +370,11 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
     setTermEpoch((n) => n + 1);
 
     return () => {
-      cancelAnimationFrame(fitRaf);
-      if (fitTimer) clearTimeout(fitTimer);
+      cancelled = true;
+      if (fitRaf !== undefined) window.cancelAnimationFrame(fitRaf);
+      window.clearTimeout(fitTimer);
+      fonts?.removeEventListener('loadingdone', onFontsReady);
+      window.removeEventListener('load', onFontsReady);
       scrollDisp.dispose();
       ro.disconnect();
       term.dispose();

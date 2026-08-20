@@ -73,4 +73,7 @@ image.png
 benchmarks/
 SESSION_BRIDGE_CATCODE_OPENCODE.md
 .mythos.yml
+.mythos/
 .sphinx/
+.sphinxignore
+.opencode/
