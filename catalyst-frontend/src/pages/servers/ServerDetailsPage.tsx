@@ -326,21 +326,17 @@ function ServerDetailsPage() {
  const [databaseHostId, setDatabaseHostId] = useState('');
  const [databaseName, setDatabaseName] = useState('');
 
- // ── Sync server data to local state via render-time state adjustment ──
- const [prevServer, setPrevServer] = useState(server);
- if (server !== prevServer) {
- setPrevServer(server);
- if (server?.name) setServerName(server.name);
- if (server) {
- setRestartPolicy(server.restartPolicy ?? 'on-failure');
- setMaxCrashCount(
- server.maxCrashCount !== undefined && server.maxCrashCount !== null
- ? String(server.maxCrashCount)
- : '5',
- );
- setStartupCommand(server.startupCommand ?? server.template?.startup ?? '');
- }
- }
+  useEffect(() => {
+    if (!server) return;
+    setServerName(server.name ?? '');
+    setRestartPolicy(server.restartPolicy ?? 'on-failure');
+    setMaxCrashCount(
+      server.maxCrashCount !== undefined && server.maxCrashCount !== null
+        ? String(server.maxCrashCount)
+        : '5',
+    );
+    setStartupCommand(server.startupCommand ?? server.template?.startup ?? '');
+  }, [server?.id]);
 
  const [prevPermissionsData, setPrevPermissionsData] = useState(permissionsData?.data);
  if (permissionsData?.data !== prevPermissionsData) {

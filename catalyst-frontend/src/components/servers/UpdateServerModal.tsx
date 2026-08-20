@@ -124,7 +124,6 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     setDisk(String(server.allocatedDiskMb ?? 10240));
     setDatabaseAllocation(String(server.databaseAllocation ?? 0));
     setPrimaryIp(server.primaryIp ?? '');
-    setAllocationId('');
   }, [open, server?.id]);
 
   const [prevIpDeps, setPrevIpDeps] = useState({

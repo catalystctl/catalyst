@@ -10,8 +10,8 @@
       "id": "api-list-servers",
       "label": "List servers",
       "description": "GET server list — primary pagination path. Catalyst: /api/servers filtered by user access. Ptero: Application API paginated list.",
-      "catalyst": { "path": "/api/servers", "method": "GET" },
-      "pterodactyl": { "path": "/api/application/servers", "method": "GET", "key": "app" }
+      "catalyst": { "path": "/api/servers?limit=50", "method": "GET" },
+      "pterodactyl": { "path": "/api/application/servers?per_page=50", "method": "GET", "key": "app" }
     },
     {
       "id": "api-get-server",
@@ -87,8 +87,8 @@
       "id": "api-templates",
       "label": "List templates / eggs",
       "description": "GET template/egg catalog.",
-      "catalyst": { "path": "/api/templates", "method": "GET" },
-      "pterodactyl": { "path": "/api/application/nests/:nestId/eggs", "method": "GET", "key": "app" }
+      "catalyst": { "path": "/api/templates?limit=50", "method": "GET" },
+      "pterodactyl": { "path": "/api/application/nests/:nestId/eggs?per_page=50", "method": "GET", "key": "app" }
     }
   ],
   "ops": [

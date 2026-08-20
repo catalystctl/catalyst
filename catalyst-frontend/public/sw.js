@@ -1,7 +1,10 @@
-// Catalyst Service Worker v2 — caches static assets for faster loads
+// Catalyst Service Worker v3 — caches static assets for faster loads
 // API/WebSocket requests are NEVER intercepted (pass through directly)
+// v3: bumped from v2 to force eviction of stale cached index.html that
+// contained broken /node_modules/@fontsource preload links (404). See
+// https://panel.arcadiamc.it 500s on fresh devices after 1.23.0.
 
-const CACHE_NAME = 'catalyst-v2';
+const CACHE_NAME = 'catalyst-v3';
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = ['/index.html', '/favicon.ico'];

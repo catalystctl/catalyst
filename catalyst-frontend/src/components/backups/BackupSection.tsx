@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
 import { useBackups } from '../../hooks/useBackups';
@@ -43,27 +43,54 @@ function BackupSection({
  serverStatus: string;
  isSuspended?: boolean;
 }) {
- const [page, setPage] = useState(1);
- const { data: server } = useServer(serverId);
- const user = useAuthStore((s) => s.user);
- const [storageMode, setStorageMode] = useState<BackupStorageMode>('local');
- const [retentionCount, setRetentionCount] = useState('');
- const [retentionDays, setRetentionDays] = useState('');
- const [s3Bucket, setS3Bucket] = useState('');
- const [s3Region, setS3Region] = useState('');
- const [s3Endpoint, setS3Endpoint] = useState('');
- const [s3AccessKeyId, setS3AccessKeyId] = useState('');
- const [s3SecretAccessKey, setS3SecretAccessKey] = useState('');
- const [s3PathStyle, setS3PathStyle] = useState(false);
- const [sftpHost, setSftpHost] = useState('');
- const [sftpPort, setSftpPort] = useState('22');
- const [sftpUsername, setSftpUsername] = useState('');
- const [sftpPassword, setSftpPassword] = useState('');
- const [sftpPrivateKey, setSftpPrivateKey] = useState('');
- const [sftpPrivateKeyPassphrase, setSftpPrivateKeyPassphrase] = useState('');
- const [sftpBasePath, setSftpBasePath] = useState('');
- const queryClient = useQueryClient();
- const progressByBackup = useBackupDownloadStore((s) => s.progressByBackup);
+  const [page, setPage] = useState(1);
+  const { data: server } = useServer(serverId);
+  const user = useAuthStore((s) => s.user);
+  const [storageMode, setStorageMode] = useState<BackupStorageMode>('local');
+  const [retentionCount, setRetentionCount] = useState('');
+  const [retentionDays, setRetentionDays] = useState('');
+  const [s3Bucket, setS3Bucket] = useState('');
+  const [s3Region, setS3Region] = useState('');
+  const [s3Endpoint, setS3Endpoint] = useState('');
+  const [s3AccessKeyId, setS3AccessKeyId] = useState('');
+  const [s3SecretAccessKey, setS3SecretAccessKey] = useState('');
+  const [s3PathStyle, setS3PathStyle] = useState(false);
+  const [sftpHost, setSftpHost] = useState('');
+  const [sftpPort, setSftpPort] = useState('22');
+  const [sftpUsername, setSftpUsername] = useState('');
+  const [sftpPassword, setSftpPassword] = useState('');
+  const [sftpPrivateKey, setSftpPrivateKey] = useState('');
+  const [sftpPrivateKeyPassphrase, setSftpPrivateKeyPassphrase] = useState('');
+  const [sftpBasePath, setSftpBasePath] = useState('');
+  useEffect(() => {
+    if (!server) return;
+    setStorageMode(server.backupStorageMode ?? 'local');
+    setRetentionCount(
+      server.backupRetentionCount !== undefined && server.backupRetentionCount !== null
+        ? String(server.backupRetentionCount)
+        : '',
+    );
+    setRetentionDays(
+      server.backupRetentionDays !== undefined && server.backupRetentionDays !== null
+        ? String(server.backupRetentionDays)
+        : '',
+    );
+    setS3Bucket(server.backupS3Config?.bucket ?? '');
+    setS3Region(server.backupS3Config?.region ?? '');
+    setS3Endpoint(server.backupS3Config?.endpoint ?? '');
+    setS3AccessKeyId(server.backupS3Config?.accessKeyId ?? '');
+    setS3SecretAccessKey(server.backupS3Config?.secretAccessKey ?? '');
+    setS3PathStyle(Boolean(server.backupS3Config?.pathStyle));
+    setSftpHost(server.backupSftpConfig?.host ?? '');
+    setSftpPort(server.backupSftpConfig?.port ? String(server.backupSftpConfig.port) : '22');
+    setSftpUsername(server.backupSftpConfig?.username ?? '');
+    setSftpPassword(server.backupSftpConfig?.password ?? '');
+    setSftpPrivateKey(server.backupSftpConfig?.privateKey ?? '');
+    setSftpPrivateKeyPassphrase(server.backupSftpConfig?.privateKeyPassphrase ?? '');
+    setSftpBasePath(server.backupSftpConfig?.basePath ?? '');
+  }, [server?.id]);
+  const queryClient = useQueryClient();
+  const progressByBackup = useBackupDownloadStore((s) => s.progressByBackup);
  const setProgress = useBackupDownloadStore((s) => s.setProgress);
  const clearProgress = useBackupDownloadStore((s) => s.clearProgress);
  const { data, isLoading, isError } = useBackups(serverId, { page, limit: 10 });
@@ -94,67 +121,34 @@ function BackupSection({
  // Settings / create use create; list actions split restore vs delete
  const canWrite = canCreate;
 
- const [prevServer, setPrevServer] = useState(server);
- if (server !== prevServer) {
- setPrevServer(server);
- if (server) {
- setStorageMode(server.backupStorageMode ?? 'local');
- setRetentionCount(
- server.backupRetentionCount !== undefined && server.backupRetentionCount !== null
- ? String(server.backupRetentionCount)
- : '',
- );
- setRetentionDays(
- server.backupRetentionDays !== undefined && server.backupRetentionDays !== null
- ? String(server.backupRetentionDays)
- : '',
- );
- setS3Bucket(server.backupS3Config?.bucket ?? '');
- setS3Region(server.backupS3Config?.region ?? '');
- setS3Endpoint(server.backupS3Config?.endpoint ?? '');
- setS3AccessKeyId(server.backupS3Config?.accessKeyId ?? '');
- setS3SecretAccessKey(server.backupS3Config?.secretAccessKey ?? '');
- setS3PathStyle(Boolean(server.backupS3Config?.pathStyle));
- setSftpHost(server.backupSftpConfig?.host ?? '');
- setSftpPort(
- server.backupSftpConfig?.port ? String(server.backupSftpConfig.port) : '22',
- );
- setSftpUsername(server.backupSftpConfig?.username ?? '');
- setSftpPassword(server.backupSftpConfig?.password ?? '');
- setSftpPrivateKey(server.backupSftpConfig?.privateKey ?? '');
- setSftpPrivateKeyPassphrase(server.backupSftpConfig?.privateKeyPassphrase ?? '');
- setSftpBasePath(server.backupSftpConfig?.basePath ?? '');
- }
- }
-
- const handleDownload = async (backupId: string, name: string) => {
- try {
- setProgress(`${progressKeyPrefix}${backupId}`, { loaded: 0 });
- const blob = await backupsApi.download(serverId, backupId, (progress) => {
- setProgress(`${progressKeyPrefix}${backupId}`, progress);
- });
- const url = URL.createObjectURL(blob);
- const link = document.createElement('a');
- link.href = url;
- link.download = `${name}.tar.gz`;
- document.body.appendChild(link);
- link.click();
- link.remove();
- URL.revokeObjectURL(url);
- clearProgress(`${progressKeyPrefix}${backupId}`);
- notifyInfo('Backup download started');
- } catch (error: unknown) {
- reportSystemError({
- level: 'error',
- component: 'BackupSection',
- message: error instanceof Error ? error.message : String(error),
- stack: error instanceof Error ? error.stack : undefined,
- metadata: { context: 'download backup' },
- });
- clearProgress(`${progressKeyPrefix}${backupId}`);
- notifyError(getErrorMessage(error, 'Failed to download backup'));
- }
- };
+  const handleDownload = async (backupId: string, name: string) => {
+    try {
+      setProgress(`${progressKeyPrefix}${backupId}`, { loaded: 0 });
+      const blob = await backupsApi.download(serverId, backupId, (progress) => {
+        setProgress(`${progressKeyPrefix}${backupId}`, progress);
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${name}.tar.gz`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      clearProgress(`${progressKeyPrefix}${backupId}`);
+      notifyInfo('Backup download started');
+    } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'BackupSection',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'download backup' },
+      });
+      clearProgress(`${progressKeyPrefix}${backupId}`);
+      notifyError(getErrorMessage(error, 'Failed to download backup'));
+    }
+  };
 
  const backups = data?.backups ?? [];
  const totalPages = data?.totalPages ?? 1;

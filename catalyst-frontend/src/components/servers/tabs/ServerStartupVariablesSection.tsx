@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { Save, RotateCcw, AlertCircle, CheckCircle2, Cog } from 'lucide-react';
 import { qk } from '../../../lib/queryKeys';
@@ -43,20 +43,15 @@ export default function ServerStartupVariablesSection({
  // EMPTY_STARTUP_VARIABLES is module-scoped so identity is stable while loading.
  const variables = Array.isArray(variablesData) ? variablesData : EMPTY_STARTUP_VARIABLES;
 
- // Sync local values when the *query result identity* changes (real data load/refetch).
- // Do not use a fresh [] fallback here — that loops under React 19.
- const [prevVariables, setPrevVariables] = useState(variables);
- if (variables !== prevVariables) {
- setPrevVariables(variables);
- // Reset local form state on real loads (including empty template → clear fields).
- const next: Record<string, string> = {};
- for (const v of variables) {
- next[v.name] = v.value;
- }
- setLocalValues(next);
- setLocalErrors({});
- setTouched(new Set());
- }
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const v of variables) {
+      next[v.name] = v.value;
+    }
+    setLocalValues(next);
+    setLocalErrors({});
+    setTouched(new Set());
+  }, [variables]);
 
  const updateMutation = useMutation({
  mutationFn: (payload: Record<string, string>) =>

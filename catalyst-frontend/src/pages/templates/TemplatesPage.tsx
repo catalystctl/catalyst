@@ -127,10 +127,10 @@ function TemplateRow({
  <span className="font-mono text-[11px] opacity-60">
  {template.defaultImage || template.image}
  </span>
- <span className="hidden md:inline">
- {template.variables.length} variable
- {template.variables.length !== 1 ? 's' : ''}
- </span>
+  <span className="hidden md:inline">
+  {(template.variables?.length ?? 0)} variable
+  {(template.variables?.length ?? 0) !== 1 ? 's' : ''}
+  </span>
  </div>
  </div>
 
@@ -323,23 +323,23 @@ function TemplatesPage({ hideHeader }: Props) {
  } else if (selectedNestId !== null) {
  filtered = filtered.filter((t) => t.nestId === selectedNestId);
  }
- const sorted = [...filtered];
- sorted.sort((a, b) => {
- switch (sort) {
- case 'name-desc':
- return b.name.localeCompare(a.name);
- case 'author':
- return a.author.localeCompare(b.author);
- case 'version':
- return b.version.localeCompare(a.version);
- case 'memory':
- return b.allocatedMemoryMb - a.allocatedMemoryMb;
- case 'cpu':
- return b.allocatedCpuCores - a.allocatedCpuCores;
- default:
- return a.name.localeCompare(b.name);
- }
- });
+  const sorted = [...filtered];
+  sorted.sort((a, b) => {
+  switch (sort) {
+  case 'name-desc':
+  return b.name.localeCompare(a.name);
+  case 'author':
+  return a.author.localeCompare(b.author);
+  case 'version':
+  return b.version.localeCompare(a.version);
+  case 'memory':
+  return (b.allocatedMemoryMb ?? 0) - (a.allocatedMemoryMb ?? 0);
+  case 'cpu':
+  return (b.allocatedCpuCores ?? 0) - (a.allocatedCpuCores ?? 0);
+  default:
+  return a.name.localeCompare(b.name);
+  }
+  });
  return sorted;
  }, [templates, search, authorFilter, sort, selectedNestId]);
 

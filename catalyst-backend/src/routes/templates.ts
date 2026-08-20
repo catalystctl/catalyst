@@ -12,8 +12,9 @@ import { SimpleCache } from "../lib/cache.js";
 const templateListCache = new SimpleCache<string, any>(10000);
 const templateListInflight = new Map<string, Promise<any>>();
 
-// Lean select for list: exclude heavy variables/installScript for throughput,
-// but keep essential fields + nest. Detail endpoint remains full.
+// Lean select for list: exclude heavy installScript for throughput,
+// but keep all fields required by TemplatesPage list view.
+// Previously variables/allocated* were omitted, causing `Cannot read properties of undefined (reading 'length')`.
 const templateListSelect = {
   id: true,
   name: true,
@@ -29,6 +30,12 @@ const templateListSelect = {
   nestId: true,
   createdAt: true,
   updatedAt: true,
+  // Required by frontend list rendering:
+  variables: true,
+  supportedPorts: true,
+  allocatedMemoryMb: true,
+  allocatedCpuCores: true,
+  features: true,
   nest: { select: { id: true, name: true, icon: true } },
 } as const;
 
@@ -136,20 +143,22 @@ export async function templateRoutes(app: FastifyInstance) {
 	// Using shared prisma instance from db.ts
 
 	// List all templates — optimized for max throughput (benchmark hot-path)
-	// Supports ?limit &offset &nestId &full=1 (full includes variables/installScript)
+	// Supports ?limit &offset &nestId &full=1 (full includes installScript).
+	// When no limit is provided, returns all templates (backwards-compatible with frontend list view).
 	app.get(
 		"/",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const query = request.query as { limit?: string; offset?: string; nestId?: string; full?: string };
-			const limitRaw = Math.floor(Number(query.limit ?? 50));
-			const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, limitRaw)) : 50;
+			const hasLimitParam = query.limit !== undefined && query.limit !== '';
+			const limitRaw = hasLimitParam ? Math.floor(Number(query.limit)) : NaN;
+			const limit = hasLimitParam ? (Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, limitRaw)) : 50) : undefined;
 			const offsetRaw = Math.floor(Number(query.offset ?? 0));
 			const offset = Number.isFinite(offsetRaw) ? Math.max(0, offsetRaw) : 0;
 			const nestId = typeof query.nestId === "string" && query.nestId ? query.nestId : null;
 			const wantFull = query.full === "1" || query.full === "true";
 
-			const cacheKey = `${request.user.userId}:${limit}:${offset}:${nestId ?? ""}:${wantFull?1:0}`;
+			const cacheKey = `${request.user.userId}:${limit ?? 'all'}:${offset}:${nestId ?? ""}:${wantFull?1:0}`;
 			const hit = templateListCache.get(cacheKey);
 			if (hit) {
 				reply.header("X-Cache", "HIT");
@@ -170,8 +179,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				const templates = await prisma.serverTemplate.findMany({
 					where,
 					orderBy: { createdAt: "desc" },
-					take: limit,
-					skip: offset,
+					...(limit !== undefined ? { take: limit, skip: offset } : {}),
 					select: wantFull ? undefined : (templateListSelect as any),
 					include: wantFull ? { nest: { select: { id: true, name: true, icon: true } } } : undefined,
 				} as any);

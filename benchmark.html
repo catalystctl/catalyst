@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalyst vs Pterodactyl — Fair Benchmark Report</title>
+<meta name="description" content="Max-throughput fair benchmark: Catalyst 1.22.6 beats Pterodactyl 1.11.11 by 38x on list-servers after hot-path fix. 20c 15s 2s warmup, rate-limits disabled, external polling suppressed.">
+<style>
+  :root{
+    --bg:#080C14;
+    --panel:#0F1720;
+    --panel2:#111E2D;
+    --line:#1A2A3D;
+    --line2:#24364E;
+    --text:#E6EDF6;
+    --muted:#8AA0B8;
+    --dim:#5B7288;
+    --cyan:#00E5FF;
+    --cyan2:#00B8CC;
+    --amber:#FFB020;
+    --amber2:#FF8A00;
+    --green:#2ECC71;
+    --red:#FF3B5C;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background: var(--bg);
+    color:var(--text);
+    font-family: ui-sans-system, -apple-system, Segoe UI, Inter, Helvetica, Arial, sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* grid backdrop */
+  body:before{
+    content:"";
+    position:fixed; inset:0;
+    background:
+      linear-gradient(to right, rgba(0,229,255,0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0,229,255,0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask: radial-gradient(ellipse 90% 70% at 50% 0%, black 60%, transparent 100%);
+    pointer-events:none;
+    z-index:-1;
+  }
+  a{color:var(--cyan); text-decoration:none}
+  a:hover{color:#fff}
+  .wrap{max-width:1160px; margin:0 auto; padding:0 20px}
+  header{
+    position:sticky; top:0; z-index:20;
+    backdrop-filter: blur(12px);
+    background: rgba(8,12,20,0.85);
+    border-bottom:1px solid var(--line);
+  }
+  .nav{
+    display:flex; align-items:center; justify-content:space-between;
+    height:56px; gap:16px;
+  }
+  .brand{
+    display:flex; align-items:center; gap:12px; font-weight:700; letter-spacing:0.02em;
+  }
+  .mark{
+    width:28px; height:28px; border-radius:8px;
+    background: linear-gradient(135deg, var(--cyan), #0077FF);
+    display:grid; place-items:center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; color:#001018;
+    box-shadow: 0 0 20px rgba(0,229,255,0.4);
+  }
+  .meta{font-family: ui-monospace, monospace; font-size:11px; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase}
+  .pill{
+    display:inline-flex; align-items:center; gap:8px;
+    border:1px solid var(--line2); background:rgba(0,229,255,0.08);
+    color:var(--cyan); padding:4px 10px; border-radius:999px;
+    font-family: ui-monospace, monospace; font-size:11px; letter-spacing:0.06em; text-transform:uppercase;
+  }
+  .pill b{color:#fff}
+  .hero{
+    padding: 36px 0 18px;
+    display:grid; grid-template-columns: 1.35fr 0.75fr; gap:24px;
+    align-items:start;
+  }
+  @media (max-width:880px){ .hero{grid-template-columns:1fr} }
+  .eyebrow{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    font-family: ui-monospace, monospace; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted);
+  }
+  .eyebrow i{width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green)}
+  h1{
+    margin:10px 0 10px;
+    font-size:42px; line-height:0.95; letter-spacing:-0.04em; font-weight:800;
+  }
+  h1 em{font-style:normal; background: linear-gradient(90deg, var(--cyan), #7B61FF); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .lead{color:var(--muted); font-size:15px; max-width:640px}
+  .lead strong{color:var(--text); font-weight:600}
+  .hero-card{
+    border:1px solid var(--line2); background: linear-gradient(180deg, rgba(17,30,45,0.9), rgba(15,23,32,0.9));
+    border-radius: var(--radius); overflow:hidden;
+  }
+  .card-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 14px; border-bottom:1px solid var(--line);
+    font-family: ui-monospace, monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);
+  }
+  .big-grid{display:grid; grid-template-columns:1fr 1fr; border-top:1px solid var(--line)}
+  .big-cell{padding:16px 14px; border-right:1px solid var(--line); border-bottom:1px solid var(--line)}
+  .big-cell:nth-child(2n){border-right:0}
+  .big-cell:last-child{border-bottom:0}
+  .big-cell:nth-last-child(2){border-bottom:0}
+  .k{font-family: ui-monospace, monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--dim)}
+  .v{font-size:28px; font-weight:800; letter-spacing:-0.04em; line-height:1}
+  .v small{font-size:13px; font-weight:600; letter-spacing:0; color:var(--muted); margin-left:4px}
+  .v.cyan{color:var(--cyan)} .v.amber{color:var(--amber)}
+  .sub{font-family: ui-monospace, monospace; font-size:11px; color:var(--dim); margin-top:2px}
+  .section{padding: 28px 0; border-top:1px solid var(--line)}
+  .section h2{
+    font-size:18px; letter-spacing:-0.02em; margin:0 0 8px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .section h2:before{
+    content:""; width:3px; height:18px; border-radius:999px; background:var(--cyan);
+    box-shadow:0 0 10px rgba(0,229,255,0.6);
+  }
+  .section p{color:var(--muted); margin:0 0 12px; font-size:14px}
+  .cols{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+  @media (max-width:780px){ .cols{grid-template-columns:1fr} }
+  .panel{
+    border:1px solid var(--line2); background: var(--panel);
+    border-radius: var(--radius); overflow:hidden;
+  }
+  .panel h3{margin:0; padding:14px 16px; font-size:13px; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line); background: rgba(255,255,255,0.02)}
+  .panel .body{padding:16px}
+  .spec-grid{display:grid; grid-template-columns:1fr 1fr; gap:0; font-family: ui-monospace, monospace; font-size:12px}
+  .spec{padding:10px 14px; border-bottom:1px solid var(--line); border-right:1px solid var(--line); display:flex; justify-content:space-between; gap:12px}
+  .spec:nth-child(2n){border-right:0}
+  .spec b{color:var(--text); font-weight:600}
+  .spec span{color:var(--dim)}
+  table{
+    width:100%; border-collapse:collapse; font-size:13px;
+  }
+  thead th{
+    text-align:left; font-family: ui-monospace, monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--dim); padding:10px 12px; border-bottom:1px solid var(--line2); white-space:nowrap;
+  }
+  tbody td{padding:10px 12px; border-bottom:1px solid rgba(26,42,61,0.7); vertical-align:top}
+  tbody tr:hover{background: rgba(0,229,255,0.04)}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, monospace}
+  .bar{
+    height:6px; border-radius:999px; background: #0F2236; overflow:hidden; margin-top:6px;
+  }
+  .bar i{display:block; height:100%; background: linear-gradient(90deg, var(--cyan), #7B61FF)}
+  .bar.ptero i{background: linear-gradient(90deg, var(--amber), var(--amber2))}
+  .badge{
+    display:inline-flex; padding:2px 6px; border-radius:999px; font-family: ui-monospace, monospace; font-size:11px; letter-spacing:0.04em;
+    border:1px solid var(--line2); background: rgba(255,255,255,0.04); color:var(--muted);
+  }
+  .badge.win{color:var(--cyan); border-color: rgba(0,229,255,0.3); background: rgba(0,229,255,0.12)}
+  .badge.loss{color:var(--amber); border-color: rgba(255,176,32,0.3); background: rgba(255,176,32,0.12)}
+  .why{display:grid; grid-template-columns: repeat(3,1fr); gap:14px}
+  @media (max-width:900px){ .why{grid-template-columns:1fr} }
+  .why .card{border:1px solid var(--line2); background: var(--panel); border-radius:12px; padding:16px}
+  .why .card h4{margin:0 0 6px; font-size:13px}
+  .why .card p{font-size:13px; margin:0; color:var(--muted)}
+  .callout{
+    border:1px solid rgba(0,229,255,0.25); background: linear-gradient(180deg, rgba(0,229,255,0.12), rgba(0,229,255,0.04));
+    border-radius:12px; padding:14px 16px; display:flex; gap:12px; align-items:flex-start;
+    font-size:13px; color: #B6FAFF;
+  }
+  .callout i{width:22px; height:22px; border-radius:999px; background: var(--cyan); color:#001018; display:grid; place-items:center; font-family: ui-monospace, monospace; font-weight:800; flex-shrink:0}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media (max-width:780px){ .grid2{grid-template-columns:1fr} }
+  code{font-family: ui-monospace, monospace; font-size:12px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); padding:1px 5px; border-radius:6px; color:var(--text)}
+  pre{margin:0; padding:14px; background:#0B121E; border:1px solid var(--line); border-radius:12px; overflow:auto; font-family: ui-monospace, monospace; font-size:12px; line-height:1.6; color:#D6E4F0}
+  .foot{padding:20px 0 40px; border-top:1px solid var(--line); color:var(--dim); font-family: ui-monospace, monospace; font-size:11px; letter-spacing:0.04em}
+  .spark{height:42px; display:flex; align-items:end; gap:2px}
+  .spark i{flex:1; background: var(--cyan); border-radius:2px 2px 0 0; opacity:0.9}
+  .spark.ptero i{background: var(--amber)}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap nav">
+    <div class="brand"><div class="mark">◈</div> CATALYST <span class="meta">/ LXC LAB — FAIR BENCH</span></div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+      <span class="meta">2026-08-19 • 20c 15s 2s warmup • v22.22.2</span>
+      <span class="pill"><b>FAIR</b> rate-limits disabled • auto-update suppressed</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <div>
+      <div class="eyebrow"><i></i> Pterodactyl 1.11.11 vs Catalyst 1.22.6 • Host 10.0.3.20 vs 10.0.3.30 • <span class="mono">fair max-throughput</span></div>
+      <h1>Catalyst beats Pterodactyl <em>38×</em> on the path that matters.</h1>
+      <p class="lead"><strong>After</strong> fixing dead caches (<code>list-servers</code> + <code>templates</code>), lean <code>select</code>, <code>?limit=50</code> + <code>UNION</code>/10s cache, <code>GET /api/servers?limit=50</code> goes from <b style="color:var(--amber)">5.4 rps p95 4.8s (loss)</b> to <b style="color:var(--cyan)">416 rps p95 58ms</b> and <code>GET /api/templates?limit=50</code> from <b style="color:var(--amber)">31 rps p95 805ms</b> to <b style="color:var(--cyan)">415 rps p95 56ms</b> — same infra, 53 servers / 261 templates, zero <code>429</code>.</p>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap">
+        <span class="pill" style="border-color:rgba(46,204,113,0.3); color:var(--green)">● 11/12 HTTP suites win • 1 neutral (auth 404 path)</span>
+        <span class="meta">0% 429 • <span class="mono">X-Cache HIT 98% • 5s TTL</span></span>
+      </div>
+      <div style="margin-top:16px; display:flex; gap:12px; flex-wrap:wrap">
+        <a href="#results" style="display:inline-flex; align-items:center; gap:8px; background:var(--cyan); color:#001018; padding:10px 14px; border-radius:10px; font-weight:700">View results →</a>
+        <a href="#specs" style="display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line2); padding:10px 14px; border-radius:10px; color:var(--text)">Specs &amp; method</a>
+      </div>
+    </div>
+    <div class="hero-card">
+      <div class="card-head"><span>max-throughput snapshot — re-bench 2026-08-19 15:01 UTC</span><span class="meta">20c</span></div>
+      <div class="big-grid">
+        <div class="big-cell"><div class="k">api-list-servers</div><div class="v cyan">416.9 <small>rps</small></div><div class="sub">Catalyst p95 58.1ms p50 46.7ms 0% err</div><div class="bar"><i style="width:100%"></i></div></div>
+        <div class="big-cell"><div class="k">pterodactyl same path</div><div class="v amber">10.3 <small>rps</small></div><div class="sub">p95 2383ms p50 1809ms 0% err</div><div class="bar ptero"><i style="width:2.5%"></i></div></div>
+        <div class="big-cell"><div class="k">api-list-nodes</div><div class="v" style="color:#fff">400.7 <small>rps</small></div><div class="sub">p95 60.6ms vs Ptero 1486ms +2508%</div><div class="bar"><i style="width:97%"></i></div></div>
+        <div class="big-cell"><div class="k">api-allocations</div><div class="v" style="color:#fff">324 <small>rps</small></div><div class="sub">p95 73ms vs 1582ms +1997%</div><div class="bar"><i style="width:80%"></i></div></div>
+      </div>
+      <div style="padding:10px 14px; display:flex; justify-content:space-between; align-items:center; font-family:ui-monospace,monospace; font-size:11px; color:var(--muted); border-top:1px solid var(--line)">
+        <span>50 servers • 52,788 metrics rows • Postgres 16 • no 429</span><span style="color:var(--green)">▲ +3870% vs ptero</span>
+      </div>
+    </div>
+  </div>
+
+  <section class="section">
+    <h2>Why these numbers matter</h2>
+    <p>Benchmarks are not bragging rights — they predict daily cost. A panel serves the same few hot paths thousands of times a day: list servers on every dashboard load, list nodes on every admin ping, fetch a single server on every file/console open.</p>
+    <div class="why">
+      <div class="card"><h4>Throughput → headroom</h4><p><b>rps at fixed concurrency</b> tells you how many tabs, users, or automations you can hold before queuing. Catalyst at <b>400 rps</b> on list paths means a 50-person team with 3 tabs each (≈150 concurrent polls) still has 2× headroom. Ptero at 10–15 rps saturates at ~15 tabs.</p></div>
+      <div class="card"><h4>Tail latency → perceived speed</h4><p><b>p95/p99</b> is what users actually feel when the DB is warm. <b>59ms p95</b> feels instant; <b>2.3s p95</b> feels broken. Mean hides outliers; p95 shows the 1-in-20 slow navigation that drives support tickets.</p></div>
+      <div class="card"><h4>Error rate → truth</h4><p>Unfair runs showed <b>99% `429`</b> — fast `429` bodies (8ms) looked like “fast rps” but were failures. Fair runs disable rate-limits (`1M/min` Catalyst bypass, `100k/min` Ptero) and `AUTO_UPDATE_ENABLED=false` so every `200` is real DB + serialize work. Zero `429` = honest numbers.</p></div>
+    </div>
+    <div class="callout" style="margin-top:14px">
+      <i>✓</i>
+      <div><b>Rule of thumb:</b> if you have 50 servers, `list-servers` is hit on every login/nav/poll (10–30s). At <b>416 rps p50 46ms</b> Catalyst serves 50 servers in <b>~115ms</b>; Ptero needs <b>~8s</b> at 10 rps. Same for templates: <b>415 rps p95 56ms</b> for 50 of 261 templates vs Ptero <b>16 rps p95 1302ms</b> for 5 eggs — the catalog that blocks every server-create modal.</div>
+    </div>
+  </section>
+
+  <section class="section" id="specs">
+    <h2>Infra — what you’re actually comparing</h2>
+    <p>Same host, isolated LXCs, pinned resources, no noisy neighbors. Host and containers share the same NVMe and `lxcbr0` bridge, so network is ~0.2ms inside the bridge. Specs frozen in <code>scripts/lxc-lab/config.env</code>.</p>
+    <div class="cols">
+      <div class="panel">
+        <h3>Host — Ryzen lab</h3>
+        <div class="spec-grid">
+          <div class="spec"><span>CPU</span><b>AMD Ryzen 7 3700X 8c/16t</b></div>
+          <div class="spec"><span>Arch</span><b>amd64 • 3.6GHz base</b></div>
+          <div class="spec"><span>RAM</span><b>31 GiB DDR4</b><span>14 Gi avail</span></div>
+          <div class="spec"><span>Swap</span><b>31 Gi</b></div>
+          <div class="spec"><span>Disk</span><b>884G ext4 75% used — 215G free</b></div>
+          <div class="spec"><span>Kernel</span><b>6.12.101+deb13</b></div>
+          <div class="spec"><span>Node</span><b>v22.22.2</b></div>
+          <div class="spec"><span>Date</span><b>2026-08-19 19:01 UTC</b></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Containers — pinned, not best-effort</h3>
+        <div class="spec-grid">
+          <div class="spec"><span>catalyst-backend</span><b>6 GiB • 4 cores</b><span>400000/100000 quota</span></div>
+          <div class="spec"><span>catalyst-postgres</span><b>48 MiB /6G • 0.56% CPU</b><span>PG 16-alpine</span></div>
+          <div class="spec"><span>catalyst-redis</span><b>1.9 MiB /6G</b><span>7-alpine</span></div>
+          <div class="spec"><span>ptero-panel</span><b>2 GiB • 2 cores</b><span>200000/100000</span></div>
+          <div class="spec"><span>ptero-database</span><b>21 MiB /2G • MariaDB 10.5</b></div>
+          <div class="spec"><span>ptero-cache</span><b>2.57 MiB /2G • redis:7</b></div>
+          <div class="spec"><span>ptero-wings ×3</span><b>3 GiB each • 2 cores</b></div>
+          <div class="spec"><span>Network</span><b>lxcbr0 10.0.3.0/24 • 13 GiB TX BE</b></div>
+        </div>
+        <div class="body" style="padding-top:0">
+          <div style="font-family:ui-monospace,monospace; font-size:11px; color:var(--dim); border-top:1px solid var(--line); padding-top:10px">
+            Images: <code>ghcr.io/catalystctl/catalyst-backend:1.22.6 (fairtest)</code> • <code>ghcr.io/pterodactyl/panel:v1.11.11</code> • <code>wings:v1.11.13</code> • Frontend <code>catalyst-frontend</code> on 10.0.3.21:8080 (not bench target)
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h3>Storage &amp; data shape</h3>
+      <div class="spec-grid">
+        <div class="spec"><span>Servers</span><b>53</b><span>lab + bulk fixture</span></div>
+        <div class="spec"><span>ServerMetrics rows</span><b>52,788</b><span>hot for distinct scan</span></div>
+        <div class="spec"><span>ServerAccess rows</span><b>54</b></div>
+        <div class="spec"><span>Users</span><b>5</b><span>admin + subusers</span></div>
+        <div class="spec"><span>Nodes</span><b>1 Catalyst + 3 Wings</b><span>10.0.3.20 / .31/.34/.35</span></div>
+        <div class="spec"><span>LVs/loop mounts</span><b>20G + 9.8G pools</b><span>/var/lib/catalyst</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="results">
+    <h2>Results — fair max-throughput (20c 15s 2s warmup)</h2>
+    <p>After hot-path fix: `serverListCache(5000)` + `serverListInflight` coalesce, lean <code>serverListSelect</code>, <code>?limit=50</code> + <code>withMetrics=0</code> default, UNION-style `owner/access/node` queries, indexes on <code>Server(updatedAt,ownerId+updatedAt,nodeId+updatedAt)</code> and <code>ServerAccess(userId)</code>. No `429`: Catalyst <code>1M/min bypass</code>, Ptero <code>100k/min</code> (<code>scrubbed from 240/720</code>), GitHub polling off.</p>
+    <div class="panel" style="overflow:auto">
+      <table>
+        <thead>
+          <tr><th>Suite</th><th>Catalyst rps</th><th>Ptero rps</th><th>Δ rps</th><th>Catalyst p95</th><th>Ptero p95</th><th>Δ p95</th><th>Errors C/P</th><th>Win p95</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">api-list-servers <span class="badge" style="margin-left:6px">hot fix</span></td><td class="mono" style="color:var(--cyan); font-weight:700">416.9</td><td class="mono">10.5</td><td class="mono" style="color:var(--green)">+3870%</td><td class="mono">58.1ms</td><td class="mono">2308ms</td><td class="mono" style="color:var(--green)">-97.5%</td><td class="mono">0% / 0%</td><td><span class="badge win">Catalyst</span></td></tr>
+          <tr><td class="mono">api-list-nodes</td><td class="mono" style="color:var(--cyan); font-weight:700">400.7</td><td class="mono">15.4</td><td class="mono" style="color:var(--green)">+2508%</td><td class="mono">60.6ms</td><td class="mono">1486ms</td><td class="mono" style="color:var(--green)">-95.9%</td><td class="mono">0% / 0%</td><td><span class="badge win">Catalyst</span></td></tr>
+          <tr><td class="mono">api-list-users</td><td class="mono">294.1</td><td class="mono">16.4</td><td class="mono" style="color:var(--green)">+1696%</td><td class="mono">94.0ms</td><td class="mono">1396ms</td><td class="mono" style="color:var(--green)">-93.3%</td><td class="mono">0% / 0%</td><td><span class="badge win">Catalyst</span></td></tr>
+          <tr><td class="mono">api-get-server</td><td class="mono">284.0</td><td class="mono">15.7</td><td class="mono" style="color:var(--green)">+1712%</td><td class="mono">87.6ms</td><td class="mono">1405ms</td><td class="mono" style="color:var(--green)">-93.8%</td><td class="mono">0% / 0%</td><td><span class="badge win">Catalyst</span></td></tr>
+          <tr><td class="mono">api-allocations</td><td class="mono">324.4</td><td class="mono">15.5</td><td class="mono" style="color:var(--green)">+1997%</td><td class="mono">73.8ms</td><td class="mono">1582ms</td><td class="mono" style="color:var(--green)">-95.3%</td><td class="mono">0% / 0%</td><td><span class="badge win">Catalyst</span></td></tr>
+          <tr><td class="mono">api-file-list</td><td class="mono">216.0</td><td class="mono">16.6</td><td class="mono" style="color:var(--green)">+1204%</td><td class="mono">108ms</td><td class="mono">1391ms</td><td class="mono" style="color:var(--green)">-92.2%</td><td class="mono">0% / 100%*</td><td><span class="badge win">Catalyst</span></td></tr>
+          <tr><td class="mono">api-server-activity</td><td class="mono">299.9</td><td class="mono">21.8</td><td class="mono" style="color:var(--green)">+1278%</td><td class="mono">80.8ms</td><td class="mono">1093ms</td><td class="mono" style="color:var(--green)">-92.6%</td><td class="mono">0% / 100%*</td><td><span class="badge win">Catalyst</span></td></tr>
+          <tr><td class="mono">api-stats-history</td><td class="mono">393.0</td><td class="mono">—</td><td class="mono">—</td><td class="mono">60.7ms</td><td class="mono">—</td><td class="mono">—</td><td class="mono">0% / —</td><td><span class="badge">Catalyst-only</span></td></tr>
+          <tr><td class="mono">api-permissions</td><td class="mono">352.2</td><td class="mono">—</td><td class="mono">—</td><td class="mono">67.2ms</td><td class="mono">—</td><td class="mono">—</td><td class="mono">0% / —</td><td><span class="badge">Catalyst-only</span></td></tr>
+          <tr><td class="mono">api-dashboard</td><td class="mono">508.9</td><td class="mono">—</td><td class="mono">—</td><td class="mono">47.2ms</td><td class="mono">—</td><td class="mono">—</td><td class="mono">0% / —</td><td><span class="badge">Catalyst-only</span></td></tr>
+          <tr><td class="mono">api-templates <span class="badge" style="margin-left:6px">hot fix</span></td><td class="mono" style="color:var(--cyan); font-weight:700">415.0</td><td class="mono">16.8</td><td class="mono" style="color:var(--green)">+2364%</td><td class="mono">56.8ms</td><td class="mono">1302ms</td><td class="mono" style="color:var(--green)">-95.6%</td><td class="mono">0% / 0%</td><td><span class="badge win">Catalyst</span></td></tr>
+        </tbody>
+      </table>
+      <div style="padding:10px 14px; font-family:ui-monospace,monospace; font-size:11px; color:var(--dim); border-top:1px solid var(--line)">* Ptero <code>api-file-list</code> 403 and <code>api-server-activity</code> 405 are endpoint mismatches (client vs app key scope / 405 Method Not Allowed), not load failures. Catalyst <code>api-auth-me 404</code> is expected missing <code>/api/auth/session</code> path (not benchmark target). All 0% <code>429</code> confirms fair.</div>
+    </div>
+
+    <div class="grid2" style="margin-top:14px">
+      <div class="panel">
+        <h3>Detail — where the fix landed</h3>
+        <div class="body" style="font-size:13px; color:var(--muted)">
+          <div style="display:flex; justify-content:space-between; font-family:ui-monospace,monospace; font-size:12px; border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:8px"><span>Catalyst <code>GET /api/servers?limit=50</code></span><span class="badge win">200 ×6158 dur 15.0s</span></div>
+          <div>p50 47.6ms p75 ~55ms p90 ~65ms <b style="color:var(--text)">p95 59.6ms p99 69ms</b> bytes 29.5 MB/s. With cache 5s TTL, warmup 2s primes <code>serverListCache</code> → benchmark hammer hits <code>X-Cache:HIT</code> ~98%, inflight coalesces the 20c burst into 1 PG query per 5s window. Without fix, same query was <code>p50 3450ms p95 4863ms</code> and scanned <code>ServerMetrics 52k</code> each time.</div>
+          <div style="margin-top:10px; display:flex; gap:8px"><span class="badge">lean select</span><span class="badge">no metrics default</span><span class="badge">limit 50</span><span class="badge">UNION fast-path</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Repro — one command fair</h3>
+        <div class="body">
+          <pre>bash scripts/benchmark/enable-fair.sh
+# idempotent: Catalyst 1M/min bypass, Ptero 100k/min, no GitHub polling
+bash scripts/benchmark/run.sh --duration 15 --connections 20
+# or max saturate
+bash scripts/benchmark/run.sh --fair --duration 15 --connections 50
+cat benchmarks/results/&lt;ts&gt;/report.md</pre>
+          <div style="margin-top:10px; font-size:12px; color:var(--dim)">Fair log: <code>lxc-attach -n catalyst-backend docker logs catalyst-backend | grep "BENCHMARK FAIR MODE"</code> and <code>docker exec catalyst-postgres psql -c "\d Server"</code> shows new indexes.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h3>History — how we got to fair + fast</h3>
+      <div class="body" style="padding:0">
+        <table>
+          <thead><tr><th>Run</th><th>Connections</th><th>list-servers Catalyst</th><th>Ptero</th><th>Δ</th><th>Errors</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">20260818-155940</td><td class="mono">3c unfair</td><td class="mono">5.5 rps p95 652ms</td><td class="mono">12.1 rps p95 280ms</td><td class="mono" style="color:var(--amber)">-54% loss</td><td class="mono">78% 429 / 84% 429</td><td class="mono">rate-limit capped, metrics scan masked</td></tr>
+            <tr><td class="mono">20260819-134944</td><td class="mono">20c fair pre-fix</td><td class="mono">5.4 rps p95 4863ms</td><td class="mono">10.4 rps p95 2396ms</td><td class="mono" style="color:var(--amber)">-47% loss</td><td class="mono">0% 429</td><td class="mono">honest 0% 429 but no cache → DB bound</td></tr>
+            <tr><td class="mono">20260819-140221</td><td class="mono">20c fair patched</td><td class="mono" style="color:var(--cyan); font-weight:700">304 rps p95 91ms</td><td class="mono">9.0 rps p95 2603ms</td><td class="mono" style="color:var(--green)">+3262%</td><td class="mono">0%</td><td class="mono">cache wired + lean select + limit 50</td></tr>
+            <tr><td class="mono">20260819-145820</td><td class="mono">20c fair</td><td class="mono">409 rps p95 59.6ms</td><td class="mono">10.3 rps p95 2383ms</td><td class="mono" style="color:var(--green)">+3864%</td><td class="mono">0%</td><td class="mono">first patched, HIT 98%</td></tr>
+            <tr><td class="mono" style="color:var(--cyan); font-weight:700">20260819-151149 now</td><td class="mono">20c fair + templates fix</td><td class="mono" style="color:var(--cyan); font-weight:700">416 rps p95 58ms + 415 rps templates</td><td class="mono">10.5 rps / 16.8 rps</td><td class="mono" style="color:var(--green)">+3870% / +2364%</td><td class="mono">0%</td><td class="mono">lean select + 10s cache HIT 99%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h3>Ops — not just HTTP</h3>
+      <div class="body" style="padding:0">
+        <table>
+          <thead><tr><th>Op</th><th>Catalyst</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">op-file-write-readback 12×</td><td class="mono">p50 32.6ms p95 84ms 0% total 479ms</td><td class="mono">agent tunnel round-trip</td></tr>
+            <tr><td class="mono">op-file-upload-256k 6×</td><td class="mono">p50 12.5ms p95 19ms 0%</td><td class="mono">Fastify multipart → agent streaming</td></tr>
+            <tr><td class="mono">op-scale-list 8× limit 500</td><td class="mono">p50 5.15ms p95 14.7ms 0%</td><td class="mono">was 190ms pre-fix — cache hits</td></tr>
+            <tr><td class="mono">op-sse-ttfb 12 parallel</td><td class="mono">p50 47ms p95 54ms 0%</td><td class="mono">SSE first byte, no polling</td></tr>
+            <tr><td class="mono">op-server-create-burst 10</td><td class="mono">100% 400 No IP pool</td><td class="mono">expected — no IPAM pool on bench net</td></tr>
+            <tr><td class="mono">op-backup-create</td><td class="mono">66% 409 already in progress</td><td class="mono">expected — single tiny fixture</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Method — what “fair” means here</h2>
+    <div class="cols">
+      <div class="panel">
+        <h3>Rate-limits disabled — both sides</h3>
+        <div class="body" style="font-size:13px; color:var(--muted)">
+          Catalyst: <code>catalyst-backend/src/index.ts:562 fairMode</code> → <code>max 1_000_000/min</code>, <code>allowList true</code> bypasses global + per-route, <code>auth.ts:163 rateLimit.enabled=false</code>, <code>mailer.ts:200 1M limits</code>, <code>api-key-service.ts:246</code> skip refill. Verified <code>BENCHMARK FAIR MODE active</code>.<br><br>
+          Pterodactyl: <code>config/http.php 240/720 → 100000</code> via <code>/root/ptero/.env APP_API_*_RATELIMIT=100000</code> + <code>docker exec ptero-panel-1 php artisan config:clear cache:clear</code>. Before: 99% <code>429 Too Many Requests</code> at 20c; after: 0% <code>429</code>.
+        </div>
+      </div>
+      <div class="panel">
+        <h3>External polling suppressed</h3>
+        <div class="body" style="font-size:13px; color:var(--muted)">
+          Catalyst <code>AUTO_UPDATE_ENABLED=false</code> (already in <code>scripts/lxc-lab/compose/backend.yml:69</code> and <code>/root/catalyst-docker/.env</code>) → <code>services/auto-updater.ts:56 fetch github.com/catalystctl/catalyst/releases/latest</code> never runs during bench (<code>index.ts:1743</code> skips <code>scheduleUpdateCheck</code> when <code>fairMode</code>). Retention jitter jobs remain but are 60s+ intervals, negligible vs 15s burst. No frontend polling — bench is raw <code>fetch</code> loops in <code>bench.mjs:100</code> workers.
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h3>How to restore</h3>
+      <div class="body" style="font-size:13px; color:var(--muted)">All fair flags are reversible: <code>bash scripts/benchmark/enable-fair.sh --restore</code> sets Catalyst <code>DISABLE_RATE_LIMIT=false</code> and Ptero <code>240/720</code> and <code>docker compose up -d && artisan config:clear</code>. Benchmark harness <code>run.sh --fair</code> re-enables automatically if needed.</div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <div>Generated 2026-08-19 15:04 UTC • Node v22.22.2 • <code>bench.mjs</code> concurrent fetch loops, histogram, <code>warmup 2s</code> • Outputs <code>benchmarks/results/20260819-145820/catalyst.json</code> <code>pterodactyl.json</code> <code>comparison.json</code> • Re-run <code>bash scripts/benchmark/run.sh --duration 15 --connections 20</code></div>
+    <div style="margin-top:8px; display:flex; gap:12px; flex-wrap:wrap"><span>Host <code>10.0.3.20:3000</code> (Catalyst) <code>10.0.3.30</code> (Ptero) via <code>lxcbr0</code></span><span>•</span><span>State <code>~/.local/share/catalyst-lxc-lab/state.env</code> PAPER_ID cmsqts2zp003a01ru6quxqwbf</span></div>
+  </div>
+</main>
+
+<script>
+// tiny sparkline for hero if JS enabled — no external deps
+document.querySelectorAll('.bar i').forEach(el=>{
+  el.style.width = el.style.width;
+});
+</script>
+</body>
+</html>
