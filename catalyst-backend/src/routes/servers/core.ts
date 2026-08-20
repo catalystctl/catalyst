@@ -935,8 +935,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           const hostPort = findAvailableHostPort(usedPorts, resolvedHostIp, containerPort);
           clonePortBindings[containerPort] = hostPort;
           // Register the assigned port so subsequent bindings don't conflict
-          if (!usedPorts.has(ipKey)) usedPorts.set(ipKey, new Set());
-          usedPorts.get(ipKey)!.add(hostPort);
+          let portsForIp = usedPorts.get(ipKey);
+          if (!portsForIp) {
+            portsForIp = new Set();
+            usedPorts.set(ipKey, portsForIp);
+          }
+          portsForIp.add(hostPort);
         }
       }
 

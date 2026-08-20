@@ -177,6 +177,8 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       if (!parsedContainerPort || !parsedHostPort) {
         return reply.status(400).send({ error: "Invalid port value" });
       }
+      const containerPort = parsedContainerPort;
+      const hostPort = parsedHostPort;
 
       const bindings = parseStoredPortBindings(server.portBindings);
       if (bindings[parsedContainerPort]) {
@@ -237,10 +239,10 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
           if (!fresh) throw new Error("Server not found");
           const txBindings = parseStoredPortBindings(fresh.portBindings);
           // Re-check inside transaction — concurrent request may have added this port
-          if (txBindings[parsedContainerPort!]) {
+          if (txBindings[containerPort]) {
             throw new Error("Allocation already exists for container port");
           }
-          if (Object.values(txBindings).includes(parsedHostPort!)) {
+          if (Object.values(txBindings).includes(hostPort)) {
             const isSamePrimary =
               parsedContainerPort === fresh.primaryPort &&
               parsedHostPort === fresh.primaryPort;
@@ -263,7 +265,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
             }
           }
 
-          txBindings[parsedContainerPort!] = parsedHostPort!;
+          txBindings[containerPort] = hostPort;
           return tx.server.update({
             where: { id: serverId },
             data: { portBindings: txBindings },

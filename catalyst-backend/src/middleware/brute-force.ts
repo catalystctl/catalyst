@@ -110,11 +110,12 @@ async function checkIpRateLimit(
   if (existing) {
     const windowStart = existing.firstFailedAt.getTime();
     const windowExpired = now - windowStart > IP_RATE_LIMIT_WINDOW_MS;
-    const lockActive = existing.lockedUntil && existing.lockedUntil.getTime() > now;
+    const lockedUntilDate = existing.lockedUntil;
+    const lockActive = lockedUntilDate && lockedUntilDate.getTime() > now;
 
     if (lockActive) {
-      const minutesRemaining = Math.ceil((existing.lockedUntil!.getTime() - now) / 60000);
-      setLocalIpCache(ip, existing.failureCount, existing.lockedUntil!.getTime());
+      const minutesRemaining = Math.ceil((lockedUntilDate.getTime() - now) / 60000);
+      setLocalIpCache(ip, existing.failureCount, lockedUntilDate.getTime());
       throw new Error(
         `Too many login attempts. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
       );

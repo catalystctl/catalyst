@@ -946,7 +946,7 @@ impl FirewallManager {
                 ],
             )
             .await;
-            if check.is_err() || !check.unwrap().status.success() {
+            if check.map_or(true, |v| !v.status.success()) {
                 let _ = run_firewall_command(
                     cmd,
                     &[

@@ -85,6 +85,7 @@ export function useQuery<TData = unknown, TError = Error>(
   const enabled = options.enabled ?? true;
   const queryKey = options.queryKey;
   const queryKeyHash = stableHash(queryKey);
+  const refetchInterval = options.refetchInterval;
 
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -92,8 +93,10 @@ export function useQuery<TData = unknown, TError = Error>(
   const query = useMemo(() => {
     return client.ensureQuery({
       ...optionsRef.current,
-      queryKey,
+      queryKey: optionsRef.current.queryKey,
     });
+    // queryKeyHash is the stable identity of queryKey (inline arrays change every render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hashed key, not array identity
   }, [client, queryKeyHash]);
 
   // Per-observer ownership: share queryFn/meta via query.options, keep enabled/interval/select/placeholder
@@ -116,13 +119,10 @@ export function useQuery<TData = unknown, TError = Error>(
       const entry = (live as unknown as { observerEntries: Map<number, { options: unknown }> }).observerEntries.get(observerIdRef.current);
       if (entry) {
         entry.options = observerOptionsRef.current as unknown as Record<string, unknown>;
-        (client as unknown as { updateRefetchInterval?: (q: unknown) => void }).updateRefetchInterval?.(live as unknown as Query);
+        (client as unknown as { updateRefetchInterval: (q: unknown) => void }).updateRefetchInterval(live as unknown as Query);
       }
     }
-  }, [client, query, enabled, (options.refetchInterval as unknown)]);
-  // must rebind to the new Query instance when cache.get(hash) identity changes.
-  // liveHash in deps forces resubscribe when identity changes (added/removed).
-  const liveHash = client.getQueryCache().get(query.queryHash)?.queryHash ?? query.queryHash;
+  }, [client, query, enabled, refetchInterval]);
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
       const current = (client.getQueryCache().get(query.queryHash) as unknown as Query | undefined) ?? query;
@@ -161,7 +161,7 @@ export function useQuery<TData = unknown, TError = Error>(
         unsub();
       };
     },
-    [client, query, liveHash],
+    [client, query],
   );
 
   const getSnapshot = useCallback(() => {
@@ -186,7 +186,7 @@ export function useQuery<TData = unknown, TError = Error>(
       Date.now() - current.state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
 
     if (isStale) {
-      void client.fetchQuery({ ...optionsRef.current, queryKey }).catch(() => {});
+      void client.fetchQuery({ ...optionsRef.current, queryKey: optionsRef.current.queryKey }).catch(() => {});
     }
   }, [client, query, enabled, queryKeyHash, state.isInvalidated]);
 
@@ -233,7 +233,7 @@ export function useQuery<TData = unknown, TError = Error>(
 
   const refetch = useCallback(() => {
     return client.fetchQuery({ ...optionsRef.current, queryKey: optionsRef.current.queryKey });
-  }, [client, queryKeyHash]);
+  }, [client]);
 
   const resultRef = useRef<UseQueryResult<TData, TError> | null>(null);
   const next: UseQueryResult<TData, TError> = {

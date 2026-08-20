@@ -33,7 +33,7 @@ export function bootstrapCluster(mainFn: () => Promise<void>) {
     const workers = Number(process.env.WORKERS) || os.cpus().length;
     // Arm IPC relay before any worker can broadcast cache invalidations.
     initCacheBusPrimary();
-    console.log(
+    console.warn(
       `[cluster] Primary ${process.pid} forking ${workers} worker(s). ` +
         `Background jobs will run only on worker id=1. ` +
         `Cache invalidations use cluster IPC (no Redis).`,

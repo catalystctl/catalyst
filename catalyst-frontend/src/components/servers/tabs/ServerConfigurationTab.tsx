@@ -131,12 +131,14 @@ export default function ServerConfigurationTab({
  const queryClient = useQueryClient();
  const [configSearch, setConfigSearch] = useState('');
 
- const configTemplatePath = server.template?.features?.configFile;
- const configTemplatePaths = server.template?.features?.configFiles ?? [];
- const combinedConfigPaths = [
- ...(configTemplatePath ? [configTemplatePath] : []),
- ...configTemplatePaths,
- ];
+ const configTemplate = server?.template;
+ const configTemplatePath = configTemplate?.features?.configFile;
+ const configTemplatePaths = configTemplate?.features?.configFiles;
+ const combinedConfigPaths = useMemo(
+  () => [...(configTemplatePath ? [configTemplatePath] : []), ...(configTemplatePaths ?? [])],
+  [configTemplatePath, configTemplatePaths],
+ );
+ const configPathsKey = combinedConfigPaths.join('|');
 
  const buildConfigRecord = (sections: ConfigSection[]): ConfigMap => {
  const record: ConfigMap = {};
@@ -235,13 +237,12 @@ export default function ServerConfigurationTab({
 
  // Load config files on mount
  const [prevConfigDeps, setPrevConfigDeps] = useState({ serverId, configPathsKey: '' as string });
- const configPathsKey = combinedConfigPaths.join('|');
  if (
  prevConfigDeps.serverId !== serverId ||
  prevConfigDeps.configPathsKey !== configPathsKey
  ) {
  setPrevConfigDeps({ serverId, configPathsKey });
- if (!serverId || !server?.template || combinedConfigPaths.length === 0) {
+ if (!serverId || !configTemplate || combinedConfigPaths.length === 0) {
  setConfigFiles([]);
  setOpenConfigIndex(-1);
  } else {
@@ -262,7 +263,7 @@ export default function ServerConfigurationTab({
  }
 
  useEffect(() => {
- if (!serverId || !server?.template || combinedConfigPaths.length === 0) return;
+ if (!serverId || !configTemplate || combinedConfigPaths.length === 0) return;
  let active = true;
  const uniquePaths = Array.from(new Set(combinedConfigPaths));
  Promise.all(uniquePaths.map((path) => loadConfigFile(path))).then(
@@ -274,12 +275,7 @@ export default function ServerConfigurationTab({
  return () => {
  active = false;
  };
- }, [
- serverId,
- server?.template?.features?.configFile,
- server?.template?.features?.configFiles?.join('|'),
- loadConfigFile,
- ]);
+ }, [serverId, combinedConfigPaths, configTemplate, loadConfigFile]);
 
  const configMutation = useMutation({
  mutationFn: async (index: number) => {

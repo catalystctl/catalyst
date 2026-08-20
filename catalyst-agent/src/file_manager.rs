@@ -1091,7 +1091,7 @@ mod tests {
         // Use a write size that can never fit regardless of small statvfs
         // races between the two available_bytes() probes (~free-space jitter).
         let avail = FileManager::available_bytes(path.parent().unwrap()).unwrap();
-        let huge = avail.checked_add(1024 * 1024 * 1024).unwrap_or(u64::MAX);
+        let huge = avail.saturating_add(1024 * 1024 * 1024);
         let err = fm
             .ensure_write_fits(&path, 0, huge)
             .await

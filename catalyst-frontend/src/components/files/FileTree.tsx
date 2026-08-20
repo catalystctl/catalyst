@@ -42,7 +42,8 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
-  const entries = data?.files ?? [];
+  const files = data?.files;
+  const entries = useMemo(() => files ?? [], [files]);
   const childDirectories = useMemo(() => sortDirectories(entries), [entries]);
   const childFiles = useMemo(() => sortFiles(entries), [entries]);
   const isActuallyEmpty = Boolean(data) && entries.length === 0;

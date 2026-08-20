@@ -100,8 +100,9 @@ export function onCacheInvalidate(
     handlers.set(channel, set);
   }
   set.add(handler);
+  const channelHandlers = set;
   return () => {
-    set!.delete(handler);
+    channelHandlers.delete(handler);
   };
 }
 

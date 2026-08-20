@@ -43,9 +43,10 @@ export class PluginWorkerHost {
       },
     );
 
-    this.worker.on('message', (msg: any) => this.handleMessage(msg));
-    this.worker.on('error', (err: unknown) => this.handleError(err instanceof Error ? err : new Error(String(err))));
-    this.worker.on('exit', (code) => this.handleExit(code));
+    const worker = this.worker;
+    worker.on('message', (msg: any) => this.handleMessage(msg));
+    worker.on('error', (err: unknown) => this.handleError(err instanceof Error ? err : new Error(String(err))));
+    worker.on('exit', (code) => this.handleExit(code));
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Worker initialization timed out')), 30000);
@@ -53,20 +54,21 @@ export class PluginWorkerHost {
         if (msg.type === 'initialized') {
           clearTimeout(timeout);
           this.initialized = true;
-          this.worker!.removeListener('message', handler);
+          worker.removeListener('message', handler);
           resolve();
         } else if (msg.type === 'error') {
           clearTimeout(timeout);
-          this.worker!.removeListener('message', handler);
+          worker.removeListener('message', handler);
           reject(new Error(msg.error));
         }
       };
-      this.worker!.on('message', handler);
+      worker.on('message', handler);
     });
   }
 
   async callMethod(method: string, args: any[] = [], timeoutMs = 10000): Promise<any> {
-    if (!this.worker || !this.initialized) {
+    const worker = this.worker;
+    if (!worker || !this.initialized) {
       throw new Error('Plugin worker not initialized');
     }
 
@@ -79,7 +81,7 @@ export class PluginWorkerHost {
       }, timeoutMs);
 
       this.pendingRequests.set(requestId, { resolve, reject, timeout: timer });
-      this.worker!.postMessage({ type: 'call', method, args, requestId });
+      worker.postMessage({ type: 'call', method, args, requestId });
     });
   }
 

@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { usePluginSlots } from './usePluginSlots';
+import PluginErrorBoundary from './PluginErrorBoundary';
 
 interface PluginSlotProps {
   /** The slot name to render components for */
@@ -43,7 +44,17 @@ export function PluginSlot({
   return (
     <Wrapper className={className}>
       {components.map((Component, index) => (
-        <Component key={`${name}-${index}`} {...(componentProps ?? {})} />
+        <PluginErrorBoundary
+          key={`${name}-${index}`}
+          pluginName={name}
+          fallback={
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-muted-foreground">
+              Plugin widget failed to render
+            </div>
+          }
+        >
+          <Component {...(componentProps ?? {})} />
+        </PluginErrorBoundary>
       ))}
     </Wrapper>
   );

@@ -78,9 +78,10 @@ export class CollectionStorage implements PluginCollectionAPI {
     }
 
     if (options?.projection) {
+      const projection = options.projection;
       docs = docs.map(d => {
         const projected: any = { _id: d._id };
-        for (const [field, include] of Object.entries(options.projection!)) {
+        for (const [field, include] of Object.entries(projection)) {
           if (include && d[field] !== undefined) {
             projected[field] = d[field];
           }

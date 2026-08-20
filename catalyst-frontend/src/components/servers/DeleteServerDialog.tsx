@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useMutation } from '@/csync';
+import type { Query } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
+import { isServerListQueryKey } from '@/lib/queryUtils';
 import { serversApi } from '../../services/api/servers';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
@@ -26,10 +28,18 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
   const mutation = useMutation({
     mutationFn: () => serversApi.delete(serverId),
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: qk.servers() });
-      const prev = queryClient.getQueryData(qk.servers());
-      queryClient.setQueryData(qk.servers(), (servers: any) =>
-        Array.isArray(servers) ? servers.filter((s: any) => s.id !== serverId) : servers,
+      await queryClient.cancelQueries({
+        predicate: (q: Query<unknown, unknown>) => isServerListQueryKey(q.queryKey),
+      });
+      const prev = queryClient.getQueriesData({
+        predicate: (q: Query<unknown, unknown>) => isServerListQueryKey(q.queryKey),
+      });
+      queryClient.setQueriesData(
+        { predicate: (q: Query<unknown, unknown>) => isServerListQueryKey(q.queryKey) },
+        (servers: unknown) =>
+          Array.isArray(servers)
+            ? (servers as Array<{ id: string }>).filter((s) => s.id !== serverId)
+            : (servers as unknown),
       );
       queryClient.removeQueries({ queryKey: qk.server(serverId) });
       return { prev };
@@ -40,7 +50,11 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
       onDeleted?.();
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(qk.servers(), ctx.prev);
+      if (ctx?.prev) {
+        for (const [queryKey, data] of ctx.prev as Array<[unknown, unknown]>) {
+          queryClient.setQueryData(queryKey as readonly unknown[], data);
+        }
+      }
       notifyError('Failed to delete server');
     },
     onSettled: () => {

@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@/csync';
 import App from './App';
 import { queryClient } from './lib/queryClient';
-import { reportSystemError } from './services/api/systemErrors';
+import { initErrorReporter } from './lib/error-reporter';
 import { debugLog } from './lib/debug-log';
 import './styles/globals.css';
 
@@ -29,26 +29,7 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   }).catch(() => {});
 }
 
-window.addEventListener('error', (event) => {
- reportSystemError({
- level: 'error',
- component: 'GlobalWindowError',
- message: event.message || 'Unknown error',
- stack: event.error?.stack,
- metadata: { filename: event.filename, lineno: event.lineno, colno: event.colno },
- });
-});
-
-window.addEventListener('unhandledrejection', (event) => {
- const reason = event.reason;
- reportSystemError({
- level: 'error',
- component: 'UnhandledRejection',
- message: reason instanceof Error ? reason.message : String(reason),
- stack: reason instanceof Error ? reason.stack : undefined,
- metadata: { type: 'unhandledrejection' },
- });
-});
+initErrorReporter();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
  <React.StrictMode>

@@ -1,7 +1,7 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { reportSystemError } from '../../services/api/systemErrors';
+import { reportReactError } from '../../lib/error-reporter';
 
 interface Props {
   children: ReactNode;
@@ -40,13 +40,7 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('UI error boundary caught error', { error, info });
-    reportSystemError({
-      level: 'error',
-      component: 'ReactErrorBoundary',
-      message: error.message,
-      stack: error.stack,
-      metadata: { componentStack: info.componentStack },
-    });
+    reportReactError(error, info);
   }
 
   private handleRetry = () => {

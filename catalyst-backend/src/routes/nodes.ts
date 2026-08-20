@@ -947,7 +947,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 					agentVersion: node.agentVersion || null,
 					agentUpdateAvailable: node.agentVersion
 						? (() => {
-								const agentParts = node.agentVersion!.replace(/^v/, "").split(".").map(Number);
+								const agentVersion = node.agentVersion;
+								if (!agentVersion) return null;
+								const agentParts = agentVersion.replace(/^v/, "").split(".").map(Number);
 								const latestTag = getUpdateStatus().latestVersion;
 								if (!latestTag) return null; // unknown — haven't checked yet
 								const latestParts = latestTag.replace(/^v/, "").split(".").map(Number);

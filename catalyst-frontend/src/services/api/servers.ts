@@ -23,7 +23,9 @@ type ApiResponse<T> = {
 
 export const serversApi = {
   list: async (params?: ServerListParams) => {
-    const data = await apiClient.get<ApiResponse<Server[]>>('/api/servers', { params });
+    const merged: Record<string, unknown> = { ...(params ?? {}) };
+    if (merged.withMetrics == null && merged.metrics == null) merged.withMetrics = 1;
+    const data = await apiClient.get<ApiResponse<Server[]>>('/api/servers', { params: merged });
     return Array.isArray(data.data) ? data.data : [];
   },
   get: async (id: string) => {

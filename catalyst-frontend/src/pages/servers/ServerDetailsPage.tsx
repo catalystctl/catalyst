@@ -140,7 +140,8 @@ function ServerDetailsPage() {
  const liveMetrics = useServerMetrics(serverId, server?.allocatedMemoryMb);
  const user = useAuthStore((s) => s.user);
  const serverPluginTabs = usePluginTabs('server');
- const userPermissions = user?.permissions ?? [];
+ const rawUserPermissions = user?.permissions;
+ const userPermissions = useMemo(() => rawUserPermissions ?? [], [rawUserPermissions]);
 
  // ── Metrics ──
  const [metricsTimeRange, setMetricsTimeRange] = useState<MetricsTimeRange>({
@@ -336,7 +337,7 @@ function ServerDetailsPage() {
         : '5',
     );
     setStartupCommand(server.startupCommand ?? server.template?.startup ?? '');
-  }, [server?.id]);
+  }, [server]);
 
  const [prevPermissionsData, setPrevPermissionsData] = useState(permissionsData?.data);
  if (permissionsData?.data !== prevPermissionsData) {

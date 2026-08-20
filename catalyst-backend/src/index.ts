@@ -18,6 +18,7 @@ import { prisma } from "./db";
 import "./types"; // Load type augmentations
 import { WebSocketGateway, setWsGateway } from "./websocket/gateway";
 import { setErrorLoggerGateway, captureSystemError } from "./services/error-logger";
+import { mapHttpError } from "./lib/http-error";
 import { authRoutes } from "./routes/auth";
 import { nodeRoutes } from "./routes/nodes";
 import { serverRoutes } from "./routes/servers";
@@ -135,33 +136,52 @@ app.addContentTypeParser(
 );
 
 app.setErrorHandler((error, request, reply) => {
-	app.log.error(error);
-	captureSystemError({
-		level: 'error',
-		component: 'HTTP',
-		message: (error as Error).message || 'Internal Server Error',
-		stack: (error as Error).stack,
-		metadata: { statusCode: (error as any).statusCode, url: request.url, method: request.method },
-		userId: (request as any).user?.userId,
-	}).catch(() => {});
-	const status =
-		(error as any).statusCode && (error as any).statusCode >= 400
-			? (error as any).statusCode
-			: 500;
-	let message = "Internal Server Error";
-	if (status !== 500) {
-		const raw = (error as Error).message || "";
-		// Only expose safe, short validation messages — never Prisma or internal details
-		const isPrismaError =
-			raw.includes("prisma") ||
-			raw.includes("Unique constraint") ||
-			raw.includes("Foreign key");
-		message =
-			raw.includes("\n") || raw.length > 200 || isPrismaError
-				? "Bad Request"
-				: raw;
+	const mapped = mapHttpError(error);
+	const requestId =
+		typeof request.id === "string" && request.id.length > 0
+			? request.id
+			: undefined;
+	const logPayload = {
+		err: error,
+		statusCode: mapped.status,
+		code: mapped.code,
+		url: request.url,
+		method: request.method,
+		requestId,
+	};
+	if (mapped.status >= 500) {
+		logger.error(logPayload, "HTTP error");
+	} else {
+		logger.warn(logPayload, "HTTP client error");
 	}
-	reply.status(status).send({ error: message });
+	// Persist 5xx always. Persist mapped Prisma 4xx as warn so unique-constraint
+	// / FK failures remain visible in the admin feed without 401/404 spam.
+	if (mapped.status >= 500 || mapped.prismaCode) {
+		captureSystemError({
+			level: mapped.status >= 500 ? "error" : "warn",
+			component: "HTTP",
+			message: (error as Error).message || "Internal Server Error",
+			stack: (error as Error).stack,
+			requestId,
+			metadata: {
+				statusCode: mapped.status,
+				code: mapped.code,
+				prismaCode: mapped.prismaCode,
+				url: request.url,
+				method: request.method,
+			},
+			userId: (request as { user?: { userId?: string } }).user?.userId,
+		}).catch(() => {});
+	}
+	reply.status(mapped.status).send({
+		error: mapped.message,
+		code: mapped.code,
+		...(requestId ? { requestId } : {}),
+	});
+});
+
+app.setNotFoundHandler((_request, reply) => {
+	reply.status(404).send({ error: "Not Found" });
 });
 
 const wsGateway = new WebSocketGateway(prisma, logger);
@@ -1642,6 +1662,62 @@ async function bootstrap() {
 			},
 		);
 
+		// Client-side error ingest (unauthenticated, rate-limited). Accepts the
+		// compact {message, stack, component, url, level} payload used by the SPA.
+		app.post(
+			"/api/client-errors",
+			{
+				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+			},
+			async (request, reply) => {
+				const body = (request.body ?? {}) as {
+					message?: unknown;
+					stack?: unknown;
+					component?: unknown;
+					url?: unknown;
+					level?: unknown;
+				};
+
+				const message =
+					typeof body.message === "string" ? body.message.trim() : "";
+				if (!message) {
+					return reply.status(400).send({ error: "message is required" });
+				}
+
+				const allowedLevels = new Set(["error", "warn", "critical"]);
+				const requestedLevel =
+					typeof body.level === "string" ? body.level : "error";
+				const level = allowedLevels.has(requestedLevel)
+					? (requestedLevel as "error" | "warn" | "critical")
+					: "error";
+				const component =
+					typeof body.component === "string" && body.component.trim()
+						? body.component.trim().slice(0, 128)
+						: "frontend";
+				const stack =
+					typeof body.stack === "string"
+						? body.stack.slice(0, 10_000)
+						: undefined;
+				const url =
+					typeof body.url === "string" ? body.url.slice(0, 2048) : undefined;
+
+				await captureSystemError({
+					level: "error",
+					component: "frontend",
+					message: message.slice(0, 2000),
+					stack,
+					metadata: {
+						sourceComponent: component,
+						url,
+						reportedLevel: level,
+					},
+					...(request.user?.userId ? { userId: request.user.userId } : {}),
+				});
+
+				return { success: true };
+			},
+		);
+
 		// Initialize plugin system BEFORE starting server
 		await pluginLoader.initialize();
 		logger.info("Plugin system initialized");
@@ -1904,6 +1980,45 @@ async function shutdown(signal: string) {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+
+let capturingFatal = false;
+function captureFatalProcessError(
+	kind: "unhandledRejection" | "uncaughtException",
+	reason: unknown,
+) {
+	if (capturingFatal) {
+		logger.error({ kind, reason }, `Recursive ${kind} while capturing fatal error`);
+		return;
+	}
+	capturingFatal = true;
+	try {
+		const err = reason instanceof Error ? reason : new Error(String(reason));
+		logger.error({ err, kind }, kind);
+		void captureSystemError({
+			level: "critical",
+			component: "Process",
+			message: err.message || kind,
+			stack: err.stack,
+			metadata: { kind },
+		})
+			.catch((captureErr) => {
+				logger.error({ err: captureErr, kind }, "Failed to persist fatal process error");
+			})
+			.finally(() => {
+				capturingFatal = false;
+			});
+	} catch (handlerErr) {
+		logger.error({ err: handlerErr, kind }, `Fatal ${kind} handler failed`);
+		capturingFatal = false;
+	}
+}
+
+process.on("unhandledRejection", (reason) => {
+	captureFatalProcessError("unhandledRejection", reason);
+});
+process.on("uncaughtException", (error) => {
+	captureFatalProcessError("uncaughtException", error);
+});
 
 const run = () => bootstrap().catch((err) => {
 	logger.error(err, "Bootstrap error");

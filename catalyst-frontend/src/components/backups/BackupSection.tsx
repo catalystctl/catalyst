@@ -88,7 +88,7 @@ function BackupSection({
     setSftpPrivateKey(server.backupSftpConfig?.privateKey ?? '');
     setSftpPrivateKeyPassphrase(server.backupSftpConfig?.privateKeyPassphrase ?? '');
     setSftpBasePath(server.backupSftpConfig?.basePath ?? '');
-  }, [server?.id]);
+  }, [server]);
   const queryClient = useQueryClient();
   const progressByBackup = useBackupDownloadStore((s) => s.progressByBackup);
  const setProgress = useBackupDownloadStore((s) => s.setProgress);

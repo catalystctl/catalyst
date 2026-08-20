@@ -131,9 +131,10 @@ export function useVirtualizer(options: Options) {
   }, [measureElement, ensureRowObserver]);
 
   useEffect(() => {
+    const observedRows = observedRowsRef.current;
     return () => {
       rowObserverRef.current?.disconnect();
-      observedRowsRef.current.clear();
+      observedRows.clear();
     };
   }, []);
 
@@ -157,12 +158,11 @@ export function useVirtualizer(options: Options) {
     if (changed) setMeasuredVersion((n) => n + 1);
   }, [count]);
 
-  // Invalidate key mapping when getItemKey identity changes
-  const getItemKeyVersionRef = useRef(0);
+  // Invalidate key mapping when getItemKey identity changes. offsets depends on
+  // getItemKey so the window recomputes after the size map is cleared.
   const prevGetItemKeyRef = useRef(getItemKey);
   if (prevGetItemKeyRef.current !== getItemKey) {
     prevGetItemKeyRef.current = getItemKey;
-    getItemKeyVersionRef.current++;
     // Keys may have changed — clear size map keyed by old keys
     sizeMapRef.current.clear();
     keyAtIndexRef.current.clear();
@@ -173,7 +173,7 @@ export function useVirtualizer(options: Options) {
       const k = getKey(index);
       return sizeMapRef.current.get(k) ?? estimateSizeRef.current(index);
     },
-    [measuredVersion, estimateSize, getKey, getItemKeyVersionRef.current],
+    [getKey],
   );
 
   const offsets = useMemo(() => {
@@ -184,7 +184,9 @@ export function useVirtualizer(options: Options) {
       acc += getSize(i);
     }
     return { starts, total: acc };
-  }, [count, getSize]);
+    // measuredVersion / getItemKey invalidate cached sizes after measure or re-key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- size map is ref-backed
+  }, [count, getSize, measuredVersion, getItemKey]);
 
   // Scroll position compensation: when measured sizes above viewport change, keep viewport stable
   const offsetsRefForComp = useRef(offsets);
@@ -347,7 +349,7 @@ export function useVirtualizer(options: Options) {
     }
 
     return items;
-  }, [offsets, count, getSize, overscan, scrollTop, viewport, getKey, getItemKeyVersionRef.current]);
+  }, [offsets, count, getSize, overscan, scrollTop, viewport, getKey]);
 
   const countRef = useRef(count);
   countRef.current = count;

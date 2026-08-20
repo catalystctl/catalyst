@@ -126,7 +126,6 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  // Sync selected TTL from server response
  useEffect(() => {
  if (sftpInfo?.ttlMs && !selectedTtl) {
- // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from API response
  setSelectedTtl(sftpInfo.ttlMs);
  }
  }, [sftpInfo?.ttlMs, selectedTtl]);

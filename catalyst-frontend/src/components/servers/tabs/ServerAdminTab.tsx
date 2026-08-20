@@ -245,9 +245,11 @@ export default function ServerAdminTab({
  enabled: Boolean(serverId) && canAdminWrite && !isSuspended,
  staleTime: 30_000,
  });
- const transferCandidates = Array.isArray(transferCandidatesQuery.data)
- ? transferCandidatesQuery.data
- : [];
+ const transferCandidatesData = transferCandidatesQuery.data;
+ const transferCandidates = useMemo(
+ () => (Array.isArray(transferCandidatesData) ? transferCandidatesData : []),
+ [transferCandidatesData],
+ );
 
  const transferUserOptions = useMemo(() => {
  const toOption = (u: {
@@ -416,7 +418,7 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  }
- }, [serverId]);
+ }, [serverId, queryClient]);
 
  const handleChangeImageVariant = useCallback(async () => {
  if (!imageVariantConfirm) return;
@@ -476,7 +478,7 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  }
- }, [serverId]);
+ }, [serverId, queryClient]);
 
  const handleReinstall = useCallback(async () => {
  try {
@@ -498,7 +500,7 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  }
- }, [serverId]);
+ }, [serverId, queryClient]);
 
  const handleTransferOwnership = useCallback(async () => {
  try {

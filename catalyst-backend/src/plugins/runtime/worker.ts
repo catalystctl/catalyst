@@ -33,6 +33,7 @@ const { manifest, entryPath } = workerData as {
 if (!parentPort) {
   throw new Error('worker.ts requires a parentPort for IPC');
 }
+const port = parentPort;
 
 let pluginModule: any = null;
 let pluginContext: any = null;
@@ -49,7 +50,7 @@ function createIsolatedContext(manifest: PluginManifest) {
             {
               get(_, level) {
                 return (...args: any[]) => {
-                  parentPort!.postMessage({
+                  port.postMessage({
                     type: 'log',
                     level,
                     args,
@@ -64,20 +65,20 @@ function createIsolatedContext(manifest: PluginManifest) {
           return new Promise((resolve, reject) => {
             const handler = (msg: WorkerCallMessage | WorkerResultMessage) => {
               if (msg.type === 'result' && msg.requestId === requestId) {
-                parentPort!.removeListener('message', handler);
+                port.removeListener('message', handler);
                 if (msg.error) reject(new Error(msg.error));
                 else resolve(msg.data);
               }
             };
-            parentPort!.on('message', handler);
-            parentPort!.postMessage({
+            port.on('message', handler);
+            port.postMessage({
               type: 'call',
               method: String(prop),
               args,
               requestId,
             });
             setTimeout(() => {
-              parentPort!.removeListener('message', handler);
+              port.removeListener('message', handler);
               reject(new Error(`Plugin method "${String(prop)}" timed out`));
             }, 30000);
           });
@@ -97,9 +98,9 @@ async function init() {
       await plugin.onLoad(pluginContext);
     }
 
-    parentPort!.postMessage({ type: 'initialized' });
+    port.postMessage({ type: 'initialized' });
   } catch (err: any) {
-    parentPort!.postMessage({
+    port.postMessage({
       type: 'error',
       error: err.message || String(err),
       stack: err.stack,
