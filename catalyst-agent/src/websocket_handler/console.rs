@@ -309,7 +309,7 @@ impl WebSocketHandler {
                                     .await
                                     .unwrap_or(None);
                                 let reason = if exit_code == Some(137) {
-                                    "Killed by system OOM killer (cgroup memory limit exceeded — heap was ~100% of cgroup; next start auto-clamped via _JAVA_OPTIONS to 75% of allocation)".to_string()
+                                    OOM_KILL_REASON.to_string()
                                 } else {
                                     match exit_code {
                                         Some(code) => {
@@ -351,7 +351,7 @@ impl WebSocketHandler {
                             .await
                             .unwrap_or(None);
                         let reason = if exit_code == Some(137) {
-                            "Killed by system OOM killer (cgroup memory limit exceeded — heap was ~100% of cgroup; next start auto-clamped via _JAVA_OPTIONS to 75% of allocation)".to_string()
+                            OOM_KILL_REASON.to_string()
                         } else {
                             match exit_code {
                                 Some(code) => format!("Container exited with code {}", code),
@@ -502,11 +502,7 @@ impl WebSocketHandler {
                         .await;
                     if exit_code == Some(137) {
                         let _ = self
-                            .emit_console_output(
-                                server_id,
-                                "system",
-                                "[Catalyst] Killed by system OOM killer — heap exceeded cgroup limit. Next start will auto-clamp via _JAVA_OPTIONS to 75% of allocation. If this repeats, increase Memory allocation.\n",
-                            )
+                            .emit_console_output(server_id, "system", OOM_KILL_CONSOLE_HINT)
                             .await;
                     }
                     // Still emit crashed since auto-restart failed
@@ -524,11 +520,7 @@ impl WebSocketHandler {
                 // No stored start message — fall back to normal crash reporting
                 if exit_code == Some(137) {
                     let _ = self
-                        .emit_console_output(
-                            server_id,
-                            "system",
-                            "[Catalyst] Killed by system OOM killer — heap exceeded cgroup limit. Next start will auto-clamp via _JAVA_OPTIONS to 75% of allocation. If this repeats, increase Memory allocation.\n",
-                        )
+                        .emit_console_output(server_id, "system", OOM_KILL_CONSOLE_HINT)
                         .await;
                 }
                 let _ = self
@@ -573,11 +565,7 @@ impl WebSocketHandler {
 
             if exit_code == Some(137) {
                 let _ = self
-                    .emit_console_output(
-                        server_id,
-                        "system",
-                        "[Catalyst] Killed by system OOM killer — heap exceeded cgroup limit. Next start will auto-clamp via _JAVA_OPTIONS to 75% of allocation. If this repeats, increase Memory allocation.\n",
-                    )
+                    .emit_console_output(server_id, "system", OOM_KILL_CONSOLE_HINT)
                     .await;
             }
 

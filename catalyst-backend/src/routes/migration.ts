@@ -9,6 +9,7 @@ import { MigrationService } from "../services/migration/index.js";
 
 import { serialize } from "../utils/serialize.js";
 import { captureSystemError } from "../services/error-logger.js";
+import { SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../utils/java-memory.js";
 
 // Singleton migration service
 let migrationService: MigrationService | null = null;
@@ -64,12 +65,11 @@ export async function migrationRoutes(app: FastifyInstance) {
         orderBy: { name: "asc" },
       });
 
-      // Calculate used memory from server allocations
       const nodesWithUsage = await Promise.all(
         nodes.map(async (node) => {
-          const serverMemory = await prisma.server.aggregate({
+          const servers = await prisma.server.findMany({
             where: { nodeId: node.id },
-            _sum: { allocatedMemoryMb: true },
+            select: SERVER_CGROUP_MEMORY_SELECT,
           });
           return {
             id: node.id,
@@ -78,7 +78,7 @@ export async function migrationRoutes(app: FastifyInstance) {
             isOnline: node.isOnline,
             lastSeenAt: node.lastSeenAt?.toISOString() ?? null,
             maxMemoryMb: node.maxMemoryMb,
-            usedMemoryMb: serverMemory._sum?.allocatedMemoryMb ?? 0,
+            usedMemoryMb: sumCgroupMemoryMb(servers),
             serverCount: node.servers.length,
             locationName: node.location?.name,
           };

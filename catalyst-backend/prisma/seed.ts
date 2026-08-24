@@ -402,7 +402,7 @@ async function main() {
       installImage: "eclipse-temurin:21-jdk",
       installEntrypoint: "bash",
       startup:
-        "java -Xms{{MEMORY}}M -Xmx{{MEMORY}}M -XX:+UseG1GC -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true $( [[ -f unix_args.txt ]] && printf %s '@unix_args.txt' || printf %s '-jar server.jar nogui' )",
+        "java -Xms128M -Xmx{{MEMORY}}M -XX:+UseG1GC -XX:MaxRAMPercentage=70.0 -Dterminal.jline=false -Dterminal.ansi=true $( [[ -f unix_args.txt ]] && printf %s '@unix_args.txt' || printf %s '-jar server.jar nogui' )",
       stopCommand: "stop",
       sendSignalTo: "SIGTERM",
       variables: [
@@ -430,7 +430,7 @@ async function main() {
         },
         {
           name: "MEMORY",
-          description: "Amount of RAM in MB allocated to the JVM",
+          description: "JVM heap in MB. Defaults from server Memory; the container is sized larger so off-heap (direct/metaspace/threads) does not steal that heap.",
           default: "1024",
           required: true,
           input: "number",

@@ -42,6 +42,8 @@ pub(crate) const MAX_RESTORE_STREAM_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10 
 pub(crate) const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
 pub(crate) const MAX_CONSOLE_BATCH_BYTES: usize = 32768; // Max bytes to batch into a single console_output message
 pub(crate) const MAX_EVENT_SUBSCRIBE_FAILURES: u32 = 10; // Give up on event monitor after this many consecutive failures
+pub(crate) const OOM_KILL_REASON: &str = "Killed by system OOM killer (cgroup memory limit exceeded). JVM off-heap (direct buffers, metaspace, threads) counts toward the limit — increase Memory allocation.";
+pub(crate) const OOM_KILL_CONSOLE_HINT: &str = "[Catalyst] Killed by system OOM killer — container exceeded its memory allocation. Increase the server Memory allocation. JVM heap is auto-capped below the allocation so off-heap (direct memory, metaspace, threads) fits.\n";
 
 // ---------------------------------------------------------------------------
 // Typed message structs for hot-path serialization (avoids json! allocation)

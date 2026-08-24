@@ -247,6 +247,36 @@ pub fn default_seccomp_profile() -> serde_json::Value {
     })
 }
 
+/// OCI `linux.resources.memory` plus cgroup v2 `unified` map.
+/// `memory.high` is not a portable OCI field; runc applies it via unified.
+pub(crate) fn linux_memory_resources(
+    memory_mb: u64,
+    swap_mb: u64,
+    reservation_mb: u64,
+) -> (
+    serde_json::Map<String, serde_json::Value>,
+    serde_json::Value,
+) {
+    let mem_limit = (memory_mb as i64) * 1024 * 1024;
+    let mem_high = mem_limit * 9 / 10;
+    let mut memory = serde_json::Map::new();
+    memory.insert("limit".into(), serde_json::json!(mem_limit));
+    if reservation_mb > 0 && reservation_mb < memory_mb {
+        let reservation = (reservation_mb as i64) * 1024 * 1024;
+        memory.insert("reservation".into(), serde_json::json!(reservation));
+    }
+    if swap_mb > 0 {
+        let total_mb = memory_mb.saturating_add(swap_mb);
+        let total_bytes = total_mb.saturating_mul(1024 * 1024);
+        let capped = std::cmp::min(total_bytes, 1024u64 * 1024 * 1024 * 1024);
+        memory.insert("swap".into(), serde_json::json!(capped as i64));
+    }
+    let unified = serde_json::json!({
+        "memory.high": mem_high.to_string()
+    });
+    (memory, unified)
+}
+
 use super::ContainerdRuntime;
 
 impl ContainerdRuntime {
@@ -587,21 +617,11 @@ impl ContainerdRuntime {
 
         let args = build_process_args(config.startup_command, image_entrypoint, image_cmd);
 
-        let mem_limit = (config.memory_mb as i64) * 1024 * 1024;
-        let mem_high = (mem_limit as f64 * 0.9) as i64;
-        // Swap: memory + swap (0 means no swap limit). OCI spec uses
-        // memory.swap as the total (memory + swap), not swap alone.
-        let mem_swap = if config.swap_mb > 0 {
-            // Use saturating_add to prevent overflow; memory values are u64 from config.
-            // Cap at 1 TiB to prevent negative i64 cast which would create an
-            // unlimited cgroup memory limit.
-            let total_mb = config.memory_mb.saturating_add(config.swap_mb);
-            let total_bytes = total_mb.saturating_mul(1024 * 1024);
-            let capped = std::cmp::min(total_bytes, 1024u64 * 1024 * 1024 * 1024);
-            Some(capped as i64)
-        } else {
-            None
-        };
+        let (memory, unified) = linux_memory_resources(
+            config.memory_mb,
+            config.swap_mb,
+            config.memory_reservation_mb,
+        );
         let cpu_quota = (config.cpu_cores as i64) * 100_000;
         let cpu_weight = config.cpu_cores * 100;
         let cgroup_path = format!("/{}/{}", self.namespace, config.container_id);
@@ -610,6 +630,8 @@ impl ContainerdRuntime {
         let mut mounts = base_mounts(config.data_dir);
         // Pterodactyl images expect server data at /home/container; bind it to the same host dir as /data
         mounts.push(serde_json::json!({"destination":"/home/container","type":"bind","source":config.data_dir,"options":["rbind","rw"]}));
+        // Wings: tmpfs /tmp (exec allowed — some servers unpack helpers there).
+        mounts.push(serde_json::json!({"destination":"/tmp","type":"tmpfs","source":"tmpfs","options":["nosuid","nodev","mode=1777","size=104857600"]}));
         // stdio is wired via CreateTaskRequest (stdin/stdout/stderr fields),
         // so no bind mounts are needed here.  Binding host log paths into the
         // container at those same absolute host paths would let a container
@@ -667,11 +689,11 @@ impl ContainerdRuntime {
                 "capabilities":{"bounding":caps,"effective":caps,"permitted":caps,"ambient":caps},
                 "noNewPrivileges":true,"rlimits":[{"type":"RLIMIT_NOFILE","hard":65536u64,"soft":65536u64}]},
             "root":{"path":"rootfs","readonly":false},"hostname":config.container_id,"mounts":mounts,
-            "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":{"limit":mem_limit,
-                "high":mem_high,"swap":mem_swap},"cpu":{"quota":cpu_quota,"period":100000u64,"weight":cpu_weight},
+            "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":memory,
+                "cpu":{"quota":cpu_quota,"period":100000u64,"weight":cpu_weight},
                 "blockIO":{"weight":config.io_weight},
                 "pids":{"limit":512},
-                "devices":devices},
+                "devices":devices,"unified":unified},
                 "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths(),
                 "seccomp": default_seccomp_profile()}
         }))
@@ -780,5 +802,36 @@ mod tests {
         let mut env = HashMap::new();
         apply_wine_xvfb_default("ghcr.io/ptero-eggs/yolks:java_25", &mut env);
         assert!(!env.contains_key("XVFB"));
+    }
+
+    #[test]
+    fn memory_resources_omit_swap_when_zero() {
+        let (memory, unified) = linux_memory_resources(2048, 0, 0);
+        let limit = 2048i64 * 1024 * 1024;
+        assert_eq!(memory.get("limit"), Some(&serde_json::json!(limit)));
+        assert!(!memory.contains_key("swap"));
+        assert!(!memory.contains_key("reservation"));
+        assert_eq!(
+            unified.get("memory.high"),
+            Some(&serde_json::json!((limit * 9 / 10).to_string()))
+        );
+    }
+
+    #[test]
+    fn memory_resources_swap_is_memory_plus_swap() {
+        let (memory, _) = linux_memory_resources(2048, 512, 0);
+        assert_eq!(
+            memory.get("swap"),
+            Some(&serde_json::json!(2560i64 * 1024 * 1024))
+        );
+    }
+
+    #[test]
+    fn memory_resources_reservation_below_limit() {
+        let (memory, _) = linux_memory_resources(2688, 0, 2048);
+        assert_eq!(
+            memory.get("reservation"),
+            Some(&serde_json::json!(2048i64 * 1024 * 1024))
+        );
     }
 }

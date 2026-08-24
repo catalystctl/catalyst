@@ -12,6 +12,7 @@ import { getUpdateStatus } from "../services/auto-updater";
 import { getCurrentVersion } from "../lib/panel-version";
 import { createAuditLog } from "../middleware/audit.js";
 import { openSseStream } from "../utils/sse.js";
+import { SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../utils/java-memory.js";
 
 // ID format validation — accepts UUID, Cuid2, and other safe identifier formats.
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -859,8 +860,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 						select: {
 							id: true,
 							status: true,
-							allocatedMemoryMb: true,
 							allocatedCpuCores: true,
+							...SERVER_CGROUP_MEMORY_SELECT,
 						},
 					},
 				},
@@ -871,10 +872,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			}
 
 			// Calculate resource usage
-			const totalAllocatedMemory = node.servers.reduce(
-				(sum, server) => sum + (server.allocatedMemoryMb || 0),
-				0,
-			);
+			const totalAllocatedMemory = sumCgroupMemoryMb(node.servers);
 			const totalAllocatedCpu = node.servers.reduce(
 				(sum, server) => sum + (server.allocatedCpuCores || 0),
 				0,

@@ -231,6 +231,8 @@ pub struct ContainerConfig<'a> {
     pub startup_command: &'a str,
     pub env: &'a HashMap<String, String>,
     pub memory_mb: u64,
+    /// Advertised allocation (Wings MemoryReservation). 0 = omit.
+    pub memory_reservation_mb: u64,
     pub swap_mb: u64,
     pub cpu_cores: u64,
     pub io_weight: u64,

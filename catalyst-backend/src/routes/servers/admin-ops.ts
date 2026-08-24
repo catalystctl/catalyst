@@ -3,6 +3,7 @@ import { prisma } from "../../db.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { allocateIpForServer, canAccessServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, OWNER_SERVER_PERMISSIONS, path, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
+import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../../utils/java-memory.js";
 
 export async function serverAdminopsRoutes(app: FastifyInstance) {
   app.patch(
@@ -296,7 +297,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       // Get server with current node
       const server = await prisma.server.findUnique({
         where: { id },
-        include: { node: true },
+        include: { node: true, template: true },
       });
 
       if (!server) {
@@ -354,25 +355,30 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         });
       }
 
-      // Check if target node has enough resources
       const serversOnTarget = await prisma.server.findMany({
         where: { nodeId: targetNodeId },
+        select: {
+          allocatedCpuCores: true,
+          ...SERVER_CGROUP_MEMORY_SELECT,
+        },
       });
 
-      const usedMemory = serversOnTarget.reduce(
-        (sum, s) => sum + s.allocatedMemoryMb,
-        0
-      );
+      const usedMemory = sumCgroupMemoryMb(serversOnTarget);
       const usedCpu = serversOnTarget.reduce(
         (sum, s) => sum + s.allocatedCpuCores,
         0
       );
+      const requiredMemory = requestedCgroupMemoryMb(server.allocatedMemoryMb, {
+        startup: server.startupCommand || server.template?.startup,
+        image: server.template?.image,
+        environment: server.environment,
+      });
 
       const effectiveMaxMemory = targetNode.memoryOverallocatePercent === -1 ? Infinity : Math.floor(targetNode.maxMemoryMb * (1 + targetNode.memoryOverallocatePercent / 100));
       const effectiveMaxCpu = targetNode.cpuOverallocatePercent === -1 ? Infinity : targetNode.maxCpuCores * (1 + targetNode.cpuOverallocatePercent / 100);
 
       if (
-        usedMemory + server.allocatedMemoryMb > effectiveMaxMemory ||
+        usedMemory + requiredMemory > effectiveMaxMemory ||
         usedCpu + server.allocatedCpuCores > effectiveMaxCpu
       ) {
         return reply.status(400).send({
@@ -382,7 +388,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
             cpu: effectiveMaxCpu === Infinity ? "unlimited" : effectiveMaxCpu - usedCpu,
           },
           required: {
-            memory: server.allocatedMemoryMb,
+            memory: requiredMemory,
             cpu: server.allocatedCpuCores,
           },
         });

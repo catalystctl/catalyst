@@ -849,17 +849,23 @@ impl WebSocketHandler {
                 env_map.insert("GAME_PORT".to_string(), primary_port.to_string());
             }
 
-            if !env_map.contains_key("MEMORY_XMS") {
-                let memory_value = env_map
-                    .get("MEMORY")
-                    .and_then(|value| value.parse::<u64>().ok())
-                    .unwrap_or(memory_mb);
-                let xms_percent = env_map
-                    .get("MEMORY_XMS_PERCENT")
-                    .and_then(|value| value.parse::<u64>().ok())
-                    .unwrap_or(50);
-                let memory_xms = std::cmp::max(1, (memory_value * xms_percent) / 100);
-                env_map.insert("MEMORY_XMS".to_string(), memory_xms.to_string());
+            // `MEMORY_XMS` from the panel is an operator override. Eggs that
+            // use {{MEMORY_XMS}} without a value get Paper's 128M default.
+            // Do not auto-fill 50% of allocation — that commits a huge heap
+            // at boot (unlike Pterodactyl's -Xms128M).
+            let xms_from_panel = env_map
+                .get("MEMORY_XMS")
+                .and_then(|v| v.parse::<u64>().ok())
+                .filter(|v| *v > 0);
+            let xms_percent = env_map
+                .get("MEMORY_XMS_PERCENT")
+                .and_then(|v| v.parse::<u64>().ok())
+                .filter(|v| *v > 0 && *v <= 100);
+            if xms_from_panel.is_none() {
+                env_map.insert(
+                    "MEMORY_XMS".to_string(),
+                    crate::shell_utils::JAVA_DEFAULT_XMS_MB.to_string(),
+                );
             }
 
             // Replace all {{VARIABLE}} placeholders.
@@ -877,52 +883,62 @@ impl WebSocketHandler {
             // Some templates use bash-style arithmetic tests like ((1)); convert for /bin/sh.
             final_startup_command = shell_utils::normalize_startup_for_sh(&final_startup_command);
 
-            // ── Transparent Java heap clamp ──────────────────────────────────────────
-            // Leaf example: -Xms1G -Xmx2G on 2048M cgroup => heap == limit, off-heap
-            // (+Metaspace/CodeCache/threads/Direct) -> cgroup OOM -> SIGKILL 137.
-            // CLI rewrites miss @user_jvm_args.txt/@unix_args.txt (CurseForge/Forge) and
-            // run.sh wrappers. CLI -XX:MaxRAMPercentage is expanded before @argfiles so
-            // argfile -Xmx wins; JAVA_TOOL_OPTIONS is prepended so egg -Xmx still wins.
-            // _JAVA_OPTIONS is appended last by HotSpot and inherited by child JVMs, so it
-            // overrides both CLI and argfiles. Inject there without requiring operator edits.
+            // ── Java: advertised allocation is the heap; cgroup is larger ──────────
+            // Operators who set Memory=2GB expect -Xmx2G, not 1.5G. Off-heap
+            // (Direct defaults to Xmx, metaspace, stacks, glibc arenas) is added
+            // to the cgroup instead of stolen from the heap. _JAVA_OPTIONS is
+            // appended last by HotSpot and overrides CLI / @argfiles.
+            let mut container_memory_mb = memory_mb;
             let java_fix_enabled =
                 env_map.get("CATALYST_JAVA_MEMORY_FIX").map(|v| v.as_str()) != Some("0");
-            if java_fix_enabled {
-                // 75% of limit leaves ~25% for off-heap. Never let Xmx meet the cgroup
-                // limit and keep headroom for tiny servers. Advised: (m*75/100).max(128)
-                // .min(m.saturating_sub(256).max(128)) so Xmx < limit.
-                let raw_heap = memory_mb * 75 / 100;
-                let headroom_floor = memory_mb.saturating_sub(256).max(128);
-                let clamped_heap = raw_heap.max(128).min(headroom_floor);
-                let parsed_xms = env_map
-                    .get("MEMORY_XMS")
-                    .and_then(|v| v.parse::<u64>().ok())
-                    .unwrap_or(memory_mb / 2);
-                let clamped_xms = parsed_xms.min(clamped_heap).max(128);
-                if memory_mb >= 256 && clamped_heap >= 128 {
-                    // Preserve operator-provided _JAVA_OPTIONS (prepend/merge).
+            let is_java = crate::shell_utils::looks_like_java(&final_startup_command, docker_image);
+            if java_fix_enabled && is_java {
+                let requested_heap = crate::shell_utils::parse_xmx_mb(&final_startup_command);
+                let literal_xms = crate::shell_utils::parse_xms_mb(startup_command);
+                let requested_xms = xms_from_panel.or_else(|| {
+                    xms_percent.map(|pct| (memory_mb * pct / 100).max(1))
+                }).or(literal_xms);
+                let plan = crate::shell_utils::plan_java_memory(
+                    memory_mb,
+                    requested_heap,
+                    requested_xms,
+                );
+                if memory_mb >= 256 && plan.heap_mb >= 128 {
                     let existing = env_map.get("_JAVA_OPTIONS").cloned().unwrap_or_default();
-                    let injected = format!(
-                        "-Xms{}M -Xmx{}M -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError",
-                        clamped_xms, clamped_heap
-                    );
+                    let injected = plan.java_options();
                     let merged = if existing.trim().is_empty() {
                         injected
                     } else {
                         format!("{} {}", existing.trim(), injected)
                     };
                     env_map.insert("_JAVA_OPTIONS".to_string(), merged);
-                    // Also normalize visible startup for logs: strip literal -Xmx/-Xms and
-                    // excessive MaxRAMPercentage so logs don't mislead, but don't rely on it
-                    // for enforcement — _JAVA_OPTIONS is the enforcer.
-                    // This is log-only; actual clamp is via env.
+                    env_map
+                        .entry("MALLOC_ARENA_MAX".to_string())
+                        .or_insert_with(|| "2".to_string());
                     final_startup_command = crate::shell_utils::normalize_java_heap_args(
                         &final_startup_command,
                     );
+                    container_memory_mb = plan.cgroup_mb;
                     info!(
-                        "Java heap clamped via _JAVA_OPTIONS: -Xms{}M -Xmx{}M (limit {}M, orig startup: {})",
-                        clamped_xms, clamped_heap, memory_mb, startup_command
+                        "Java memory plan: heap {}M xms {}M direct {}M metaspace {}M cgroup {}M (allocation {}M, orig startup: {})",
+                        plan.heap_mb,
+                        plan.xms_mb,
+                        plan.direct_mb,
+                        plan.metaspace_mb,
+                        plan.cgroup_mb,
+                        memory_mb,
+                        startup_command
                     );
+                    let _ = self
+                        .emit_console_output(
+                            server_id,
+                            "system",
+                            &format!(
+                                "[Catalyst] JVM heap -Xmx{}M (server Memory {}M); container {}M to fit off-heap (direct {}M, metaspace {}M)\n",
+                                plan.heap_mb, memory_mb, plan.cgroup_mb, plan.direct_mb, plan.metaspace_mb
+                            ),
+                        )
+                        .await;
                 }
             }
 
@@ -1005,9 +1021,14 @@ impl WebSocketHandler {
                     image: docker_image,
                     startup_command: &final_startup_command,
                     env: &env_map,
-                    memory_mb,
-                    cpu_cores,
+                    memory_mb: container_memory_mb,
+                    memory_reservation_mb: if container_memory_mb > memory_mb {
+                        memory_mb
+                    } else {
+                        0
+                    },
                     swap_mb,
+                    cpu_cores,
                     io_weight,
                     data_dir: &host_server_dir,
                     port: primary_port,
@@ -1038,7 +1059,7 @@ impl WebSocketHandler {
                     .await
                     .unwrap_or(None);
                 let reason = if exit_code == Some(137) {
-                    format!("Container exited immediately with code 137 (OOM killed — cgroup {}M limit exceeded; next start will use _JAVA_OPTIONS=Xmx{}M ~75% of limit)", memory_mb, memory_mb * 75 / 100)
+                    format!("Container exited immediately with code 137 (OOM killed — cgroup {}M limit exceeded; JVM off-heap counts toward the limit — increase Memory allocation)", memory_mb)
                 } else {
                     match exit_code {
                         Some(code) => format!("Container exited immediately with code {}", code),

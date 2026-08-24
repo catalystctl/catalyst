@@ -4,6 +4,7 @@ import { createAuditLog } from '../../middleware/audit.js';
 import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { minimumDiskMbFromHints } from "../../utils/egg-import.js";
+import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../../utils/java-memory.js";
 import { SimpleCache } from "../../lib/cache.js";
 
 // Hot-path cache for GET /api/servers — makes list-servers win by a huge margin.
@@ -301,12 +302,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           servers: {
             select: {
               id: true,
-              allocatedMemoryMb: true,
               allocatedCpuCores: true,
               primaryPort: true,
               primaryIp: true,
               portBindings: true,
               networkMode: true,
+              ...SERVER_CGROUP_MEMORY_SELECT,
             },
           },
         },
@@ -330,15 +331,17 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "backupAllocationMb must be 0 or more" });
       }
 
-      // Check resource availability
-      const totalAllocatedMemory = node.servers.reduce(
-        (sum, s) => sum + (s.allocatedMemoryMb || 0),
-        0
-      );
+      // Check resource availability (Java cgroup is allocation + off-heap overhead)
+      const totalAllocatedMemory = sumCgroupMemoryMb(node.servers);
       const totalAllocatedCpu = node.servers.reduce(
         (sum, s) => sum + (s.allocatedCpuCores || 0),
         0
       );
+      const requiredMemory = requestedCgroupMemoryMb(allocatedMemoryMb, {
+        startup: template.startup,
+        image: template.image,
+        environment,
+      });
 
       request.log.debug(
         {
@@ -348,6 +351,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           totalAllocatedMemory,
           totalAllocatedCpu,
           requestedMemory: allocatedMemoryMb,
+          requiredCgroupMemory: requiredMemory,
           requestedCpu: allocatedCpuCores,
         },
         "Node resource check"
@@ -356,10 +360,10 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const effectiveMaxMemory = node.memoryOverallocatePercent === -1 ? Infinity : Math.floor(node.maxMemoryMb * (1 + node.memoryOverallocatePercent / 100));
       const effectiveMaxCpu = node.cpuOverallocatePercent === -1 ? Infinity : node.maxCpuCores * (1 + node.cpuOverallocatePercent / 100);
 
-      if (totalAllocatedMemory + allocatedMemoryMb > effectiveMaxMemory) {
+      if (totalAllocatedMemory + requiredMemory > effectiveMaxMemory) {
         const available = effectiveMaxMemory === Infinity ? "unlimited" : `${effectiveMaxMemory - totalAllocatedMemory}MB`;
         return reply.status(400).send({
-          error: `Insufficient memory. Available: ${available}, Required: ${allocatedMemoryMb}MB`,
+          error: `Insufficient memory. Available: ${available}, Required: ${requiredMemory}MB`,
         });
       }
 
@@ -825,12 +829,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           servers: {
             select: {
               id: true,
-              allocatedMemoryMb: true,
               allocatedCpuCores: true,
               primaryPort: true,
               primaryIp: true,
               portBindings: true,
               networkMode: true,
+              ...SERVER_CGROUP_MEMORY_SELECT,
             },
           },
         },
@@ -841,20 +845,23 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       }
 
       // Check resource availability
-      const totalAllocatedMemory = node.servers.reduce(
-        (sum: number, s: any) => sum + (s.allocatedMemoryMb || 0), 0
-      );
+      const totalAllocatedMemory = sumCgroupMemoryMb(node.servers);
       const totalAllocatedCpu = node.servers.reduce(
-        (sum: number, s: any) => sum + (s.allocatedCpuCores || 0), 0
+        (sum, s) => sum + (s.allocatedCpuCores || 0), 0
       );
+      const requiredMemory = requestedCgroupMemoryMb(resolvedMemoryMb, {
+        startup: sourceServer.startupCommand || sourceServer.template.startup,
+        image: sourceServer.template.image,
+        environment: body.environment ?? sourceServer.environment,
+      });
 
       const effectiveMaxMemory = node.memoryOverallocatePercent === -1 ? Infinity : Math.floor(node.maxMemoryMb * (1 + node.memoryOverallocatePercent / 100));
       const effectiveMaxCpu = node.cpuOverallocatePercent === -1 ? Infinity : node.maxCpuCores * (1 + node.cpuOverallocatePercent / 100);
 
-      if (totalAllocatedMemory + resolvedMemoryMb > effectiveMaxMemory) {
+      if (totalAllocatedMemory + requiredMemory > effectiveMaxMemory) {
         const available = effectiveMaxMemory === Infinity ? 'unlimited' : `${effectiveMaxMemory - totalAllocatedMemory}MB`;
         return reply.status(400).send({
-          error: `Insufficient memory. Available: ${available}, Required: ${resolvedMemoryMb}MB`,
+          error: `Insufficient memory. Available: ${available}, Required: ${requiredMemory}MB`,
         });
       }
 
@@ -1736,19 +1743,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           },
           select: {
             id: true,
-            allocatedMemoryMb: true,
             allocatedCpuCores: true,
             allocatedDiskMb: true,
             primaryPort: true,
             portBindings: true,
             networkMode: true,
+            ...SERVER_CGROUP_MEMORY_SELECT,
           },
         });
 
-        const totalOtherMemory = otherServers.reduce(
-          (sum, s) => sum + (s.allocatedMemoryMb || 0),
-          0
-        );
+        const totalOtherMemory = sumCgroupMemoryMb(otherServers);
         const totalOtherCpu = otherServers.reduce(
           (sum, s) => sum + (s.allocatedCpuCores || 0),
           0
@@ -1761,11 +1765,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         const newMemory = allocatedMemoryMb ?? server.allocatedMemoryMb;
         const newCpu = allocatedCpuCores ?? server.allocatedCpuCores;
         const newDisk = allocatedDiskMb ?? server.allocatedDiskMb;
+        const requiredMemory = requestedCgroupMemoryMb(newMemory, {
+          startup: startupCommand ?? server.startupCommand ?? server.template.startup,
+          image: server.template.image,
+          environment: environment ?? server.environment,
+        });
 
         const effectiveMaxMemory = node.memoryOverallocatePercent === -1 ? Infinity : Math.floor(node.maxMemoryMb * (1 + node.memoryOverallocatePercent / 100));
         const effectiveMaxCpu = node.cpuOverallocatePercent === -1 ? Infinity : node.maxCpuCores * (1 + node.cpuOverallocatePercent / 100);
 
-        if (totalOtherMemory + newMemory > effectiveMaxMemory) {
+        if (totalOtherMemory + requiredMemory > effectiveMaxMemory) {
           const available = effectiveMaxMemory === Infinity ? "unlimited" : `${effectiveMaxMemory - totalOtherMemory}MB`;
           return reply.status(400).send({
             error: `Insufficient memory. Available: ${available}`,
