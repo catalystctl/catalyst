@@ -22,6 +22,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { ArrowDown } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
 import { useThemeStore } from '@/stores/themeStore';
+import { shouldCopyXtermSelection } from './consoleClipboard';
+
 import type { RawEntry } from './types';
 
 type XtermConsoleProps = {
@@ -266,6 +268,20 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
     term.loadAddon(links);
     term.open(host);
 
+    const copySelectionIfNeeded = (ev: KeyboardEvent) => {
+      if (!shouldCopyXtermSelection(ev, term.hasSelection())) return;
+      const text = term.getSelection();
+      if (!text) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      void navigator.clipboard.writeText(text).catch(() => undefined);
+    };
+    // Window capture, not attachCustomKeyEventHandler: disableStdin means the
+    // helper textarea may never see keys. Same path as the toolbar copy button
+    // (term.getSelection). Also swallows Brave/Linux Ctrl+Shift+C Inspect.
+    window.addEventListener('keydown', copySelectionIfNeeded, true);
+    host.addEventListener('keydown', copySelectionIfNeeded, true);
+
     const initialBg = readXtermTheme().background || resolveThemeColor('--card', '#0b0f14');
     host.style.backgroundColor = initialBg;
     const initialViewport = host.querySelector('.xterm-viewport') as HTMLElement | null;
@@ -370,6 +386,8 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
     setTermEpoch((n) => n + 1);
 
     return () => {
+      window.removeEventListener('keydown', copySelectionIfNeeded, true);
+      host.removeEventListener('keydown', copySelectionIfNeeded, true);
       cancelled = true;
       if (fitRaf !== undefined) window.cancelAnimationFrame(fitRaf);
       window.clearTimeout(fitTimer);
