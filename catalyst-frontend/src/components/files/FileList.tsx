@@ -197,10 +197,12 @@ function FileList({
 
  if (!files.length) {
  return (
+ <div className="flex h-full items-center justify-center p-6">
  <EmptyState
  title="This folder is empty"
- description="Upload files or create a new folder to get started."
+ description="Drop files here, or use Upload to add files to this folder."
  />
+ </div>
  );
  }
 

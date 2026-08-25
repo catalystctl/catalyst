@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Upload, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileTypeIcon } from './FileTypeIcon';
+import { collectDroppedFiles, isFileDrag } from '../../utils/droppedFiles';
 
 type Props = {
  path: string;
@@ -18,7 +19,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  const [fileProgress, setFileProgress] = useState<Record<number, number>>({});
  const [fileNames, setFileNames] = useState<string[]>([]);
 
- const handleFiles = (files: FileList | null) => {
+ const handleFiles = (files: File[] | FileList | null) => {
  if (!files?.length) return;
  const arr = Array.from(files);
  setFileNames(arr.map((f) => f.name));
@@ -70,15 +71,30 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  ? 'border-primary bg-primary-500/5 scale-[1.02]'
  : 'border-border bg-surface-1/50 hover:border-primary/40 hover:bg-surface-1 dark:border-border dark:bg-surface-2/30 dark:hover:border-primary/30'
  } ${inModal ? '' : 'mt-4'}`}
- onDragOver={(e) => {
+ onDragEnter={(e) => {
+ if (!isFileDrag(e.dataTransfer)) return;
  e.preventDefault();
+ e.stopPropagation();
  setIsDragActive(true);
  }}
- onDragLeave={() => setIsDragActive(false)}
- onDrop={(e) => {
+ onDragOver={(e) => {
+ if (!isFileDrag(e.dataTransfer)) return;
+ e.preventDefault();
+ e.stopPropagation();
+ e.dataTransfer.dropEffect = 'copy';
+ setIsDragActive(true);
+ }}
+ onDragLeave={(e) => {
  e.preventDefault();
  setIsDragActive(false);
- handleFiles(e.dataTransfer.files);
+ }}
+ onDrop={(e) => {
+ e.preventDefault();
+ e.stopPropagation();
+ setIsDragActive(false);
+ void collectDroppedFiles(e.dataTransfer).then((dropped) => {
+ handleFiles(dropped.map((item) => item.file));
+ });
  }}
  >
  <motion.div

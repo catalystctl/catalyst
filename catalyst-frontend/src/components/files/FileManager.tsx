@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 
@@ -35,6 +35,7 @@ import { adminApi } from '../../services/api/admin';
 import type { FileEntry } from '../../types/file';
 import { formatFileMode } from '../../utils/formatters';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
+import { collectDroppedFiles, isFileDrag } from '../../utils/droppedFiles';
 import { buildBreadcrumbs, getParentPath, joinPath, normalizePath } from '../../utils/filePaths';
 import {
  Dialog,
@@ -134,8 +135,28 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  } | null>(null);
  const [showSidebar, setShowSidebar] = useState(false);
  const [searchQuery, setSearchQuery] = useState('');
+ const [isFileDropActive, setIsFileDropActive] = useState(false);
+ const fileDropDepthRef = useRef(0);
 
  const writeDisabled = isSuspended || !canWrite;
+
+ // Without preventDefault on dragover, the browser treats a file drop as a
+ // navigation and the explorer never sees `drop`. Keep that from stealing
+ // drops anywhere on the Files tab.
+ useEffect(() => {
+  const onDragOver = (event: globalThis.DragEvent) => {
+   if (isFileDrag(event.dataTransfer)) event.preventDefault();
+  };
+  const onDrop = (event: globalThis.DragEvent) => {
+   if (isFileDrag(event.dataTransfer)) event.preventDefault();
+  };
+  window.addEventListener('dragover', onDragOver);
+  window.addEventListener('drop', onDrop);
+  return () => {
+   window.removeEventListener('dragover', onDragOver);
+   window.removeEventListener('drop', onDrop);
+  };
+ }, []);
 
  // Reset UI state when navigating to a different path
  useEffect(() => {
@@ -300,28 +321,53 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  },
  });
 
- const uploadMutation = useMutation({
- mutationFn: async ({ files, onProgress, signal }: { files: File[]; onProgress?: (fileIndex: number, progress: number) => void; signal?: AbortSignal }) => {
- // Validate file sizes against the configurable upload limit (with fallback)
- let maxUploadMb: number;
+ const resolveMaxUploadMb = useCallback(async () => {
  try {
  const controller = new AbortController();
  const timeout = setTimeout(() => controller.abort(), 5000);
  try {
- maxUploadMb = await adminApi.getFileTunnelUploadLimit();
+ return await adminApi.getFileTunnelUploadLimit();
  } finally {
  clearTimeout(timeout);
  }
  } catch {
- maxUploadMb = DEFAULT_MAX_UPLOAD_MB; // fallback — when the setting can't be fetched
+ return DEFAULT_MAX_UPLOAD_MB;
  }
+ }, []);
+
+ const assertUploadSize = useCallback(async (files: File[]) => {
+ const maxUploadMb = await resolveMaxUploadMb();
  const maxBytes = maxUploadMb * 1024 * 1024;
  const oversized = files.filter((f) => f.size > maxBytes);
  if (oversized.length > 0) {
  const names = oversized.map((f) => f.name).join(', ');
  throw new Error(`Files exceed the maximum upload size of ${maxUploadMb}MB: ${names}`);
  }
- await filesApi.upload(serverId, path, files, onProgress, signal);
+ }, [resolveMaxUploadMb]);
+
+ const uploadMutation = useMutation({
+ mutationFn: async ({
+ files,
+ onProgress,
+ signal,
+ targetPath,
+ batches,
+ }: {
+ files: File[];
+ onProgress?: (fileIndex: number, progress: number) => void;
+ signal?: AbortSignal;
+ targetPath?: string;
+ batches?: Array<{ files: File[]; targetPath: string }>;
+ }) => {
+ if (batches?.length) {
+ for (const batch of batches) {
+ await assertUploadSize(batch.files);
+ await filesApi.upload(serverId, batch.targetPath, batch.files, onProgress, signal);
+ }
+ return;
+ }
+ await assertUploadSize(files);
+ await filesApi.upload(serverId, targetPath ?? path, files, onProgress, signal);
  },
  onSuccess: () => {
  setShowUpload(false);
@@ -398,6 +444,77 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  invalidateFiles();
  },
  });
+
+ const resetFileDrop = useCallback(() => {
+ fileDropDepthRef.current = 0;
+ setIsFileDropActive(false);
+ }, []);
+
+ const handleExplorerDragEnter = useCallback(
+ (event: DragEvent<HTMLDivElement>) => {
+ if (writeDisabled || !isFileDrag(event.dataTransfer)) return;
+ event.preventDefault();
+ event.stopPropagation();
+ fileDropDepthRef.current += 1;
+ setIsFileDropActive(true);
+ },
+ [writeDisabled],
+ );
+
+ const handleExplorerDragOver = useCallback(
+ (event: DragEvent<HTMLDivElement>) => {
+ if (writeDisabled || !isFileDrag(event.dataTransfer)) return;
+ event.preventDefault();
+ event.stopPropagation();
+ event.dataTransfer.dropEffect = 'copy';
+ },
+ [writeDisabled],
+ );
+
+ const handleExplorerDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+ event.preventDefault();
+ event.stopPropagation();
+ fileDropDepthRef.current = Math.max(0, fileDropDepthRef.current - 1);
+ if (fileDropDepthRef.current === 0) setIsFileDropActive(false);
+ }, []);
+
+ const handleExplorerDrop = useCallback(
+ async (event: DragEvent<HTMLDivElement>) => {
+ event.preventDefault();
+ event.stopPropagation();
+ resetFileDrop();
+ if (writeDisabled) {
+ notifyError(isSuspended ? 'Server is suspended' : 'You do not have permission to modify files');
+ return;
+ }
+ if (!isFileDrag(event.dataTransfer)) return;
+ try {
+ const dropped = await collectDroppedFiles(event.dataTransfer);
+ if (!dropped.length) {
+ notifyError('No files found in that drop');
+ return;
+ }
+ const groups = new Map<string, File[]>();
+ for (const item of dropped) {
+ const target = item.relativeDir ? joinPath(path, item.relativeDir) : path;
+ const list = groups.get(target) ?? [];
+ list.push(item.file);
+ groups.set(target, list);
+ }
+ const batches = [...groups.entries()].map(([targetPath, filesToUpload]) => ({
+ files: filesToUpload,
+ targetPath,
+ }));
+ await uploadMutation.mutateAsync({
+ files: dropped.map((item) => item.file),
+ batches,
+ });
+ } catch (error: unknown) {
+ notifyError(error instanceof Error ? error.message : 'Failed to upload files');
+ }
+ },
+ [isSuspended, path, resetFileDrop, uploadMutation, writeDisabled],
+ );
 
  const handleOpen = (entry: FileEntry) => {
  if (entry.isDirectory) {
@@ -873,8 +990,25 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  )}
  </AnimatePresence>
 
- {/* File list */}
- <div className="rounded-xl border border-border bg-card dark:border-border dark:bg-surface-1 h-[calc(100vh-280px)] min-h-[200px] overflow-hidden">
+ {/* File list — drop target for explorer uploads (no Upload modal required) */}
+ <div
+ className={`relative rounded-xl border bg-card dark:bg-surface-1 h-[calc(100vh-280px)] min-h-[200px] overflow-hidden transition-colors ${
+ isFileDropActive
+ ? 'border-primary ring-2 ring-primary/30'
+ : 'border-border dark:border-border'
+ }`}
+ onDragEnter={handleExplorerDragEnter}
+ onDragOver={handleExplorerDragOver}
+ onDragLeave={handleExplorerDragLeave}
+ onDrop={handleExplorerDrop}
+ >
+ {isFileDropActive && canWrite && !isSuspended && (
+ <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-primary/10 backdrop-blur-[1px]">
+ <Upload className="h-8 w-8 text-primary" />
+ <p className="text-sm font-semibold text-primary">Drop to upload</p>
+ <p className="font-mono text-[11px] text-muted-foreground">{path}</p>
+ </div>
+ )}
  <FileList
  files={sortedFiles}
  selectedPaths={selectedPaths}
