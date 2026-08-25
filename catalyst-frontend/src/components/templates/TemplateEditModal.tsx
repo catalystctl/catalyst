@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { reportSystemError } from '../../services/api/systemErrors';
 
 type VariableDraft = {
+ id: string;
  name: string;
  description: string;
  defaultValue: string;
@@ -39,13 +40,26 @@ type VariableDraft = {
  rules: string;
 };
 
+type ImageOptionDraft = TemplateImageOption & { id: string };
+
+const createDraftId = () =>
+ crypto.randomUUID?.() ?? `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 const createVariableDraft = (variable?: TemplateVariable): VariableDraft => ({
+ id: createDraftId(),
  name: variable?.name ?? '',
  description: variable?.description ?? '',
  defaultValue: variable?.default ?? '',
  required: Boolean(variable?.required),
  input: variable?.input ?? 'text',
  rules: variable?.rules?.join('; ') ?? '',
+});
+
+const createImageOptionDraft = (option?: Partial<TemplateImageOption>): ImageOptionDraft => ({
+ id: createDraftId(),
+ name: option?.name ?? '',
+ label: option?.label ?? '',
+ image: option?.image ?? '',
 });
 
 type EditProps = {
@@ -70,7 +84,9 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  const [version, setVersion] = useState(template.version);
  const [image, setImage] = useState(template.image);
  const [installImage, setInstallImage] = useState(template.installImage ?? '');
- const [imageOptions, setImageOptions] = useState<TemplateImageOption[]>(template.images ?? []);
+ const [imageOptions, setImageOptions] = useState<ImageOptionDraft[]>(
+  (template.images ?? []).map((option) => createImageOptionDraft(option)),
+ );
  const [defaultImage, setDefaultImage] = useState(template.defaultImage ?? '');
  const [startup, setStartup] = useState(template.startup);
  const [stopCommand, setStopCommand] = useState(template.stopCommand);
@@ -167,7 +183,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  setVersion(template.version);
  setImage(template.image);
  setInstallImage(template.installImage ?? '');
- setImageOptions(template.images ?? []);
+ setImageOptions((template.images ?? []).map((option) => createImageOptionDraft(option)));
  setDefaultImage(template.defaultImage ?? '');
  setStartup(template.startup);
  setStopCommand(template.stopCommand);
@@ -222,11 +238,13 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  setImage(String(payload.image ?? ''));
  setImageOptions(
  Array.isArray(payload.images)
- ? payload.images.map((option: any) => ({
+ ? payload.images.map((option: any) =>
+ createImageOptionDraft({
  name: String(option?.name ?? ''),
  label: option?.label ? String(option.label) : undefined,
  image: String(option?.image ?? ''),
- }))
+ }),
+ )
  : [],
  );
  setDefaultImage(String(payload.defaultImage ?? ''));
@@ -273,6 +291,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  setPluginProviders(extractProviderIds((payload.features?.pluginManager as any)?.providers));
  const importedVariables = Array.isArray(payload.variables)
  ? payload.variables.map((variable: any) => ({
+ id: createDraftId(),
  name: String(variable?.name ?? ''),
  description: String(variable?.description ?? ''),
  defaultValue: String(variable?.default ?? ''),
@@ -324,7 +343,9 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  author,
  version,
  image,
- images: imageOptions.filter((option) => option.name && option.image),
+ images: imageOptions
+  .filter((option) => option.name && option.image)
+  .map(({ name, label, image }) => ({ name, label, image })),
  defaultImage: defaultImage || undefined,
  installImage: installImage || undefined,
         startup,
@@ -636,9 +657,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </div>
  <button
  className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
- onClick={() =>
- setImageOptions((prev) => [...prev, { name: '', label: '', image: '' }])
- }
+ onClick={() => setImageOptions((prev) => [...prev, createImageOptionDraft()])}
  type="button"
  >
  Add image
@@ -648,7 +667,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <div className="space-y-2">
  {imageOptions.map((option, index) => (
  <div
- key={`${option.name}-${index}`}
+ key={option.id}
  className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
  >
  <label className="block space-y-1">
@@ -866,7 +885,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </div>
  {variables.map((variable, index) => (
  <div
- key={`${variable.name}-${index}`}
+ key={variable.id}
  className="rounded-xl border border-border/30 bg-card p-3 transition-colors hover:border-primary"
  >
  <div className="flex items-center justify-between gap-2">

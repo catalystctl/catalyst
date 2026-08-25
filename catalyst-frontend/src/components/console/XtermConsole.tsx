@@ -15,7 +15,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { Terminal, type ITheme } from '@xterm/xterm';
+import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -23,6 +23,7 @@ import { ArrowDown } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
 import { useThemeStore } from '@/stores/themeStore';
 import { shouldCopyXtermSelection } from './consoleClipboard';
+import { paintXtermBackground, readXtermTheme, resolveThemeColor } from './xtermTheme';
 
 import type { RawEntry } from './types';
 
@@ -49,95 +50,6 @@ export type XtermConsoleHandle = {
   getSelection: () => string;
 };
 
-
-/**
- * Catalyst theme tokens are HSL *channels* (e.g. `240 12% 9%`), not full colors.
- * xterm needs a real CSS color. Resolve via a probe element so custom themeStore
- * overrides and .dark/.light both work.
- */
-let colorProbe: HTMLSpanElement | null = null;
-
-function resolveThemeColor(token: string, fallback: string): string {
-  if (typeof window === 'undefined' || typeof document === 'undefined') return fallback;
-  try {
-    if (!colorProbe) {
-      colorProbe = document.createElement('span');
-      colorProbe.style.cssText =
-        'position:fixed;left:-9999px;top:0;width:0;height:0;pointer-events:none;opacity:0;';
-      document.documentElement.appendChild(colorProbe);
-    }
-    // Support both bare channel tokens (`--card`) and already-wrapped values.
-    colorProbe.style.color = `hsl(var(${token}))`;
-    const resolved = getComputedStyle(colorProbe).color;
-    // getComputedStyle returns rgb/rgba; empty/transparent means the var was missing.
-    if (!resolved || resolved === 'rgba(0, 0, 0, 0)' || resolved === 'transparent') {
-      return fallback;
-    }
-    return resolved;
-  } catch {
-    return fallback;
-  }
-}
-
-/** Mix selection: primary at ~35% over the card background via color-mix when available. */
-function resolveSelection(fallback: string): string {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    // Ensure probe exists (resolveThemeColor usually ran first, but be safe).
-    resolveThemeColor('--card', fallback);
-    if (!colorProbe) return fallback;
-    colorProbe.style.color =
-      'color-mix(in srgb, hsl(var(--primary)) 35%, hsl(var(--card)))';
-    const resolved = getComputedStyle(colorProbe).color;
-    if (!resolved || resolved === 'rgba(0, 0, 0, 0)' || resolved === 'transparent') {
-      return resolveThemeColor('--primary', fallback);
-    }
-    return resolved;
-  } catch {
-    return resolveThemeColor('--primary', fallback);
-  }
-}
-
-function readXtermTheme(): ITheme {
-  // Solid colors only — allowTransparency + semi-transparent selection causes
-  // repaint flicker under frequent writes. Map ANSI palette to semantic tokens
-  // so stderr/system/stdin tints and agent ANSI follow the active theme.
-  const bg = resolveThemeColor('--card', '#0b0f14');
-  const fg = resolveThemeColor('--foreground', '#e6edf3');
-  const primary = resolveThemeColor('--primary', '#14b8a6');
-  const danger = resolveThemeColor('--danger', '#f87171');
-  const success = resolveThemeColor('--success', '#4ade80');
-  const warning = resolveThemeColor('--warning', '#fbbf24');
-  const info = resolveThemeColor('--info', '#60a5fa');
-  const muted = resolveThemeColor('--muted-foreground', '#6b7280');
-  const surface = resolveThemeColor('--surface-2', '#1f2937');
-
-  return {
-    background: bg,
-    foreground: fg,
-    cursor: primary,
-    cursorAccent: bg,
-    selectionBackground: resolveSelection(primary),
-    selectionInactiveBackground: surface,
-    selectionForeground: fg,
-    black: resolveThemeColor('--background', '#09090b'),
-    red: danger,
-    green: success,
-    yellow: warning,
-    blue: info,
-    magenta: primary,
-    cyan: info,
-    white: fg,
-    brightBlack: muted,
-    brightRed: danger,
-    brightGreen: success,
-    brightYellow: warning,
-    brightBlue: info,
-    brightMagenta: primary,
-    brightCyan: info,
-    brightWhite: resolveThemeColor('--card-foreground', fg),
-  };
-}
 
 /** Keep lone CR so installer/progress lines overwrite instead of stacking. */
 function normalizeChunk(data: string): string {
@@ -283,11 +195,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
     host.addEventListener('keydown', copySelectionIfNeeded, true);
 
     const initialBg = readXtermTheme().background || resolveThemeColor('--card', '#0b0f14');
-    host.style.backgroundColor = initialBg;
-    const initialViewport = host.querySelector('.xterm-viewport') as HTMLElement | null;
-    if (initialViewport) initialViewport.style.backgroundColor = initialBg;
-    const initialXterm = host.querySelector('.xterm') as HTMLElement | null;
-    if (initialXterm) initialXterm.style.backgroundColor = initialBg;
+    paintXtermBackground(host, initialBg);
 
     term.write('\x1b[?25l');
 
@@ -426,15 +334,11 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
         if (!term || !host) return;
         const theme = readXtermTheme();
         term.options.theme = theme;
-        // xterm.css hardcodes `.xterm-viewport { background-color: #000 }` — that
-        // is the black letterbox/frame around the cell grid. Paint host + viewport
-        // with the resolved card color (and leave canvas theme bg in sync).
+        // xterm 6 paints theme.background onto `.xterm-scrollable-element` as an
+        // inline style. Keep host + viewport + scrollable in lockstep so a
+        // mis-resolved color cannot cover the log (white-on-white).
         const bg = theme.background || resolveThemeColor('--card', '#0b0f14');
-        host.style.backgroundColor = bg;
-        const viewport = host.querySelector('.xterm-viewport') as HTMLElement | null;
-        if (viewport) viewport.style.backgroundColor = bg;
-        const xtermEl = host.querySelector('.xterm') as HTMLElement | null;
-        if (xtermEl) xtermEl.style.backgroundColor = bg;
+        paintXtermBackground(host, bg);
       });
     };
     apply();

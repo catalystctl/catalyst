@@ -374,14 +374,16 @@ select option {
 }
 
 /*
- * xterm.js ships `.xterm-viewport { background-color: #000 }` which shows as a
- * black frame/letterbox around the cell grid once FitAddon snaps to char cells.
- * Paint host + viewport with the card token; keep the canvas transparent so the
- * themed cell background shows through without a #000 fringe.
+ * xterm.js 6 paints theme.background onto `.xterm-scrollable-element` as an
+ * inline style. Combined with `.xterm-viewport { background-color: #000 }` this
+ * can cover the DOM-rendered log (white-on-white when the theme bg is wrong).
+ * Force host + viewport + scrollable to the card token; keep the cell grid
+ * transparent so themed row colors show through.
  */
 .xterm-console-host,
 .xterm-console-host .xterm,
-.xterm-console-host .xterm-viewport {
+.xterm-console-host .xterm-viewport,
+.xterm-console-host .xterm-scrollable-element {
   background-color: hsl(var(--card)) !important;
 }
 
