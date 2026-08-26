@@ -42,6 +42,14 @@ pub(crate) const MAX_RESTORE_STREAM_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10 
 pub(crate) const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
 pub(crate) const MAX_CONSOLE_BATCH_BYTES: usize = 32768; // Max bytes to batch into a single console_output message
 pub(crate) const MAX_EVENT_SUBSCRIBE_FAILURES: u32 = 10; // Give up on event monitor after this many consecutive failures
+/// TCP connect + TLS + WS handshake. A hung DNS/NAT must not stall the reconnect loop.
+pub(crate) const WS_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// Individual WS frame send. A half-open TCP write can block until this fires.
+pub(crate) const WS_SEND_TIMEOUT: Duration = Duration::from_secs(10);
+/// No inbound frame (including pong) for this long → treat the socket as dead
+/// and reconnect. Backend heartbeat timeout is 60s; stay under that.
+pub(crate) const WS_READ_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
+pub(crate) const WS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 pub(crate) const OOM_KILL_REASON: &str = "Killed by system OOM killer (cgroup memory limit exceeded). JVM off-heap (direct buffers, metaspace, threads) counts toward the limit — increase Memory allocation.";
 pub(crate) const OOM_KILL_CONSOLE_HINT: &str = "[Catalyst] Killed by system OOM killer — container exceeded its memory allocation. Increase the server Memory allocation. JVM heap is auto-capped below the allocation so off-heap (direct memory, metaspace, threads) fits.\n";
 
@@ -851,9 +859,18 @@ impl WebSocketHandler {
         let ws_config = WebSocketConfig::default()
             .max_frame_size(Some(4 * 1024 * 1024))
             .max_message_size(Some(8 * 1024 * 1024));
-        let (ws_stream, _) = connect_async_with_config(ws_url.as_str(), Some(ws_config), false)
-            .await
-            .map_err(|e| AgentError::NetworkError(format!("Failed to connect: {}", e)))?;
+        let (ws_stream, _) = tokio::time::timeout(
+            WS_CONNECT_TIMEOUT,
+            connect_async_with_config(ws_url.as_str(), Some(ws_config), false),
+        )
+        .await
+        .map_err(|_| {
+            AgentError::NetworkError(format!(
+                "WebSocket connect timed out after {}s",
+                WS_CONNECT_TIMEOUT.as_secs()
+            ))
+        })?
+        .map_err(|e| AgentError::NetworkError(format!("Failed to connect: {}", e)))?;
 
         info!("WebSocket connected to backend");
 
@@ -874,12 +891,7 @@ impl WebSocketHandler {
             "protocolVersion": "1.0",
         });
 
-        {
-            let mut w = write.lock().await;
-            w.send(Message::Text(handshake.to_string().into()))
-                .await
-                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
-        }
+        send_ws_with_timeout(&write, Message::Text(handshake.to_string().into())).await?;
 
         info!("Handshake sent");
 
@@ -907,10 +919,13 @@ impl WebSocketHandler {
         // Connection-scoped background tasks. Abort on disconnect to avoid accumulation.
         let mut connection_tasks: Vec<tokio::task::JoinHandle<()>> = Vec::new();
 
-        // Start heartbeat task
+        // JSON heartbeat keeps the panel's lastHeartbeat fresh. WS Ping forces a
+        // Pong so a half-open TCP (NAT drop, silent panel restart) is detected
+        // by the read-idle timeout below — without that, systemd still shows
+        // the agent "active" while the node is offline until a manual restart.
         let write_clone = write.clone();
         connection_tasks.push(tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(15));
+            let mut interval = tokio::time::interval(WS_HEARTBEAT_INTERVAL);
             loop {
                 interval.tick().await;
                 debug!("Sending heartbeat");
@@ -918,7 +933,28 @@ impl WebSocketHandler {
                     "type": "heartbeat"
                 });
                 let mut w = write_clone.lock().await;
-                let _ = w.send(Message::Text(heartbeat.to_string().into())).await;
+                let send = tokio::time::timeout(WS_SEND_TIMEOUT, async {
+                    w.send(Message::Text(heartbeat.to_string().into())).await?;
+                    w.send(Message::Ping(Vec::new().into())).await?;
+                    Ok::<(), tokio_tungstenite::tungstenite::Error>(())
+                })
+                .await;
+                match send {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => {
+                        warn!("Heartbeat send failed ({}); closing socket to reconnect", e);
+                        let _ = tokio::time::timeout(WS_SEND_TIMEOUT, w.close()).await;
+                        break;
+                    }
+                    Err(_) => {
+                        warn!(
+                            "Heartbeat send timed out after {}s; closing socket to reconnect",
+                            WS_SEND_TIMEOUT.as_secs()
+                        );
+                        let _ = tokio::time::timeout(WS_SEND_TIMEOUT, w.close()).await;
+                        break;
+                    }
+                }
             }
         }));
 
@@ -972,8 +1008,24 @@ impl WebSocketHandler {
             handler_clone.spawn_health_checker().await;
         }));
 
-        // Listen for messages
-        while let Some(msg) = read.next().await {
+        // Listen for messages. A half-open TCP never yields here, so bound the
+        // wait: no inbound frame (text/binary/pong/ping/close) → reconnect.
+        loop {
+            let msg = match tokio::time::timeout(WS_READ_IDLE_TIMEOUT, read.next()).await {
+                Ok(Some(msg)) => msg,
+                Ok(None) => {
+                    info!("WebSocket stream ended");
+                    break;
+                }
+                Err(_) => {
+                    warn!(
+                        "No WebSocket traffic for {}s (half-open socket?); reconnecting",
+                        WS_READ_IDLE_TIMEOUT.as_secs()
+                    );
+                    let _ = send_ws_with_timeout(&write, Message::Close(None)).await;
+                    break;
+                }
+            };
             match msg {
                 Ok(Message::Text(text)) => {
                     if let Err(e) = self.handle_message(&text, &write).await {
@@ -1050,6 +1102,15 @@ impl WebSocketHandler {
                 Ok(Message::Close(_)) => {
                     info!("Backend closed connection");
                     break;
+                }
+                Ok(Message::Ping(payload)) => {
+                    if let Err(e) = send_ws_with_timeout(&write, Message::Pong(payload)).await {
+                        warn!("Failed to reply to WebSocket ping: {}", e);
+                        break;
+                    }
+                }
+                Ok(Message::Pong(_)) => {
+                    debug!("WebSocket pong");
                 }
                 Err(e) => {
                     error!("WebSocket error: {}", e);
@@ -3061,6 +3122,22 @@ pub(crate) fn parse_size_to_bytes(value: &str) -> Option<u64> {
     Some((number * multiplier).round() as u64)
 }
 
+async fn send_ws_with_timeout(
+    write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    msg: Message,
+) -> AgentResult<()> {
+    let mut w = write.lock().await;
+    tokio::time::timeout(WS_SEND_TIMEOUT, w.send(msg))
+        .await
+        .map_err(|_| {
+            AgentError::NetworkError(format!(
+                "WebSocket send timed out after {}s",
+                WS_SEND_TIMEOUT.as_secs()
+            ))
+        })?
+        .map_err(|e| AgentError::NetworkError(e.to_string()))
+}
+
 fn parse_df_output_mb(output: &str) -> Option<(u64, u64)> {
     let mut lines = output.lines().filter(|line| !line.trim().is_empty());
     let header = lines.next()?;
@@ -3106,6 +3183,16 @@ mod memory_parse_tests {
     fn rejects_empty() {
         assert_eq!(parse_memory_usage_mb(""), None);
         assert_eq!(parse_size_to_bytes("   "), None);
+    }
+
+    #[test]
+    fn ws_idle_timeout_is_under_panel_heartbeat_timeout() {
+        // Panel marks the node offline after 60s without a JSON heartbeat.
+        // Detect a dead socket before that so reconnect can land a fresh one.
+        assert!(super::WS_READ_IDLE_TIMEOUT.as_secs() < 60);
+        assert!(super::WS_HEARTBEAT_INTERVAL < super::WS_READ_IDLE_TIMEOUT);
+        assert!(super::WS_CONNECT_TIMEOUT.as_secs() >= 5);
+        assert!(super::WS_SEND_TIMEOUT.as_secs() >= 5);
     }
 
     #[test]
