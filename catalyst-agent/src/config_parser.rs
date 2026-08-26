@@ -863,6 +863,29 @@ pub fn specs_from_template(template: &Map<String, Value>) -> Vec<ConfigFileSpec>
     specs
 }
 
+/// Paper/Purpur/Folia call `File.getUsableSpace()` at boot and **exit** when
+/// it reports under 1 GB (`Low disk space! Might not be able to save the world.`).
+/// On Catalyst loop/bind mounts that syscall often returns 0 even when `df`
+/// shows tens of GB free, so the check is a false positive. Disable it.
+pub fn paper_disk_space_specs() -> Vec<ConfigFileSpec> {
+    vec![ConfigFileSpec {
+        file_name: "config/paper-global.yml".to_string(),
+        parser: "yaml".to_string(),
+        replacements: vec![
+            ConfigReplacement {
+                match_key: "disk-space.check-early".to_string(),
+                if_value: None,
+                replace_with: "false".to_string(),
+            },
+            ConfigReplacement {
+                match_key: "disk-space.exit".to_string(),
+                if_value: None,
+                replace_with: "false".to_string(),
+            },
+        ],
+    }]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1024,5 +1047,35 @@ mod tests {
         assert!(out.contains("server-port=25565"));
         assert!(out.contains("query.port=25565"));
         assert!(out.contains("motd=TestWorld"));
+    }
+
+    #[tokio::test]
+    async fn paper_disk_space_specs_write_nested_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let specs = paper_disk_space_specs();
+        apply_configuration_files(dir.path(), &specs, &ctx())
+            .await
+            .unwrap();
+        let out = std::fs::read_to_string(dir.path().join("config/paper-global.yml")).unwrap();
+        assert!(out.contains("disk-space"), "{out}");
+        assert!(out.contains("check-early"), "{out}");
+        assert!(out.contains("exit"), "{out}");
+        assert!(out.contains("false"), "{out}");
+        // Preserve unrelated keys if the file already existed.
+        let path = dir.path().join("config/paper-global.yml");
+        std::fs::write(
+            &path,
+            "proxies:\n  bungee-cord:\n    online-mode: true\ndisk-space:\n  exit: true\n",
+        )
+        .unwrap();
+        apply_configuration_files(dir.path(), &specs, &ctx())
+            .await
+            .unwrap();
+        let out = std::fs::read_to_string(&path).unwrap();
+        assert!(out.contains("online-mode"), "{out}");
+        assert!(
+            out.contains("exit: false") || out.contains("exit:false"),
+            "{out}"
+        );
     }
 }

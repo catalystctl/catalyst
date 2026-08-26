@@ -69,6 +69,10 @@ impl StorageManager {
                 self.grow_image(&image_path, mount_dir, size_mb, true)
                     .await?;
             }
+            // uid 1000 cannot see the default 5% root reserve; Paper then thinks
+            // the disk is empty. Harmless if already 0.
+            self.clear_ext4_reserved_blocks(&image_path, mount_dir, mounted)
+                .await;
         }
 
         // Host (PID 1) mount table is what containerd bind-mounts. A loop image
@@ -472,6 +476,9 @@ impl StorageManager {
                 &["-l", &format!("{}M", size), image_str],
             )?;
             command_utils::run_command_sync("mkfs.ext4", &["-F", image_str])?;
+            // Default 5% root reserve is invisible to uid 1000 (Paper) and can
+            // make getUsableSpace() look empty near the quota.
+            let _ = command_utils::run_command_sync("tune2fs", &["-m", "0", image_str]);
             Ok(())
         })
         .await
@@ -620,6 +627,7 @@ impl StorageManager {
                 command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
             }
             command_utils::run_command_sync("resize2fs", &[&image])?;
+            let _ = command_utils::run_command_sync("tune2fs", &["-m", "0", &image]);
             Ok::<(), AgentError>(())
         })
         .await
@@ -646,9 +654,45 @@ impl StorageManager {
             .to_str()
             .ok_or_else(|| AgentError::FileSystemError("Invalid image path".to_string()))?
             .to_string();
-        spawn_blocking(move || command_utils::run_command_sync("resize2fs", &[&image]))
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("resize2fs task failed: {}", e)))?
+        spawn_blocking(move || {
+            command_utils::run_command_sync("resize2fs", &[&image])?;
+            let _ = command_utils::run_command_sync("tune2fs", &["-m", "0", &image]);
+            Ok(())
+        })
+        .await
+        .map_err(|e| AgentError::FileSystemError(format!("resize2fs task failed: {}", e)))?
+    }
+
+    async fn clear_ext4_reserved_blocks(&self, image_path: &Path, mount_dir: &Path, mounted: bool) {
+        let image = match image_path.to_str() {
+            Some(s) => s.to_string(),
+            None => return,
+        };
+        let mount = mount_dir.to_string_lossy().to_string();
+        let result = spawn_blocking(move || {
+            if mounted {
+                // Never tune2fs the .img while it is loop-mounted — that attaches
+                // a second loop and can leave the live FS at the old size.
+                let loop_dev = find_loop_device(&image, &mount)?;
+                command_utils::run_in_host_mount_ns("tune2fs", &["-m", "0", &loop_dev])
+            } else {
+                command_utils::run_command_sync("tune2fs", &["-m", "0", &image])
+            }
+        })
+        .await;
+        match result {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                warn!("tune2fs -m 0 failed for {}: {}", image_path.display(), e);
+            }
+            Err(e) => {
+                warn!(
+                    "tune2fs -m 0 task failed for {}: {}",
+                    image_path.display(),
+                    e
+                );
+            }
+        }
     }
 
     async fn verify_filesystem_grown(&self, mount_dir: &Path, size_mb: u64) -> AgentResult<()> {
@@ -983,7 +1027,7 @@ fn filesystem_size_mb_at(path: &Path) -> AgentResult<u64> {
 fn grow_mounted_filesystem(image: &str, mount: &str) -> AgentResult<()> {
     let loop_dev = find_loop_device(image, mount)?;
     command_utils::run_in_host_mount_ns("losetup", &["--set-capacity", &loop_dev])?;
-    match command_utils::run_in_host_mount_ns("resize2fs", &[&loop_dev]) {
+    let resize = match command_utils::run_in_host_mount_ns("resize2fs", &[&loop_dev]) {
         Ok(()) => Ok(()),
         Err(e) => {
             warn!(
@@ -992,7 +1036,9 @@ fn grow_mounted_filesystem(image: &str, mount: &str) -> AgentResult<()> {
             );
             command_utils::run_in_host_mount_ns("resize2fs", &[mount])
         }
-    }
+    };
+    let _ = command_utils::run_in_host_mount_ns("tune2fs", &["-m", "0", &loop_dev]);
+    resize
 }
 
 fn find_loop_device(image: &str, mount: &str) -> AgentResult<String> {

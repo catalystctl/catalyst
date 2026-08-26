@@ -947,7 +947,30 @@ impl WebSocketHandler {
             // Apply Pterodactyl egg config.files (properties/json/ini/yaml/xml/file)
             // before the container starts — same timing as Wings UpdateConfigurationFiles.
             {
-                let specs = crate::config_parser::specs_from_template(template);
+                let mut specs = crate::config_parser::specs_from_template(template);
+                let paper_like = is_java
+                    || lower_image.contains("minecraft")
+                    || lower_image.contains("purpur")
+                    || lower_image.contains("paper")
+                    || lower_image.contains("folia")
+                    || lower_image.contains("spigot")
+                    || lower_image.contains("bukkit");
+                if paper_like {
+                    specs.extend(crate::config_parser::paper_disk_space_specs());
+                    // Paper's getUsableSpace() on a missing world/ can return 0
+                    // even when /data has tens of GB. Create it on the loop FS.
+                    let world_dir = server_dir_path.join("world");
+                    if let Err(e) = tokio::fs::create_dir_all(&world_dir).await {
+                        warn!("Failed to create world dir {}: {}", world_dir.display(), e);
+                    }
+                    let _ = self
+                        .emit_console_output(
+                            server_id,
+                            "system",
+                            "[Catalyst] Paper/Purpur disk-space exit disabled (Java often reports 0 bytes free on loop mounts).\n",
+                        )
+                        .await;
+                }
                 if !specs.is_empty() {
                     let primary_ip = env_map
                         .get("SERVER_IP")
