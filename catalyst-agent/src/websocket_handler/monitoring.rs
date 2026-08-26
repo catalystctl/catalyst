@@ -13,26 +13,28 @@ impl WebSocketHandler {
         tokio::time::sleep(Duration::from_millis(200)).await;
         system.refresh_cpu_all();
         system.refresh_memory();
-        let cpu_percent = system.global_cpu_usage();
+        let cpu_percent = sanitize_cpu_percent(system.global_cpu_usage());
         // sysinfo reports memory in bytes; convert to MiB.
         let memory_usage_mb = system.used_memory() / (1024 * 1024);
         let memory_total_mb = system.total_memory() / (1024 * 1024);
-        let mut disks = Disks::new_with_refreshed_list();
-        disks.refresh(true);
-        let mut disk_usage_mb = 0u64;
-        let mut disk_total_mb = 0u64;
-        for disk in disks.list() {
-            disk_total_mb += disk.total_space() / (1024 * 1024);
-            disk_usage_mb +=
-                disk.total_space().saturating_sub(disk.available_space()) / (1024 * 1024);
-        }
 
-        // Collect aggregate network stats across all interfaces
+        // Disk usage is measured on the filesystem that actually holds the
+        // server data dir. Summing every mount double/triple-counts loop
+        // images, bind mounts, tmpfs, and overlayfs stacked on the same
+        // underlying device.
+        let (disk_usage_mb, disk_total_mb) = data_dir_disk_usage_mb(&self.config.server.data_dir);
+
+        // Aggregate host network totals across physical interfaces only.
+        // Virtual interfaces (lo, veth, bridges) mirror container traffic and
+        // would inflate the counters several times over.
         let mut networks = Networks::new_with_refreshed_list();
         networks.refresh(true);
         let mut total_network_rx_bytes: u64 = 0;
         let mut total_network_tx_bytes: u64 = 0;
-        for data in networks.list().values() {
+        for (name, data) in networks.list() {
+            if !is_physical_interface(name) {
+                continue;
+            }
             total_network_rx_bytes += data.total_received();
             total_network_tx_bytes += data.total_transmitted();
         }
@@ -627,16 +629,20 @@ impl WebSocketHandler {
                 let network_rx_bytes = stats.network_rx_bytes;
                 let network_tx_bytes = stats.network_tx_bytes;
                 let disk_io_mb = (stats.block_read_bytes + stats.block_write_bytes) / (1024 * 1024);
+                let disk_read_mb = stats.block_read_bytes / (1024 * 1024);
+                let disk_write_mb = stats.block_write_bytes / (1024 * 1024);
 
-                // For immediate requests use a very short df timeout — stale data is fine
+                // For immediate requests use a very short df timeout — stale data is fine.
+                // On failure report zeros: block-IO counters measure throughput,
+                // not capacity, and must never stand in for disk usage.
                 let (disk_usage_mb, disk_total_mb) = match tokio::time::timeout(
                     Duration::from_secs(1),
                     self.runtime.exec(target, vec!["df", "-m", "/data"]),
                 )
                 .await
                 {
-                    Ok(Ok(output)) => parse_df_output_mb(&output).unwrap_or((disk_io_mb, 0)),
-                    _ => (disk_io_mb, 0),
+                    Ok(Ok(output)) => parse_df_output_mb(&output).unwrap_or((0, 0)),
+                    _ => (0, 0),
                 };
 
                 let payload = ResourceStats {
@@ -647,6 +653,8 @@ impl WebSocketHandler {
                     networkRxBytes: network_rx_bytes,
                     networkTxBytes: network_tx_bytes,
                     diskIoMb: disk_io_mb,
+                    diskReadMb: Some(disk_read_mb),
+                    diskWriteMb: Some(disk_write_mb),
                     diskUsageMb: disk_usage_mb,
                     diskTotalMb: disk_total_mb,
                     timestamp: chrono::Utc::now().timestamp_millis(),
@@ -754,6 +762,8 @@ impl WebSocketHandler {
                 let network_rx_bytes = stats.network_rx_bytes;
                 let network_tx_bytes = stats.network_tx_bytes;
                 let disk_io_mb = (stats.block_read_bytes + stats.block_write_bytes) / (1024 * 1024);
+                let disk_read_mb = stats.block_read_bytes / (1024 * 1024);
+                let disk_write_mb = stats.block_write_bytes / (1024 * 1024);
 
                 // Prefer real df-based filesystem usage (same as immediate stats path).
                 // Fall back to block IO only if df fails/times out; total stays 0 then.
@@ -774,6 +784,8 @@ impl WebSocketHandler {
                     networkRxBytes: network_rx_bytes,
                     networkTxBytes: network_tx_bytes,
                     diskIoMb: disk_io_mb,
+                    diskReadMb: Some(disk_read_mb),
+                    diskWriteMb: Some(disk_write_mb),
                     diskUsageMb: disk_usage_mb,
                     diskTotalMb: disk_total_mb,
                     timestamp: chrono::Utc::now().timestamp_millis(),

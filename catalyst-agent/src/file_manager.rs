@@ -90,9 +90,11 @@ impl FileManager {
 
     /// Validate and resolve a path within the container's data directory
     pub fn resolve_path(&self, server_id: &str, requested_path: &str) -> AgentResult<PathBuf> {
-        if server_id.contains('/') || server_id.contains('\\') {
-            return Err(AgentError::InvalidRequest("Invalid server id".to_string()));
-        }
+        // Reject ids that are empty, traversal segments, or contain path
+        // separators / NUL. `""` and "." would resolve to the entire data
+        // directory and ".." to its parent — all three must never be usable
+        // as a server root, even though the panel normally sends cuids.
+        Self::validate_server_id(server_id)?;
         let server_base = self.data_dir.join(server_id);
         let requested = PathBuf::from(requested_path);
 
@@ -179,6 +181,23 @@ impl FileManager {
             AgentError::PermissionDenied("Access denied: path outside data directory".to_string())
         })?;
         Ok(canonical_base.join(relative))
+    }
+
+    /// Resolve a server id for filesystem use with the same hardening as
+    /// `resolve_path`: no empty/traversal/separator ids. Shared by callers
+    /// that only need the root and never a nested path.
+    pub(crate) fn validate_server_id(server_id: &str) -> AgentResult<()> {
+        if server_id.is_empty()
+            || server_id == "."
+            || server_id == ".."
+            || server_id.contains('/')
+            || server_id.contains('\\')
+            || server_id.contains('\0')
+            || server_id.trim().is_empty()
+        {
+            return Err(AgentError::InvalidRequest("Invalid server id".to_string()));
+        }
+        Ok(())
     }
 
     /// Resolve a path and ensure its parent directory exists. Used by install-url.
@@ -1097,5 +1116,35 @@ mod tests {
             .await
             .expect_err("over-capacity write must fail");
         assert!(err.to_string().to_lowercase().contains("no space"), "{err}");
+    }
+
+    #[test]
+    fn server_id_validation_rejects_traversal_forms() {
+        // The whole point: these must never become a filesystem root.
+        for bad in [
+            "", ".", "..", "  ", "/", "\\", "a/b", "a\\b", "a\0b", "/etc",
+        ] {
+            assert!(
+                FileManager::validate_server_id(bad).is_err(),
+                "{bad:?} must be rejected"
+            );
+        }
+        // Normal cuid-style ids pass.
+        assert!(FileManager::validate_server_id("cmsnp4saw000bjcpdae71zasg").is_ok());
+        assert!(FileManager::validate_server_id("server-with-dashes_and_underscores.1").is_ok());
+    }
+
+    #[test]
+    fn resolve_path_rejects_traversal_server_ids() {
+        let fm = make_fm();
+        // ".." as server id would otherwise resolve to the data dir's parent.
+        let err = fm
+            .resolve_path("..", "world.txt")
+            .expect_err(".. server id must fail");
+        assert!(err.to_string().contains("Invalid server id"), "{err}");
+        let err = fm
+            .resolve_path("", "world.txt")
+            .expect_err("empty server id must fail");
+        assert!(err.to_string().contains("Invalid server id"), "{err}");
     }
 }

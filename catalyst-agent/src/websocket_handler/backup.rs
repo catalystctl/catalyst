@@ -1089,23 +1089,37 @@ impl WebSocketHandler {
             buf
         });
 
-        let mut write_guard = write.lock().await;
         let mut buf = vec![0u8; 64 * 1024]; // 64 KB read buffer
+        let mut chunk_count: u64 = 0;
 
+        // NOTE: the sink mutex is intentionally taken per-chunk rather than held
+        // across the whole stream. Holding it here used to block every
+        // control-plane message (power commands, acks, heartbeats) behind an
+        // entire multi-GB tar transfer.
         loop {
             use tokio::io::AsyncReadExt;
             match stdout.read(&mut buf).await {
                 Ok(0) => break,
                 Ok(n) => {
-                    if write_guard
-                        .send(Message::Binary(buf[..n].to_vec().into()))
+                    chunk_count += 1;
+                    let sent = {
+                        let mut w = write.lock().await;
+                        tokio::time::timeout(
+                            WS_SEND_TIMEOUT,
+                            w.send(Message::Binary(buf[..n].to_vec().into())),
+                        )
                         .await
-                        .is_err()
-                    {
+                    };
+                    if !matches!(sent, Ok(Ok(()))) {
                         child.kill().await.ok();
                         return Err(AgentError::NetworkError(
                             "Failed to send backup chunk".to_string(),
                         ));
+                    }
+                    // Yield occasionally so other tasks (control messages, event
+                    // monitor) stay responsive during long transfers.
+                    if chunk_count.is_multiple_of(16) {
+                        tokio::task::yield_now().await;
                     }
                 }
                 Err(e) => {
@@ -1117,8 +1131,6 @@ impl WebSocketHandler {
                 }
             }
         }
-
-        drop(write_guard);
 
         let status = child
             .wait()

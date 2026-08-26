@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
-use sysinfo::{Disks, Networks, System};
+use sysinfo::{Networks, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{broadcast, RwLock, Semaphore};
 use tokio_tungstenite::connect_async_with_config;
@@ -40,6 +40,9 @@ pub(crate) const CONTAINER_GID: u32 = 1000;
 pub(crate) const MAX_BACKUP_UPLOAD_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10GB
 pub(crate) const MAX_RESTORE_STREAM_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10 GB, matches MAX_BACKUP_UPLOAD_BYTES
 pub(crate) const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
+/// Maximum number of buffered control-plane events (error reports, critical
+/// state updates) replayed after a reconnect. Oldest overflow is dropped.
+pub(crate) const MAX_EVENT_REPLAY: usize = 200;
 pub(crate) const MAX_CONSOLE_BATCH_BYTES: usize = 32768; // Max bytes to batch into a single console_output message
 pub(crate) const MAX_EVENT_SUBSCRIBE_FAILURES: u32 = 10; // Give up on event monitor after this many consecutive failures
 /// TCP connect + TLS + WS handshake. A hung DNS/NAT must not stall the reconnect loop.
@@ -126,6 +129,12 @@ pub(crate) struct ResourceStats<'a> {
     networkRxBytes: u64,
     networkTxBytes: u64,
     diskIoMb: u64,
+    /// Additive wire fields: split block read/write throughput in MiB.
+    /// Older panels ignore unknown JSON keys; absent when None.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diskReadMb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diskWriteMb: Option<u64>,
     diskUsageMb: u64,
     diskTotalMb: u64,
     timestamp: i64,
@@ -140,6 +149,12 @@ pub(crate) struct ResourceStatsEntry {
     networkRxBytes: u64,
     networkTxBytes: u64,
     diskIoMb: u64,
+    /// Additive wire fields: split block read/write throughput in MiB.
+    /// Older panels ignore unknown JSON keys; absent when None.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diskReadMb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diskWriteMb: Option<u64>,
     diskUsageMb: u64,
     diskTotalMb: u64,
     timestamp: i64,
@@ -632,18 +647,99 @@ impl WebSocketHandler {
             "timestamp": chrono::Utc::now().timestamp_millis(),
         });
 
-        // Send via WebSocket (best effort)
-        let guard = self.write.read().await;
-        if let Some(write_arc) = guard.as_ref() {
-            let mut w = write_arc.lock().await;
-            let msg = payload.to_string();
-            if let Err(e) = w
-                .send(tokio_tungstenite::tungstenite::Message::Text(msg.into()))
-                .await
-            {
-                warn!("Failed to send error report via WS: {}", e);
+        // Send via WebSocket; persist for replay if the socket is down so the
+        // panel eventually sees errors that happened mid-disconnect.
+        if let Err(e) = self
+            .send_or_buffer_event(payload.to_string().as_str())
+            .await
+        {
+            warn!("Failed to deliver or buffer error report: {}", e);
+        }
+    }
+
+    /// Send a control-plane message on the current socket, or — when the socket
+    /// is down or the send fails — persist it to disk for replay after the next
+    /// reconnect. Used for error reports and critical state updates.
+    pub(crate) async fn send_or_buffer_event(&self, payload_text: &str) -> AgentResult<()> {
+        let writer = { self.write.read().await.clone() };
+        if let Some(ws) = writer {
+            match send_ws_with_timeout(&ws, Message::Text(payload_text.to_string().into())).await {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    warn!("WS send failed ({}); buffering event for replay", e);
+                }
             }
         }
+        if let Err(e) = self
+            .storage_manager
+            .append_buffered_event(payload_text)
+            .await
+        {
+            warn!("Failed to buffer event for replay: {}", e);
+        }
+        Ok(())
+    }
+
+    /// Replay control-plane events buffered while disconnected, then clear the
+    /// buffer. Mirrors flush_buffered_metrics; called right after connecting.
+    pub(crate) async fn flush_buffered_events(
+        &self,
+        write: Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let events = match self.storage_manager.read_buffered_events().await {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("Failed to read buffered events: {}", e);
+                return Ok(());
+            }
+        };
+
+        if events.is_empty() {
+            return Ok(());
+        }
+
+        // Cap the replay: drop the oldest entries beyond MAX_EVENT_REPLAY.
+        let skip = events.len().saturating_sub(MAX_EVENT_REPLAY);
+        if skip > 0 {
+            warn!(
+                "Dropping {} stale buffered events beyond replay cap of {}",
+                skip, MAX_EVENT_REPLAY
+            );
+        }
+        info!("Flushing {} buffered events", events.len() - skip);
+
+        let unsent: &[Value] = &events[skip..];
+        for (idx, event) in unsent.iter().enumerate() {
+            let payload_text = match serde_json::to_string(event) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let mut w = write.lock().await;
+            let send =
+                tokio::time::timeout(WS_SEND_TIMEOUT, w.send(Message::Text(payload_text.into())))
+                    .await;
+            match send {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) | Err(_) => {
+                    warn!("Failed to send buffered event batch; re-buffering remainder");
+                    // Re-append everything from this event onward.
+                    for e in &unsent[idx..] {
+                        let _ = self
+                            .storage_manager
+                            .append_buffered_event(&e.to_string())
+                            .await;
+                    }
+                    return Ok(());
+                }
+            }
+        }
+
+        // All events sent successfully - clear buffer
+        if let Err(e) = self.storage_manager.clear_buffered_events().await {
+            warn!("Failed to clear buffered events: {}", e);
+        }
+
+        Ok(())
     }
 
     pub(crate) async fn flush_buffered_metrics(
@@ -682,12 +778,26 @@ impl WebSocketHandler {
                 let payload = json!({ "type": "resource_stats_batch", "metrics": metrics_value });
                 payload.to_string()
             };
-            let mut w = write.lock().await;
-            if let Err(e) = w.send(Message::Text(payload_text.into())).await {
-                warn!("Failed to send buffered metrics batch: {}", e);
-                // leave buffer intact - will retry on next connect
-                return Ok(());
+            // Timeout-bounded so a half-open socket can't wedge the flush task,
+            // and released between chunks so control traffic can interleave.
+            let send_result = {
+                let mut w = write.lock().await;
+                tokio::time::timeout(WS_SEND_TIMEOUT, w.send(Message::Text(payload_text.into())))
+                    .await
+            };
+            match send_result {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    warn!("Failed to send buffered metrics batch: {}", e);
+                    // leave buffer intact - will retry on next connect
+                    return Ok(());
+                }
+                Err(_) => {
+                    warn!("Timed out sending buffered metrics batch; will retry on next connect");
+                    return Ok(());
+                }
             }
+            tokio::task::yield_now().await;
         }
 
         // All batches sent successfully - clear buffer
@@ -719,14 +829,37 @@ impl WebSocketHandler {
         // Network reconnect backoff: 5s → 10s → 20s → 40s → 60s (capped) + jitter.
         // Auth lockout `retry_after_seconds` always takes precedence when set.
         let mut network_backoff_secs: u64 = 5;
+        // Upper bound on how long a connection attempt may take to reach an
+        // ESTABLISHED session. Once the session loop is live the attempt is
+        // legitimately long-lived, so the abort guard below must never fire
+        // again for that task — healthy sessions run for hours. Without this
+        // distinction a naive timeout self-disconnects every healthy agent
+        // exactly once per window (observed in production testing).
+        const SETUP_TIMEOUT: Duration = Duration::from_secs(120);
+        let session_established = Arc::new(std::sync::atomic::AtomicBool::new(false));
         loop {
-            match self.establish_connection().await {
-                Ok(()) => {
+            let this = self.clone();
+            let established = session_established.clone();
+            established.store(false, std::sync::atomic::Ordering::SeqCst);
+            let attempt =
+                tokio::spawn(async move { this.establish_connection(&established).await });
+            tokio::pin!(attempt);
+
+            let outcome = tokio::time::timeout(SETUP_TIMEOUT, async {
+                (&mut attempt)
+                    .await
+                    .map(|r| r.unwrap_or_else(|e| info!("connection task panicked: {e}")))
+            })
+            .await;
+
+            match outcome {
+                Ok(Ok(())) => {
+                    // Session ran and closed cleanly (read loop ended).
                     info!("WebSocket connection closed");
                     // Clean disconnect after a successful session — reset backoff.
                     network_backoff_secs = 5;
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     error!("Connection error: {}", e);
                     // Report connection errors to the backend (best effort, will send when reconnected)
                     self.report_error(
@@ -737,6 +870,53 @@ impl WebSocketHandler {
                         None,
                     )
                     .await;
+                }
+                Err(_) => {
+                    if !session_established.load(std::sync::atomic::Ordering::SeqCst) {
+                        // Setup never finished: the future is wedged (hung await in
+                        // handshake/restore/flush paths or in teardown of the prior
+                        // socket). Aborting the task cancels it at its await point,
+                        // releasing any held locks — unlike a plain timeout() which
+                        // abandons but keeps the zombie running.
+                        error!(
+                            "Connection setup exceeded {}s — aborting wedged task and reconnecting",
+                            SETUP_TIMEOUT.as_secs()
+                        );
+                        attempt.abort();
+                        let _ = (&mut attempt).await; // observe cancellation
+                        let mut guard = self.write.write().await;
+                        *guard = None;
+                    }
+                    // else: session WAS established and simply outlived the
+                    // window; `attempt` has already completed via select arm? No —
+                    // this branch means timeout fired while task still running.
+                    // Healthy long sessions fall into the inner async block only
+                    // when the task COMPLETES; timeout(SETUP_TIMEOUT) fires even
+                    // mid-session. Guarded here so we just keep waiting instead.
+                    else {
+                        // Healthy session still running: resume waiting without
+                        // re-entering dial/backoff.
+                        match attempt.await {
+                            Ok(Ok(())) => {
+                                info!("WebSocket connection closed");
+                                network_backoff_secs = 5;
+                            }
+                            Ok(Err(e)) => {
+                                error!("Connection error: {}", e);
+                                self.report_error(
+                                    ErrorLevel::Error,
+                                    "agent:connection",
+                                    &format!("{}", e),
+                                    None,
+                                    None,
+                                )
+                                .await;
+                            }
+                            Err(join_err) => {
+                                error!("Connection task join error: {}", join_err);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -800,8 +980,14 @@ impl WebSocketHandler {
         }
     }
 
-    async fn establish_connection(&self) -> AgentResult<()> {
+    async fn establish_connection(
+        &self,
+        session_established: &std::sync::atomic::AtomicBool,
+    ) -> AgentResult<()> {
         self.set_backend_connected(false).await;
+        // Not yet established: any hang before the session loop begins is
+        // abortable by the outer setup guard.
+        session_established.store(false, std::sync::atomic::Ordering::SeqCst);
 
         let (auth_token, token_type) = self.select_agent_auth_token()?;
 
@@ -916,6 +1102,11 @@ impl WebSocketHandler {
             warn!("Failed to flush buffered metrics: {}", e);
         }
 
+        // Replay error reports / critical state updates buffered while offline
+        if let Err(e) = self.flush_buffered_events(write.clone()).await {
+            warn!("Failed to flush buffered events: {}", e);
+        }
+
         // Connection-scoped background tasks. Abort on disconnect to avoid accumulation.
         let mut connection_tasks: Vec<tokio::task::JoinHandle<()>> = Vec::new();
 
@@ -1007,6 +1198,11 @@ impl WebSocketHandler {
         connection_tasks.push(tokio::spawn(async move {
             handler_clone.spawn_health_checker().await;
         }));
+
+        // Setup complete: the session is now long-lived and legitimate. The
+        // outer setup guard must never abort this task from here on — it only
+        // bounds the dial/handshake/restore phase above.
+        session_established.store(true, std::sync::atomic::Ordering::SeqCst);
 
         // Listen for messages. A half-open TCP never yields here, so bound the
         // wait: no inbound frame (text/binary/pong/ping/close) → reconnect.
@@ -1132,39 +1328,55 @@ impl WebSocketHandler {
             task.abort();
         }
 
-        // Kill ctr events subprocess explicitly — task abort may not drop
-        // the CtrChildGuard before the process exits.
-        if let Some(ctr_pid) = *self.ctr_event_pid.lock().await {
-            let _ = kill(Pid::from_raw(ctr_pid as i32), Signal::SIGKILL);
-            *self.ctr_event_pid.lock().await = None;
-        }
-
-        // Drop any in-progress uploads on disconnect to avoid stale sessions accumulating across
-        // reconnects and to release file descriptors.
-        self.cleanup_all_uploads().await;
-
-        // Kill any active restore streams on disconnect, and reap zombie processes.
-        // Lock ordering: active_restore_streams before active_restore_bytes_written.
-        {
-            let mut streams = self.active_restore_streams.write().await;
-            for (rid, mut child) in streams.drain() {
-                child.stdin.take(); // close stdin
-                let _ = child.kill().await;
-                // Always reap the zombie process, even if kill() failed
-                // (e.g., process already exited — ESRCH on Unix).
-                match child.wait().await {
-                    Ok(status) => {
-                        debug!("Orphaned restore stream {} exited with: {}", rid, status);
-                    }
-                    Err(e) => {
-                        warn!("Failed to wait for orphaned restore stream {}: {}", rid, e);
-                    }
-                }
-                warn!("Cleaned up orphaned restore stream {}", rid);
+        // Teardown, bounded: every hang we have observed in production testing
+        // lives in this section (a lock or child-reap that never resolves). A
+        // plain await here can stall the retry loop forever; wrapping the whole
+        // phase guarantees the next dial happens.
+        const TEARDOWN_TIMEOUT: Duration = Duration::from_secs(20);
+        let teardown = async {
+            // Kill ctr events subprocess explicitly — task abort may not drop
+            // the CtrChildGuard before the process exits.
+            if let Some(ctr_pid) = *self.ctr_event_pid.lock().await {
+                let _ = kill(Pid::from_raw(ctr_pid as i32), Signal::SIGKILL);
+                *self.ctr_event_pid.lock().await = None;
             }
+
+            // Drop any in-progress uploads on disconnect to avoid stale sessions accumulating across
+            // reconnects and to release file descriptors.
+            self.cleanup_all_uploads().await;
+
+            // Kill any active restore streams on disconnect, and reap zombie processes.
+            // Lock ordering: active_restore_streams before active_restore_bytes_written.
+            {
+                let mut streams = self.active_restore_streams.write().await;
+                for (rid, mut child) in streams.drain() {
+                    child.stdin.take(); // close stdin
+                    let _ = child.kill().await;
+                    // Always reap the zombie process, even if kill() failed
+                    // (e.g., process already exited — ESRCH on Unix).
+                    match child.wait().await {
+                        Ok(status) => {
+                            debug!("Orphaned restore stream {} exited with: {}", rid, status);
+                        }
+                        Err(e) => {
+                            warn!("Failed to wait for orphaned restore stream {}: {}", rid, e);
+                        }
+                    }
+                    warn!("Cleaned up orphaned restore stream {}", rid);
+                }
+            }
+            // Clean up restore byte counters
+            self.active_restore_bytes_written.write().await.clear();
+        };
+        if tokio::time::timeout(TEARDOWN_TIMEOUT, teardown)
+            .await
+            .is_err()
+        {
+            error!(
+                "Connection teardown exceeded {}s — skipping remainder to force reconnect",
+                TEARDOWN_TIMEOUT.as_secs()
+            );
         }
-        // Clean up restore byte counters
-        self.active_restore_bytes_written.write().await.clear();
 
         {
             let mut guard = self.write.write().await;
@@ -2601,18 +2813,9 @@ impl WebSocketHandler {
 
         debug!("Emitting state update: {}", text);
 
-        let writer = { self.write.read().await.clone() };
-        if let Some(ws) = writer {
-            let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(text.into())).await {
-                return Err(AgentError::NetworkError(format!(
-                    "Failed to send state update: {}",
-                    err
-                )));
-            }
-        }
-
-        Ok(())
+        // Critical state transitions must survive a disconnect: send now, or
+        // persist for replay on the next connection.
+        self.send_or_buffer_event(&text).await
     }
 
     /// Echo a power-command acknowledgement so the panel's requestFromAgent
@@ -3042,6 +3245,56 @@ fn normalize_container_name(name: &str) -> String {
         .to_string()
 }
 
+/// Clamp a host CPU percentage into the [0, 100] range with NaN/∞ protection.
+/// sysinfo's global_cpu_usage should already be sane, but an out-of-range or
+/// non-finite value would otherwise poison the whole health report: serde
+/// serializes NaN as `null`, and the backend rejects reports with null fields.
+pub(crate) fn sanitize_cpu_percent(value: f32) -> f32 {
+    if !value.is_finite() {
+        return 0.0;
+    }
+    value.clamp(0.0, 100.0)
+}
+
+/// True when an interface carries host-level traffic worth reporting.
+/// Loopback counts container↔container on the same host, and veth/bridge/
+/// cni/podman links mirror each packet once per hop — summing them all would
+/// multiply real throughput by 2-4×.
+pub(crate) fn is_physical_interface(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    !(n == "lo"
+        || n.starts_with("veth")
+        || n.starts_with("br-")
+        || n.starts_with("docker")
+        || n.starts_with("virbr")
+        || n.starts_with("lxcbr")
+        || n.starts_with("cni")
+        || n.starts_with("podman")
+        || n.starts_with("vet"))
+}
+
+/// Disk usage of the filesystem containing `dir`, in (used, total) MiB.
+/// Reports zeros if the filesystem cannot be queried rather than guessing.
+pub(crate) fn data_dir_disk_usage_mb(dir: &std::path::Path) -> (u64, u64) {
+    match nix::sys::statvfs::statvfs(dir) {
+        Ok(vfs) => {
+            let block_bytes = vfs.fragment_size();
+            let total_mb = vfs.blocks() * block_bytes / (1024 * 1024);
+            // f_bavail = free blocks available to unprivileged users.
+            let avail_mb = vfs.blocks_available() * block_bytes / (1024 * 1024);
+            (total_mb.saturating_sub(avail_mb), total_mb)
+        }
+        Err(e) => {
+            warn!(
+                "statvfs({}) failed: {} — disk metrics unavailable",
+                dir.display(),
+                e
+            );
+            (0, 0)
+        }
+    }
+}
+
 /// Extract container_id from a containerd event's protobuf Any payload
 fn extract_container_id_from_event(event: &prost_types::Any) -> Option<String> {
     // containerd task events encode container_id as a field in the protobuf message
@@ -3126,7 +3379,16 @@ async fn send_ws_with_timeout(
     write: &Arc<tokio::sync::Mutex<WsWrite>>,
     msg: Message,
 ) -> AgentResult<()> {
-    let mut w = write.lock().await;
+    // Bound BOTH stages: acquiring the sink lock (a peer task stuck holding it
+    // must not wedge unrelated senders forever) and the frame write itself.
+    let mut w = tokio::time::timeout(WS_SEND_TIMEOUT, write.lock())
+        .await
+        .map_err(|_| {
+            AgentError::NetworkError(format!(
+                "WebSocket sink lock timed out after {}s",
+                WS_SEND_TIMEOUT.as_secs()
+            ))
+        })?;
     tokio::time::timeout(WS_SEND_TIMEOUT, w.send(msg))
         .await
         .map_err(|_| {
@@ -3209,5 +3471,129 @@ mod memory_parse_tests {
     fn rejects_garbage_units() {
         assert_eq!(parse_size_to_bytes("12xx"), None);
         assert_eq!(parse_memory_usage_mb("not-a-size"), None);
+    }
+
+    #[test]
+    fn cpu_sanitizer_clamps_and_degrades_non_finite() {
+        use super::sanitize_cpu_percent;
+        assert_eq!(sanitize_cpu_percent(0.0), 0.0);
+        assert_eq!(sanitize_cpu_percent(37.5), 37.5);
+        assert_eq!(sanitize_cpu_percent(100.0), 100.0);
+        // Over-range readings (some virtualization layers report >100) clamp.
+        assert_eq!(sanitize_cpu_percent(240.0), 100.0);
+        assert_eq!(sanitize_cpu_percent(-1.0), 0.0);
+        // Non-finite must become 0, never poison serialization.
+        assert_eq!(sanitize_cpu_percent(f32::NAN), 0.0);
+        assert_eq!(sanitize_cpu_percent(f32::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn host_interface_filter_excludes_virtual_links() {
+        use super::is_physical_interface;
+        assert!(is_physical_interface("eth0"));
+        assert!(is_physical_interface("enp34s0"));
+        assert!(is_physical_interface("wlan0"));
+        // Loopback and virtual/container links mirror traffic — excluded.
+        assert!(!is_physical_interface("lo"));
+        assert!(!is_physical_interface("vethabc123"));
+        assert!(!is_physical_interface("br-deadbeef"));
+        assert!(!is_physical_interface("docker0"));
+        assert!(!is_physical_interface("virbr0"));
+        assert!(!is_physical_interface("lxcbr0"));
+        assert!(!is_physical_interface("cni0"));
+        assert!(!is_physical_interface("podman0"));
+    }
+
+    #[test]
+    fn data_dir_disk_usage_reports_zero_on_missing_dir() {
+        use super::data_dir_disk_usage_mb;
+        let (used, total) = data_dir_disk_usage_mb(std::path::Path::new("/nonexistent/xyz"));
+        assert_eq!((used, total), (0, 0));
+    }
+
+    #[test]
+    fn data_dir_disk_usage_is_plausible_for_real_fs() {
+        use super::data_dir_disk_usage_mb;
+        // The workspace itself lives on a real filesystem.
+        let (used, total) = data_dir_disk_usage_mb(std::path::Path::new("."));
+        assert!(total > 0, "total should be positive for a real mount");
+        assert!(
+            used <= total,
+            "used ({}) cannot exceed total ({})",
+            used,
+            total
+        );
+    }
+
+    #[test]
+    fn resource_stats_wire_contract_disk_read_write_mb() {
+        use super::{ResourceStats, ResourceStatsEntry};
+        // Wire contract: optional integer diskReadMb / diskWriteMb on BOTH the
+        // single-server resource_stats payload and the batch entry. Fields must
+        // appear as raw integers when Some and be fully ABSENT when None so
+        // older panels (which ignore unknown keys) keep parsing cleanly and
+        // legacy summed diskIoMb stays untouched.
+
+        // Batch-entry shape (slow path → ResourceStatsBatch.metrics).
+        let entry = ResourceStatsEntry {
+            serverUuid: "cm0srv123".to_string(),
+            cpuPercent: 12.5,
+            memoryUsageMb: 256,
+            networkRxBytes: 10,
+            networkTxBytes: 20,
+            diskIoMb: 30,
+            diskReadMb: Some(10),
+            diskWriteMb: Some(20),
+            diskUsageMb: 1024,
+            diskTotalMb: 20480,
+            timestamp: 1_700_000_000_000,
+        };
+        let text = serde_json::to_string(&entry).unwrap();
+        assert!(text.contains(r#""diskReadMb":10"#), "got {text}");
+        assert!(text.contains(r#""diskWriteMb":20"#), "got {text}");
+        assert!(
+            text.contains(r#""diskIoMb":30"#),
+            "legacy summed field must stay"
+        );
+
+        // Round-trip through JSON to confirm the keys survive with integer values.
+        let round_tripped: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(round_tripped["diskReadMb"], serde_json::json!(10));
+        assert_eq!(round_tripped["diskWriteMb"], serde_json::json!(20));
+        assert_eq!(round_tripped["diskIoMb"], serde_json::json!(30));
+
+        // None => both keys omitted from the serialized string entirely.
+        let none_entry = ResourceStatsEntry {
+            diskReadMb: None,
+            diskWriteMb: None,
+            ..entry
+        };
+        let text = serde_json::to_string(&none_entry).unwrap();
+        let none_round_tripped: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert!(none_round_tripped.get("diskReadMb").is_none(), "got {text}");
+        assert!(
+            none_round_tripped.get("diskWriteMb").is_none(),
+            "got {text}"
+        );
+        assert!(none_round_tripped["diskIoMb"] == serde_json::json!(30));
+
+        // Fast-path single-server shape (resource_stats).
+        let fast = ResourceStats {
+            ty: "resource_stats",
+            serverUuid: "cm0srv123",
+            cpuPercent: 12.5,
+            memoryUsageMb: 256,
+            networkRxBytes: 10,
+            networkTxBytes: 20,
+            diskIoMb: 30,
+            diskReadMb: Some(7),
+            diskWriteMb: Some(3),
+            diskUsageMb: 1024,
+            diskTotalMb: 20480,
+            timestamp: 1_700_000_000_000,
+        };
+        let text = serde_json::to_string(&fast).unwrap();
+        assert!(text.contains(r#""diskReadMb":7"#), "got {text}");
+        assert!(text.contains(r#""diskWriteMb":3"#), "got {text}");
     }
 }

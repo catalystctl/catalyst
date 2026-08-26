@@ -957,6 +957,68 @@ impl StorageManager {
         Ok(())
     }
 
+    // --- Event buffering helpers (error reports, state updates) ------------------
+    // Critical control-plane messages that must survive an agent↔panel disconnect
+    // are appended here when the socket is down and replayed on reconnect.
+    // Much smaller cap than the metrics buffer: these are low-volume, and stale
+    // error reports lose value quickly.
+    fn events_buffer_path(&self) -> PathBuf {
+        self.data_dir.join("events_buffer.jsonl")
+    }
+
+    pub async fn append_buffered_event(&self, line: &str) -> AgentResult<()> {
+        fs::create_dir_all(&self.data_dir).await?;
+        let path = self.events_buffer_path();
+        const MAX_EVENT_BUFFER_BYTES: u64 = 4 * 1024 * 1024;
+        if let Ok(meta) = fs::metadata(&path).await {
+            if meta.len() > MAX_EVENT_BUFFER_BYTES {
+                // Rotate; drop the oldest half of history implicitly by keeping
+                // only the rotated (newer) file going forward.
+                let rotated = self.data_dir.join("events_buffer.jsonl.1");
+                let _ = fs::remove_file(&rotated).await;
+                let _ = fs::rename(&path, &rotated).await;
+            }
+        }
+        let file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .await?;
+        use tokio::io::AsyncWriteExt;
+        let mut writer = tokio::io::BufWriter::new(file);
+        writer.write_all(line.as_bytes()).await?;
+        writer.write_all(b"\n").await?;
+        writer.flush().await?;
+        Ok(())
+    }
+
+    pub async fn read_buffered_events(&self) -> AgentResult<Vec<Value>> {
+        let path = self.events_buffer_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let s = fs::read_to_string(&path).await?;
+        let mut out = Vec::new();
+        for line in s.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            match serde_json::from_str::<Value>(line) {
+                Ok(v) => out.push(v),
+                Err(e) => tracing::warn!("Skipping invalid buffered event line: {}", e),
+            }
+        }
+        Ok(out)
+    }
+
+    pub async fn clear_buffered_events(&self) -> AgentResult<()> {
+        let path = self.events_buffer_path();
+        if path.exists() {
+            fs::remove_file(path).await?;
+        }
+        Ok(())
+    }
+
     // -----------------------------------------------------------------------------
 
     async fn dir_has_data(&self, dir: &Path) -> AgentResult<bool> {
