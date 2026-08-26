@@ -102,6 +102,71 @@ interface ConnectedAgent {
   lastHeartbeat: number;
 }
 
+// Message types considered control-plane critical: always delivered when a
+// socket exists even under backpressure, and never worth queueing offline
+// beyond the general outbox rules below.
+const CRITICAL_OUTBOUND_TYPES = new Set([
+  "start_server",
+  "stop_server",
+  "kill_server",
+  "restart_server",
+  "delete_server",
+  "install_server",
+  "reinstall_server",
+  "rebuild_server",
+  "update_agent",
+]);
+
+// Message types safe to queue while an agent is mid-reconnect. Stale beyond
+// the TTL they are dropped rather than replayed against a possibly-changed
+// server state.
+const OUTBOXABLE_TYPES = new Set([
+  "start_server",
+  "stop_server",
+  "kill_server",
+  "restart_server",
+  "request_immediate_stats",
+  "resume_console",
+  "update_agent",
+]);
+
+// Supported agent WebSocket protocol major version. Minor bumps are
+// backwards-compatible; a major mismatch rejects the handshake explicitly.
+const AGENT_PROTOCOL_MAJOR = 1;
+
+// Heartbeat lastSeenAt persistence throttle: agents heartbeat every 15s, but
+// writing lastSeenAt on every beat is pure DB churn. Persist at most once per
+// window per node (finalizeAgentConnection resets the marker on reconnect).
+const HEARTBEAT_PERSIST_THROTTLE_MS = 30_000;
+
+/**
+ * Coerce an inbound metric value into a finite number clamped to
+ * [min, max]. Non-finite inputs (NaN, missing, wrong type) fall back to
+ * `fallback` instead of poisoning the rest of the report — previously one
+ * bad field could void an entire metrics payload or throw mid-persist.
+ */
+export function sanitizeMetric(value: unknown, min: number, max: number, fallback = 0): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(n, min), max);
+}
+
+/** Round-and-clamp helper for integer MiB fields. */
+export function sanitizeIntMetric(value: unknown, min: number, max: number, fallback = 0): number {
+  return Math.round(sanitizeMetric(value, min, max, fallback));
+}
+
+/**
+ * Byte counters arrive as u64 from the agent; numbers beyond 2^53 lose
+ * precision in JS but remain positive. Non-numeric/NaN input becomes 0n —
+ * BigInt(NaN) throws, which used to abort health-report processing entirely.
+ */
+export function toByteCounterBig(value: unknown): bigint {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0n;
+  return BigInt(Math.floor(n));
+}
+
 interface ClientConnection {
   userId: string;
   socket: any;
@@ -115,6 +180,8 @@ type PendingAgentRequest = {
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
   kind: "json" | "binary";
+  /** Owning node — lets us fail-fast every in-flight request on disconnect. */
+  nodeId?: string;
   chunks?: Buffer[];
   onChunk?: (chunk: Buffer) => void;
 };
@@ -124,6 +191,9 @@ export class WebSocketGateway {
   private clients = new Map<string, ClientConnection>();
   private logger: pino.Logger;
   private pendingAgentRequests = new Map<string, PendingAgentRequest>();
+  // nodeId → timestamp of the last heartbeat whose lastSeenAt hit the database.
+  // Entries older than ~10 minutes are swept; reset on agent reconnect.
+  private readonly nodeLastPersistedSeen = new Map<string, number>();
   private activeBackupRelay: { sourceNodeId: string; targetNodeId: string; resolve: () => void; reject: (err: Error) => void } | null = null;
   private consoleOutputCounters = new Map<string, { count: number; resetAt: number; warned: boolean }>();
   private clientCommandCounters = new Map<string, { count: number; resetAt: number }>();
@@ -157,7 +227,169 @@ export class WebSocketGateway {
   private readonly agentUpdateRetryAfter = new Map<string, number>();
   private static readonly AGENT_UPDATE_RETRY_MS = 15 * 60 * 1000;
   private heartbeatInterval?: ReturnType<typeof setInterval>;
+  // Panel→agent WS-level ping loop: proves the agent socket is alive in both
+  // directions, not just that the agent is still sending.
+  private pingInterval?: ReturnType<typeof setInterval>;
   private subscriberSweepInterval?: ReturnType<typeof setInterval>;
+
+  // ── Agent outbox ───────────────────────────────────────────────────────────
+  // Commands queued per node when sendToAgent() finds no connected agent
+  // (brief reconnects, panel restarts mid-deploy). Drained on reconnection;
+  // entries expire after OUTBOX_TTL_MS and the queue is capped per node.
+  private readonly outbox = new Map<string, Array<{ payload: string; queuedAt: number }>>();
+  private static readonly OUTBOX_MAX_PER_NODE = 50;
+  private static readonly OUTBOX_TTL_MS = 30_000;
+
+  // Backpressure guard: if an agent's TCP buffer accumulates more than this
+  // many unsent bytes (slow consumer, half-open peer), shed non-critical
+  // outbound traffic instead of growing memory without bound.
+  private static readonly AGENT_BACKPRESSURE_BYTES = (() => {
+    const n = Number(process.env.AGENT_BACKPRESSURE_BYTES);
+    return Number.isFinite(n) && n > 0 ? n : 4 * 1024 * 1024;
+  })();
+
+  // ── Reliability counters (per node, since process start) ──────────────────
+  private readonly reliabilityConnections = new Map<string, number[]>();
+  private readonly reliabilityHeartbeatTimeouts = new Map<string, number>();
+  private readonly reliabilityRateLimitedDrops = new Map<string, number>();
+  private readonly reliabilityOutboxQueued = new Map<string, number>();
+  private readonly reliabilityOutboxDropped = new Map<string, number>();
+  private readonly reliabilityBackpressureDrops = new Map<string, number>();
+  private static readonly FLAP_WINDOW_MS = 60_000;
+  private static readonly FLAP_THRESHOLD = 5;
+
+  private bumpCounter(map: Map<string, number>, nodeId: string): void {
+    map.set(nodeId, (map.get(nodeId) ?? 0) + 1);
+  }
+
+  // Last time we warned about state syncs for a given nodeId:serverUuid pair.
+  private readonly unknownServerSyncWarned = new Map<string, number>();
+  private static readonly UNKNOWN_SERVER_SYNC_WARN_TTL_MS = 10 * 60 * 1000;
+  private static readonly UNKNOWN_SERVER_SYNC_WARN_CAP = 500;
+
+  /** Warn once per TTL about an unknown synced container; count every hit. */
+  private warnUnknownServerSyncOnce(nodeId: string, serverUuid: string): void {
+    const key = `${nodeId}:${serverUuid}`;
+    const now = Date.now();
+    const last = this.unknownServerSyncWarned.get(key) ?? 0;
+    if (now - last > WebSocketGateway.UNKNOWN_SERVER_SYNC_WARN_TTL_MS) {
+      this.logger.warn(
+        { nodeId, serverId: serverUuid },
+        "State sync for unknown server ID (suppressing repeats for 10m)",
+      );
+      this.unknownServerSyncWarned.set(key, now);
+      // Bound the map: on overflow drop the oldest half via re-insertion order.
+      if (this.unknownServerSyncWarned.size > WebSocketGateway.UNKNOWN_SERVER_SYNC_WARN_CAP) {
+        const entries = Array.from(this.unknownServerSyncWarned.entries());
+        this.unknownServerSyncWarned.clear();
+        for (const [k, v] of entries.slice(-WebSocketGateway.UNKNOWN_SERVER_SYNC_WARN_CAP / 2)) {
+          this.unknownServerSyncWarned.set(k, v);
+        }
+      }
+    }
+  }
+
+  /** Cumulative per-node reliability counters plus flap detection. */
+  getReliabilityStats(): Record<string, Record<string, number>> {
+    const toObj = <T>(m: Map<string, T>) => Object.fromEntries(m) as Record<string, any>;
+    return {
+      connections: toObj(this.reliabilityConnections),
+      heartbeatTimeouts: toObj(this.reliabilityHeartbeatTimeouts),
+      rateLimitedDroppedMessages: toObj(this.reliabilityRateLimitedDrops),
+      outboxQueued: toObj(this.reliabilityOutboxQueued),
+      outboxDropped: toObj(this.reliabilityOutboxDropped),
+      backpressureDropped: toObj(this.reliabilityBackpressureDrops),
+    };
+  }
+
+  /**
+   * Track a successful agent connection for flap detection. Nodes reconnecting
+   * more than FLAP_THRESHOLD times within FLAP_WINDOW_MS are reported to admin
+   * subscribers so chronic instability surfaces instead of hiding behind logs.
+   */
+  private recordAgentConnection(nodeId: string): void {
+    const now = Date.now();
+    const stamps = (this.reliabilityConnections.get(nodeId) ?? []).filter(
+      (t) => now - t < WebSocketGateway.FLAP_WINDOW_MS,
+    );
+    stamps.push(now);
+    this.reliabilityConnections.set(nodeId, stamps);
+    if (stamps.length >= WebSocketGateway.FLAP_THRESHOLD) {
+      this.logger.warn({ nodeId, reconnectsInWindow: stamps.length }, "Node connection flapping detected");
+      this.pushToAdminSubscribers("node_flapping", {
+        type: "node_flapping",
+        nodeId,
+        reconnectsInWindow: stamps.length,
+        windowMs: WebSocketGateway.FLAP_WINDOW_MS,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  /** Force-tear down a socket. Unlike close(), terminate() does not wait for a
+   * close-frame handshake from a peer that may be half-open or dead. */
+  private terminateSocket(socket: any): void {
+    try {
+      if (typeof socket?.terminate === "function") {
+        socket.terminate();
+      } else {
+        socket?.close?.();
+      }
+    } catch {
+      // Socket may already be destroyed — nothing to do.
+    }
+  }
+
+  private queueInOutbox(nodeId: string, message: any): boolean {
+    if (!message || typeof message.type !== "string" || !OUTBOXABLE_TYPES.has(message.type)) {
+      return false;
+    }
+    const now = Date.now();
+    let queue = this.outbox.get(nodeId);
+    if (!queue) {
+      queue = [];
+      this.outbox.set(nodeId, queue);
+    }
+    // Expire stale entries before appending.
+    while (queue.length > 0 && now - queue[0].queuedAt > WebSocketGateway.OUTBOX_TTL_MS) {
+      queue.shift();
+      this.bumpCounter(this.reliabilityOutboxDropped, nodeId);
+    }
+    if (queue.length >= WebSocketGateway.OUTBOX_MAX_PER_NODE) {
+      this.bumpCounter(this.reliabilityOutboxDropped, nodeId);
+      return false;
+    }
+    queue.push({ payload: JSON.stringify(message), queuedAt: now });
+    this.bumpCounter(this.reliabilityOutboxQueued, nodeId);
+    return true;
+  }
+
+  private drainOutbox(nodeId: string, agent: ConnectedAgent): void {
+    const queue = this.outbox.get(nodeId);
+    if (!queue || queue.length === 0) return;
+    this.outbox.delete(nodeId);
+    const now = Date.now();
+    let sent = 0;
+    let expired = 0;
+    for (const entry of queue) {
+      if (now - entry.queuedAt > WebSocketGateway.OUTBOX_TTL_MS) {
+        expired += 1;
+        continue;
+      }
+      try {
+        agent.socket.send(entry.payload);
+        sent += 1;
+      } catch {
+        break;
+      }
+    }
+    if (expired > 0) {
+      this.bumpCounter(this.reliabilityOutboxDropped, nodeId);
+    }
+    if (sent > 0 || expired > 0) {
+      this.logger.info({ nodeId, drained: sent, expired }, "Drained agent command outbox after reconnect");
+    }
+  }
 
   // SSE console stream subscribers — maps serverId → subscriberId → { push, lastActivity }
   private readonly sseSubscribers = new Map<string, Map<string, { push: (event: string, data: any) => void; lastActivity: number }>>();
@@ -245,6 +477,7 @@ export class WebSocketGateway {
   constructor(private prisma: PrismaClient, logger: pino.Logger) {
     this.logger = logger.child({ component: "WebSocketGateway" });
     this.startHeartbeatCheck();
+    this.startPingLoop();
     this.startMaintenanceSweep();
     this.refreshConsoleLimits().catch((err) =>
       this.logger.warn({ err }, "Failed to load console rate limits")
@@ -320,6 +553,14 @@ export class WebSocketGateway {
         lastHeartbeat: Date.now(),
       };
       const onMessage = (data: any, isBinary: boolean) => this.handleAgentMessage(nodeId, socket, data, isBinary);
+      // WS-level pong from the panel's ping loop is direct proof the agent
+      // socket is still alive in the panel→agent direction.
+      const onPong = () => {
+        const current = this.agents.get(nodeId);
+        if (current && current.socket === socket) {
+          current.lastHeartbeat = Date.now();
+        }
+      };
       const onClose = () => {
         const current = this.agents.get(nodeId);
         if (!current || current.socket !== socket) {
@@ -328,6 +569,9 @@ export class WebSocketGateway {
         }
         this.agents.delete(nodeId);
         this.agentUpdateSent.delete(nodeId);
+        // Fail-fast any commands still awaiting an ack from this agent instead
+        // of letting them hang until their per-request timeout (15-60s).
+        this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} disconnected`);
         this.discoveredContainers.delete(nodeId);
         this.prisma.node.update({
           where: { id: nodeId },
@@ -407,14 +651,15 @@ export class WebSocketGateway {
           const existing = this.agents.get(nodeId);
           if (existing && existing.socket !== socket) {
             this.logger.warn({ nodeId }, "Replacing existing agent connection");
-            try {
-              existing.socket.close();
-            } catch {
-              // ignore close errors
-            }
+            // Fail requests that were sent over the superseded socket.
+            this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} connection replaced`);
+            // Terminate: a replaced socket may be half-open, and close() would
+            // wait forever for its close-frame handshake.
+            this.terminateSocket(existing.socket);
           }
           this.agents.set(nodeId, agent);
           socket.on("message", onMessage);
+          socket.on("pong", onPong);
           socket.on("close", onClose);
           this.logger.info(
             { nodeId, authType: authResult.authType },
@@ -437,14 +682,15 @@ export class WebSocketGateway {
         const existing = this.agents.get(nodeId);
         if (existing && existing.socket !== socket) {
           this.logger.warn({ nodeId }, "Replacing existing agent connection");
-          try {
-            existing.socket.close();
-          } catch {
-            // ignore close errors
-          }
+          // Fail requests that were sent over the superseded socket.
+          this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} connection replaced`);
+          // Terminate: a replaced socket may be half-open, and close() would
+          // wait forever for its close-frame handshake.
+          this.terminateSocket(existing.socket);
         }
         this.agents.set(nodeId, agent);
         socket.on("message", onMessage);
+        socket.on("pong", onPong);
         socket.on("close", onClose);
         // Check progressive lockout for handshake path too
         const lockout = this.checkAgentLockout(nodeId);
@@ -464,9 +710,11 @@ export class WebSocketGateway {
         setTimeout(() => {
           const pending = this.agents.get(nodeId);
           if (pending && pending.socket === socket && !pending.authenticated) {
-            pending.socket.close();
+            // Never authenticated — nothing to negotiate, kill the socket now.
+            this.terminateSocket(pending.socket);
             this.agents.delete(nodeId);
-        this.agentUpdateSent.delete(nodeId);
+            this.agentUpdateSent.delete(nodeId);
+            this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} handshake timeout`);
             this.logger.warn({ nodeId }, "Agent handshake timeout");
           }
         }, 10000);
@@ -487,6 +735,10 @@ export class WebSocketGateway {
   private async finalizeAgentConnection(node: any, agent: ConnectedAgent) {
     // Note: agent.authenticated should be set to true BEFORE calling this function
     // to prevent race conditions with the handshake timeout
+    // Reset the lastSeenAt-persist throttle so the FIRST heartbeat after a
+    // (re)connect always persists immediately.
+    this.nodeLastPersistedSeen.delete(node.id);
+    this.recordAgentConnection(node.id);
     await this.prisma.node.update({
       where: { id: node.id },
       data: { isOnline: true, lastSeenAt: new Date() },
@@ -507,6 +759,8 @@ export class WebSocketGateway {
         maxUploadBytes: maxUploadBytesFromMb(security.fileTunnelMaxUploadMb),
       })
     );
+    // Replay any commands queued while this agent was reconnecting.
+    this.drainOutbox(node.id, agent);
     await this.resumeConsoleStreams(node.id);
   }
 
@@ -743,18 +997,34 @@ export class WebSocketGateway {
       // Binary frames: forward to active relay if one exists
       if (isBinary && this.activeBackupRelay) {
         const targetAgent = this.agents.get(this.activeBackupRelay.targetNodeId);
-        if (targetAgent && targetAgent.socket.readyState === 1) {
-          targetAgent.socket.send(data);
+        if (!targetAgent || targetAgent.socket.readyState !== 1) {
+          // Relay target vanished mid-transfer — error the stream instead of
+          // silently dropping frames.
+          const { reject } = this.activeBackupRelay;
+          this.activeBackupRelay = null;
+          reject(new Error("Relay target disconnected mid-stream"));
+          return;
         }
+        // Backpressure guard: bulk binary relay must not buffer unboundedly
+        // behind a slow consumer. Aborting the stream surfaces the stall to
+        // both operators instead of growing panel memory silently.
+        if (
+          Number(targetAgent.socket.bufferedAmount ?? 0) >
+          WebSocketGateway.AGENT_BACKPRESSURE_BYTES
+        ) {
+          const { reject } = this.activeBackupRelay;
+          this.activeBackupRelay = null;
+          this.bumpCounter(this.reliabilityBackpressureDrops, nodeId);
+          reject(new Error("Relay target backpressure threshold exceeded"));
+          return;
+        }
+        targetAgent.socket.send(data);
         return;
       }
 
-      if (!this.allowAgentMessage(nodeId, this.agentMessageLimit)) {
-        if (this.shouldWarnRateLimit(nodeId, this.agentMessageLimit.windowMs)) {
-          this.logger.warn({ nodeId }, "Agent message rate limit exceeded");
-        }
-        return;
-      }
+      // Parse BEFORE the rate-limit gate: heartbeats must never be dropped by
+      // the limiter, or a busy node (stats flush + backup stream burst) gets
+      // falsely marked offline.
       const parsed = this.parseAgentMessage(data);
       if (!parsed.ok || !parsed.value || typeof parsed.value !== "object") {
         this.logger.warn({ nodeId }, "Invalid agent message payload");
@@ -763,6 +1033,16 @@ export class WebSocketGateway {
       const message = parsed.value;
       if (typeof message.type !== "string") {
         this.logger.warn({ nodeId }, "Agent message missing type");
+        return;
+      }
+      if (
+        message.type !== "heartbeat" &&
+        !this.allowAgentMessage(nodeId, this.agentMessageLimit)
+      ) {
+        this.bumpCounter(this.reliabilityRateLimitedDrops, nodeId);
+        if (this.shouldWarnRateLimit(nodeId, this.agentMessageLimit.windowMs)) {
+          this.logger.warn({ nodeId }, "Agent message rate limit exceeded");
+        }
         return;
       }
       const agent = this.agents.get(nodeId);
@@ -775,9 +1055,40 @@ export class WebSocketGateway {
         this.logger.warn({ nodeId }, "Rejected agent message before handshake");
         return;
       }
+      // Liveness: refresh immediately after auth gating so any accepted frame
+      // counts — including heartbeats during traffic bursts (rate-limiter
+      // exemption above keeps them flowing).
+      agent.lastHeartbeat = Date.now();
       if (message.type === "node_handshake") {
         if (agent.authenticated) {
           this.logger.debug({ nodeId }, "Ignoring redundant node_handshake for authenticated agent");
+          return;
+        }
+        // Protocol negotiation: agents speaking an incompatible protocol
+        // major get an explicit error instead of undefined post-upgrade
+        // behavior. Missing field → legacy agent, treated as v1.
+        const reportedVersion =
+          typeof message.protocolVersion === "string" ? message.protocolVersion : "";
+        const parsedMajor = Number.parseInt(reportedVersion.split(".")[0] ?? "", 10);
+        const effectiveMajor = Number.isFinite(parsedMajor) ? parsedMajor : 1;
+        if (effectiveMajor !== AGENT_PROTOCOL_MAJOR) {
+          const supportedVersion = `${AGENT_PROTOCOL_MAJOR}.0`;
+          this.logger.warn(
+            { nodeId, reportedVersion: reportedVersion || null, supportedVersion },
+            "Agent protocol version mismatch — rejecting handshake",
+          );
+          try {
+            agent.socket.send(
+              JSON.stringify({
+                type: "error",
+                error: "protocol_mismatch",
+                receivedProtocolVersion: reportedVersion || null,
+                supportedProtocolVersion: supportedVersion,
+              }),
+            );
+          } catch { /* socket may already be closing */ }
+          this.terminateSocket(agent.socket);
+          this.agents.delete(nodeId);
           return;
         }
         this.logger.info({ nodeId, hasToken: Boolean(message.token) }, "Received node_handshake from agent");
@@ -818,10 +1129,6 @@ export class WebSocketGateway {
         }
         return;
       }
-      // Treat any authenticated agent message as liveness to avoid false disconnects
-      // when heartbeat packets are delayed but other traffic is active.
-      agent.lastHeartbeat = Date.now();
-
       if (message.type === "backup_download_response") {
         const pending = message.requestId
           ? this.pendingAgentRequests.get(message.requestId)
@@ -1002,20 +1309,27 @@ export class WebSocketGateway {
       if (message.type === "heartbeat") {
         if (agent) {
           agent.lastHeartbeat = Date.now();
-          try {
-            await this.prisma.node.update({
-              where: { id: nodeId },
-              data: { lastSeenAt: new Date() },
-            });
-          } catch (err) {
-            captureSystemError({
-              level: 'error',
-              component: 'WebSocketGateway',
-              message: err instanceof Error ? err.message : 'WebSocket handler error: heartbeat node update failed',
-              stack: err instanceof Error ? err.stack : undefined,
-              metadata: { nodeId },
-            }).catch(() => {});
-            this.logger.error({ err, nodeId }, 'WebSocket handler error: heartbeat node update failed');
+          // Agents beat every 15s; writing lastSeenAt on every beat is avoidable
+          // write load. Throttle to one DB write per window per node — the
+          // in-memory liveness timestamp above still updates on every beat.
+          const lastPersistedAt = this.nodeLastPersistedSeen.get(nodeId) ?? 0;
+          if (Date.now() - lastPersistedAt >= HEARTBEAT_PERSIST_THROTTLE_MS) {
+            this.nodeLastPersistedSeen.set(nodeId, Date.now());
+            try {
+              await this.prisma.node.update({
+                where: { id: nodeId },
+                data: { lastSeenAt: new Date() },
+              });
+            } catch (err) {
+              captureSystemError({
+                level: 'error',
+                component: 'WebSocketGateway',
+                message: err instanceof Error ? err.message : 'WebSocket handler error: heartbeat node update failed',
+                stack: err instanceof Error ? err.stack : undefined,
+                metadata: { nodeId },
+              }).catch(() => {});
+              this.logger.error({ err, nodeId }, 'WebSocket handler error: heartbeat node update failed');
+            }
           }
         }
       } else if (message.type === "health_report") {
@@ -1031,25 +1345,29 @@ export class WebSocketGateway {
         if (!node) {
           return;
         }
-        const cpuPercent = Number(message.cpuPercent);
-        const memoryUsageMb = Number(message.memoryUsageMb);
-        const memoryTotalMb = Number(message.memoryTotalMb ?? node.maxMemoryMb);
-        const diskUsageMb = Number(message.diskUsageMb ?? 0);
-        const diskTotalMb = Number(message.diskTotalMb ?? 0);
-        const containerCount = Number(message.containerCount);
-        const networkRxBytes = BigInt(Math.max(0, Number(message.networkRxBytes ?? 0)));
-        const networkTxBytes = BigInt(Math.max(0, Number(message.networkTxBytes ?? 0)));
-        if (
-          !Number.isFinite(cpuPercent) ||
-          !Number.isFinite(memoryUsageMb) ||
-          !Number.isFinite(memoryTotalMb) ||
-          !Number.isFinite(diskUsageMb) ||
-          !Number.isFinite(diskTotalMb) ||
-          !Number.isFinite(containerCount)
-        ) {
-          this.logger.warn({ nodeId }, "Invalid health report payload");
-          return;
-        }
+        // All fields sanitized field-by-field: a single bad value degrades to
+        // its fallback instead of rejecting the whole report. Host CPU is
+        // 0-100 (sysinfo aggregate); per-container CPU (>100 on multicore)
+        // is clamped later with the server's allocated cores in mind.
+        const cpuPercent = sanitizeMetric(message.cpuPercent, 0, 100);
+        const memoryUsageMb = sanitizeIntMetric(
+          message.memoryUsageMb,
+          0,
+          Number.MAX_SAFE_INTEGER,
+          Math.round(node.maxMemoryMb ?? 0),
+        );
+        const memoryTotalMb = sanitizeIntMetric(
+          message.memoryTotalMb,
+          0,
+          Number.MAX_SAFE_INTEGER,
+          Math.round(node.maxMemoryMb ?? 0),
+        );
+        const diskUsageMb = sanitizeIntMetric(message.diskUsageMb, 0, Number.MAX_SAFE_INTEGER);
+        const diskTotalMb = sanitizeIntMetric(message.diskTotalMb, 0, Number.MAX_SAFE_INTEGER);
+        const containerCount = Math.round(sanitizeMetric(message.containerCount, 0, 1_000_000));
+        const uptimeSeconds = Math.round(sanitizeMetric(message.uptimeSeconds, 0, Number.MAX_SAFE_INTEGER));
+        const networkRxBytes = toByteCounterBig(message.networkRxBytes);
+        const networkTxBytes = toByteCounterBig(message.networkTxBytes);
         try {
           await this.prisma.node.update({
             where: { id: nodeId },
@@ -1070,6 +1388,7 @@ export class WebSocketGateway {
               networkRxBytes,
               networkTxBytes,
               containerCount: Math.max(0, Math.round(containerCount)),
+              uptimeSeconds,
             },
           });
         } catch (err) {
@@ -1098,6 +1417,7 @@ export class WebSocketGateway {
           networkRxBytes: Number(message.networkRxBytes ?? 0),
           networkTxBytes: Number(message.networkTxBytes ?? 0),
           containerCount: Math.max(0, Math.round(containerCount)),
+          uptimeSeconds,
           timestamp: new Date().toISOString(),
         });
 
@@ -1172,26 +1492,54 @@ export class WebSocketGateway {
           return;
         }
 
-        const cpuPercent = Number(message.cpuPercent);
-        const memoryUsageMb = Number(message.memoryUsageMb);
-        const diskUsageMb = Number(message.diskUsageMb ?? 0);
-        const diskIoMb = Number(message.diskIoMb ?? 0);
-        const diskTotalMb = Number(message.diskTotalMb ?? 0);
-        const networkRxBytes = BigInt(Math.max(0, Number(message.networkRxBytes ?? 0)));
-        const networkTxBytes = BigInt(Math.max(0, Number(message.networkTxBytes ?? 0)));
+        // Container CPU is normalized against the cores the server is
+        // allocated: a 4-core server legitimately reports up to 400%. The
+        // old hard clamp at 100 silently corrupted multi-core usage.
+        const cpuCeiling = 100 * Math.max(1, (server as any).allocatedCpuCores ?? 1);
+        const cpuPercent = sanitizeMetric(message.cpuPercent, 0, cpuCeiling);
+        const memoryUsageMb = sanitizeIntMetric(message.memoryUsageMb, 0, Number.MAX_SAFE_INTEGER);
+        const diskUsageMb = sanitizeIntMetric(message.diskUsageMb, 0, Number.MAX_SAFE_INTEGER);
+        const diskIoMb = sanitizeIntMetric(message.diskIoMb, 0, Number.MAX_SAFE_INTEGER);
+        const diskTotalMb = sanitizeIntMetric(message.diskTotalMb, 0, Number.MAX_SAFE_INTEGER);
+        const networkRxBytes = toByteCounterBig(message.networkRxBytes);
+        const networkTxBytes = toByteCounterBig(message.networkTxBytes);
+        // Split IO halves (newer agents). Absent on older agents → fall back
+        // to legacy behavior below rather than guessing.
+        const diskReadMbRaw = message.diskReadMb;
+        const diskWriteMbRaw = message.diskWriteMb;
+        const hasSplitIo =
+          diskReadMbRaw !== undefined &&
+          diskWriteMbRaw !== undefined &&
+          Number.isFinite(Number(diskReadMbRaw)) &&
+          Number.isFinite(Number(diskWriteMbRaw));
+        const diskReadMb = hasSplitIo
+          ? sanitizeIntMetric(diskReadMbRaw, 0, Number.MAX_SAFE_INTEGER)
+          : null;
+        const diskWriteMb = hasSplitIo
+          ? sanitizeIntMetric(diskWriteMbRaw, 0, Number.MAX_SAFE_INTEGER)
+          : null;
 
         if (!this.allowServerMetrics(server.id)) {
           return;
         }
+
+        // Honor the agent's sample timestamp (same semantics as the batch
+        // ingest path): the panel may be delayed in processing, and the
+        // ServerMetrics unique constraint is (serverId, timestamp). Fall back
+        // to now for legacy agents that omit it.
+        const tsNumber = Number(message.timestamp);
+        const sampleTs = Number.isFinite(tsNumber) && tsNumber > 0 ? new Date(tsNumber) : new Date();
+
         // Persist metrics to DB — fire-and-forget to avoid blocking SSE broadcast
         const metricsData = {
           serverId: server.id,
-          cpuPercent: Number.isFinite(cpuPercent) ? Math.min(Math.max(cpuPercent, 0), 100) : 0,
-          memoryUsageMb: Math.round(Number.isFinite(memoryUsageMb) ? Math.max(memoryUsageMb, 0) : 0),
+          cpuPercent,
+          memoryUsageMb,
           networkRxBytes,
           networkTxBytes,
-          diskIoMb: Math.round(Number.isFinite(diskIoMb) ? Math.max(diskIoMb, 0) : 0),
-          diskUsageMb: Math.round(Number.isFinite(diskUsageMb) ? Math.max(diskUsageMb, 0) : 0),
+          diskIoMb,
+          diskUsageMb,
+          timestamp: sampleTs,
         };
         this.prisma.serverMetrics.create({ data: metricsData }).catch((err) => {
           this.logger.warn({ err, serverId: server.id }, 'Failed to persist serverMetrics');
@@ -1210,8 +1558,15 @@ export class WebSocketGateway {
             diskUsed: metricsData.diskUsageMb ? toStatBytes(metricsData.diskUsageMb) : null,
             netRx: Number(networkRxBytes) || null,
             netTx: Number(networkTxBytes) || null,
-            blockRead: Number.isFinite(diskIoMb) ? toStatBytes(diskIoMb) : null,
-            blockWrite: null,
+            // Split halves when the agent provides them; otherwise legacy
+            // fallback writes the combined counter into blockRead.
+            blockRead:
+              hasSplitIo && (diskReadMb as number) > 0
+                ? toStatBytes(diskReadMb as number)
+                : metricsData.diskIoMb
+                  ? toStatBytes(metricsData.diskIoMb)
+                  : null,
+            blockWrite: hasSplitIo && (diskWriteMb as number) > 0 ? toStatBytes(diskWriteMb as number) : null,
           },
         }).catch((err) => {
           this.logger.warn({ err, serverId: server.id }, 'Failed to persist ServerStat');
@@ -1220,14 +1575,17 @@ export class WebSocketGateway {
         const payload = {
           type: "resource_stats",
           serverId: server.id,
-          cpuPercent: Number.isFinite(cpuPercent) ? Math.min(Math.max(cpuPercent, 0), 100) : 0,
-          memoryUsageMb: Math.round(Number.isFinite(memoryUsageMb) ? Math.max(memoryUsageMb, 0) : 0),
+          cpuPercent,
+          memoryUsageMb,
           networkRxBytes: networkRxBytes.toString(),
           networkTxBytes: networkTxBytes.toString(),
-          diskIoMb: Math.round(Number.isFinite(diskIoMb) ? Math.max(diskIoMb, 0) : 0),
-          diskUsageMb: Math.round(Number.isFinite(diskUsageMb) ? Math.max(diskUsageMb, 0) : 0),
-          diskTotalMb: Math.round(Number.isFinite(diskTotalMb) ? Math.max(diskTotalMb, 0) : 0),
-          timestamp: Date.now(),
+          diskIoMb,
+          diskUsageMb,
+          diskTotalMb,
+          ...(hasSplitIo
+            ? { diskReadMb: diskReadMb as number, diskWriteMb: diskWriteMb as number }
+            : {}),
+          timestamp: sampleTs.getTime(),
         };
         this.latestResourceStats.set(server.id, payload);
         await this.routeToClients(server.id, payload);
@@ -1249,17 +1607,32 @@ export class WebSocketGateway {
         }
 
         const items: any[] = [];
+        // Samples stamped more than 5 minutes into the future are dropped:
+        // clock-skewed future rows sit at the top of "latest metrics" queries
+        // and escape retention pruning until their horizon passes. Past
+        // timestamps remain accepted by design (offline backfill).
+        const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
         for (const m of message.metrics) {
           if (!m.serverUuid || !m.timestamp) continue;
           if (!Number.isFinite(Number(m.timestamp))) continue;
+          if (Number(m.timestamp) > Date.now() + MAX_FUTURE_SKEW_MS) {
+            this.logger.warn(
+              { nodeId, serverId: m.serverUuid, timestamp: m.timestamp },
+              "Dropping resource_stats_batch item with future timestamp",
+            );
+            continue;
+          }
           items.push({
             serverId: m.serverUuid,
-            cpuPercent: Number.isFinite(Number(m.cpuPercent)) ? Math.min(Math.max(Number(m.cpuPercent), 0), 100) : 0,
-            memoryUsageMb: Math.round(Number.isFinite(Number(m.memoryUsageMb)) ? Math.max(Number(m.memoryUsageMb), 0) : 0),
-            networkRxBytes: BigInt(Math.max(0, Number(m.networkRxBytes || 0))),
-            networkTxBytes: BigInt(Math.max(0, Number(m.networkTxBytes || 0))),
-            diskIoMb: Math.round(Number.isFinite(Number(m.diskIoMb)) ? Math.max(Number(m.diskIoMb), 0) : 0),
-            diskUsageMb: Math.round(Number.isFinite(Number(m.diskUsageMb)) ? Math.max(Number(m.diskUsageMb), 0) : 0),
+            // CPU ceiling depends on each server's allocated cores (known
+            // after the server lookup below), so keep the raw value here and
+            // clamp in the filtered pass.
+            cpuPercentRaw: sanitizeMetric(m.cpuPercent, 0, Number.MAX_SAFE_INTEGER),
+            memoryUsageMb: sanitizeIntMetric(m.memoryUsageMb, 0, Number.MAX_SAFE_INTEGER),
+            networkRxBytes: toByteCounterBig(m.networkRxBytes),
+            networkTxBytes: toByteCounterBig(m.networkTxBytes),
+            diskIoMb: sanitizeIntMetric(m.diskIoMb, 0, Number.MAX_SAFE_INTEGER),
+            diskUsageMb: sanitizeIntMetric(m.diskUsageMb, 0, Number.MAX_SAFE_INTEGER),
             timestamp: new Date(Number(m.timestamp)),
           });
         }
@@ -1269,9 +1642,11 @@ export class WebSocketGateway {
         const serverIds = Array.from(new Set(items.map((i) => i.serverId)));
         const servers = await this.prisma.server.findMany({
           where: { id: { in: serverIds }, nodeId },
-          select: { id: true },
+          select: { id: true, allocatedCpuCores: true },
         });
-        const allowed = new Set(servers.map((s) => s.id));
+        const coresByServer = new Map<string, number>();
+        for (const s of servers) coresByServer.set(s.id, Math.max(1, s.allocatedCpuCores ?? 1));
+        const allowed = new Set(coresByServer.keys());
         const filtered = items.filter((item) => {
           if (!allowed.has(item.serverId)) {
             return false;
@@ -1286,12 +1661,12 @@ export class WebSocketGateway {
         // We use GREATEST(...) for memory / network to preserve spikes when backfilling
         const tuples: Prisma.Sql[] = [];
         for (const it of filtered) {
-          const cpu = Number(it.cpuPercent) || 0;
-          const mem = Number(it.memoryUsageMb) || 0;
-          const rx = BigInt(it.networkRxBytes || 0);
-          const tx = BigInt(it.networkTxBytes || 0);
-          const dio = Number(it.diskIoMb) || 0;
-          const dusg = Number(it.diskUsageMb) || 0;
+          const cpu = Math.min(it.cpuPercentRaw, 100 * (coresByServer.get(it.serverId) ?? 1));
+          const mem = it.memoryUsageMb;
+          const rx = it.networkRxBytes;
+          const tx = it.networkTxBytes;
+          const dio = it.diskIoMb;
+          const dusg = it.diskUsageMb;
           const ts = new Date(it.timestamp);
           tuples.push(
             Prisma.sql`(${crypto.randomUUID()}, ${it.serverId}, ${cpu}, ${mem}, ${rx}, ${tx}, ${dio}, ${dusg}, ${ts})`
@@ -1341,12 +1716,12 @@ export class WebSocketGateway {
                 },
               });
 
-              const cpu = Number(it.cpuPercent) || 0;
-              const mem = Math.round(Number(it.memoryUsageMb) || 0);
-              const rx = BigInt(it.networkRxBytes || 0);
-              const tx = BigInt(it.networkTxBytes || 0);
-              const dio = Math.round(Number(it.diskIoMb) || 0);
-              const dusg = Math.round(Number(it.diskUsageMb) || 0);
+              const cpu = Math.min(it.cpuPercentRaw, 100 * (coresByServer.get(it.serverId) ?? 1));
+              const mem = it.memoryUsageMb;
+              const rx = it.networkRxBytes;
+              const tx = it.networkTxBytes;
+              const dio = it.diskIoMb;
+              const dusg = it.diskUsageMb;
               const ts = new Date(it.timestamp);
 
               if (existing) {
@@ -1686,7 +2061,10 @@ export class WebSocketGateway {
         });
 
         if (!server) {
-          this.logger.warn(`State sync for unknown server ID: ${message.serverUuid}`);
+          // One stale container re-syncs every 30s; warning each time floods
+          // logs for days after a server deletion. Warn once per server per
+          // window, then count silently (visible via reliability stats).
+          this.warnUnknownServerSyncOnce(nodeId, message.serverUuid);
           // Only track running unknown containers for auto-import. Stopped/crashed
           // containers are usually deleted servers or ones that don't exist anymore.
           if (message.state !== 'running') {
@@ -2990,7 +3368,10 @@ export class WebSocketGateway {
       for (const [nodeId, agent] of this.agents) {
         if (now - agent.lastHeartbeat > timeout) {
           this.logger.warn(`Agent heartbeat timeout: ${nodeId}`);
-          agent.socket.close();
+          this.bumpCounter(this.reliabilityHeartbeatTimeouts, nodeId);
+          // terminate(), not close(): a half-open socket will never complete a
+          // close-frame handshake, leaving the connection lingering for minutes.
+          this.terminateSocket(agent.socket);
           this.agents.delete(nodeId);
         this.agentUpdateSent.delete(nodeId);
           this.prisma.node.update({
@@ -3017,6 +3398,26 @@ export class WebSocketGateway {
     }, 10000); // Check every 10 seconds
   }
 
+  /**
+   * Panel-initiated WS ping loop. Heartbeats prove the agent→panel direction;
+   * this proves panel→agent and updates liveness on pong so a silently
+   * dead socket is reaped by the heartbeat check within one interval.
+   */
+  private startPingLoop() {
+    const PING_INTERVAL_MS = 30_000;
+    this.pingInterval = setInterval(() => {
+      for (const [, agent] of this.agents) {
+        if (!agent.authenticated || agent.socket.readyState !== 1) continue;
+        try {
+          agent.socket.ping();
+        } catch {
+          // A failed ping means a broken pipe; the heartbeat timeout will
+          // reap it — don't race it here.
+        }
+      }
+    }, PING_INTERVAL_MS);
+  }
+
   private sweepCounters() {
     const now = Date.now();
     for (const [key, val] of this.consoleOutputCounters) {
@@ -3037,6 +3438,19 @@ export class WebSocketGateway {
     for (const [key, val] of this.consoleResumeTimestamps) {
       // Resume timestamps are single-use; expire after 60 seconds
       if (now - val > 60_000) this.consoleResumeTimestamps.delete(key);
+    }
+    for (const [nodeId, ts] of this.nodeLastPersistedSeen) {
+      // Bound the heartbeat-throttle map: entries idle longer than 10 minutes
+      // belong to nodes that are long gone.
+      if (now - ts > 600_000) this.nodeLastPersistedSeen.delete(nodeId);
+    }
+    for (const [nodeId, queue] of this.outbox) {
+      const fresh = queue.filter((e) => now - e.queuedAt <= WebSocketGateway.OUTBOX_TTL_MS);
+      if (fresh.length === 0) {
+        this.outbox.delete(nodeId);
+      } else if (fresh.length !== queue.length) {
+        this.outbox.set(nodeId, fresh);
+      }
     }
   }
 
@@ -3104,9 +3518,34 @@ export class WebSocketGateway {
   async sendToAgent(nodeId: string, message: any): Promise<boolean> {
     const agent = this.agents.get(nodeId);
     if (!agent || !agent.authenticated || agent.socket.readyState !== 1) {
+      // Agent mid-reconnect: queue control-plane commands (bounded, with TTL)
+      // so they are replayed on reconnect instead of vanishing.
+      if (this.queueInOutbox(nodeId, message)) {
+        this.logger.debug(
+          { nodeId, type: typeof message?.type === "string" ? message.type : undefined },
+          "Agent offline — command queued in outbox",
+        );
+        return true;
+      }
       this.logger.warn(
         { nodeId, type: typeof message?.type === "string" ? message.type : undefined },
         "Cannot send to agent: not connected",
+      );
+      return false;
+    }
+
+    // Backpressure guard: a slow/half-open consumer can accumulate unbounded
+    // kernel-buffered bytes. Shed non-critical traffic above the watermark;
+    // control-plane messages always attempt delivery.
+    const bufferedAmount = Number(agent.socket.bufferedAmount ?? 0);
+    if (
+      bufferedAmount > WebSocketGateway.AGENT_BACKPRESSURE_BYTES &&
+      !CRITICAL_OUTBOUND_TYPES.has(message?.type)
+    ) {
+      this.bumpCounter(this.reliabilityBackpressureDrops, nodeId);
+      this.logger.warn(
+        { nodeId, bufferedAmount, type: message?.type },
+        "Agent backpressure threshold exceeded — dropping low-priority message",
       );
       return false;
     }
@@ -3149,6 +3588,12 @@ export class WebSocketGateway {
   sendBinaryToAgent(nodeId: string, data: Buffer): boolean {
     const agent = this.agents.get(nodeId);
     if (!agent || !agent.authenticated || agent.socket.readyState !== 1) {
+      return false;
+    }
+    // Backpressure guard for bulk transfers: exceeding the watermark fails
+    // the send (and thus the transfer) rather than buffering without bound.
+    if (Number(agent.socket.bufferedAmount ?? 0) > WebSocketGateway.AGENT_BACKPRESSURE_BYTES) {
+      this.bumpCounter(this.reliabilityBackpressureDrops, nodeId);
       return false;
     }
     try {
@@ -3219,6 +3664,23 @@ export class WebSocketGateway {
     }
   }
 
+  /**
+   * Fail-fast every pending agent request that was sent to a node which just
+   * disconnected or had its connection replaced. Requests belonging to other
+   * nodes are untouched. Returns the number of rejected entries.
+   */
+  private failPendingRequestsForNode(nodeId: string, reason: string): number {
+    let failed = 0;
+    for (const [requestId, pending] of this.pendingAgentRequests) {
+      if (pending.nodeId !== nodeId) continue;
+      clearTimeout(pending.timeout);
+      this.pendingAgentRequests.delete(requestId);
+      pending.reject(new Error(reason));
+      failed += 1;
+    }
+    return failed;
+  }
+
   async requestFromAgent(nodeId: string, message: any, timeoutMs = 15000): Promise<any> {
     const agent = this.agents.get(nodeId);
     if (!agent || !agent.authenticated || agent.socket.readyState !== 1) {
@@ -3236,7 +3698,7 @@ export class WebSocketGateway {
         this.pendingAgentRequests.delete(requestId);
         reject(new Error("Agent request timed out"));
       }, timeoutMs);
-      this.pendingAgentRequests.set(requestId, { resolve, reject, timeout, kind: "json" });
+      this.pendingAgentRequests.set(requestId, { resolve, reject, timeout, kind: "json", nodeId });
     });
 
     agent.socket.send(JSON.stringify(payload));
@@ -3265,6 +3727,7 @@ export class WebSocketGateway {
         reject,
         timeout,
         kind: "binary",
+        nodeId,
         chunks: [],
       });
     });
@@ -3300,6 +3763,7 @@ export class WebSocketGateway {
         reject,
         timeout,
         kind: "binary",
+        nodeId,
         onChunk,
       });
     });
@@ -3490,6 +3954,7 @@ export class WebSocketGateway {
   destroy(): void {
     this.logger.info('Destroying WebSocket gateway');
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    if (this.pingInterval) clearInterval(this.pingInterval);
     if (this.subscriberSweepInterval) clearInterval(this.subscriberSweepInterval);
     for (const [nodeId, agent] of this.agents) {
       try {

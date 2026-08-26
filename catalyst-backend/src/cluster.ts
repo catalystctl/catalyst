@@ -38,6 +38,19 @@ export function bootstrapCluster(mainFn: () => Promise<void>) {
         `Background jobs will run only on worker id=1. ` +
         `Cache invalidations use cluster IPC (no Redis).`,
     );
+    if (workers > 1) {
+      // Agent WebSocket sessions and requestFromAgent pending maps are
+      // process-local: an agent socket lives in exactly one worker, so HTTP
+      // requests that need to reach the agent must land on the same worker.
+      // Without sticky routing, node operations will fail intermittently.
+      console.error(
+        `[cluster] WORKERS=${workers} with agent WebSocket connections is NOT fully supported.\n` +
+          `[cluster] Agent sockets live in one worker while API requests round-robin across workers,\n` +
+          `[cluster] so sendToAgent()/requestFromAgent() fail when they hit a worker without the socket.\n` +
+          `[cluster] Fix: set WORKERS=0 or 1 (recommended), or terminate TLS at a sticky load balancer\n` +
+          `[cluster] that routes by nodeId/cookie to a single backend instance.`,
+      );
+    }
     for (let i = 0; i < workers; i++) cluster.fork();
     cluster.on('exit', (worker, code, signal) => {
       console.error(

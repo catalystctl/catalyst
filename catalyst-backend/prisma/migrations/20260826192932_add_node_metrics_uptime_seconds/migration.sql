@@ -1,0 +1,1 @@
+ALTER TABLE "NodeMetrics" ADD COLUMN "uptimeSeconds" INTEGER NOT NULL DEFAULT 0;

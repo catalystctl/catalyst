@@ -823,6 +823,7 @@ model NodeMetrics {
   networkRxBytes BigInt
   networkTxBytes BigInt
   containerCount Int
+  uptimeSeconds  Int      @default(0)
   timestamp      DateTime @default(now())
 
   @@index([nodeId, timestamp])
