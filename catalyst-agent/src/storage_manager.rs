@@ -5,6 +5,11 @@ use tokio::task::spawn_blocking;
 use tracing::{error, info, warn};
 
 const MAX_METRICS_BUFFER_BYTES: u64 = 100 * 1024 * 1024;
+/// Cap at 100 GB to prevent a malicious allocatedDiskMb from filling the host.
+const MAX_DISK_MB: u64 = 100 * 1024;
+/// ext4 metadata + 1 MiB rounding. A 50 GB image reporting 20 GB is a grow;
+/// a 50 GB image reporting 49.5 GB is not.
+const FS_GROW_SLACK_MB: u64 = 256;
 
 use crate::command_utils;
 use crate::{AgentError, AgentResult};
@@ -32,12 +37,34 @@ impl StorageManager {
         // Reinstall/start used to return early when the image was already
         // mounted, so a panel disk change (10 GB → 80 GB) never grew the
         // loop. SteamCMD then hit 0x202 after ~30 GB.
+        //
+        // Also heal the "file grew, filesystem did not" case: fallocate without
+        // losetup --set-capacity leaves the loop/ext4 at the old size while
+        // image_size_mb() already matches the panel quota.
         if image_path.exists() {
             let current_mb = self.image_size_mb(&image_path).await?;
-            if image_needs_grow(current_mb, size_mb) {
+            let mounted = self.is_mounted(mount_dir).await.unwrap_or(false);
+            let fs_mb = if mounted {
+                match self.filesystem_size_mb(mount_dir).await {
+                    Ok(mb) => Some(mb),
+                    Err(e) => {
+                        warn!(
+                            "Could not read filesystem size for {} ({}). Will refresh loop capacity.",
+                            server_uuid, e
+                        );
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            let file_too_small = image_needs_grow(current_mb, size_mb);
+            let fs_too_small = fs_mb.is_some_and(|mb| filesystem_needs_grow(mb, size_mb));
+            let fs_unknown_while_mounted = mounted && fs_mb.is_none() && current_mb >= size_mb;
+            if file_too_small || fs_too_small || fs_unknown_while_mounted {
                 info!(
-                    "Growing storage for {} from {} MB to {} MB",
-                    server_uuid, current_mb, size_mb
+                    "Growing storage for {} (image {} MB, filesystem {:?} MB, requested {} MB)",
+                    server_uuid, current_mb, fs_mb, size_mb
                 );
                 self.grow_image(&image_path, mount_dir, size_mb, true)
                     .await?;
@@ -77,6 +104,13 @@ impl StorageManager {
 
         if !image_path.exists() {
             self.create_image(&image_path, size_mb).await?;
+        } else if let Err(e) = self.resize_unmounted_image(&image_path).await {
+            // Do not block start: a later online heal can still grow a live mount.
+            warn!(
+                "Could not grow unmounted image {} to fill the file: {}",
+                image_path.display(),
+                e
+            );
         }
 
         if self.dir_has_data(mount_dir).await? {
@@ -85,7 +119,19 @@ impl StorageManager {
         }
 
         match self.mount_image(&image_path, mount_dir).await {
-            Ok(()) => Ok(image_path),
+            Ok(()) => {
+                if let Ok(fs_mb) = self.filesystem_size_mb(mount_dir).await {
+                    if filesystem_needs_grow(fs_mb, size_mb) {
+                        info!(
+                            "Mounted {} but filesystem is {} MB (requested {} MB); growing",
+                            server_uuid, fs_mb, size_mb
+                        );
+                        self.grow_image(&image_path, mount_dir, size_mb, true)
+                            .await?;
+                    }
+                }
+                Ok(image_path)
+            }
             Err(e) if !command_utils::same_mount_namespace_as_init() => {
                 error!(
                     "Cannot mount disk image for {} in the host mount namespace ({}). \
@@ -266,6 +312,66 @@ impl StorageManager {
         Ok(())
     }
 
+    /// Grow any live loop image whose file is larger than the mounted
+    /// filesystem. `fallocate` without `losetup --set-capacity` leaves Paper
+    /// (and `df /data`) stuck on the old size even though the `.img` is 50 GB.
+    /// Called on agent start so an update heals running servers.
+    pub async fn heal_mounted_images(&self) -> AgentResult<()> {
+        let images_dir = self.images_dir();
+        if !images_dir.exists() {
+            return Ok(());
+        }
+        let mut entries = match fs::read_dir(&images_dir).await {
+            Ok(e) => e,
+            Err(e) => {
+                warn!("Could not scan storage images for heal: {}", e);
+                return Ok(());
+            }
+        };
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            let Some(uuid) = name.strip_suffix(".img") else {
+                continue;
+            };
+            if uuid.is_empty() || uuid.contains('/') || uuid.contains('\0') {
+                continue;
+            }
+            let mount_dir = self.data_dir.join(uuid);
+            if !self.is_mounted(&mount_dir).await.unwrap_or(false) {
+                continue;
+            }
+            let file_mb = match self.image_size_mb(&path).await {
+                Ok(mb) => mb,
+                Err(e) => {
+                    warn!("heal: could not stat image {}: {}", path.display(), e);
+                    continue;
+                }
+            };
+            if file_mb == 0 {
+                continue;
+            }
+            let fs_mb = self.filesystem_size_mb(&mount_dir).await.ok();
+            let needs = match fs_mb {
+                Some(mb) => filesystem_needs_grow(mb, file_mb),
+                None => true,
+            };
+            if !needs {
+                continue;
+            }
+            info!(
+                "Healing storage for {}: image {} MB, filesystem {:?} MB",
+                uuid, file_mb, fs_mb
+            );
+            if let Err(e) = self.grow_image(&path, &mount_dir, file_mb, true).await {
+                warn!("Failed to heal storage for {}: {}", uuid, e);
+            }
+        }
+        Ok(())
+    }
+
     pub async fn resize(
         &self,
         server_uuid: &str,
@@ -279,13 +385,21 @@ impl StorageManager {
         }
 
         let current_mb = self.image_size_mb(&image_path).await?;
-        if size_mb == current_mb {
-            return Ok(());
-        }
-
-        if size_mb > current_mb {
-            self.grow_image(&image_path, mount_dir, size_mb, allow_online_grow)
-                .await?;
+        let mounted = self.is_mounted(mount_dir).await.unwrap_or(false);
+        let fs_mb = if mounted {
+            self.filesystem_size_mb(mount_dir).await.ok()
+        } else {
+            None
+        };
+        // Grow / heal only when the requested size is at least the current file.
+        // A smaller request is a shrink — never fallocate -l downward on a live image.
+        if size_mb >= current_mb {
+            let fs_too_small = fs_mb.is_some_and(|mb| filesystem_needs_grow(mb, size_mb));
+            let fs_unknown = mounted && fs_mb.is_none();
+            if image_needs_grow(current_mb, size_mb) || fs_too_small || fs_unknown {
+                self.grow_image(&image_path, mount_dir, size_mb, allow_online_grow)
+                    .await?;
+            }
             return Ok(());
         }
 
@@ -332,16 +446,20 @@ impl StorageManager {
         Ok(metadata.len() / (1024 * 1024))
     }
 
+    async fn filesystem_size_mb(&self, mount_dir: &Path) -> AgentResult<u64> {
+        let local = self.mount_info_from("/proc/mounts", mount_dir).await?;
+        let probe = if local.is_some() {
+            mount_dir.to_path_buf()
+        } else {
+            host_root_view(mount_dir)
+        };
+        spawn_blocking(move || filesystem_size_mb_at(&probe))
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("statvfs task failed: {}", e)))?
+    }
+
     async fn create_image(&self, image_path: &Path, size_mb: u64) -> AgentResult<()> {
-        // Cap at 100 GB to prevent unreasonable allocations that could
-        // exhaust host disk space via a malicious allocatedDiskMb value.
-        const MAX_DISK_MB: u64 = 100 * 1024; // 100 GB in MB
-        if size_mb > MAX_DISK_MB {
-            return Err(AgentError::InvalidRequest(format!(
-                "Requested disk size {} MB exceeds maximum {} MB",
-                size_mb, MAX_DISK_MB
-            )));
-        }
+        validate_disk_mb(size_mb)?;
         let image = image_path.to_path_buf();
         let size = size_mb;
         spawn_blocking(move || -> AgentResult<()> {
@@ -458,6 +576,7 @@ impl StorageManager {
         size_mb: u64,
         allow_online_grow: bool,
     ) -> AgentResult<()> {
+        validate_disk_mb(size_mb)?;
         let mounted = self.is_mounted(mount_dir).await?;
         if allow_online_grow && mounted {
             let image = image_path
@@ -468,14 +587,21 @@ impl StorageManager {
                 .to_str()
                 .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
                 .to_string();
-            let size_arg = format!("{}M", size_mb);
             spawn_blocking(move || {
-                command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
-                command_utils::run_in_host_mount_ns("resize2fs", &[&mount])?;
-                Ok::<(), AgentError>(())
+                // Skip fallocate when the file is already at quota (heal path).
+                // Never shrink a live image here — resize() routes shrinks offline.
+                let file_mb = std::fs::metadata(&image)
+                    .map(|m| m.len() / (1024 * 1024))
+                    .unwrap_or(0);
+                if image_needs_grow(file_mb, size_mb) {
+                    let size_arg = format!("{}M", size_mb);
+                    command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
+                }
+                grow_mounted_filesystem(&image, &mount)
             })
             .await
             .map_err(|e| AgentError::FileSystemError(format!("Resize task failed: {}", e)))??;
+            self.verify_filesystem_grown(mount_dir, size_mb).await?;
             return Ok(());
         }
         if mounted {
@@ -485,15 +611,70 @@ impl StorageManager {
             .to_str()
             .ok_or_else(|| AgentError::FileSystemError("Invalid image path".to_string()))?
             .to_string();
-        let size_arg = format!("{}M", size_mb);
-        spawn_blocking(move || {
-            command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
+        let grow_result = spawn_blocking(move || {
+            let file_mb = std::fs::metadata(&image)
+                .map(|m| m.len() / (1024 * 1024))
+                .unwrap_or(0);
+            if image_needs_grow(file_mb, size_mb) {
+                let size_arg = format!("{}M", size_mb);
+                command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
+            }
             command_utils::run_command_sync("resize2fs", &[&image])?;
             Ok::<(), AgentError>(())
         })
         .await
-        .map_err(|e| AgentError::FileSystemError(format!("Resize task failed: {}", e)))??;
-        Ok(())
+        .map_err(|e| AgentError::FileSystemError(format!("Resize task failed: {}", e)))?;
+        if mounted {
+            if let Err(remount_err) = self.mount_image(image_path, mount_dir).await {
+                if let Err(grow_err) = grow_result {
+                    return Err(AgentError::FileSystemError(format!(
+                        "Offline grow failed ({grow_err}), and remount failed ({remount_err})"
+                    )));
+                }
+                return Err(remount_err);
+            }
+            self.verify_filesystem_grown(mount_dir, size_mb).await?;
+            return grow_result;
+        }
+        grow_result
+    }
+
+    /// Grow the ext4 inside an unmounted image to fill the file.
+    /// `resize2fs` is a no-op when the filesystem already matches.
+    async fn resize_unmounted_image(&self, image_path: &Path) -> AgentResult<()> {
+        let image = image_path
+            .to_str()
+            .ok_or_else(|| AgentError::FileSystemError("Invalid image path".to_string()))?
+            .to_string();
+        spawn_blocking(move || command_utils::run_command_sync("resize2fs", &[&image]))
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("resize2fs task failed: {}", e)))?
+    }
+
+    async fn verify_filesystem_grown(&self, mount_dir: &Path, size_mb: u64) -> AgentResult<()> {
+        let mut last_mb = 0u64;
+        for attempt in 0..5 {
+            last_mb = self.filesystem_size_mb(mount_dir).await?;
+            if !filesystem_needs_grow(last_mb, size_mb) {
+                info!(
+                    "Filesystem at {} is {} MB after grow to {} MB",
+                    mount_dir.display(),
+                    last_mb,
+                    size_mb
+                );
+                return Ok(());
+            }
+            if attempt < 4 {
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+        }
+        Err(AgentError::FileSystemError(format!(
+            "Filesystem at {} is still {} MB after grow to {} MB \
+             (loop device may not have picked up the new image size)",
+            mount_dir.display(),
+            last_mb,
+            size_mb
+        )))
     }
 
     async fn shrink_image(&self, image_path: &Path, size_mb: u64) -> AgentResult<()> {
@@ -767,6 +948,103 @@ async fn move_children_except(from: &Path, to: &Path, except: &[&str]) -> AgentR
     Ok(())
 }
 
+fn validate_disk_mb(size_mb: u64) -> AgentResult<()> {
+    if size_mb == 0 {
+        return Err(AgentError::InvalidRequest(
+            "Requested disk size must be greater than 0 MB".to_string(),
+        ));
+    }
+    if size_mb > MAX_DISK_MB {
+        return Err(AgentError::InvalidRequest(format!(
+            "Requested disk size {} MB exceeds maximum {} MB",
+            size_mb, MAX_DISK_MB
+        )));
+    }
+    Ok(())
+}
+
+/// True when the live filesystem is still meaningfully smaller than the quota.
+/// Slack covers ext4 metadata (inode tables, journal) plus 1 MiB rounding.
+pub(crate) fn filesystem_needs_grow(fs_mb: u64, requested_mb: u64) -> bool {
+    let slack = FS_GROW_SLACK_MB.max(requested_mb / 20);
+    requested_mb > fs_mb.saturating_add(slack)
+}
+
+fn filesystem_size_mb_at(path: &Path) -> AgentResult<u64> {
+    let stat = nix::sys::statvfs::statvfs(path).map_err(|e| {
+        AgentError::FileSystemError(format!("statvfs failed for {}: {e}", path.display()))
+    })?;
+    let bytes = (stat.blocks() as u64).saturating_mul(stat.fragment_size() as u64);
+    Ok(bytes / (1024 * 1024))
+}
+
+/// After fallocate, tell the kernel the loop is bigger, then grow ext4.
+/// Without `--set-capacity`, resize2fs sees the old device size and no-ops.
+fn grow_mounted_filesystem(image: &str, mount: &str) -> AgentResult<()> {
+    let loop_dev = find_loop_device(image, mount)?;
+    command_utils::run_in_host_mount_ns("losetup", &["--set-capacity", &loop_dev])?;
+    match command_utils::run_in_host_mount_ns("resize2fs", &[&loop_dev]) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            warn!(
+                "resize2fs {} failed ({}); trying mount path {}",
+                loop_dev, e, mount
+            );
+            command_utils::run_in_host_mount_ns("resize2fs", &[mount])
+        }
+    }
+}
+
+fn find_loop_device(image: &str, mount: &str) -> AgentResult<String> {
+    for mounts_file in ["/proc/1/mounts", "/proc/mounts"] {
+        if let Ok(contents) = std::fs::read_to_string(mounts_file) {
+            if let Some(src) = parse_mount_source(&contents, Path::new(mount)) {
+                if src.starts_with("/dev/loop") {
+                    return Ok(src);
+                }
+            }
+        }
+    }
+    let out = command_utils::run_in_host_mount_ns_capture("losetup", &["-j", image])?;
+    parse_losetup_device(&out).ok_or_else(|| {
+        AgentError::FileSystemError(format!(
+            "No loop device found for image {} (mounted at {})",
+            image, mount
+        ))
+    })
+}
+
+/// First `/dev/loopN` from `losetup -j <image>` output.
+pub(crate) fn parse_losetup_device(output: &str) -> Option<String> {
+    let line = output.lines().find(|l| !l.trim().is_empty())?;
+    let dev = line.split(':').next()?.trim();
+    if dev.starts_with("/dev/loop") {
+        Some(dev.to_string())
+    } else {
+        None
+    }
+}
+
+/// Block device backing `mount_dir` in a `/proc/mounts` dump.
+pub(crate) fn parse_mount_source(contents: &str, mount_dir: &Path) -> Option<String> {
+    let target = mount_dir.to_string_lossy();
+    for line in contents.lines() {
+        let mut parts = line.split_whitespace();
+        let source = match parts.next() {
+            Some(s) => s.replace("\\040", " "),
+            None => continue,
+        };
+        let mount_point = match parts.next() {
+            Some(p) => p.replace("\\040", " "),
+            None => continue,
+        };
+        if mount_point == target {
+            return Some(source);
+        }
+    }
+    None
+}
+
 /// Parse /proc/mounts (or /proc/1/mounts) for `mount_dir`.
 /// Returns Some((true, noexec)) when the exact mount point is present.
 pub(crate) fn image_needs_grow(current_mb: u64, requested_mb: u64) -> bool {
@@ -815,6 +1093,43 @@ mod tests {
         assert!(image_needs_grow(10240, 81920));
         assert!(!image_needs_grow(81920, 81920));
         assert!(!image_needs_grow(81920, 10240));
+    }
+
+    #[test]
+    fn filesystem_needs_grow_detects_stale_ext4() {
+        // 50 GB image, 20 GB live FS — the user-facing Paper crash.
+        assert!(filesystem_needs_grow(20 * 1024, 50 * 1024));
+        // Same quota, FS already there (with ext4 overhead).
+        assert!(!filesystem_needs_grow(50 * 1024 - 512, 50 * 1024));
+        assert!(!filesystem_needs_grow(20 * 1024, 20 * 1024));
+        // Tiny grow still counts.
+        assert!(filesystem_needs_grow(1024, 2048));
+        // 20% slack covers typical ext4 overhead on a fully-grown image.
+        assert!(!filesystem_needs_grow(10 * 1024 - 400, 10 * 1024));
+    }
+
+    #[test]
+    fn parse_losetup_device_reads_first_loop() {
+        let out = "/dev/loop0: [2049]:12345 (/var/lib/catalyst/servers/images/abc.img)\n";
+        assert_eq!(parse_losetup_device(out).as_deref(), Some("/dev/loop0"));
+        let offset = "/dev/loop3: [2049]:1 (/path/to.img) (offset 0, sizelimit 0)\n";
+        assert_eq!(parse_losetup_device(offset).as_deref(), Some("/dev/loop3"));
+        assert_eq!(parse_losetup_device(""), None);
+        assert_eq!(parse_losetup_device("not-a-loop: foo\n"), None);
+    }
+
+    #[test]
+    fn parse_mount_source_finds_loop() {
+        let src = parse_mount_source(SAMPLE, Path::new("/var/lib/catalyst/srv-1"));
+        assert_eq!(src.as_deref(), Some("/dev/loop0"));
+        assert_eq!(
+            parse_mount_source(SAMPLE, Path::new("/var/lib/catalyst/missing")),
+            None
+        );
+        assert_eq!(
+            parse_mount_source(SAMPLE, Path::new("/var/lib/catalyst/with space")).as_deref(),
+            Some("/dev/loop2")
+        );
     }
 
     #[test]
@@ -886,6 +1201,20 @@ mod tests {
         assert!(dest.join("new.txt").exists());
         assert!(!dest.join("live.txt").exists());
         assert!(!src.exists());
+    }
+
+    #[tokio::test]
+    async fn heal_mounted_images_noop_without_images() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sm = StorageManager::new(tmp.path().to_path_buf());
+        sm.heal_mounted_images()
+            .await
+            .expect("heal with no images dir");
+        std::fs::create_dir_all(tmp.path().join("images")).unwrap();
+        std::fs::write(tmp.path().join("images/not-an-image.txt"), b"x").unwrap();
+        sm.heal_mounted_images()
+            .await
+            .expect("heal skips non-img files");
     }
 
     #[tokio::test]

@@ -108,6 +108,12 @@ impl CatalystAgent {
     pub async fn run(&self, mut shutdown_rx: broadcast::Receiver<()>) -> AgentResult<()> {
         info!("Starting Catalyst Agent");
 
+        // Heal loop images whose file grew but ext4/loop capacity did not.
+        // Safe to run while game servers are up (online resize2fs).
+        if let Err(e) = self.storage_manager.heal_mounted_images().await {
+            warn!("Storage heal on startup failed: {}", e);
+        }
+
         // Run an initial resource snapshot immediately (captures current usage at startup)
         if let Err(e) = self.ws_handler.send_resource_stats(None).await {
             warn!("Initial resource snapshot failed: {}", e);

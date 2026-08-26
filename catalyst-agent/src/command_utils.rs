@@ -25,9 +25,27 @@ pub fn run_command_sync_with_timeout(
     args: &[&str],
     timeout_secs: u64,
 ) -> AgentResult<()> {
+    run_command_with_timeout(command, args, timeout_secs, false).map(|_| ())
+}
+
+/// Run a command and capture stdout. stderr is included in the error on failure.
+pub fn run_command_capture(command: &str, args: &[&str]) -> AgentResult<String> {
+    run_command_with_timeout(command, args, 600, true)
+}
+
+fn run_command_with_timeout(
+    command: &str,
+    args: &[&str],
+    timeout_secs: u64,
+    capture_stdout: bool,
+) -> AgentResult<String> {
     let mut child = std::process::Command::new(command)
         .args(args)
-        .stdout(std::process::Stdio::null())
+        .stdout(if capture_stdout {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        })
         .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| AgentError::FileSystemError(format!("Failed to run {}: {}", command, e)))?;
@@ -38,12 +56,18 @@ pub fn run_command_sync_with_timeout(
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                if status.success() {
-                    return Ok(());
-                }
                 let mut stderr = String::new();
                 if let Some(mut err) = child.stderr.take() {
                     let _ = err.read_to_string(&mut stderr);
+                }
+                let mut stdout = String::new();
+                if capture_stdout {
+                    if let Some(mut out) = child.stdout.take() {
+                        let _ = out.read_to_string(&mut stdout);
+                    }
+                }
+                if status.success() {
+                    return Ok(stdout);
                 }
                 let stderr = stderr.trim();
                 return Err(AgentError::FileSystemError(if stderr.is_empty() {
@@ -128,6 +152,17 @@ pub fn run_in_host_mount_ns(command: &str, args: &[&str]) -> AgentResult<()> {
     run_command_sync("nsenter", &ns_args)
 }
 
+/// Like [`run_in_host_mount_ns`] but captures stdout.
+pub fn run_in_host_mount_ns_capture(command: &str, args: &[&str]) -> AgentResult<String> {
+    if same_mount_namespace_as_init() {
+        return run_command_capture(command, args);
+    }
+    let mut ns_args: Vec<&str> = Vec::with_capacity(4 + args.len());
+    ns_args.extend_from_slice(&["-t", "1", "-m", "--", command]);
+    ns_args.extend_from_slice(args);
+    run_command_capture("nsenter", &ns_args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +183,19 @@ mod tests {
     fn same_mount_namespace_as_init_does_not_panic() {
         // In CI / cargo test we share the host NS (or cannot read /proc/1).
         let _ = same_mount_namespace_as_init();
+    }
+
+    #[test]
+    fn run_command_capture_returns_stdout() {
+        let out = run_command_capture("echo", &["loop-ok"]).expect("echo");
+        assert_eq!(out.trim(), "loop-ok");
+    }
+
+    #[test]
+    fn run_command_capture_includes_stderr_on_failure() {
+        let err = run_command_capture("sh", &["-c", "echo boom >&2; exit 7"]).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("7"), "{msg}");
+        assert!(msg.contains("boom"), "{msg}");
     }
 }
