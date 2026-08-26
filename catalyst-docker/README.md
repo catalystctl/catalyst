@@ -21,6 +21,21 @@ That's it. The first-run **Setup** wizard creates the administrator. No database
 
 ---
 
+## ⚠️ Agent WebSocket Routing (multi-worker / multi-instance setups)
+
+Each agent holds one long-lived WebSocket to the panel. If you run **multiple
+backend instances** behind a load balancer, or set `WORKERS > 1` inside a single
+backend, commands to agents (`start`, `stop`, console, backups) will fail
+intermittently unless the same agent always reaches the same backend process.
+
+Rules of thumb:
+
+- **Single instance, `WORKERS` unset/0/1** (the default): nothing to do — this is the supported setup.
+- **Multiple backend instances**: your LB/reverse proxy must pin an agent's WebSocket session to the instance it connected to, and route the panel→agent command path through that same instance. Session affinity by cookie alone is not enough for machines — key on `nodeId` query parameter or source IP.
+- **`WORKERS > 1` in one container**: agent sockets are process-local per Node worker; the panel logs a warning at boot. Prefer `WORKERS=0`.
+
+---
+
 ## Table of Contents
 
 - [What You Need](#what-you-need)

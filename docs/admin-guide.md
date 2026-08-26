@@ -11,24 +11,25 @@ This guide covers all administrative features in Catalyst, from user management 
 3. [User Management](#user-management)
 4. [Role & Permission System](#role--permission-system)
 5. [Node Management](#node-management)
-6. [Server Templates](#server-templates)
-7. [Server Administration](#server-administration)
-8. [Backup Management](#backup-management)
-9. [Alerts System](#alerts-system)
-10. [Scheduled Tasks](#scheduled-tasks)
-11. [API Key Management](#api-key-management)
-12. [Webhooks](#webhooks)
-13. [Plugin Management](#plugin-management)
-14. [Security Settings](#security-settings)
-15. [SMTP & Email Configuration](#smtp--email-configuration)
-16. [Theme & Branding](#theme--branding)
-17. [IPAM (IP Address Management)](#ipam-ip-address-management)
-18. [Database Host Management](#database-host-management)
-19. [Audit Logs](#audit-logs)
-20. [Pterodactyl Migration](#pterodactyl-migration)
-21. [Auth Lockouts](#auth-lockouts)
-22. [OIDC / OAuth Provider Configuration](#oidc--oauth-provider-configuration)
-23. [Mod Manager Settings](#mod-manager-settings)
+6. [Agent link resilience controls](#agent-link-resilience-controls)
+7. [Server Templates](#server-templates)
+8. [Server Administration](#server-administration)
+9. [Backup Management](#backup-management)
+10. [Alerts System](#alerts-system)
+11. [Scheduled Tasks](#scheduled-tasks)
+12. [API Key Management](#api-key-management)
+13. [Webhooks](#webhooks)
+14. [Plugin Management](#plugin-management)
+15. [Security Settings](#security-settings)
+16. [SMTP & Email Configuration](#smtp--email-configuration)
+17. [Theme & Branding](#theme--branding)
+18. [IPAM (IP Address Management)](#ipam-ip-address-management)
+19. [Database Host Management](#database-host-management)
+20. [Audit Logs](#audit-logs)
+21. [Pterodactyl Migration](#pterodactyl-migration)
+22. [Auth Lockouts](#auth-lockouts)
+23. [OIDC / OAuth Provider Configuration](#oidc--oauth-provider-configuration)
+24. [Mod Manager Settings](#mod-manager-settings)
 
 ---
 
@@ -353,6 +354,19 @@ Assignments support optional expiration via the `expiresAt` field (ISO date stri
 ### Node Heartbeat
 
 The agent sends heartbeats to `POST /api/nodes/:nodeId/heartbeat` with health data including CPU, memory, disk, container count, and network I/O. The panel updates the node's online status and stores metrics for the statistics dashboard.
+
+---
+
+## Agent link resilience controls
+
+Catalyst hardens the panel↔agent WebSocket link so transient network trouble does not silently strand commands or grow memory without bound. These behaviors are automatic; as an operator you mainly observe them via logs and counters:
+
+- **Dead-socket detection:** the panel sends WS-level pings to every connected agent every 30 seconds and reaps any agent socket that stays silent past a 60-second liveness timeout using forceful `terminate()` — skipping the close-frame handshake a half-open peer would never complete.
+- **Command queueing during reconnects:** commands aimed at a disconnected agent are queued briefly per node (outbox cap of 50 messages with a 30-second TTL) and delivered when the agent reconnects; expired or overflowing entries are dropped and counted.
+- **Backpressure shedding:** when a slow agent's outbound buffer passes the backpressure watermark (`AGENT_BACKPRESSURE_BYTES`, default 4 MiB), low-priority traffic to that agent is shed and bulk binary transfers abort instead of buffering unboundedly; control-plane power commands (start/stop/restart/kill) are always attempted.
+- **Reliability statistics:** cumulative per-node counters (connections, heartbeat timeouts, rate-limited drops, outbox queued/dropped, backpressure drops) are queryable programmatically via `wsGateway.getReliabilityStats()`.
+- **Flap detection:** a node connecting 5 or more times within one minute raises a `node_flapping` event to admin subscribers, so chronic instability surfaces instead of hiding behind logs.
+- **Protocol compatibility:** an agent speaking an incompatible protocol major receives a machine-readable `protocol_mismatch` rejection at handshake rather than undefined behavior afterwards.
 
 ---
 

@@ -274,6 +274,8 @@ Webhooks include an `X-Webhook-Signature` header with an HMAC-SHA256 hash of the
 | `MAX_CLIENT_CONNECTIONS` | Integer | `10000` | Max concurrent connections from dashboard/API clients. |
 | `MAX_CONNECTIONS_PER_USER` | Integer | `10` | Max concurrent connections per authenticated user. |
 | `WORKERS` | Integer | `0` | Number of **Node.js** cluster worker processes. `0` = single process (cluster mode off). Set to a positive number for multi-process cluster mode. |
+| `WS_MAX_PAYLOAD_BYTES` | Integer | `8388608` (8 MB) | Maximum accepted WebSocket message size (`fastify-websocket` `maxPayload`, registered in `catalyst-backend/src/index.ts`). Messages larger than this are rejected at the protocol level. Raise only if agents legitimately send larger single frames. |
+| `AGENT_BACKPRESSURE_BYTES` | Integer | `4194304` (4 MiB) | Outbound backpressure watermark per agent socket in `WebSocketGateway`. When an agent's unsent outbound buffer exceeds this, low-priority traffic to that agent is shed and bulk binary transfers abort instead of growing memory; control-plane power commands are always attempted. |
 | `METRICS_RETENTION_DAYS` | Integer | `30` | How long to retain server metrics data, in days. |
 
 ### Auto Updater
@@ -707,4 +709,4 @@ openssl rand -base64 32
 
 ---
 
-*Last updated: 2026-05-04*
+*Last updated: 2026-08-26*
