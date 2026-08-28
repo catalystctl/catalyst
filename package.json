@@ -34,6 +34,7 @@
 		"test:e2e": "pnpm --filter catalyst-frontend run test:e2e",
 		"test:screenshots": "pnpm --filter catalyst-frontend run test:screenshots",
 		"test:screenshots:headed": "pnpm --filter catalyst-frontend run test:screenshots:headed",
+		"screenshots:crawl": "pnpm --filter catalyst-frontend run screenshots:crawl",
 		"clean": "rm -rf catalyst-backend/dist catalyst-backend/node_modules catalyst-frontend/dist catalyst-frontend/node_modules node_modules",
 		"prepare": "husky"
 	},

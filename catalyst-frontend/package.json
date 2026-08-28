@@ -17,6 +17,8 @@
 		"test:e2e": "playwright test",
 		"test:screenshots": "playwright test screenshot-crawl",
 		"test:screenshots:headed": "playwright test screenshot-crawl --headed",
+		"screenshots:crawl": "node scripts/screenshots/capture-all.mjs",
+		"screenshots:crawl:headed": "node scripts/screenshots/capture-all.mjs --headed",
 		"build:analyze": "vite build --mode analyze"
 	},
 	"dependencies": {
