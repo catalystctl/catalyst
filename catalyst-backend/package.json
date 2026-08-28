@@ -65,7 +65,7 @@
 		"@eslint/js": "~10.0.1",
 		"@types/archiver": "^6.0.4",
 		"@types/extract-zip": "^2.0.3",
-		"@types/node": "~26.2.0",
+		"@types/node": "~26.3.0",
 		"@typescript-eslint/eslint-plugin": "~8.67.0",
 		"@typescript-eslint/parser": "~8.67.0",
 		"@vitest/coverage-v8": "~4.1.10",
