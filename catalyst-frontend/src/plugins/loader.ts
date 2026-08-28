@@ -60,14 +60,52 @@ export async function loadPluginFrontend(manifest: PluginManifest): Promise<Load
 
   const importer = frontendMap.get(manifest.name);
   if (!importer) {
-    console.warn(`[PluginLoader] No frontend found for plugin "${manifest.name}"`);
-    return { manifest, routes: [], tabs, components };
+    // ── Runtime-installed plugin? ────────────────────────────────────────
+    // Marketplace-installed plugins ship a self-contained ESM bundle at
+    // frontend/frontend.mjs, served by the backend under /plugins-assets/.
+    // Everything (including React) is bundled by the author; no import map.
+    const API_BASE = import.meta.env.VITE_API_URL ?? '';
+    const runtimeUrl = `${API_BASE}/plugins-assets/${encodeURIComponent(manifest.name)}/frontend.mjs`;
+    let runtimeMod: FrontendModule | null = null;
+    try {
+      runtimeMod = (await import(/* @vite-ignore */ runtimeUrl)) as FrontendModule;
+    } catch {
+      console.warn(`[PluginLoader] No frontend found for plugin "${manifest.name}"`);
+      return { manifest, routes: [], tabs, components };
+    }
+
+    const mod = runtimeMod;
+    // Reuse the exact same registration paths as build-time modules below.
+    return registerFrontendModule(mod, manifest);
   }
 
   try {
     const mod = await importer();
+    return registerFrontendModule(mod, manifest);
+  } catch (error) {
+    reportSystemError({
+      level: 'error',
+      component: 'loader',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      metadata: { context: 'Failed to load plugin frontend' },
+    });
+    console.error(`[PluginLoader] Failed to load frontend for "${manifest.name}":`, error);
+  }
 
-    // ── New SDK pattern: default export is a FrontendPluginDefinition ──
+  return { manifest, routes, tabs, components };
+}
+
+/**
+ * Register tabs/routes/slots/lifecycle from a loaded frontend module — shared
+ * by build-time imports and runtime-installed plugin bundles.
+ */
+function registerFrontendModule(mod: FrontendModule, manifest: PluginManifest): LoadedPlugin {
+  const tabs: PluginTabConfig[] = [];
+  const routes: PluginRouteConfig[] = [];
+  const components: PluginComponentSlot[] = [];
+
+  // ── New SDK pattern: default export is a FrontendPluginDefinition ──
     const definition = mod.default ?? mod;
     const isSdkDefinition =
       definition &&
@@ -200,16 +238,6 @@ export async function loadPluginFrontend(manifest: PluginManifest): Promise<Load
         }
       }
     }
-  } catch (error) {
-    reportSystemError({
-      level: 'error',
-      component: 'loader',
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      metadata: { context: 'Failed to load plugin frontend' },
-    });
-    console.error(`[PluginLoader] Failed to load frontend for "${manifest.name}":`, error);
-  }
 
   return { manifest, routes, tabs, components };
 }

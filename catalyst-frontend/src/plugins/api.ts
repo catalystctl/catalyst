@@ -41,7 +41,18 @@ async function apiFetch<T>(
   });
   if (!res.ok) {
     reportSystemError({ level: 'error', component: 'PluginApi', message: `HTTP ${res.status}`, metadata: { context: 'apiFetch' } });
-    throw new Error(`HTTP ${res.status}`);
+    // Prefer the structured error body (e.g. SAFETY_CONSENT_REQUIRED payloads)
+    // over a bare status string when the backend provides one.
+    let body: any = null;
+    try {
+      body = await res.json();
+    } catch {
+      /* non-JSON error body */
+    }
+    const err = new Error(body?.error || `HTTP ${res.status}`) as Error & { code?: string; payload?: any };
+    if (body?.code) err.code = body.code;
+    err.payload = body;
+    throw err;
   }
   return res.json() as Promise<T>;
 }
@@ -67,12 +78,51 @@ export async function fetchPluginDetails(name: string): Promise<any> {
 }
 
 /**
- * Enable or disable plugin
+ * Enable or disable plugin.
+ * When enabling a plugin that has not accepted the current safety disclaimer,
+ * pass `acceptSafetyVersion` (must match the server's DISCLAIMER_VERSION) to
+ * record the acceptance in the same request.
  */
-export async function togglePlugin(name: string, enabled: boolean): Promise<void> {
+export async function togglePlugin(
+  name: string,
+  enabled: boolean,
+  opts?: { acceptSafetyVersion?: string },
+): Promise<void> {
   await apiFetch(`/api/plugins/${name}/enable`, {
     method: 'POST',
-    body: { enabled },
+    body: {
+      enabled,
+      ...(opts?.acceptSafetyVersion
+        ? { safety: { disclaimerVersion: opts.acceptSafetyVersion } }
+        : {}),
+    },
+  });
+}
+
+/** Structured error thrown by apiFetch when the enable endpoint gates on consent. */
+export interface SafetyConsentRequiredError extends Error {
+  code: 'SAFETY_CONSENT_REQUIRED';
+  /** Full response body ({ reason, requestedCapabilities, disclaimerVersion, … }). */
+  payload?: {
+    reason?: string;
+    requestedPermissions?: string[];
+    requestedCapabilities?: import('./types').CapabilitySummary[];
+    disclaimerVersion?: string;
+    author?: string;
+    version?: string;
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * Replace the admin-controlled permission grants for a plugin. Grants must be
+ * a subset of the manifest's declared permissions; revocations take effect
+ * immediately for the plugin's data access.
+ */
+export async function updatePluginPermissions(name: string, granted: string[]): Promise<void> {
+  await apiFetch(`/api/plugins/${name}/permissions`, {
+    method: 'PUT',
+    body: { granted },
   });
 }
 
@@ -102,4 +152,55 @@ export async function updatePluginConfig(
 export async function fetchPluginFrontendManifest(name: string): Promise<any> {
   const data = await apiFetch<{ data: any }>(`/api/plugins/${name}/frontend-manifest`);
   return data.data;
+}
+
+// ── Marketplace ──────────────────────────────────────────────────────────────
+
+export interface MarketplaceEntry {
+  name: string;
+  displayName?: string;
+  description?: string;
+  author?: string;
+  version?: string;
+  downloadUrl: string;
+  sha256?: string;
+  homepage?: string;
+  tags?: string[];
+  installed?: boolean;
+}
+
+export interface MarketplaceBrowseResult {
+  sources: { url: string; ok: boolean; error?: string; entryCount: number }[];
+  entries: MarketplaceEntry[];
+}
+
+/** Browse configured marketplace indexes (5-minute server-side cache). */
+export async function fetchMarketplace(forceRefresh = false): Promise<MarketplaceBrowseResult> {
+  const data = await apiFetch<{ data: MarketplaceBrowseResult }>(
+    `/api/plugins/marketplace${forceRefresh ? '?forceRefresh=true' : ''}`,
+  );
+  return data.data ?? { sources: [], entries: [] };
+}
+
+/**
+ * Download, verify and stage a plugin package. Code lands inert until an
+ * admin accepts the safety disclaimer and enables it.
+ */
+export async function installPlugin(url: string, sha256?: string): Promise<{ name: string; version: string; upgraded: boolean }> {
+  const data = await apiFetch<{
+    success: boolean;
+    data: { name: string; version: string; upgraded: boolean };
+  }>(`/api/plugins/install`, {
+    method: 'POST',
+    body: { url, ...(sha256 ? { sha256 } : {}) },
+  });
+  return data.data;
+}
+
+/** Uninstall a plugin; optionally purge its persisted storage rows. */
+export async function uninstallPlugin(name: string, purgeData = false): Promise<void> {
+  await apiFetch(`/api/plugins/${name}/uninstall`, {
+    method: 'POST',
+    body: { purgeData },
+  });
 }
