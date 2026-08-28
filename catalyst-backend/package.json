@@ -27,7 +27,7 @@
 		"test:coverage": "vitest run --coverage"
 	},
 	"dependencies": {
-		"@aws-sdk/client-s3": "~3.1107.0",
+		"@aws-sdk/client-s3": "~3.1117.0",
 		"@better-auth/passkey": "~1.6.26",
 		"@fastify/compress": "^9.2.0",
 		"@fastify/cors": "~11.3.0",
