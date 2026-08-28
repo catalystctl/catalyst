@@ -29,10 +29,19 @@ Catalyst plugins extend the platform with custom backend routes, frontend UI com
 - [Plugin SDK](#plugin-sdk)
   - [Installation & Scaffolding](#installation--scaffolding)
   - [SDK Exports](#sdk-exports)
+  - [Permission Declarations](#permission-declarations)
   - [Typed Collections](#typed-collections)
   - [Config Definitions](#config-definitions)
   - [Route Builder](#route-builder)
   - [Testing Utilities](#testing-utilities)
+- [Safety Consent & Permission Control](#safety-consent--permission-control)
+  - [Disclaimer Policy](#disclaimer-policy)
+  - [Effective Grants](#effective-grants)
+  - [Declaring capabilities reviewers understand](#declaring-capabilities-reviewers-understand)
+- [Marketplace & Packaging](#marketplace--packaging)
+  - [Package format (.catpkg.zip)](#package-format-catpkgzip)
+  - [Marketplace index schema](#marketplace-index-schema)
+  - [Runtime frontends (frontend.mjs)](#runtime-frontends-frontendmjs)
 - [Plugin Security](#plugin-security)
   - [Permission Model](#permission-model)
   - [Database Scoping](#database-scoping)
@@ -176,6 +185,7 @@ Every plugin must have a `plugin.json` file at its root. This is the single sour
 | `author` | `string` | ✅ | Author name (max 100 chars). |
 | `catalystVersion` | `string` | ✅ | Minimum compatible Catalyst version. Supports `>=`, `>`, `=`, `<`, `<=`. |
 | `permissions` | `string[]` | ❌ | Permission scopes the plugin requests. See [Permission Model](#permission-model). |
+| `permissionDescriptions` | `Record<string, string>` | ❌ | Reviewer-facing copy per **declared** scope (max 200 chars/key). Rendered verbatim in the safety-consent dialog and permission reviewers; keys not present in `permissions` fail validation. Built-in scopes ship panel copy already — use this for custom scopes or to refine wording. |
 | `backend` | `object` | ❌ | `{ "entry": "backend/index.js" }` — path to backend module. |
 | `frontend` | `object` | ❌ | `{ "entry": "frontend/index.ts" }` — path to frontend module. |
 | `dependencies` | `Record<string, string>` | ❌ | Plugin name → version map. Validated at discovery. |
@@ -699,6 +709,20 @@ From `@catalyst/plugin-sdk`:
 | `PluginTaskHandler` | type | Cron task handler signature |
 | `PluginEventHandler` | type | Event handler signature |
 
+#### Permission Declarations
+
+```typescript
+import { definePermissions } from '@catalyst/plugin-sdk';
+
+// Produces the `permissions` + `permissionDescriptions` manifest block.
+export const manifestPermissions = definePermissions(
+  'server.read',
+  { token: 'leaderboard.write', description: 'Update leaderboard entries for tracked servers' },
+);
+```
+
+Built-in scopes already carry reviewer copy on the panel; only describe custom scopes (or refine builtin wording when the default is misleading). See [Declaring capabilities reviewers understand](#declaring-capabilities-reviewers-understand).
+
 #### Config Definitions
 
 ```typescript
@@ -801,6 +825,133 @@ await harness.unload();
 
 ---
 
+## Safety Consent & Permission Control
+
+Installing (first-enabling) a plugin is a trust decision, and the panel treats it as one. Two mechanisms work together:
+
+1. **Safety disclaimer** — recorded acceptance required before enabling.
+2. **Effective grants** — per-plugin, admin-revocable permission control.
+
+### Disclaimer Policy
+
+Enabling a plugin requires accepting the safety disclaimer **whenever any of these is true**:
+
+| Trigger | Consent reason |
+|---------|----------------|
+| No acceptance has ever been recorded | `never_accepted` |
+| The plugin's version changed since acceptance (new code) | `plugin_updated` |
+| The manifest declares permissions not covered by the accepted snapshot | `permissions_grew` |
+| The panel's disclaimer wording was bumped (`DISCLAIMER_VERSION`) | `disclaimer_updated` |
+
+Acceptance records **who** accepted, **when**, and the exact permission snapshot accepted. Disabling never requires consent. Acceptances are audited in `pluginActionAudit` (`safety.accepted`).
+
+> **Legacy grandfathering:** plugins that were enabled before this feature shipped keep running after upgrade; a backfill acceptance with no accepting user (`legacyAcceptance`) is recorded at startup and surfaced in the UI as *"Review access"* so admins can re-confirm or revoke.
+
+### Effective Grants
+
+- Enabling grants **all declared permissions by default** — plugins work out of the box.
+- Admins can then revoke any declared permission per plugin via **Plugins → Details → Permissions** (`PUT /api/plugins/:name/permissions`). Grant lists are validated subsets of the manifest; extra tokens are rejected.
+- Checks are **live**: scoped DB table access, whitelisted writes and plugin-to-plugin RPC re-read the grant list on every call, so revoking `server.write` stops status changes mid-flight without a restart or reload. Re-granting restores access immediately.
+- Grants persist in the `Plugin` row (`grantedPermissions`) and survive restarts/reloads.
+
+### Declaring capabilities reviewers understand
+
+Enabling your plugin shows an admin a consent dialog listing exactly what it can do. Make that list meaningful:
+
+- **Declare only what you use.** Every declared scope appears as explicit consent wording; unused declarations erode trust and enlarge the review surface.
+- **Describe custom scopes.** The panel ships reviewer copy for built-in scopes (`server.read`, `plugin.rpc`, …). For anything custom, add `permissionDescriptions`:
+
+```json
+{
+  "permissions": ["server.read", "leaderboard.write"],
+  "permissionDescriptions": {
+    "leaderboard.write": "Create and update leaderboard entries for tracked servers"
+  }
+}
+```
+
+Keys must reference declared permissions — mismatches are rejected at discovery time with an actionable error, so typos never reach production silently.
+
+- **Gate route handlers on user permissions** (`ctx.requirePermission('server.read')`) *and* rely on the scoped db for data gating: the first protects against unprivileged users, the second reflects what the admin granted *your plugin* — and revocations apply mid-flight.
+
+### What Revocation Does *Not* Do
+
+Mounted routes, scheduled tasks and event listeners remain registered until the plugin is disabled — Fastify cannot unregister routes cleanly and tasks re-register in `onEnable()`. Data access behind those code paths is gated live, which is the meaningful lever; the disable button remains the complete off-switch.
+
+### Admin Endpoints
+
+All require `admin.read` for lists, `admin.write` for mutations:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/plugins` | List with permission/consent state + capability counts |
+| `GET /api/plugins/:name` | Full details incl. routes/tasks/events/WS/RPC inventory |
+| `POST /api/plugins/:name/enable` | Body `{ enabled, safety?: { disclaimerVersion } }`. Returns `409 SAFETY_CONSENT_REQUIRED` when a fresh acceptance is needed |
+| `PUT /api/plugins/:name/permissions` | Body `{ granted: string[] }` ⊆ declared permissions |
+
+---
+
+## Marketplace & Packaging
+
+Plugins ship as `.catpkg.zip` packages and install through the panel — no file shuffling, no rebuilds.
+
+### Package format (.catpkg.zip)
+
+A zip archive whose entries sit at the root (or under one wrapper folder, which is flattened automatically). Allowed top-level content **only**: `plugin.json`, `README.md`, `LICENSE`, `backend/`, `frontend/`, `assets/`. Everything else is rejected at install time; traversal segments (`../`), absolute paths and archives exceeding size caps (256 MB compressed / 512 MB extracted / 20k entries) are refused before anything is written. The embedded `plugin.json` is validated with the full manifest schema pre-install.
+
+Build one from your plugin directory with the SDK CLI:
+
+```bash
+npx @catalyst/plugin-sdk pack            # → ./name-version.catpkg.zip + .sha256 sidecar
+```
+
+**Install flow (trust model):** installing downloads, checksum-verifies against the index-pinned `sha256`, stages and wires the plugin into the registry — but everything stays **inert until an admin accepts the safety disclaimer and enables it**. Version-bumped reinstalls re-trigger consent via the normal rules. Uninstall (`POST /api/plugins/:name/uninstall`, optional `purgeData`) removes code and optionally stored data.
+
+### Marketplace index schema
+
+Point the panel at one or more index documents via comma-separated `PLUGIN_MARKETPLACE_URLS`. Any host publishes a catalog by serving this JSON (fetched with SSRF guards, cached 5 minutes):
+
+```json
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "name": "awesome-plugin",
+      "displayName": "Awesome Plugin",
+      "description": "What it does",
+      "author": "someone",
+      "version": "1.2.0",
+      "downloadUrl": "https://cdn.example.com/awesome-plugin-1.2.0.catpkg.zip",
+      "sha256": "…hex digest of the archive…",
+      "homepage": "https://github.com/…",
+      "tags": ["discord", "notifications"]
+    }
+  ]
+}
+```
+
+Admins browse/install from **Plugins → Marketplace**. `sha256` pinning is strongly recommended for publishers.
+
+### Runtime frontends (frontend.mjs)
+
+Historically plugin UI compiled into the panel build — installed plugins couldn't render. Now the host falls back to serving an installed plugin's self-contained bundle at `/plugins-assets/<name>/frontend.mjs` when no build-time frontend exists. Contract:
+
+- One ESM file built with Vite/Rollup **lib mode**, everything bundled inline (including React) — no bare imports, no import maps.
+- Exports exactly what a build-time frontend module does: `default FrontendPluginDefinition`, or legacy `AdminTab` / `ServerTab` / `UserPage` / `slots`.
+- Served authenticated, MIME-correct, same-origin ⇒ cookies flow and plugin API calls work as usual.
+
+```js
+// vite.config.js for a plugin's frontend/
+export default {
+  build: { lib: { entry: 'index.ts', formats: ['es'], fileName: () => 'frontend.mjs' }, outDir: 'dist' },
+};
+// rename dist/frontend.mjs into the package's frontend/ directory
+```
+
+Backend-only packages skip `frontend.mjs` entirely and just contribute API/cron/event functionality.
+
+---
+
 ## Plugin Security
 
 ### Permission Model
@@ -882,12 +1033,13 @@ To enable hot reload, ensure the PluginLoader is initialized with `hotReload: tr
 | Issue | Impact | Workaround |
 |-------|--------|------------|
 | No true process isolation | A plugin crash can take down the server | Write defensive error handling; `runtime: "isolated"` is accepted but forced in-process until worker IPC is finished |
-| Frontend bundled at build time | Cannot install new plugins without rebuilding the panel frontend | Pre-bundle all plugins under `catalyst-plugins/*/frontend` |
+| Repo plugin UI is compiled in | Build-time (`catalyst-plugins/*`) frontends require a panel rebuild to change | Marketplace-installed plugins ship self-contained `frontend.mjs` runtime bundles instead |
+| Ecosystem/tooling maturity | Install pipeline & index protocol are new; no official catalog yet | Configure `PLUGIN_MARKETPLACE_URLS`; publish indexes per schema above |
 | ESM hot-reload unreliable | Changes may not reload without restart | Restart backend after structural changes |
 | Collection storage (legacy) not scalable | O(n) queries over JSON arrays | Set `"storageEngine": "dedicated"` for large collections |
 | No row-level security | Plugins with `server.read` see ALL servers | Filter results in the plugin; future host helpers may scope by requester |
 | Task scheduling is process-local | Tasks lost on server restart | Re-register tasks in `onEnable()` (host clears on disable) |
-| No plugin marketplace | Plugins only discovered from filesystem | Curate plugins under `catalyst-plugins/` |
+| Marketplace opt-in via env | Browsing/install disabled until `PLUGIN_MARKETPLACE_URLS` is set | Configure one or more index URLs per [Marketplace](#marketplace--packaging) schema |
 | Config schema vs values | Admin UI needs field schemas; runtime needs plain values | Host unwraps schema → values in `getConfig`; `configSchema` is the original plugin.json |
 | Host auth user id shape | `request.user.userId` (not `.id`) | Use `context.getUserId(request)` |
 | RPC circuit breaker | Repeated failures open a 30s circuit | Keep plugin APIs fast; handle thrown circuit errors |

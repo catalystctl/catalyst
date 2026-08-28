@@ -3672,6 +3672,11 @@ Update an existing scheduled task. All fields are optional — only provided fie
 | `POST` | `/api/plugins/:name/enable` | `admin.write` | Enable or disable a plugin |
 | `POST` | `/api/plugins/:name/reload` | `admin.write` | Hot-reload a plugin |
 | `PUT` | `/api/plugins/:name/config` | `admin.write` | Update plugin configuration |
+| `PUT` | `/api/plugins/:name/permissions` | `admin.write` | Replace effective permission grants |
+| `POST` | `/api/plugins/install` | `admin.write` | Install/upgrade a `.catpkg.zip` by URL |
+| `POST` | `/api/plugins/:name/uninstall` | `admin.write` | Remove an installed plugin |
+| `GET` | `/api/plugins/marketplace` | `admin.read` | Browse configured marketplace indexes |
+| `GET` | `/plugins-assets/:name/:file` | auth | Serve installed-plugin runtime frontend assets |
 | `GET` | `/api/plugins/:name/frontend-manifest` | `admin.read` | Get plugin frontend manifest |
 
 #### GET `/api/plugins`
@@ -3773,11 +3778,13 @@ Enable or disable a plugin. Enabling loads the plugin's backend and frontend. Di
 **Body:**
 ```json
 {
-  "enabled": true
+  "enabled": true,
+  "safety": { "disclaimerVersion": "1" }
 }
 ```
 
 - `enabled` — boolean, required
+- `safety.disclaimerVersion` — optional; required to pass the safety-consent gate when re-acceptance is pending (first enable, plugin update, added permissions, or disclaimer bump)
 
 **Response (200):**
 ```json
@@ -3787,9 +3794,50 @@ Enable or disable a plugin. Enabling loads the plugin's backend and frontend. Di
 }
 ```
 
+**Consent gate response (409):**
+```json
+{
+  "success": false,
+  "code": "SAFETY_CONSENT_REQUIRED",
+  "reason": "permissions_grew",
+  "requestedPermissions": ["server.read"],
+  "disclaimerVersion": "1"
+}
+```
+
 **Errors:**
 - `400` — Plugin failed to enable/disable
 - `404` — Plugin not found
+- `409` — Safety disclaimer acceptance required (`SAFETY_CONSENT_REQUIRED`)
+
+#### PUT `/api/plugins/:name/permissions`
+
+Replace the admin-controlled effective grants for a plugin. The grant list must be a subset of the plugin's declared permissions. Revocations take effect immediately for the plugin's data and RPC access.
+
+**Auth:** `admin.write`  
+**Body:**
+```json
+{
+  "granted": ["server.read"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Plugin permissions updated",
+  "data": {
+    "declaredPermissions": ["server.read", "server.write"],
+    "grantedPermissions": ["server.read"],
+    "revokedPermissions": ["server.write"]
+  }
+}
+```
+
+**Errors:**
+- `400` — Grant list contains undeclared permissions
+- `404` — Plugin not found or in error state
 
 #### POST `/api/plugins/:name/reload`
 
