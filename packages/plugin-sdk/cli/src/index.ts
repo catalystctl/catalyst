@@ -18,6 +18,10 @@ Commands:
   create <name>      Create a new plugin from a template
   build              Build the plugin for production
   test               Run plugin tests
+  pack               Package the plugin into a marketplace-ready .catpkg.zip
+
+Pack options:
+  --out <dir>        Output directory (default: current directory)
 
 Create options:
   --template, -t     Template type (backend-only | fullstack | minimal)
@@ -35,10 +39,12 @@ function parseArgs(argv: string[]): { command: string; name: string; options: Re
   }
 
   const command = args[0];
-  const name = args[1] || '';
+  // Commands like `pack`/`build`/`test` take no name — don't swallow a flag.
+  const secondArgIsName = !!args[1] && !args[1].startsWith('-');
+  const name = secondArgIsName ? args[1] : '';
   const options: Record<string, string | boolean> = {};
 
-  for (let i = 2; i < args.length; i++) {
+  for (let i = secondArgIsName ? 2 : 1; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--help' || arg === '-h') {
       options.help = true;
@@ -48,6 +54,8 @@ function parseArgs(argv: string[]): { command: string; name: string; options: Re
       options.template = args[++i] || 'backend-only';
     } else if (arg === '--path' || arg === '-p') {
       options.path = args[++i] || '.';
+    } else if (arg === '--out') {
+      options.out = args[++i] || '.';
     } else if (arg === '--watch') {
       options.watch = true;
     }
@@ -164,6 +172,86 @@ async function testPlugin() {
   }
 }
 
+const PACK_INCLUDE = [
+  'plugin.json',
+  'README.md',
+  'LICENSE',
+];
+
+const PACK_DIRS = ['backend', 'frontend', 'assets'];
+
+/**
+ * Package the plugin in CWD into a marketplace-ready .catpkg.zip plus a
+ * sha256 sidecar. The archive root is flattened (entries at zip root) which
+ * the panel installer accepts directly.
+ */
+async function packPlugin(options: Record<string, string | boolean>) {
+  const fsSync = await import('fs');
+  const fsp = await import('fs/promises');
+  const pathMod = await import('path');
+
+  let manifest: any;
+  try {
+    manifest = JSON.parse(await fsp.readFile('plugin.json', 'utf-8'));
+  } catch {
+    console.error('❌ pack must be run from a plugin directory containing plugin.json');
+    process.exit(1);
+  }
+
+  // Validate manifest, then assemble. frontend/frontend.mjs enables runtime
+  // loading after install (see docs/plugins.md "Runtime frontends").
+  const outDir = pathMod.resolve((options.out as string) || '.');
+  await fsp.mkdir(outDir, { recursive: true });
+  const outFile = pathMod.join(outDir, `${manifest.name}-${manifest.version}.catpkg.zip`);
+
+  console.log(`📦 Packaging ${manifest.name}@${manifest.version} → ${outFile}`);
+
+  const archiverMod = await import('archiver').catch(() => null);
+  if (!archiverMod) {
+    console.error("❌ archiver is unavailable — install it with: npm install -D archiver");
+    process.exit(1);
+  }
+  const archiverFactory = (archiverMod as any).default ?? archiverMod;
+  const archive = archiverFactory('zip', { zlib: { level: 9 } });
+  const hash = (await import('crypto')).createHash('sha256');
+  const ws = fsSync.createWriteStream(outFile);
+  archive.on('data', (chunk: Buffer) => hash.update(chunk));
+  const done = new Promise<void>((resolve, reject) => {
+    ws.on('close', resolve);
+    archive.on('error', reject);
+    ws.on('error', reject);
+  });
+
+  archive.pipe(ws);
+
+  const entries = await fsp.readdir('.', { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isFile() && PACK_INCLUDE.includes(entry.name)) {
+      archive.file(entry.name, { name: entry.name });
+      console.log(`   + ${entry.name}`);
+    }
+  }
+  for (const dir of PACK_DIRS) {
+    if (fsSync.existsSync(dir)) {
+      archive.directory(dir, dir);
+      console.log(`   + ${dir}/`);
+    }
+  }
+  if (!fsSync.existsSync(pathMod.join('backend')) && !fsSync.existsSync(pathMod.join('frontend'))) {
+    console.log('⚠️  No backend/ or frontend/ directory — package will install but do nothing.');
+  }
+
+  await archive.finalize();
+  await done;
+
+  const digest = hash.digest('hex');
+  await fsp.writeFile(`${outFile}.sha256`, `${digest}  ${pathMod.basename(outFile)}\n`, 'utf-8');
+  console.log('✅ Packaged.');
+  console.log(`   Archive : ${outFile}`);
+  console.log(`   sha256  : ${digest}`);
+  console.log('   Publish both the archive and its digest to your marketplace index.');
+}
+
 async function main() {
   const { command, name, options } = parseArgs(process.argv);
 
@@ -181,6 +269,9 @@ async function main() {
       break;
     case 'test':
       await testPlugin();
+      break;
+    case 'pack':
+      await packPlugin(options);
       break;
     default:
       console.error(`Unknown command: ${command}`);

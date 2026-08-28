@@ -20,6 +20,10 @@ export type {
 export { defineConfig, configField, createConfigSchema } from './config.js';
 export type { ConfigFieldDef } from './config.js';
 
+// Permissions
+export { definePermissions } from './permissions.js';
+export type { PermissionDefinition, PermissionsManifestFragment } from './permissions.js';
+
 // Storage
 export { createTypedCollection } from './storage.js';
 export type { TypedCollection } from './storage.js';

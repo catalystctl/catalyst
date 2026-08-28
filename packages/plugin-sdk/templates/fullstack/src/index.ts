@@ -1,5 +1,8 @@
 import { defineRoutes } from '@catalyst/plugin-sdk';
 
+// Capabilities are declared in plugin.json (`permissions` +
+// `permissionDescriptions`). Use `definePermissions()` from the SDK in your
+// build tooling if you want to generate that manifest block from code.
 export default {
   async onLoad(context) {
     context.logger.info('{{PluginName}} loaded');

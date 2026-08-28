@@ -7,6 +7,11 @@ export interface PluginManifest {
   author: string;
   catalystVersion: string;
   permissions: string[];
+  /**
+   * Author-provided reviewer copy for declared scopes (esp. custom ones).
+   * Keys must be declared permissions; see `definePermissions()`.
+   */
+  permissionDescriptions?: Record<string, string>;
   backend?: { entry: string };
   frontend?: { entry: string };
   dependencies?: Record<string, string>;

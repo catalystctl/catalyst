@@ -5,7 +5,13 @@
   "description": "{{description}}",
   "author": "{{author}}",
   "catalystVersion": ">=1.0.0",
-  "permissions": ["server.read", "admin.read"],
+  "permissions": [
+    "server.read",
+    "{{pluginName}}.sample"
+  ],
+  "permissionDescriptions": {
+    "{{pluginName}}.sample": "Example custom capability. Describe what this scope actually lets the plugin do — this copy is shown verbatim to admins in the safety-consent dialog."
+  },
   "backend": {
     "entry": "dist/src/index.js"
   },
