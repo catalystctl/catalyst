@@ -1,0 +1,1364 @@
+{
+  "generatedAt": "2026-08-28T01:17:59.042Z",
+  "frontendUrl": "http://localhost:5173",
+  "captures": [
+    {
+      "type": "page",
+      "section": "auth",
+      "file": "login.png",
+      "url": "http://localhost:5173/login",
+      "name": "login"
+    },
+    {
+      "type": "page",
+      "section": "auth",
+      "file": "register.png",
+      "url": "http://localhost:5173/register",
+      "name": "register"
+    },
+    {
+      "type": "page",
+      "section": "auth",
+      "file": "forgot-password.png",
+      "url": "http://localhost:5173/forgot-password",
+      "name": "forgot-password"
+    },
+    {
+      "type": "page",
+      "section": "auth",
+      "file": "reset-password.png",
+      "url": "http://localhost:5173/reset-password",
+      "name": "reset-password"
+    },
+    {
+      "type": "page",
+      "section": "auth",
+      "file": "invites-token.png",
+      "url": "http://localhost:5173/invites/10394ae9960e1f18e474d897234f33c1db07d7cf83852b28",
+      "name": "invites-token"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "dashboard.png",
+      "url": "http://localhost:5173/dashboard",
+      "name": "dashboard"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "profile.png",
+      "url": "http://localhost:5173/profile",
+      "name": "profile"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "servers.png",
+      "url": "http://localhost:5173/servers",
+      "name": "servers"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/servers-modal-new-server.png",
+      "url": "http://localhost:5173/servers",
+      "name": "servers-modal-New server",
+      "trigger": "New server"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9",
+      "name": "server-Shotbot Test Server"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-console.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/console",
+      "name": "server-Shotbot Test Server-tab-console",
+      "tab": "Console"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-files.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/files",
+      "name": "server-Shotbot Test Server-tab-files",
+      "tab": "Files"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-files-modal-upload.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/files",
+      "name": "server-Shotbot Test Server-tab-files-modal-Upload",
+      "trigger": "Upload"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-files-modal-new-file.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/files",
+      "name": "server-Shotbot Test Server-tab-files-modal-New File",
+      "trigger": "New File"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-files-modal-new-folder.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/files",
+      "name": "server-Shotbot Test Server-tab-files-modal-New Folder",
+      "trigger": "New Folder"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-sftp.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/sftp",
+      "name": "server-Shotbot Test Server-tab-sftp",
+      "tab": "SFTP"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-backups.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/backups",
+      "name": "server-Shotbot Test Server-tab-backups",
+      "tab": "Backups"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-tasks.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/tasks",
+      "name": "server-Shotbot Test Server-tab-tasks",
+      "tab": "Tasks"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-tasks-modal-create-task.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/tasks",
+      "name": "server-Shotbot Test Server-tab-tasks-modal-Create task",
+      "trigger": "Create task"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-metrics.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/metrics",
+      "name": "server-Shotbot Test Server-tab-metrics",
+      "tab": "Metrics"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-alerts.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/alerts",
+      "name": "server-Shotbot Test Server-tab-alerts",
+      "tab": "Alerts"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-alerts-modal-create-rule.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/alerts",
+      "name": "server-Shotbot Test Server-tab-alerts-modal-Create Rule",
+      "trigger": "Create Rule"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-activity.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/activity",
+      "name": "server-Shotbot Test Server-tab-activity",
+      "tab": "Activity"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-mod-manager.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/modManager",
+      "name": "server-Shotbot Test Server-tab-mod-manager",
+      "tab": "Mod Manager"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-plugin-manager.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/pluginManager",
+      "name": "server-Shotbot Test Server-tab-plugin-manager",
+      "tab": "Plugin Manager"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-users.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/users",
+      "name": "server-Shotbot Test Server-tab-users",
+      "tab": "Users"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-settings.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/settings",
+      "name": "server-Shotbot Test Server-tab-settings",
+      "tab": "Settings"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-settings-modal-reinstall.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/settings",
+      "name": "server-Shotbot Test Server-tab-settings-modal-Reinstall",
+      "trigger": "Reinstall"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-settings-modal-clone.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/settings",
+      "name": "server-Shotbot Test Server-tab-settings-modal-Clone",
+      "trigger": "Clone"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-admin.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/admin",
+      "name": "server-Shotbot Test Server-tab-admin",
+      "tab": "Admin"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-admin-modal-rebuild.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/admin",
+      "name": "server-Shotbot Test Server-tab-admin-modal-Rebuild",
+      "trigger": "Rebuild"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-admin-modal-reinstall.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/admin",
+      "name": "server-Shotbot Test Server-tab-admin-modal-Reinstall",
+      "trigger": "Reinstall"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-shotbot-test-server-tab-configuration.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/configuration",
+      "name": "server-Shotbot Test Server-tab-configuration"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-shotbot-test-server-tab-configuration-modal-delete.png",
+      "url": "http://localhost:5173/servers/cmtc91yuf0003azpdelkx0sz9/admin",
+      "name": "server-Shotbot Test Server-tab-configuration-modal-Delete",
+      "trigger": "Delete"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg",
+      "name": "server-test"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-console.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/console",
+      "name": "server-test-tab-console",
+      "tab": "Console"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-files.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/files",
+      "name": "server-test-tab-files",
+      "tab": "Files"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-files-modal-upload.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/files",
+      "name": "server-test-tab-files-modal-Upload",
+      "trigger": "Upload"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-files-modal-new-file.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/files",
+      "name": "server-test-tab-files-modal-New File",
+      "trigger": "New File"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-files-modal-new-folder.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/files",
+      "name": "server-test-tab-files-modal-New Folder",
+      "trigger": "New Folder"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-sftp.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/sftp",
+      "name": "server-test-tab-sftp",
+      "tab": "SFTP"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-backups.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/backups",
+      "name": "server-test-tab-backups",
+      "tab": "Backups"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-tasks.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/tasks",
+      "name": "server-test-tab-tasks",
+      "tab": "Tasks"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-tasks-modal-create-task.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/tasks",
+      "name": "server-test-tab-tasks-modal-Create task",
+      "trigger": "Create task"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-metrics.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/metrics",
+      "name": "server-test-tab-metrics",
+      "tab": "Metrics"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-alerts.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/alerts",
+      "name": "server-test-tab-alerts",
+      "tab": "Alerts"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-alerts-modal-create-rule.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/alerts",
+      "name": "server-test-tab-alerts-modal-Create Rule",
+      "trigger": "Create Rule"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-activity.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/activity",
+      "name": "server-test-tab-activity",
+      "tab": "Activity"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-users.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/users",
+      "name": "server-test-tab-users",
+      "tab": "Users"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-settings.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/settings",
+      "name": "server-test-tab-settings",
+      "tab": "Settings"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-settings-modal-reinstall.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/settings",
+      "name": "server-test-tab-settings-modal-Reinstall",
+      "trigger": "Reinstall"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-settings-modal-clone.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/settings",
+      "name": "server-test-tab-settings-modal-Clone",
+      "trigger": "Clone"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-admin.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/admin",
+      "name": "server-test-tab-admin",
+      "tab": "Admin"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-admin-modal-rebuild.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/admin",
+      "name": "server-test-tab-admin-modal-Rebuild",
+      "trigger": "Rebuild"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-admin-modal-reinstall.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/admin",
+      "name": "server-test-tab-admin-modal-Reinstall",
+      "trigger": "Reinstall"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-modmanager.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/modManager",
+      "name": "server-test-tab-modmanager"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-modmanager-modal-delete.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/admin",
+      "name": "server-test-tab-modmanager-modal-Delete",
+      "trigger": "Delete"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-pluginmanager.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/pluginManager",
+      "name": "server-test-tab-pluginmanager"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-pluginmanager-modal-rebuild.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/admin",
+      "name": "server-test-tab-pluginmanager-modal-Rebuild",
+      "trigger": "Rebuild"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-pluginmanager-modal-reinstall.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/admin",
+      "name": "server-test-tab-pluginmanager-modal-Reinstall",
+      "trigger": "Reinstall"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-configuration.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/configuration",
+      "name": "server-test-tab-configuration"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-configuration-modal-delete.png",
+      "url": "http://localhost:5173/servers/cmsnp4saw000bjcpdae71zasg/admin",
+      "name": "server-test-tab-configuration-modal-Delete",
+      "trigger": "Delete"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5",
+      "name": "server-test"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-console.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/console",
+      "name": "server-test-tab-console",
+      "tab": "Console"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-files.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/files",
+      "name": "server-test-tab-files",
+      "tab": "Files"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-files-modal-upload.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/files",
+      "name": "server-test-tab-files-modal-Upload",
+      "trigger": "Upload"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-files-modal-new-file.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/files",
+      "name": "server-test-tab-files-modal-New File",
+      "trigger": "New File"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-files-modal-new-folder.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/files",
+      "name": "server-test-tab-files-modal-New Folder",
+      "trigger": "New Folder"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-sftp.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/sftp",
+      "name": "server-test-tab-sftp",
+      "tab": "SFTP"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-backups.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/backups",
+      "name": "server-test-tab-backups",
+      "tab": "Backups"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-tasks.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/tasks",
+      "name": "server-test-tab-tasks",
+      "tab": "Tasks"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-tasks-modal-create-task.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/tasks",
+      "name": "server-test-tab-tasks-modal-Create task",
+      "trigger": "Create task"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-metrics.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/metrics",
+      "name": "server-test-tab-metrics",
+      "tab": "Metrics"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-alerts.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/alerts",
+      "name": "server-test-tab-alerts",
+      "tab": "Alerts"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-alerts-modal-create-rule.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/alerts",
+      "name": "server-test-tab-alerts-modal-Create Rule",
+      "trigger": "Create Rule"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-activity.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/activity",
+      "name": "server-test-tab-activity",
+      "tab": "Activity"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-users.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/users",
+      "name": "server-test-tab-users",
+      "tab": "Users"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-settings.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/settings",
+      "name": "server-test-tab-settings",
+      "tab": "Settings"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-settings-modal-reinstall.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/settings",
+      "name": "server-test-tab-settings-modal-Reinstall",
+      "trigger": "Reinstall"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-settings-modal-clone.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/settings",
+      "name": "server-test-tab-settings-modal-Clone",
+      "trigger": "Clone"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-admin.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/admin",
+      "name": "server-test-tab-admin",
+      "tab": "Admin"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-admin-modal-rebuild.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/admin",
+      "name": "server-test-tab-admin-modal-Rebuild",
+      "trigger": "Rebuild"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-admin-modal-reinstall.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/admin",
+      "name": "server-test-tab-admin-modal-Reinstall",
+      "trigger": "Reinstall"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-modmanager.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/modManager",
+      "name": "server-test-tab-modmanager"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-modmanager-modal-delete.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/admin",
+      "name": "server-test-tab-modmanager-modal-Delete",
+      "trigger": "Delete"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-pluginmanager.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/pluginManager",
+      "name": "server-test-tab-pluginmanager"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-pluginmanager-modal-rebuild.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/admin",
+      "name": "server-test-tab-pluginmanager-modal-Rebuild",
+      "trigger": "Rebuild"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-pluginmanager-modal-reinstall.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/admin",
+      "name": "server-test-tab-pluginmanager-modal-Reinstall",
+      "trigger": "Reinstall"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "server-test-tab-configuration.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/configuration",
+      "name": "server-test-tab-configuration"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/server-test-tab-configuration-modal-delete.png",
+      "url": "http://localhost:5173/servers/cmsnp4elq0006jcpdbdq4nas5/admin",
+      "name": "server-test-tab-configuration-modal-Delete",
+      "trigger": "Delete"
+    },
+    {
+      "type": "page",
+      "section": "user",
+      "file": "404-not-found.png",
+      "url": "about:blank",
+      "name": "404-not-found"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin.png",
+      "url": "http://localhost:5173/admin",
+      "name": "admin"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-users.png",
+      "url": "http://localhost:5173/admin/users",
+      "name": "admin-users"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-users-modal-ban.png",
+      "url": "http://localhost:5173/admin/users",
+      "name": "admin-users-modal-Ban",
+      "trigger": "Ban"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-users-modal-create-user.png",
+      "url": "http://localhost:5173/admin/users",
+      "name": "admin-users-modal-Create user",
+      "trigger": "Create user"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-users-modal-view-details.png",
+      "url": "http://localhost:5173/admin/users",
+      "name": "admin-users-modal-View details",
+      "trigger": "View details"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-users-modal-more-menu-view.png",
+      "url": "http://localhost:5173/admin/users",
+      "name": "admin-users-modal-more-menu-View",
+      "trigger": "more-menu-View"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-users-modal-more-menu-edit.png",
+      "url": "http://localhost:5173/admin/users",
+      "name": "admin-users-modal-more-menu-Edit",
+      "trigger": "more-menu-Edit"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-users-modal-more-menu-ban.png",
+      "url": "http://localhost:5173/admin/users",
+      "name": "admin-users-modal-more-menu-Ban",
+      "trigger": "more-menu-Ban"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-users-modal-more-menu-delete.png",
+      "url": "http://localhost:5173/admin/users",
+      "name": "admin-users-modal-more-menu-Delete",
+      "trigger": "more-menu-Delete"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-roles.png",
+      "url": "http://localhost:5173/admin/roles",
+      "name": "admin-roles"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-roles-modal-delete.png",
+      "url": "http://localhost:5173/admin/roles",
+      "name": "admin-roles-modal-Delete",
+      "trigger": "Delete"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-roles-modal-create-role.png",
+      "url": "http://localhost:5173/admin/roles",
+      "name": "admin-roles-modal-Create role",
+      "trigger": "Create role"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-roles-modal-view-details.png",
+      "url": "http://localhost:5173/admin/roles",
+      "name": "admin-roles-modal-View details",
+      "trigger": "View details"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-roles-modal-edit.png",
+      "url": "http://localhost:5173/admin/roles",
+      "name": "admin-roles-modal-Edit",
+      "trigger": "Edit"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-servers.png",
+      "url": "http://localhost:5173/admin/servers",
+      "name": "admin-servers"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-servers-modal-suspend.png",
+      "url": "http://localhost:5173/admin/servers",
+      "name": "admin-servers-modal-Suspend",
+      "trigger": "Suspend"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-servers-modal-new-server.png",
+      "url": "http://localhost:5173/admin/servers",
+      "name": "admin-servers-modal-New server",
+      "trigger": "New server"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-servers-modal-more-menu-suspend.png",
+      "url": "http://localhost:5173/admin/servers",
+      "name": "admin-servers-modal-more-menu-Suspend",
+      "trigger": "more-menu-Suspend"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-servers-modal-more-menu-update.png",
+      "url": "http://localhost:5173/admin/servers",
+      "name": "admin-servers-modal-more-menu-Update",
+      "trigger": "more-menu-Update"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-servers-modal-more-menu-delete.png",
+      "url": "http://localhost:5173/admin/servers",
+      "name": "admin-servers-modal-more-menu-Delete",
+      "trigger": "more-menu-Delete"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-nodes.png",
+      "url": "http://localhost:5173/admin/nodes",
+      "name": "admin-nodes"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-nodes-modal-locations.png",
+      "url": "http://localhost:5173/admin/nodes",
+      "name": "admin-nodes-modal-Locations",
+      "trigger": "Locations"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-nodes-modal-more-menu-delete.png",
+      "url": "http://localhost:5173/admin/nodes",
+      "name": "admin-nodes-modal-more-menu-Delete",
+      "trigger": "more-menu-Delete"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-templates.png",
+      "url": "http://localhost:5173/admin/templates",
+      "name": "admin-templates"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-templates-modal-nests.png",
+      "url": "http://localhost:5173/admin/templates",
+      "name": "admin-templates-modal-Nests",
+      "trigger": "Nests"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-templates-modal-new-template.png",
+      "url": "http://localhost:5173/admin/templates",
+      "name": "admin-templates-modal-New Template",
+      "trigger": "New Template"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-templates-modal-import.png",
+      "url": "http://localhost:5173/admin/templates",
+      "name": "admin-templates-modal-Import",
+      "trigger": "Import"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-templates-modal-more-menu-edit.png",
+      "url": "http://localhost:5173/admin/templates",
+      "name": "admin-templates-modal-more-menu-Edit",
+      "trigger": "more-menu-Edit"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-templates-modal-more-menu-delete.png",
+      "url": "http://localhost:5173/admin/templates",
+      "name": "admin-templates-modal-more-menu-Delete",
+      "trigger": "more-menu-Delete"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-database.png",
+      "url": "http://localhost:5173/admin/database",
+      "name": "admin-database"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-database-modal-add-host.png",
+      "url": "http://localhost:5173/admin/database",
+      "name": "admin-database-modal-Add host",
+      "trigger": "Add host"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-system.png",
+      "url": "http://localhost:5173/admin/system",
+      "name": "admin-system"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-security.png",
+      "url": "http://localhost:5173/admin/security",
+      "name": "admin-security"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-theme-settings.png",
+      "url": "http://localhost:5173/admin/theme-settings",
+      "name": "admin-theme-settings"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-alerts.png",
+      "url": "http://localhost:5173/admin/alerts",
+      "name": "admin-alerts"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-alerts-modal-create-rule.png",
+      "url": "http://localhost:5173/admin/alerts",
+      "name": "admin-alerts-modal-Create Rule",
+      "trigger": "Create Rule"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-audit-logs.png",
+      "url": "http://localhost:5173/admin/audit-logs",
+      "name": "admin-audit-logs"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-audit-logs-modal-view-details.png",
+      "url": "http://localhost:5173/admin/audit-logs",
+      "name": "admin-audit-logs-modal-View details",
+      "trigger": "View details"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-system-errors.png",
+      "url": "http://localhost:5173/admin/system-errors",
+      "name": "admin-system-errors"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-system-errors-modal-view-details.png",
+      "url": "http://localhost:5173/admin/system-errors",
+      "name": "admin-system-errors-modal-View details",
+      "trigger": "View details"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-api-keys.png",
+      "url": "http://localhost:5173/admin/api-keys",
+      "name": "admin-api-keys"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-api-keys-modal-create-api-key.png",
+      "url": "http://localhost:5173/admin/api-keys",
+      "name": "admin-api-keys-modal-Create API Key",
+      "trigger": "Create API Key"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-migration.png",
+      "url": "http://localhost:5173/admin/migration",
+      "name": "admin-migration"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-plugins.png",
+      "url": "http://localhost:5173/admin/plugins",
+      "name": "admin-plugins"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "admin-plugins-tab-all3.png",
+      "url": "http://localhost:5173/admin/plugins",
+      "name": "admin-plugins-tab-all3",
+      "tab": "All3"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-plugins-tab-all3-modal-settings.png",
+      "url": "http://localhost:5173/admin/plugins",
+      "name": "admin-plugins-tab-all3-modal-Settings",
+      "trigger": "Settings"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/admin-plugins-tab-all3-modal-details.png",
+      "url": "http://localhost:5173/admin/plugins",
+      "name": "admin-plugins-tab-all3-modal-Details",
+      "trigger": "Details"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "node-asd.png",
+      "url": "http://localhost:5173/admin/nodes/cmsqi74to0009mtpd3c49fet7",
+      "name": "node-asd"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/node-asd-modal-regenerate-key.png",
+      "url": "http://localhost:5173/admin/nodes/cmsqi74to0009mtpd3c49fet7",
+      "name": "node-asd-modal-Regenerate Key",
+      "trigger": "Regenerate Key"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "node-development-1.png",
+      "url": "http://localhost:5173/admin/nodes/cmsnjrcrc00010qpd6nf3m0cy",
+      "name": "node-development-1"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/node-development-1-modal-regenerate-key.png",
+      "url": "http://localhost:5173/admin/nodes/cmsnjrcrc00010qpd6nf3m0cy",
+      "name": "node-development-1-modal-Regenerate Key",
+      "trigger": "Regenerate Key"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "node-development-1-allocations.png",
+      "url": "http://localhost:5173/admin/nodes/cmsnjrcrc00010qpd6nf3m0cy/allocations",
+      "name": "node-development-1-allocations"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/node-development-1-allocations-modal-create-allocations.png",
+      "url": "http://localhost:5173/admin/nodes/cmsnjrcrc00010qpd6nf3m0cy/allocations",
+      "name": "node-development-1-allocations-modal-Create Allocations",
+      "trigger": "Create Allocations"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "template-node-js-bot-git-repository.png",
+      "url": "http://localhost:5173/admin/templates/cmsnjrctt00070qpdxqdhisbw",
+      "name": "template-Node.js Bot (Git Repository)"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/template-node-js-bot-git-repository-modal-delete.png",
+      "url": "http://localhost:5173/admin/templates/cmsnjrctt00070qpdxqdhisbw",
+      "name": "template-Node.js Bot (Git Repository)-modal-Delete",
+      "trigger": "Delete"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/template-node-js-bot-git-repository-modal-edit.png",
+      "url": "http://localhost:5173/admin/templates/cmsnjrctt00070qpdxqdhisbw",
+      "name": "template-Node.js Bot (Git Repository)-modal-Edit",
+      "trigger": "Edit"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "template-minecraft-server-universal.png",
+      "url": "http://localhost:5173/admin/templates/cmsnjrcsz00060qpd884hqow6",
+      "name": "template-Minecraft Server (Universal)"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/template-minecraft-server-universal-modal-delete.png",
+      "url": "http://localhost:5173/admin/templates/cmsnjrcsz00060qpd884hqow6",
+      "name": "template-Minecraft Server (Universal)-modal-Delete",
+      "trigger": "Delete"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/template-minecraft-server-universal-modal-edit.png",
+      "url": "http://localhost:5173/admin/templates/cmsnjrcsz00060qpd884hqow6",
+      "name": "template-Minecraft Server (Universal)-modal-Edit",
+      "trigger": "Edit"
+    },
+    {
+      "type": "page",
+      "section": "admin",
+      "file": "template-test-template-jqvebymy.png",
+      "url": "http://localhost:5173/admin/templates/cmpklkv3r00031xpdq33f0c05",
+      "name": "template-test-template-jqVEbYmy"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/template-test-template-jqvebymy-modal-delete.png",
+      "url": "http://localhost:5173/admin/templates/cmpklkv3r00031xpdq33f0c05",
+      "name": "template-test-template-jqVEbYmy-modal-Delete",
+      "trigger": "Delete"
+    },
+    {
+      "type": "modal",
+      "section": "admin",
+      "file": "modals/template-test-template-jqvebymy-modal-edit.png",
+      "url": "http://localhost:5173/admin/templates/cmpklkv3r00031xpdq33f0c05",
+      "name": "template-test-template-jqVEbYmy-modal-Edit",
+      "trigger": "Edit"
+    },
+    {
+      "type": "modal",
+      "section": "user",
+      "file": "modals/dashboard-modal-search-palette.png",
+      "url": "http://localhost:5173/dashboard",
+      "name": "dashboard-modal-search-palette",
+      "trigger": "Ctrl+K"
+    }
+  ],
+  "failures": [],
+  "skipped": [
+    {
+      "url": "/setup",
+      "reason": "redirected to /login"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/console",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/files",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/sftp",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/backups",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/tasks",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/databases",
+      "reason": "state already captured (/servers/cmtc91yuf0003azpdelkx0sz9/console)"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/metrics",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/alerts",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/activity",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/modManager",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/pluginManager",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/users",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/settings",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmtc91yuf0003azpdelkx0sz9/admin",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/console",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/files",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/sftp",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/backups",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/tasks",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/databases",
+      "reason": "state already captured (/servers/cmsnp4saw000bjcpdae71zasg/console)"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/metrics",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/alerts",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/activity",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/users",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/settings",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4saw000bjcpdae71zasg/admin",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/console",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/files",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/sftp",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/backups",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/tasks",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/databases",
+      "reason": "state already captured (/servers/cmsnp4elq0006jcpdbdq4nas5/console)"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/metrics",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/alerts",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/activity",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/users",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/settings",
+      "reason": "already captured"
+    },
+    {
+      "url": "/servers/cmsnp4elq0006jcpdbdq4nas5/admin",
+      "reason": "already captured"
+    },
+    {
+      "url": "/tickets",
+      "reason": "state already captured (/dashboard)"
+    },
+    {
+      "url": "/admin/nodes/cmsqi74to0009mtpd3c49fet7/allocations",
+      "reason": "redirected to blank (not available)"
+    }
+  ]
+}
