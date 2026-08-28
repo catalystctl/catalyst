@@ -5,6 +5,11 @@ vite.config.ts.timestamp
 .DS_Store
 coverage
 dist
+# TypeScript incremental build state (tsconfig.node.json is composite)
+*.tsbuildinfo
+# Compiled output of vite.config.ts (composite tsconfig.node.json)
+vite.config.js
+vite.config.d.ts
 .env
 .env.local
 .env.production
