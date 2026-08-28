@@ -75,6 +75,7 @@ import { auth } from "./auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { normalizeHostIp } from "./utils/ipam";
 import { PluginLoader } from "./plugins/loader";
+import { DISCLAIMER_VERSION } from "./plugins/safety";
 import { pluginRoutes } from "./routes/plugins";
 import { FileTunnelService } from "./services/file-tunnel";
 import { fileTunnelRoutes } from "./routes/file-tunnel";
@@ -972,7 +973,7 @@ async function bootstrap() {
 		await app.register(alertRoutes, { prefix: "/api" });
 		await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
 		await app.register(apiKeyRoutes);
-		await app.register((app) => pluginRoutes(app, pluginLoader));
+		await app.register((app) => pluginRoutes(app, pluginLoader, prisma));
 		// File tunnel routes need a high body limit; the panel setting is
 		// enforced in FileTunnelService so changing it does not require a restart.
 		const fileTunnelBodyLimit = MAX_UPLOAD_MB_CEILING * 1024 * 1024;
@@ -1722,12 +1723,33 @@ async function bootstrap() {
 		await pluginLoader.initialize();
 		logger.info("Plugin system initialized");
 
-		// Auto-enable plugins that were previously enabled
+		// Auto-enable plugins that were previously enabled. Plugins enabled
+		// before the safety-disclaimer feature existed are grandfathered: a
+		// backfill acceptance (no accepting user) is recorded once so they
+		// keep starting, and the UI flags them for permission review.
 		const enabledPlugins = await prisma.plugin.findMany({
 			where: { enabled: true },
 		});
 		for (const plugin of enabledPlugins) {
 			try {
+				if (!plugin.safetyAcceptedAt && typeof plugin.version === "string") {
+					const manifest = pluginLoader.getRegistry().get(plugin.name)?.manifest;
+					await prisma.plugin.update({
+						where: { name: plugin.name },
+						data: {
+							safetyAcceptedAt: new Date(),
+							safetyAcceptedBy: null,
+							safetyDisclaimerVersion: DISCLAIMER_VERSION,
+							safetyAcceptedPluginVersion: plugin.version,
+							safetyAcceptedPermissions:
+								(manifest?.permissions as string[] | undefined) ?? [],
+						},
+					});
+					logger.warn(
+						{ plugin: plugin.name },
+						"Grandfathered previously-enabled plugin without disclaimer acceptance — flagged for admin review",
+					);
+				}
 				await pluginLoader.enablePlugin(plugin.name);
 			} catch (error: any) {
 				logger.error(

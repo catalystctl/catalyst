@@ -11,6 +11,7 @@ import { createPluginContext, runMiddleware } from './context';
 import { captureSystemError } from '../services/error-logger';
 import { PluginRegistry } from './registry';
 import { createGatedHandler, DEFAULT_GATE_CONFIG, setPluginGateEnabled } from './runtime/request-gate';
+import { normalizePermissionList } from './safety';
 import EventEmitter from 'events';
 import { buildRuntimeConfig, isStoredSchemaPollution, getDeclaredFieldType } from './config-utils';
 
@@ -28,6 +29,8 @@ export class PluginLoader {
   private hotReloadEnabled: boolean;
   private hotReloadDebounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private readonly HOT_RELOAD_DEBOUNCE_MS = 500;
+  /** Live effective permission grants per plugin name (admin-controlled). */
+  private effectiveGrants = new Map<string, string[]>();
 
   constructor(
     pluginsDir: string,
@@ -316,7 +319,7 @@ export class PluginLoader {
       // only bump version — then rehydrate runtime values below.
       const existingRow = await this.prisma.plugin.findUnique({
         where: { name: manifest.name },
-        select: { config: true, enabled: true },
+        select: { config: true, enabled: true, grantedPermissions: true },
       });
 
       await this.prisma.plugin.upsert({
@@ -362,7 +365,18 @@ export class PluginLoader {
         }).catch(() => {});
       }
 
-      // Create plugin context (pass registry for RPC support)
+      // Create plugin context (pass registry for RPC support).
+      // Effective grants: admin-controlled list persisted in the Plugin row.
+      // Null/absent ⇒ all manifest-declared permissions are granted. The
+      // provider is consulted live on every permission check, so revocations
+      // via setEffectivePermissions() apply immediately.
+      const declaredPermissions = normalizePermissionList(manifest.permissions || []);
+      const storedGrants = Array.isArray(existingRow?.grantedPermissions)
+        ? normalizePermissionList(existingRow.grantedPermissions as unknown[])
+        : null;
+      const effectiveGrants = storedGrants ?? [...declaredPermissions];
+      this.effectiveGrants.set(manifest.name, effectiveGrants);
+
       const context = createPluginContext(
         manifest,
         originalConfig,
@@ -377,6 +391,7 @@ export class PluginLoader {
         this.eventEmitter,
         (this.fastify as any).authenticate,
         this.registry,
+        () => this.effectiveGrants.get(manifest.name) ?? [],
       );
 
       loadedPlugin.context = context;
@@ -507,6 +522,35 @@ export class PluginLoader {
       };
       this.registry.register(errorPlugin);
     }
+  }
+
+  /**
+   * Current effective permission grants for a plugin (empty array if not loaded).
+   */
+  getEffectivePermissions(name: string): string[] {
+    return this.effectiveGrants.get(name) ?? [];
+  }
+
+  /** Plugins root directory (used by marketplace install paths). */
+  getPluginsDir(): string {
+    return this.pluginsDir;
+  }
+
+  /**
+   * Discover and load a single freshly-installed plugin without restarting
+   * the panel. Routes register immediately (gated by enabledRef as usual).
+   */
+  async discoverSingle(name: string): Promise<void> {
+    await this.loadPlugin(this.resolvePluginDir(path.join(this.pluginsDir, name)));
+  }
+
+  /**
+   * Replace the live effective grants for a plugin. Applies immediately —
+   * every subsequent DB/RPC permission check inside the plugin consults the
+   * new list. Callers must have validated grants against the manifest.
+   */
+  setEffectivePermissions(name: string, grants: string[]): void {
+    this.effectiveGrants.set(name, normalizePermissionList(grants));
   }
 
   /**
@@ -697,6 +741,9 @@ export class PluginLoader {
 
       // Remove exposed RPC APIs
       this.registry.removeExposedApis(name);
+
+      // Drop live grants entry (re-seeded from DB on next load)
+      this.effectiveGrants.delete(name);
 
       // Keep Fastify route handlers denied after unload (routes stay registered)
       setPluginGateEnabled(name, false);

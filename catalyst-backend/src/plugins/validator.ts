@@ -15,6 +15,9 @@ export function isValidPluginName(name: string): boolean {
   return typeof name === 'string' && name.length > 0 && name.length <= 50 && PLUGIN_NAME_REGEX.test(name);
 }
 
+// Permission description values — single reviewer-facing sentence.
+const PERMISSION_DESCRIPTION_MAX = 200;
+
 /**
  * Zod schema for plugin manifest validation
  */
@@ -30,6 +33,15 @@ export const PluginManifestSchema = z.object({
   author: z.string().min(1).max(100),
   catalystVersion: z.string().min(1),
   permissions: z.array(z.string()).default([]),
+  /**
+   * Author-supplied reviewer descriptions for DECLARED permission scopes.
+   * Built-in scopes come with panel-provided copy; authors only need this for
+   * custom scopes (or to refine wording). Keys must be declared permissions —
+   * enforced below so typos surface at discovery time, not in review UIs.
+   */
+  permissionDescriptions: z
+    .record(z.string(), z.string().min(1).max(PERMISSION_DESCRIPTION_MAX))
+    .optional(),
   // Isolation / storage engine flags — must be kept (not stripped) so loader can activate them.
   runtime: z.enum(['legacy', 'isolated']).optional(),
   storageEngine: z.enum(['legacy', 'dedicated']).optional(),
@@ -66,6 +78,22 @@ export const PluginManifestSchema = z.object({
       }),
     )
     .optional(),
+}).superRefine((manifest, ctx) => {
+  // permissionDescriptions keys must reference DECLARED permissions. Failing
+  // loudly here gives authors an immediate, actionable error during discovery
+  // instead of silently-missing copy in the admin consent/review UIs.
+  const descriptions = manifest.permissionDescriptions;
+  if (!descriptions) return;
+  const declared = new Set(manifest.permissions ?? []);
+  for (const key of Object.keys(descriptions)) {
+    if (!declared.has(key)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['permissionDescriptions', key],
+        message: `permissionDescriptions key "${key}" is not declared in "permissions"`,
+      });
+    }
+  }
 });
 
 /**

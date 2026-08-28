@@ -98,6 +98,12 @@ export interface PluginManifest {
   author: string;
   catalystVersion: string;
   permissions: string[];
+  /**
+   * Author-provided reviewer copy for declared scopes (esp. custom ones).
+   * Keys validated against `permissions` at discovery; rendered verbatim in
+   * the safety-consent dialog and permission reviewers.
+   */
+  permissionDescriptions?: Record<string, string>;
   runtime?: 'legacy' | 'isolated';
   storageEngine?: 'legacy' | 'dedicated';
   backend?: {

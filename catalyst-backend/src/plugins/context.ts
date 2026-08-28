@@ -22,6 +22,7 @@ import { captureSystemError } from '../services/error-logger';
 import { createCollectionStorage } from './storage/collection-storage';
 import { resolveConfigValue } from './config-utils';
 import { matchFilter, applyUpdateOperators } from './path-utils';
+import { normalizePermissionList } from './safety';
 
 // ── Simple unique ID generator ──────────────────────────────────────────────
 function generateId(): string {
@@ -97,38 +98,54 @@ const USER_WRITE_WHITELIST = new Set<string>([]);
 
 /**
  * Scoped database wrapper that limits plugin access to safe operations only.
- * Plugins should only access what they declare in their manifest permissions.
+ * Plugins should only access what they declare in their manifest permissions,
+ * intersected with what the admin has granted. Permission checks are LIVE:
+ * every table access and every write re-reads the current grant list, so an
+ * admin revoking a permission takes effect immediately without a restart.
  */
 class ScopedPluginDBClient implements ScopedPluginDB {
   private prisma: PrismaClient;
   private pluginName: string;
   private logger: Logger;
-  private allowedTables: Set<string>;
-  private permissions: Set<string>;
+  /** Live view of the plugin's effective permission grants. */
+  private getPermissions: () => string[];
 
   constructor(
     prisma: PrismaClient,
     pluginName: string,
     logger: Logger,
-    allowedTables: string[],
-    permissions: string[],
+    getPermissions: () => string[],
   ) {
     this.prisma = prisma;
     this.pluginName = pluginName;
     this.logger = logger;
-    this.allowedTables = new Set(allowedTables);
-    this.permissions = new Set(permissions);
+    this.getPermissions = getPermissions;
+  }
+
+  /** Current grants as a set (fresh on every call). */
+  private currentPermissions(): Set<string> {
+    return new Set(this.getPermissions() ?? []);
+  }
+
+  /** True if any of the required tokens is granted (`*` grants everything). */
+  private hasAnyOf(...required: string[]): boolean {
+    const perms = this.currentPermissions();
+    return perms.has('*') || required.some((r) => perms.has(r));
+  }
+
+  /** Live table-access check derived from current grants. */
+  private canAccessTable(table: string): boolean {
+    return getAllowedTablesForPermissions(this.getPermissions() ?? []).includes(table);
   }
 
   // Server operations - READ ONLY by default, write with field whitelist
   get servers() {
-    if (!this.allowedTables.has('servers')) {
+    if (!this.canAccessTable('servers')) {
       this.logger.warn({ plugin: this.pluginName }, 'Plugin attempted to access servers without permission');
       throw new Error('Permission denied: servers access not declared in manifest');
     }
     this.logger.debug({ plugin: this.pluginName }, 'Plugin accessed servers (read)');
     const prisma = this.prisma;
-    const permissions = this.permissions;
     const pluginName = this.pluginName;
     const logger = this.logger;
     return {
@@ -150,7 +167,7 @@ class ScopedPluginDBClient implements ScopedPluginDB {
       },
       count: async (args?: any) => prisma.server.count(args),
       update: async (id: string, data: Record<string, any>) => {
-        if (!permissions.has('server.write') && !permissions.has('*')) {
+        if (!this.hasAnyOf('server.write')) {
           logger.warn({ plugin: pluginName }, 'Plugin attempted server.update without server.write permission');
           throw new Error('Permission denied: server.write permission required for updates');
         }
@@ -176,13 +193,12 @@ class ScopedPluginDBClient implements ScopedPluginDB {
 
   // User operations - VERY LIMITED, basic info only, NO credentials or API keys
   get users() {
-    if (!this.allowedTables.has('users')) {
+    if (!this.canAccessTable('users')) {
       this.logger.warn({ plugin: this.pluginName }, 'Plugin attempted to access users without permission');
       throw new Error('Permission denied: users access not declared in manifest');
     }
     this.logger.debug({ plugin: this.pluginName }, 'Plugin accessed users (read, limited)');
     const prisma = this.prisma;
-    const permissions = this.permissions;
     const pluginName = this.pluginName;
     const logger = this.logger;
     return {
@@ -204,7 +220,7 @@ class ScopedPluginDBClient implements ScopedPluginDB {
       },
       count: async (args?: any) => prisma.user.count(args),
       update: async (id: string, data: Record<string, any>) => {
-        if (!permissions.has('user.write') && !permissions.has('*')) {
+        if (!this.hasAnyOf('user.write')) {
           logger.warn({ plugin: pluginName }, 'Plugin attempted user.update without user.write permission');
           throw new Error('Permission denied: user.write permission required for updates');
         }
@@ -592,6 +608,10 @@ function getAllowedTablesForPermissions(permissions: string[]): string[] {
  * Creates plugin context for backend plugins.
  *
  * @param registry - PluginRegistry for RPC storage (must be passed for exposeApi/callPluginApi)
+ * @param permissionsProvider - Optional live view of the plugin's effective grants.
+ *   When provided, every permission check (DB table access, whitelisted writes,
+ *   plugin.rpc) consults this on each call so admin revocations apply immediately.
+ *   Defaults to the manifest's declared permissions.
  */
 export function createPluginContext(
   manifest: PluginManifest,
@@ -607,18 +627,17 @@ export function createPluginContext(
   eventEmitter: EventEmitter,
   authenticate?: Function,
   registry?: PluginRegistry,
+  permissionsProvider?: () => string[],
 ): PluginBackendContext {
   const pluginLogger = logger.child({ plugin: manifest.name });
 
-  // Create scoped database wrapper based on declared permissions
-  const allowedTables = getAllowedTablesForPermissions(manifest.permissions || []);
-  const scopedDb = new ScopedPluginDBClient(
-    prisma,
-    manifest.name,
-    pluginLogger,
-    allowedTables,
-    manifest.permissions || [],
-  );
+  // Live effective permissions. The default falls back to manifest-declared
+  // permissions for backwards compatibility (tests, embedding hosts).
+  const getPermissions: () => string[] =
+    permissionsProvider ?? (() => normalizePermissionList(manifest.permissions || []));
+
+  // Create scoped database wrapper based on live effective permissions
+  const scopedDb = new ScopedPluginDBClient(prisma, manifest.name, pluginLogger, getPermissions);
 
   const context: PluginBackendContext = {
     manifest,
@@ -961,8 +980,9 @@ export function createPluginContext(
         throw new Error('Cannot call plugin API: no registry available');
       }
 
-      // Permission check
-      if (!manifest.permissions.includes('plugin.rpc') && !manifest.permissions.includes('*')) {
+      // Permission check — LIVE against current effective grants
+      const perms = new Set(getPermissions());
+      if (!perms.has('plugin.rpc') && !perms.has('*')) {
         pluginLogger.warn(
           { targetPlugin: pluginName, api: apiName },
           'Plugin attempted RPC without plugin.rpc permission',

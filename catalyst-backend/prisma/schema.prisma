@@ -911,6 +911,19 @@ model Plugin {
   updatedAt   DateTime        @updatedAt
   storage     PluginStorage[]
 
+  // Safety consent — records who accepted the plugin safety disclaimer, when,
+  // and against which disclaimer/plugin versions and permission set.
+  safetyAcceptedAt            DateTime?
+  // Null userId with a non-null timestamp marks a legacy/backfill acceptance
+  // (grandfathered from before the disclaimer existed).
+  safetyAcceptedBy            String?
+  safetyDisclaimerVersion     String?
+  safetyAcceptedPluginVersion String?
+  safetyAcceptedPermissions   Json?
+
+  // Admin-controlled effective grants. Null = all manifest permissions granted.
+  grantedPermissions Json?
+
   @@index([enabled])
   @@index([name, enabled])
 }
