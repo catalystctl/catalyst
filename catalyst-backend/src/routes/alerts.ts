@@ -408,7 +408,11 @@ export async function alertRoutes(app: FastifyInstance) {
         }
       }
 
-      const skip = (Number(page) - 1) * Number(limit);
+      // Clamp pagination: NaN/negative inputs would make Prisma throw a
+      // validation error (500) instead of returning a sane page.
+      const pageNum = Math.max(1, Math.floor(Number(page)) || 1);
+      const limitNum = Math.min(100, Math.max(1, Math.floor(Number(limit)) || 25));
+      const skip = (pageNum - 1) * limitNum;
 
       const where: any = {};
       if (serverId) where.serverId = serverId;

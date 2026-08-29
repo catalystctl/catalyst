@@ -58,7 +58,7 @@ export async function adminRoutes(app: FastifyInstance) {
   const isAdminUser = (request: any, required: 'admin.read' | 'admin.write' = 'admin.read') => {
     const perms: string[] = request.user?.permissions ?? [];
     if (perms.includes('*')) return true;
-    if (required === 'admin.write') return perms.includes('admin.write') || perms.includes('admin.read');
+    // Exact match: admin.read must not satisfy an admin.write check.
     return perms.includes(required);
   };
 
@@ -520,6 +520,28 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
+      // Role-change guards for Administrator demotion: removing the
+      // Administrator role from a user who currently holds it requires the
+      // wildcard permission and must never remove the last administrator.
+      if (roleIds) {
+        const adminRole = await prisma.role.findUnique({ where: { name: 'Administrator' } });
+        if (adminRole) {
+          const targetHasAdmin = existingUser.roles.some((role) => role.id === adminRole.id);
+          const newRolesIncludeAdmin = roleIds.includes(adminRole.id);
+          if (targetHasAdmin && !newRolesIncludeAdmin) {
+            if (!(user.permissions ?? []).includes('*')) {
+              return reply.status(403).send({ error: 'Insufficient permissions to demote this administrator' });
+            }
+            const adminCount = await prisma.user.count({
+              where: { roles: { some: { name: 'Administrator' } } },
+            });
+            if (adminCount <= 1) {
+              return reply.status(409).send({ error: 'Cannot remove the last administrator' });
+            }
+          }
+        }
+      }
+
       if (password && password.length < 8) {
         return reply.status(400).send({ error: 'Password must be at least 8 characters' });
       }
@@ -567,10 +589,25 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       if (password) {
-        await auth.api.setPassword({
-          headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
-          body: { newPassword: password },
-        } as any);
+        // Change the target user's password via better-auth's admin plugin.
+        // setUserPassword({ userId, newPassword }) derives the session context
+        // internally from the acting admin's headers — the previous
+        // auth.api.setPassword call was an invalid method (it does not exist).
+        try {
+          // (admin plugin endpoints are not reflected on auth.api's type —
+          // same convention as banUser/unbanUser below)
+          await (auth.api as any).setUserPassword({
+            headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
+            body: { userId, newPassword: password },
+          });
+        } catch (err: any) {
+          request.log.error({ err }, 'Failed to set user password');
+          return reply.status(400).send({
+            error: err?.message || 'Failed to update user password',
+          });
+        }
+        // Invalidate the target user's existing sessions after a password change.
+        await prisma.session.deleteMany({ where: { userId } }).catch(() => {});
       }
 
       const updatedUser = await prisma.user.update({
@@ -799,9 +836,33 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Cannot delete the current user' });
       }
 
-      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { roles: true },
+      });
       if (!existingUser) {
         return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Hierarchy guard: deleting an admin-equivalent user (Administrator role
+      // or admin.write permission via any role) requires the wildcard permission.
+      const targetEffectivePerms = existingUser.roles.flatMap(
+        (role) => (role.permissions as string[]) ?? [],
+      );
+      const targetIsAdminEquivalent = existingUser.roles.some((role) => role.name === 'Administrator') ||
+        targetEffectivePerms.includes('admin.write');
+      if (targetIsAdminEquivalent && !(user.permissions ?? []).includes('*')) {
+        return reply.status(403).send({ error: 'Insufficient permissions to delete this user' });
+      }
+
+      // Last-admin guard: never allow deleting the final Administrator.
+      if (existingUser.roles.some((role) => role.name === 'Administrator')) {
+        const adminCount = await prisma.user.count({
+          where: { roles: { some: { name: 'Administrator' } } },
+        });
+        if (adminCount <= 1) {
+          return reply.status(409).send({ error: 'Cannot delete the last administrator' });
+        }
       }
 
       // Check if the user owns any servers — block deletion unless force-transferring
@@ -2787,6 +2848,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
       const hosts = await prisma.databaseHost.findMany({
         orderBy: { createdAt: 'desc' },
+        omit: { password: true },
         include: { _count: { select: { databases: true } } },
       });
 
@@ -2849,6 +2911,7 @@ export async function adminRoutes(app: FastifyInstance) {
             engine: resolvedEngine === 'postgres' ? 'postgresql' : (resolvedEngine || 'mysql'),
             database: database?.trim() || (resolvedEngine === 'postgresql' || resolvedEngine === 'postgres' ? 'postgres' : undefined),
           },
+          omit: { password: true },
         });
 
         await createAuditLog(user.userId, {
@@ -2930,6 +2993,12 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       try {
+        // Password preservation: the list endpoints never return the plaintext
+        // password, so a masked or empty value must keep the stored password.
+        const passwordToStore =
+          password === undefined || password === '' || password === '********'
+            ? existing.password
+            : password;
         const updated = await prisma.databaseHost.update({
           where: { id: hostId },
           data: {
@@ -2937,10 +3006,11 @@ export async function adminRoutes(app: FastifyInstance) {
             host: host !== undefined ? host.trim() : existing.host,
             port: port ?? existing.port,
             username: username !== undefined ? username.trim() : existing.username,
-            password: password ?? existing.password,
+            password: passwordToStore,
             engine: resolvedEngine === 'postgres' ? 'postgresql' : (resolvedEngine || existing.engine),
             database: database !== undefined ? database.trim() : existing.database,
           },
+          omit: { password: true },
         });
 
         await createAuditLog(user.userId, {
@@ -3192,7 +3262,14 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'Admin read permission required' });
       }
       const settings = await getSmtpSettings();
-      reply.send(serialize({ success: true, data: settings }));
+      // Never return the plaintext SMTP password — send a mask sentinel instead.
+      reply.send(serialize({
+        success: true,
+        data: {
+          ...settings,
+          password: settings.password ? '********' : null,
+        },
+      }));
     }
   );
 
@@ -3238,11 +3315,21 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Invalid SMTP port' });
       }
 
+      // Password preservation: the client never sees the plaintext password
+      // (GET returns a '********' mask), so an omitted, empty, or masked
+      // password must keep the stored value instead of wiping it. Explicit
+      // null still clears the stored password.
+      const existingSmtp = await getSmtpSettings();
+      const passwordToStore =
+        password === undefined || password === '' || password === '********'
+          ? existingSmtp.password
+          : password;
+
       await upsertSmtpSettings({
         host: host ?? null,
         port: port ?? null,
         username: username ?? null,
-        password: password ?? null,
+        password: passwordToStore ?? null,
         from: from ?? null,
         replyTo: replyTo ?? null,
         secure: secure ?? false,

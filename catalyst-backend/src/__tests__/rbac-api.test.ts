@@ -390,6 +390,68 @@ describe('RBAC - Route Protection Verification', () => {
     });
   });
 
+  describe('isAdminUser helper (admin route gate)', () => {
+    // Minimal stub of the Fastify instance that captures the handler options
+    // registered by adminRoutes(app).
+    async function captureAdminRoutes() {
+      const registered: Array<{ method: string; url: string; handler: any }> = [];
+      const capture = (method: string) => (url: string, options: any, handler?: any) => {
+        registered.push({ method, url, handler: handler ?? options });
+      };
+      const app: any = {
+        get: capture('GET'),
+        put: capture('PUT'),
+        post: capture('POST'),
+        delete: capture('DELETE'),
+        patch: capture('PATCH'),
+      };
+      const { adminRoutes } = await import('../routes/admin');
+      await adminRoutes(app);
+      return registered;
+    }
+
+    function makeRequest(perms: string[]) {
+      return { user: { userId: 'actor-1', permissions: perms } } as any;
+    }
+
+    it('admin.read must NOT satisfy an admin.write check (dns-settings PUT)', async () => {
+      const routes = await captureAdminRoutes();
+      const dnsPut = routes.find(
+        (r) => r.method === 'PUT' && r.url === '/dns-settings',
+      );
+      expect(dnsPut).toBeDefined();
+
+      // A user with only admin.read must be rejected with 403...
+      const reply = {
+        status: (code: number) => ({
+          send: (body: any) => ({ code, body }),
+        }),
+      };
+      const result = await dnsPut!.handler(
+        makeRequest(['admin.read']),
+        reply,
+      );
+      expect(result.code).toBe(403);
+
+      // ...while admin.write passes the permission gate. A body missing the
+      // required DNS fields is rejected with 400 (validation) BEFORE any DB
+      // access, proving the request got past the isAdminUser check.
+      const okReply = {
+        status: (code: number) => ({
+          send: (body: any) => ({ code, body }),
+        }),
+      };
+      const okResult = await dnsPut!.handler(
+        { ...makeRequest(['admin.write']), body: { enabled: true } },
+        okReply,
+      );
+      expect(okResult.code).toBe(400);
+      expect(okResult.body.error).toBe(
+        'Base domain and provider are required when DNS is enabled',
+      );
+    });
+  });
+
   describe('Permission Aggregation Tests', () => {
     it('should correctly aggregate permissions from multiple roles', async () => {
       // Create a user with multiple roles

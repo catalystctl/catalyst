@@ -234,22 +234,17 @@ export async function setupRoutes(app: FastifyInstance) {
 		},
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			// 1. Ensure no users exist yet
-			const userCount = await prisma.user.count();
-			const existingUser =
-				userCount > 0
-					? await prisma.user.findFirst({
-							include: { roles: true },
-					  })
-					: null;
+			//
+			// The gate keys off the administrator count, not the raw user count:
+			// a panel with users but no administrator is still "in setup", and the
+			// recovery path below must only ever promote the account the operator
+			// actually specified in this request (never an arbitrary first user).
+			let userCount = await prisma.user.count();
+			let adminCount = await prisma.user.count({
+				where: { roles: { some: { name: "Administrator" } } },
+			});
 
-			// If a user exists but has no admin role, the previous attempt
-			// partially failed. Finish the setup instead of rejecting.
-			const isFullySetUp =
-				existingUser?.roles.some(
-					(r) => r.name === "Administrator",
-				) ?? false;
-
-			if (userCount > 0 && isFullySetUp) {
+			if (adminCount > 0) {
 				return reply.status(409).send({
 					error: "Setup has already been completed",
 				});
@@ -267,9 +262,21 @@ export async function setupRoutes(app: FastifyInstance) {
 				});
 			}
 
-			// 3. Partial setup recovery — user exists but wasn't fully configured
-			if (existingUser && !isFullySetUp) {
-				return ensureSetupComplete(reply, parsed.data, existingUser);
+			// 3. Partial setup recovery — an administrator-capable account may
+			// already exist (e.g. a previous attempt crashed after user creation
+			// but before role assignment). Finish its setup instead of rejecting,
+			// but only when it is the account named in this setup request.
+			if (adminCount === 0 && userCount > 0) {
+				const namedUser = await prisma.user.findUnique({
+					where: { email: parsed.data.email },
+				});
+				if (!namedUser) {
+					return reply.status(400).send({
+						error:
+							"Setup cannot be completed: an administrator already exists",
+					});
+				}
+				return ensureSetupComplete(reply, parsed.data, namedUser);
 			}
 
 			const {
@@ -286,7 +293,36 @@ export async function setupRoutes(app: FastifyInstance) {
 			} = parsed.data;
 			const metadata = rawMetadata as any;
 
+			// Serialize concurrent setup attempts with a Postgres advisory lock so
+			// two racing requests cannot both pass the "no admin" check and create
+			// two administrator accounts. (The ::text cast is required: Prisma v7
+			// cannot deserialize the bare function's void result column.)
+			await prisma.$queryRaw`SELECT pg_advisory_lock(7274483)::text`;
 			try {
+				// Re-check under the lock: another request may have won the race.
+				adminCount = await prisma.user.count({
+					where: { roles: { some: { name: "Administrator" } } },
+				});
+				userCount = await prisma.user.count();
+				if (adminCount > 0) {
+					return reply.status(409).send({
+						error: "Setup has already been completed",
+					});
+				}
+				if (userCount > 0) {
+					const namedUser = await prisma.user.findUnique({
+						where: { email: parsed.data.email },
+					});
+					if (!namedUser) {
+						return reply.status(400).send({
+							error:
+								"Setup cannot be completed: an administrator already exists",
+						});
+					}
+					return ensureSetupComplete(reply, parsed.data, namedUser);
+				}
+
+				try {
 				// 4. Create Administrator role
 				const adminRole = await prisma.role.upsert({
 					where: { name: "Administrator" },
@@ -426,19 +462,23 @@ export async function setupRoutes(app: FastifyInstance) {
 						panelName,
 					},
 				});
-			} catch (error: any) {
-				captureSystemError({
-					level: "error",
-					component: "SetupRoutes",
-					message: error?.message || "Setup failed",
-					stack: error?.stack,
-					metadata: { context: "setup" },
-				}).catch(() => {});
-				request.log.error({ error }, "Setup failed");
-				return reply.status(500).send({
-					error: "An unexpected error occurred during setup",
-				});
-			}
-		},
+				} catch (error: any) {
+					captureSystemError({
+						level: "error",
+						component: "SetupRoutes",
+						message: error?.message || "Setup failed",
+						stack: error?.stack,
+						metadata: { context: "setup" },
+					}).catch(() => {});
+					request.log.error({ error }, "Setup failed");
+					return reply.status(500).send({
+						error: "An unexpected error occurred during setup",
+					});
+				}
+			} finally {
+				await prisma
+					.$queryRaw`SELECT pg_advisory_unlock(7274483)`
+					.catch(() => {});
+			}		},
 	);
 }

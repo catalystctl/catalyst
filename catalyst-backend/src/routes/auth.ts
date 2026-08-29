@@ -562,7 +562,7 @@ export async function authRoutes(app: FastifyInstance) {
           where: { userId: request.user.userId },
           orderBy: { timestamp: 'desc' },
           take: Math.min(Number(limit) || 50, 200),
-          skip: Number(offset) || 0,
+          skip: Math.max(0, Math.floor(Number(offset)) || 0),
           select: { id: true, action: true, resource: true, resourceId: true, details: true, timestamp: true },
         }),
         prisma.auditLog.count({ where: { userId: request.user.userId } }),

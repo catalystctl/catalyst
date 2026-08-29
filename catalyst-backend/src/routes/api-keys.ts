@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db";
 import { createApiKey, deleteApiKey as deleteApiKeyService, updateApiKey as updateApiKeyService } from "../services/api-key-service";
-import { PERMISSION_CATEGORIES, hasPermission } from "../lib/permissions-catalog";
+import { PERMISSION_CATEGORIES, hasPermission, isAdmin } from "../lib/permissions-catalog";
 import { serialize } from '../utils/serialize';
 import { captureSystemError } from "../services/error-logger";
 import { createAuditLog } from "../middleware/audit.js";
@@ -139,12 +139,16 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   });
 
   // ── GET / ──
-  // List all API keys.
+  // List API keys. Admins (admin.read) see all keys; non-admin holders of
+  // apikey.manage are scoped to their own keys to prevent enumeration of
+  // other users' keys.
   app.get("/api/admin/api-keys", {
     preHandler: [authenticate, requireApiKeyManage],
-  }, async (request, reply) => {
+  }, async (request: any, reply) => {
     try {
+      const canListAll = isAdmin(request);
       const apiKeys = await prisma.apikey.findMany({
+        ...(canListAll ? {} : { where: { userId: request.user.userId } }),
         select: {
           id: true,
           name: true,
@@ -187,7 +191,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // ── GET /:id ──
   app.get<{ Params: { id: string } }>("/api/admin/api-keys/:id", {
     preHandler: [authenticate, requireApiKeyManage],
-  }, async (request, reply) => {
+  }, async (request: any, reply) => {
     try {
       const { id } = request.params;
       const apiKey = await prisma.apikey.findUnique({
@@ -203,6 +207,11 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
       if (!apiKey) {
         return reply.status(404).send({ success: false, error: "API key not found" });
+      }
+
+      // Non-admins may only read their own keys.
+      if (apiKey.userId !== request.user.userId && !isAdmin(request)) {
+        return reply.status(403).send({ success: false, error: "Requires admin.read permission" });
       }
 
       return reply.send(serialize({ success: true, data: apiKey }));
@@ -226,6 +235,21 @@ export async function apiKeyRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params;
       const body = updateApiKeySchema.parse(request.body);
+
+      // Non-admins may only modify their own keys.
+      if (!isAdmin(request)) {
+        const ownsKey = await prisma.apikey.findFirst({
+          where: { id, userId: request.user.userId },
+          select: { id: true },
+        });
+        if (!ownsKey) {
+          const exists = await prisma.apikey.findUnique({ where: { id }, select: { id: true } });
+          if (!exists) {
+            return reply.status(404).send({ success: false, error: "API key not found" });
+          }
+          return reply.status(403).send({ success: false, error: "Requires admin.read permission" });
+        }
+      }
 
       const apiKey = await updateApiKeyService(id, body);
 
@@ -280,6 +304,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       const apiKey = await prisma.apikey.findUnique({
         where: { id },
         select: {
+          userId: true,
           name: true,
           // Better Auth apikey model may not expose these; keep best-effort.
           metadata: true,
@@ -288,6 +313,11 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
       if (!apiKey) {
         return reply.status(404).send({ success: false, error: "API key not found" });
+      }
+
+      // Non-admins may only delete their own keys.
+      if (apiKey.userId !== request.user.userId && !isAdmin(request)) {
+        return reply.status(403).send({ success: false, error: "Requires admin.read permission" });
       }
 
       await deleteApiKeyService(id);
@@ -332,12 +362,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // ── GET /:id/usage ──
   app.get<{ Params: { id: string } }>("/api/admin/api-keys/:id/usage", {
     preHandler: [authenticate, requireApiKeyManage],
-  }, async (request, reply) => {
+  }, async (request: any, reply) => {
     try {
       const { id } = request.params;
       const apiKey = await prisma.apikey.findUnique({
         where: { id },
         select: {
+          userId: true,
           requestCount: true, remaining: true, lastRequest: true,
           rateLimitMax: true, rateLimitTimeWindow: true, createdAt: true,
         },
@@ -345,6 +376,11 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
       if (!apiKey) {
         return reply.status(404).send({ success: false, error: "API key not found" });
+      }
+
+      // Non-admins may only view usage of their own keys.
+      if (apiKey.userId !== request.user.userId && !isAdmin(request)) {
+        return reply.status(403).send({ success: false, error: "Requires admin.read permission" });
       }
 
       return reply.send(serialize({
