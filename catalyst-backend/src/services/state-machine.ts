@@ -108,6 +108,6 @@ export class ServerStateMachine {
    * Check if server is transitioning
    */
   static isTransitioning(state: ServerState): boolean {
-    return [ServerState.STARTING, ServerState.STOPPING, ServerState.RESTORING, ServerState.CREATING_BACKUP, ServerState.TRANSFERRING, ServerState.CLONING].includes(state);
+    return [ServerState.INSTALLING, ServerState.STARTING, ServerState.STOPPING, ServerState.RESTORING, ServerState.CREATING_BACKUP, ServerState.TRANSFERRING, ServerState.CLONING].includes(state);
   }
 }

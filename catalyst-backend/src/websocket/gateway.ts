@@ -100,6 +100,8 @@ interface ConnectedAgent {
   socket: any;
   authenticated: boolean;
   lastHeartbeat: number;
+  /** Set while the socket is registered under a temporary pre-auth key. */
+  preAuthNodeId?: string;
 }
 
 // Message types considered control-plane critical: always delivered when a
@@ -134,6 +136,14 @@ const OUTBOXABLE_TYPES = new Set([
 // backwards-compatible; a major mismatch rejects the handshake explicitly.
 const AGENT_PROTOCOL_MAJOR = 1;
 
+// Outbox power commands eligible for stale-state re-validation at drain time.
+const POWER_OUTBOX_COMMANDS = new Set([
+  "start_server",
+  "stop_server",
+  "kill_server",
+  "restart_server",
+]);
+
 // Heartbeat lastSeenAt persistence throttle: agents heartbeat every 15s, but
 // writing lastSeenAt on every beat is pure DB churn. Persist at most once per
 // window per node (finalizeAgentConnection resets the marker on reconnect).
@@ -164,7 +174,10 @@ export function sanitizeIntMetric(value: unknown, min: number, max: number, fall
 export function toByteCounterBig(value: unknown): bigint {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return 0n;
-  return BigInt(Math.floor(n));
+  // Clamp to the int8 column range: 1e20 is finite but overflows bigint
+  // columns (networkRxBytes/networkTxBytes) and would void the whole write.
+  const bytes = BigInt(Math.floor(n));
+  return bytes > INT8_MAX ? INT8_MAX : bytes;
 }
 
 interface ClientConnection {
@@ -186,17 +199,45 @@ type PendingAgentRequest = {
   onChunk?: (chunk: Buffer) => void;
 };
 
+// Postgres int4/int8 ceilings: metric columns are Int/BigInt, so values beyond
+// these make the whole write (or an entire batch INSERT) fail.
+const INT4_MAX = 2_147_483_647;
+const INT8_MAX = 9_223_372_036_854_775_807n;
+
+/**
+ * Validate an agent-supplied epoch-milliseconds timestamp. Returns null for
+ * non-finite input and for values outside the JS Date range (±8.64e15 ms) —
+ * e.g. 1e20 produces an Invalid Date which would poison a whole batch INSERT.
+ */
+export function sanitizeBatchTimestamp(value: unknown): Date | null {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const ms = Math.floor(n);
+  if (Math.abs(ms) > 8.64e15) return null;
+  const d = new Date(ms);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export class WebSocketGateway {
   private agents = new Map<string, ConnectedAgent>();
   private clients = new Map<string, ClientConnection>();
   private logger: pino.Logger;
   private pendingAgentRequests = new Map<string, PendingAgentRequest>();
+  // Pre-handshake agent sockets are registered under a temporary key so an
+  // unauthenticated socket can never displace a live authenticated agent.
+  // handshakeTimeouts backs the 10s handshake deadline per connection.
+  private handshakeTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
   // nodeId → timestamp of the last heartbeat whose lastSeenAt hit the database.
   // Entries older than ~10 minutes are swept; reset on agent reconnect.
   private readonly nodeLastPersistedSeen = new Map<string, number>();
   private activeBackupRelay: { sourceNodeId: string; targetNodeId: string; resolve: () => void; reject: (err: Error) => void } | null = null;
   private consoleOutputCounters = new Map<string, { count: number; resetAt: number; warned: boolean }>();
   private clientCommandCounters = new Map<string, { count: number; resetAt: number }>();
+  // Per-connection inbound client WS message limiter: every message costs DB
+  // queries (subscribe runs several), so unbounded rates are a DB-amplification
+  // DoS vector for any authenticated user.
+  private clientMessageCounters = new Map<string, { count: number; resetAt: number }>();
+  private static readonly CLIENT_MESSAGE_LIMIT = { max: 240, windowMs: 10_000 };
   private agentMessageCounters = new Map<string, { count: number; resetAt: number }>();
   private agentMetricsCounters = new Map<string, { count: number; resetAt: number }>();
   private serverMetricsCounters = new Map<string, { count: number; resetAt: number }>();
@@ -364,30 +405,129 @@ export class WebSocketGateway {
     return true;
   }
 
-  private drainOutbox(nodeId: string, agent: ConnectedAgent): void {
+  private async drainOutbox(nodeId: string, agent: ConnectedAgent): Promise<void> {
     const queue = this.outbox.get(nodeId);
     if (!queue || queue.length === 0) return;
     this.outbox.delete(nodeId);
     const now = Date.now();
     let sent = 0;
     let expired = 0;
+    let stale = 0;
+    let failureAt = -1;
+
+    // Stale-command guard: a power command queued while the agent was offline
+    // can contradict decisions made since (user stopped the server,
+    // auto-restart already started it, server was suspended or deleted).
+    // Re-validate every queued power command against current DB state before
+    // replaying; non-power commands (stats/resume) are always safe to replay.
+    const pendingPower = new Map<string, string[]>(); // serverId → queued types
     for (const entry of queue) {
+      try {
+        const payload = JSON.parse(entry.payload);
+        if (
+          POWER_OUTBOX_COMMANDS.has(payload?.type) &&
+          typeof payload.serverId === "string"
+        ) {
+          const list = pendingPower.get(payload.serverId) ?? [];
+          list.push(payload.type);
+          pendingPower.set(payload.serverId, list);
+        }
+      } catch {
+        // handled per-entry below
+      }
+    }
+    const staleServerIds = new Set<string>();
+    if (pendingPower.size > 0) {
+      try {
+        const servers = await this.prisma.server.findMany({
+          where: { id: { in: [...pendingPower.keys()] } },
+          select: { id: true, status: true, suspendedAt: true },
+        });
+        const byId = new Map(servers.map((s: any) => [s.id, s]));
+        for (const [serverId, commands] of pendingPower) {
+          const server = byId.get(serverId);
+          // Deleted or suspended server: never replay power commands.
+          if (!server || (server.suspendedAt && process.env.SUSPENSION_ENFORCED !== "false")) {
+            staleServerIds.add(serverId);
+            continue;
+          }
+          for (const command of commands) {
+            const state = server.status as ServerState;
+            const contradictory =
+              (command === "start_server" && !ServerStateMachine.canStart(state)) ||
+              (command === "stop_server" && !ServerStateMachine.canStop(state)) ||
+              (command === "kill_server" && !ServerStateMachine.canStop(state)) ||
+              (command === "restart_server" && !ServerStateMachine.canRestart(state));
+            if (contradictory) {
+              staleServerIds.add(serverId);
+              break;
+            }
+          }
+        }
+      } catch (err) {
+        // DB unavailable: replay rather than silently lose the commands
+        // (matches the pre-guard behavior for this failure mode).
+        this.logger.warn({ err, nodeId }, "Outbox stale-command re-validation failed; replaying queue");
+      }
+    }
+
+    for (let i = 0; i < queue.length; i++) {
+      const entry = queue[i];
       if (now - entry.queuedAt > WebSocketGateway.OUTBOX_TTL_MS) {
         expired += 1;
         continue;
+      }
+      if (staleServerIds.size > 0) {
+        try {
+          const payload = JSON.parse(entry.payload);
+          if (
+            POWER_OUTBOX_COMMANDS.has(payload?.type) &&
+            typeof payload.serverId === "string" &&
+            staleServerIds.has(payload.serverId)
+          ) {
+            stale += 1;
+            continue;
+          }
+        } catch {
+          stale += 1;
+          continue;
+        }
+      }
+      // Only send to an open socket. The ws library silently no-ops send()
+      // on a closed socket, which would silently discard the command.
+      if (agent.socket.readyState !== 1) {
+        failureAt = i;
+        break;
       }
       try {
         agent.socket.send(entry.payload);
         sent += 1;
       } catch {
+        failureAt = i;
         break;
       }
     }
-    if (expired > 0) {
+    if (failureAt >= 0) {
+      // Re-queue everything that was not successfully sent (including the
+      // failed entry itself) so a subsequent reconnect can retry it, instead
+      // of silently dropping the rest of the queue.
+      const remaining = queue
+        .slice(failureAt)
+        .filter((e) => now - e.queuedAt <= WebSocketGateway.OUTBOX_TTL_MS);
+      if (remaining.length > 0) {
+        const existing = this.outbox.get(nodeId) ?? [];
+        this.outbox.set(nodeId, [...remaining, ...existing]);
+        this.bumpCounter(this.reliabilityOutboxDropped, nodeId);
+      }
+    }
+    if (expired > 0 || stale > 0) {
       this.bumpCounter(this.reliabilityOutboxDropped, nodeId);
     }
-    if (sent > 0 || expired > 0) {
-      this.logger.info({ nodeId, drained: sent, expired }, "Drained agent command outbox after reconnect");
+    if (sent > 0 || expired > 0 || stale > 0) {
+      this.logger.info(
+        { nodeId, drained: sent, expired, stale },
+        "Drained agent command outbox after reconnect",
+      );
     }
   }
 
@@ -552,27 +692,43 @@ export class WebSocketGateway {
         authenticated: false,
         lastHeartbeat: Date.now(),
       };
-      const onMessage = (data: any, isBinary: boolean) => this.handleAgentMessage(nodeId, socket, data, isBinary);
+      // Routing key for this socket in this.agents. Starts as the real nodeId
+      // for token-authenticated connections; for the handshake path it starts
+      // as a temporary pre-auth key and is re-bound after successful auth.
+      const agentKey = () => agent.nodeId;
+      const onMessage = (data: any, isBinary: boolean) =>
+        this.handleAgentMessage(agentKey(), socket, data, isBinary);
       // WS-level pong from the panel's ping loop is direct proof the agent
       // socket is still alive in the panel→agent direction.
       const onPong = () => {
-        const current = this.agents.get(nodeId);
+        const current = this.agents.get(agentKey());
         if (current && current.socket === socket) {
           current.lastHeartbeat = Date.now();
         }
       };
       const onClose = () => {
-        const current = this.agents.get(nodeId);
+        const current = this.agents.get(agentKey());
         if (!current || current.socket !== socket) {
           this.logger.debug({ nodeId }, "Ignoring close from stale agent socket");
           return;
         }
-        this.agents.delete(nodeId);
-        this.agentUpdateSent.delete(nodeId);
+        this.agents.delete(agentKey());
+        this.agentUpdateSent.delete(agentKey());
         // Fail-fast any commands still awaiting an ack from this agent instead
         // of letting them hang until their per-request timeout (15-60s).
         this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} disconnected`);
         this.discoveredContainers.delete(nodeId);
+        // Release an active backup relay owned by this node so node-to-node
+        // transfers fail fast instead of wedging until the 5-minute timeout.
+        this.rejectBackupRelay(nodeId, new Error(`Source or target agent ${nodeId} disconnected mid-relay`));
+        // Clear any pending handshake deadline for this socket. While
+        // pre-registered, the socket's map key IS agent.nodeId (the
+        // __preauth: key); the map is keyed by that key, not by nodeId.
+        const handshakeTimer = this.handshakeTimeouts.get(agent.nodeId);
+        if (handshakeTimer) {
+          clearTimeout(handshakeTimer);
+          this.handshakeTimeouts.delete(agent.nodeId);
+        }
         this.prisma.node.update({
           where: { id: nodeId },
           data: { isOnline: false },
@@ -588,40 +744,7 @@ export class WebSocketGateway {
         });
 
         // Revert stuck backup/restore states for servers on this node
-        this.prisma.server.findMany({
-          where: {
-            nodeId,
-            status: { in: [ServerState.CREATING_BACKUP, ServerState.RESTORING] },
-          },
-          select: { id: true, status: true },
-        }).then(async (stuckServers) => {
-          for (const server of stuckServers) {
-            await this.prisma.server.update({
-              where: { id: server.id },
-              data: { status: ServerState.STOPPED },
-            });
-            await this.prisma.serverLog.create({
-              data: {
-                serverId: server.id,
-                stream: "system",
-                data: `[Node Disconnect] Node ${nodeId} went offline while server was in ${server.status}. Transitioned to STOPPED.`,
-              },
-            });
-            await this.routeToClients(server.id, {
-              type: "server_state_update",
-              serverId: server.id,
-              state: ServerState.STOPPED,
-              reason: `Node ${nodeId} disconnected during ${server.status}`,
-              timestamp: Date.now(),
-            });
-            this.logger.info(
-              { serverId: server.id, nodeId, fromStatus: server.status },
-              "Reverted stuck state to STOPPED on node disconnect"
-            );
-          }
-        }).catch(err => {
-          this.logger.error({ err, nodeId }, "Failed to revert stuck states on node disconnect");
-        });
+        this.revertStuckBackupStatesForNode(nodeId);
 
         this.pushToAdminSubscribers('node_updated', {
           type: 'node_updated',
@@ -678,21 +801,28 @@ export class WebSocketGateway {
         }
       } else {
         // No token in URL - agent will send handshake with token
-        // Add to agents map so handleAgentMessage can find it
+        // SECURITY: do NOT replace or displace an existing connection here.
+        // A socket that has not authenticated must never terminate a live
+        // (authenticated) agent — an attacker knowing only the nodeId could
+        // otherwise knock the real agent offline. The pre-auth socket is
+        // registered under a temporary key so messages from it can be routed,
+        // and it is bound to the real key only after a successful handshake.
+        const preAuthKey = `__preauth:${nodeId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
         const existing = this.agents.get(nodeId);
-        if (existing && existing.socket !== socket) {
-          this.logger.warn({ nodeId }, "Replacing existing agent connection");
-          // Fail requests that were sent over the superseded socket.
-          this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} connection replaced`);
-          // Terminate: a replaced socket may be half-open, and close() would
-          // wait forever for its close-frame handshake.
-          this.terminateSocket(existing.socket);
+        if (existing && existing.socket === socket) {
+          // Duplicate registration of the same socket — ignore.
+          socket.close();
+          return;
         }
-        this.agents.set(nodeId, agent);
+        agent.nodeId = preAuthKey;
+        agent.preAuthNodeId = nodeId;
+        this.agents.set(preAuthKey, agent);
         socket.on("message", onMessage);
         socket.on("pong", onPong);
         socket.on("close", onClose);
-        // Check progressive lockout for handshake path too
+
+        // Check progressive lockout for handshake path (pre-auth sockets
+        // cannot displace anyone, but lockout still applies).
         const lockout = this.checkAgentLockout(nodeId);
         if (lockout.locked) {
           this.logger.warn(
@@ -707,17 +837,18 @@ export class WebSocketGateway {
         this.logger.info({ nodeId }, "Agent connected, awaiting handshake");
 
         // Disconnect agent if handshake not completed within 10 seconds
-        setTimeout(() => {
-          const pending = this.agents.get(nodeId);
+        const handshakeTimer = setTimeout(() => {
+          const pending = this.agents.get(preAuthKey);
           if (pending && pending.socket === socket && !pending.authenticated) {
             // Never authenticated — nothing to negotiate, kill the socket now.
             this.terminateSocket(pending.socket);
-            this.agents.delete(nodeId);
-            this.agentUpdateSent.delete(nodeId);
-            this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} handshake timeout`);
+            this.agents.delete(preAuthKey);
+            this.agentUpdateSent.delete(preAuthKey);
             this.logger.warn({ nodeId }, "Agent handshake timeout");
           }
+          this.handshakeTimeouts.delete(preAuthKey);
         }, 10000);
+        this.handshakeTimeouts.set(preAuthKey, handshakeTimer);
       }
     } catch (err) {
       this.logger.error(err, "Error in agent connection");
@@ -760,7 +891,9 @@ export class WebSocketGateway {
       })
     );
     // Replay any commands queued while this agent was reconnecting.
-    this.drainOutbox(node.id, agent);
+    this.drainOutbox(node.id, agent).catch((err) => {
+      this.logger.error({ err, nodeId: node.id }, "Failed to drain agent command outbox");
+    });
     await this.resumeConsoleStreams(node.id);
   }
 
@@ -857,12 +990,13 @@ export class WebSocketGateway {
       }
 
       socket.on("message", (data: any) => {
-        this.logger.info({ clientId, dataType: typeof data, dataLength: data?.length }, "Raw message received");
+        this.logger.debug({ clientId, dataType: typeof data, dataLength: data?.length }, "Raw message received");
         this.handleClientMessage(clientId, data);
       });
       socket.on("close", () => {
         this.clients.delete(clientId);
         this.clientCommandCounters.delete(clientId);
+        this.clientMessageCounters.delete(clientId);
         this.logger.info(`Client disconnected: ${clientId}`);
       });
 
@@ -892,6 +1026,34 @@ export class WebSocketGateway {
     } catch (err) {
       this.logger.warn({ err, userId }, "Failed to evaluate admin.read permission");
       return false;
+    }
+  }
+
+  /** Full-admin (manage) permission: '*' or admin.write — mirrors
+   *  decideServerAccess in lib/server-access.ts. admin.read alone must NOT
+   *  authorize power actions or console writes. */
+  private async userHasAdminWrite(userId: string) {
+    try {
+      return await hasPermission(this.prisma, userId, "admin.write");
+    } catch (err) {
+      this.logger.warn({ err, userId }, "Failed to evaluate admin.write permission");
+      return false;
+    }
+  }
+
+  /** Aggregate the user's role permissions (same query shape hasPermission uses). */
+  private async getUserRolePermissions(userId: string): Promise<string[]> {
+    try {
+      const userRoles = await this.prisma.role.findMany({
+        where: { users: { some: { id: userId } } },
+        select: { permissions: true },
+      });
+      const out: string[] = [];
+      for (const role of userRoles) out.push(...role.permissions);
+      return out;
+    } catch (err) {
+      this.logger.warn({ err, userId }, "Failed to load role permissions");
+      return [];
     }
   }
 
@@ -996,6 +1158,19 @@ export class WebSocketGateway {
     try {
       // Binary frames: forward to active relay if one exists
       if (isBinary && this.activeBackupRelay) {
+        // SECURITY: only the authenticated agent socket that STARTED the
+        // relay may inject frames. Without this check any connected socket —
+        // including a pre-handshake one — could corrupt the restore stream.
+        if (
+          nodeId !== this.activeBackupRelay.sourceNodeId ||
+          socket.__catalystRelaySocket !== true
+        ) {
+          this.logger.warn(
+            { nodeId, sourceNodeId: this.activeBackupRelay.sourceNodeId },
+            "Dropping binary frame from non-source socket",
+          );
+          return;
+        }
         const targetAgent = this.agents.get(this.activeBackupRelay.targetNodeId);
         if (!targetAgent || targetAgent.socket.readyState !== 1) {
           // Relay target vanished mid-transfer — error the stream instead of
@@ -1088,31 +1263,61 @@ export class WebSocketGateway {
             );
           } catch { /* socket may already be closing */ }
           this.terminateSocket(agent.socket);
-          this.agents.delete(nodeId);
+          this.agents.delete(agent.nodeId);
           return;
         }
         this.logger.info({ nodeId, hasToken: Boolean(message.token) }, "Received node_handshake from agent");
+        // Pre-auth sockets are registered under a temporary __preauth: key;
+        // authentication and lockout must always target the REAL node id the
+        // socket claims (agent.preAuthNodeId), never the temporary key.
+        const realNodeId =
+          typeof agent.preAuthNodeId === "string" ? agent.preAuthNodeId : nodeId;
         const tokenValue = typeof message.token === "string" ? message.token : "";
-        const authResult = await this.authenticateAgentToken(nodeId, tokenValue);
+        const authResult = await this.authenticateAgentToken(realNodeId, tokenValue);
         this.logger.debug(
-          { nodeId, tokenProvided: Boolean(tokenValue), authType: authResult?.authType },
+          { nodeId: realNodeId, tokenProvided: Boolean(tokenValue), authType: authResult?.authType },
           "Agent auth check",
         );
         if (!authResult) {
-          const lockoutSeconds = this.recordAgentAuthFailure(nodeId);
+          const lockoutSeconds = this.recordAgentAuthFailure(realNodeId);
           this.logger.warn(
-            { nodeId, token: Boolean(tokenValue), lockoutSeconds },
-            `Agent authentication failed for node: ${nodeId} — locked out for ${lockoutSeconds}s`,
+            { nodeId: realNodeId, token: Boolean(tokenValue), lockoutSeconds },
+            `Agent authentication failed for node: ${realNodeId} — locked out for ${lockoutSeconds}s`,
           );
           try {
             agent.socket.send(JSON.stringify({ type: 'error', error: 'auth_failed', retryAfterSeconds: lockoutSeconds }));
           } catch { /* socket may already be closing */ }
           agent.socket.close();
-          this.agents.delete(nodeId);
-        this.agentUpdateSent.delete(nodeId);
+          this.agents.delete(agent.nodeId);
+          this.agentUpdateSent.delete(agent.nodeId);
           return;
         }
-        this.clearAgentAuthFailures(nodeId);
+        this.clearAgentAuthFailures(realNodeId);
+        // Bind the pre-auth entry to its REAL node id (agent.preAuthNodeId —
+        // the nodeId parameter here is the routing key, which is the
+        // temporary __preauth: key for handshake-path sockets).
+        const bindNodeId = realNodeId;
+        const preAuthKey = agent.nodeId;
+        if (typeof preAuthKey === "string" && preAuthKey.startsWith("__preauth:")) {
+          this.agents.delete(preAuthKey);
+          const handshakeTimer = this.handshakeTimeouts.get(preAuthKey);
+          if (handshakeTimer) {
+            clearTimeout(handshakeTimer);
+            this.handshakeTimeouts.delete(preAuthKey);
+          }
+        }
+        const existing = this.agents.get(nodeId);
+        if (existing && existing.socket !== socket) {
+          this.logger.warn({ nodeId }, "Replacing existing agent connection");
+          // Fail requests that were sent over the superseded socket.
+          this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} connection replaced`);
+          // Terminate: a replaced socket may be half-open, and close() would
+          // wait forever for its close-frame handshake.
+          this.terminateSocket(existing.socket);
+        }
+        agent.nodeId = bindNodeId;
+        delete agent.preAuthNodeId;
+        this.agents.set(bindNodeId, agent);
         // Set authenticated flag IMMEDIATELY to prevent timeout from disconnecting during async operations
         agent.authenticated = true;
         await this.finalizeAgentConnection(authResult.node, agent);
@@ -1122,10 +1327,10 @@ export class WebSocketGateway {
         // Also persist the version to the database.
         if (message.agentVersion && typeof message.agentVersion === 'string') {
           await this.prisma.node.update({
-            where: { id: nodeId },
+            where: { id: bindNodeId },
             data: { agentVersion: String(message.agentVersion) },
           }).catch(() => {});
-          this.checkAgentUpdate(nodeId, message.agentVersion).catch(() => {});
+          this.checkAgentUpdate(bindNodeId, message.agentVersion).catch(() => {});
         }
         return;
       }
@@ -1240,7 +1445,11 @@ export class WebSocketGateway {
       // matches a pending request will resolve it.
       if (message.requestId) {
         const pending = this.pendingAgentRequests.get(message.requestId);
-        if (pending && pending.kind === "json") {
+        // Defense in depth: a response is only accepted from the node the
+        // request was sent to (requestIds are unguessable UUIDs, but a
+        // compromised node must not be able to resolve another node's
+        // in-flight request by replaying an observed id).
+        if (pending && pending.kind === "json" && (!pending.nodeId || pending.nodeId === nodeId)) {
           clearTimeout(pending.timeout);
           this.pendingAgentRequests.delete(message.requestId);
           pending.resolve(message);
@@ -1497,10 +1706,12 @@ export class WebSocketGateway {
         // old hard clamp at 100 silently corrupted multi-core usage.
         const cpuCeiling = 100 * Math.max(1, (server as any).allocatedCpuCores ?? 1);
         const cpuPercent = sanitizeMetric(message.cpuPercent, 0, cpuCeiling);
-        const memoryUsageMb = sanitizeIntMetric(message.memoryUsageMb, 0, Number.MAX_SAFE_INTEGER);
-        const diskUsageMb = sanitizeIntMetric(message.diskUsageMb, 0, Number.MAX_SAFE_INTEGER);
-        const diskIoMb = sanitizeIntMetric(message.diskIoMb, 0, Number.MAX_SAFE_INTEGER);
-        const diskTotalMb = sanitizeIntMetric(message.diskTotalMb, 0, Number.MAX_SAFE_INTEGER);
+        // int4 columns (ServerMetrics): clamp at the column ceiling. Values
+        // beyond int4 max would make the write (or a whole batch INSERT) fail.
+        const memoryUsageMb = sanitizeIntMetric(message.memoryUsageMb, 0, INT4_MAX);
+        const diskUsageMb = sanitizeIntMetric(message.diskUsageMb, 0, INT4_MAX);
+        const diskIoMb = sanitizeIntMetric(message.diskIoMb, 0, INT4_MAX);
+        const diskTotalMb = sanitizeIntMetric(message.diskTotalMb, 0, INT4_MAX);
         const networkRxBytes = toByteCounterBig(message.networkRxBytes);
         const networkTxBytes = toByteCounterBig(message.networkTxBytes);
         // Split IO halves (newer agents). Absent on older agents → fall back
@@ -1513,10 +1724,10 @@ export class WebSocketGateway {
           Number.isFinite(Number(diskReadMbRaw)) &&
           Number.isFinite(Number(diskWriteMbRaw));
         const diskReadMb = hasSplitIo
-          ? sanitizeIntMetric(diskReadMbRaw, 0, Number.MAX_SAFE_INTEGER)
+          ? sanitizeIntMetric(diskReadMbRaw, 0, INT4_MAX)
           : null;
         const diskWriteMb = hasSplitIo
-          ? sanitizeIntMetric(diskWriteMbRaw, 0, Number.MAX_SAFE_INTEGER)
+          ? sanitizeIntMetric(diskWriteMbRaw, 0, INT4_MAX)
           : null;
 
         if (!this.allowServerMetrics(server.id)) {
@@ -1615,6 +1826,10 @@ export class WebSocketGateway {
         for (const m of message.metrics) {
           if (!m.serverUuid || !m.timestamp) continue;
           if (!Number.isFinite(Number(m.timestamp))) continue;
+          // Reject values outside the JS Date range (e.g. 1e20 or -1e20):
+          // they become Invalid Dates and would abort the whole batch INSERT.
+          const ts = sanitizeBatchTimestamp(m.timestamp);
+          if (!ts) continue;
           if (Number(m.timestamp) > Date.now() + MAX_FUTURE_SKEW_MS) {
             this.logger.warn(
               { nodeId, serverId: m.serverUuid, timestamp: m.timestamp },
@@ -1628,12 +1843,14 @@ export class WebSocketGateway {
             // after the server lookup below), so keep the raw value here and
             // clamp in the filtered pass.
             cpuPercentRaw: sanitizeMetric(m.cpuPercent, 0, Number.MAX_SAFE_INTEGER),
-            memoryUsageMb: sanitizeIntMetric(m.memoryUsageMb, 0, Number.MAX_SAFE_INTEGER),
+            // int4 columns: clamp at the column ceiling so one poisoned
+            // sample cannot void the entire batch INSERT.
+            memoryUsageMb: sanitizeIntMetric(m.memoryUsageMb, 0, INT4_MAX),
             networkRxBytes: toByteCounterBig(m.networkRxBytes),
             networkTxBytes: toByteCounterBig(m.networkTxBytes),
-            diskIoMb: sanitizeIntMetric(m.diskIoMb, 0, Number.MAX_SAFE_INTEGER),
-            diskUsageMb: sanitizeIntMetric(m.diskUsageMb, 0, Number.MAX_SAFE_INTEGER),
-            timestamp: new Date(Number(m.timestamp)),
+            diskIoMb: sanitizeIntMetric(m.diskIoMb, 0, INT4_MAX),
+            diskUsageMb: sanitizeIntMetric(m.diskUsageMb, 0, INT4_MAX),
+            timestamp: ts,
           });
         }
 
@@ -1785,6 +2002,22 @@ export class WebSocketGateway {
           }
         }
       } else if (message.type === "console_output") {
+        // Node ownership check: an agent may only report console output for
+        // servers that actually live on its node. Without this, a compromised
+        // node can forge log lines into any server's console and database.
+        const consoleServer = message.serverId
+          ? await this.prisma.server.findUnique({
+              where: { id: message.serverId },
+              select: { nodeId: true },
+            })
+          : null;
+        if (!consoleServer || consoleServer.nodeId !== nodeId) {
+          this.logger.warn(
+            { nodeId, serverId: message.serverId },
+            "console_output for server not on this node — dropping",
+          );
+          return;
+        }
         if (typeof message.data === "string") {
           if (!this.allowConsoleOutputBytes(message.serverId, Buffer.byteLength(message.data))) {
             this.logger.warn({ nodeId, serverId: message.serverId }, "console_output exceeded byte limit");
@@ -1839,6 +2072,20 @@ export class WebSocketGateway {
           this.logger.warn({ nodeId }, "eula_required missing serverId");
           return;
         }
+        // Node ownership check (same rationale as console_output): the EULA
+        // text is attacker-controlled content shown to the server owner, so a
+        // cross-node spoof would be a phishing primitive.
+        const eulaServer = await this.prisma.server.findUnique({
+          where: { id: message.serverId },
+          select: { nodeId: true },
+        });
+        if (!eulaServer || eulaServer.nodeId !== nodeId) {
+          this.logger.warn(
+            { nodeId, serverId: message.serverId },
+            "eula_required for server not on this node — dropping",
+          );
+          return;
+        }
         await this.routeToClients(message.serverId, {
           type: "eula_required",
           serverId: message.serverId,
@@ -1891,6 +2138,14 @@ export class WebSocketGateway {
             : {}),
           ...(typeof message.exitCode === "number" ? { lastExitCode: message.exitCode } : {}),
         };
+
+        // A server that reaches RUNNING after a genuine start has proven
+        // stability: clear the crash counter so the auto-restart budget is
+        // per-run, not lifetime. Without this, maxCrashCount crashes spread
+        // over weeks silently and permanently disable auto-restart.
+        if (message.state === ServerState.RUNNING && (server.crashCount ?? 0) > 0) {
+          nextData.crashCount = 0;
+        }
 
         const shouldRecordCrash = message.state === ServerState.CRASHED;
         let shouldAutoRestart = false;
@@ -2096,6 +2351,19 @@ export class WebSocketGateway {
 
         // Only update if state is different to avoid unnecessary writes
         if (server.status !== message.state) {
+          // Transitional operations (INSTALLING/TRANSFERRING/CLONING and the
+          // backup/restore windows) are owned by explicit lifecycle code: the
+          // 30s sync must never pull a server out of them — an INSTALLING
+          // server has no container yet, so a periodic sync would mark it
+          // "stopped" and unlock start/stop mid-install. Only the operation's
+          // own completion/error handlers may move these states.
+          if (ServerStateMachine.isTransitioning(server.status as ServerState)) {
+            this.logger.warn(
+              { serverId: server.id, from: server.status, to: message.state },
+              "State sync ignored: server is in a guarded transitional state",
+            );
+            return;
+          }
           const transition = ServerStateMachine.validateTransition(
             server.status as ServerState,
             message.state as ServerState
@@ -2163,7 +2431,15 @@ export class WebSocketGateway {
             nodeId,
             // Only check servers that aren't already in terminal states
             status: {
-              notIn: [ServerState.STOPPED, ServerState.ERROR, ServerState.CREATING_BACKUP, ServerState.RESTORING]
+              notIn: [
+                ServerState.STOPPED,
+                ServerState.ERROR,
+                ServerState.CREATING_BACKUP,
+                ServerState.RESTORING,
+                ServerState.INSTALLING,
+                ServerState.TRANSFERRING,
+                ServerState.CLONING,
+              ],
             }
           },
           select: { id: true, uuid: true, status: true, suspendedAt: true }
@@ -2222,14 +2498,6 @@ export class WebSocketGateway {
           include: { node: true },
         });
 
-        // Transition server back to STOPPED after backup completes
-        if (server?.status === ServerState.CREATING_BACKUP) {
-          await this.prisma.server.update({
-            where: { id: message.serverId },
-            data: { status: ServerState.STOPPED },
-          });
-        }
-
         if (!server) {
           return;
         }
@@ -2238,8 +2506,21 @@ export class WebSocketGateway {
           return;
         }
 
+        // Transition server back to STOPPED after backup completes
+        if (server.status === ServerState.CREATING_BACKUP) {
+          await this.prisma.server.update({
+            where: { id: message.serverId },
+            data: { status: ServerState.STOPPED },
+          });
+        }
+
+        // Backup lookup must be scoped to this server: a node must not be
+        // able to rewrite the size/checksum/metadata of another server's
+        // backup by supplying its backupId.
         const backupRecord = message.backupId
-          ? await this.prisma.backup.findUnique({ where: { id: message.backupId } })
+          ? await this.prisma.backup.findFirst({
+              where: { id: message.backupId, serverId: message.serverId },
+            })
           : await this.prisma.backup.findFirst({
               where: {
                 serverId: message.serverId,
@@ -2444,6 +2725,19 @@ export class WebSocketGateway {
         }
 
       } else if (message.type === "backup_restore_complete") {
+        // Node ownership check: a node must not be able to finalize (or
+        // corrupt) another node's restore by spoofing the serverId.
+        const restoreServer = await this.prisma.server.findUnique({
+          where: { id: message.serverId },
+          select: { nodeId: true },
+        });
+        if (!restoreServer || restoreServer.nodeId !== nodeId) {
+          this.logger.warn(
+            { nodeId, serverId: message.serverId },
+            "backup_restore_complete for server not on this node — dropping",
+          );
+          return;
+        }
         // Transition server back to STOPPED after restore completes
         await this.prisma.server.updateMany({
           where: { id: message.serverId, status: ServerState.RESTORING },
@@ -2491,7 +2785,9 @@ export class WebSocketGateway {
           "Agent error reported"
         );
 
-        // Revert stuck backup/restore states on agent error
+        // Revert stuck backup/restore states on agent error. The server must
+        // belong to the reporting node — otherwise any node could flip another
+        // node's server into ERROR.
         const errorServerId = metadata?.serverId;
         if (errorServerId && typeof errorServerId === "string") {
           const isBackupError =
@@ -2499,8 +2795,8 @@ export class WebSocketGateway {
             (typeof message.backupId === "string" && message.backupId) ||
             (typeof message.backupPath === "string" && message.backupPath);
           if (isBackupError) {
-            const server = await this.prisma.server.findUnique({
-              where: { id: errorServerId },
+            const server = await this.prisma.server.findFirst({
+              where: { id: errorServerId, nodeId },
               select: { id: true, status: true },
             });
             if (server && (server.status === ServerState.CREATING_BACKUP || server.status === ServerState.RESTORING)) {
@@ -2587,7 +2883,23 @@ export class WebSocketGateway {
         return;
       }
 
-      this.logger.info({ clientId, type: message.type, authenticated: client.authenticated }, "Received client message");
+      // Per-connection message rate limit (handshakes included, so pre-auth
+      // floods cost the same as post-auth floods).
+      const nowMs = Date.now();
+      const limiter = this.clientMessageCounters.get(clientId);
+      if (!limiter || nowMs >= limiter.resetAt) {
+        this.clientMessageCounters.set(clientId, {
+          count: 1,
+          resetAt: nowMs + WebSocketGateway.CLIENT_MESSAGE_LIMIT.windowMs,
+        });
+      } else if (limiter.count >= WebSocketGateway.CLIENT_MESSAGE_LIMIT.max) {
+        this.logger.debug({ clientId }, "Client message rate limit exceeded");
+        return;
+      } else {
+        limiter.count += 1;
+      }
+
+      this.logger.debug({ clientId, type: message.type, authenticated: client.authenticated }, "Received client message");
 
       if (message.type === "client_handshake") {
         // If already authenticated via cookies, just acknowledge
@@ -2609,6 +2921,21 @@ export class WebSocketGateway {
         });
         if (!session) {
           this.logger.warn({ clientId }, "client_handshake invalid session");
+          client.socket.close();
+          this.clients.delete(clientId);
+          return;
+        }
+        // Enforce the same per-user connection cap as the cookie path so the
+        // token path cannot bypass MAX_CLIENT_CONNECTIONS_PER_USER.
+        let userConnections = 0;
+        for (const [, c] of this.clients) {
+          if (c.authenticated && c.userId === session.user.id) userConnections += 1;
+        }
+        if (userConnections >= this.MAX_CONNECTIONS_PER_USER) {
+          this.logger.warn(
+            { clientId, userId: session.user.id, connections: userConnections },
+            "Client connection rejected: per-user limit reached (token handshake)",
+          );
           client.socket.close();
           this.clients.delete(clientId);
           return;
@@ -2735,10 +3062,16 @@ export class WebSocketGateway {
           );
         }
 
-        // Check if client is owner or has access
+        // Check if client is owner or has access. Power actions follow the
+        // decideServerAccess contract: admin requires admin.write (admin.read
+        // is observation-only), and node assignment alone grants nothing
+        // unless paired with node.update.
         const isOwner = server.ownerId === client.userId;
-        const isAdmin = await this.userHasAdminRead(client.userId);
-        const nodeAccess = await hasNodeAccess(this.prisma, client.userId, server.nodeId);
+        const isAdmin = await this.userHasAdminWrite(client.userId);
+        const rolePerms = await this.getUserRolePermissions(client.userId);
+        const nodeAccess =
+          (await hasNodeAccess(this.prisma, client.userId, server.nodeId)) &&
+          rolePerms.includes("node.update");
         if (!isOwner && !access && !isAdmin && !nodeAccess) {
           return client.socket.send(
             JSON.stringify({
@@ -2767,7 +3100,12 @@ export class WebSocketGateway {
               : event.action === "kill" || event.action === "restart" || event.action === "reboot"
                 ? "server.stop"
                 : "server.start";
-        if (!isOwner && !isAdmin && !nodeAccess && !access?.permissions?.includes(requiredPermission)) {
+        if (
+          !isOwner &&
+          !isAdmin &&
+          !nodeAccess &&
+          !access?.permissions?.includes(requiredPermission)
+        ) {
           return client.socket.send(
             JSON.stringify({
               type: "error",
@@ -2819,11 +3157,16 @@ export class WebSocketGateway {
           return;
         }
 
-        const isAdmin = await this.userHasAdminRead(client.userId);
+        const isAdmin = await this.userHasAdminWrite(client.userId);
         const access = await this.prisma.serverAccess.findUnique({
           where: { userId_serverId: { userId: client.userId, serverId: server.id } },
         });
-        const consoleNodeAccess = await hasNodeAccess(this.prisma, client.userId, server.nodeId);
+        // Node assignment alone must not grant console write (the
+        // decideServerAccess contract) — it requires node.update too.
+        const rolePerms = await this.getUserRolePermissions(client.userId);
+        const consoleNodeAccess =
+          (await hasNodeAccess(this.prisma, client.userId, server.nodeId)) &&
+          rolePerms.includes("node.update");
         if (!access && server.ownerId !== client.userId && !isAdmin && !consoleNodeAccess) {
           if (client.socket.readyState === 1) {
             client.socket.send(
@@ -3374,6 +3717,12 @@ export class WebSocketGateway {
           this.terminateSocket(agent.socket);
           this.agents.delete(nodeId);
         this.agentUpdateSent.delete(nodeId);
+          // Full disconnect cleanup — the socket's own onClose handler will
+          // early-return (its map entry is already gone), so the reap must do
+          // everything the close path would have done.
+          this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} heartbeat timeout`);
+          this.discoveredContainers.delete(nodeId);
+          this.rejectBackupRelay(nodeId, new Error(`Source or target agent ${nodeId} disconnected mid-relay`));
           this.prisma.node.update({
             where: { id: nodeId },
             data: { isOnline: false },
@@ -3393,9 +3742,54 @@ export class WebSocketGateway {
             isOnline: false,
             timestamp: Date.now(),
           });
+          // Revert stuck backup/restore states (mirrors the onClose path) so
+          // servers don't linger in CREATING_BACKUP/RESTORING until the
+          // 15-minute watchdog fires.
+          this.revertStuckBackupStatesForNode(nodeId);
         }
       }
     }, 10000); // Check every 10 seconds
+  }
+
+  /**
+   * Revert servers on a node that are stuck in CREATING_BACKUP/RESTORING to
+   * STOPPED. Shared by the disconnect-close path and the heartbeat reaper.
+   */
+  private revertStuckBackupStatesForNode(nodeId: string): void {
+    this.prisma.server.findMany({
+      where: {
+        nodeId,
+        status: { in: [ServerState.CREATING_BACKUP, ServerState.RESTORING] },
+      },
+      select: { id: true, status: true },
+    }).then(async (stuckServers) => {
+      for (const server of stuckServers) {
+        await this.prisma.server.update({
+          where: { id: server.id },
+          data: { status: ServerState.STOPPED },
+        });
+        await this.prisma.serverLog.create({
+          data: {
+            serverId: server.id,
+            stream: "system",
+            data: `[Node Disconnect] Node ${nodeId} went offline while server was in ${server.status}. Transitioned to STOPPED.`,
+          },
+        });
+        await this.routeToClients(server.id, {
+          type: "server_state_update",
+          serverId: server.id,
+          state: ServerState.STOPPED,
+          reason: `Node ${nodeId} disconnected during ${server.status}`,
+          timestamp: Date.now(),
+        });
+        this.logger.info(
+          { serverId: server.id, nodeId, fromStatus: server.status },
+          "Reverted stuck state to STOPPED on node disconnect"
+        );
+      }
+    }).catch(err => {
+      this.logger.error({ err, nodeId }, "Failed to revert stuck states on node disconnect");
+    });
   }
 
   /**
@@ -3451,6 +3845,24 @@ export class WebSocketGateway {
       } else if (fresh.length !== queue.length) {
         this.outbox.set(nodeId, fresh);
       }
+    }
+    // Sweep the remaining counter maps: without these, an authenticated agent
+    // (or console traffic) inflating entries for arbitrary server/node ids
+    // grows the heap without bound (serverConsoleBytes was attacker-inflatable).
+    for (const [key, val] of this.serverConsoleBytes) {
+      if (now >= val.resetAt) this.serverConsoleBytes.delete(key);
+    }
+    for (const [key, val] of this.agentLimitWarnings) {
+      if (now >= val.resetAt) this.agentLimitWarnings.delete(key);
+    }
+    for (const [key, val] of this.serverCommandCounters) {
+      if (now >= val.resetAt) this.serverCommandCounters.delete(key);
+    }
+    for (const [key, val] of this.clientMessageCounters) {
+      if (now >= val.resetAt) this.clientMessageCounters.delete(key);
+    }
+    for (const [key, val] of this.userCommandCounters) {
+      if (now >= val.resetAt) this.userCommandCounters.delete(key);
     }
   }
 
@@ -3620,6 +4032,9 @@ export class WebSocketGateway {
       if (!sourceAgent || sourceAgent.socket.readyState !== 1) {
         return reject(new Error(`Source agent ${sourceNodeId} not connected`));
       }
+      if (!sourceAgent.authenticated) {
+        return reject(new Error(`Source agent ${sourceNodeId} is not authenticated`));
+      }
       if (!targetAgent || targetAgent.socket.readyState !== 1) {
         return reject(new Error(`Target agent ${targetNodeId} not connected`));
       }
@@ -3628,12 +4043,21 @@ export class WebSocketGateway {
         return reject(new Error("A backup relay is already active"));
       }
 
+      const cleanup = () => {
+        delete sourceAgent.socket.__catalystRelaySocket;
+      };
+
       const timeout = setTimeout(() => {
         this.activeBackupRelay = null;
+        cleanup();
         reject(new Error("Backup stream relay timed out (5 min)"));
       }, 5 * 60 * 1000);
 
       this.activeBackupRelay = { sourceNodeId, targetNodeId, resolve, reject };
+
+      // Tag the socket allowed to inject binary frames for this relay. The
+      // binary branch of handleAgentMessage drops frames from any other socket.
+      sourceAgent.socket.__catalystRelaySocket = true;
 
       // The handleAgentMessage method will forward binary frames while this relay is active.
       // The source agent sends a text frame "backup_stream_complete" when done,
@@ -3647,6 +4071,8 @@ export class WebSocketGateway {
   /** Resolve an active backup relay (called when backup_stream_complete is received). */
   resolveBackupRelay(sourceNodeId: string): void {
     if (this.activeBackupRelay && this.activeBackupRelay.sourceNodeId === sourceNodeId) {
+      const sourceAgent = this.agents.get(sourceNodeId);
+      if (sourceAgent) delete sourceAgent.socket.__catalystRelaySocket;
       clearTimeout((this.activeBackupRelay as any)._timeout);
       const { resolve } = this.activeBackupRelay;
       this.activeBackupRelay = null;
@@ -3654,9 +4080,17 @@ export class WebSocketGateway {
     }
   }
 
-  /** Reject and clean up an active backup relay. */
+  /** Reject and clean up an active backup relay. Matches the relay whose
+   *  source OR target is the given node, so either endpoint disconnecting
+   *  fails the transfer fast instead of wedging the single relay slot. */
   rejectBackupRelay(sourceNodeId: string, err: Error): void {
-    if (this.activeBackupRelay && this.activeBackupRelay.sourceNodeId === sourceNodeId) {
+    if (
+      this.activeBackupRelay &&
+      (this.activeBackupRelay.sourceNodeId === sourceNodeId ||
+        this.activeBackupRelay.targetNodeId === sourceNodeId)
+    ) {
+      const sourceAgent = this.agents.get(this.activeBackupRelay.sourceNodeId);
+      if (sourceAgent) delete sourceAgent.socket.__catalystRelaySocket;
       clearTimeout((this.activeBackupRelay as any)._timeout);
       const { reject } = this.activeBackupRelay;
       this.activeBackupRelay = null;
@@ -3754,17 +4188,32 @@ export class WebSocketGateway {
     const payload = { ...message, requestId };
 
     const response = new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingAgentRequests.delete(requestId);
-        reject(new Error("Agent request timed out"));
-      }, timeoutMs);
+      let timeout: ReturnType<typeof setTimeout>;
+      // Sliding inactivity timeout: every received chunk resets the clock, so
+      // long-running transfers stay alive while data flows. Only a genuine
+      // stall (no chunks for timeoutMs) aborts the stream. A fixed 60s
+      // wall-clock previously killed every backup larger than ~60s of
+      // streaming — including the agent's only copy on the S3-upload path.
+      const resetTimeout = () => {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          this.pendingAgentRequests.delete(requestId);
+          reject(new Error("Agent request timed out"));
+        }, timeoutMs);
+      };
+      resetTimeout();
       this.pendingAgentRequests.set(requestId, {
         resolve,
         reject,
-        timeout,
+        get timeout() {
+          return timeout;
+        },
         kind: "binary",
         nodeId,
-        onChunk,
+        onChunk: (chunk: Buffer) => {
+          resetTimeout();
+          onChunk(chunk);
+        },
       });
     });
 
@@ -3812,12 +4261,16 @@ export class WebSocketGateway {
       throw new Error('Server not found');
     }
 
-    // Permission check
+    // Permission check — same contract as the WS console_input path:
+    // admin requires admin.write; node assignment alone is not enough.
     const access = await this.prisma.serverAccess.findUnique({
       where: { userId_serverId: { userId, serverId } },
     });
-    const isAdmin = await this.userHasAdminRead(userId);
-    const consoleNodeAccess = await hasNodeAccess(this.prisma, userId, server.nodeId);
+    const isAdmin = await this.userHasAdminWrite(userId);
+    const rolePerms = await this.getUserRolePermissions(userId);
+    const consoleNodeAccess =
+      (await hasNodeAccess(this.prisma, userId, server.nodeId)) &&
+      rolePerms.includes("node.update");
 
     if (!access && server.ownerId !== userId && !isAdmin && !consoleNodeAccess) {
       throw Object.assign(new Error('Permission denied'), { code: 403 });
@@ -3965,6 +4418,11 @@ export class WebSocketGateway {
       this.agents.delete(nodeId);
         this.agentUpdateSent.delete(nodeId);
     }
+    for (const clientId of this.handshakeTimeouts.keys()) {
+      const timer = this.handshakeTimeouts.get(clientId);
+      if (timer) clearTimeout(timer);
+    }
+    this.handshakeTimeouts.clear();
     for (const [clientId, client] of this.clients) {
       try {
         client.socket.close();
@@ -3973,7 +4431,21 @@ export class WebSocketGateway {
       }
       this.clients.delete(clientId);
     }
-    this.pendingAgentRequests.clear();
+    // Reject (not just clear) pending requests so callers fail fast and no
+    // per-request timeout timers outlive the gateway, and clear the relay so
+    // app.close() cannot stall on a wedged relay promise.
+    for (const [requestId, pending] of this.pendingAgentRequests) {
+      clearTimeout(pending.timeout);
+      pending.reject(new Error("Gateway shutting down"));
+      this.pendingAgentRequests.delete(requestId);
+    }
+    if (this.activeBackupRelay) {
+      clearTimeout((this.activeBackupRelay as any)._timeout);
+      const { reject } = this.activeBackupRelay;
+      this.activeBackupRelay = null;
+      reject(new Error("Gateway shutting down"));
+    }
+    this.outbox.clear();
     this.sseSubscribers.clear();
     this.sseEventSubscribers.clear();
     this.globalSseSubscribers.clear();

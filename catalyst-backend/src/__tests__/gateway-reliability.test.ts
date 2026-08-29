@@ -18,6 +18,9 @@ const prismaStub = {
     findUnique: async () => null,
     update: async () => ({}),
   },
+  server: {
+    findMany: async () => [],
+  },
 };
 
 const loggerStub = {
@@ -89,14 +92,14 @@ describe("WebSocketGateway agent-link reliability", () => {
     });
   });
 
-  it("drops queued commands beyond the TTL on drain", () => {
+  it("drops queued commands beyond the TTL on drain", async () => {
     const gw = makeGateway();
     const socket = fakeSocket();
     const drainFn = (gw as any).drainOutbox.bind(gw);
     const stale = { payload: JSON.stringify({ type: "start_server" }), queuedAt: Date.now() - 60_000 };
     const fresh = { payload: JSON.stringify({ type: "stop_server" }), queuedAt: Date.now() };
     (gw as any).outbox.set("node-3", [stale, fresh]);
-    drainFn("node-3", { nodeId: "node-3", socket, authenticated: true, lastHeartbeat: Date.now() });
+    await drainFn("node-3", { nodeId: "node-3", socket, authenticated: true, lastHeartbeat: Date.now() });
     expect((gw as any).outbox.has("node-3")).toBe(false);
     expect(socket.sent).toHaveLength(1);
     expect(JSON.parse(socket.sent[0]).type).toBe("stop_server");
