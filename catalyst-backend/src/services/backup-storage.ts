@@ -21,6 +21,19 @@ type S3Config = {
   bucket: string;
 };
 
+// Timeouts so a hung S3 TCP connection cannot block backup_complete
+// handlers (and their sockets) forever. requestTimeout caps the whole
+// request/response; connectionTimeout caps the TCP connect phase.
+// Passed as v3-style NodeHttpHandlerOptions — the SDK builds a fresh
+// handler per client, so evictStaleS3Clients()' client.destroy() cannot
+// poison a shared handler. throwOnRequestTimeout makes the 120s cap
+// actually abort the request instead of only logging a warning.
+const S3_REQUEST_HANDLER_OPTIONS = {
+  requestTimeout: 120_000,
+  connectionTimeout: 10_000,
+  throwOnRequestTimeout: true,
+} as const;
+
 const buildS3Client = (config?: {
   bucket?: string | null;
   region?: string | null;
@@ -44,6 +57,7 @@ const buildS3Client = (config?: {
       endpoint,
       forcePathStyle: pathStyle,
       credentials: { accessKeyId, secretAccessKey },
+      requestHandler: S3_REQUEST_HANDLER_OPTIONS,
     }),
     bucket,
   };
@@ -470,6 +484,14 @@ export const deleteBackupFromStorage = async (
       }
     }
   } else {
+    // Local mode: if the owning node is offline, the agent-side copy of the
+    // tar cannot be cleaned up below. Throw instead of pretending success so
+    // callers (delete route, retention) defer and retry later instead of
+    // orphaning the agent-side file while deleting the DB row.
+    const localAgentPath = backup.metadata?.agentPath as string | undefined;
+    if (server?.node?.isOnline === false && localAgentPath) {
+      throw new Error("Node is offline; backup deletion deferred");
+    }
     // Local mode: try backend FS first
     try {
       await fs.unlink(backup.path);

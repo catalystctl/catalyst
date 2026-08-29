@@ -55,6 +55,7 @@ export async function checkForUpdate(logger?: any): Promise<UpdateStatus> {
 	try {
 		const response = await fetch(
 			"https://api.github.com/repos/catalystctl/catalyst/releases/latest",
+			{ signal: AbortSignal.timeout(10_000) },
 		);
 		if (!response.ok) {
 			throw new Error(`GitHub API returned ${response.status}`);
@@ -417,9 +418,11 @@ export function scheduleUpdateCheck(intervalMs: number, logger?: any): void {
 				if (logger) {
 					logger.info({ result }, "Auto-update triggered");
 				}
-			});
+			}).catch((err) =>
+				logger?.warn?.({ err }, "Auto-update trigger failed"),
+			);
 		}
-	});
+	}).catch((err) => logger?.warn?.({ err }, "Update check failed"));
 
 	checkInterval = setInterval(() => {
 		checkForUpdate(logger).then((status) => {
@@ -440,9 +443,11 @@ export function scheduleUpdateCheck(intervalMs: number, logger?: any): void {
 					if (logger) {
 						logger.info({ result }, "Auto-update triggered");
 					}
-				});
+				}).catch((err) =>
+					logger?.warn?.({ err }, "Auto-update trigger failed"),
+				);
 			}
-		});
+		}).catch((err) => logger?.warn?.({ err }, "Update check failed"));
 	}, intervalMs);
 
 	if (logger) {

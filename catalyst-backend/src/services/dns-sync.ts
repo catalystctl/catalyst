@@ -41,7 +41,7 @@ const listRecords = async (
 ): Promise<CloudflareDnsRecord[]> => {
   const res = await fetch(
     `${CF_API_BASE}/${zoneId}/dns_records?name=${encodeURIComponent(name)}&type=${type}`,
-    { headers: cfHeaders(token) }
+    { headers: cfHeaders(token), signal: AbortSignal.timeout(10_000) }
   );
   const data = (await res.json()) as CloudflareResponse<CloudflareDnsRecord[]>;
   return data.result ?? [];
@@ -64,6 +64,7 @@ const upsertRecord = async (
       method: 'PUT',
       headers: cfHeaders(token),
       body: payload,
+      signal: AbortSignal.timeout(10_000),
     });
     const updateData = (await updateRes.json()) as CloudflareResponse<CloudflareDnsRecord>;
     if (!updateData.success) {
@@ -79,6 +80,7 @@ const upsertRecord = async (
     method: 'POST',
     headers: cfHeaders(token),
     body: payload,
+    signal: AbortSignal.timeout(10_000),
   });
   const createData = (await createRes.json()) as CloudflareResponse<CloudflareDnsRecord>;
   if (!createData.success) {
@@ -102,6 +104,7 @@ const deleteRecord = async (
     await fetch(`${CF_API_BASE}/${zoneId}/dns_records/${record.id}`, {
       method: 'DELETE',
       headers: cfHeaders(token),
+      signal: AbortSignal.timeout(10_000),
     });
   }
 };

@@ -3,6 +3,23 @@ import os from 'os';
 import { initCacheBusPrimary } from './lib/cache-bus.js';
 
 /**
+ * PID of the clustered worker that owns background jobs. Tracked by PID (not
+ * worker id) because replacement workers forked after a crash get NEW ids —
+ * gating on `id === 1` silently stops all background jobs after any worker
+ * death. `null` when unassigned or running non-clustered.
+ *
+ * Module state is NOT shared across processes: the primary learns the owner
+ * PID from cluster.fork() here, while the designated worker seeds its own
+ * copy below from the CATALYST_BACKGROUND_JOB_OWNER env flag passed at fork
+ * time (deterministic — no IPC race at startup).
+ */
+export let backgroundJobWorkerPid: number | null = null;
+
+if (cluster.isWorker && process.env.CATALYST_BACKGROUND_JOB_OWNER === '1') {
+  backgroundJobWorkerPid = process.pid;
+}
+
+/**
  * Multi-worker bootstrap.
  *
  * When WORKERS > 0, the primary process only forks workers; it does NOT run
@@ -12,7 +29,8 @@ import { initCacheBusPrimary } from './lib/cache-bus.js';
  * watchdog, auto-updater) MUST run on exactly one worker to avoid N-way
  * duplicate execution. Use `shouldRunBackgroundJobs()` for that gate:
  *   - single-process mode (WORKERS unset/0): always true
- *   - clustered mode: only worker with id === 1 (first forked worker)
+ *   - clustered mode: only the tracked background-job worker (the first
+ *     forked worker; by PID so replacements after a crash inherit the role)
  *
  * Process-local caches (agent-auth, permissions, admin-user, node-access):
  * There is no Redis. Invalidations are broadcast across workers via the
@@ -35,7 +53,7 @@ export function bootstrapCluster(mainFn: () => Promise<void>) {
     initCacheBusPrimary();
     console.warn(
       `[cluster] Primary ${process.pid} forking ${workers} worker(s). ` +
-        `Background jobs will run only on worker id=1. ` +
+        `Background jobs will run only on the tracked background-job worker. ` +
         `Cache invalidations use cluster IPC (no Redis).`,
     );
     if (workers > 1) {
@@ -51,12 +69,38 @@ export function bootstrapCluster(mainFn: () => Promise<void>) {
           `[cluster] that routes by nodeId/cookie to a single backend instance.`,
       );
     }
-    for (let i = 0; i < workers; i++) cluster.fork();
+    // The first worker forked owns background jobs. Track it by PID: after a
+    // worker dies and is re-forked, the replacement gets a NEW worker.id, so
+    // an id-based gate would never match again and background jobs would
+    // silently stop. Exactly one worker owns jobs at any time. The flag env
+    // var lets the designated worker recognize itself after fork (module
+    // state is process-local).
+    let backgroundJobsAssigned = false;
+    const forkWorker = () => {
+      const worker = cluster.fork({
+        ...(backgroundJobsAssigned
+          ? {}
+          : { CATALYST_BACKGROUND_JOB_OWNER: '1' }),
+      });
+      if (!backgroundJobsAssigned) {
+        backgroundJobsAssigned = true;
+        backgroundJobWorkerPid = worker.process.pid ?? null;
+      }
+      return worker;
+    };
+    for (let i = 0; i < workers; i++) forkWorker();
     cluster.on('exit', (worker, code, signal) => {
+      if (worker.process.pid === backgroundJobWorkerPid) {
+        backgroundJobWorkerPid = null;
+        backgroundJobsAssigned = false;
+        console.error(
+          `Worker ${worker.process.pid} (id=${worker.id}) owned background jobs — reassigning to its replacement.`,
+        );
+      }
       console.error(
         `Worker ${worker.process.pid} (id=${worker.id}) died (code=${code}, signal=${signal}). Restarting...`,
       );
-      cluster.fork();
+      forkWorker();
     });
   } else {
     mainFn().catch((err) => {
@@ -70,7 +114,9 @@ export function bootstrapCluster(mainFn: () => Promise<void>) {
  * Returns true when this process should start singleton background jobs.
  *
  * - Non-clustered (WORKERS=0 / unset): always true (single process owns jobs).
- * - Clustered: only the first worker (cluster.worker.id === 1).
+ * - Clustered: only the worker whose PID matches the tracked background-job
+ *   owner (initially the first forked worker; re-assigned to the replacement
+ *   if that worker dies).
  *
  * HTTP request handling still runs on every worker; only schedulers/retention
  * are gated.
@@ -80,9 +126,10 @@ export function shouldRunBackgroundJobs(): boolean {
   if (!workersEnv || workersEnv <= 0) {
     return true;
   }
-  // In a worker process, cluster.worker is defined and id is 1-based.
-  if (cluster.isWorker && cluster.worker) {
-    return cluster.worker.id === 1;
+  // In a worker process, compare against the PID the primary designated as
+  // the background-job owner. Exactly one worker matches at any time.
+  if (cluster.isWorker && backgroundJobWorkerPid !== null) {
+    return process.pid === backgroundJobWorkerPid;
   }
   // Primary never runs mainFn under bootstrapCluster, but be defensive.
   return false;
@@ -93,5 +140,6 @@ export function backgroundJobOwnerLabel(): string {
   if (!Number(process.env.WORKERS || 0)) {
     return `pid=${process.pid} (single-process)`;
   }
-  return `workerId=${cluster.worker?.id ?? 'n/a'} pid=${process.pid}`;
+  const isOwner = backgroundJobWorkerPid !== null && process.pid === backgroundJobWorkerPid;
+  return `workerId=${cluster.worker?.id ?? 'n/a'} pid=${process.pid}${isOwner ? ' (background-job owner)' : ''}`;
 }

@@ -9,6 +9,7 @@
  */
 
 import crypto from "crypto";
+import { prisma } from "../db.js";
 
 const sftpTokenCache = new Map<string, SftpTokenEntry>();
 
@@ -35,6 +36,10 @@ interface SftpTokenEntry {
   createdAt: number;
   expiresAt: number;
   ttlMs: number;
+  /** Mint-time / last-check ban snapshot: true = banned, null = not yet checked. */
+  banned?: boolean | null;
+  /** Mint-time / last-check lock snapshot: future timestamp = locked, null = not yet checked. */
+  lockedUntil?: string | Date | null;
 }
 
 /** Default TTL if none specified: 5 minutes */
@@ -102,23 +107,60 @@ export function generateSftpToken(
   const token = `sftp_${crypto.randomBytes(32).toString("hex")}`;
   const now = Date.now();
 
-  const entry: SftpTokenEntry = {
+  // Snapshot the user's ban/lock state so validateSftpToken can reject
+  // banned/locked holders even before the first live DB recheck lands.
+  const mint: SftpTokenEntry = {
     token,
     userId,
     serverId,
     createdAt: now,
     expiresAt: now + resolvedTtl,
     ttlMs: resolvedTtl,
+    banned: null,
+    lockedUntil: null,
   };
 
-  sftpTokenCache.set(key, entry);
+  sftpTokenCache.set(key, mint);
   indexToken(token, userId, serverId);
+
+  // Refresh the ban/lock snapshot from the DB (fire-and-forget; validation
+  // stays synchronous). Also refreshes snapshots of any other live tokens
+  // held by this user.
+  void refreshUserStatusSnapshots(userId).catch(() => {});
 
   return {
     token,
-    expiresAt: entry.expiresAt,
+    expiresAt: mint.expiresAt,
     ttlMs: resolvedTtl,
   };
+}
+
+/** How often a token's ban/lock snapshot is re-verified against the DB. */
+const USER_STATUS_RECHECK_INTERVAL_MS = 60 * 1000;
+
+/** userId -> last DB recheck timestamp (throttles live status refreshes). */
+const lastUserStatusCheck = new Map<string, number>();
+
+/**
+ * Refresh banned/lockedUntil snapshots for all live tokens of a user.
+ * Revokes tokens whose user is banned or currently locked.
+ */
+async function refreshUserStatusSnapshots(userId: string): Promise<void> {
+  const account = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { banned: true, lockedUntil: true },
+  });
+  if (!account) return;
+  const now = Date.now();
+  for (const entry of sftpTokenCache.values()) {
+    if (entry.userId !== userId) continue;
+    entry.banned = account.banned;
+    entry.lockedUntil = account.lockedUntil;
+    if (account.banned || (account.lockedUntil && new Date(account.lockedUntil).getTime() > now)) {
+      unindexToken(entry.token);
+      sftpTokenCache.delete(`${entry.userId}:${entry.serverId}`);
+    }
+  }
 }
 
 /**
@@ -156,6 +198,27 @@ export function validateSftpToken(
 
   // Verify serverId matches and token not expired
   if (entry.serverId === serverId && entry.expiresAt > Date.now()) {
+    // Reject banned / locked users. Snapshots are set at mint time and
+    // refreshed by the throttled DB recheck below.
+    if (entry.banned) {
+      return null;
+    }
+    if (entry.lockedUntil && new Date(entry.lockedUntil).getTime() > Date.now()) {
+      return null;
+    }
+
+    // Throttled live recheck: tokens minted before a ban/lock (or minted when
+    // the snapshot was still unknown) get revoked shortly after the fact.
+    // Kept fire-and-forget so validation stays synchronous (the agent-facing
+    // endpoint in index.ts does not await this function).
+    const snapshotKnown = entry.banned !== null || entry.lockedUntil !== null;
+    const lastCheck = snapshotKnown ? lastUserStatusCheck.get(entry.userId) ?? 0 : 0;
+    const now = Date.now();
+    if (now - lastCheck > USER_STATUS_RECHECK_INTERVAL_MS) {
+      lastUserStatusCheck.set(entry.userId, now);
+      void refreshUserStatusSnapshots(entry.userId).catch(() => {});
+    }
+
     return { userId: entry.userId, serverId: entry.serverId };
   }
 
@@ -293,9 +356,7 @@ export function revokeSftpTokensForUser(userId: string, serverId?: string): numb
   return count;
 }
 
-/**
- * Clean up expired entries. Call periodically.
- */
+/** Clean up expired entries. Call periodically. */
 export function pruneExpiredSftpTokens(): number {
   const now = Date.now();
   let pruned = 0;
@@ -305,6 +366,11 @@ export function pruneExpiredSftpTokens(): number {
       sftpTokenCache.delete(key);
       pruned++;
     }
+  }
+  // Keep the status-recheck throttle map bounded (only users with live tokens).
+  const liveUserIds = new Set([...sftpTokenCache.values()].map((e) => e.userId));
+  for (const userId of lastUserStatusCheck.keys()) {
+    if (!liveUserIds.has(userId)) lastUserStatusCheck.delete(userId);
   }
   return pruned;
 }

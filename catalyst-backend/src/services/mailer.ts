@@ -376,6 +376,11 @@ const createTransporter = (settings: SmtpSettings) => {
     secure: Boolean(settings.secure),
     requireTLS: Boolean(settings.requireTls),
     pool: Boolean(settings.pool),
+    // Timeouts so a stalled SMTP server cannot hang sendMail forever
+    // (welcome emails are awaited inline by HTTP registration requests).
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
     maxConnections: settings.maxConnections ?? undefined,
     maxMessages: settings.maxMessages ?? undefined,
     auth: settings.username && settings.password ? { user: settings.username, pass: settings.password } : undefined,

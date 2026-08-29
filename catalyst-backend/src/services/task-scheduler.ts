@@ -207,6 +207,8 @@ export class TaskScheduler {
         serverId: task.serverId,
         status: 'running',
         timestamp: Date.now(),
+      }).catch((err) => {
+        this.logger.debug({ err }, 'Failed to route task progress event to clients');
       });
     }
 
@@ -247,6 +249,8 @@ export class TaskScheduler {
           status: 'success',
           lastRunAt: new Date().toISOString(),
           timestamp: Date.now(),
+        }).catch((err) => {
+          this.logger.debug({ err }, 'Failed to route task complete event to clients');
         });
       }
 
@@ -264,6 +268,7 @@ export class TaskScheduler {
         stack: error instanceof Error ? error.stack : undefined,
         metadata: { taskId: task.id, taskName: task.name, serverId: task.serverId },
       }).catch(() => {});
+      // Failure-path DB write must not throw inside the node-cron callback.
       await this.prisma.scheduledTask.update({
         where: { id: task.id },
         data: {
@@ -272,6 +277,11 @@ export class TaskScheduler {
           lastStatus: 'failed',
           lastError: message,
         },
+      }).catch((updateError) => {
+        this.logger.error(
+          updateError,
+          `Failed to record failure status for task ${task.id}`,
+        );
       });
 
       // Notify clients that task failed
@@ -283,6 +293,8 @@ export class TaskScheduler {
           status: 'failed',
           lastRunAt: new Date().toISOString(),
           timestamp: Date.now(),
+        }).catch((err) => {
+          this.logger.debug({ err }, 'Failed to route task failed event to clients');
         });
       }
       await this.updateNextRunTime(task.id, task.schedule, startedAt);
