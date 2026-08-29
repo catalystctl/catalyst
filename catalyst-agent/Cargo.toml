@@ -37,7 +37,7 @@ containerd-client = "0.9"
 tonic = "0.14"
 prost-types = "0.14"
 # russh 0.62 folds keys into the main crate; keep ssh-key for host-key IO helpers
-russh = "0.62"
+russh = "0.63"
 russh-sftp = "2.4"
 ssh-key = "0.7.0-rc"
 anyhow = "1"
