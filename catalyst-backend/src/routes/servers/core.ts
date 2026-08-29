@@ -517,6 +517,33 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             },
           });
 
+          // Re-check host-port conflicts inside the transaction: the outer
+          // check runs outside the tx, so a concurrent create may have claimed
+          // the same ports since. Exclude the just-created row from the scan.
+          if (!shouldUseIpam(desiredNetworkMode) && desiredNetworkMode !== "host") {
+            const txUsedPorts = collectUsedHostPortsByIp(
+              await tx.server.findMany({
+                where: { nodeId: node.id },
+                select: {
+                  id: true,
+                  primaryIp: true,
+                  primaryPort: true,
+                  portBindings: true,
+                  networkMode: true,
+                },
+              }),
+              created.id,
+            );
+            const txConflictPort = findPortConflict(
+              txUsedPorts,
+              allocationId ? allocationIp : resolvedHostIp,
+              Object.values(resolvedPortBindings)
+            );
+            if (txConflictPort) {
+              throw new Error("PORT_CONFLICT");
+            }
+          }
+
           if (allocationId) {
             const updated = await tx.server.update({
               where: { id: created.id },
@@ -530,17 +557,22 @@ export async function serverCoreRoutes(app: FastifyInstance) {
                 },
               },
             });
-            await tx.nodeAllocation.update({
-              where: { id: allocationId },
+            // Conditional claim: fail if a concurrent request claimed the
+            // allocation between the outer check and this transaction.
+            const claim = await tx.nodeAllocation.updateMany({
+              where: { id: allocationId, nodeId, serverId: null },
               data: { serverId: created.id },
             });
+            if (claim.count === 0) {
+              throw new Error("ALLOCATION_TAKEN");
+            }
 
             // Claim any additional free NodeAllocations matching secondary port bindings.
             const secondaryHostPorts = Object.values(resolvedPortBindings).filter(
               (port) => port !== (allocationPort ?? validatedPrimaryPort),
             );
             if (secondaryHostPorts.length > 0) {
-              await tx.nodeAllocation.updateMany({
+              const secondaryClaim = await tx.nodeAllocation.updateMany({
                 where: {
                   nodeId,
                   serverId: null,
@@ -549,6 +581,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
                 },
                 data: { serverId: created.id },
               });
+              if (secondaryClaim.count === 0) {
+                throw new Error("ALLOCATION_TAKEN");
+              }
             }
 
             return updated as typeof created;
@@ -589,6 +624,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           return created;
         });
       } catch (error: any) {
+        if (error?.message === "ALLOCATION_TAKEN") {
+          return reply.status(409).send({ error: "Allocation is no longer available" });
+        }
+        if (error?.message === "PORT_CONFLICT") {
+          return reply.status(409).send({
+            error: "One of the requested ports is already in use on this node",
+          });
+        }
         return reply.status(400).send({ error: error.message });
       }
 
@@ -1026,10 +1069,15 @@ export async function serverCoreRoutes(app: FastifyInstance) {
                 },
               },
             });
-            await tx.nodeAllocation.update({
-              where: { id: cloneAllocationId },
+            // Conditional claim: fail if a concurrent request claimed the
+            // allocation between the outer check and this transaction.
+            const claim = await tx.nodeAllocation.updateMany({
+              where: { id: cloneAllocationId, nodeId: targetNodeId, serverId: null },
               data: { serverId: created.id },
             });
+            if (claim.count === 0) {
+              throw new Error("ALLOCATION_TAKEN");
+            }
             return updated as typeof created;
           }
 
@@ -1066,6 +1114,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           return created;
         });
       } catch (error: any) {
+        if (error?.message === "ALLOCATION_TAKEN") {
+          return reply.status(409).send({ error: "Allocation is no longer available" });
+        }
         return reply.status(400).send({ error: error.message });
       }
 
@@ -1933,103 +1984,114 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         }
       }
 
-      const updated = await prisma.$transaction(async (tx) => {
-        let nextPrimaryIp = server.primaryIp ?? null;
-        let nextEnvironment = (resolvedUpdateEnvironment || server.environment) as Record<string, string>;
+      let updated;
+      try {
+        updated = await prisma.$transaction(async (tx) => {
+          let nextPrimaryIp = server.primaryIp ?? null;
+          let nextEnvironment = (resolvedUpdateEnvironment || server.environment) as Record<string, string>;
 
 
-        if (hasPrimaryIpUpdate) {
-          if (normalizedPrimaryIp && normalizedPrimaryIp.length > 0) {
-            if (normalizedPrimaryIp !== server.primaryIp) {
+          if (hasPrimaryIpUpdate) {
+            if (normalizedPrimaryIp && normalizedPrimaryIp.length > 0) {
+              if (normalizedPrimaryIp !== server.primaryIp) {
+                await releaseIpForServer(tx, serverId);
+                const allocatedIp = await allocateIpForServer(tx, {
+                  nodeId: server.nodeId,
+                  networkName: server.networkMode,
+                  serverId,
+                  requestedIp: normalizedPrimaryIp,
+                });
+                if (!allocatedIp) {
+                  throw new Error("No IP pool configured for this network");
+                }
+                nextPrimaryIp = allocatedIp;
+              }
+            } else if (server.primaryIp) {
               await releaseIpForServer(tx, serverId);
               const allocatedIp = await allocateIpForServer(tx, {
                 nodeId: server.nodeId,
                 networkName: server.networkMode,
                 serverId,
-                requestedIp: normalizedPrimaryIp,
               });
               if (!allocatedIp) {
                 throw new Error("No IP pool configured for this network");
               }
               nextPrimaryIp = allocatedIp;
             }
-          } else if (server.primaryIp) {
-            await releaseIpForServer(tx, serverId);
-            const allocatedIp = await allocateIpForServer(tx, {
-              nodeId: server.nodeId,
-              networkName: server.networkMode,
-              serverId,
-            });
-            if (!allocatedIp) {
-              throw new Error("No IP pool configured for this network");
+
+            nextEnvironment = {
+              ...((resolvedUpdateEnvironment || environment || server.environment || {}) as Record<string, any>),
+            };
+            if (nextPrimaryIp) {
+              nextEnvironment.CATALYST_NETWORK_IP = nextPrimaryIp;
+            } else {
+              delete nextEnvironment.CATALYST_NETWORK_IP;
             }
-            nextPrimaryIp = allocatedIp;
+          } else if (isHostNetwork && hostNetworkIp) {
+            nextEnvironment = {
+              ...((resolvedUpdateEnvironment || environment || server.environment || {}) as Record<string, any>),
+              CATALYST_NETWORK_IP: hostNetworkIp,
+            };
           }
 
-          nextEnvironment = {
-            ...((resolvedUpdateEnvironment || environment || server.environment || {}) as Record<string, any>),
-          };
-          if (nextPrimaryIp) {
-            nextEnvironment.CATALYST_NETWORK_IP = nextPrimaryIp;
-          } else {
-            delete nextEnvironment.CATALYST_NETWORK_IP;
-          }
-        } else if (isHostNetwork && hostNetworkIp) {
-          nextEnvironment = {
-            ...((resolvedUpdateEnvironment || environment || server.environment || {}) as Record<string, any>),
-            CATALYST_NETWORK_IP: hostNetworkIp,
-          };
-        }
-
-        // Handle allocation update for bridge/host networking
-        if (newAllocation) {
-          // Release old allocation if it exists
-          const oldAllocation = await tx.nodeAllocation.findFirst({
-            where: { serverId },
-          });
-          if (oldAllocation && oldAllocation.id !== newAllocation.id) {
-            await tx.nodeAllocation.update({
-              where: { id: oldAllocation.id },
-              data: { serverId: null },
+          // Handle allocation update for bridge/host networking
+          if (newAllocation) {
+            // Release old allocation if it exists
+            const oldAllocation = await tx.nodeAllocation.findFirst({
+              where: { serverId },
             });
+            if (oldAllocation && oldAllocation.id !== newAllocation.id) {
+              await tx.nodeAllocation.update({
+                where: { id: oldAllocation.id },
+                data: { serverId: null },
+              });
+            }
+            // Assign new allocation — conditional claim so a concurrent update
+            // that already claimed it aborts this transaction instead of stealing it.
+            const claim = await tx.nodeAllocation.updateMany({
+              where: { id: newAllocation.id, nodeId: server.nodeId, serverId: null },
+              data: { serverId },
+            });
+            if (claim.count === 0) {
+              throw new Error("ALLOCATION_TAKEN");
+            }
+            nextPrimaryIp = newAllocation.ip;
+            nextPrimaryPort = newAllocation.port;
+            nextEnvironment = {
+              ...((resolvedUpdateEnvironment || environment || server.environment || {}) as Record<string, any>),
+              CATALYST_NETWORK_IP: newAllocation.ip,
+            };
           }
-          // Assign new allocation
-          await tx.nodeAllocation.update({
-            where: { id: newAllocation.id },
-            data: { serverId },
+
+          const updatedServer = await tx.server.update({
+            where: { id: serverId },
+            data: {
+              name: name || server.name,
+              description: description !== undefined ? description : server.description,
+              environment: nextEnvironment,
+              ...(startupCommand !== undefined ? { startupCommand: startupCommand || null } : {}),
+              allocatedMemoryMb: allocatedMemoryMb ?? server.allocatedMemoryMb,
+              allocatedCpuCores: allocatedCpuCores ?? server.allocatedCpuCores,
+              allocatedDiskMb: allocatedDiskMb ?? server.allocatedDiskMb,
+              backupAllocationMb: backupAllocationMb ?? server.backupAllocationMb ?? 0,
+              databaseAllocation: databaseAllocation ?? server.databaseAllocation ?? 0,
+              primaryPort: nextPrimaryPort,
+              portBindings: effectiveBindings,
+              primaryIp: nextPrimaryIp,
+              subdomain: subdomain !== undefined ? normalizedSubdomain : server.subdomain,
+            },
           });
-          nextPrimaryIp = newAllocation.ip;
-          nextPrimaryPort = newAllocation.port;
-          nextEnvironment = {
-            ...((resolvedUpdateEnvironment || environment || server.environment || {}) as Record<string, any>),
-            CATALYST_NETWORK_IP: newAllocation.ip,
-          };
-        }
 
-        const updatedServer = await tx.server.update({
-          where: { id: serverId },
-          data: {
-            name: name || server.name,
-            description: description !== undefined ? description : server.description,
-            environment: nextEnvironment,
-            ...(startupCommand !== undefined ? { startupCommand: startupCommand || null } : {}),
-            allocatedMemoryMb: allocatedMemoryMb ?? server.allocatedMemoryMb,
-            allocatedCpuCores: allocatedCpuCores ?? server.allocatedCpuCores,
-            allocatedDiskMb: allocatedDiskMb ?? server.allocatedDiskMb,
-            backupAllocationMb: backupAllocationMb ?? server.backupAllocationMb ?? 0,
-            databaseAllocation: databaseAllocation ?? server.databaseAllocation ?? 0,
-            primaryPort: nextPrimaryPort,
-            portBindings: effectiveBindings,
-            primaryIp: nextPrimaryIp,
-            subdomain: subdomain !== undefined ? normalizedSubdomain : server.subdomain,
-          },
+          return updatedServer;
         });
-
-        return updatedServer;
-      });
+      } catch (error: any) {
+        if (error?.message === "ALLOCATION_TAKEN") {
+          return reply.status(409).send({ error: "Allocation is no longer available" });
+        }
+        throw error;
+      }
 
       reply.send({ success: true, data: updated });
-
       // Trigger DNS sync if subdomain or primary IP changed
       if (updated.subdomain) {
         const { syncServerSubdomain } = await import('../../services/dns-sync.js');

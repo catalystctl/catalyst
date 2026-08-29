@@ -1351,6 +1351,23 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return reply.status(409).send({ error: "Server is already suspended" });
       }
 
+      // Reject suspend from transitional states — the in-flight operation
+      // owns the status and completing it must not race with the suspension.
+      const TRANSITIONAL_STATUSES = new Set<string>([
+        ServerState.STARTING,
+        ServerState.STOPPING,
+        ServerState.INSTALLING,
+        ServerState.CREATING_BACKUP,
+        ServerState.RESTORING,
+        ServerState.TRANSFERRING,
+        ServerState.CLONING,
+      ]);
+      if (TRANSITIONAL_STATUSES.has(server.status)) {
+        return reply.status(409).send({
+          error: `Cannot suspend a server while it is ${server.status}`,
+        });
+      }
+
       // Determine whether to stop the server.
       // Default is true (always stop). Set stopServer=false to suspend without stopping.
       const shouldStop = stopServer !== false;
@@ -1374,11 +1391,20 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         if (!server.node?.isOnline) {
           return reply.status(503).send({ error: "Node is offline" });
         }
-        await gateway.sendToAgent(server.nodeId, {
+        const stopQueued = await gateway.sendToAgent(server.nodeId, {
           type: "stop_server",
           serverId: server.id,
           serverUuid: server.uuid,
         });
+        if (stopQueued === false) {
+          // sendToAgent returned false: the stop was dropped (offline agent with
+          // a full outbox, or backpressure shedding) — not queued for replay.
+          // The outbox is gateway-internal, so we can only surface a warning.
+          app.log.warn(
+            { serverId: server.id, nodeId: server.nodeId },
+            "Suspend requested a stop but the command could not be delivered to the agent (offline or backpressure) — the server may still be running on the node",
+          );
+        }
       }
 
       // Disable all scheduled tasks for this server to prevent failed executions
