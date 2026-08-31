@@ -728,7 +728,25 @@ impl StorageManager {
             .to_string();
         let size_arg = format!("{}M", size_mb);
         spawn_blocking(move || {
-            command_utils::run_command_sync("e2fsck", &["-f", &image])?;
+            // The filesystem MUST be clean before resize2fs shrinks it. Run
+            // e2fsck with -y so every repair prompt is answered "yes": the
+            // agent has no terminal, and a filesystem needing interactive
+            // repair would otherwise abort with status 8 ("need terminal
+            // for interactive repairs"). Exit codes carry meaning here —
+            // 0 = clean, 1 = errors corrected, 2 = corrected (reboot
+            // advised, irrelevant for an unmounted image) — so 1 and 2 are
+            // success. Anything else (e.g. 4 = uncorrected errors) fails
+            // the shrink with the tool's stderr included. Generous timeout:
+            // repairing a large filesystem can take well over 10 minutes.
+            command_utils::run_command_sync_with_ok_codes(
+                "e2fsck",
+                &["-f", "-y", &image],
+                3600,
+                &[1, 2],
+            )
+            .map(|_| {
+                info!("e2fsck completed for {} (clean or auto-repaired)", image);
+            })?;
             command_utils::run_command_sync("resize2fs", &[&image, &size_arg])?;
             command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
             Ok::<(), AgentError>(())

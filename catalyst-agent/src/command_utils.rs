@@ -18,6 +18,22 @@ pub fn run_command_sync(command: &str, args: &[&str]) -> AgentResult<()> {
     run_command_sync_with_timeout(command, args, 600)
 }
 
+/// Run a command synchronously, tolerating specific non-zero exit codes.
+///
+/// Some tools encode meaningful outcomes in their exit status — e2fsck
+/// exits 0 when the filesystem is clean, 1 when it *corrected* errors,
+/// and 2 when it corrected them and advises a reboot. Any code not in
+/// `ok_codes` (including signal deaths, whose `status.code()` is None)
+/// is still an error carrying the captured stderr.
+pub fn run_command_sync_with_ok_codes(
+    command: &str,
+    args: &[&str],
+    timeout_secs: u64,
+    ok_codes: &[i32],
+) -> AgentResult<()> {
+    run_command_with_timeout(command, args, timeout_secs, false, ok_codes).map(|_| ())
+}
+
 /// Run a command synchronously with a custom timeout.
 /// Returns an error if the command fails or times out.
 pub fn run_command_sync_with_timeout(
@@ -25,12 +41,12 @@ pub fn run_command_sync_with_timeout(
     args: &[&str],
     timeout_secs: u64,
 ) -> AgentResult<()> {
-    run_command_with_timeout(command, args, timeout_secs, false).map(|_| ())
+    run_command_with_timeout(command, args, timeout_secs, false, &[]).map(|_| ())
 }
 
 /// Run a command and capture stdout. stderr is included in the error on failure.
 pub fn run_command_capture(command: &str, args: &[&str]) -> AgentResult<String> {
-    run_command_with_timeout(command, args, 600, true)
+    run_command_with_timeout(command, args, 600, true, &[])
 }
 
 fn run_command_with_timeout(
@@ -38,6 +54,7 @@ fn run_command_with_timeout(
     args: &[&str],
     timeout_secs: u64,
     capture_stdout: bool,
+    ok_codes: &[i32],
 ) -> AgentResult<String> {
     let mut child = std::process::Command::new(command)
         .args(args)
@@ -66,7 +83,8 @@ fn run_command_with_timeout(
                         let _ = out.read_to_string(&mut stdout);
                     }
                 }
-                if status.success() {
+                let code = status.code().unwrap_or(-1);
+                if status.success() || ok_codes.contains(&code) {
                     return Ok(stdout);
                 }
                 let stderr = stderr.trim();
