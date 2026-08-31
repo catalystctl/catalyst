@@ -477,6 +477,9 @@ pub struct WebSocketHandler {
     /// Deduplication map for error reporting: (component|message_prefix) -> last_sent.
     pub(crate) error_dedup:
         Arc<tokio::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>>,
+    /// Errors that occurred before the WS connection was up (e.g. system setup
+    /// or storage heal failures). Drained and reported on the next connect.
+    pub(crate) pending_startup_errors: Arc<tokio::sync::RwLock<Vec<String>>>,
     /// PID of the ctr events subprocess, for explicit cleanup during shutdown.
     pub(crate) ctr_event_pid: Arc<tokio::sync::Mutex<Option<u32>>>,
     /// Shutdown signal sender — used by restart_agent command to trigger graceful shutdown.
@@ -530,6 +533,7 @@ impl Clone for WebSocketHandler {
             active_restore_request_id: self.active_restore_request_id.clone(),
             retry_after_seconds: self.retry_after_seconds.clone(),
             error_dedup: self.error_dedup.clone(),
+            pending_startup_errors: self.pending_startup_errors.clone(),
             ctr_event_pid: self.ctr_event_pid.clone(),
             shutdown_tx: self.shutdown_tx.clone(),
         }
@@ -586,6 +590,7 @@ impl WebSocketHandler {
             active_restore_request_id: Arc::new(RwLock::new(None)),
             retry_after_seconds: Arc::new(RwLock::new(None)),
             error_dedup: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            pending_startup_errors: Arc::new(RwLock::new(Vec::new())),
             ctr_event_pid: Arc::new(tokio::sync::Mutex::new(None)),
             shutdown_tx: Arc::new(RwLock::new(None)),
         }
@@ -654,6 +659,24 @@ impl WebSocketHandler {
             .await
         {
             warn!("Failed to deliver or buffer error report: {}", e);
+        }
+    }
+
+    /// Queue an error that happened before the WS connection existed (startup
+    /// phase: system setup, storage heal, ...). Delivered to the panel's System
+    /// Errors page on the next successful connect via flush_startup_errors.
+    pub async fn queue_startup_error(&self, message: String) {
+        self.pending_startup_errors.write().await.push(message);
+    }
+
+    /// Drain pending startup errors and report them. Called right after the
+    /// handshake succeeds (and buffered-event replay), so pre-connection
+    /// failures are visible on the panel's System Errors page.
+    async fn flush_startup_errors(&self) {
+        let drained: Vec<String> = std::mem::take(&mut *self.pending_startup_errors.write().await);
+        for message in drained {
+            self.report_error(ErrorLevel::Error, "agent:startup", &message, None, None)
+                .await;
         }
     }
 
@@ -1107,6 +1130,10 @@ impl WebSocketHandler {
             warn!("Failed to flush buffered events: {}", e);
         }
 
+        // Report errors that happened before the connection was up (startup
+        // failures, etc.) — now that delivery is possible.
+        self.flush_startup_errors().await;
+
         // Connection-scoped background tasks. Abort on disconnect to avoid accumulation.
         let mut connection_tasks: Vec<tokio::task::JoinHandle<()>> = Vec::new();
 
@@ -1559,6 +1586,15 @@ impl WebSocketHandler {
                     let Some(server_uuid) = msg["serverUuid"].as_str() else {
                         error!("Error in restart_server handler: Missing serverUuid");
                         handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:restart_server",
+                                "restart_server message is missing serverUuid",
+                                None,
+                                None,
+                            )
+                            .await;
+                        handler
                             .emit_power_command_ack(
                                 request_id.as_deref(),
                                 "unknown",
@@ -1589,6 +1625,28 @@ impl WebSocketHandler {
                         .await
                     {
                         error!("Error in restart_server (stop) handler: {}", e);
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:restart_server:stop",
+                                &format!(
+                                    "Restart of server {} aborted: stop phase failed: {}",
+                                    server_id, e
+                                ),
+                                None,
+                                Some(serde_json::json!({ "serverId": server_id })),
+                            )
+                            .await;
+                        handler
+                            .emit_server_state_update(
+                                server_id,
+                                "error",
+                                Some(format!("Restart failed during stop: {}", e)),
+                                None,
+                                None,
+                            )
+                            .await
+                            .ok();
                         return;
                     }
                     // Wait for container to actually stop (up to 30s) instead of hardcoded 2s
@@ -2350,6 +2408,17 @@ impl WebSocketHandler {
                                 .await
                             {
                                 error!("Force kill failed during server_control restart: {}", e);
+                                self.report_error(
+                                    ErrorLevel::Error,
+                                    "agent:restart_server:force_kill",
+                                    &format!(
+                                        "Force kill failed for server {} during restart: {}",
+                                        server_id, e
+                                    ),
+                                    None,
+                                    Some(serde_json::json!({ "serverId": server_id })),
+                                )
+                                .await;
                             }
                             break;
                         }

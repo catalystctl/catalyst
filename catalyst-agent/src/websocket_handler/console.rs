@@ -621,6 +621,18 @@ impl WebSocketHandler {
                     "Failed to stream logs for server {} (container {}): {}",
                     server_id, container_id, err
                 );
+                handler
+                    .report_error(
+                        crate::error_reporter::ErrorLevel::Warn,
+                        "agent:log_stream",
+                        &format!(
+                            "Log stream for server {} (container {}) ended with error: {}",
+                            server_id, container_id, err
+                        ),
+                        None,
+                        Some(serde_json::json!({ "serverId": server_id })),
+                    )
+                    .await;
                 let _ = handler
                     .emit_console_output(
                         &server_id,

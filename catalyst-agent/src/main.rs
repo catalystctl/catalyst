@@ -94,6 +94,44 @@ impl CatalystAgent {
             backend_connected.clone(),
         ));
 
+        // Give layers without WS access (runtime manager, file tunnel) a way to
+        // route non-fatal errors into the panel's System Errors page. The sink
+        // keeps a Weak ref so it never creates a reference cycle.
+        {
+            let ws_weak = Arc::downgrade(&ws_handler);
+            runtime.set_error_sink(Arc::new(
+                move |level: crate::error_reporter::ErrorLevel,
+                      component: String,
+                      message: String,
+                      metadata: Option<serde_json::Value>| {
+                    if let Some(handler) = ws_weak.upgrade() {
+                        tokio::spawn(async move {
+                            handler
+                                .report_error(level, &component, &message, None, metadata)
+                                .await;
+                        });
+                    }
+                },
+            ));
+        }
+        {
+            let ws_weak = Arc::downgrade(&ws_handler);
+            file_tunnel.set_error_sink(Arc::new(
+                move |level: crate::error_reporter::ErrorLevel,
+                      component: String,
+                      message: String,
+                      metadata: Option<serde_json::Value>| {
+                    if let Some(handler) = ws_weak.upgrade() {
+                        tokio::spawn(async move {
+                            handler
+                                .report_error(level, &component, &message, None, metadata)
+                                .await;
+                        });
+                    }
+                },
+            ));
+        }
+
         Ok(Self {
             config,
             runtime,
@@ -112,6 +150,9 @@ impl CatalystAgent {
         // Safe to run while game servers are up (online resize2fs).
         if let Err(e) = self.storage_manager.heal_mounted_images().await {
             warn!("Storage heal on startup failed: {}", e);
+            self.ws_handler
+                .queue_startup_error(format!("Storage heal on startup failed: {}", e))
+                .await;
         }
 
         // Run an initial resource snapshot immediately (captures current usage at startup)
@@ -235,6 +276,17 @@ impl CatalystAgent {
             if let Err(e) = result {
                 if e.is_panic() {
                     error!("Task panicked during shutdown: {}", e);
+                    // Buffered to disk if the socket is already down; delivered
+                    // to the panel's System Errors page on the next boot.
+                    self.ws_handler
+                        .report_error(
+                            crate::error_reporter::ErrorLevel::Error,
+                            "agent:task_panic:shutdown",
+                            &format!("Task panicked during shutdown: {}", e),
+                            None,
+                            None,
+                        )
+                        .await;
                 }
             }
             if tokio::time::Instant::now() >= shutdown_deadline {
@@ -387,14 +439,22 @@ async fn main() -> AgentResult<()> {
 
     // Run system initialization
     info!("Running system setup and dependency check...");
+    let mut startup_error: Option<String> = None;
     if let Err(e) = SystemSetup::initialize(&config).await {
         warn!("System setup encountered issues: {}", e);
         warn!("Continuing with existing configuration...");
-        // Report via global tracing; actual WS reporting will happen once connected
+        // Queued onto the WS handler below and reported to the panel's System
+        // Errors page as soon as the connection is up.
+        startup_error = Some(format!("System setup failed: {}", e));
     }
 
     // Create and run agent
     let agent = CatalystAgent::new(config).await?;
+
+    // Deliver any startup-phase error to the panel once connected.
+    if let Some(err_msg) = startup_error {
+        agent.ws_handler.queue_startup_error(err_msg).await;
+    }
 
     let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
 

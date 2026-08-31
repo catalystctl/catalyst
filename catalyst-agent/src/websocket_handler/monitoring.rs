@@ -351,6 +351,17 @@ impl WebSocketHandler {
                     "gRPC Subscribe failed {} consecutive times — switching to ctr events fallback.",
                     consecutive_failures
                 );
+                self.report_error(
+                    ErrorLevel::Warn,
+                    "agent:event_monitor",
+                    &format!(
+                        "containerd gRPC event subscription failed {} consecutive times — degraded to ctr events subprocess fallback. State syncing continues, but check containerd health on this node.",
+                        consecutive_failures
+                    ),
+                    None,
+                    None,
+                )
+                .await;
                 ctr_fallback_active = true;
                 consecutive_failures = 0;
                 continue;

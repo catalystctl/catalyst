@@ -873,6 +873,15 @@ impl ContainerdRuntime {
                             FirewallManager::allow_port(fwd.host_port, "tcp", cip, server_id).await
                         {
                             error!("Firewall reattach failed for port {}: {}", fwd.host_port, e);
+                            self.report_runtime_error(
+                                crate::error_reporter::ErrorLevel::Warn,
+                                "agent:firewall",
+                                format!(
+                                    "Firewall reattach failed for port {} on server {}: {}",
+                                    fwd.host_port, server_id, e
+                                ),
+                                Some(serde_json::json!({ "serverId": server_id, "port": fwd.host_port })),
+                            );
                         }
                     }
                 } else {

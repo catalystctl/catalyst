@@ -222,6 +222,17 @@ impl ContainerdRuntime {
                         FirewallManager::allow_port(p, "tcp", &ip, config.server_id).await
                     {
                         error!("Firewall config failed for port {}: {}", p, e);
+                        // Non-fatal but security-relevant: the container is running while
+                        // its port rule could not be applied. Surface on the panel.
+                        self.report_runtime_error(
+                            crate::error_reporter::ErrorLevel::Warn,
+                            "agent:firewall",
+                            format!(
+                                "Firewall config failed for port {} on server {}: {}",
+                                p, config.server_id, e
+                            ),
+                            Some(serde_json::json!({ "serverId": config.server_id, "port": p })),
+                        );
                     }
                 }
             }

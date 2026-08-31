@@ -4,6 +4,7 @@
 //! error data to the backend panel via the WebSocket connection.
 
 use crate::AgentError;
+use std::sync::Arc;
 
 /// Error severity levels matching backend `systemError` levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,3 +35,10 @@ impl ErrorLevel {
 
 /// Deduplication window in seconds.
 pub const DEDUP_WINDOW_SECS: u64 = 30;
+
+/// Sink used by layers that have no WebSocketHandler access (runtime manager,
+/// file tunnel) to route errors into the panel reporting pipeline. Installed
+/// by main.rs after the WebSocketHandler is constructed; implementations
+/// should be cheap and non-blocking (spawn async work internally).
+pub type ErrorSink =
+    Arc<dyn Fn(ErrorLevel, String, String, Option<serde_json::Value>) + Send + Sync>;

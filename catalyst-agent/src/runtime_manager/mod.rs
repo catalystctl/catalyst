@@ -404,6 +404,9 @@ pub struct ContainerdRuntime {
     cni_bridge_name: String,
     /// Subnet for the default bridge NAT network.
     cni_bridge_subnet: String,
+    /// Error reporting sink installed by main.rs so non-fatal runtime errors
+    /// (e.g. firewall rule failures) reach the panel's System Errors page.
+    error_sink: Arc<std::sync::RwLock<Option<crate::error_reporter::ErrorSink>>>,
 }
 
 pub mod cni_network;
@@ -477,7 +480,29 @@ impl ContainerdRuntime {
             cni_bin_dir: config.cni_bin_dir,
             cni_bridge_name: config.cni_bridge_name,
             cni_bridge_subnet: config.cni_bridge_subnet,
+            error_sink: Arc::new(std::sync::RwLock::new(None)),
         })
+    }
+
+    /// Install the error reporting sink (called once by main.rs after the
+    /// WebSocketHandler exists). Errors reported before installation are only
+    /// logged locally.
+    pub fn set_error_sink(&self, sink: crate::error_reporter::ErrorSink) {
+        *self.error_sink.write().unwrap() = Some(sink);
+    }
+
+    /// Report a non-fatal runtime error through the sink (if installed).
+    /// Synchronous and cheap — the sink spawns async delivery itself.
+    pub fn report_runtime_error(
+        &self,
+        level: crate::error_reporter::ErrorLevel,
+        component: &str,
+        message: String,
+        metadata: Option<serde_json::Value>,
+    ) {
+        if let Some(sink) = self.error_sink.read().unwrap().as_ref() {
+            sink(level, component.to_string(), message, metadata);
+        }
     }
 }
 

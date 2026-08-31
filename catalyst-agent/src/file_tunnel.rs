@@ -58,6 +58,7 @@ pub struct FileTunnelClient {
     client: Client,
     base_url: String,
     request_semaphore: Arc<Semaphore>,
+    error_sink: std::sync::RwLock<Option<crate::error_reporter::ErrorSink>>,
 }
 
 impl FileTunnelClient {
@@ -86,6 +87,25 @@ impl FileTunnelClient {
             client,
             base_url,
             request_semaphore,
+            error_sink: std::sync::RwLock::new(None),
+        }
+    }
+
+    /// Install the error reporting sink (called once by main.rs after the
+    /// WebSocketHandler exists) so fatal tunnel failures reach the panel's
+    /// System Errors page.
+    pub fn set_error_sink(&self, sink: crate::error_reporter::ErrorSink) {
+        *self.error_sink.write().unwrap() = Some(sink);
+    }
+
+    fn report_tunnel_error(
+        &self,
+        level: crate::error_reporter::ErrorLevel,
+        component: &str,
+        message: String,
+    ) {
+        if let Some(sink) = self.error_sink.read().unwrap().as_ref() {
+            sink(level, component.to_string(), message, None);
         }
     }
 
@@ -93,6 +113,11 @@ impl FileTunnelClient {
     pub async fn run(&self) {
         if self.config.server.api_key.trim().is_empty() {
             error!("File tunnel disabled: server.api_key is required");
+            self.report_tunnel_error(
+                crate::error_reporter::ErrorLevel::Critical,
+                "agent:file_tunnel",
+                "File tunnel disabled: server.api_key is required — HTTP file operations on this node are unavailable".to_string(),
+            );
             return;
         }
 
@@ -130,6 +155,14 @@ impl FileTunnelClient {
         for handle in handles {
             if let Err(e) = handle.await {
                 error!("Poll worker exited: {}", e);
+                self.report_tunnel_error(
+                    crate::error_reporter::ErrorLevel::Error,
+                    "agent:file_tunnel",
+                    format!(
+                        "File tunnel poll worker exited: {} — file operations may be degraded",
+                        e
+                    ),
+                );
             }
         }
     }
