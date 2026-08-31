@@ -3,6 +3,35 @@ import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { ModManagerTarget, buildProviderHeaders, ensureModManagerEnabled, ensurePluginManagerEnabled, ensureServerAccess, extractGameVersion, fileRateLimitMax, fileRateLimitWindowMs, getModManagerSettings, getProviderTargets, loadPluginProviderConfig, loadProviderConfig, normalizeTargetValue, path, resolveCurseforgeClassId, validateAndNormalizePath, resolveCurseforgeGameId, resolveCurseforgeLoaderType, resolveModManagerProvider, resolveModrinthGameVersion, resolvePaperDownload, resolveSpigotDownload, resolveTemplatePath, sanitizeFilename } from './_helpers.js';
 
+// ── Plugin-manager search sort presets ──────────────────────────────────
+// Cross-provider sort options, mapped to each provider's native query params.
+// "relevance" (query-driven ranking) is intentionally unmapped — omitting the
+// sort param falls back to each provider's default ranking. Verified against
+// the live APIs: Modrinth `index`, Hangar `sort` (leading "-" = descending),
+// Spiget `sort` (leading "-" = descending).
+const PLUGIN_SORT_OPTIONS = new Set(["trending", "popular", "rating", "updated", "newest"]);
+const MODRINTH_SORT_INDEX: Record<string, string> = {
+  trending: "downloads",
+  popular: "downloads",
+  rating: "follows",
+  updated: "updated",
+  newest: "newest",
+};
+const SPIGOT_SORT_PARAM: Record<string, string> = {
+  trending: "-downloads",
+  popular: "-downloads",
+  rating: "-rating",
+  updated: "-updateDate",
+  newest: "-releaseDate",
+};
+const HANGAR_SORT_PARAM: Record<string, string> = {
+  trending: "-recent_downloads",
+  popular: "-downloads",
+  rating: "-stars",
+  updated: "-updated",
+  newest: "-newest",
+};
+
 export async function serverModpluginsRoutes(app: FastifyInstance) {
   const fileTunnel = (app as any).fileTunnel as import("../../services/file-tunnel").FileTunnelService;
   const tunnelFileOp = async (
@@ -472,11 +501,10 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const pluginManager = ensurePluginManagerEnabled(server, reply);
       if (!pluginManager) return;
 
-      if (provider !== "modrinth") {
-        return reply.send({ success: true, data: [] });
-      }
-
-      const providerConfig = await loadPluginProviderConfig(provider);
+      // Game-version tags describe Minecraft releases, which are provider-agnostic.
+      // Resolve them from Modrinth's tag API regardless of the selected provider so
+      // the game-version filter also works for Paper/Spigot browse flows.
+      const providerConfig = await loadPluginProviderConfig("modrinth");
       if (!providerConfig) {
         return reply.status(404).send({ error: "Provider not found" });
       }
@@ -484,8 +512,10 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       try {
         const settings = await getModManagerSettings();
         headers = buildProviderHeaders(providerConfig, settings);
-      } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+      } catch {
+        // The tag endpoint is public — a missing Modrinth key must not block
+        // the version filter for Paper/Spigot-only templates.
+        headers = { "User-Agent": "CatalystPluginManager/1.0" };
       }
 
       const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
@@ -515,11 +545,12 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const { provider: rawProvider, query, page, gameVersion } = request.query as {
+      const { provider: rawProvider, query, page, gameVersion, sort } = request.query as {
         provider?: string;
         query?: string;
         gameVersion?: string;
         page?: string | number;
+        sort?: string;
       };
       const provider = rawProvider === "spiget" ? "spigot" : rawProvider;
       const userId = request.user.userId;
@@ -556,6 +587,16 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const searchQuery = typeof query === "string" ? query.trim() : "";
       const rawGameVersion = gameVersion?.trim() || extractGameVersion(server.environment);
       const isTrending = !searchQuery;
+
+      // ── Sort ──
+      const requestedSort = typeof sort === "string" ? sort.trim().toLowerCase() : "";
+      if (requestedSort && !PLUGIN_SORT_OPTIONS.has(requestedSort)) {
+        return reply.status(400).send({
+          error: `Invalid sort '${requestedSort}'. Valid options: ${[...PLUGIN_SORT_OPTIONS].join(", ")}`,
+        });
+      }
+      const sortValue = requestedSort || (isTrending ? "trending" : "relevance");
+
       let url = "";
       if (provider === "modrinth") {
         // Resolve game version (handles "latest", partial versions like "1.21")
@@ -566,18 +607,21 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         if (resolvedGameVersion) {
           facets.push([`versions:${resolvedGameVersion}`]);
         }
+        const modrinthIndex = MODRINTH_SORT_INDEX[sortValue];
         const params = new URLSearchParams({
           query: searchQuery,
           limit: "20",
           facets: JSON.stringify(facets),
           offset: String(Math.max(0, (Number(pageValue) - 1) * 20)),
-          ...(isTrending ? { index: "downloads" } : {}),
+          ...(modrinthIndex ? { index: modrinthIndex } : {}),
         });
         url = `${baseUrl}${providerConfig.endpoints.search}?${params.toString()}`;
       } else if (provider === "spigot") {
+        const spigotSort = SPIGOT_SORT_PARAM[sortValue];
         const params = new URLSearchParams({
           size: "20",
           page: String(Math.max(0, Number(pageValue) - 1)),
+          ...(spigotSort ? { sort: spigotSort } : {}),
         });
         if (searchQuery) {
           url = `${baseUrl}${providerConfig.endpoints.search.replace(
@@ -588,10 +632,12 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           url = `${baseUrl}${providerConfig.endpoints.resources}?${params.toString()}`;
         }
       } else if (provider === "paper") {
+        const hangarSort = HANGAR_SORT_PARAM[sortValue];
         const params = new URLSearchParams({
           limit: "20",
           offset: String(Math.max(0, (Number(pageValue) - 1) * 20)),
           ...(searchQuery ? { q: searchQuery } : {}),
+          ...(hangarSort ? { sort: hangarSort } : {}),
         });
         url = `${baseUrl}${providerConfig.endpoints.projects}?${params.toString()}`;
       } else {
@@ -614,9 +660,8 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         const filtered = payload.data.filter((entry: any) => entry?.premium !== true);
         return reply.send({ success: true, data: { ...payload, data: filtered } });
       }
-      if (provider === "paper" && payload && Array.isArray(payload?.result)) {
-        return reply.send({ success: true, data: payload.result });
-      }
+      // Paper: keep the full payload — the frontend reads `result` plus
+      // `pagination.count` for correct page totals.
       return reply.send({ success: true, data: payload });
     }
   );

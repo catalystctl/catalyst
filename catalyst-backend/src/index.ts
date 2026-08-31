@@ -39,6 +39,7 @@ import { WebhookService } from "./services/webhook-service";
 import { TaskScheduler } from "./services/task-scheduler";
 import { alertRoutes } from "./routes/alerts";
 import { dashboardRoutes } from "./routes/dashboard";
+import { providerKeyRoutes } from "./routes/provider-keys";
 import { setupRoutes } from "./routes/setup";
 import {
 	verifyApiKey as verifyApiKeyService,
@@ -972,6 +973,7 @@ async function bootstrap() {
 		await app.register(bulkServerRoutes, { prefix: "/api/servers" });
 		await app.register(alertRoutes, { prefix: "/api" });
 		await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
+await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		await app.register(apiKeyRoutes);
 		await app.register((app) => pluginRoutes(app, pluginLoader, prisma));
 		// File tunnel routes need a high body limit; the panel setting is

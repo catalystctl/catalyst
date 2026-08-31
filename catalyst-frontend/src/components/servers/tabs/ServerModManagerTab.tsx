@@ -16,6 +16,10 @@ import {
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { formatBytes } from '../../../utils/formatters';
 import { modManagerApi } from '../../../services/api/modManager';
+import {
+ providerKeysApi,
+ providerKeyConfigured,
+} from '../../../services/api/providerKeys';
 import { qk } from '../../../lib/queryKeys';
 import {
  notifyError,
@@ -284,12 +288,33 @@ export default function ServerModManagerTab({
  }, [modManagerConfig]);
 
  const [modProviderKey, setModProviderKey] = useState('');
+ // ── Provider key availability ──
+ // Hide key-gated providers (Modrinth, CurseForge) whose key isn't configured —
+ // selecting them would only produce 409 "API key not configured" errors.
+ const {
+ data: providerKeyStatus,
+ isSuccess: keyStatusLoaded,
+ isError: keyStatusUnavailable,
+ } = useQuery({
+ queryKey: qk.providerKeyStatus,
+ queryFn: providerKeysApi.status,
+ staleTime: 60_000,
+ retry: 1,
+ });
+ const keyStatusSettled = keyStatusLoaded || keyStatusUnavailable;
+ const availableModProviderOptions = useMemo(
+ () =>
+ modProviderOptions.filter((entry) =>
+ providerKeyConfigured(entry.providerId, providerKeyStatus),
+ ),
+ [modProviderOptions, providerKeyStatus],
+ );
  const selectedModProvider = useMemo(
  () =>
- modProviderOptions.find((entry) => entry.key === modProviderKey) ??
- modProviderOptions[0] ??
+ availableModProviderOptions.find((entry) => entry.key === modProviderKey) ??
+ availableModProviderOptions[0] ??
  null,
- [modProviderKey, modProviderOptions],
+ [modProviderKey, availableModProviderOptions],
  );
  const modProvider = selectedModProvider?.providerId ?? '';
  const modProviderGame = selectedModProvider?.game;
@@ -331,16 +356,16 @@ export default function ServerModManagerTab({
  // compared during render; when the tracked input differs, the dependent
  // state is updated and the tracker is moved forward. This replaces the
  // setState-in-useEffect anti-pattern flagged by react-hooks.
- const [prevProviderOptions, setPrevProviderOptions] = useState(modProviderOptions);
- if (modProviderOptions !== prevProviderOptions) {
- setPrevProviderOptions(modProviderOptions);
- if (modProviderOptions.length === 0) {
+ const [prevProviderOptions, setPrevProviderOptions] = useState(availableModProviderOptions);
+ if (availableModProviderOptions !== prevProviderOptions) {
+ setPrevProviderOptions(availableModProviderOptions);
+ if (availableModProviderOptions.length === 0) {
  if (modProviderKey) setModProviderKey('');
  } else {
- const hasSelected = modProviderOptions.some(
+ const hasSelected = availableModProviderOptions.some(
  (entry) => entry.key === modProviderKey,
  );
- if (!hasSelected) setModProviderKey(modProviderOptions[0].key);
+ if (!hasSelected) setModProviderKey(availableModProviderOptions[0].key);
  }
  }
 
@@ -397,6 +422,7 @@ export default function ServerModManagerTab({
  data: modSearchResults,
  isLoading: modSearchLoading,
  isError: modSearchError,
+ error: modSearchErrorDetail,
  } = useQuery({
  queryKey: qk.modManagerSearch(serverId ?? '', modProvider, modQuery.trim(), modGameVersion.trim(), searchPage),
  queryFn: () =>
@@ -409,7 +435,12 @@ export default function ServerModManagerTab({
  gameVersion: modGameVersion.trim() || undefined,
  page: searchPage,
  }),
- enabled: Boolean(serverId && modProvider),
+ // Wait for key status to settle and for a provider to be available, so a
+ // hidden default never fires a doomed 409 request.
+ enabled:
+ Boolean(serverId && modProvider) &&
+ keyStatusSettled &&
+ availableModProviderOptions.length > 0,
  });
 
  const {
@@ -718,7 +749,7 @@ export default function ServerModManagerTab({
  value={selectedModProvider?.key ?? ''}
  onChange={(e) => setModProviderKey(e.target.value)}
  >
- {modProviderOptions.map((providerEntry) => (
+ {availableModProviderOptions.map((providerEntry) => (
  <option key={providerEntry.key} value={providerEntry.key}>
  {providerEntry.label}
  </option>
@@ -790,15 +821,38 @@ export default function ServerModManagerTab({
  </motion.div>
 
  {/* ── Results area ── */}
- {modSearchLoading ? (
+ {availableModProviderOptions.length === 0 ? (
+ <motion.div variants={itemVariants}>
+ <EmptyState
+ title="No providers available"
+ description="Every provider this template offers requires an API key that isn't configured. An administrator can add one under Admin → System → Mod Manager API Keys."
+ />
+ </motion.div>
+ ) : modSearchLoading ? (
  <BrowseSkeleton />
  ) : modSearchError ? (
  <motion.div
  variants={itemVariants}
  className="rounded-xl border border-danger/30 bg-danger-muted p-4 text-sm text-danger"
  >
- Unable to load search results. Check your provider API keys in
- admin settings.
+ {(() => {
+ const err: any = modSearchErrorDetail;
+ const status = err?.response?.status ?? err?.status;
+ const detail =
+ err?.response?.data?.error ||
+ err?.response?.data?.message ||
+ err?.message;
+ if (status === 409) {
+ return (
+ detail ||
+ 'Provider API key not configured. Set it under Admin → System → Mod Manager API Keys.'
+ );
+ }
+ if (detail) {
+ return `Search failed${status ? ` (HTTP ${status})` : ''}: ${String(detail).slice(0, 200)}`;
+ }
+ return 'Unable to load search results. Try again in a moment.';
+ })()}
  </motion.div>
  ) : modResults.length === 0 ? (
  <motion.div variants={itemVariants}>

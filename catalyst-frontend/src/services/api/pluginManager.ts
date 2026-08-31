@@ -35,6 +35,8 @@ export const pluginManagerApi = {
       provider: string;
       query?: string;
       gameVersion?: string;
+      /** trending | popular | rating | updated | newest — omitted = relevance */
+      sort?: string;
       page?: number;
     },
   ) => {

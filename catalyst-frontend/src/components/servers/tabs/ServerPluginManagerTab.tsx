@@ -1,22 +1,35 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@/csync';
 import {
  ArrowLeftRight,
  ArrowUpCircle,
+ ChevronDown,
  ChevronLeft,
  ChevronRight,
  Download,
  ExternalLink,
+ Flame,
+ History,
  Loader2,
  Package,
  Puzzle,
  RefreshCw,
  Search,
+ Sparkles,
+ Star,
  Trash2,
+ TrendingUp,
 } from 'lucide-react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import { formatBytes } from '../../../utils/formatters';
+import {
+ formatBytes,
+ formatRelativeTime,
+} from '../../../utils/formatters';
 import { pluginManagerApi } from '../../../services/api/pluginManager';
+import {
+ providerKeysApi,
+ providerKeyConfigured,
+} from '../../../services/api/providerKeys';
 import { qk } from '../../../lib/queryKeys';
 import {
  notifyError,
@@ -27,7 +40,7 @@ import {
  titleCase,
  normalizeVersionId,
  normalizeVersionLabel,
- filterAndSortVersions,
+ splitVersionsForGameVersion,
  formatDownloadCount,
  isStableRelease,
 } from '../../../utils/modManagerUtils';
@@ -60,21 +73,18 @@ const itemVariants: Variants = {
  },
 };
 
-const cardVariants: Variants = {
- hidden: { opacity: 0, scale: 0.97 },
- visible: {
- opacity: 1,
- scale: 1,
- transition: { type: 'spring', stiffness: 400, damping: 28 },
- },
- exit: {
- opacity: 0,
- scale: 0.97,
- transition: { duration: 0.15 },
- },
-};
-
 const RESULTS_PER_PAGE = 12;
+
+// ── Sort presets (mapped server-side to each provider's native params) ──
+const PLUGIN_SORT_OPTIONS = [
+ { id: 'trending', label: 'Trending', icon: Flame },
+ { id: 'popular', label: 'Popular', icon: TrendingUp },
+ { id: 'rating', label: 'Top rated', icon: Star },
+ { id: 'updated', label: 'Recently updated', icon: History },
+ { id: 'newest', label: 'Newest', icon: Sparkles },
+] as const;
+
+type PluginSortId = (typeof PLUGIN_SORT_OPTIONS)[number]['id'];
 
 // ── Types ──
 interface Props {
@@ -115,6 +125,9 @@ function VersionSelector({
  isError,
  onInstall,
  isInstalling,
+ gameVersionLabel,
+ exactMatch,
+ rawCount,
 }: {
  versionOptions: any[];
  selectedVersion: string;
@@ -123,63 +136,97 @@ function VersionSelector({
  isError: boolean;
  onInstall: () => void;
  isInstalling: boolean;
+ gameVersionLabel?: string;
+ exactMatch: boolean;
+ rawCount: number;
 }) {
+ const filterNote = (() => {
+  if (!gameVersionLabel) return '';
+  if (exactMatch) return `${versionOptions.length} for ${gameVersionLabel}`;
+  if (versionOptions.length > 0)
+   return `nothing tagged for ${gameVersionLabel} — showing all`;
+  return '';
+ })();
+
  return (
- <motion.div
- initial={{ height: 0, opacity: 0 }}
- animate={{ height: 'auto', opacity: 1 }}
- exit={{ height: 0, opacity: 0 }}
- transition={{ duration: 0.2, ease: 'easeInOut' }}
- className="overflow-hidden"
- >
- <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
- <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
- Version
- </label>
- {isError ? (
- <p className="text-xs text-danger">Failed to load versions.</p>
- ) : (
- <div className="flex items-end gap-2">
- <div className="relative flex-1">
- <select
- className="w-full appearance-none rounded-lg border border-border bg-surface-2 px-3 py-2 pr-8 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
- value={selectedVersion}
- onChange={(event) => onVersionChange(event.target.value)}
- disabled={isLoading}
- >
- <option value="">
- {isLoading ? 'Loading…' : 'Select version'}
- </option>
- {versionOptions.map((version: any) => {
- const vid = normalizeVersionId(version);
- const vlabel = normalizeVersionLabel(version);
- if (!vid) return null;
- return (
- <option key={vid} value={String(vid)}>
- {vlabel}
- </option>
- );
- })}
- </select>
- <ChevronLeft className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
- </div>
- <Button
- size="sm"
- disabled={!selectedVersion || isInstalling}
- onClick={onInstall}
- className="gap-1.5"
- >
- {isInstalling ? (
- <Loader2 className="h-3.5 w-3.5 animate-spin" />
- ) : (
- <Download className="h-3.5 w-3.5" />
- )}
- {isInstalling ? 'Installing…' : 'Install'}
- </Button>
- </div>
- )}
- </div>
- </motion.div>
+ // Clicks inside the selector (opening the <select> dropdown, pressing
+ // Install) must not bubble to the card, whose onClick toggles selection
+ // and would unmount this panel mid-interaction.
+ <div onClick={(event) => event.stopPropagation()}>
+   <motion.div
+    initial={{ height: 0, opacity: 0 }}
+    animate={{ height: 'auto', opacity: 1 }}
+    exit={{ height: 0, opacity: 0 }}
+    transition={{ duration: 0.2, ease: 'easeInOut' }}
+    className="overflow-hidden"
+   >
+    <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
+     <div className="flex items-center justify-between gap-2">
+      <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+       Version
+      </label>
+      {filterNote && (
+       <span className="truncate text-[10px] text-muted-foreground">
+        {filterNote}
+       </span>
+      )}
+     </div>
+     {isError ? (
+      <p className="text-xs text-danger">Failed to load versions.</p>
+     ) : (
+      <div className="flex items-end gap-2">
+       <div className="relative flex-1">
+        <select
+         className="w-full appearance-none rounded-lg border border-border bg-surface-2 px-3 py-2 pr-8 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+         value={selectedVersion}
+         onChange={(event) => onVersionChange(event.target.value)}
+         disabled={isLoading}
+        >
+         <option value="">
+          {isLoading ? 'Loading…' : 'Select version'}
+         </option>
+         {versionOptions.map((version: any) => {
+          const vid = normalizeVersionId(version);
+          const rawLabel = normalizeVersionLabel(version);
+          const vlabel =
+            typeof rawLabel === 'string' ? rawLabel : String(rawLabel ?? '');
+          if (!vid) return null;
+          const stabilitySuffix = isStableRelease(version)
+           ? ''
+           : ' (pre-release)';
+          return (
+           <option key={vid} value={String(vid)}>
+            {vlabel}
+            {stabilitySuffix}
+           </option>
+          );
+         })}
+        </select>
+        <ChevronLeft className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
+       </div>
+       <Button
+        size="sm"
+        disabled={!selectedVersion || isInstalling}
+        onClick={onInstall}
+        className="gap-1.5"
+       >
+        {isInstalling ? (
+         <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+         <Download className="h-3.5 w-3.5" />
+        )}
+        {isInstalling ? 'Installing…' : 'Install'}
+       </Button>
+      </div>
+     )}
+     {!isError && !isLoading && versionOptions.length === 0 && rawCount === 0 && (
+      <p className="text-xs text-muted-foreground">
+       No published versions found for this plugin.
+      </p>
+     )}
+    </div>
+   </motion.div>
+  </div>
  );
 }
 
@@ -194,30 +241,74 @@ export default function ServerPluginManagerTab({
  pluginManagerConfig,
 }: Props) {
  const queryClient = useQueryClient();
+ // ── Provider key availability ──
+ // Providers whose required API key isn't configured (Modrinth) are hidden
+ // from the dropdown — selecting them would only produce 409 errors.
+ const {
+ data: providerKeyStatus,
+ isSuccess: keyStatusLoaded,
+ isError: keyStatusUnavailable,
+ } = useQuery({
+ queryKey: qk.providerKeyStatus,
+ queryFn: providerKeysApi.status,
+ staleTime: 60_000,
+ retry: 1,
+ });
+ const keyStatusSettled = keyStatusLoaded || keyStatusUnavailable;
+
  // ── Provider state ──
  const pluginManagerProviders = Array.isArray(pluginManagerConfig?.providers)
  ? pluginManagerConfig.providers
  : EMPTY_PLUGIN_PROVIDERS;
- const [pluginProvider, setPluginProvider] = useState('modrinth');
+ const availablePluginProviders = useMemo(
+ () =>
+ pluginManagerProviders.filter((provider: string) =>
+ providerKeyConfigured(provider, providerKeyStatus),
+ ),
+ [pluginManagerProviders, providerKeyStatus],
+ );
+ // Initialize from the already-filtered list: when the key status is cached
+ // (returning to the tab), the list may exclude the 'modrinth' default on the
+ // very first render — the render-sync block below can't fix that, because
+ // its tracker is initialized to the same list and never sees a "change".
+ const [pluginProvider, setPluginProvider] = useState(() =>
+ availablePluginProviders.length > 0 &&
+ !availablePluginProviders.includes('modrinth')
+ ? availablePluginProviders[0]
+ : 'modrinth',
+ );
 
  // ── Sync (set state during render, React 19 pattern) ──
  // Track each input via useState; when an input changes between renders,
  // update the dependent state and advance the tracker during render. This
  // replaces the setState-in-useEffect anti-pattern flagged by react-hooks.
- const [prevPluginProviders, setPrevPluginProviders] = useState(pluginManagerProviders);
- if (pluginManagerProviders !== prevPluginProviders) {
- setPrevPluginProviders(pluginManagerProviders);
+ const [prevPluginProviders, setPrevPluginProviders] = useState(availablePluginProviders);
+ if (availablePluginProviders !== prevPluginProviders) {
+ setPrevPluginProviders(availablePluginProviders);
  if (
- pluginManagerProviders.length > 0 &&
- !pluginManagerProviders.includes(pluginProvider)
+ availablePluginProviders.length > 0 &&
+ !availablePluginProviders.includes(pluginProvider)
  ) {
- setPluginProvider(pluginManagerProviders[0]);
+ setPluginProvider(availablePluginProviders[0]);
  }
  }
 
  // ── Browse state ──
  const [pluginQuery, setPluginQuery] = useState('');
- const [pluginGameVersion, setPluginGameVersion] = useState('');
+ // Search fires against the debounced query so typing doesn't hammer the
+ // provider APIs (and trip their rate limits) with a request per keystroke.
+ const [debouncedPluginQuery, setDebouncedPluginQuery] = useState('');
+ useEffect(() => {
+  const timer = setTimeout(() => setDebouncedPluginQuery(pluginQuery.trim()), 350);
+  return () => clearTimeout(timer);
+ }, [pluginQuery]);
+ // Default the game-version filter to the server's detected Minecraft
+ // version; the render-sync block below keeps it in sync when the prop
+ // arrives after mount.
+ const [pluginGameVersion, setPluginGameVersion] = useState(
+ () => serverGameVersion?.trim() || '',
+ );
+ const [pluginSort, setPluginSort] = useState<PluginSortId>('trending');
  const [searchPage, setSearchPage] = useState(1);
  const [selectedPlugin, setSelectedPlugin] = useState<string | null>(null);
  const [selectedPluginName, setSelectedPluginName] = useState('');
@@ -264,7 +355,7 @@ export default function ServerPluginManagerTab({
  }
 
  // Reset page and selection on filter change
- const pluginFilterKey = `${pluginProvider}|${pluginQuery}|${pluginGameVersion}`;
+ const pluginFilterKey = `${pluginProvider}|${debouncedPluginQuery}|${pluginGameVersion}|${pluginSort}`;
  const [prevPluginFilterKey, setPrevPluginFilterKey] = useState(pluginFilterKey);
  if (pluginFilterKey !== prevPluginFilterKey) {
  setPrevPluginFilterKey(pluginFilterKey);
@@ -280,10 +371,12 @@ export default function ServerPluginManagerTab({
  }
 
  // ── Queries ──
+ // Minecraft game-version tags are provider-agnostic (the backend resolves
+ // them from Modrinth regardless of provider), so fetch them once per server.
  const { data: pluginGameVersionTags } = useQuery({
- queryKey: qk.pluginManagerGameVersions(serverId ?? '', pluginProvider),
- queryFn: () => pluginManagerApi.gameVersions(serverId ?? '', pluginProvider),
- enabled: Boolean(serverId && pluginProvider === 'modrinth'),
+ queryKey: qk.pluginManagerGameVersions(serverId ?? '', 'modrinth'),
+ queryFn: () => pluginManagerApi.gameVersions(serverId ?? '', 'modrinth'),
+ enabled: Boolean(serverId),
  staleTime: 10 * 60 * 1000,
  });
 
@@ -291,17 +384,34 @@ export default function ServerPluginManagerTab({
  data: pluginSearchResults,
  isLoading: pluginSearchLoading,
  isError: pluginSearchError,
+ error: pluginSearchErrorDetail,
  } = useQuery({
- queryKey: qk.pluginManagerSearch(serverId ?? '', pluginProvider, pluginQuery.trim(), pluginGameVersion.trim(), searchPage),
+ queryKey: qk.pluginManagerSearch(serverId ?? '', pluginProvider, debouncedPluginQuery, pluginGameVersion.trim(), searchPage, pluginSort),
  queryFn: () =>
  pluginManagerApi.search(serverId ?? '', {
  provider: pluginProvider,
- query: pluginQuery.trim() || undefined,
+ query: debouncedPluginQuery || undefined,
  gameVersion: pluginGameVersion.trim() || undefined,
+ sort: pluginSort,
  page: searchPage,
  }),
- enabled: Boolean(serverId && pluginProvider),
+ // Wait for key status to settle and for the selected provider to be one
+ // that's actually available, so a hidden default never fires a doomed 409.
+ enabled:
+ Boolean(serverId && pluginProvider) &&
+ keyStatusSettled &&
+ availablePluginProviders.includes(pluginProvider),
  });
+
+ // Detected Minecraft version from the server environment, plus whether the
+ // provider tag list already contains it (avoids duplicate select options).
+ const detectedVersion = serverGameVersion?.trim() || '';
+ const gameVersionTagsIncludeDetected = Boolean(
+ detectedVersion &&
+ (pluginGameVersionTags ?? []).some(
+ (tag: string) => tag.toLowerCase() === detectedVersion.toLowerCase(),
+ ),
+ );
 
  const {
  data: pluginVersions,
@@ -371,31 +481,44 @@ export default function ServerPluginManagerTab({
  // ── Derived data ──
  const pluginResults = useMemo(() => {
  if (!pluginSearchResults) return [];
- if (Array.isArray(pluginSearchResults.hits))
- return pluginSearchResults.hits;
- if (Array.isArray(pluginSearchResults.data))
- return pluginSearchResults.data;
- if (Array.isArray(pluginSearchResults))
- return pluginSearchResults;
+ const response = pluginSearchResults as any;
+ // Modrinth → { hits, total_hits }; Paper → { result, pagination: { count } };
+ // Spigot → plain array.
+ if (Array.isArray(response)) return response;
+ if (Array.isArray(response.result)) return response.result;
+ if (Array.isArray(response.hits)) return response.hits;
+ if (Array.isArray(response.data)) return response.data;
  return [];
  }, [pluginSearchResults]);
 
- const totalHits = (pluginSearchResults as any)?.total_hits ?? pluginResults.length;
+ const totalHits = useMemo(() => {
+ const response = pluginSearchResults as any;
+ return (
+ response?.total_hits ??
+ response?.pagination?.count ??
+ pluginResults.length
+ );
+ }, [pluginSearchResults, pluginResults]);
 
  const totalPages = Math.max(1, Math.ceil(totalHits / RESULTS_PER_PAGE));
 
- const pluginVersionOptions = useMemo(() => {
+ const rawPluginVersions = useMemo(() => {
  if (!pluginVersions) return [];
  const versionsResponse = pluginVersions as any;
- const raw = Array.isArray(versionsResponse.data)
- ? versionsResponse.data
- : Array.isArray(versionsResponse.result)
- ? versionsResponse.result
- : Array.isArray(pluginVersions)
- ? pluginVersions
- : [];
- return filterAndSortVersions(raw, pluginGameVersion);
- }, [pluginGameVersion, pluginVersions]);
+ if (Array.isArray(versionsResponse)) return versionsResponse;
+ if (Array.isArray(versionsResponse.data)) return versionsResponse.data;
+ if (Array.isArray(versionsResponse.result)) return versionsResponse.result;
+ return [];
+ }, [pluginVersions]);
+
+ const {
+ list: pluginVersionOptions,
+ exactMatch: pluginVersionsExactMatch,
+ } = useMemo(
+ () =>
+ splitVersionsForGameVersion(rawPluginVersions, pluginGameVersion),
+ [rawPluginVersions, pluginGameVersion],
+ );
 
  const filteredInstalledPlugins = useMemo(() => {
  let list = [...installedPlugins];
@@ -478,8 +601,10 @@ export default function ServerPluginManagerTab({
 
  // ── Handlers ──
  const handleSearch = useCallback(() => {
+ // Flush the debounce so Enter/Search applies immediately.
+ setDebouncedPluginQuery(pluginQuery.trim());
  setSearchPage(1);
- }, []);
+ }, [pluginQuery]);
 
  const handleUpdatePlugins = async () => {
  if (!serverId) return;
@@ -548,7 +673,7 @@ export default function ServerPluginManagerTab({
  <TabHeader
  icon={Puzzle}
  title="Plugins"
- description="Browse and install plugins for your server."
+ description="Discover, install, and update plugins for your server."
  actions={(
  <div className="flex items-center gap-2">
  {installedPlugins.length > 0 && (
@@ -606,10 +731,11 @@ export default function ServerPluginManagerTab({
  {/* ── Filters ── */}
  <motion.div
  variants={itemVariants}
- className="flex flex-wrap items-center gap-2.5"
+ className="rounded-xl border border-border/50 bg-card/60 p-2.5 backdrop-blur-sm"
  >
+ <div className="flex flex-wrap items-center gap-2.5">
  {/* Search */}
- <div className="relative min-w-[200px] flex-1 max-w-sm">
+ <div className="relative min-w-[220px] flex-1">
  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
  <Input
  value={pluginQuery}
@@ -622,24 +748,25 @@ export default function ServerPluginManagerTab({
  />
  </div>
 
- {/* Game version */}
- <div className="relative">
- <Input
+ {/* Game version — provider-agnostic Minecraft version filter */}
+ <select
+ className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
  value={pluginGameVersion}
  onChange={(e) => setPluginGameVersion(e.target.value)}
- placeholder={serverGameVersion || 'Game version'}
- className="w-40"
- list="plugin-game-version-tags"
- />
- {pluginProvider === 'modrinth' && pluginGameVersionTags && pluginGameVersionTags.length > 0 && (
- <datalist id="plugin-game-version-tags">
- <option value="latest" />
- {pluginGameVersionTags.slice(0, 30).map((v) => (
- <option key={v} value={v} />
- ))}
- </datalist>
+ aria-label="Filter by game version"
+ >
+ <option value="">Any game version</option>
+ {detectedVersion && !gameVersionTagsIncludeDetected && (
+ <option value={detectedVersion}>
+ Server version ({detectedVersion})
+ </option>
  )}
- </div>
+ {(pluginGameVersionTags ?? []).slice(0, 60).map((v) => (
+ <option key={v} value={v}>
+ {v}
+ </option>
+ ))}
+ </select>
 
  {/* Provider */}
  <select
@@ -647,7 +774,7 @@ export default function ServerPluginManagerTab({
  value={pluginProvider}
  onChange={(e) => setPluginProvider(e.target.value)}
  >
- {pluginManagerProviders.map((provider: string) => (
+ {availablePluginProviders.map((provider: string) => (
  <option key={provider} value={provider}>
  {provider === 'spiget' ? 'Spigot' : titleCase(provider)}
  </option>
@@ -668,18 +795,78 @@ export default function ServerPluginManagerTab({
  )}
  Search
  </Button>
+ </div>
+ </motion.div>
+
+ {/* ── Sort presets + result meta ── */}
+ <motion.div
+ variants={itemVariants}
+ className="flex flex-wrap items-center justify-between gap-2"
+ >
+ <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border/50 bg-card/60 p-1 backdrop-blur-sm">
+ {PLUGIN_SORT_OPTIONS.map(({ id, label, icon: SortIcon }) => (
+ <button
+ key={id}
+ type="button"
+ className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+ pluginSort === id
+ ? 'bg-primary text-primary-foreground shadow-sm'
+ : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
+ }`}
+ onClick={() => setPluginSort(id)}
+ >
+ <SortIcon className="h-3.5 w-3.5" />
+ {label}
+ </button>
+ ))}
+ </div>
+ {availablePluginProviders.length > 0 && (
+ <span className="text-xs text-muted-foreground">
+ {totalHits.toLocaleString()} result{totalHits !== 1 ? 's' : ''}
+ {totalHits > RESULTS_PER_PAGE && (
+ <> · page {searchPage} of {totalPages}</>
+ )}
+ </span>
+ )}
  </motion.div>
 
  {/* ── Results area ── */}
- {pluginSearchLoading ? (
+ {availablePluginProviders.length === 0 ? (
+ <motion.div variants={itemVariants}>
+ <EmptyState
+ title="No providers available"
+ description="Every provider this template offers requires an API key that isn't configured. An administrator can add one under Admin → System → Mod Manager API Keys."
+ />
+ </motion.div>
+ ) : !keyStatusSettled ? (
+ /* Provider key status still resolving — search is gated on it, so show
+    a loader rather than a misleading "No results" flash. */
+ <BrowseSkeleton />
+ ) : pluginSearchLoading ? (
  <BrowseSkeleton />
  ) : pluginSearchError ? (
  <motion.div
  variants={itemVariants}
  className="rounded-xl border border-danger/30 bg-danger-muted p-4 text-sm text-danger"
  >
- Unable to load search results. Check your provider API keys in
- admin settings.
+ {(() => {
+ const err: any = pluginSearchErrorDetail;
+ const status = err?.response?.status ?? err?.status;
+ const detail =
+ err?.response?.data?.error ||
+ err?.response?.data?.message ||
+ err?.message;
+ if (status === 409) {
+ return (
+ detail ||
+ 'Provider API key not configured. Set it under Admin → System → Mod Manager API Keys.'
+ );
+ }
+ if (detail) {
+ return `Search failed${status ? ` (HTTP ${status})` : ''}: ${String(detail).slice(0, 200)}`;
+ }
+ return 'Unable to load search results. Try again in a moment.';
+ })()}
  </motion.div>
  ) : pluginResults.length === 0 ? (
  <motion.div variants={itemVariants}>
@@ -694,57 +881,21 @@ export default function ServerPluginManagerTab({
  </motion.div>
  ) : (
  <>
- {/* Results count + pagination info */}
- <motion.div
- variants={itemVariants}
- className="flex items-center justify-between"
- >
- <span className="text-xs text-muted-foreground">
- {totalHits.toLocaleString()} result{totalHits !== 1 ? 's' : ''}
- {totalHits > RESULTS_PER_PAGE && (
- <> · Page {searchPage} of {totalPages}</>
- )}
- </span>
- {totalHits > RESULTS_PER_PAGE && (
- <div className="flex items-center gap-1">
- <Button
- variant="ghost"
- size="icon"
- className="h-7 w-7"
- disabled={searchPage <= 1}
- onClick={() => setSearchPage((p) => Math.max(1, p - 1))}
- >
- <ChevronLeft className="h-4 w-4" />
- </Button>
- <span className="min-w-[4rem] text-center text-xs text-muted-foreground">
- {searchPage} / {totalPages}
- </span>
- <Button
- variant="ghost"
- size="icon"
- className="h-7 w-7"
- disabled={searchPage >= totalPages}
- onClick={() => setSearchPage((p) => Math.min(totalPages, p + 1))}
- >
- <ChevronRight className="h-4 w-4" />
- </Button>
- </div>
- )}
- </motion.div>
-
- {/* Result cards */}
- <motion.div
- variants={containerVariants}
- initial="hidden"
- animate="visible"
- className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
- >
+ {/* Result cards — each card owns its entrance animation (direct props,
+     not inherited variants): orchestrated staggered entrances can strand
+     late children in the "hidden" state when a re-render lands mid-flight,
+     which showed up as cards silently missing until a re-mount. */}
+ <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
  <AnimatePresence>
- {pluginResults.map((entry: any) => {
+ {pluginResults.map((entry: any, index: number) => {
  const id =
  pluginProvider === 'paper'
  ? encodeURIComponent(
- (entry.owner?.name && entry.slug
+ // Hangar identifies projects as {owner}/{slug} (namespace); fall
+ // back to the bare slug, which the Hangar API also accepts.
+ (entry.namespace?.owner && entry.namespace?.slug
+ ? `${entry.namespace.owner}/${entry.namespace.slug}`
+ : entry.owner?.name && entry.slug
  ? `${entry.owner.name}/${entry.slug}`
  : entry.slug || entry.id) ?? '',
  )
@@ -758,12 +909,16 @@ export default function ServerPluginManagerTab({
  entry.title ||
  entry.tag ||
  entry.slug ||
+ entry.id ||
  'Untitled';
- const summary =
+ // Provider payloads vary — never render a non-string as a React child.
+ const titleText = typeof title === 'string' ? title : String(title);
+ const rawSummary =
  entry.description ||
  entry.summary ||
  entry.tag ||
  '';
+ const summary = typeof rawSummary === 'string' ? rawSummary : '';
  const isActive =
  selectedPlugin === String(id);
  const imageUrl =
@@ -772,7 +927,7 @@ export default function ServerPluginManagerTab({
  : pluginProvider === 'paper'
  ? entry.avatarUrl
  : entry.icon?.url || entry.icon?.data;
- const fallbackLabel = title
+ const fallbackLabel = titleText
  .split(/\s+/)
  .filter(Boolean)
  .slice(0, 2)
@@ -800,41 +955,66 @@ export default function ServerPluginManagerTab({
  : '';
  }
 
+ // Spiget search results carry `author` as `{id}` only (no name) — extract
+ // strings strictly so nothing object-shaped reaches the JSX.
+ const rawAuthor =
+ pluginProvider === 'modrinth'
+ ? entry.author
+ : pluginProvider === 'paper'
+ ? entry.namespace?.owner
+ : entry.author?.name;
+ const author = typeof rawAuthor === 'string' ? rawAuthor.trim() : '';
+ const updatedValue =
+ pluginProvider === 'modrinth'
+ ? entry.date_modified
+ : pluginProvider === 'paper'
+ ? entry.lastUpdated
+ : entry.updateDate;
+ const updatedLabel = formatRelativeTime(updatedValue);
+
  return (
  <motion.div
  key={String(id)}
- variants={cardVariants}
- layout
- layoutId={`plugin-${String(id)}`}
- className={`group relative rounded-xl border p-4 transition-all duration-200 ${
+ initial={{ opacity: 0, y: 8 }}
+ animate={{
+ opacity: 1,
+ y: 0,
+ transition: {
+ duration: 0.22,
+ delay: Math.min(index * 0.03, 0.15),
+ ease: 'easeOut',
+ },
+ }}
+ exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.12 } }}
+ className={`group relative cursor-pointer rounded-xl border p-4 transition-all duration-200 ${
  isActive
  ? 'border-primary/50 bg-primary-muted/50 ring-1 ring-primary/20'
- : 'border-border/50 bg-card/80 backdrop-blur-sm hover:border-primary/30'
+ : 'border-border/50 bg-card/80 backdrop-blur-sm hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-black/5'
  }`}
  onClick={() => {
  setSelectedPlugin(
  isActive ? null : String(id),
  );
- setSelectedPluginName(title);
+ setSelectedPluginName(titleText);
  }}
  >
- <div className="flex gap-3">
+ <div className="flex items-start gap-3">
  {imageUrl ? (
  <img
  src={imageUrl}
  alt=""
  loading="lazy"
- className="h-11 w-11 rounded-lg object-cover ring-1 ring-black/5"
+ className="h-11 w-11 shrink-0 rounded-lg object-cover ring-1 ring-black/5"
  />
  ) : (
- <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-surface-2 text-xs font-bold text-muted-foreground">
+ <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/15 to-primary/5 text-xs font-bold text-primary/70">
  {fallbackLabel || 'PL'}
  </div>
  )}
  <div className="min-w-0 flex-1">
  <div className="flex items-start justify-between gap-2">
  <span className="truncate text-sm font-semibold text-foreground">
- {title}
+ {titleText}
  </span>
  {externalUrl && (
  <a
@@ -848,18 +1028,37 @@ export default function ServerPluginManagerTab({
  </a>
  )}
  </div>
+ {author && (
+ <p className="truncate text-[11px] text-muted-foreground">
+ by {author}
+ </p>
+ )}
+ </div>
+ </div>
  {summary && (
- <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+ <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
  {summary}
  </p>
  )}
+ <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/40 pt-2.5">
+ <div className="flex min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
  {downloads > 0 && (
- <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+ <span className="flex items-center gap-1">
  <Download className="h-3 w-3" />
  {formatDownloadCount(downloads)}
- </div>
+ </span>
+ )}
+ {updatedLabel && (
+ <span className="truncate">
+ updated {updatedLabel}
+ </span>
  )}
  </div>
+ <ChevronDown
+ className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${
+ isActive ? 'rotate-180 text-primary' : ''
+ }`}
+ />
  </div>
 
  {/* Expanded version selector */}
@@ -877,6 +1076,11 @@ export default function ServerPluginManagerTab({
  isInstalling={
  installPluginMutation.isPending
  }
+ gameVersionLabel={
+ pluginGameVersion.trim() || undefined
+ }
+ exactMatch={pluginVersionsExactMatch}
+ rawCount={rawPluginVersions.length}
  />
  )}
  </AnimatePresence>
@@ -884,7 +1088,7 @@ export default function ServerPluginManagerTab({
  );
  })}
  </AnimatePresence>
- </motion.div>
+ </div>
 
  {/* Bottom pagination */}
  {totalHits > RESULTS_PER_PAGE && (
@@ -1137,12 +1341,7 @@ export default function ServerPluginManagerTab({
  />
  </motion.div>
  ) : (
- <motion.div
- variants={containerVariants}
- initial="hidden"
- animate="visible"
- className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm"
- >
+ <div className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm">
  <AnimatePresence>
  {filteredInstalledPlugins.map((plugin: any) => {
  const isSelected = selectedPluginFiles.has(
@@ -1151,8 +1350,9 @@ export default function ServerPluginManagerTab({
  return (
  <motion.div
  key={plugin.name}
- variants={itemVariants}
- layout
+ initial={{ opacity: 0, y: 6 }}
+ animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } }}
+ exit={{ opacity: 0, transition: { duration: 0.1 } }}
  className={`group flex items-center gap-3 border-b border-border/50 px-4 py-3 transition-colors last:border-0 ${
  isSelected
  ? 'bg-primary-500/5'
@@ -1311,7 +1511,7 @@ export default function ServerPluginManagerTab({
  );
  })}
  </AnimatePresence>
- </motion.div>
+ </div>
  )}
  </div>
 

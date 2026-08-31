@@ -3222,6 +3222,23 @@ The special permission `*` grants all permissions.
 | `DELETE` | `/api/templates/:id` | `template.delete` | Delete a template (if not in use) |
 | `POST` | `/api/templates/import-pterodactyl` | `template.create` | Import Pterodactyl egg |
 
+#### GET `/api/providers/status` — Provider API Key Availability
+
+Reports which mod/plugin provider API keys are configured. Booleans only — key values are never exposed. Any authenticated user can read this (subusers see the same tabs); the frontend uses it to hide providers whose required key is missing (Modrinth, CurseForge) from the plugin/mod-manager provider dropdowns.
+
+**Auth:** any authenticated user
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "modrinth": true,
+    "curseforge": false
+  }
+}
+```
+
 #### POST `/api/templates/import-pterodactyl`
 
 Import a Pterodactyl egg (template configuration) into Catalyst. Converts the egg format to Catalyst's template schema.

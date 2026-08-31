@@ -14,6 +14,9 @@
  *   qk.server(id)             → ['servers', id]          — specific detail
  */
 export const qk = {
+  // ── Providers ────────────────────────────────────────────────────────
+  providerKeyStatus: ['providers', 'key-status'] as const,
+
   // ── Server ──────────────────────────────────────────────────────────
   servers: (filters?: Record<string, unknown>) =>
     filters ? ['servers', filters] as const : ['servers'] as const,
@@ -117,8 +120,8 @@ export const qk = {
   // ── Plugin Manager (per-server) ──────────────────────────────────────
   pluginManagerGameVersions: (serverId: string, provider: string) =>
     ['servers', serverId, 'plugin-manager', 'game-versions', provider] as const,
-  pluginManagerSearch: (serverId: string, provider: string, query: string, gameVersion: string, page: number) =>
-    ['servers', serverId, 'plugin-manager', 'search', provider, query, gameVersion, page] as const,
+  pluginManagerSearch: (serverId: string, provider: string, query: string, gameVersion: string, page: number, sort: string) =>
+    ['servers', serverId, 'plugin-manager', 'search', provider, query, gameVersion, page, sort] as const,
   pluginManagerVersions: (serverId: string, provider: string, plugin: string) =>
     ['servers', serverId, 'plugin-manager', 'versions', provider, plugin] as const,
   pluginManagerInstalled: (serverId: string) =>

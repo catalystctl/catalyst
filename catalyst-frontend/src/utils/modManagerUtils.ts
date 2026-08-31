@@ -175,6 +175,59 @@ export const filterAndSortVersions = (
   });
 };
 
+/**
+ * Split a version list by the requested game version.
+ *
+ * Returns the list to display (game-version filtered and sorted when possible)
+ * plus flags describing what happened so the UI can annotate the selector:
+ * - `filtered`: the list was narrowed down by the requested game version.
+ * - `exactMatch`: false means nothing was tagged for the requested version and
+ *   the full list is shown as a fallback.
+ *
+ * Providers differ in how much compatibility data they expose:
+ * - Modrinth versions carry `game_versions` — reliable filtering.
+ * - Spigot versions often carry no tags; releases named after Minecraft
+ *   versions (e.g. "1.21.4") are matched by label as a secondary signal.
+ * - Hangar (Paper) versions carry no MC tags at all — the full list is shown.
+ */
+export const splitVersionsForGameVersion = (
+  versions: any[],
+  requestedGameVersion?: string,
+): { list: any[]; exactMatch: boolean; filtered: boolean } => {
+  const all = Array.isArray(versions) ? versions : [];
+  if (!all.length) return { list: all, exactMatch: false, filtered: false };
+  const requested = requestedGameVersion?.trim();
+  if (!requested || requested.toLowerCase() === 'latest') {
+    return { list: filterAndSortVersions(all), exactMatch: false, filtered: false };
+  }
+
+  const tagged = all.filter((entry) => extractGameVersions(entry).length > 0);
+  if (!tagged.length) {
+    // No explicit tags — try label-based matching before giving up.
+    const byLabel = all.filter((entry) =>
+      isGameVersionMatch(normalizeVersionLabel(entry), requested),
+    );
+    if (byLabel.length) {
+      return {
+        list: filterAndSortVersions(byLabel),
+        exactMatch: true,
+        filtered: byLabel.length < all.length,
+      };
+    }
+    return { list: filterAndSortVersions(all), exactMatch: false, filtered: false };
+  }
+
+  const matching = all.filter((entry) => matchesRequestedGameVersion(entry, requested));
+  if (matching.length) {
+    return {
+      list: filterAndSortVersions(matching),
+      exactMatch: true,
+      filtered: matching.length < all.length,
+    };
+  }
+  return { list: filterAndSortVersions(all), exactMatch: false, filtered: false };
+};
+
 // ── Download count formatting ──
 
 export const formatDownloadCount = (downloads: number): string => {
