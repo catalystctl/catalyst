@@ -26,6 +26,13 @@ let server1Id: string;
 let server2Id: string;
 let nextPort = 30000;
 
+// Node-manager scenario: non-owner whose role holds node.update and is
+// assigned to the node (the documented node_manage authz path).
+let nodeManagerUserId: string;
+let nodeManagerRoleId: string;
+let plainUserId: string;
+let nodeManagerServerId: string;
+
 const createdServerIds: string[] = [];
 
 function getNextPort() {
@@ -163,6 +170,58 @@ beforeAll(async () => {
   });
   server2Id = server2.id;
   createdServerIds.push(server2Id);
+
+  // Node manager: role with node.update, assigned to the test node.
+  const nodeManagerRole = await prisma.role.create({
+    data: { name: `alloc-test-nodemgr-${nanoid(8)}`, permissions: ['node.read', 'node.update'] },
+  });
+  nodeManagerRoleId = nodeManagerRole.id;
+
+  const nodeManager = await prisma.user.create({
+    data: {
+      email: `alloc-nodemgr-${nanoid(8)}@example.com`,
+      username: `allocnodemgr${nanoid(4)}`,
+      name: 'Alloc Node Manager',
+      emailVerified: true,
+      roles: { connect: { id: nodeManagerRole.id } },
+    },
+  });
+  nodeManagerUserId = nodeManager.id;
+
+  await prisma.nodeAssignment.create({
+    data: { nodeId: testNodeId, roleId: nodeManagerRole.id, assignedBy: testUserId },
+  });
+
+  // Plain user: no roles, no assignments — must stay forbidden.
+  const plainUser = await prisma.user.create({
+    data: {
+      email: `alloc-plain-${nanoid(8)}@example.com`,
+      username: `allocplain${nanoid(4)}`,
+      name: 'Alloc Plain User',
+      emailVerified: true,
+    },
+  });
+  plainUserId = plainUser.id;
+
+  // Server owned by the primary test user — the node manager is NOT the owner.
+  const primaryPort3 = getNextPort();
+  const server3 = await prisma.server.create({
+    data: {
+      name: `alloc-server3-${nanoid(6)}`,
+      uuid: `alloc-uuid3-${nanoid(8)}`,
+      templateId: testTemplateId,
+      nodeId: testNodeId,
+      locationId: testLocationId,
+      ownerId: testUserId,
+      status: 'stopped',
+      primaryPort: primaryPort3,
+      allocatedMemoryMb: 1024,
+      allocatedCpuCores: 2,
+      networkMode: 'bridge',
+    },
+  });
+  nodeManagerServerId = server3.id;
+  createdServerIds.push(nodeManagerServerId);
 });
 
 afterAll(async () => {
@@ -177,6 +236,10 @@ afterAll(async () => {
   if (testUserId) await prisma.user.delete({ where: { id: testUserId } });
   if (adminRoleId) await prisma.role.delete({ where: { id: adminRoleId } });
   if (testLocationId) await prisma.location.delete({ where: { id: testLocationId } });
+  // Node-manager scenario cleanup (node assignment cascades with role/node)
+  if (nodeManagerRoleId) await prisma.role.delete({ where: { id: nodeManagerRoleId } }).catch(() => {});
+  if (nodeManagerUserId) await prisma.user.delete({ where: { id: nodeManagerUserId } }).catch(() => {});
+  if (plainUserId) await prisma.user.delete({ where: { id: plainUserId } }).catch(() => {});
 });
 
 // ============================================================================
@@ -569,5 +632,61 @@ describe('Set primary allocation on running server', () => {
       (m: any) => m.type === 'allocation_added' || m.type === 'allocation_removed'
     );
     expect(agentMsg).toBeFalsy();
+  });
+});
+
+// ============================================================================
+// Node-manager access (role with node.update + node assignment)
+//
+// Regression: POST /:serverId/allocations previously ran
+// rbac.requirePermission('server.update', 'serverId') as onRequest middleware.
+// 'server.update' is not a grantable catalog permission, so every non-wildcard
+// caller — including node managers (node access + node.update) — was 403'd
+// before the in-handler canAccessServer check (which implements the full
+// write-path contract) could run.
+// ============================================================================
+describe('Secondary Allocations — node-manager (role node.update + node assignment)', () => {
+  it('node manager can add an allocation on a server they do not own (regression: was 403)', async () => {
+    const app = buildTestApp({ userId: nodeManagerUserId, permissions: ['node.read', 'node.update'] });
+    await app.register(serverNetworkRoutes);
+
+    const hostPort = getNextPort();
+    const containerPort = hostPort + 700;
+    const { status, body } = await request(app, 'POST', `/${nodeManagerServerId}/allocations`, {
+      containerPort,
+      hostPort,
+    });
+    expect(status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.containerPort).toBe(containerPort);
+    expect(body.data.hostPort).toBe(hostPort);
+  });
+
+  it('node manager can remove a secondary allocation on a server they do not own', async () => {
+    const app = buildTestApp({ userId: nodeManagerUserId, permissions: ['node.read', 'node.update'] });
+    await app.register(serverNetworkRoutes);
+
+    const hostPort = getNextPort();
+    const containerPort = hostPort + 701;
+    const addRes = await request(app, 'POST', `/${nodeManagerServerId}/allocations`, { containerPort, hostPort });
+    expect(addRes.status).toBe(200);
+
+    const { status, body } = await request(app, 'DELETE', `/${nodeManagerServerId}/allocations/${containerPort}`);
+    expect(status).toBe(200);
+    expect(body.success).toBe(true);
+  });
+
+  it('unprivileged user without node access is still forbidden', async () => {
+    const app = buildTestApp({ userId: plainUserId, permissions: [] });
+    await app.register(serverNetworkRoutes);
+
+    const hostPort = getNextPort();
+    const containerPort = hostPort + 702;
+    const { status, body } = await request(app, 'POST', `/${nodeManagerServerId}/allocations`, {
+      containerPort,
+      hostPort,
+    });
+    expect(status).toBe(403);
+    expect(body.error).toBe('Forbidden');
   });
 });

@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../db.js";
-import { createRbacMiddleware } from "../../middleware/rbac.js";
 import { canAccessServer, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam, validateRequestBody } from './_helpers.js';
 
 /** Statuses that allow allocation changes. Stopped servers can always change allocations;
@@ -29,7 +28,6 @@ const allocationSchema = z
   });
 
 export async function serverNetworkRoutes(app: FastifyInstance) {
-  const rbac = createRbacMiddleware(prisma);
   app.get(
     "/:serverId/allocations",
     { onRequest: [app.authenticate] },
@@ -105,7 +103,14 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
   // Add allocation (hot-add supported for running servers)
   app.post(
     "/:serverId/allocations",
-    { onRequest: [app.authenticate, rbac.requirePermission('server.update', 'serverId')], preHandler: [validateRequestBody(allocationSchema)] },
+    // No onRequest RBAC gate here: the write-path contract (owner | ServerAccess
+    // update/delete | node access + node.update | admin.write/*) is enforced
+    // in-handler via canAccessServer below, same as DELETE and /primary.
+    // A requirePermission('server.update') middleware previously ran here and
+    // always 403'd non-super-admins — 'server.update' is not a grantable
+    // catalog permission, and the middleware ran before canAccessServer could
+    // apply the node-manage path.
+    { onRequest: [app.authenticate], preHandler: [validateRequestBody(allocationSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const body = request.body as z.infer<typeof allocationSchema>;
