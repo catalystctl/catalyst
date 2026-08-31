@@ -53,12 +53,12 @@ export const usernameSchema = z.string()
 /**
  * Server name validation
  * - 1-100 characters
- * - Alphanumeric, spaces, hyphens, underscores
+ * - Alphanumeric, spaces, hyphens, underscores, dots, parentheses, ampersands, apostrophes
  */
 export const serverNameSchema = z.string()
   .min(1, 'Server name is required')
   .max(100, 'Server name must be at most 100 characters')
-  .regex(/^[a-zA-Z0-9-_ ]+$/, 'Server name can only contain letters, numbers, spaces, hyphens, and underscores');
+  .regex(/^[a-zA-Z0-9\-_ .()&']+$/, 'Server name can only contain letters, numbers, spaces, hyphens, underscores, dots, parentheses, ampersands, and apostrophes');
 
 /**
  * Server creation validation

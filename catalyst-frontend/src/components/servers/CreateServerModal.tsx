@@ -350,7 +350,13 @@ function CreateServerModal() {
  },
  onError: (error: any) => {
  console.error('Server creation error:', error?.response?.data || error);
- const message = error?.response?.data?.error || 'Failed to create server';
+ const data = error?.response?.data;
+ const firstDetail = Array.isArray(data?.details)
+ ? data.details.find((d: any) => d?.message)?.message
+ : typeof data?.details === 'string'
+ ? data.details
+ : null;
+ const message = firstDetail || data?.error || 'Failed to create server';
  notifyError(message);
  },
  });
@@ -362,7 +368,11 @@ function CreateServerModal() {
  const parsedDisk = Number(disk);
  const parsedPort = Number(port);
  const parsedSwap = allocatedSwapMb.trim() === '' ? undefined : Number(allocatedSwapMb);
- const detailsValid = Boolean(name.trim() && templateId && nodeId);
+ const detailsValid =
+ Boolean(name.trim()) &&
+ /^[a-zA-Z0-9\-_ .()&']+$/.test(name) &&
+ Boolean(templateId) &&
+ Boolean(nodeId);
  const resourcesValid =
  Number.isFinite(parsedMemory) &&
  parsedMemory >= 256 &&
