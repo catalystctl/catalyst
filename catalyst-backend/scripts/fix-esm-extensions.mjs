@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distRoot = path.resolve(__dirname, "..", "dist");
+const srcRoot = path.resolve(__dirname, "..", "src");
 
 if (!fs.existsSync(distRoot)) {
 	console.error(`fix-esm-extensions: dist not found at ${distRoot}`);
@@ -83,3 +84,20 @@ function walk(dir) {
 
 const n = walk(distRoot);
 console.log(`fix-esm-extensions: rewrote ${n} file(s) under dist/`);
+
+// tsc only emits JS/declarations — runtime-read JSON assets (e.g. the mod/plugin
+// provider configs resolved via path.resolve(__dirname, "../mod-manager/…")) are
+// never copied to dist. Without this step every provider lookup in production
+// throws ENOENT and the mod/plugin-manager endpoints return 500.
+const assetsDir = path.join(srcRoot, "mod-manager");
+const assetsOutDir = path.join(distRoot, "mod-manager");
+if (fs.existsSync(assetsDir)) {
+	fs.mkdirSync(assetsOutDir, { recursive: true });
+	const copied = [];
+	for (const ent of fs.readdirSync(assetsDir, { withFileTypes: true })) {
+		if (!ent.isFile() || !ent.name.endsWith(".json")) continue;
+		fs.copyFileSync(path.join(assetsDir, ent.name), path.join(assetsOutDir, ent.name));
+		copied.push(ent.name);
+	}
+	console.log(`fix-esm-extensions: copied ${copied.length} mod-manager config(s) to dist/mod-manager/`);
+}
