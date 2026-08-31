@@ -117,6 +117,7 @@ const CRITICAL_OUTBOUND_TYPES = new Set([
   "reinstall_server",
   "rebuild_server",
   "update_agent",
+  "resize_storage",
 ]);
 
 // Message types safe to queue while an agent is mid-reconnect. Stale beyond
@@ -130,6 +131,7 @@ const OUTBOXABLE_TYPES = new Set([
   "request_immediate_stats",
   "resume_console",
   "update_agent",
+  "resize_storage",
 ]);
 
 // Supported agent WebSocket protocol major version. Minor bumps are
@@ -421,6 +423,7 @@ export class WebSocketGateway {
     // Re-validate every queued power command against current DB state before
     // replaying; non-power commands (stats/resume) are always safe to replay.
     const pendingPower = new Map<string, string[]>(); // serverId → queued types
+    const pendingResize = new Map<string, number[]>(); // serverId → queued disk targets
     for (const entry of queue) {
       try {
         const payload = JSON.parse(entry.payload);
@@ -431,17 +434,30 @@ export class WebSocketGateway {
           const list = pendingPower.get(payload.serverId) ?? [];
           list.push(payload.type);
           pendingPower.set(payload.serverId, list);
+        } else if (
+          payload?.type === "resize_storage" &&
+          typeof payload.serverId === "string" &&
+          Number.isFinite(payload.allocatedDiskMb)
+        ) {
+          const targets = pendingResize.get(payload.serverId) ?? [];
+          targets.push(Number(payload.allocatedDiskMb));
+          pendingResize.set(payload.serverId, targets);
         }
       } catch {
         // handled per-entry below
       }
     }
     const staleServerIds = new Set<string>();
-    if (pendingPower.size > 0) {
+    const staleResizeServerIds = new Set<string>();
+    if (pendingPower.size > 0 || pendingResize.size > 0) {
       try {
         const servers = await this.prisma.server.findMany({
-          where: { id: { in: [...pendingPower.keys()] } },
-          select: { id: true, status: true, suspendedAt: true },
+          where: {
+            id: {
+              in: [...new Set([...pendingPower.keys(), ...pendingResize.keys()])],
+            },
+          },
+          select: { id: true, status: true, suspendedAt: true, allocatedDiskMb: true },
         });
         const byId = new Map(servers.map((s: any) => [s.id, s]));
         for (const [serverId, commands] of pendingPower) {
@@ -464,6 +480,20 @@ export class WebSocketGateway {
             }
           }
         }
+        // Queued resizes: a grow is always safe to replay, but a queued shrink
+        // is stale if the server is no longer stopped (shrink-while-running is
+        // rejected by the API and would be rejected by the agent too).
+        for (const [serverId, targets] of pendingResize) {
+          const server = byId.get(serverId);
+          if (!server || (server.suspendedAt && process.env.SUSPENSION_ENFORCED !== "false")) {
+            staleResizeServerIds.add(serverId);
+            continue;
+          }
+          const state = server.status as ServerState;
+          if (targets.some((target) => target < server.allocatedDiskMb && state !== ServerState.STOPPED)) {
+            staleResizeServerIds.add(serverId);
+          }
+        }
       } catch (err) {
         // DB unavailable: replay rather than silently lose the commands
         // (matches the pre-guard behavior for this failure mode).
@@ -477,14 +507,19 @@ export class WebSocketGateway {
         expired += 1;
         continue;
       }
-      if (staleServerIds.size > 0) {
+      if (staleServerIds.size > 0 || staleResizeServerIds.size > 0) {
         try {
           const payload = JSON.parse(entry.payload);
-          if (
+          const serverId = typeof payload?.serverId === "string" ? payload.serverId : null;
+          const isStalePower =
+            serverId !== null &&
             POWER_OUTBOX_COMMANDS.has(payload?.type) &&
-            typeof payload.serverId === "string" &&
-            staleServerIds.has(payload.serverId)
-          ) {
+            staleServerIds.has(serverId);
+          const isStaleResize =
+            serverId !== null &&
+            payload?.type === "resize_storage" &&
+            staleResizeServerIds.has(serverId);
+          if (isStalePower || isStaleResize) {
             stale += 1;
             continue;
           }
@@ -3927,6 +3962,12 @@ export class WebSocketGateway {
   }
 
   // Send message to agent (for API endpoints)
+  /** True when an authenticated agent socket is currently open for this node. */
+  isAgentConnected(nodeId: string): boolean {
+    const agent = this.agents.get(nodeId);
+    return Boolean(agent && agent.authenticated && agent.socket.readyState === 1);
+  }
+
   async sendToAgent(nodeId: string, message: any): Promise<boolean> {
     const agent = this.agents.get(nodeId);
     if (!agent || !agent.authenticated || agent.socket.readyState !== 1) {

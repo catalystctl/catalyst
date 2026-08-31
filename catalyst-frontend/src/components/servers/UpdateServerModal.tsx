@@ -34,6 +34,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   const setOpen = (value: boolean) => {
     setInternalOpen(value);
     onOpenChange?.(value);
+    if (!value) setAwaitingResize(false);
   };
   const [memory, setMemory] = useState('1024');
   const [cpu, setCpu] = useState('1');
@@ -49,9 +50,22 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   const [availableIps, setAvailableIps] = useState<string[]>([]);
   const [ipLoadError, setIpLoadError] = useState<string | null>(null);
   const { data: server } = useServer(serverId);
+  const [awaitingResize, setAwaitingResize] = useState(false);
   useSseResizeComplete(serverId, () => {
+    setAwaitingResize(false);
     setOpen(false);
   });
+
+  // Backend queues the resize command if the agent is mid-reconnect (30s TTL);
+  // if the completion event never arrives, stop waiting instead of hanging.
+  useEffect(() => {
+    if (!awaitingResize) return;
+    const timeout = setTimeout(() => {
+      setAwaitingResize(false);
+      notifyError('Storage resize timed out — the node agent may be offline. Try again.');
+    }, 45_000);
+    return () => clearTimeout(timeout);
+  }, [awaitingResize]);
 
   const isRunning = server?.status !== 'stopped';
   const isIpamNetwork = server?.networkMode && !['bridge', 'host'].includes(server.networkMode);
@@ -103,7 +117,8 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     onSuccess: () => {
       if (diskValue !== existingDiskMb) {
         notifySuccess('Storage resize initiated');
-        // Wait for SSE event to close modal
+        // Wait for SSE event to close modal (with a timeout guard above)
+        setAwaitingResize(true);
       } else {
         notifySuccess('Server updated');
         setOpen(false);

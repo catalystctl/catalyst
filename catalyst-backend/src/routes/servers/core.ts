@@ -2157,16 +2157,32 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       }
 
       if (server.ownerId !== userId) {
+        // Standard decideServerAccess contract:
+        //   owner | explicit ServerAccess | admin.write/* | (node access + node.update)
+        // This route previously only recognized owners + ServerAccess rows, which
+        // locked panel admins (and node managers) out of disk resizes.
         const access = await prisma.serverAccess.findUnique({
           where: { userId_serverId: { userId, serverId } },
         });
-        if (!access) {
+        const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
+        const { decideServerAccess } = await import("../../lib/server-access.js");
+        const rolePerms = await resolveUserPermissions(userId);
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        const decision = decideServerAccess({
+          isOwner: false,
+          hasExplicitServerAccess: Boolean(access),
+          rolePermissions: rolePerms,
+          hasNodeAccess: hasNodeAccessToServer,
+        });
+        if (!decision.allowed) {
           return reply.status(403).send({ error: "Forbidden" });
         }
-        // Check that the access entry includes write permissions for storage resize
-        const accessPermissions = access.permissions as string[];
-        if (!accessPermissions.includes('file.write') && !accessPermissions.includes('server.update')) {
-          return reply.status(403).send({ error: "Insufficient permissions for storage resize" });
+        // Explicit subuser grants still need a write-capable permission for resize
+        if (decision.reason === "server_access") {
+          const accessPermissions = (access?.permissions as string[] | undefined) ?? [];
+          if (!accessPermissions.some((p) => p === 'file.write' || p === 'server.update')) {
+            return reply.status(403).send({ error: "Insufficient permissions for storage resize" });
+          }
         }
       }
 
@@ -2188,6 +2204,23 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       if (!success) {
+        // With resize_storage outboxable, a false return means genuine
+        // delivery failure (outbox full, backpressure shed, or send throw).
+        // Capture the reason trail so the System Errors page is diagnosable —
+        // a node can show "online" (HTTP heartbeat) while its command channel
+        // is down (multi-worker split, mid-reconnect, proxy without WS upgrade).
+        captureSystemError({
+          level: 'error',
+          component: 'ServerStorageResize',
+          message: `Failed to send resize command to agent for server ${serverId}`,
+          metadata: {
+            serverId,
+            nodeId: server.nodeId,
+            allocatedDiskMb,
+            isShrink,
+            agentConnected: gateway.isAgentConnected(server.nodeId),
+          },
+        }).catch(() => {});
         return reply.status(503).send({ error: "Failed to send resize command to agent" });
       }
 
