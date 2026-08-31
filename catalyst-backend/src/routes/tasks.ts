@@ -54,12 +54,21 @@ export async function taskRoutes(app: FastifyInstance) {
 
     const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
 
-    if (!serverAccess && !hasNodeAccessToServer) {
+    // Global roles may grant server.schedule panel-wide (mirrors
+    // decideServerAccess's requiredPermission branch).
+    const { resolveUserPermissions } = await import('../lib/permissions-catalog.js');
+    const rolePerms = await resolveUserPermissions(userId);
+    const roleAllowed =
+      rolePerms.includes('*') ||
+      rolePerms.includes('admin.write') ||
+      rolePerms.includes('server.schedule');
+
+    if (!serverAccess && !hasNodeAccessToServer && !roleAllowed) {
       reply.status(403).send({ error: message });
       return false;
     }
 
-    if (!hasNodeAccessToServer && !serverAccess?.permissions.includes('server.schedule')) {
+    if (!hasNodeAccessToServer && !roleAllowed && !serverAccess?.permissions.includes('server.schedule')) {
       reply.status(403).send({ error: message });
       return false;
     }

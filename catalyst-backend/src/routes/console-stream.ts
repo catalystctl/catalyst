@@ -60,9 +60,13 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const hasConsoleRead = access?.permissions?.includes('console.read');
       const isOwner = server.ownerId === userId;
       const isAdmin = checkIsAdmin(request, 'admin.read');
+      // Global roles may grant console.read panel-wide (mirrors
+      // getEffectiveServerPermissions / decideServerAccess).
+      const rolePerms: string[] = (request as any).user?.permissions ?? [];
+      const hasRoleConsoleRead = rolePerms.includes('console.read');
       const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
 
-      if (!isOwner && !hasConsoleRead && !isAdmin && !hasNodeAccessResult) {
+      if (!isOwner && !hasConsoleRead && !isAdmin && !hasNodeAccessResult && !hasRoleConsoleRead) {
         reply.status(403).send({ error: 'Access denied' });
         return;
       }
@@ -149,11 +153,16 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
       const isAdmin = checkIsAdmin(request, 'admin.read');
       const access = server.access.find((a) => a.userId === userId);
+      // Global roles may grant console.write panel-wide (mirrors
+      // getEffectiveServerPermissions / decideServerAccess).
+      const rolePerms: string[] = (request as any).user?.permissions ?? [];
+      const hasRoleConsoleWrite = rolePerms.includes('console.write');
       const hasWritePermission =
         access?.permissions?.includes('console.write') ||
         server.ownerId === userId ||
         isAdmin ||
-        hasNodeAccessResult;
+        hasNodeAccessResult ||
+        hasRoleConsoleWrite;
 
       if (!hasWritePermission) {
         reply.status(403).send({ error: ErrorCodes.PERMISSION_DENIED });

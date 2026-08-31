@@ -77,9 +77,18 @@ export async function metricsRoutes(app: FastifyInstance) {
         });
       }
 
-      // Check permissions - owner, explicit access, or node assignment
+      // Check permissions — owner, explicit access, global role grant
+      // (server.read / admin), or node assignment
+      const rolePerms: string[] = (request.user as { permissions?: string[] })?.permissions ?? [];
       const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-      if (server.ownerId !== userId && !access?.permissions?.includes("server.read") && !hasNodeAccessToServer) {
+      const canReadMetrics =
+        server.ownerId === userId ||
+        Boolean(access?.permissions?.includes("server.read")) ||
+        rolePerms.includes("server.read") ||
+        rolePerms.includes("admin.write") ||
+        rolePerms.includes("*") ||
+        hasNodeAccessToServer;
+      if (!canReadMetrics) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -297,9 +306,18 @@ export async function metricsRoutes(app: FastifyInstance) {
         });
       }
 
-      // Check permissions - owner, explicit access, or node assignment
+      // Check permissions — owner, explicit access, global role grant
+      // (server.read / admin), or node assignment
+      const rolePerms: string[] = (request.user as { permissions?: string[] })?.permissions ?? [];
       const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-      if (server.ownerId !== userId && !access?.permissions?.includes("server.read") && !hasNodeAccessToServer) {
+      const canReadMetrics =
+        server.ownerId === userId ||
+        Boolean(access?.permissions?.includes("server.read")) ||
+        rolePerms.includes("server.read") ||
+        rolePerms.includes("admin.write") ||
+        rolePerms.includes("*") ||
+        hasNodeAccessToServer;
+      if (!canReadMetrics) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 

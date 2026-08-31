@@ -1442,7 +1442,15 @@ async function bootstrap() {
 				}
 
 				const isOwner = server.ownerId === userId;
-				const tokens = listSftpTokensForServer(serverId, userId, isOwner);
+				const perms: string[] = (request as any).user?.permissions ?? [];
+				// Global roles may manage SFTP tokens panel-wide with server.update
+				// (or full admin); token *values* stay visible to their owner only.
+				const canManageTokens =
+					isOwner ||
+					perms.includes("*") ||
+					perms.includes("admin.write") ||
+					perms.includes("server.update");
+				const tokens = listSftpTokensForServer(serverId, userId, canManageTokens);
 
 				// Enrich tokens with user info
 				const enriched = await Promise.all(
@@ -1492,11 +1500,19 @@ async function bootstrap() {
 				}
 
 				const isOwner = server.ownerId === userId;
+				const perms: string[] = (request as any).user?.permissions ?? [];
+				// Global roles may manage SFTP tokens panel-wide with server.update
+				// (or full admin) — mirrors the list/revoke-all routes.
+				const canManageTokens =
+					isOwner ||
+					perms.includes("*") ||
+					perms.includes("admin.write") ||
+					perms.includes("server.update");
 				const revoked = revokeSftpToken(
 					targetUserId,
 					serverId,
 					userId,
-					isOwner,
+					canManageTokens,
 				);
 
 				if (!revoked) {
@@ -1509,7 +1525,7 @@ async function bootstrap() {
 			},
 		);
 
-		// Revoke ALL SFTP tokens for a server (owner-only)
+		// Revoke ALL SFTP tokens for a server (owner or panel-side manager)
 		app.delete(
 			"/api/sftp/tokens",
 			{ preHandler: [authenticate] },
@@ -1531,7 +1547,13 @@ async function bootstrap() {
 					return reply.status(404).send({ error: "Server not found" });
 				}
 
-				if (server.ownerId !== userId) {
+				const perms: string[] = (request as any).user?.permissions ?? [];
+				const canManageTokens =
+					server.ownerId === userId ||
+					perms.includes("*") ||
+					perms.includes("admin.write") ||
+					perms.includes("server.update");
+				if (!canManageTokens) {
 					return reply
 						.status(403)
 						.send({ error: "Only the server owner can revoke all tokens" });

@@ -80,8 +80,16 @@ export async function backupRoutes(app: FastifyInstance) {
         permissions: { has: permission },
       },
     });
+    // Global roles may grant the same backup permission panel-wide
+    // (mirrors decideServerAccess's requiredPermission branch).
+    const { resolveUserPermissions } = await import("../lib/permissions-catalog.js");
+    const rolePerms = await resolveUserPermissions(userId);
+    const roleAllowed =
+      rolePerms.includes("*") ||
+      rolePerms.includes("admin.write") ||
+      rolePerms.includes(permission);
     const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-    if (!access && !hasNodeAccessToServer) {
+    if (!access && !hasNodeAccessToServer && !roleAllowed) {
       reply.status(403).send({ error: "Forbidden" });
       return null;
     }

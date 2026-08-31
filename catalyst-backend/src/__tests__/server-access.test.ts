@@ -144,3 +144,95 @@ describe("isFullAdminRole / canManageViaNode helpers", () => {
     expect(canManageViaNode(false, [])).toBe(false);
   });
 });
+
+describe("decideServerAccess — requiredPermission (global role grants)", () => {
+  it("allows when a global role grants the exact required permission", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["server.start"],
+      hasNodeAccess: false,
+      requiredPermission: "server.start",
+    });
+    expect(result).toEqual({ allowed: true, reason: "role_permission" });
+  });
+
+  it("denies when the role holds a DIFFERENT server permission", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["server.start"],
+      hasNodeAccess: false,
+      requiredPermission: "server.stop",
+    });
+    expect(result).toEqual({ allowed: false, reason: "forbidden" });
+  });
+
+  it("denies when requiredPermission is set but no role grant exists", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: [],
+      hasNodeAccess: false,
+      requiredPermission: "backup.create",
+    });
+    expect(result).toEqual({ allowed: false, reason: "forbidden" });
+  });
+
+  it("admin.write still wins over a missing required permission", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["admin.write"],
+      hasNodeAccess: false,
+      requiredPermission: "backup.create",
+    });
+    expect(result).toEqual({ allowed: true, reason: "admin" });
+  });
+
+  it("explicit ServerAccess grants access regardless of requiredPermission", () => {
+    // The caller is responsible for checking the access row's permissions;
+    // the decision only distinguishes the grant source.
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: true,
+      rolePermissions: [],
+      hasNodeAccess: false,
+      requiredPermission: "file.write",
+    });
+    expect(result).toEqual({ allowed: true, reason: "server_access" });
+  });
+
+  it("role_permission is checked before the node_manage path", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["server.start", "node.update"],
+      hasNodeAccess: true,
+      requiredPermission: "server.start",
+    });
+    expect(result).toEqual({ allowed: true, reason: "role_permission" });
+  });
+
+  it("node_manage still applies when the role lacks the required permission", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["node.update"],
+      hasNodeAccess: true,
+      requiredPermission: "server.start",
+    });
+    expect(result).toEqual({ allowed: true, reason: "node_manage" });
+  });
+
+  it("owner bypasses requiredPermission entirely", () => {
+    const result = decideServerAccess({
+      isOwner: true,
+      hasExplicitServerAccess: false,
+      rolePermissions: [],
+      hasNodeAccess: false,
+      requiredPermission: "file.write",
+    });
+    expect(result).toEqual({ allowed: true, reason: "owner" });
+  });
+});

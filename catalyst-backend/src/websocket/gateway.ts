@@ -3022,7 +3022,22 @@ export class WebSocketGateway {
           where: { userId_serverId: { userId: client.userId, serverId: server.id } },
         });
         const nodeAccess = await hasNodeAccess(this.prisma, client.userId, server.nodeId);
-        if (!access && server.ownerId !== client.userId && !isAdmin && !nodeAccess) {
+        // Global roles may grant server.read / console.read panel-wide
+        // (mirrors decideServerAccess's requiredPermission branch).
+        const rolePerms = await this.getUserRolePermissions(client.userId);
+        const roleCanServerRead =
+          rolePerms.includes("server.read") ||
+          rolePerms.includes("admin.write") ||
+          rolePerms.includes("*");
+        const roleCanConsoleRead = rolePerms.includes("console.read") || roleCanServerRead;
+        if (
+          !access &&
+          server.ownerId !== client.userId &&
+          !isAdmin &&
+          !nodeAccess &&
+          !roleCanServerRead &&
+          !roleCanConsoleRead
+        ) {
           if (client.socket.readyState === 1) {
             client.socket.send(
               JSON.stringify({
@@ -3035,8 +3050,10 @@ export class WebSocketGateway {
           return;
         }
         const isOwner = server.ownerId === client.userId;
-        const canConsoleRead = isOwner || isAdmin || nodeAccess || access?.permissions?.includes("console.read");
-        const canServerRead = isOwner || isAdmin || nodeAccess || access?.permissions?.includes("server.read");
+        const canConsoleRead =
+          isOwner || isAdmin || nodeAccess || roleCanConsoleRead || access?.permissions?.includes("console.read");
+        const canServerRead =
+          isOwner || isAdmin || nodeAccess || roleCanServerRead || access?.permissions?.includes("server.read");
         if (!canConsoleRead && !canServerRead) {
           if (client.socket.readyState === 1) {
             client.socket.send(
@@ -3099,15 +3116,26 @@ export class WebSocketGateway {
 
         // Check if client is owner or has access. Power actions follow the
         // decideServerAccess contract: admin requires admin.write (admin.read
-        // is observation-only), and node assignment alone grants nothing
-        // unless paired with node.update.
+        // is observation-only), a global role granting the action's specific
+        // server permission also counts, and node assignment alone grants
+        // nothing unless paired with node.update.
         const isOwner = server.ownerId === client.userId;
         const isAdmin = await this.userHasAdminWrite(client.userId);
         const rolePerms = await this.getUserRolePermissions(client.userId);
         const nodeAccess =
           (await hasNodeAccess(this.prisma, client.userId, server.nodeId)) &&
           rolePerms.includes("node.update");
-        if (!isOwner && !access && !isAdmin && !nodeAccess) {
+        const requiredPermission =
+          event.action === "start"
+            ? "server.start"
+            : event.action === "stop"
+              ? "server.stop"
+              // kill, restart, and reboot are destructive actions requiring server.stop permission
+              : event.action === "kill" || event.action === "restart" || event.action === "reboot"
+                ? "server.stop"
+                : "server.start";
+        const roleAllows = rolePerms.includes(requiredPermission);
+        if (!isOwner && !access && !isAdmin && !nodeAccess && !roleAllows) {
           return client.socket.send(
             JSON.stringify({
               type: "error",
@@ -3126,19 +3154,11 @@ export class WebSocketGateway {
               })
             );
         }
-        const requiredPermission =
-          event.action === "start"
-            ? "server.start"
-            : event.action === "stop"
-              ? "server.stop"
-              // kill, restart, and reboot are destructive actions requiring server.stop permission
-              : event.action === "kill" || event.action === "restart" || event.action === "reboot"
-                ? "server.stop"
-                : "server.start";
         if (
           !isOwner &&
           !isAdmin &&
           !nodeAccess &&
+          !roleAllows &&
           !access?.permissions?.includes(requiredPermission)
         ) {
           return client.socket.send(

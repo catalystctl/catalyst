@@ -507,6 +507,9 @@ export const ensureServerAccess = async (
     hasExplicitServerAccess,
     rolePermissions: rolePerms,
     hasNodeAccess: hasNodeAccessToServer,
+    // A global role granting exactly this server permission counts the same
+    // as a per-server grant (mirrored by getEffectiveServerPermissions).
+    requiredPermission: permission,
   });
 
   if (!decision.allowed) {
@@ -521,42 +524,72 @@ export const loadProviderConfig = async (provider: string) => {
   if (!configPath) {
     return null;
   }
-  const raw = await fs.readFile(configPath, "utf8");
-  return JSON.parse(raw) as {
-    id: string;
-    name: string;
-    baseUrl: string;
-    headers: Record<string, string>;
-    endpoints: Record<string, string>;
-  };
+  try {
+    const raw = await fs.readFile(configPath, "utf8");
+    return JSON.parse(raw) as {
+      id: string;
+      name: string;
+      baseUrl: string;
+      headers: Record<string, string>;
+      endpoints: Record<string, string>;
+    };
+  } catch (error: any) {
+    captureSystemError({
+      level: 'error',
+      component: 'ServerRoutes',
+      message: `Failed to load mod-manager provider config '${provider}': ${error?.message || String(error)}`,
+      stack: error?.stack,
+    }).catch(() => {});
+    return null;
+  }
 };
 export const loadCs2ProviderConfig = async (provider: string) => {
   const configPath = cs2FrameworkProviders.get(provider);
   if (!configPath) {
     return null;
   }
-  const raw = await fs.readFile(configPath, "utf8");
-  return JSON.parse(raw) as {
-    id: string;
-    name: string;
-    baseUrl: string;
-    headers: Record<string, string>;
-    endpoints: Record<string, string>;
-  };
+  try {
+    const raw = await fs.readFile(configPath, "utf8");
+    return JSON.parse(raw) as {
+      id: string;
+      name: string;
+      baseUrl: string;
+      headers: Record<string, string>;
+      endpoints: Record<string, string>;
+    };
+  } catch (error: any) {
+    captureSystemError({
+      level: 'error',
+      component: 'ServerRoutes',
+      message: `Failed to load CS2 framework provider config '${provider}': ${error?.message || String(error)}`,
+      stack: error?.stack,
+    }).catch(() => {});
+    return null;
+  }
 };
 export const loadPluginProviderConfig = async (provider: string) => {
   const configPath = pluginManagerProviders.get(provider);
   if (!configPath) {
     return null;
   }
-  const raw = await fs.readFile(configPath, "utf8");
-  return JSON.parse(raw) as {
-    id: string;
-    name: string;
-    baseUrl: string;
-    headers: Record<string, string>;
-    endpoints: Record<string, string>;
-  };
+  try {
+    const raw = await fs.readFile(configPath, "utf8");
+    return JSON.parse(raw) as {
+      id: string;
+      name: string;
+      baseUrl: string;
+      headers: Record<string, string>;
+      endpoints: Record<string, string>;
+    };
+  } catch (error: any) {
+    captureSystemError({
+      level: 'error',
+      component: 'ServerRoutes',
+      message: `Failed to load plugin-manager provider config '${provider}': ${error?.message || String(error)}`,
+      stack: error?.stack,
+    }).catch(() => {});
+    return null;
+  }
 };
 
 export const buildProviderHeaders = (providerConfig: {
@@ -1275,7 +1308,10 @@ export const ALL_SERVER_PERMISSIONS = [
  * Effective server-scoped permissions.
  * Same AuthZ contract as decideServerAccess:
  * - owner / admin.write|`*` / (node access + node.update) → ALL_SERVER_PERMISSIONS
- * - explicit ServerAccess → that row's permissions only
+ * - explicit ServerAccess → that row's permissions, UNION role-granted
+ *   server permissions (global roles may grant granular server perms —
+ *   they apply across all servers, mirroring decideServerAccess's
+ *   requiredPermission branch)
  * - bare node assignment → [] (NOT a grant)
  *
  * preComputedNodeAccess only means "user is assigned to the node"; it does NOT
@@ -1313,13 +1349,18 @@ export const getEffectiveServerPermissions = async (
     return ALL_SERVER_PERMISSIONS;
   }
 
+  // Global roles may grant granular server permissions (e.g. a "game manager"
+  // role holding server.start / file.write). Those apply on every server.
+  const roleGranted = rolePermissions.filter((p) =>
+    (ALL_SERVER_PERMISSIONS as string[]).includes(p),
+  );
+
   if (hasExplicitServerAccess) {
     const access = serverAccess?.find((a) => a.userId === userId);
-    return access ? [...access.permissions] : [];
+    return [...new Set([...roleGranted, ...(access?.permissions ?? [])])];
   }
 
-  // Bare node assignment (or nothing) — no server powers.
-  return [];
+  return roleGranted;
 };
 
 export const isArchiveName = (value: string) => {
@@ -1378,7 +1419,12 @@ export const ensureDatabasePermission = async (
     select: { permissions: true },
   });
   const rolePermissions = roles.flatMap((role) => role.permissions);
-  if (rolePermissions.includes("*") || rolePermissions.includes("admin.read")) {
+  if (
+    rolePermissions.includes("*") ||
+    rolePermissions.includes("admin.write") ||
+    rolePermissions.includes(permission) ||
+    rolePermissions.includes("admin.read")
+  ) {
     return true;
   }
 

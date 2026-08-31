@@ -64,7 +64,8 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Permission check: owner | ServerAccess with server.rebuild | node+node.update | admin.write/*
+      // Permission check: owner | ServerAccess with server.rebuild | global
+      // role with server.rebuild/admin | node+node.update (canAccessServer)
       if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
           where: {
@@ -73,7 +74,15 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
             permissions: { has: "server.rebuild" },
           },
         });
-        if (!access) {
+        // Global roles may grant server.rebuild panel-wide (mirrors
+        // decideServerAccess's requiredPermission branch).
+        const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
+        const rolePerms = await resolveUserPermissions(userId);
+        const roleAllowed =
+          rolePerms.includes("*") ||
+          rolePerms.includes("admin.write") ||
+          rolePerms.includes("server.rebuild");
+        if (!access && !roleAllowed) {
           // Fall back to full canAccessServer (admin.write / node.update manage path).
           if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
             return reply.status(403).send({ error: "Forbidden" });

@@ -117,11 +117,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       // For admin/API-key callers, allow specifying a different owner.
       // Regular users can only create servers for themselves.
-      const canCreate = checkIsAdmin(request, "admin.write");
+      // Global roles may grant server.create directly (a "game manager" role
+      // can deploy servers panel-wide without full admin.write).
+      const canCreate =
+        checkIsAdmin(request, "admin.write") || checkPerm(request, "server.create");
       const hasNodeAccessResult = await hasNodeAccess(prisma, userId, nodeId);
 
       if (!canCreate && !hasNodeAccessResult) {
-        return reply.status(403).send({ error: 'Admin access or node assignment required' });
+        return reply
+          .status(403)
+          .send({ error: "Admin access, server.create permission, or node assignment required" });
       }
 
       const effectiveOwnerId = (canCreate || hasNodeAccessResult) && bodyOwnerId ? bodyOwnerId : userId;
@@ -2173,6 +2178,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           hasExplicitServerAccess: Boolean(access),
           rolePermissions: rolePerms,
           hasNodeAccess: hasNodeAccessToServer,
+          // A global role granting server.update may resize too; explicit
+          // subuser grants still need a write-capable permission (below).
+          requiredPermission: "server.update",
         });
         if (!decision.allowed) {
           return reply.status(403).send({ error: "Forbidden" });
