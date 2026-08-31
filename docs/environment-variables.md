@@ -190,21 +190,16 @@ Do not commit OAuth secrets to version control. Use secret managers, Docker secr
 | `DATABASE_HOST_PORT_DEFAULT` | Integer | `3306` | Default MySQL port for provisioned database hosts. |
 | `DATABASE_HOST_CONNECT_TIMEOUT_MS` | Integer | `5000` | Connection timeout when creating new MySQL database host connections, in milliseconds. |
 
-### SFTP Server
+### Server Data
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `SFTP_ENABLED` | `true` \| `false` | `true` | Enable SFTP file access (agent-hosted; opaque `sftp_` tokens). |
-| `SFTP_PORT` | Integer | `2022` | SFTP listen port. |
 | `SERVER_DATA_DIR` | Filesystem path | `/var/lib/catalyst/servers` | Root directory for server data. All server files live under this path. |
-| `SFTP_HOST_KEY` | Filesystem path | `./sftp_host_key` | Path to SSH host private key for SFTP authentication. |
-| `SFTP_HOST_KEY_BASE64` | Base64 string | — | Alternative to `SFTP_HOST_KEY`. Provide a base64-encoded private key directly. Useful for Docker/Kubernetes secrets. |
+
+::: tip SFTP Runs on the Agent
+SFTP is hosted by the **node agent** (default port `2022`), not the panel or backend. The per-node SFTP port is configured in the panel (Admin → Nodes) and written into the agent's `config.toml` by the deploy script. The panel only issues short-lived SFTP tokens (`/api/sftp/connection-info`).
 
 SFTP file size is the panel Admin → Security **Max upload size**, not an environment variable.
-
-
-::: tip Docker SFTP Key
-In Docker Compose, set `SFTP_HOST_KEY=` (empty) to let the backend auto-generate a host key on first startup, or set `SFTP_HOST_KEY_BASE64` with the key contents.
 :::
 
 ### Plugins
@@ -321,7 +316,6 @@ cp catalyst-docker/.env.example catalyst-docker/.env
 |----------|------|---------|-------------|
 | `FRONTEND_PORT` | Host:Container binding | `0.0.0.0:8080` | Port binding for the frontend service. For podman (rootless), use a port ≥ 1024 (e.g., `0.0.0.0:8080`). |
 | `BACKEND_PORT` | Host:Container binding | `127.0.0.1:3000` (compose default) | Host publish for the backend API. Compose defaults to **localhost-only**; the process still listens on `0.0.0.0` inside the container. |
-| `SFTP_PORT` | Host:Container binding | `0.0.0.0:2022` | Port binding for the SFTP service. |
 
 ::: tip Restricting Bind Addresses
 Set the prefix to `127.0.0.1:` to restrict access to localhost only. Example: `FRONTEND_PORT=127.0.0.1:8080`.
@@ -671,9 +665,11 @@ openssl rand -base64 32
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Can't connect to SFTP | `SFTP_ENABLED=false` | Set `SFTP_ENABLED=true` |
-| Port mismatch | `SFTP_PORT` differs from client config | Verify the port in your SFTP client matches `SFTP_PORT` |
-| Docker port not mapped | `SFTP_PORT` variable not reflected in Compose | Check `docker-compose.yml` port mapping includes `SFTP_PORT` |
+| Can't connect to SFTP | Agent down or SFTP disabled for the node | Check `systemctl status catalyst-agent` on the node; enable SFTP in Admin → Nodes |
+| Port mismatch | Node SFTP port differs from client config | Use the host/port from the panel's SFTP Connection Info (default `2022`) |
+| Node firewall blocks SFTP | SFTP port closed on the node | Open the node's SFTP port in its firewall |
+
+> SFTP is hosted by the node agent — there is no `SFTP_PORT`/`SFTP_ENABLED` variable for the panel compose stack.
 
 ### "Plugin hot-reload not working"
 

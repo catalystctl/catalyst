@@ -52,15 +52,6 @@ _generate_secret() {
     openssl rand -base64 "$length" 2>/dev/null || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w "$length" | head -n 1
 }
 
-# Generate an SFTP host key (ed25519)
-_generate_sftp_host_key() {
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-    ssh-keygen -t ed25519 -f "$tmp_dir/host_key" -N "" -C "catalyst-test" > /dev/null 2>&1
-    cat "$tmp_dir/host_key"
-    rm -rf "$tmp_dir"
-}
-
 # ============================================================================
 # Main Functions
 # ============================================================================
@@ -78,39 +69,29 @@ generate_test_env() {
     log_info "Generating test environment file: $output_file"
 
     # Generate random ports
-    local postgres_port backend_port frontend_port redis_port sftp_port
+    local postgres_port backend_port frontend_port redis_port
     postgres_port=$(_generate_random_port)
     backend_port=$(_generate_random_port)
     frontend_port=$(_generate_random_port)
     redis_port=$(_generate_random_port)
-    sftp_port=$(_generate_random_port)
 
     # Ensure all ports are unique
     while [ "$postgres_port" = "$backend_port" ] || [ "$postgres_port" = "$frontend_port" ] || \
-          [ "$postgres_port" = "$redis_port" ] || [ "$postgres_port" = "$sftp_port" ]; do
+          [ "$postgres_port" = "$redis_port" ]; do
         postgres_port=$(_generate_random_port)
     done
-    while [ "$backend_port" = "$frontend_port" ] || [ "$backend_port" = "$redis_port" ] || \
-          [ "$backend_port" = "$sftp_port" ]; do
+    while [ "$backend_port" = "$frontend_port" ] || [ "$backend_port" = "$redis_port" ]; do
         backend_port=$(_generate_random_port)
     done
-    while [ "$frontend_port" = "$redis_port" ] || [ "$frontend_port" = "$sftp_port" ]; do
+    while [ "$frontend_port" = "$redis_port" ]; do
         frontend_port=$(_generate_random_port)
-    done
-    while [ "$redis_port" = "$sftp_port" ]; do
-        redis_port=$(_generate_random_port)
     done
 
     # Generate secrets
-    local better_auth_secret postgres_password redis_password sftp_host_key
+    local better_auth_secret postgres_password redis_password
     better_auth_secret=$(_generate_secret 32)
     postgres_password=$(_generate_secret 24)
     redis_password=$(_generate_secret 24)
-    sftp_host_key=$(_generate_sftp_host_key)
-
-    # Base64 encode the SFTP host key for env var
-    local sftp_host_key_base64
-    sftp_host_key_base64=$(echo "$sftp_host_key" | base64 -w 0)
 
     # Construct public URL (frontend port on localhost)
     local public_url
@@ -134,7 +115,6 @@ POSTGRES_PORT=127.0.0.1:${postgres_port}
 REDIS_PORT=127.0.0.1:${redis_port}
 BACKEND_PORT=127.0.0.1:${backend_port}
 FRONTEND_PORT=127.0.0.1:${frontend_port}
-SFTP_PORT=0.0.0.0:${sftp_port}
 
 # --- PostgreSQL --------------------------------------------------------------
 POSTGRES_USER=catalyst
@@ -153,10 +133,7 @@ PASSKEY_RP_ID=localhost
 PUBLIC_URL=${public_url}
 
 # --- SFTP --------------------------------------------------------------------
-SFTP_ENABLED=true
-# SFTP_HOST_KEY is left empty — backend auto-generates from SFTP_HOST_KEY_BASE64
-SFTP_HOST_KEY=
-SFTP_HOST_KEY_BASE64=${sftp_host_key_base64}
+# SFTP runs on the node agent (default port 2022), not in this compose stack.
 
 
 # --- Backups -----------------------------------------------------------------
@@ -194,7 +171,6 @@ EOF
     log_info "  Frontend port: ${frontend_port}"
     log_info "  Postgres port: ${postgres_port}"
     log_info "  Redis port: ${redis_port}"
-    log_info "  SFTP port: ${sftp_port}"
 }
 
 # Get the backend URL from the generated .env.test file

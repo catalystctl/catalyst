@@ -73,9 +73,9 @@ if [[ "$PASSKEY_VAL" != "localhost" ]]; then
     exit 1
 fi
 
-# Check SFTP host key variables are set
-if ! grep -q "^SFTP_HOST_KEY=" "$TESTROOT/catalyst-docker/.env"; then
-    echo "  FAIL: SFTP_HOST_KEY is not set"
+# Check the panel stack does not claim the agent's SFTP port
+if grep -q "^SFTP_PORT=" "$TESTROOT/catalyst-docker/.env"; then
+    echo "  FAIL: SFTP_PORT is set — SFTP belongs to the node agent, not the compose stack"
     exit 1
 fi
 

@@ -187,7 +187,6 @@ patch_official_env() {
     sed -i 's~^APP_NAME=.*~APP_NAME=${PANEL_NAME}~' \"\$ENV\"
     sed -i 's~^FRONTEND_PORT=.*~FRONTEND_PORT=0.0.0.0:8080~' \"\$ENV\"
     sed -i 's~^BACKEND_PORT=.*~BACKEND_PORT=${backend_bind}~' \"\$ENV\"
-    sed -i 's~^SFTP_PORT=.*~SFTP_PORT=0.0.0.0:2022~' \"\$ENV\"
     if grep -q '^CORS_ORIGIN=' \"\$ENV\"; then
       sed -i 's~^CORS_ORIGIN=.*~CORS_ORIGIN=${LAB_CORS_ORIGINS}~' \"\$ENV\"
     else

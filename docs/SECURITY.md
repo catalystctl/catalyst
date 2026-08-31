@@ -213,7 +213,7 @@ Catalyst is **free and open-source software**. Security features include:
 - Path traversal protection is implemented in both backend and agent
 - SFTP password auth accepts **`sftp_`-prefixed tokens** only; the agent validates them with the backend (`POST /api/agent/sftp/validate-token`)
 - Tokens are **opaque and in-memory** on the panel process (not JWTs). Multi-instance panel deployments do not share the token map unless architecture changes
-- Compose default publish for SFTP is **`0.0.0.0:2022`** (public). Treat tokens as bearer secrets and restrict exposure in production
+- SFTP is hosted by the **node agent**, published by default on **`0.0.0.0:2022`** (public). Treat tokens as bearer secrets and restrict exposure on nodes in production
 
 ### Database Access
 

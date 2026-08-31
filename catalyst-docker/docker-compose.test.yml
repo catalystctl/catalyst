@@ -49,8 +49,8 @@ services:
     image: catalyst-backend:test
     container_name: catalyst-backend-test
     ports:
+      # No SFTP publish here — port 2022 belongs to the node agent.
       - "${BACKEND_PORT:-127.0.0.1:3000}:3000"
-      - "${SFTP_PORT:-0.0.0.0:2022}:2022"
     environment:
       NODE_ENV: test
       LOG_LEVEL: debug
@@ -64,10 +64,7 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-${PUBLIC_URL:-http://localhost}}
       BACKEND_EXTERNAL_ADDRESS: ${BACKEND_EXTERNAL_ADDRESS:-${PUBLIC_URL:-http://localhost}}
       BACKEND_URL: ${BACKEND_URL:-${PUBLIC_URL:-http://localhost}}
-      SFTP_ENABLED: ${SFTP_ENABLED:-true}
-      SFTP_PORT: "2022"
-      SFTP_HOST_KEY: ${SFTP_HOST_KEY:-}
-      SFTP_HOST_KEY_BASE64: ${SFTP_HOST_KEY_BASE64:-}
+      # SFTP runs on the node agent (default port 2022), not in this container.
       DEPLOY_SCRIPT_PATH: /scripts/deploy-agent.sh
       SERVER_DATA_DIR: /var/lib/catalyst/servers
       BACKUP_DIR: /var/lib/catalyst/backups

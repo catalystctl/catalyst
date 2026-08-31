@@ -55,7 +55,7 @@ The stack consists of four services:
 |---------|-------|---------|-------------|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
 | `redis` | `redis:7-alpine` | Compose service; not used as session store by current backend | `127.0.0.1:6379` |
-| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | API (agent hosts SFTP; compose may map `:2022`) | `127.0.0.1:3000`, `0.0.0.0:2022` |
+| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | API (SFTP runs on the node agent, not here) | `127.0.0.1:3000` |
 | `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Web panel | `0.0.0.0:80` |
 
 > **Important:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct bare-metal installation is not supported.
@@ -805,7 +805,6 @@ Rootless Podman cannot bind ports below 1024. Two options:
 ```env
 FRONTEND_PORT=0.0.0.0:8080
 BACKEND_PORT=0.0.0.0:3000
-SFTP_PORT=0.0.0.0:2022
 ```
 
 This is the default in `.env.example`.
@@ -848,16 +847,9 @@ The exact path depends on your UID:
 podman info --format '{{.Host.RemoteSocket.Path}}'
 ```
 
-### SFTP Host Key Quirk
+### SFTP
 
-`podman-compose` may pass literal `${VAR:-}` strings instead of empty values. Explicitly set:
-
-```env
-SFTP_HOST_KEY=
-SFTP_HOST_KEY_BASE64=
-```
-
-The backend will auto-generate a host key on first start.
+SFTP runs on the node agent (default port `2022`), not in this compose stack — no extra env or port mapping is needed here.
 
 ### Volume Ownership
 
@@ -892,7 +884,6 @@ PUBLIC_URL=http://<YOUR_LAN_IP>:8080
 PASSKEY_RP_ID=<YOUR_LAN_IP>
 FRONTEND_PORT=0.0.0.0:8080
 BACKEND_PORT=0.0.0.0:3000
-SFTP_PORT=0.0.0.0:2022
 ```
 
 Find your LAN IP:
@@ -1179,8 +1170,7 @@ cp .env .env.backup.$(date +%Y%m%d)
 | Can't log in | `PUBLIC_URL` mismatch | Set to exact browser URL |
 | CORS errors | `CORS_ORIGIN` doesn't match | Set `PUBLIC_URL` correctly |
 | Cookies rejected | `PUBLIC_URL` uses HTTP but `NODE_ENV=production` | Set `NODE_ENV=development` or use HTTPS |
-| SFTP refused | Port not mapped | Check `SFTP_ENABLED=true` in `.env` |
-| SFTP refused (Podman) | Variable interpolation quirk | Set `SFTP_HOST_KEY=` explicitly |
+| SFTP refused | SFTP runs on the node agent | Check agent status and SFTP port on the node |
 | Passkeys don't work | `PASSKEY_RP_ID` mismatch | Set to bare hostname |
 | 2FA codes rejected | Clock drift | Sync server time with NTP |
 | Panel blank page | Stale JS bundle | Clear browser cache |
@@ -1250,15 +1240,10 @@ This section explains every variable in `.env.example` in detail.
 |----------|---------|-----------|-------------|
 | `FRONTEND_PORT` | `0.0.0.0:8080` | No | Web panel port. `0.0.0.0` = all interfaces; `127.0.0.1` = localhost only. |
 | `BACKEND_PORT` | `0.0.0.0:3000` | No | Backend API port. Should be `127.0.0.1` in production. |
-| `SFTP_PORT` | `0.0.0.0:2022` | No | SFTP server port. Must be externally reachable for SFTP access. |
 
 ### SFTP
 
-| Variable | Default | Required? | Description |
-|----------|---------|-----------|-------------|
-| `SFTP_ENABLED` | `true` | No | Enable/disable the built-in SFTP server. |
-| `SFTP_HOST_KEY` | *(empty)* | No | Path to SSH host private key. Leave empty to auto-generate. |
-| `SFTP_HOST_KEY_BASE64` | *(empty)* | No | Base64-encoded host key. Alternative to `SFTP_HOST_KEY`. |
+SFTP is hosted by the **node agent** on each game server node (default port `2022`), not by this compose stack. The per-node SFTP port is configured in the panel (Admin → Nodes) and written into the agent's `config.toml` by the deploy script.
 
 File size is the panel Admin → Security **Max upload size**.
 

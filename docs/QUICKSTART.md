@@ -11,7 +11,7 @@ Welcome! This guide gets you from zero to a running Catalyst panel in about five
 | Requirement | Minimum | Notes |
 |---|---|---|
 | **Docker** 20.10+ **or** **Podman** 4.0+ | Required | Docker Compose v2 plugin or `podman-compose` |
-| **Ports** | 8080, 3000, 2022 | Adjust in `.env` if conflicts |
+| **Ports** | 8080, 3000 | Adjust in `.env` if conflicts (SFTP :2022 runs on node agents) |
 | **RAM** | 2 GB | 4+ GB recommended |
 | **Disk** | 10 GB | SSD recommended |
 
@@ -76,7 +76,7 @@ You should see four containers, all healthy:
 |---|---|---|
 | `catalyst-postgres` | healthy | `127.0.0.1:5432` |
 | `catalyst-redis` | healthy | `127.0.0.1:6379` |
-| `catalyst-backend` | healthy | `127.0.0.1:3000`, `0.0.0.0:2022` |
+| `catalyst-backend` | healthy | `127.0.0.1:3000` |
 | `catalyst-frontend` | running | `0.0.0.0:8080` |
 
 > If any container shows `unhealthy` or `restarting`, check logs: `docker compose logs -f <service>`.

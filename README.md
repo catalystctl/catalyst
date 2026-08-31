@@ -74,7 +74,8 @@ All configuration lives in `.env`. The install script generates it automatically
 | `BETTER_AUTH_SECRET` | ✅ | auto-generated | Session encryption key |
 | `FRONTEND_PORT` | | `0.0.0.0:8080` | Panel port |
 | `BACKEND_PORT` | | `127.0.0.1:3000` | API port (localhost-only by default) |
-| `SFTP_PORT` | | `0.0.0.0:2022` | SFTP file access port |
+
+> SFTP is served by the node agent (default port `2022`), not by the Docker stack.
 
 For the complete variable reference, see [Environment Variables](docs/environment-variables.md).
 
@@ -104,7 +105,6 @@ See [Docker Setup](docs/docker-setup.md) for full TLS, reverse proxy, and harden
                      │    │  /api  /ws      │
                      │    ▼                 │
                      │  Fastify (Backend)   │──► :3000 (API)
-                     │    │                 │──► :2022 (SFTP)
                      │    ▼                 │
   :5432 (internal) ◄─│  PostgreSQL          │
   :6379 (internal) ◄─│  Redis               │
@@ -114,9 +114,9 @@ See [Docker Setup](docs/docker-setup.md) for full TLS, reverse proxy, and harden
   ┌──────────────┐                    ┌──────────────┐
   │  Rust Agent  │◄── WebSocket ─────►│  Backend API │
   │  (containerd)│                    └──────────────┘
-  └──────────────┘
-       │
-       ▼
+  └──────┬───────┘
+         │ :2022 (SFTP)
+         ▼
   ┌──────────────┐
   │  Game        │
   │  Servers     │

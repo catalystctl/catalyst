@@ -55,10 +55,7 @@ services:
       FRONTEND_URL: ${PUBLIC_URL}
       BACKEND_EXTERNAL_ADDRESS: ${BACKEND_EXTERNAL_ADDRESS}
       BACKEND_URL: ${BACKEND_URL}
-      SFTP_ENABLED: "true"
-      SFTP_PORT: "2022"
-      SFTP_HOST_KEY: ""
-      SFTP_HOST_KEY_BASE64: ""
+      # SFTP runs on the node agent (default port 2022), not in this container.
       DEPLOY_SCRIPT_PATH: /scripts/deploy-agent.sh
       SERVER_DATA_DIR: /var/lib/catalyst/servers
       BACKUP_DIR: /var/lib/catalyst/backups
@@ -68,8 +65,8 @@ services:
       PLUGINS_DIR: /var/lib/catalyst/plugins
       AUTO_UPDATE_ENABLED: "false"
     ports:
+      # No SFTP publish here — port 2022 belongs to the node agent.
       - "0.0.0.0:3000:3000"
-      - "0.0.0.0:2022:2022"
     volumes:
       - catalyst-server-data:/var/lib/catalyst/servers
       - catalyst-backup-data:/var/lib/catalyst/backups

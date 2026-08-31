@@ -120,7 +120,6 @@ PUBLIC_URL=http://<YOUR_LAN_IP>:8080
 PASSKEY_RP_ID=<YOUR_LAN_IP>
 FRONTEND_PORT=0.0.0.0:8080
 BACKEND_PORT=0.0.0.0:3000
-SFTP_PORT=0.0.0.0:2022
 ```
 
 Find your LAN IP with `hostname -I | awk '{print $1}'`.
@@ -242,22 +241,14 @@ All config lives in `.env` inside `catalyst-docker/`. Copy `.env.example` as a s
 | `REDIS_PORT` | `127.0.0.1:6379` | Host port binding |
 | `FRONTEND_PORT` | `0.0.0.0:8080` | Web panel port |
 | `BACKEND_PORT` | `127.0.0.1:3000` | Backend API port |
-| `SFTP_PORT` | `0.0.0.0:2022` | SFTP server port |
 
 > The backend entrypoint automatically runs `prisma migrate deploy` on every startup. For a fresh database, run `db:seed` to initialize sample data.
 
 ### SFTP
 
-| Variable | Default | Description |
-|---|---|---|
-| `SFTP_ENABLED` | `true` | Enable/disable built-in SFTP server |
-| `SFTP_HOST_KEY` | *(auto-generate)* | SSH host key path. Leave empty to auto-generate. |
-| `SFTP_HOST_KEY_BASE64` | *(empty)* | Base64-encoded host key (alternative) |
+SFTP is hosted by the **node agent** on each game server node (default port `2022`), not by this compose stack. The per-node SFTP port is configured in the panel (Admin → Nodes) and written into the agent's `config.toml` by the deploy script.
 
 File size is the panel Admin → Security **Max upload size**.
-
-
-> **Podman:** set `SFTP_HOST_KEY=` and `SFTP_HOST_KEY_BASE64=` explicitly in `.env` to avoid interpolation issues.
 
 ### Backups
 
@@ -465,7 +456,7 @@ curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.s
 | Docker Compose hangs on start | It waits for healthchecks (1–3 min). Check `docker compose ps`. |
 | PostgreSQL connection error | Verify container: `docker compose ps postgres`. Check `POSTGRES_PASSWORD` in `.env`. |
 | Redis warning | Redis is optional. Safe to ignore unless using rate limiting or caching. |
-| SFTP refused | Check `SFTP_ENABLED=true` and port mapping. Podman: set `SFTP_HOST_KEY=` explicitly. |
+| SFTP refused | SFTP runs on the node agent — check agent status and port on the node |
 | Podman port 80 error | Use port 8080, or run: `echo 'net.ipv4.ip_unprivileged_port_start=80' \| sudo tee -a /etc/sysctl.conf && sudo sysctl -p` |
 | Port already in use | `ss -tlnp \| grep :3000` then change in `.env` |
 | Backend crash loop | Check `BETTER_AUTH_SECRET` and `DATABASE_URL` are set. Check `docker compose logs -f backend`. |

@@ -267,11 +267,12 @@ Permissions enum in [catalyst-backend/src/shared-types.ts](../catalyst-backend/s
 - Expiration: 24 hours (hardcoded in [index.ts](../catalyst-backend/src/index.ts#L1))
 - **On changes:** Update `@fastify/jwt` config in `src/index.ts`
 
-### SFTP Server (ssh2 library)
-- Port: `.env` `SFTP_PORT` (default 2022)
-- Auth: Username = serverId, Password = JWT token
-- Chroot: Each user restricted to their server's file directory
-- **Caveat:** Can timeout if backend API calls block; use async/await
+### SFTP (node agent, not the backend)
+- The backend does NOT run an SFTP server (`src/sftp-server.ts` is a deprecated no-op stub)
+- SFTP runs on the Rust node agent (default port 2022, `catalyst-agent/src/sftp_server.rs`; port configured per node via the panel → `deploy-agent.sh` → agent `config.toml`)
+- Auth: Username = serverId, Password = opaque `sftp_` token; agent validates via `POST /api/agent/sftp/validate-token`
+- Panel token logic lives in `src/services/sftp-token-manager.ts` (`/api/sftp/connection-info`, `/api/sftp/rotate-token`)
+- The panel/compose stack must never publish port 2022 — it belongs to the agent
 
 ### Redis (if configured)
 - Used for caching, session storage (optional, not required for MVP)

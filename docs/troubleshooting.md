@@ -909,17 +909,20 @@ cat /var/log/catalyst/console/SERVER_ID/stdout
 
 **Symptoms:** SFTP client says "Connection refused" or "Timeout".
 
+SFTP is hosted by the **node agent** (default port `2022`), not the panel — run these checks on the node, not the panel host.
+
 **Check:**
 
 ```bash
-# Verify SFTP port is exposed in Docker
-grep 2022 catalyst-docker/docker-compose.yml
+# Is the agent running and listening on the SFTP port?
+systemctl status catalyst-agent
+ss -tlnp | grep 2022
 
-# Check if SFTP is enabled
-grep SFTP_ENABLED catalyst-docker/.env.example
+# Check the SFTP port configured for this agent
+grep -A 2 '\[sftp\]' /opt/catalyst-agent/config.toml
 
 # Test connectivity from the client machine
-nc -zv sftp-host 2022
+nc -zv <node-address> 2022
 
 # Check for firewall blocking port 2022
 sudo ufw status
@@ -929,20 +932,14 @@ sudo iptables -L -n | grep 2022
 **Fix:**
 
 ```bash
-# Ensure SFTP is enabled and the port is exposed
-# In catalyst-docker/.env:
-SFTP_ENABLED=true
-
-# In catalyst-docker/docker-compose.yml, verify:
-# ports:
-#   - "2022:2022"
-
-# Restart the backend
-docker compose restart backend
+# Restart the agent if it is down
+sudo systemctl restart catalyst-agent
 
 # Get an SFTP token (from the panel or API)
 # Admin → [Server] → Files → SFTP Connection Info
 ```
+
+If the agent listens on a non-default port, use the port shown in the panel's SFTP connection info. The panel does not listen on `2022` — there is nothing to expose in `catalyst-docker/docker-compose.yml`.
 
 ### File Manager Fails to Load Files
 

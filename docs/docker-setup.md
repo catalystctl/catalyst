@@ -73,7 +73,7 @@ The Docker Compose stack (`catalyst-docker/docker-compose.yml`) defines four cor
 |---------|-------|---------|---------------------|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
 | `redis` | `redis:7-alpine` | Compose service; not session store in current backend | `127.0.0.1:6379` |
-| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API (SFTP publish may still map `:2022`; runtime SFTP is agent-hosted) | `127.0.0.1:3000`, `0.0.0.0:2022` |
+| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API (SFTP runs on the node agent, not here) | `127.0.0.1:3000` |
 | `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Nginx static SPA | `0.0.0.0:80` |
 
 ### What Each Service Does
@@ -227,7 +227,6 @@ Then start with: `docker compose -f docker-compose.yml -f docker-compose.overrid
 |----------|---------|-------------|
 | `FRONTEND_PORT` | `0.0.0.0:8080` (install / `.env.example`; bare compose fallback is `:80`) | Panel access. Use `127.0.0.1:8080` to restrict to localhost. |
 | `BACKEND_PORT` | `127.0.0.1:3000` | API access. Usually localhost-only (proxied by nginx). |
-| `SFTP_PORT` | `0.0.0.0:2022` | SFTP file access. Must be externally reachable. |
 | `POSTGRES_PORT` | `127.0.0.1:5432` | Database. Disable by commenting out if not needed externally. |
 | `REDIS_PORT` | `127.0.0.1:6379` | Redis. Optional — comment out to disable external access. |
 
@@ -425,7 +424,6 @@ You only need to override these individually for split internal/external setups 
 | `POSTGRES_PASSWORD` | `.env` file | **Required.** Strong password. No default. |
 | `BETTER_AUTH_SECRET` | `.env` file | **Required.** Generate with `openssl rand -base64 32`. |
 | `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | `.env` file | Required for S3 backups. Generate with `openssl rand -hex 32`. |
-| `SFTP_HOST_KEY` | `.env` or auto-generated | Path to SSH host key. Leave empty to auto-generate on first start. |
 
 ### Generating Secrets
 
@@ -644,22 +642,7 @@ docker compose up -d postgres
 | Permission denied on volumes | Rootless Podman maps your UID. Ensure files are owned by your user. |
 | Can't access containerd socket | The agent needs root or the `containerd` group. See the [Agent Guide](agent.md). |
 
-### 4. SFTP Host Key Issues
-
-**Symptom:** SFTP connection fails or backend crashes on startup.
-
-**Cause:** `podman-compose` may pass literal `${VAR:-}` strings instead of empty values for `SFTP_HOST_KEY`.
-
-**Fix:** Explicitly set these in `.env`:
-
-```env
-SFTP_HOST_KEY=
-SFTP_HOST_KEY_BASE64=
-```
-
-The backend will auto-generate a host key on first start.
-
-### 5. First-Time Startup Takes 2–3 Minutes
+### 4. First-Time Startup Takes 2–3 Minutes
 
 **Symptom:** `docker compose up -d` seems to hang. `docker compose ps` shows containers as `starting` or `unhealthy`.
 
@@ -677,7 +660,7 @@ docker compose ps
 docker compose logs -f backend
 ```
 
-### 6. `DATABASE_URL` vs `POSTGRES_PASSWORD` Confusion
+### 5. `DATABASE_URL` vs `POSTGRES_PASSWORD` Confusion
 
 **The Docker Compose setup uses `POSTGRES_PASSWORD`, not `DATABASE_URL`.**
 
@@ -692,7 +675,7 @@ If you're running the backend outside Docker (development), then you **do** need
 
 **Critical:** the official Postgres image only applies `POSTGRES_PASSWORD` the first time the data volume is initialized. Changing the value in `.env` (or re-running install with a newly generated password) while keeping `catalyst-postgres-data` causes Prisma **P1000** — `password authentication failed for user "catalyst"`. Fix by wiping the volume, restoring the original password, or `ALTER USER` inside Postgres (see [troubleshooting](troubleshooting.md#database-initialization-fails)).
 
-### 7. `PUBLIC_URL` Mismatch
+### 6. `PUBLIC_URL` Mismatch
 
 **Symptom:** Login works but you get CORS errors, or cookies are rejected, or OAuth callbacks fail.
 
@@ -717,7 +700,7 @@ nano .env
 docker compose restart backend
 ```
 
-### 8. `NODE_ENV=production` Without TLS
+### 7. `NODE_ENV=production` Without TLS
 
 **Symptom:** Browser refuses to load the panel, or assets fail to load with "mixed content" errors.
 
@@ -742,7 +725,7 @@ Podman Compose is a drop-in replacement. Key differences from Docker:
      - /run/user/1000/podman/podman.sock:/var/run/docker.sock
    ```
 
-3. **SFTP host key:** Explicitly set `SFTP_HOST_KEY=` and `SFTP_HOST_KEY_BASE64=` in `.env` due to Podman variable interpolation quirks.
+3. **SFTP:** SFTP runs on the node agent (default port 2022), not in this compose stack — no extra env or port mapping needed here.
 
 All other commands are identical — just replace `docker` with `podman`.
 

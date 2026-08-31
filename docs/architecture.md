@@ -906,7 +906,7 @@ User requests SFTP connection
 - Tokens expire automatically based on TTL.
 - Tokens can be individually revoked or all revoked at once by the server owner.
 - Token rotation is supported (generate new token without closing existing session).
-- The **agent** SFTP server listens on the node (`SFTP_PORT`, default `2022`). Compose may still publish `:2022` on the backend container; connection-info points clients at the **node**.
+- The **agent** SFTP server listens on the node (default `2022`, configured per node). The panel/compose stack does **not** listen on `2022`; connection-info points clients at the **node**.
 
 ### Container Security
 
@@ -916,7 +916,7 @@ User requests SFTP connection
 2. **Resource limits**: CPU and memory limits enforced by containerd and/or cgroups.
 3. **Disk quotas**: Per-server disk limits tracked by `StorageManager`.
 4. **File path validation**: The `path-validation.ts` module prevents path traversal attacks (e.g., `../../etc/passwd`).
-5. **Host-key for SFTP**: The SFTP server uses a dedicated host key (`SFTP_HOST_KEY`), not the host's SSH keys.
+5. **Host-key for SFTP**: The agent's SFTP server uses a dedicated host key (`sftp.host_key_path` in the agent config), not the host's SSH keys.
 
 **Firewall rules:**
 

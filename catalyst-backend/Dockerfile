@@ -146,8 +146,8 @@ LABEL org.opencontainers.image.source="https://github.com/catalystctl/catalyst" 
 # IAC:docker-root-user is intentional here - entrypoint drops privileges immediately after chown/docker group join.
 # Hadolint/Checkov: allow root in final stage for docker.sock handling.
 # sphinx:ignore iac:docker-root-user - entrypoint su-exec's to catalyst
-# Expose port
-EXPOSE 3000 2022
+# Expose port (SFTP is served by the node agent on 2022, not by the backend)
+EXPOSE 3000
 
 # Set production environment
 ENV NODE_ENV=production

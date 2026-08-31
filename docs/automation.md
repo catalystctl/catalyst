@@ -1375,11 +1375,8 @@ services:
       NODE_ENV: production
       BETTER_AUTH_SECRET: ${AUTH_SECRET}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
-      SFTP_ENABLED: "true"
-      SFTP_PORT: "2022"
     ports:
       - "3000:3000"
-      - "2022:2022"
     depends_on:
       catalyst-db:
         condition: service_healthy

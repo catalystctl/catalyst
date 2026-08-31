@@ -106,11 +106,9 @@ services:
       BACKEND_EXTERNAL_ADDRESS: ${BACKEND_EXTERNAL_ADDRESS:-${PUBLIC_URL:-http://localhost}}
       BACKEND_URL: ${BACKEND_URL:-${PUBLIC_URL:-http://localhost}}
 
-      # SFTP listens on the agent. Size limit is the panel "Max upload size".
-      SFTP_ENABLED: ${SFTP_ENABLED:-true}
-      SFTP_PORT: "2022"
-      SFTP_HOST_KEY: ${SFTP_HOST_KEY:-}
-      SFTP_HOST_KEY_BASE64: ${SFTP_HOST_KEY_BASE64:-}
+      # SFTP runs on the node agent (default port 2022), not in this container.
+      # The per-node SFTP port is written into the agent config by deploy-agent.sh;
+      # this panel only issues SFTP tokens (/api/sftp/connection-info).
 
       # Deploy script (baked into the image)
       DEPLOY_SCRIPT_PATH: /scripts/deploy-agent.sh
@@ -172,8 +170,8 @@ services:
       CONSOLE_OUTPUT_BYTE_LIMIT_BYTES: ${CONSOLE_OUTPUT_BYTE_LIMIT_BYTES:-524288}
       MAX_DISK_MB: ${MAX_DISK_MB:-1048576}
     ports:
+      # No SFTP publish here — port 2022 belongs to the node agent.
       - "${BACKEND_PORT:-127.0.0.1:3000}:3000"
-      - "${SFTP_PORT:-0.0.0.0:2022}:2022"
     volumes:
       - catalyst-server-data:/var/lib/catalyst/servers
       - catalyst-backup-data:/var/lib/catalyst/backups

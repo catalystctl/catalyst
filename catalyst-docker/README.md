@@ -100,8 +100,8 @@ nano .env
 | `PASSKEY_RP_ID` | `localhost` | Set to hostname from `PUBLIC_URL` for passkeys |
 | `FRONTEND_PORT` | `0.0.0.0:8080` | Change to `127.0.0.1:8080` to block external access |
 | `BACKEND_PORT` | `127.0.0.1:3000` | Change to `127.0.0.1:3000` for localhost-only API |
-| `SFTP_PORT` | `0.0.0.0:2022` | Change if port 2022 is in use |
-| `SFTP_HOST_KEY` | *(auto)* | Set empty explicitly for Podman (see [Troubleshooting](#troubleshooting)) |
+
+> SFTP is served by the node agent (default port `2022`), not by this compose stack.
 
 > **`PUBLIC_URL` is the single source of truth.** It automatically drives `BETTER_AUTH_URL`, `CORS_ORIGIN`, `FRONTEND_URL`, `BACKEND_EXTERNAL_ADDRESS`, and `BACKEND_URL`. You only need to override those individually for split DNS setups.
 
@@ -118,7 +118,6 @@ PUBLIC_URL=http://<YOUR_LAN_IP>:8080
 PASSKEY_RP_ID=<YOUR_LAN_IP>
 FRONTEND_PORT=0.0.0.0:8080
 BACKEND_PORT=0.0.0.0:3000
-SFTP_PORT=0.0.0.0:2022
 ```
 
 ### 2. Start the stack
@@ -147,7 +146,7 @@ Expected output — all containers `Up` with postgres/redis/backend showing `(he
 |---|---|---|
 | `catalyst-postgres` | `healthy` | `127.0.0.1:5432` |
 | `catalyst-redis` | `healthy` | `127.0.0.1:6379` |
-| `catalyst-backend` | `healthy` | `127.0.0.1:3000`, `0.0.0.0:2022` |
+| `catalyst-backend` | `healthy` | `127.0.0.1:3000` |
 | `catalyst-frontend` | `running` | `0.0.0.0:8080` |
 
 If any container shows `(unhealthy)` or `Restarting`, see [Troubleshooting](#troubleshooting).
@@ -176,7 +175,7 @@ The Docker Compose stack defines four services:
 |---|---|---|---|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
 | `redis` | `redis:7-alpine` | Present in compose; **not** the Better Auth session store in current backend | `127.0.0.1:6379` |
-| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API (SFTP runtime is on the agent; compose may still map `:2022`) | `127.0.0.1:3000`, `0.0.0.0:2022` |
+| `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API (SFTP runs on the node agent, not here) | `127.0.0.1:3000` |
 | `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Nginx static SPA | `0.0.0.0:8080` |
 
 ### Service Dependencies
@@ -232,13 +231,7 @@ Both Docker and Podman are fully supported. The workflow is identical — just r
 
 2. **Port merging:** `podman-compose` merges port lists instead of replacing them. When using a TLS overlay, set `FRONTEND_PORT=127.0.0.1:8080` in `.env` to prevent double exposure.
 
-3. **SFTP host key:** Podman may pass literal `${VAR:-}` strings instead of empty values. Explicitly set in `.env`:
-   ```bash
-   SFTP_HOST_KEY=
-   SFTP_HOST_KEY_BASE64=
-   ```
-
-4. **Docker socket path:** If running the agent on the same host, adjust the socket path:
+3. **Docker socket path:** If running the agent on the same host, adjust the socket path:
    ```yaml
    volumes:
      - /run/user/1000/podman/podman.sock:/var/run/docker.sock
@@ -326,7 +319,7 @@ Internet → Caddy/Traefik (443/80) → frontend nginx (:80) → backend (:3000)
 - The **reverse proxy** terminates TLS and forwards plain HTTP to nginx
 - **nginx** preserves the `X-Forwarded-Proto: https` header
 - The **backend** sees the correct protocol and applies security headers
-- **SFTP** (port 2022) is unaffected — it's a separate protocol
+- **SFTP** is unaffected — it's served by the node agent (default port 2022), a separate protocol
 
 ### ⚠️ HSTS Warning
 
@@ -406,31 +399,16 @@ docker compose exec redis redis-cli ping || echo "UNHEALTHY"
 - Verify `DATABASE_URL` is constructed correctly (derived from `POSTGRES_PASSWORD`)
 - Check `docker compose logs backend` for connection errors
 
-### SFTP host key errors (especially with Podman)
-
-**Symptom:** Backend crashes with SFTP key errors.
-
-**Fix:** Explicitly set empty values in `.env`:
-
-```bash
-SFTP_HOST_KEY=
-SFTP_HOST_KEY_BASE64=
-```
-
-The backend will auto-generate a key on first startup. If you already have a key, set `SFTP_HOST_KEY` to its path or `SFTP_HOST_KEY_BASE64` to its base64 content.
-
 ### Port conflicts
 
 ```bash
 # Check what's using a port
 ss -tlnp | grep :8080
 ss -tlnp | grep :3000
-ss -tlnp | grep :2022
 
 # Change in .env, e.g.:
 FRONTEND_PORT=0.0.0.0:8081
 BACKEND_PORT=127.0.0.1:3001
-SFTP_PORT=0.0.0.0:2023
 ```
 
 ### Database connection issues

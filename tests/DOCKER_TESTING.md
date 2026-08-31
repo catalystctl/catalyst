@@ -118,12 +118,10 @@ The orchestrator automatically generates a test environment file (`catalyst-dock
 | `FRONTEND_PORT` | Randomized frontend port |
 | `POSTGRES_PORT` | Randomized PostgreSQL port |
 | `REDIS_PORT` | Randomized Redis port |
-| `SFTP_PORT` | Randomized SFTP port |
 | `BETTER_AUTH_SECRET` | Secure random secret (base64, 32 bytes) |
 | `POSTGRES_PASSWORD` | Secure random password |
 | `REDIS_PASSWORD` | Secure random password |
 | `PUBLIC_URL` | Points to `http://127.0.0.1:<frontend_port>` |
-| `SFTP_HOST_KEY` | Auto-generated ED25519 host key |
 
 You can also set these environment variables before running:
 
