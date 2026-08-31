@@ -1419,6 +1419,21 @@ async function bootstrap() {
 			},
 		);
 
+		// ── Server permission catalog (the shared subuser/role checklist) ──
+		// Single source: ALL_SERVER_PERMISSIONS in lib/permissions-catalog.ts.
+		// Consumed by the subuser UI and the role wizard's scoped-access step,
+		// so new server permissions appear in both automatically.
+		app.get(
+			"/api/permissions/server",
+			{ preHandler: [authenticate] },
+			async (_request, reply) => {
+				const { ALL_SERVER_PERMISSIONS } = await import(
+					"./lib/permissions-catalog.js"
+				);
+				return reply.send({ success: true, data: ALL_SERVER_PERMISSIONS });
+			}
+		);
+
 		// List all SFTP tokens for a server (owner-only, or self-view for non-owners)
 		app.get(
 			"/api/sftp/tokens",
@@ -1435,21 +1450,23 @@ async function bootstrap() {
 
 				const server = await prisma.server.findUnique({
 					where: { id: serverId },
-					select: { ownerId: true },
+					select: { ownerId: true, nodeId: true },
 				});
 				if (!server) {
 					return reply.status(404).send({ error: "Server not found" });
 				}
 
 				const isOwner = server.ownerId === userId;
-				const perms: string[] = (request as any).user?.permissions ?? [];
-				// Global roles may manage SFTP tokens panel-wide with server.update
-				// (or full admin); token *values* stay visible to their owner only.
+				// Server-scoped role resolution: global roles + RoleServerGrant +
+				// RoleNodeGrant rows covering this server. Token *values* stay
+				// visible to their owner only.
+				const { resolveServerPermissions } = await import("./lib/permissions-catalog.js");
+				const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
 				const canManageTokens =
 					isOwner ||
-					perms.includes("*") ||
-					perms.includes("admin.write") ||
-					perms.includes("server.update");
+					rolePerms.includes("*") ||
+					rolePerms.includes("admin.write") ||
+					rolePerms.includes("server.update");
 				const tokens = listSftpTokensForServer(serverId, userId, canManageTokens);
 
 				// Enrich tokens with user info
@@ -1493,21 +1510,21 @@ async function bootstrap() {
 
 				const server = await prisma.server.findUnique({
 					where: { id: serverId },
-					select: { ownerId: true },
+					select: { ownerId: true, nodeId: true },
 				});
 				if (!server) {
 					return reply.status(404).send({ error: "Server not found" });
 				}
 
 				const isOwner = server.ownerId === userId;
-				const perms: string[] = (request as any).user?.permissions ?? [];
-				// Global roles may manage SFTP tokens panel-wide with server.update
-				// (or full admin) — mirrors the list/revoke-all routes.
+				// Server-scoped role resolution (mirrors the list/revoke-all routes).
+				const { resolveServerPermissions } = await import("./lib/permissions-catalog.js");
+				const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
 				const canManageTokens =
 					isOwner ||
-					perms.includes("*") ||
-					perms.includes("admin.write") ||
-					perms.includes("server.update");
+					rolePerms.includes("*") ||
+					rolePerms.includes("admin.write") ||
+					rolePerms.includes("server.update");
 				const revoked = revokeSftpToken(
 					targetUserId,
 					serverId,
@@ -1541,18 +1558,20 @@ async function bootstrap() {
 
 				const server = await prisma.server.findUnique({
 					where: { id: serverId },
-					select: { ownerId: true },
+					select: { ownerId: true, nodeId: true },
 				});
 				if (!server) {
 					return reply.status(404).send({ error: "Server not found" });
 				}
 
-				const perms: string[] = (request as any).user?.permissions ?? [];
+				// Server-scoped role resolution (mirrors the list/revoke routes).
+				const { resolveServerPermissions } = await import("./lib/permissions-catalog.js");
+				const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
 				const canManageTokens =
 					server.ownerId === userId ||
-					perms.includes("*") ||
-					perms.includes("admin.write") ||
-					perms.includes("server.update");
+					rolePerms.includes("*") ||
+					rolePerms.includes("admin.write") ||
+					rolePerms.includes("server.update");
 				if (!canManageTokens) {
 					return reply
 						.status(403)

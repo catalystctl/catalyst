@@ -21,12 +21,20 @@ import {
  Users,
  Sparkles,
  Globe,
+ Layers,
 } from 'lucide-react';
 
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { rolesApi } from '../../services/api/roles';
+import { serversApi } from '../../services/api/servers';
+import { useNodes } from '../../hooks/useNodes';
+import {
+ useServerPermissionOptions,
+ serverPermissionLabel,
+} from '../../lib/serverPermissions';
+import type { RoleScope, RoleScopeMode } from '../../types/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
@@ -350,6 +358,22 @@ function RoleCard({
  )}
  </div>
 
+ {/* Scoped access badges */}
+ {(role.serverGrantCount > 0 || role.nodeGrantCount > 0) && (
+ <div className="mt-1.5 flex flex-wrap gap-1.5">
+ {role.nodeGrantCount > 0 && (
+ <Badge variant="outline" className="gap-1 text-[10px]">
+ <Globe className="h-2.5 w-2.5" /> {role.nodeGrantCount} node{role.nodeGrantCount > 1 ? 's' : ''} scoped
+ </Badge>
+ )}
+ {role.serverGrantCount > 0 && (
+ <Badge variant="outline" className="gap-1 text-[10px]">
+ <Server className="h-2.5 w-2.5" /> {role.serverGrantCount} server{role.serverGrantCount > 1 ? 's' : ''} scoped
+ </Badge>
+ )}
+ </div>
+ )}
+
  {/* Footer */}
  <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
  <Badge variant="outline" className="text-[10px]">
@@ -361,6 +385,220 @@ function RoleCard({
  </Badge>
  ) : null}
  </div>
+ </div>
+ );
+}
+
+// ── Scoped Access Step (server/node grants with subuser permissions) ──
+function ScopedAccessStep({
+ scopeMode,
+ onScopeModeChange,
+ nodes,
+ selectedNodeIds,
+ onToggleNode,
+ servers,
+ selectedServerIds,
+ onToggleServer,
+ permissionOptions,
+ selectedPermissions,
+ onTogglePermission,
+ search,
+ onSearchChange,
+ permissionSearch,
+ onPermissionSearchChange,
+}: {
+ scopeMode: RoleScopeMode;
+ onScopeModeChange: (mode: RoleScopeMode) => void;
+ nodes: Array<{ id: string; name: string }>;
+ selectedNodeIds: string[];
+ onToggleNode: (id: string) => void;
+ servers: Array<{ id: string; name: string; nodeName?: string }>;
+ selectedServerIds: string[];
+ onToggleServer: (id: string) => void;
+ permissionOptions: string[];
+ selectedPermissions: Set<string>;
+ onTogglePermission: (perm: string) => void;
+ search: string;
+ onSearchChange: (value: string) => void;
+ permissionSearch: string;
+ onPermissionSearchChange: (value: string) => void;
+}) {
+ const modeCards: Array<{ mode: RoleScopeMode; title: string; description: string }> = [
+ { mode: 'none', title: 'No scoped access', description: 'Members only get the global permissions above.' },
+ { mode: 'nodes', title: 'By node', description: 'Grant the selected permissions on every server hosted on the chosen nodes.' },
+ { mode: 'servers', title: 'By server', description: 'Grant the selected permissions on specific servers, on any node.' },
+ ];
+
+ const filteredNodes = nodes.filter((n) =>
+ n.name.toLowerCase().includes(search.toLowerCase())
+ );
+ const filteredServers = servers.filter(
+ (s) =>
+ s.name.toLowerCase().includes(search.toLowerCase()) ||
+ (s.nodeName?.toLowerCase().includes(search.toLowerCase()) ?? false)
+ );
+ const filteredPerms = permissionOptions.filter((p) =>
+ p.toLowerCase().includes(permissionSearch.toLowerCase())
+ );
+ const hasAllNodes = selectedNodeIds.includes('*');
+
+ return (
+ <div className="space-y-4">
+ {/* Mode selection */}
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+ {modeCards.map(({ mode, title, description }) => (
+ <button
+ key={mode}
+ type="button"
+ onClick={() => onScopeModeChange(mode)}
+ className={`rounded-xl border p-4 text-left transition-all duration-200 ${
+ scopeMode === mode
+ ? 'border-primary/40 bg-primary/5'
+ : 'border-border bg-card hover:border-primary/20'
+ }`}
+ >
+ <div className={`text-sm font-semibold ${scopeMode === mode ? 'text-primary' : 'text-foreground'}`}>
+ {title}
+ </div>
+ <div className="mt-1 text-[11px] text-muted-foreground">{description}</div>
+ </button>
+ ))}
+ </div>
+
+ {/* Resource selection */}
+ {scopeMode === 'nodes' && (
+ <div>
+ <div className="mb-2 flex items-center justify-between gap-3">
+ <span className="text-sm font-semibold text-foreground">Nodes</span>
+ <div className="relative w-56">
+ <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+ <Input
+ value={search}
+ onChange={(e) => onSearchChange(e.target.value)}
+ placeholder="Search nodes…"
+ className="h-8 pl-8 text-xs"
+ />
+ </div>
+ </div>
+
+ {/* All nodes */}
+ <label className="mb-2 flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/20">
+ <input
+ type="checkbox"
+ className="h-3.5 w-3.5 rounded border-border/40 bg-card text-primary-600"
+ checked={hasAllNodes}
+ onChange={() => onToggleNode('*')}
+ />
+ <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+ <span className="text-xs font-semibold text-foreground">All nodes</span>
+ <span className="text-[11px] text-muted-foreground">Every server in the panel</span>
+ </label>
+
+ <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border bg-card p-2">
+ {filteredNodes.map((node) => (
+ <label
+ key={node.id}
+ className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-primary/5"
+ >
+ <input
+ type="checkbox"
+ className="h-3.5 w-3.5 rounded border-border/40 bg-card text-primary-600"
+ checked={selectedNodeIds.includes(node.id)}
+ onChange={() => onToggleNode(node.id)}
+ />
+ <Server className="h-3 w-3 text-muted-foreground" />
+ <span>{node.name}</span>
+ </label>
+ ))}
+ {filteredNodes.length === 0 && (
+ <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">No nodes match</div>
+ )}
+ </div>
+ </div>
+ )}
+
+ {scopeMode === 'servers' && (
+ <div>
+ <div className="mb-2 flex items-center justify-between gap-3">
+ <span className="text-sm font-semibold text-foreground">Servers</span>
+ <div className="relative w-56">
+ <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+ <Input
+ value={search}
+ onChange={(e) => onSearchChange(e.target.value)}
+ placeholder="Search servers…"
+ className="h-8 pl-8 text-xs"
+ />
+ </div>
+ </div>
+ <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border bg-card p-2">
+ {filteredServers.map((server) => (
+ <label
+ key={server.id}
+ className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-primary/5"
+ >
+ <input
+ type="checkbox"
+ className="h-3.5 w-3.5 rounded border-border/40 bg-card text-primary-600"
+ checked={selectedServerIds.includes(server.id)}
+ onChange={() => onToggleServer(server.id)}
+ />
+ <span className="truncate">{server.name}</span>
+ {server.nodeName && (
+ <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{server.nodeName}</span>
+ )}
+ </label>
+ ))}
+ {filteredServers.length === 0 && (
+ <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">No servers match</div>
+ )}
+ </div>
+ </div>
+ )}
+
+ {/* Permission checklist — the shared subuser permission list */}
+ {scopeMode !== 'none' && (
+ <div>
+ <div className="mb-2 flex items-center justify-between gap-3">
+ <div className="flex items-center gap-2">
+ <span className="text-sm font-semibold text-foreground">Permissions</span>
+ <Badge variant={selectedPermissions.size > 0 ? 'default' : 'outline'} className="tabular-nums text-[10px]">
+ {selectedPermissions.size} selected
+ </Badge>
+ </div>
+ <div className="relative w-56">
+ <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+ <Input
+ value={permissionSearch}
+ onChange={(e) => onPermissionSearchChange(e.target.value)}
+ placeholder="Search permissions…"
+ className="h-8 pl-8 text-xs"
+ />
+ </div>
+ </div>
+ <div className="grid max-h-52 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border border-border bg-card p-3 sm:grid-cols-2">
+ {filteredPerms.map((perm) => (
+ <label key={perm} className="flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+ <input
+ type="checkbox"
+ className="h-3.5 w-3.5 rounded border-border/40 bg-card text-primary-600"
+ checked={selectedPermissions.has(perm)}
+ onChange={() => onTogglePermission(perm)}
+ />
+ <span>{serverPermissionLabel(perm)}</span>
+ <span className="ml-auto font-mono text-[9px] opacity-60">{perm}</span>
+ </label>
+ ))}
+ {filteredPerms.length === 0 && (
+ <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">No permissions match</div>
+ )}
+ </div>
+ <div className="mt-2 text-[11px] text-muted-foreground">
+ Members of this role get exactly these permissions on the selected{' '}
+ {scopeMode === 'nodes' ? 'nodes’ servers' : 'servers'} — like adding a subuser, in bulk.
+ </div>
+ </div>
+ )}
  </div>
  );
 }
@@ -611,6 +849,14 @@ function RolesPage() {
  // Wizard state
  const [wizardStep, setWizardStep] = useState(0);
 
+ // Scoped access state (role wizard step 3)
+ const [scopeMode, setScopeMode] = useState<RoleScopeMode>('none');
+ const [scopedNodeIds, setScopedNodeIds] = useState<string[]>([]);
+ const [scopedServerIds, setScopedServerIds] = useState<string[]>([]);
+ const [scopedPermissions, setScopedPermissions] = useState<Set<string>>(new Set());
+ const [scopeSearch, setScopeSearch] = useState('');
+ const [scopePermSearch, setScopePermSearch] = useState('');
+
  // Form state
  const [name, setName] = useState('');
  const [description, setDescription] = useState('');
@@ -626,6 +872,15 @@ function RolesPage() {
  staleTime: 5 * 60 * 1000,
  });
 
+ // Scoped-access inputs: shared permission list, nodes, servers
+ const { data: scopePermissionOptions = [] } = useServerPermissionOptions();
+ const { data: scopeNodes = [] } = useNodes();
+ const { data: scopeServers = [] } = useQuery({
+ queryKey: ['admin-servers-for-scope'],
+ queryFn: () => serversApi.list({ limit: 500 }),
+ staleTime: 60 * 1000,
+ });
+
  // Fetch presets
  const { data: presets = [] } = useQuery({
  queryKey: qk.rolePresets(),
@@ -634,7 +889,7 @@ function RolesPage() {
  });
 
  const createMutation = useMutation({
- mutationFn: (data: { name: string; description?: string; permissions: string[] }) => rolesApi.create(data),
+ mutationFn: (data: { name: string; description?: string; permissions: string[]; scope?: RoleScope }) => rolesApi.create(data),
  onSuccess: () => {
  notifySuccess('Role created');
  resetForm();
@@ -647,7 +902,7 @@ function RolesPage() {
  });
 
  const updateMutation = useMutation({
- mutationFn: ({ roleId, data }: { roleId: string; data: Partial<{ name: string; description?: string; permissions: string[] }> }) =>
+ mutationFn: ({ roleId, data }: { roleId: string; data: Partial<{ name: string; description?: string; permissions: string[]; scope?: RoleScope }> }) =>
  rolesApi.update(roleId, data),
  onSuccess: () => {
  notifySuccess('Role updated');
@@ -706,6 +961,12 @@ function RolesPage() {
  setSelectedNodeIds([]);
  setWizardStep(0);
  setActivePreset(null);
+ setScopeMode('none');
+ setScopedNodeIds([]);
+ setScopedServerIds([]);
+ setScopedPermissions(new Set());
+ setScopeSearch('');
+ setScopePermSearch('');
  }, []);
 
  const startEdit = async (role: any) => {
@@ -719,6 +980,19 @@ function RolesPage() {
  setViewingRole(null);
  setWizardStep(0);
  setActivePreset(null);
+
+ // Prefill scoped access from the role detail (grants are not in the list payload)
+ try {
+ const detail = await rolesApi.get(role.id);
+ if (editingRequestRef.current === requestId && detail?.scope) {
+ setScopeMode(detail.scope.mode ?? 'none');
+ setScopedNodeIds(detail.scope.nodeIds ?? []);
+ setScopedServerIds(detail.scope.serverIds ?? []);
+ setScopedPermissions(new Set(detail.scope.permissions ?? []));
+ }
+ } catch {
+ // keep defaults — the wizard treats unknown scope as 'none'
+ }
 
  try {
  const response = await fetch(`/api/roles/${role.id}/nodes`, {
@@ -749,18 +1023,25 @@ function RolesPage() {
  [roles, search],
  );
 
- const canSubmit = name.trim().length > 0 && selectedPermissions.size > 0;
+ const scopeSelectionValid =
+ scopeMode === 'none' ||
+ (scopeMode === 'nodes' && scopedNodeIds.length > 0 && scopedPermissions.size > 0) ||
+ (scopeMode === 'servers' && scopedServerIds.length > 0 && scopedPermissions.size > 0);
+ const canSubmit =
+ name.trim().length > 0 && selectedPermissions.size > 0 && scopeSelectionValid;
  const isModalOpen = isCreateOpen || !!editingRole;
 
  const wizardSteps = [
  { label: 'Details', icon: Info },
  { label: 'Permissions', icon: Shield },
  { label: 'Node Access', icon: Server },
+ { label: 'Scoped Access', icon: Layers },
  ];
 
  const canNavigateStep = [
  true,
  name.trim().length > 0,
+ name.trim().length > 0 && selectedPermissions.size > 0,
  name.trim().length > 0 && selectedPermissions.size > 0,
  ];
 
@@ -771,10 +1052,20 @@ function RolesPage() {
  };
 
  const handleSubmit = () => {
+ const scope: RoleScope | undefined =
+ scopeMode === 'none'
+ ? { mode: 'none', permissions: [] }
+ : {
+ mode: scopeMode,
+ nodeIds: scopeMode === 'nodes' ? scopedNodeIds : undefined,
+ serverIds: scopeMode === 'servers' ? scopedServerIds : undefined,
+ permissions: Array.from(scopedPermissions),
+ };
  const data = {
  name: name.trim(),
  description: description.trim() || undefined,
  permissions: Array.from(selectedPermissions),
+ scope,
  };
  if (editingRole) {
  updateMutation.mutate({ roleId: editingRole.id, data });
@@ -1012,6 +1303,42 @@ function RolesPage() {
  disabled={createMutation.isPending || updateMutation.isPending}
  />
  </div>
+ )}
+
+ {/* Step 3: Scoped Access (server/node grants with subuser permissions) */}
+ {wizardStep === 3 && (
+ <ScopedAccessStep
+ scopeMode={scopeMode}
+ onScopeModeChange={setScopeMode}
+ nodes={scopeNodes as Array<{ id: string; name: string }>}
+ selectedNodeIds={scopedNodeIds}
+ onToggleNode={(id: string) =>
+ setScopedNodeIds((prev) =>
+ prev.includes(id) ? prev.filter((n) => n !== id) : [...prev, id]
+ )
+ }
+ servers={scopeServers as Array<{ id: string; name: string; nodeName?: string }>}
+ selectedServerIds={scopedServerIds}
+ onToggleServer={(id: string) =>
+ setScopedServerIds((prev) =>
+ prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+ )
+ }
+ permissionOptions={scopePermissionOptions}
+ selectedPermissions={scopedPermissions}
+ onTogglePermission={(perm: string) =>
+ setScopedPermissions((prev) => {
+ const newSet = new Set(prev);
+ if (newSet.has(perm)) newSet.delete(perm);
+ else newSet.add(perm);
+ return newSet;
+ })
+ }
+ search={scopeSearch}
+ onSearchChange={setScopeSearch}
+ permissionSearch={scopePermSearch}
+ onPermissionSearchChange={setScopePermSearch}
+ />
  )}
  </DialogBody>
 

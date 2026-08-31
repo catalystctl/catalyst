@@ -307,12 +307,29 @@ export interface AuthLockoutsResponse {
 }
 
 // Role management types
+
+/** Role wizard scoped-access step: server/node grants for this role. */
+export type RoleScopeMode = 'none' | 'nodes' | 'servers';
+export interface RoleScope {
+  mode: RoleScopeMode;
+  /** Node ids for mode 'nodes'; "*" = all nodes. */
+  nodeIds?: string[];
+  serverIds?: string[];
+  /** Subset of ALL_SERVER_PERMISSIONS (GET /api/permissions/server). */
+  permissions?: string[];
+}
+
 export interface Role {
   id: string;
   name: string;
   description?: string;
   permissions: string[];
   userCount?: number;
+  serverGrantCount?: number;
+  nodeGrantCount?: number;
+  scope?: RoleScope;
+  serverGrants?: Array<{ serverId: string; permissions: string[]; server?: { name: string; node?: { name: string } } }>;
+  nodeGrants?: Array<{ nodeId: string | null; permissions: string[]; node?: { name: string } | null }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -321,12 +338,14 @@ export interface RoleCreateInput {
   name: string;
   description?: string;
   permissions: string[];
+  scope?: RoleScope;
 }
 
 export interface RoleUpdateInput {
   name?: string;
   description?: string;
   permissions?: string[];
+  scope?: RoleScope;
 }
 
 export interface RolePreset {

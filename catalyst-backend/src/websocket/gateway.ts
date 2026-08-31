@@ -13,6 +13,7 @@ import {
   ErrorCodes,
 } from "../shared-types";
 import { hasPermission, hasNodeAccess } from "../lib/permissions";
+import { ALL_SERVER_PERMISSIONS } from "../lib/permissions-catalog";
 import { sanitizeInput } from "../lib/validation";
 import { ServerStateMachine } from "../services/state-machine";
 import { normalizeHostIp } from "../utils/ipam";
@@ -1088,6 +1089,26 @@ export class WebSocketGateway {
       return out;
     } catch (err) {
       this.logger.warn({ err, userId }, "Failed to load role permissions");
+      return [];
+    }
+  }
+
+  /**
+   * Server-scoped role permissions: global role perms UNION RoleServerGrant
+   * UNION RoleNodeGrant rows covering this server. Used by the subscribe,
+   * server_control, and console authz paths so role-scoped grants apply
+   * over the WebSocket exactly like over the REST routes.
+   */
+  private async getUserServerRolePermissions(
+    userId: string,
+    serverId: string,
+    nodeId: string,
+  ): Promise<string[]> {
+    try {
+      const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
+      return await resolveServerPermissions(userId, serverId, nodeId);
+    } catch (err) {
+      this.logger.warn({ err, userId, serverId }, "Failed to load server-scoped role permissions");
       return [];
     }
   }
@@ -3022,9 +3043,13 @@ export class WebSocketGateway {
           where: { userId_serverId: { userId: client.userId, serverId: server.id } },
         });
         const nodeAccess = await hasNodeAccess(this.prisma, client.userId, server.nodeId);
-        // Global roles may grant server.read / console.read panel-wide
-        // (mirrors decideServerAccess's requiredPermission branch).
-        const rolePerms = await this.getUserRolePermissions(client.userId);
+        // Server-scoped role permissions: global roles + RoleServerGrant +
+        // RoleNodeGrant rows covering this server (mirrors the REST checks).
+        const rolePerms = await this.getUserServerRolePermissions(
+          client.userId,
+          server.id,
+          server.nodeId,
+        );
         const roleCanServerRead =
           rolePerms.includes("server.read") ||
           rolePerms.includes("admin.write") ||
@@ -3121,7 +3146,11 @@ export class WebSocketGateway {
         // nothing unless paired with node.update.
         const isOwner = server.ownerId === client.userId;
         const isAdmin = await this.userHasAdminWrite(client.userId);
-        const rolePerms = await this.getUserRolePermissions(client.userId);
+        const rolePerms = await this.getUserServerRolePermissions(
+          client.userId,
+          server.id,
+          server.nodeId,
+        );
         const nodeAccess =
           (await hasNodeAccess(this.prisma, client.userId, server.nodeId)) &&
           rolePerms.includes("node.update");
@@ -4328,15 +4357,32 @@ export class WebSocketGateway {
       where: { userId_serverId: { userId, serverId } },
     });
     const isAdmin = await this.userHasAdminWrite(userId);
-    const rolePerms = await this.getUserRolePermissions(userId);
+    // Server-scoped role permissions: global roles + RoleServerGrant +
+    // RoleNodeGrant rows covering this server.
+    const rolePerms = await this.getUserServerRolePermissions(userId, serverId, server.nodeId);
+    const hasScopedGrant = rolePerms.some((p) =>
+      (ALL_SERVER_PERMISSIONS as readonly string[]).includes(p),
+    );
     const consoleNodeAccess =
       (await hasNodeAccess(this.prisma, userId, server.nodeId)) &&
       rolePerms.includes("node.update");
 
-    if (!access && server.ownerId !== userId && !isAdmin && !consoleNodeAccess) {
+    if (
+      !access &&
+      server.ownerId !== userId &&
+      !isAdmin &&
+      !consoleNodeAccess &&
+      !hasScopedGrant
+    ) {
       throw Object.assign(new Error('Permission denied'), { code: 403 });
     }
-    if (!access?.permissions?.includes('console.write') && server.ownerId !== userId && !isAdmin && !consoleNodeAccess) {
+    if (
+      !access?.permissions?.includes('console.write') &&
+      server.ownerId !== userId &&
+      !isAdmin &&
+      !consoleNodeAccess &&
+      !rolePerms.includes('console.write')
+    ) {
       throw Object.assign(new Error('Permission denied'), { code: 403 });
     }
 

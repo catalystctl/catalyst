@@ -21,12 +21,133 @@ import {
 import {
   invalidateUserPermissions,
   flushPermissionsCache,
+  ALL_SERVER_PERMISSIONS,
 } from '../lib/permissions-catalog';
 
 /** Role permission mutations affect admin + node-access caches too. */
 function flushAllPermissionCaches(): void {
   flushPermissionsCache();
   flushRbacCaches();
+}
+
+/** Shape of the role wizard's scoped-access step (server/node grants). */
+interface RoleScopePayload {
+  mode: 'none' | 'nodes' | 'servers';
+  nodeIds?: string[]; // node ids; "*" = all nodes (stored as nodeId null)
+  serverIds?: string[];
+  permissions?: string[]; // subset of ALL_SERVER_PERMISSIONS
+}
+
+/**
+ * Validate + persist a role's scoped access (replace-all semantics).
+ *
+ * - mode "none": clears all grants.
+ * - mode "nodes": one RoleNodeGrant per selected node ("*" → nodeId null);
+ *   members hold `permissions` on every server hosted on those nodes.
+ * - mode "servers": one RoleServerGrant per selected server; members hold
+ *   `permissions` on those servers regardless of node.
+ */
+async function applyRoleScope(
+  roleId: string,
+  scope: RoleScopePayload,
+  editorPerms: string[]
+): Promise<void> {
+  const mode = scope.mode ?? 'none';
+  const permissions = scope.permissions ?? [];
+
+  // Replace-all first, so mode changes clean up the previous grants.
+  await prisma.$transaction([
+    prisma.roleServerGrant.deleteMany({ where: { roleId } }),
+    prisma.roleNodeGrant.deleteMany({ where: { roleId } }),
+  ]);
+
+  if (mode === 'none') return;
+
+  const invalid = permissions.filter(
+    (p) => !(ALL_SERVER_PERMISSIONS as readonly string[]).includes(p)
+  );
+  if (invalid.length > 0) {
+    throw Object.assign(
+      new Error(`Invalid server permissions: ${invalid.join(', ')}`),
+      { statusCode: 400 }
+    );
+  }
+  if (permissions.length === 0) {
+    throw Object.assign(new Error('Select at least one permission for the scoped access'), {
+      statusCode: 400,
+    });
+  }
+
+  // Same escalation guard as global permissions: editors cannot grant
+  // server permissions they do not hold themselves (or via '*').
+  if (!editorPerms.includes('*')) {
+    const cantGrant = permissions.filter((p) => !editorPerms.includes(p));
+    if (cantGrant.length > 0) {
+      throw Object.assign(
+        new Error(`Cannot grant permissions you don't have: ${cantGrant.join(', ')}`),
+        { statusCode: 403 }
+      );
+    }
+  }
+
+  if (mode === 'nodes') {
+    const ids = scope.nodeIds ?? [];
+    if (ids.length === 0) {
+      throw Object.assign(new Error('Select at least one node (or "All nodes")'), {
+        statusCode: 400,
+      });
+    }
+    const wildcard = ids.includes('*');
+    const specific = ids.filter((id) => id !== '*');
+    if (specific.length > 0) {
+      const found = await prisma.node.findMany({
+        where: { id: { in: specific } },
+        select: { id: true },
+      });
+      if (found.length !== specific.length) {
+        throw Object.assign(new Error('One or more selected nodes do not exist'), {
+          statusCode: 400,
+        });
+      }
+    }
+    await prisma.$transaction([
+      ...(wildcard
+        ? [prisma.roleNodeGrant.create({ data: { roleId, nodeId: null, permissions } })]
+        : []),
+      ...specific.map((nodeId) =>
+        prisma.roleNodeGrant.create({ data: { roleId, nodeId, permissions } })
+      ),
+    ]);
+    return;
+  }
+
+  // mode === 'servers'
+  const serverIds = scope.serverIds ?? [];
+  if (serverIds.length === 0) {
+    throw Object.assign(new Error('Select at least one server'), { statusCode: 400 });
+  }
+  const foundServers = await prisma.server.findMany({
+    where: { id: { in: serverIds } },
+    select: { id: true },
+  });
+  if (foundServers.length !== serverIds.length) {
+    throw Object.assign(new Error('One or more selected servers do not exist'), {
+      statusCode: 400,
+    });
+  }
+  await prisma.roleServerGrant.createMany({
+    data: serverIds.map((serverId) => ({ roleId, serverId, permissions })),
+  });
+}
+
+/** Respond from a thrown applyRoleScope validation error. */
+function respondScopeError(reply: FastifyReply, err: unknown): boolean {
+  const e = err as { statusCode?: number; message?: string };
+  if (e?.statusCode) {
+    reply.status(e.statusCode).send({ error: e.message });
+    return true;
+  }
+  return false;
 }
 import { serialize } from '../utils/serialize';
 
@@ -60,7 +181,7 @@ export async function roleRoutes(app: FastifyInstance) {
         orderBy: { name: 'asc' },
         include: {
           _count: {
-            select: { users: true },
+            select: { users: true, serverGrants: true, nodeGrants: true },
           },
         },
       });
@@ -73,6 +194,8 @@ export async function roleRoutes(app: FastifyInstance) {
           description: role.description,
           permissions: role.permissions,
           userCount: role._count.users,
+          serverGrantCount: role._count.serverGrants,
+          nodeGrantCount: role._count.nodeGrants,
           createdAt: role.createdAt,
           updatedAt: role.updatedAt,
         })),
@@ -105,12 +228,47 @@ export async function roleRoutes(app: FastifyInstance) {
             },
             orderBy: { username: 'asc' },
           },
+          serverGrants: {
+            select: {
+              serverId: true,
+              permissions: true,
+              server: { select: { name: true, node: { select: { name: true } } } },
+            },
+          },
+          nodeGrants: {
+            select: {
+              nodeId: true,
+              permissions: true,
+              node: { select: { name: true } },
+            },
+          },
         },
       });
 
       if (!role) {
         return reply.status(404).send({ error: 'Role not found' });
       }
+
+      // Derive the wizard scope shape from the stored grants (single mode).
+      const scopePermissions = [
+        ...new Set(
+          [...role.serverGrants, ...role.nodeGrants].flatMap((g) => g.permissions)
+        ),
+      ];
+      const scope =
+        role.serverGrants.length > 0
+          ? {
+              mode: 'servers' as const,
+              serverIds: role.serverGrants.map((g) => g.serverId),
+              permissions: scopePermissions,
+            }
+          : role.nodeGrants.length > 0
+            ? {
+                mode: 'nodes' as const,
+                nodeIds: role.nodeGrants.map((g) => g.nodeId ?? '*'),
+                permissions: scopePermissions,
+              }
+            : { mode: 'none' as const, permissions: [] };
 
       reply.send(serialize({
         success: true,
@@ -121,6 +279,9 @@ export async function roleRoutes(app: FastifyInstance) {
           permissions: role.permissions,
           userCount: role._count.users,
           users: role.users,
+          scope,
+          serverGrants: role.serverGrants,
+          nodeGrants: role.nodeGrants,
           createdAt: role.createdAt,
           updatedAt: role.updatedAt,
         },
@@ -182,13 +343,35 @@ export async function roleRoutes(app: FastifyInstance) {
         },
       });
 
+      // Scoped access (role wizard step 3) — optional on create.
+      const scope = (request.body as { scope?: RoleScopePayload }).scope;
+      if (scope) {
+        try {
+          await applyRoleScope(role.id, scope, userPerms);
+        } catch (err) {
+          // Clean up a half-created role on scope validation failure
+          await prisma.role.delete({ where: { id: role.id } }).catch(() => {});
+          if (respondScopeError(reply, err)) return;
+          throw err;
+        }
+      }
+
       await createAuditLog(userId, {
         request,
         action: 'role.create',
         resource: 'role',
         resourceId: role.id,
-        details: { name: role.name, permissions },
+        details: {
+          name: role.name,
+          permissions,
+          scope: scope ? { mode: scope.mode } : undefined,
+        },
       });
+
+      // Scoped grants change what members can do — flush caches
+      if (scope) {
+        flushAllPermissionCaches();
+      }
 
       reply.status(201).send(serialize({
         success: true,
@@ -217,10 +400,11 @@ export async function roleRoutes(app: FastifyInstance) {
       if (!(await checkPermission(userId, 'role.update', reply))) return;
 
       const { roleId } = request.params as { roleId: string };
-      const { name, description, permissions } = request.body as {
+      const { name, description, permissions, scope } = request.body as {
         name?: string;
         description?: string;
         permissions?: string[];
+        scope?: RoleScopePayload;
       };
 
       const role = await prisma.role.findUnique({
@@ -283,8 +467,21 @@ export async function roleRoutes(app: FastifyInstance) {
         data: updateData,
       });
 
+      // Scoped access replace-all (role wizard step 3)
+      let scopeChanged = false;
+      if (scope !== undefined) {
+        try {
+          const editorPerms: string[] = request.user?.permissions ?? [];
+          await applyRoleScope(roleId, scope, editorPerms);
+          scopeChanged = true;
+        } catch (err) {
+          if (respondScopeError(reply, err)) return;
+          throw err;
+        }
+      }
+
       // Role permission changes affect all assigned users — flush cache
-      if (permissions !== undefined) {
+      if (permissions !== undefined || scopeChanged) {
         flushAllPermissionCaches();
       }
 
@@ -293,7 +490,11 @@ export async function roleRoutes(app: FastifyInstance) {
         action: 'role.update',
         resource: 'role',
         resourceId: roleId,
-        details: { name: role.name, changes: updateData },
+        details: {
+          name: role.name,
+          changes: updateData,
+          scope: scopeChanged ? { mode: scope!.mode } : undefined,
+        },
       });
 
       reply.send(serialize({
@@ -347,6 +548,9 @@ export async function roleRoutes(app: FastifyInstance) {
       await prisma.role.delete({
         where: { id: roleId },
       });
+
+      // Grants cascade with the role; members may lose scoped access
+      flushAllPermissionCaches();
 
       await createAuditLog(userId, {
         request,

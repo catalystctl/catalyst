@@ -181,6 +181,8 @@ model Role {
   users           User[]
   serverRoles     ServerRole[]
   nodeAssignments NodeAssignment[]
+  serverGrants    RoleServerGrant[]
+  nodeGrants      RoleNodeGrant[]
 }
 
 model ServerRole {
@@ -192,6 +194,39 @@ model ServerRole {
   createdAt DateTime @default(now())
 
   @@unique([serverId, roleId])
+}
+
+/// Server-scoped grant: members of the role hold `permissions` on this one
+/// server (regardless of which node hosts it). Managed from the role wizard.
+model RoleServerGrant {
+  id          String   @id @default(cuid())
+  roleId      String
+  role        Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  serverId    String
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  permissions String[] // Subset of ALL_SERVER_PERMISSIONS
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([roleId, serverId])
+  @@index([serverId])
+}
+
+/// Node-scoped grant: members of the role hold `permissions` on every server
+/// hosted on the node. nodeId null = all nodes (wildcard). Managed from the
+/// role wizard.
+model RoleNodeGrant {
+  id          String   @id @default(cuid())
+  roleId      String
+  role        Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  nodeId      String?
+  node        Node?    @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  permissions String[] // Subset of ALL_SERVER_PERMISSIONS
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([roleId, nodeId])
+  @@index([nodeId])
 }
 
 model ServerAccess {
@@ -382,6 +417,7 @@ model Node {
   ipPools          IpPool[]
   allocations      NodeAllocation[]
   nodeAssignments  NodeAssignment[]
+  roleNodeGrants   RoleNodeGrant[]
 }
 
 model IpPool {
@@ -566,6 +602,7 @@ model Server {
   access         ServerAccess[]
   invites        ServerAccessInvite[]
   roles          ServerRole[]
+  roleGrants     RoleServerGrant[]
   logs           ServerLog[]
   metrics        ServerMetrics[]
   backups        Backup[]

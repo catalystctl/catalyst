@@ -1474,7 +1474,35 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const accessibleResult = await getUserAccessibleNodes(prisma, userId);
       const accessibleNodeIds = accessibleResult.nodeIds;
       const hasWildcard = accessibleResult.hasWildcard;
-      const cacheKey = `${userId}:${limit}:${offset}:${withMetrics?1:0}:${hasWildcard?"w":"s"}:${accessibleNodeIds.length}:${accessibleNodeIds.slice(0,3).join(",")}`;
+
+      // Role-scoped grants (role wizard): servers/nodes granted to the
+      // user's roles, with their permission sets. Grants make servers VISIBLE
+      // in this list and contribute to effectivePermissions.
+      const userRoleIds = (
+        await prisma.role.findMany({
+          where: { users: { some: { id: userId } } },
+          select: { id: true },
+        })
+      ).map((r) => r.id);
+      const [roleServerGrantRows, roleNodeGrantRows] = userRoleIds.length
+        ? await Promise.all([
+            prisma.roleServerGrant.findMany({
+              where: { roleId: { in: userRoleIds } },
+              select: { serverId: true, permissions: true },
+            }),
+            prisma.roleNodeGrant.findMany({
+              where: { roleId: { in: userRoleIds } },
+              select: { nodeId: true, permissions: true },
+            }),
+          ])
+        : [[], []];
+      const grantedServerIds = [...new Set(roleServerGrantRows.map((g) => g.serverId))];
+      const grantedNodeIds = [
+        ...new Set(roleNodeGrantRows.map((g) => g.nodeId).filter((n): n is string => Boolean(n))),
+      ];
+      const hasAllNodesGrant = roleNodeGrantRows.some((g) => g.nodeId === null);
+
+      const cacheKey = `${userId}:${limit}:${offset}:${withMetrics?1:0}:${hasWildcard?"w":"s"}:${accessibleNodeIds.length}:${accessibleNodeIds.slice(0,3).join(",")}:g${grantedServerIds.length}.${grantedNodeIds.length}.${hasAllNodesGrant?1:0}`;
       const hit = serverListCache.get(cacheKey);
       if (hit) {
         reply.header("X-Cache", "HIT");
@@ -1514,6 +1542,28 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           promises.push(
             prisma.server.findMany({
               where: { nodeId: { in: accessibleNodeIds } },
+              orderBy: { updatedAt: "desc" },
+              take: limit,
+              skip: offset,
+              select: serverListSelect,
+            })
+          );
+        }
+        if (grantedServerIds.length > 0) {
+          promises.push(
+            prisma.server.findMany({
+              where: { id: { in: grantedServerIds } },
+              orderBy: { updatedAt: "desc" },
+              take: limit,
+              skip: offset,
+              select: serverListSelect,
+            })
+          );
+        }
+        if (grantedNodeIds.length > 0) {
+          promises.push(
+            prisma.server.findMany({
+              where: { nodeId: { in: grantedNodeIds } },
               orderBy: { updatedAt: "desc" },
               take: limit,
               skip: offset,
@@ -1569,13 +1619,26 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             const isOwner = server.ownerId === userId;
             const hasExplicit = Boolean(a);
             const hasNode = accessibleNodeIds.includes(server.nodeId);
+            // Scoped role grants covering this server: direct server grants +
+            // node grants matching this server's node (wildcard = all nodes).
+            const grantPerms = new Set<string>();
+            for (const g of roleServerGrantRows) {
+              if (g.serverId === server.id) for (const p of g.permissions) grantPerms.add(p);
+            }
+            for (const g of roleNodeGrantRows) {
+              if (g.nodeId === null || g.nodeId === server.nodeId) {
+                for (const p of g.permissions) grantPerms.add(p);
+              }
+            }
             let effectivePermissions: string[];
             if (isOwner || listRolePermissions.includes('*') || listRolePermissions.includes('admin.write')) {
               effectivePermissions = [...ALL_SERVER_PERMISSIONS];
             } else if (hasNode && listRolePermissions.includes('node.update')) {
               effectivePermissions = [...ALL_SERVER_PERMISSIONS];
             } else if (hasExplicit) {
-              effectivePermissions = [...(a.permissions as string[])];
+              effectivePermissions = [...new Set([...(a.permissions as string[]), ...grantPerms])];
+            } else if (grantPerms.size > 0) {
+              effectivePermissions = [...grantPerms];
             } else {
               effectivePermissions = [];
             }
@@ -1626,24 +1689,33 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       }
 
       // Determine access level with decideServerAccess contract:
-      //   owner | explicit ServerAccess | (node access + node.update) | admin.write/*
+      //   owner | explicit ServerAccess | role-scoped grants |
+      //   (node access + node.update) | admin.write/*
       // Bare node assignment alone is NOT enough.
       let nodeAccessGranted = false;
       const isOwner = server.ownerId === userId;
       const hasExplicitAccess = server.access.some((a) => a.userId === userId);
+      // Server-scoped role resolution: global roles + RoleServerGrant +
+      // RoleNodeGrant rows covering this server. Grant rows make the server
+      // visible here even without a ServerAccess row.
+      const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+      const { decideServerAccess } = await import("../../lib/server-access.js");
+      const scopedRolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
 
       if (!isOwner && !hasExplicitAccess) {
-        const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
-        const { decideServerAccess } = await import("../../lib/server-access.js");
-        const rolePerms = await resolveUserPermissions(userId);
         nodeAccessGranted = await hasNodeAccess(prisma, userId, server.nodeId);
         const decision = decideServerAccess({
           isOwner: false,
           hasExplicitServerAccess: false,
-          rolePermissions: rolePerms,
+          rolePermissions: scopedRolePerms,
           hasNodeAccess: nodeAccessGranted,
         });
-        if (!decision.allowed) {
+        const hasGrant =
+          server.id &&
+          scopedRolePerms.some((p) =>
+            (ALL_SERVER_PERMISSIONS as readonly string[]).includes(p),
+          );
+        if (!decision.allowed && !hasGrant) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -1652,7 +1724,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       // (assignment flag only; getEffectiveServerPermissions still requires node.update)
       const effectivePermissions = await getEffectiveServerPermissions(
         userId,
-        { ownerId: server.ownerId, nodeId: server.nodeId },
+        { id: server.id, ownerId: server.ownerId, nodeId: server.nodeId },
         server.access.map((a) => ({ userId: a.userId, permissions: a.permissions as string[] })),
         isOwner,
         hasExplicitAccess,
@@ -2169,9 +2241,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         const access = await prisma.serverAccess.findUnique({
           where: { userId_serverId: { userId, serverId } },
         });
-        const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
+        const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
         const { decideServerAccess } = await import("../../lib/server-access.js");
-        const rolePerms = await resolveUserPermissions(userId);
+        const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
         const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
         const decision = decideServerAccess({
           isOwner: false,

@@ -74,10 +74,11 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
             permissions: { has: "server.rebuild" },
           },
         });
-        // Global roles may grant server.rebuild panel-wide (mirrors
-        // decideServerAccess's requiredPermission branch).
-        const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
-        const rolePerms = await resolveUserPermissions(userId);
+        // Server-scoped role resolution: global roles + RoleServerGrant +
+        // RoleNodeGrant rows covering this server (mirrors decideServerAccess's
+        // requiredPermission branch).
+        const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+        const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
         const roleAllowed =
           rolePerms.includes("*") ||
           rolePerms.includes("admin.write") ||

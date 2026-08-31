@@ -60,9 +60,11 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const hasConsoleRead = access?.permissions?.includes('console.read');
       const isOwner = server.ownerId === userId;
       const isAdmin = checkIsAdmin(request, 'admin.read');
-      // Global roles may grant console.read panel-wide (mirrors
+      // Server-scoped resolution: global roles + RoleServerGrant +
+      // RoleNodeGrant rows covering this server (mirrors
       // getEffectiveServerPermissions / decideServerAccess).
-      const rolePerms: string[] = (request as any).user?.permissions ?? [];
+      const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
+      const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       const hasRoleConsoleRead = rolePerms.includes('console.read');
       const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
 
@@ -153,9 +155,10 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
       const isAdmin = checkIsAdmin(request, 'admin.read');
       const access = server.access.find((a) => a.userId === userId);
-      // Global roles may grant console.write panel-wide (mirrors
-      // getEffectiveServerPermissions / decideServerAccess).
-      const rolePerms: string[] = (request as any).user?.permissions ?? [];
+      // Server-scoped resolution: global roles + RoleServerGrant +
+      // RoleNodeGrant rows covering this server.
+      const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
+      const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       const hasRoleConsoleWrite = rolePerms.includes('console.write');
       const hasWritePermission =
         access?.permissions?.includes('console.write') ||

@@ -79,14 +79,13 @@ export async function metricsRoutes(app: FastifyInstance) {
 
       // Check permissions — owner, explicit access, global role grant
       // (server.read / admin), or node assignment
-      const rolePerms: string[] = (request.user as { permissions?: string[] })?.permissions ?? [];
+      const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
+      const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
       const canReadMetrics =
         server.ownerId === userId ||
         Boolean(access?.permissions?.includes("server.read")) ||
         rolePerms.includes("server.read") ||
-        rolePerms.includes("admin.write") ||
-        rolePerms.includes("*") ||
         hasNodeAccessToServer;
       if (!canReadMetrics) {
         return reply.status(403).send({ error: "Forbidden" });
@@ -308,14 +307,13 @@ export async function metricsRoutes(app: FastifyInstance) {
 
       // Check permissions — owner, explicit access, global role grant
       // (server.read / admin), or node assignment
-      const rolePerms: string[] = (request.user as { permissions?: string[] })?.permissions ?? [];
+      const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
+      const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
       const canReadMetrics =
         server.ownerId === userId ||
         Boolean(access?.permissions?.includes("server.read")) ||
         rolePerms.includes("server.read") ||
-        rolePerms.includes("admin.write") ||
-        rolePerms.includes("*") ||
         hasNodeAccessToServer;
       if (!canReadMetrics) {
         return reply.status(403).send({ error: "Forbidden" });

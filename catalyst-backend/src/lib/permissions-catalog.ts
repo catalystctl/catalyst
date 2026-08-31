@@ -216,8 +216,33 @@ import { prisma } from '../db';
 import { SimpleCache } from './cache';
 import { broadcastCacheInvalidate, onCacheInvalidate } from './cache-bus';
 
+/**
+ * The canonical server-scoped permission set — the "subuser permission list".
+ *
+ * Single source of truth for:
+ *   - ServerAccess (subuser) grants
+ *   - Role-scoped grants (RoleServerGrant / RoleNodeGrant validation)
+ *   - getEffectiveServerPermissions mapping
+ *   - GET /api/permissions/server → the frontend permission checklist
+ *     (subuser UI + role wizard consume this, so new permissions appear
+ *     in both automatically)
+ */
+export const ALL_SERVER_PERMISSIONS = [
+  'server.read', 'server.start', 'server.stop', 'server.install',
+  'server.reinstall', 'server.rebuild',
+  'server.transfer', 'server.delete', 'server.schedule',
+  'console.read', 'console.write',
+  'file.read', 'file.write',
+  'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
+  'database.read', 'database.create', 'database.rotate', 'database.delete',
+  'alert.read', 'alert.create', 'alert.update', 'alert.delete',
+] as const;
+
 // 30-second TTL cache for resolved user permissions
 const permissionsCache = new SimpleCache<string, string[]>(30_000);
+// Shorter TTL for server-scoped resolutions (key `${userId}:${serverId}`);
+// role-grant mutations flush this cache explicitly.
+const scopedPermissionsCache = new SimpleCache<string, string[]>(15_000);
 
 /**
  * Resolve a user's effective permissions from their roles.
@@ -245,6 +270,67 @@ export async function resolveUserPermissions(
 }
 
 /**
+ * Pure merge of global role permissions with server-scoped and node-scoped
+ * role grants (RoleServerGrant / RoleNodeGrant). Kept pure for unit tests.
+ */
+export function mergeServerPermissions(
+  globalPerms: string[],
+  serverGrantRows: string[][],
+  nodeGrantRows: string[][],
+): string[] {
+  const set = new Set<string>(globalPerms);
+  for (const row of serverGrantRows) for (const p of row) set.add(p);
+  for (const row of nodeGrantRows) for (const p of row) set.add(p);
+  return [...set];
+}
+
+/**
+ * Resolve a user's effective permissions for a SPECIFIC server:
+ * global role permissions UNION RoleServerGrant rows for this server
+ * UNION RoleNodeGrant rows covering this server's node (wildcard
+ * "all nodes" grants have nodeId null).
+ *
+ * Powers the requiredPermission branch of decideServerAccess and
+ * getEffectiveServerPermissions, so role-scoped grants apply consistently
+ * across every per-server check.
+ */
+export async function resolveServerPermissions(
+  userId: string,
+  serverId: string,
+  nodeId: string | null,
+): Promise<string[]> {
+  const cacheKey = `${userId}:${serverId}`;
+  const cached = scopedPermissionsCache.get(cacheKey);
+  if (cached) return cached;
+
+  const [globalPerms, serverGrants, nodeGrants] = await Promise.all([
+    resolveUserPermissions(userId),
+    prisma.roleServerGrant.findMany({
+      where: {
+        serverId,
+        role: { users: { some: { id: userId } } },
+      },
+      select: { permissions: true },
+    }),
+    prisma.roleNodeGrant.findMany({
+      where: {
+        role: { users: { some: { id: userId } } },
+        OR: [{ nodeId: null }, ...(nodeId ? [{ nodeId }] : [])],
+      },
+      select: { permissions: true },
+    }),
+  ]);
+
+  const result = mergeServerPermissions(
+    globalPerms,
+    serverGrants.map((g) => g.permissions),
+    nodeGrants.map((g) => g.permissions),
+  );
+  scopedPermissionsCache.set(cacheKey, result);
+  return result;
+}
+
+/**
  * Invalidate cached permissions for a specific user.
  * Broadcasts to sibling workers when clustered.
  */
@@ -254,11 +340,12 @@ export function invalidateUserPermissions(userId: string): void {
 }
 
 /**
- * Flush the entire permissions cache.
+ * Flush the entire permissions cache (global + server-scoped).
  * Broadcasts to sibling workers when clustered.
  */
 export function flushPermissionsCache(): void {
   permissionsCache.clear();
+  scopedPermissionsCache.clear();
   broadcastCacheInvalidate('permissions', { flushAll: true });
 }
 
@@ -266,7 +353,11 @@ export function flushPermissionsCache(): void {
 onCacheInvalidate('permissions', (payload) => {
   if (payload.flushAll || !payload.userId) {
     permissionsCache.clear();
+    scopedPermissionsCache.clear();
   } else {
     permissionsCache.delete(payload.userId);
+    // Scoped entries are keyed `${userId}:${serverId}` — no prefix scan on
+    // SimpleCache, so a user-targeted invalidation clears the scoped map too.
+    scopedPermissionsCache.clear();
   }
 });

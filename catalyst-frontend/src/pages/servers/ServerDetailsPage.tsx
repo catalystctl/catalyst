@@ -33,6 +33,7 @@ import {
 import { useTasks, normalizeTasks } from '../../hooks/useTasks';
 import { useServerDatabases, useAvailableDatabaseHosts } from '../../hooks/useServerDatabases';
 import { useAuthStore } from '../../stores/authStore';
+import { useServerPermissionOptions } from '../../lib/serverPermissions';
 import { useConsole } from '../../hooks/useConsole';
 import { useEulaPrompt } from '../../hooks/useEulaPrompt';
 import { useMutation, useQuery, useQueryClient } from '@/csync';
@@ -362,28 +363,12 @@ function ServerDetailsPage() {
  }
 
  // ── Permission options ──
+ // Shared server-permission list (backend ALL_SERVER_PERMISSIONS, served via
+ // GET /api/permissions/server) so the subuser checklist and the role wizard
+ // always show the same, current set.
+ const { data: sharedPermissionOptions = [] } = useServerPermissionOptions();
  const permissionOptions = useMemo(() => {
- const base = [
- 'server.read',
- 'server.start',
- 'server.stop',
- 'server.install',
- 'server.transfer',
- 'server.delete',
- 'alert.read',
- 'alert.create',
- 'alert.update',
- 'alert.delete',
- 'console.read',
- 'console.write',
- 'file.read',
- 'file.write',
- 'database.read',
- 'database.create',
- 'database.rotate',
- 'database.delete',
- ];
- const all = new Set<string>(base);
+ const all = new Set<string>(sharedPermissionOptions);
  permissionsData?.data?.forEach((entry) =>
  entry.permissions.forEach((perm) => all.add(perm)),
  );
@@ -393,7 +378,7 @@ function ServerDetailsPage() {
  );
  }
  return Array.from(all).sort();
- }, [permissionsData]);
+ }, [sharedPermissionOptions, permissionsData]);
 
  // ── Mutations ──
  const pauseMutation = useMutation({

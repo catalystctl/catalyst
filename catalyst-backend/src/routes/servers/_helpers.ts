@@ -494,9 +494,13 @@ export const ensureServerAccess = async (
     hasExplicitServerAccess = Boolean(access);
   }
 
-  const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
+  // Server-scoped resolution: global role perms + RoleServerGrant +
+  // RoleNodeGrant rows covering this server.
+  const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
   const rolePerms =
-    server.ownerId === userId ? [] : await resolveUserPermissions(userId);
+    server.ownerId === userId
+      ? []
+      : await resolveServerPermissions(userId, serverId, server.nodeId);
   const hasNodeAccessToServer =
     server.ownerId === userId
       ? false
@@ -1279,30 +1283,40 @@ export const canAccessServer = async (
     hasExplicitServerAccess = Boolean(access);
   }
 
-  const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
-  const rolePermissions = await resolveUserPermissions(userId);
+  // Server-scoped role permissions include RoleServerGrant / RoleNodeGrant
+  // rows — holding any server permission via a scoped grant implies access.
+  const { resolveServerPermissions, ALL_SERVER_PERMISSIONS } = await import(
+    "../../lib/permissions-catalog.js"
+  );
+  const rolePermissions = await resolveServerPermissions(
+    userId,
+    server.id ?? "",
+    server.nodeId,
+  );
+  const hasScopedGrant =
+    server.id !== undefined &&
+    server.id !== "" &&
+    rolePermissions.some((p) => (ALL_SERVER_PERMISSIONS as readonly string[]).includes(p));
   const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
 
-  return decideServerAccess({
-    isOwner: false,
-    hasExplicitServerAccess,
-    rolePermissions,
-    hasNodeAccess: hasNodeAccessToServer,
-  }).allowed;
+  return (
+    decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess,
+      rolePermissions,
+      hasNodeAccess: hasNodeAccessToServer,
+    }).allowed || hasScopedGrant
+  );
 };
 
-// Compute the effective permissions a user has on a specific server.
-// Returns a string[] of permission identifiers (e.g. ['server.read', 'server.start', ...]).
-export const ALL_SERVER_PERMISSIONS = [
-  'server.read', 'server.start', 'server.stop', 'server.install',
-  'server.reinstall', 'server.rebuild',
-  'server.transfer', 'server.delete', 'server.schedule',
-  'console.read', 'console.write',
-  'file.read', 'file.write',
-  'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
-  'database.read', 'database.create', 'database.rotate', 'database.delete',
-  'alert.read', 'alert.create', 'alert.update', 'alert.delete',
-];
+/**
+ * Canonical server-scoped permission set — lives in lib/permissions-catalog
+ * (single source for grants validation, effective-permissions mapping, and
+ * the frontend checklist via GET /api/permissions/server). Re-exported here
+ * for existing import sites.
+ */
+export { ALL_SERVER_PERMISSIONS } from '../../lib/permissions-catalog.js';
+import { ALL_SERVER_PERMISSIONS as ALL_SERVER_PERMISSION_KEYS } from '../../lib/permissions-catalog.js';
 
 /**
  * Effective server-scoped permissions.
@@ -1312,6 +1326,8 @@ export const ALL_SERVER_PERMISSIONS = [
  *   server permissions (global roles may grant granular server perms —
  *   they apply across all servers, mirroring decideServerAccess's
  *   requiredPermission branch)
+ * - RoleServerGrant / RoleNodeGrant rows (role wizard scoped access) are
+ *   part of the scoped resolution when server.id is provided
  * - bare node assignment → [] (NOT a grant)
  *
  * preComputedNodeAccess only means "user is assigned to the node"; it does NOT
@@ -1319,18 +1335,24 @@ export const ALL_SERVER_PERMISSIONS = [
  */
 export const getEffectiveServerPermissions = async (
   userId: string,
-  server: { ownerId: string; nodeId: string },
+  server: { id?: string; ownerId: string; nodeId: string },
   serverAccess?: Array<{ userId: string; permissions: string[] }>,
   preComputedOwner?: boolean,
   preComputedExplicitAccess?: boolean,
   preComputedNodeAccess?: boolean,
 ): Promise<string[]> => {
   if (preComputedOwner ?? server.ownerId === userId) {
-    return ALL_SERVER_PERMISSIONS;
+    return [...ALL_SERVER_PERMISSION_KEYS];
   }
 
-  const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
-  const rolePermissions = await resolveUserPermissions(userId);
+  // Server-scoped resolution: global role perms + RoleServerGrant +
+  // RoleNodeGrant covering this server (when server.id is known).
+  const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+  const rolePermissions = server.id
+    ? await resolveServerPermissions(userId, server.id, server.nodeId)
+    : await (
+        await import("../../lib/permissions-catalog.js")
+      ).resolveUserPermissions(userId);
 
   const hasExplicitServerAccess =
     preComputedExplicitAccess ??
@@ -1346,13 +1368,14 @@ export const getEffectiveServerPermissions = async (
     rolePermissions.includes("admin.write") ||
     (hasNodeAccessToServer && rolePermissions.includes("node.update"))
   ) {
-    return ALL_SERVER_PERMISSIONS;
+    return [...ALL_SERVER_PERMISSION_KEYS];
   }
 
   // Global roles may grant granular server permissions (e.g. a "game manager"
-  // role holding server.start / file.write). Those apply on every server.
+  // role holding server.start / file.write); scoped role grants are already
+  // merged into rolePermissions by resolveServerPermissions.
   const roleGranted = rolePermissions.filter((p) =>
-    (ALL_SERVER_PERMISSIONS as string[]).includes(p),
+    (ALL_SERVER_PERMISSION_KEYS as readonly string[]).includes(p),
   );
 
   if (hasExplicitServerAccess) {
@@ -1381,7 +1404,7 @@ export const ensureDatabasePermission = async (
 ) => {
   const server = await prisma.server.findUnique({
     where: { id: serverId },
-    select: { ownerId: true, suspendedAt: true, suspensionReason: true },
+    select: { ownerId: true, nodeId: true, suspendedAt: true, suspensionReason: true },
   });
 
   if (!server) {
@@ -1414,11 +1437,10 @@ export const ensureDatabasePermission = async (
     return true;
   }
 
-  const roles = await prisma.role.findMany({
-    where: { users: { some: { id: userId } } },
-    select: { permissions: true },
-  });
-  const rolePermissions = roles.flatMap((role) => role.permissions);
+  // Server-scoped role resolution: global roles + RoleServerGrant +
+  // RoleNodeGrant rows covering this server.
+  const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+  const rolePermissions = await resolveServerPermissions(userId, serverId, server.nodeId);
   if (
     rolePermissions.includes("*") ||
     rolePermissions.includes("admin.write") ||
@@ -1427,7 +1449,6 @@ export const ensureDatabasePermission = async (
   ) {
     return true;
   }
-
   reply.status(403).send({ error: message });
   return false;
 };
