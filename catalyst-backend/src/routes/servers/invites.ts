@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, captureSystemError, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
+import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, canManageSubusers, captureSystemError, getEffectiveServerPermissions, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
 import { withRegistrationBypass } from '../../lib/registration-gate.js';
 
 export async function serverInvitesRoutes(app: FastifyInstance) {
@@ -91,14 +91,16 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
-        select: { id: true, name: true, ownerId: true },
+        select: { id: true, name: true, ownerId: true, nodeId: true },
       });
 
       if (!server) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      if (server.ownerId !== userId) {
+      // Subuser management is owner-or-manage-path (admin, node manager) —
+      // plain subusers cannot invite others.
+      if (!(await canManageSubusers(userId, server))) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -120,8 +122,15 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Permissions cannot be empty" });
       }
 
-      // Validate inviter has all permissions they're granting
-      const inviterPerms: string[] = request.user?.permissions ?? [];
+      // Validate inviter has all permissions they're granting — measured
+      // against their effective permissions on THIS server (owner/admin/
+      // node managers hold the full set; session role perms alone would
+      // wrongly deny node managers).
+      const inviterPerms = await getEffectiveServerPermissions(userId, {
+        id: server.id,
+        ownerId: server.ownerId,
+        nodeId: server.nodeId,
+      });
       const hasWildcard = inviterPerms.includes('*');
       if (!hasWildcard) {
         const cantGrant = sanitizedPermissions.filter(
@@ -211,14 +220,14 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
-        select: { ownerId: true },
+        select: { id: true, ownerId: true, nodeId: true },
       });
 
       if (!server) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      if (server.ownerId !== userId) {
+      if (!(await canManageSubusers(userId, server))) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -522,14 +531,14 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
-        select: { ownerId: true },
+        select: { id: true, ownerId: true, nodeId: true },
       });
 
       if (!server) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      if (server.ownerId !== userId) {
+      if (!(await canManageSubusers(userId, server))) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -547,8 +556,13 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Permissions cannot be empty" });
       }
 
-      // Validate owner/requester has all permissions they're granting
-      const requesterPerms: string[] = request.user?.permissions ?? [];
+      // Validate requester has all permissions they're granting — same
+      // effective-permissions basis as the invite route.
+      const requesterPerms = await getEffectiveServerPermissions(userId, {
+        id: server.id,
+        ownerId: server.ownerId,
+        nodeId: server.nodeId,
+      });
       const hasWildcard = requesterPerms.includes('*');
       if (!hasWildcard) {
         const cantGrant = sanitizedPermissions.filter(
@@ -604,14 +618,14 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
-        select: { ownerId: true },
+        select: { id: true, ownerId: true, nodeId: true },
       });
 
       if (!server) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      if (server.ownerId !== userId) {
+      if (!(await canManageSubusers(userId, server))) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 

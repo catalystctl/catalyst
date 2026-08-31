@@ -463,6 +463,32 @@ export const resolveTemplateImage = (
 export { decideServerAccess } from "../../lib/server-access";
 export type { ServerAccessDecision } from "../../lib/server-access";
 
+/**
+ * Whether the user may manage subusers/invites on this server: the owner,
+ * or a manage path (admin.write/*, node access + node.update).
+ *
+ * Deliberately NOT granted by plain ServerAccess rows or scoped role grants
+ * (RoleServerGrant/RoleNodeGrant): inviting and removing users is an
+ * ownership-level action, not a server permission a subuser can hold.
+ */
+export const canManageSubusers = async (
+  userId: string,
+  server: { id: string; ownerId: string; nodeId: string },
+): Promise<boolean> => {
+  if (server.ownerId === userId) return true;
+  const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+  const { decideServerAccess } = await import("../../lib/server-access.js");
+  const rolePerms = await resolveServerPermissions(userId, server.id, server.nodeId);
+  const decision = decideServerAccess({
+    isOwner: false,
+    // ServerAccess rows are excluded by design — see doc comment.
+    hasExplicitServerAccess: false,
+    rolePermissions: rolePerms,
+    hasNodeAccess: await hasNodeAccess(prisma, userId, server.nodeId),
+  });
+  return decision.allowed && (decision.reason === "admin" || decision.reason === "node_manage");
+};
+
 export const ensureServerAccess = async (
   serverId: string,
   userId: string,
