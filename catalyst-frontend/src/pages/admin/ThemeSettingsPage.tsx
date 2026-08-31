@@ -181,7 +181,9 @@ function OidcProviderSection() {
  Record<string, { clientId: string; clientSecret: string; discoveryUrl: string; source: string }>
  >({});
 
- const [prevServerConfigs, setPrevServerConfigs] = useState(serverConfigs);
+ // Same remount rule as the main form below: start the tracker as undefined
+ // so a cached-but-unchanged `serverConfigs` reference still syncs on mount.
+ const [prevServerConfigs, setPrevServerConfigs] = useState<typeof serverConfigs | undefined>(undefined);
  if (serverConfigs !== prevServerConfigs) {
  setPrevServerConfigs(serverConfigs);
  if (Object.keys(serverConfigs).length > 0) {
@@ -477,7 +479,12 @@ function ThemeSettingsPage() {
  };
 
  // ── Initialize form from server ──
- const [prevSettings, setPrevSettings] = useState(settings);
+ // prev must start as undefined — NOT as `settings`. When the query cache
+ // already holds data (e.g. navigating Themes → Plugins → Themes within
+ // staleTime), remounting hands back the same cached object reference, so
+ // `useState(settings)` would make `settings !== prevSettings` false on the
+ // first render and the form would silently stay on its useState defaults.
+ const [prevSettings, setPrevSettings] = useState<typeof settings | undefined>(undefined);
  if (settings !== prevSettings) {
  setPrevSettings(settings);
  if (settings) {

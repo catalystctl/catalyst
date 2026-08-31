@@ -279,7 +279,12 @@ function SecurityPage() {
  search: search.trim() || undefined,
  });
 
- const [prevSettings, setPrevSettings] = useState(settings);
+ // prev must start as undefined — NOT as `settings` — so the sync always runs
+ // on the first render after mount. When the query cache already holds data
+ // (navigating away and back within staleTime), the remount receives the same
+ // cached object reference and `useState(settings)` would skip the sync,
+ // leaving the form on its useState defaults.
+ const [prevSettings, setPrevSettings] = useState<typeof settings | undefined>(undefined);
  if (settings !== prevSettings) {
  setPrevSettings(settings);
  if (settings) {
