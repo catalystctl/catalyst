@@ -299,6 +299,14 @@ export interface ServerInvite {
   cancelledAt?: string | null;
 }
 
+/** Result of creating/regenerating an invite, with delivery info. */
+export interface InviteDeliveryResult {
+  invite: ServerInvite;
+  inviteUrl: string;
+  mailSent: boolean;
+  mailConfigured: boolean;
+}
+
 export interface ServerInvitePreview {
   email: string;
   serverName: string;

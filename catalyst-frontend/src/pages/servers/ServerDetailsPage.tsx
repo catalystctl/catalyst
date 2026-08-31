@@ -64,6 +64,7 @@ import { usePluginTabs } from '../../plugins/hooks';
 import PluginErrorBoundary from '../../plugins/PluginErrorBoundary';
 import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 import EulaModal from '../../components/servers/EulaModal';
+import InviteLinkModal from '../../components/servers/InviteLinkModal';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
 
@@ -323,6 +324,13 @@ function ServerDetailsPage() {
  const [accessPermissions, setAccessPermissions] = useState<
  Record<string, string[]>
  >({});
+ // Copy/paste invite link modal (shown when SMTP is not configured or the
+ // link was regenerated). The modal owns its own copy-to-clipboard state.
+ const [inviteLinkModal, setInviteLinkModal] = useState<{
+ email: string;
+ url: string;
+ inviteId: string;
+ } | null>(null);
 
  // ── State: Databases ──
  const [databaseHostId, setDatabaseHostId] = useState('');
@@ -737,9 +745,15 @@ function ServerDetailsPage() {
  : (permissionsData?.presets[invitePreset] ?? []),
  });
  },
- onSuccess: () => {
+ onSuccess: (result) => {
  setInviteEmail('');
+ if (result.mailSent) {
  notifySuccess('Invite sent');
+ } else {
+ // SMTP not configured (or delivery failed) — surface the link so the
+ // user can share it directly.
+ setInviteLinkModal({ email: result.invite.email, url: result.inviteUrl, inviteId: result.invite.id });
+ }
  },
  onSettled: () => {
  if (serverId)
@@ -749,6 +763,34 @@ function ServerDetailsPage() {
  },
  onError: (error: any) =>
  notifyError(error?.response?.data?.error || 'Failed to send invite'),
+ });
+
+ const regenerateInviteMutation = useMutation({
+ mutationFn: (inviteId: string) => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'regenerateInviteMutation' } });
+ throw new Error('Missing server id');
+ }
+ return serversApi.regenerateInvite(serverId, inviteId);
+ },
+ onSuccess: (result) => {
+ setInviteLinkModal({ email: result.invite.email, url: result.inviteUrl, inviteId: result.invite.id });
+ if (result.mailSent) {
+ notifySuccess('Invite link regenerated and re-sent');
+ } else {
+ notifySuccess('Invite link regenerated — copy the new link below');
+ }
+ },
+ onSettled: () => {
+ if (serverId)
+ queryClient.invalidateQueries({
+ queryKey: qk.serverInvites(serverId),
+ });
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error || 'Failed to regenerate invite',
+ ),
  });
 
  const cancelInviteMutation = useMutation({
@@ -1249,6 +1291,17 @@ function ServerDetailsPage() {
  onCancelInvite={(inviteId) =>
  cancelInviteMutation.mutate(inviteId)
  }
+ regenerateInvitePending={regenerateInviteMutation.isPending}
+ onRegenerateInvite={(inviteId) =>
+ regenerateInviteMutation.mutate(inviteId)
+ }
+ onCopyInviteLink={(invite) =>
+ setInviteLinkModal({
+ email: invite.email,
+ url: `${window.location.origin}/invites/${invite.token}`,
+ inviteId: invite.id,
+ })
+ }
  />
  )}
 
@@ -1361,6 +1414,16 @@ function ServerDetailsPage() {
  isLoading={eulaLoading}
  onAccept={() => respondEula(true)}
  onDecline={() => respondEula(false)}
+ />
+ )}
+
+ {inviteLinkModal && (
+ <InviteLinkModal
+ email={inviteLinkModal.email}
+ url={inviteLinkModal.url}
+ onClose={() => setInviteLinkModal(null)}
+ onRegenerate={() => regenerateInviteMutation.mutate(inviteLinkModal.inviteId)}
+ regeneratePending={regenerateInviteMutation.isPending}
  />
  )}
  </div>

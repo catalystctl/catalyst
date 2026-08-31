@@ -2,7 +2,7 @@ import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
 import SectionHeader from './SectionHeader';
 import TabEmptyState from './TabEmptyState';
-import { Users, UserPlus, ShieldCheck, Mail } from 'lucide-react';
+import { Users, UserPlus, ShieldCheck, Mail, Link2, RefreshCw } from 'lucide-react';
 
 interface UserEntry {
  id: string;
@@ -14,6 +14,7 @@ interface UserEntry {
 interface Invite {
  id: string;
  email: string;
+ token: string;
  expiresAt: string;
 }
 
@@ -38,6 +39,9 @@ interface Props {
  invites: Invite[];
  cancelInvitePending: boolean;
  onCancelInvite: (inviteId: string) => void;
+ regenerateInvitePending: boolean;
+ onRegenerateInvite: (inviteId: string) => void;
+ onCopyInviteLink: (invite: Invite) => void;
 }
 
 export default function ServerUsersTab({
@@ -61,6 +65,9 @@ export default function ServerUsersTab({
  invites,
  cancelInvitePending,
  onCancelInvite,
+ regenerateInvitePending,
+ onRegenerateInvite,
+ onCopyInviteLink,
 }: Props) {
  return (
  <div className="space-y-4">
@@ -249,6 +256,24 @@ export default function ServerUsersTab({
  Expires {new Date(invite.expiresAt).toLocaleString()}
  </div>
  </div>
+ <div className="flex items-center gap-1.5">
+ <button
+ type="button"
+ className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground disabled:opacity-50"
+ onClick={() => onCopyInviteLink(invite)}
+ title="Copy invite link"
+ >
+ <Link2 className="h-3 w-3" /> Copy link
+ </button>
+ <button
+ type="button"
+ className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground disabled:opacity-50"
+ onClick={() => onRegenerateInvite(invite.id)}
+ disabled={regenerateInvitePending}
+ title="Regenerate link (invalidates the old one)"
+ >
+ <RefreshCw className={`h-3 w-3 ${regenerateInvitePending ? 'animate-spin' : ''}`} /> Regenerate
+ </button>
  <button
  type="button"
  className="rounded-md border border-danger/20 px-2 py-0.5 text-[10px] font-medium text-danger transition-all hover:border-danger/40 hover:bg-danger/5 disabled:opacity-50"
@@ -257,6 +282,7 @@ export default function ServerUsersTab({
  >
  Cancel
  </button>
+ </div>
  </div>
  ))
  ) : (

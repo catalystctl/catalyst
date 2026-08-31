@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, canManageSubusers, captureSystemError, getEffectiveServerPermissions, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
+import { isMailConfigured } from '../../services/mailer.js';
 import { withRegistrationBypass } from '../../lib/registration-gate.js';
 
 export async function serverInvitesRoutes(app: FastifyInstance) {
@@ -155,27 +156,35 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       const inviteUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/invites/${token}`;
-      try {
-        const emailContent = await renderInviteEmail({
-          serverName: server.name,
-          inviteUrl,
-          expiresAt,
-        });
-        await sendEmail({
-          to: normalizedEmail,
-          subject: emailContent.subject,
-          html: emailContent.html,
-          text: emailContent.text,
-        });
-      } catch (emailErr: any) {
-        // Log but don't fail — the invite is already in the DB
-        captureSystemError({
-          level: 'warn',
-          component: 'ServerRoutes',
-          message: `Failed to send invite email: ${emailErr?.message || String(emailErr)}`,
-          stack: emailErr?.stack,
-        }).catch(() => {});
-        app.log.warn(emailErr, "Failed to send invite email");
+      // Only attempt delivery when SMTP is configured; otherwise the caller
+      // receives the link and shares it directly (copy/paste modal).
+      const mailConfigured = await isMailConfigured();
+      let mailSent = false;
+      if (mailConfigured) {
+        try {
+          const emailContent = await renderInviteEmail({
+            serverName: server.name,
+            inviteUrl,
+            expiresAt,
+          });
+          await sendEmail({
+            to: normalizedEmail,
+            subject: emailContent.subject,
+            html: emailContent.html,
+            text: emailContent.text,
+          });
+          mailSent = true;
+        } catch (emailErr: any) {
+          // Log but don't fail — the invite is already in the DB and the
+          // link is returned to the caller as a fallback.
+          captureSystemError({
+            level: 'warn',
+            component: 'ServerRoutes',
+            message: `Failed to send invite email: ${emailErr?.message || String(emailErr)}`,
+            stack: emailErr?.stack,
+          }).catch(() => {});
+          app.log.warn(emailErr, "Failed to send invite email");
+        }
       }
 
       await createAuditLog(userId, {
@@ -206,7 +215,93 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         });
       }
 
-      reply.status(201).send({ success: true, data: invite });
+      reply.status(201).send({
+        success: true,
+        data: invite,
+        inviteUrl,
+        mailSent,
+        mailConfigured,
+      });
+    }
+  );
+
+  // Regenerate a pending invite's link (new token + fresh expiry) — for when
+  // the original link was lost or SMTP was not configured at creation time.
+  app.post(
+    "/:serverId/invites/:inviteId/regenerate",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId, inviteId } = request.params as {
+        serverId: string;
+        inviteId: string;
+      };
+      const userId = request.user.userId;
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        select: { id: true, name: true, ownerId: true, nodeId: true },
+      });
+      if (!server) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+      if (!(await canManageSubusers(userId, server))) {
+        return reply.status(403).send({ error: "Forbidden" });
+      }
+
+      const invite = await prisma.serverAccessInvite.findFirst({
+        where: { id: inviteId, serverId },
+      });
+      if (!invite) {
+        return reply.status(404).send({ error: "Invite not found" });
+      }
+      if (invite.acceptedAt || invite.cancelledAt) {
+        return reply.status(409).send({ error: "Only pending invites can be regenerated" });
+      }
+
+      const token = nanoid(32);
+      const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+      const updated = await prisma.serverAccessInvite.update({
+        where: { id: invite.id },
+        data: { token, expiresAt },
+      });
+
+      const inviteUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/invites/${token}`;
+      const mailConfigured = await isMailConfigured();
+      let mailSent = false;
+      if (mailConfigured) {
+        try {
+          const emailContent = await renderInviteEmail({
+            serverName: server.name,
+            inviteUrl,
+            expiresAt,
+          });
+          await sendEmail({
+            to: updated.email,
+            subject: emailContent.subject,
+            html: emailContent.html,
+            text: emailContent.text,
+          });
+          mailSent = true;
+        } catch (emailErr: any) {
+          app.log.warn(emailErr, "Failed to send regenerated invite email");
+        }
+      }
+
+      await createAuditLog(userId, {
+        request,
+        action: "server.invite.regenerate",
+        resource: "server",
+        resourceId: serverId,
+        details: { email: updated.email, inviteId: updated.id },
+      });
+
+      return reply.send({
+        success: true,
+        data: updated,
+        inviteUrl,
+        mailSent,
+        mailConfigured,
+      });
     }
   );
 

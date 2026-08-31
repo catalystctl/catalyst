@@ -12,6 +12,7 @@ import type {
   ServerPermissionsResponse,
   ServerInvite,
   ServerAccessEntry,
+  InviteDeliveryResult,
 } from '../../types/server';
 
 type ApiResponse<T> = {
@@ -172,12 +173,30 @@ export const serversApi = {
     const data = await apiClient.get<ApiResponse<ServerInvite[]>>(`/api/servers/${id}/invites`);
     return Array.isArray(data.data) ? data.data : [];
   },
-  createInvite: async (id: string, payload: { email: string; permissions: string[] }) => {
-    const data = await apiClient.post<ApiResponse<ServerInvite>>(
+  createInvite: async (id: string, payload: { email: string; permissions: string[] }): Promise<InviteDeliveryResult> => {
+    const data = await apiClient.post<
+      ApiResponse<ServerInvite> & { inviteUrl: string; mailSent: boolean; mailConfigured: boolean }
+    >(
       `/api/servers/${id}/invites`,
       payload,
     );
-    return data.data;
+    return {
+      invite: (data.data ?? null) as unknown as ServerInvite,
+      inviteUrl: data.inviteUrl,
+      mailSent: data.mailSent,
+      mailConfigured: data.mailConfigured,
+    };
+  },
+  regenerateInvite: async (id: string, inviteId: string): Promise<InviteDeliveryResult> => {
+    const data = await apiClient.post<
+      ApiResponse<ServerInvite> & { inviteUrl: string; mailSent: boolean; mailConfigured: boolean }
+    >(`/api/servers/${id}/invites/${inviteId}/regenerate`);
+    return {
+      invite: (data.data ?? null) as unknown as ServerInvite,
+      inviteUrl: data.inviteUrl,
+      mailSent: data.mailSent,
+      mailConfigured: data.mailConfigured,
+    };
   },
   cancelInvite: async (id: string, inviteId: string) => {
     const data = await apiClient.delete<ApiResponse<void>>(

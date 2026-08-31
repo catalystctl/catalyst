@@ -387,6 +387,16 @@ const createTransporter = (settings: SmtpSettings) => {
   } as any);
 };
 
+/**
+ * True when an SMTP host+port are configured — i.e. invite/welcome emails
+ * can actually be delivered. Used by flows that offer a copy/paste fallback
+ * (e.g. invite links) when mail is not set up.
+ */
+export const isMailConfigured = async (): Promise<boolean> => {
+  const settings = await getSmtpSettings();
+  return Boolean(settings.host && settings.port);
+};
+
 export const sendEmail = async (payload: {
   to: string;
   subject: string;
