@@ -17,7 +17,12 @@ vi.mock('../../hooks/useUpdateCheck', () => ({
 
 vi.mock('../admin/UpdateProgressModal', () => ({
   default: () => <div data-testid="progress-modal" />,
+  consumePostUpdateReloadToast: vi.fn(() => false),
 }));
+
+import { consumePostUpdateReloadToast as mockConsumeUntyped } from '../admin/UpdateProgressModal';
+
+const mockConsume = vi.mocked(mockConsumeUntyped);
 
 import UpdateNotification from './UpdateNotification';
 
@@ -33,8 +38,10 @@ function mockUpdateData(overrides: Record<string, unknown> = {}) {
 
 describe('UpdateNotification permission gating', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     mockUser.current = undefined;
     mockUpdateCheck.current = undefined;
+    mockConsume.mockReturnValue(false);
     localStorage.clear();
   });
 
@@ -86,5 +93,24 @@ describe('UpdateNotification permission gating', () => {
     localStorage.setItem('catalyst-update-dismissed-v1.29.0', '1');
     render(<UpdateNotification />);
     expect(screen.queryByText(/update available/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the completion toast after a post-update reload (persisted flag)', async () => {
+    const notify = await import('../../utils/notify');
+    const spy = vi.spyOn(notify, 'notifySuccess');
+    mockConsume.mockReturnValue(true);
+    mockUser.current = { permissions: ['admin.write'] };
+    mockUpdateData({ updateAvailable: false });
+    render(<UpdateNotification />);
+    expect(spy).toHaveBeenCalledWith(expect.stringMatching(/update complete/i));
+  });
+
+  it('does not fire the completion toast without the persisted flag', async () => {
+    const notify = await import('../../utils/notify');
+    const spy = vi.spyOn(notify, 'notifySuccess');
+    mockUser.current = { permissions: ['admin.write'] };
+    mockUpdateData({ updateAvailable: false });
+    render(<UpdateNotification />);
+    expect(spy).not.toHaveBeenCalled();
   });
 });

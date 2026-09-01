@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@/csync';
 import { motion } from 'framer-motion';
 import {
   ArrowUpCircle,
   CheckCircle2,
-  Download,
+  Clock,
   Loader2,
   RefreshCw,
   XCircle,
@@ -24,6 +24,64 @@ import { adminApi } from '../../services/api/admin';
 import { formatRelativeTime } from '../../utils/formatters';
 
 type Phase = 'pulling' | 'restarting' | 'failed';
+
+/** localStorage flag: show a completion toast after the post-update reload. */
+const LS_UPDATE_RELOADED = 'catalyst-update-completed-toast';
+
+/** How long to wait in `restarting` before probing the panel again. */
+const RESTART_GRACE_MS = 15_000;
+/** Probe interval while waiting for the panel to come back. */
+const RESTART_PROBE_MS = 3_000;
+/** How long the success state stays before the page reloads. */
+const SUCCESS_LINGER_MS = 2_500;
+
+export function consumePostUpdateReloadToast(): boolean {
+  try {
+    if (localStorage.getItem(LS_UPDATE_RELOADED) !== '1') return false;
+    localStorage.removeItem(LS_UPDATE_RELOADED);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * After the backend swaps containers the old process (and this page's
+ * queries) are gone — the state endpoint can no longer report completion.
+ * Instead, once `restarting` has held for RESTART_GRACE_MS, probe the
+ * unauthenticated /api/update/check endpoint until the panel answers;
+ * the first response means the new version is up. Reload shortly after.
+ */
+function usePanelRestartWatch(active: boolean) {
+  const [panelBack, setPanelBack] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    let probeTimer: number | undefined;
+    let cancelled = false;
+    const graceTimeout = window.setTimeout(() => {
+      const probe = () => {
+        fetch('/api/update/check', { credentials: 'include' })
+          .then((res) => {
+            if (!cancelled && res.ok) {
+              setPanelBack(true);
+            } else if (!cancelled) {
+              probeTimer = window.setTimeout(probe, RESTART_PROBE_MS);
+            }
+          })
+          .catch(() => {
+            if (!cancelled) probeTimer = window.setTimeout(probe, RESTART_PROBE_MS);
+          });
+      };
+      probe();
+    }, RESTART_GRACE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(graceTimeout);
+      if (probeTimer) window.clearTimeout(probeTimer);
+    };
+  }, [active]);
+  return panelBack;
+}
 
 const PHASE_STEPS: Array<{ phase: Phase; label: string; description: string }> = [
   {
@@ -98,19 +156,37 @@ export default function UpdateProgressModal({
     refetchInterval: open ? 3_000 : false,
   });
 
+  const phase = state?.state ?? 'idle';
+  const restarting = phase === 'restarting';
+  const panelBack = usePanelRestartWatch(open && restarting);
+
+  // When the panel answers again after a restart: persist the completion
+  // toast flag, show "Update complete", then reload into the new version.
+  const reloadScheduledRef = useRef(false);
+  useEffect(() => {
+    if (!panelBack || reloadScheduledRef.current) return;
+    reloadScheduledRef.current = true;
+    try {
+      localStorage.setItem(LS_UPDATE_RELOADED, '1');
+    } catch {
+      // ignore
+    }
+    const t = window.setTimeout(() => window.location.reload(), SUCCESS_LINGER_MS);
+    return () => window.clearTimeout(t);
+  }, [panelBack]);
+
   const prevPhaseRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    const phase = state?.state;
-    if (prevPhaseRef.current && prevPhaseRef.current !== phase) {
+    const current = state?.state;
+    if (prevPhaseRef.current && prevPhaseRef.current !== current) {
       // Invalidate the update-check cache so "update available" badges clear
       // as soon as the new version is live (or after a failed attempt).
       queryClient.invalidateQueries({ queryKey: qk.updateCheck() });
       queryClient.invalidateQueries({ queryKey: qk.adminUpdateStatus() });
     }
-    prevPhaseRef.current = phase;
+    prevPhaseRef.current = current;
   }, [state?.state, queryClient]);
 
-  const phase = state?.state ?? 'idle';
   const pullingStatus =
     phase === 'pulling'
       ? 'active'
@@ -136,7 +212,19 @@ export default function UpdateProgressModal({
         </DialogHeader>
 
         <DialogBody className="space-y-4">
-          {phase === 'idle' ? (
+          {panelBack ? (
+            <div className="flex items-center gap-3 rounded-lg border border-success/20 bg-success-muted/30 px-3 py-3">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
+              <div>
+                <div className="text-sm font-medium text-foreground">
+                  Update complete
+                </div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  The panel is back online. Reloading into the new version…
+                </div>
+              </div>
+            </div>
+          ) : phase === 'idle' ? (
             <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-xs text-muted-foreground">
               <RefreshCw className="h-3.5 w-3.5 shrink-0" />
               Waiting for the update to start…
@@ -170,18 +258,18 @@ export default function UpdateProgressModal({
                 </div>
               )}
 
-              {phase === 'restarting' && (
+              {restarting && (
                 <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2.5 text-xs text-warning">
-                  <Download className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>
-                    The panel will be briefly unavailable while containers are
-                    recreated. Refresh the page once it comes back to load the
-                    new version.
+                    Containers are restarting. This page will reload
+                    automatically as soon as the panel is back (checking every
+                    few seconds).
                   </span>
                 </div>
               )}
 
-              {state?.startedAt && (
+              {state?.startedAt && !panelBack && (
                 <div className="text-[11px] text-muted-foreground">
                   Started {formatRelativeTime(state.startedAt)}
                   {state.message && phase === 'pulling' ? ` — ${state.message}` : ''}
@@ -195,10 +283,10 @@ export default function UpdateProgressModal({
           <Button
             size="sm"
             variant="outline"
-            disabled={phase === 'pulling' || phase === 'restarting'}
+            disabled={active && !panelBack}
             onClick={onClose}
           >
-            {phase === 'pulling' || phase === 'restarting' ? 'Update in progress…' : 'Close'}
+            {active && !panelBack ? 'Update in progress…' : 'Close'}
           </Button>
         </DialogFooter>
       </DialogContent>

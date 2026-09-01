@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, X, ArrowUpCircle, BellOff, Clock, BellRing, Ban } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -15,8 +15,8 @@ import {
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { adminApi } from '../../services/api/admin';
-import { notifyError } from '../../utils/notify';
-import UpdateProgressModal from '../admin/UpdateProgressModal';
+import { notifyError, notifySuccess } from '../../utils/notify';
+import UpdateProgressModal, { consumePostUpdateReloadToast } from '../admin/UpdateProgressModal';
 
 // ── localStorage keys ──
 const LS_DISMISS_VERSION_PREFIX = 'catalyst-update-dismissed-v';
@@ -81,6 +81,17 @@ export default function UpdateNotification() {
  const hasAdminWrite = user?.permissions?.includes('admin.write') || user?.permissions?.includes('*');
  const canUpdate = hasAdminWrite && updateData?.isDocker;
  const latestVersion = updateData?.latestVersion ?? '';
+
+ // Post-update reload: greet the admin with a completion toast exactly once.
+ // This component lives in AppLayout so it re-runs after the auto-reload.
+ const reloadedRef = useRef(false);
+ useEffect(() => {
+   if (reloadedRef.current || !hasAdminWrite) return;
+   reloadedRef.current = true;
+   if (consumePostUpdateReloadToast()) {
+     notifySuccess('Panel update complete — you are now on the latest version.');
+   }
+ }, [hasAdminWrite]);
 
  const handleQuickDismiss = useCallback(() => {
  // X button — just dismiss for this session (no modal, no localStorage)
