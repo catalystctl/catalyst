@@ -273,7 +273,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "catalyst-agent"
-version = "1.28.0"
+version = "1.28.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -286,6 +286,7 @@ dependencies = [
  "nix",
  "num_cpus",
  "once_cell",
+ "prost",
  "prost-types",
  "rand",
  "regex",

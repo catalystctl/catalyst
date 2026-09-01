@@ -339,35 +339,44 @@ impl WebSocketHandler {
 
                 // Read events from containerd gRPC streaming
                 while let Ok(Some(envelope)) = receiver.message().await {
-                    let topic = &envelope.topic;
-                    debug!("Container {} event topic: {}", monitor_container_id, topic);
+                    debug!(
+                        "Container {} event topic: {}",
+                        monitor_container_id, envelope.topic
+                    );
 
-                    // Check for exit-related events
-                    if topic.contains("/tasks/exit") || topic.contains("/tasks/delete") {
-                        // Container has stopped, get exit code
-                        let exit_code = monitor_handler
-                            .runtime
-                            .get_container_exit_code(&monitor_container_id)
-                            .await
-                            .unwrap_or(None);
-                        let reason = if exit_code == Some(137) {
-                            OOM_KILL_REASON.to_string()
-                        } else {
-                            match exit_code {
-                                Some(code) => format!("Container exited with code {}", code),
-                                None => "Container exited".to_string(),
-                            }
-                        };
-                        monitor_handler
-                            .handle_container_exit(
-                                &monitor_server_id,
-                                &monitor_container_id,
-                                &reason,
-                                exit_code,
-                            )
-                            .await;
-                        break;
-                    }
+                    // The subscription is node-wide (server-side containerd
+                    // filters are unreliable across versions), so decode the
+                    // envelope and only react to task exit events that belong
+                    // to THIS container. Reacting to foreign events caused
+                    // false "Container exited" restarts whenever any other
+                    // container on the node exited.
+                    let Some(task_event) =
+                        crate::runtime_manager::container_ops::match_task_exit_event(
+                            &envelope,
+                            &monitor_container_id,
+                        )
+                    else {
+                        continue;
+                    };
+
+                    // Prefer the exit status carried by the event itself —
+                    // querying the task service afterwards races with task
+                    // reaping (delete) and can return None.
+                    let exit_code = Some(task_event.exit_status as i32);
+                    let reason = if exit_code == Some(137) {
+                        OOM_KILL_REASON.to_string()
+                    } else {
+                        format!("Container exited with code {}", task_event.exit_status)
+                    };
+                    monitor_handler
+                        .handle_container_exit(
+                            &monitor_server_id,
+                            &monitor_container_id,
+                            &reason,
+                            exit_code,
+                        )
+                        .await;
+                    break;
                 }
 
                 // Clean up

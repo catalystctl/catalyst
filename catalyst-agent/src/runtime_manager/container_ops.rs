@@ -1563,3 +1563,170 @@ impl ContainerdRuntime {
         let _ = fs::remove_dir_all(self.console_log_dir.join(container_id));
     }
 }
+
+/// A decoded containerd task event relevant to lifecycle monitoring.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskExitEvent {
+    pub container_id: String,
+    pub exit_status: u32,
+}
+
+/// Decode a containerd `Envelope` and return the task event it carries if (and
+/// only if) it belongs to `container_id`.
+///
+/// The lifecycle monitor subscribes to the node-wide containerd event stream
+/// (server-side filters are unreliable across containerd versions), so it
+/// MUST match events by container ID before reacting. Every exit-topic
+/// payload (`TaskExit`, `TaskDelete`) carries `container_id`; events that
+/// decode to a different container, to an unrelated topic, or fail to decode
+/// return `None` instead of being treated as this container's exit.
+///
+/// Pure function — no I/O, trivially unit-testable.
+pub fn match_task_exit_event(
+    envelope: &containerd_client::types::Envelope,
+    container_id: &str,
+) -> Option<TaskExitEvent> {
+    use prost::Message;
+
+    let event = envelope.event.as_ref()?;
+    let task_event = match envelope.topic.as_str() {
+        // tasks/exit fires when the task's init process exits; the payload is
+        // containerd.events.TaskExit (protobuf full name below).
+        "/tasks/exit" => containerd_client::events::TaskExit::decode(event.value.as_slice())
+            .ok()
+            .map(|e| TaskExitEvent {
+                container_id: e.container_id,
+                exit_status: e.exit_status,
+            }),
+        // tasks/delete fires when the task is reaped/removed (e.g. after a
+        // deferred delete); the payload is containerd.events.TaskDelete.
+        "/tasks/delete" => containerd_client::events::TaskDelete::decode(event.value.as_slice())
+            .ok()
+            .map(|e| TaskExitEvent {
+                container_id: e.container_id,
+                exit_status: e.exit_status,
+            }),
+        _ => None,
+    }?;
+
+    // This is the guard that fixes the false-exit bug: only report the event
+    // when it is actually about the container we are monitoring.
+    if task_event.container_id == container_id {
+        Some(task_event)
+    } else {
+        debug!(
+            "Ignoring task event for unrelated container {} (monitoring {})",
+            task_event.container_id, container_id
+        );
+        None
+    }
+}
+
+#[cfg(test)]
+mod event_match_tests {
+    use super::match_task_exit_event;
+    use containerd_client::events::{TaskDelete, TaskExit};
+    use containerd_client::types::Envelope;
+    use prost::Message;
+
+    fn envelope(topic: &str, payload: Vec<u8>) -> Envelope {
+        Envelope {
+            timestamp: None,
+            namespace: "catalyst".to_string(),
+            topic: topic.to_string(),
+            event: Some(::prost_types::Any {
+                type_url: format!(
+                    "type.googleapis.com/containerd.events.{}",
+                    topic_short(topic)
+                ),
+                value: payload,
+            }),
+        }
+    }
+
+    fn topic_short(topic: &str) -> String {
+        topic.trim_start_matches('/').replace('/', ".")
+    }
+
+    fn exit_event(container_id: &str, status: u32) -> Envelope {
+        let payload = TaskExit {
+            container_id: container_id.to_string(),
+            id: String::new(),
+            pid: 42,
+            exit_status: status,
+            exited_at: None,
+        }
+        .encode_to_vec();
+        envelope("/tasks/exit", payload)
+    }
+
+    #[test]
+    fn matches_own_exit_event() {
+        let env = exit_event("srv-123", 0);
+        let matched = match_task_exit_event(&env, "srv-123").expect("should match own exit");
+        assert_eq!(matched.container_id, "srv-123");
+        assert_eq!(matched.exit_status, 0);
+    }
+
+    #[test]
+    fn ignores_other_containers_exit_events() {
+        // The false-exit bug: another container on the node exited.
+        let env = exit_event("other-server", 1);
+        assert!(match_task_exit_event(&env, "srv-123").is_none());
+    }
+
+    #[test]
+    fn matches_own_delete_event_with_status() {
+        let payload = TaskDelete {
+            container_id: "srv-123".to_string(),
+            pid: 42,
+            exit_status: 137,
+            exited_at: None,
+            id: String::new(),
+        }
+        .encode_to_vec();
+        let env = envelope("/tasks/delete", payload);
+        let matched = match_task_exit_event(&env, "srv-123").expect("should match own delete");
+        assert_eq!(matched.exit_status, 137);
+    }
+
+    #[test]
+    fn ignores_other_containers_delete_events() {
+        let payload = TaskDelete {
+            container_id: "installer-abc".to_string(),
+            pid: 7,
+            exit_status: 0,
+            exited_at: None,
+            id: String::new(),
+        }
+        .encode_to_vec();
+        let env = envelope("/tasks/delete", payload);
+        assert!(match_task_exit_event(&env, "srv-123").is_none());
+    }
+
+    #[test]
+    fn ignores_unrelated_topics() {
+        // e.g. container create/delete events, snapshots, etc.
+        let env = exit_event("srv-123", 0);
+        let mut env = env;
+        env.topic = "/containers/create".to_string();
+        assert!(match_task_exit_event(&env, "srv-123").is_none());
+    }
+
+    #[test]
+    fn ignores_garbage_payload() {
+        let env = envelope("/tasks/exit", vec![0xff, 0xff, 0xff]);
+        assert!(match_task_exit_event(&env, "srv-123").is_none());
+    }
+
+    #[test]
+    fn ignores_missing_event() {
+        let env = Envelope {
+            timestamp: None,
+            namespace: "catalyst".to_string(),
+            topic: "/tasks/exit".to_string(),
+            event: None,
+        };
+        assert!(match_task_exit_event(&env, "srv-123").is_none());
+    }
+}

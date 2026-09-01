@@ -77,3 +77,6 @@ SESSION_BRIDGE_CATCODE_OPENCODE.md
 .sphinx/
 .sphinxignore
 .opencode/
+
+# Dedicated templates repo (own git project: catalystctl/catalyst-templates)
+/catalyst-template/
