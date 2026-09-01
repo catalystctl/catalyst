@@ -37,6 +37,7 @@ import { formatFileMode } from '../../utils/formatters';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import { collectDroppedFiles, isFileDrag } from '../../utils/droppedFiles';
 import { buildBreadcrumbs, getParentPath, joinPath, normalizePath } from '../../utils/filePaths';
+import { useUploadStore } from '../../stores/uploadStore';
 import {
  Dialog,
  DialogContent,
@@ -359,21 +360,68 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  targetPath?: string;
  batches?: Array<{ files: File[]; targetPath: string }>;
  }) => {
+ const uploadStore = useUploadStore.getState();
+ const abortController = new AbortController();
+ const abortSignal = abortController.signal;
+ if (signal) {
+ if (signal.aborted) abortController.abort();
+ else signal.addEventListener('abort', () => abortController.abort(), { once: true });
+ }
+
+ const runBatch = async (batchFiles: File[], destPath: string) => {
+ await assertUploadSize(batchFiles);
+ const sessionId = uploadStore.beginSession(
+ batchFiles.map((file) => ({
+ path: joinPath(destPath, file.name),
+ name: file.name,
+ total: file.size,
+ })),
+ );
+ uploadStore.registerAbort(sessionId, abortController);
+ try {
+ await filesApi.upload(
+ serverId,
+ destPath,
+ batchFiles,
+ (fileIndex, pct, loaded, total) => {
+ onProgress?.(fileIndex, pct);
+ if (loaded === undefined) return;
+ const file = batchFiles[fileIndex];
+ if (!file) return;
+ uploadStore.setFileProgress(sessionId, fileIndex, loaded, total);
+ },
+ abortSignal,
+ );
+ batchFiles.forEach((_, fileIndex) => uploadStore.setFileDone(sessionId, fileIndex));
+ } catch (error: any) {
+ const aborted = abortSignal.aborted || error?.message === 'Upload aborted';
+ if (aborted) {
+ uploadStore.markSessionCanceled(sessionId);
+ } else {
+ const message = error?.message || 'Upload failed';
+ batchFiles.forEach((_, fileIndex) => uploadStore.setFileError(sessionId, fileIndex, message));
+ }
+ throw error;
+ }
+ };
+
  if (batches?.length) {
  for (const batch of batches) {
- await assertUploadSize(batch.files);
- await filesApi.upload(serverId, batch.targetPath, batch.files, onProgress, signal);
+ await runBatch(batch.files, batch.targetPath);
  }
  return;
  }
- await assertUploadSize(files);
- await filesApi.upload(serverId, targetPath ?? path, files, onProgress, signal);
+ await runBatch(files, targetPath ?? path);
  },
  onSuccess: () => {
  setShowUpload(false);
  notifySuccess('Upload complete');
  },
  onError: (error: any) => {
+ if (error?.message === 'Upload aborted') {
+ notifyInfo('Upload canceled');
+ return;
+ }
  notifyError(error?.message || 'Failed to upload files');
  },
  onSettled: () => {

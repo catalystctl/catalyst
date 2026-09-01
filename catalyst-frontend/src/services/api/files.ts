@@ -181,7 +181,7 @@ export const filesApi = {
     serverId: string,
     path: string,
     files: File[],
-    onProgress?: (fileIndex: number, progress: number) => void,
+    onProgress?: (fileIndex: number, progress: number, loaded?: number, total?: number) => void,
     signal?: AbortSignal,
   ) => {
     const normalizedPath = normalizePath(path);
@@ -197,7 +197,7 @@ export const filesApi = {
 
           xhr.upload.addEventListener('progress', (e) => {
             if (e.lengthComputable && onProgress) {
-              onProgress(index, Math.round((e.loaded / e.total) * 100));
+              onProgress(index, Math.round((e.loaded / e.total) * 100), e.loaded, e.total);
             }
           });
 

@@ -11,6 +11,7 @@ import { Menu, X, Search } from 'lucide-react';
 import SearchPalette from '../search/SearchPalette';
 import { cn } from '@/lib/utils';
 import UpdateNotification from '../shared/UpdateNotification';
+import UploadProgressIndicator from '../files/UploadProgressIndicator';
 
 function AppLayout() {
   useServerStateUpdates();
@@ -122,6 +123,7 @@ function AppLayout() {
 
 
       <SearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <UploadProgressIndicator />
     </div>
   );
 }
