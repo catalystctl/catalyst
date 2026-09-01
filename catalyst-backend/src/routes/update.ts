@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import {
 	getUpdateStatus,
+	getUpdateState,
 	performUpdate,
 	checkForUpdate,
 } from '../services/auto-updater.js';
@@ -66,6 +67,19 @@ export async function updateRoutes(app: FastifyInstance) {
 				success: false,
 				message: result.message,
 			});
+		},
+	);
+
+	// Live update progress (admin only) — polled by the frontend while an
+	// update is running so users can see what the panel is doing.
+	app.get(
+		'/state',
+		{ preHandler: [authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!checkPerm(request, 'admin.write')) {
+				return reply.status(403).send({ error: 'Admin write permission required' });
+			}
+			return reply.send(getUpdateState());
 		},
 	);
 }

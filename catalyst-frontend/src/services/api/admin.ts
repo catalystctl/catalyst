@@ -21,6 +21,7 @@ import type {
   RolePreset,
   SystemErrorsResponse,
   UpdateStatusResponse,
+  UpdateStateResponse,
   DatabaseHostPingResult,
   DbStatusResult,
 } from '../../types/admin';
@@ -373,6 +374,10 @@ export const adminApi = {
   },
   updateStatus: async () => {
     const data = await apiClient.get<UpdateStatusResponse>('/api/admin/update/status');
+    return data;
+  },
+  updateState: async () => {
+    const data = await apiClient.get<UpdateStateResponse>('/api/admin/update/state');
     return data;
   },
   triggerUpdate: async () => {

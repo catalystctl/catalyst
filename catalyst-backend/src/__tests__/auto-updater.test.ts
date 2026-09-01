@@ -7,6 +7,7 @@ import {
 	composePathFromLabels,
 	formatDockerUpdateError,
 	getComposePath,
+	getUpdateState,
 	performUpdate,
 } from "../services/auto-updater";
 
@@ -103,5 +104,19 @@ describe("performUpdate", () => {
 		expect(result.message).toMatch(
 			/Could not find docker-compose.yml|docker CLI is not available|not found/,
 		);
+	});
+});
+
+describe("update state machine", () => {
+	it("reports failed with the error message when a direct-mode update is attempted", async () => {
+		delete process.env.AUTO_UPDATE_FORCE_DOCKER;
+		process.env.AUTO_UPDATE_FORCE_DOCKER = "false";
+		// Direct mode (isDocker() false in test env) always fails with guidance.
+		const result = await performUpdate();
+		expect(result.success).toBe(false);
+		const state = getUpdateState();
+		expect(state.state).toBe("failed");
+		expect(state.message).toMatch(/manual/i);
+		expect(state.updatedAt).toBeTruthy();
 	});
 });

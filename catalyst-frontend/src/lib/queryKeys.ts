@@ -168,6 +168,7 @@ export const qk = {
   adminThemeSettings: () => ['admin-theme-settings'] as const,
   adminOidcConfig: () => ['admin-oidc-config'] as const,
   adminUpdateStatus: () => ['admin-update-status'] as const,
+  adminUpdateState: () => ['admin-update-state'] as const,
   updateCheck: () => ['update-check'] as const,
 
   // ── Profile ─────────────────────────────────────────────────────────

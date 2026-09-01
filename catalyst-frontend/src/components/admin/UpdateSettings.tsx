@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@/csync';
 import {
  ArrowUpCircle,
@@ -14,7 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { qk } from '@/lib/queryKeys';
 import { adminApi } from '../../services/api/admin';
-import { notifyError, notifySuccess } from '../../utils/notify';
+import { notifyError } from '../../utils/notify';
+import UpdateProgressModal from './UpdateProgressModal';
 
 function InfoRow({
  icon,
@@ -45,6 +47,7 @@ function InfoRow({
 
 export default function UpdateSettings() {
  const queryClient = useQueryClient();
+ const [progressOpen, setProgressOpen] = useState(false);
 
  const { data: status, isLoading } = useQuery({
  queryKey: qk.adminUpdateStatus(),
@@ -56,9 +59,10 @@ export default function UpdateSettings() {
  const triggerMutation = useMutation({
  mutationFn: adminApi.triggerUpdate,
  onSuccess: (result) => {
- if (result.success) {
- notifySuccess(result.message || 'Update triggered');
- } else {
+ // Show the live progress modal regardless of immediate success: the
+ // backend state endpoint reports pull/restart progress or the failure.
+ setProgressOpen(true);
+ if (!result.success) {
  notifyError(result.message || 'Update failed');
  }
  },
@@ -202,6 +206,8 @@ export default function UpdateSettings() {
  </>
  )}
  </div>
+
+ <UpdateProgressModal open={progressOpen} onClose={() => setProgressOpen(false)} />
  </div>
  );
 }

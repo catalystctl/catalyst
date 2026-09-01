@@ -406,3 +406,10 @@ export interface UpdateStatusResponse {
   isDocker: boolean;
   autoUpdateEnabled: boolean;
 }
+
+export interface UpdateStateResponse {
+  state: 'idle' | 'pulling' | 'restarting' | 'failed';
+  message: string | null;
+  startedAt: string | null;
+  updatedAt: string | null;
+}

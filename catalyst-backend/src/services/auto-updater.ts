@@ -18,6 +18,44 @@ export interface UpdateStatus {
 	autoUpdateEnabled: boolean;
 }
 
+/**
+ * Coarse progress state for a panel self-update, polled by the frontend
+ * while an update runs. `idle` between updates; `pulling` while compose
+ * downloads images; `restarting` once `compose up -d` has been launched
+ * (the panel goes down briefly); `failed` when the pull/check phase
+ * errored (the restarting phase cannot report failure — the process may
+ * be killed at any moment during it).
+ */
+export interface UpdateState {
+	state: "idle" | "pulling" | "restarting" | "failed";
+	message: string | null;
+	startedAt: string | null;
+	updatedAt: string | null;
+}
+
+let updateState: UpdateState = {
+	state: "idle",
+	message: null,
+	startedAt: null,
+	updatedAt: null,
+};
+
+function setUpdateState(state: UpdateState["state"], message?: string | null) {
+	updateState = {
+		state,
+		message: message ?? null,
+		startedAt:
+			state === "pulling"
+				? new Date().toISOString()
+				: updateState.startedAt,
+		updatedAt: new Date().toISOString(),
+	};
+}
+
+export function getUpdateState(): UpdateState {
+	return updateState;
+}
+
 let cachedStatus: UpdateStatus = {
 	currentVersion: getCurrentVersion(),
 	latestVersion: null,
@@ -316,11 +354,16 @@ export async function performUpdate(logger?: {
 				"Could not find docker-compose.yml. The backend was not started by Docker Compose " +
 				"(no com.docker.compose.project.working_dir label) and AUTO_UPDATE_DOCKER_COMPOSE_PATH is unset.";
 			logger?.error?.({ composePath: null }, message);
+			setUpdateState("failed", message);
 			return { success: false, message };
 		}
 		const { composePath } = context;
 
 		logger?.info?.({ composePath }, "Initiating Docker-based auto-update");
+		setUpdateState(
+			"pulling",
+			"Downloading the latest Catalyst images (this can take a few minutes)…",
+		);
 
 		try {
 			await new Promise<void>((resolve, reject) => {
@@ -351,6 +394,10 @@ export async function performUpdate(logger?: {
 
 			// Recreating this container kills in-process compose. A sibling
 			// docker:cli container bind-mounts the host compose dir and survives.
+			setUpdateState(
+				"restarting",
+				"Images pulled. Restarting containers — the panel will be briefly unavailable.",
+			);
 			const apply = spawnComposeHelper(context, ["up", "-d"], {
 				detached: true,
 			});
@@ -369,6 +416,7 @@ export async function performUpdate(logger?: {
 			if (logger?.error) {
 				logger.error({ err: error }, "Docker update failed");
 			}
+			setUpdateState("failed", message);
 			captureSystemError({
 				level: "error",
 				component: "AutoUpdater",
@@ -383,6 +431,7 @@ export async function performUpdate(logger?: {
 	const message =
 		"Direct-mode auto-update requires manual restart. Please update Catalyst manually.";
 	logger?.warn?.(message);
+	setUpdateState("failed", message);
 	return { success: false, message };
 }
 
