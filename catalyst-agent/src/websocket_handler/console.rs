@@ -337,6 +337,30 @@ impl WebSocketHandler {
                 // Take the event receiver from the containerd stream
                 let mut receiver = event_stream.receiver;
 
+                // Record the live task's PID. containerd's event service
+                // REPLAYS its event backlog to every new subscriber, so the
+                // stream starts with (among others) this container's PREVIOUS
+                // task exit events — identical container ID, different PID.
+                // Exit events whose PID differs from the live task are replay
+                // noise, not a real exit of the current process.
+                let live_pid = monitor_handler
+                    .runtime
+                    .get_container_task_pid(&monitor_container_id)
+                    .await
+                    .unwrap_or_else(|e| {
+                        warn!(
+                            "Failed to query live task pid for {}: {} — PID filtering disabled for this monitor",
+                            monitor_container_id, e
+                        );
+                        None
+                    });
+                if let Some(pid) = live_pid {
+                    debug!(
+                        "Exit monitor for {}: watching task pid {}",
+                        monitor_container_id, pid
+                    );
+                }
+
                 // Read events from containerd gRPC streaming
                 while let Ok(Some(envelope)) = receiver.message().await {
                     debug!(
@@ -347,17 +371,35 @@ impl WebSocketHandler {
                     // The subscription is node-wide (server-side containerd
                     // filters are unreliable across versions), so decode the
                     // envelope and only react to task exit events that belong
-                    // to THIS container. Reacting to foreign events caused
-                    // false "Container exited" restarts whenever any other
-                    // container on the node exited.
+                    // to THIS container AND this task's PID. Container-ID
+                    // mismatches are other containers' events; PID mismatches
+                    // are backlog replays of previous task generations.
                     let Some(task_event) =
                         crate::runtime_manager::container_ops::match_task_exit_event(
                             &envelope,
                             &monitor_container_id,
+                            live_pid,
                         )
                     else {
                         continue;
                     };
+
+                    // Belt and braces: confirm the task is really gone before
+                    // declaring an exit. A genuine exit event is immediately
+                    // followed by task reaping, so this is true for real
+                    // exits and false for anything we misclassified.
+                    if monitor_handler
+                        .runtime
+                        .is_container_running(&monitor_container_id)
+                        .await
+                        .unwrap_or(false)
+                    {
+                        warn!(
+                            "Exit event received for {} but container still running — ignoring stale event",
+                            monitor_container_id
+                        );
+                        continue;
+                    }
 
                     // Prefer the exit status carried by the event itself —
                     // querying the task service afterwards races with task

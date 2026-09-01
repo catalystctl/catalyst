@@ -1206,6 +1206,26 @@ impl ContainerdRuntime {
         }
     }
 
+    /// PID of the container task's init process, or `None` if the container
+    /// has no live task (never started, or already exited and reaped).
+    ///
+    /// Used by the lifecycle monitor to distinguish the current task from
+    /// stale events replayed by containerd's event backlog (see
+    /// `match_task_exit_event`).
+    pub async fn get_container_task_pid(&self, container_id: &str) -> AgentResult<Option<u32>> {
+        let mut tasks = TasksClient::new(self.channel.clone());
+        let req = containerd_client::services::v1::GetRequest {
+            container_id: container_id.to_string(),
+            ..Default::default()
+        };
+        let req = with_namespace!(req, &self.namespace);
+        match tasks.get(req).await {
+            Ok(resp) => Ok(resp.into_inner().process.map(|p| p.pid)),
+            Err(e) if e.code() == tonic::Code::NotFound => Ok(None),
+            Err(e) => Err(grpc_err(e)),
+        }
+    }
+
     pub async fn get_container_exit_code(&self, container_id: &str) -> AgentResult<Option<i32>> {
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = containerd_client::services::v1::GetRequest {
@@ -1568,23 +1588,33 @@ impl ContainerdRuntime {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskExitEvent {
     pub container_id: String,
+    /// PID of the process whose exit this event describes (the task's init
+    /// process for the events the lifecycle monitor cares about).
+    pub pid: u32,
     pub exit_status: u32,
 }
 
-/// Decode a containerd `Envelope` and return the task event it carries if (and
-/// only if) it belongs to `container_id`.
+/// Decode a containerd `Envelope` and return the task event it carries if
+/// (and only if) it describes the exit of the task we are monitoring.
 ///
 /// The lifecycle monitor subscribes to the node-wide containerd event stream
 /// (server-side filters are unreliable across containerd versions), so it
-/// MUST match events by container ID before reacting. Every exit-topic
-/// payload (`TaskExit`, `TaskDelete`) carries `container_id`; events that
-/// decode to a different container, to an unrelated topic, or fail to decode
-/// return `None` instead of being treated as this container's exit.
+/// MUST validate events before reacting:
+///
+/// 1. **Container ID** — every exit-topic payload (`TaskExit`, `TaskDelete`)
+///    carries `container_id`; foreign containers' events are ignored.
+/// 2. **Task PID** — containerd's event service replays its event backlog to
+///    every new subscriber, so after a start/auto-restart/agent-reconnect the
+///    monitor immediately receives the *previous* task's exit event for this
+///    same container (ID matches, PID differs). Matching the live task's PID
+///    (see `get_container_task_pid`) discards that replay and only a genuine
+///    exit of the current task passes.
 ///
 /// Pure function — no I/O, trivially unit-testable.
 pub fn match_task_exit_event(
     envelope: &containerd_client::types::Envelope,
     container_id: &str,
+    expected_pid: Option<u32>,
 ) -> Option<TaskExitEvent> {
     use prost::Message;
 
@@ -1596,6 +1626,7 @@ pub fn match_task_exit_event(
             .ok()
             .map(|e| TaskExitEvent {
                 container_id: e.container_id,
+                pid: e.pid,
                 exit_status: e.exit_status,
             }),
         // tasks/delete fires when the task is reaped/removed (e.g. after a
@@ -1604,22 +1635,37 @@ pub fn match_task_exit_event(
             .ok()
             .map(|e| TaskExitEvent {
                 container_id: e.container_id,
+                pid: e.pid,
                 exit_status: e.exit_status,
             }),
         _ => None,
     }?;
 
-    // This is the guard that fixes the false-exit bug: only report the event
-    // when it is actually about the container we are monitoring.
-    if task_event.container_id == container_id {
-        Some(task_event)
-    } else {
+    // Guard 1: only report events that are actually about the container we
+    // are monitoring.
+    if task_event.container_id != container_id {
         debug!(
             "Ignoring task event for unrelated container {} (monitoring {})",
             task_event.container_id, container_id
         );
-        None
+        return None;
     }
+
+    // Guard 2: only report events for the live task's PID. Containerd replays
+    // its event backlog to new subscribers — without this check, the monitor
+    // attached after a restart would immediately see the PREVIOUS task's exit
+    // event and falsely report another exit (restart loop).
+    if let Some(expected) = expected_pid {
+        if task_event.pid != expected {
+            debug!(
+                "Ignoring stale/replayed task event for container {} (event pid {}, live task pid {})",
+                container_id, task_event.pid, expected
+            );
+            return None;
+        }
+    }
+
+    Some(task_event)
 }
 
 #[cfg(test)]
@@ -1648,6 +1694,8 @@ mod event_match_tests {
         topic.trim_start_matches('/').replace('/', ".")
     }
 
+    /// Exit event for container `container_id` with init PID 42 (helpers all
+    /// use 42; tests pass `Some(42)` as the live PID to match).
     fn exit_event(container_id: &str, status: u32) -> Envelope {
         let payload = TaskExit {
             container_id: container_id.to_string(),
@@ -1663,16 +1711,38 @@ mod event_match_tests {
     #[test]
     fn matches_own_exit_event() {
         let env = exit_event("srv-123", 0);
-        let matched = match_task_exit_event(&env, "srv-123").expect("should match own exit");
+        let matched =
+            match_task_exit_event(&env, "srv-123", Some(42)).expect("should match own exit");
         assert_eq!(matched.container_id, "srv-123");
+        assert_eq!(matched.pid, 42);
         assert_eq!(matched.exit_status, 0);
+    }
+
+    #[test]
+    fn matches_when_pid_filter_disabled() {
+        // PID query failed at monitor startup — behave like the first fix:
+        // container-ID match only, never crash on None live pid.
+        let env = exit_event("srv-123", 1);
+        let matched = match_task_exit_event(&env, "srv-123", None)
+            .expect("should match when pid filter is disabled");
+        assert_eq!(matched.exit_status, 1);
+    }
+
+    #[test]
+    fn ignores_stale_replayed_exit_from_previous_task() {
+        // The restart-loop bug: containerd replays its event backlog to new
+        // subscribers, so after an auto-restart the monitor immediately sees
+        // the PREVIOUS task's exit event (same container, different PID) and
+        // must not treat it as a fresh exit.
+        let env = exit_event("srv-123", 0); // pid 42
+        assert!(match_task_exit_event(&env, "srv-123", Some(777)).is_none());
     }
 
     #[test]
     fn ignores_other_containers_exit_events() {
         // The false-exit bug: another container on the node exited.
-        let env = exit_event("other-server", 1);
-        assert!(match_task_exit_event(&env, "srv-123").is_none());
+        let env = exit_event("other-server", 1); // pid 42
+        assert!(match_task_exit_event(&env, "srv-123", Some(42)).is_none());
     }
 
     #[test]
@@ -1686,8 +1756,23 @@ mod event_match_tests {
         }
         .encode_to_vec();
         let env = envelope("/tasks/delete", payload);
-        let matched = match_task_exit_event(&env, "srv-123").expect("should match own delete");
+        let matched =
+            match_task_exit_event(&env, "srv-123", Some(42)).expect("should match own delete");
         assert_eq!(matched.exit_status, 137);
+    }
+
+    #[test]
+    fn ignores_stale_replayed_delete_from_previous_task() {
+        let payload = TaskDelete {
+            container_id: "srv-123".to_string(),
+            pid: 9, // previous generation
+            exit_status: 0,
+            exited_at: None,
+            id: String::new(),
+        }
+        .encode_to_vec();
+        let env = envelope("/tasks/delete", payload);
+        assert!(match_task_exit_event(&env, "srv-123", Some(42)).is_none());
     }
 
     #[test]
@@ -1701,7 +1786,7 @@ mod event_match_tests {
         }
         .encode_to_vec();
         let env = envelope("/tasks/delete", payload);
-        assert!(match_task_exit_event(&env, "srv-123").is_none());
+        assert!(match_task_exit_event(&env, "srv-123", Some(42)).is_none());
     }
 
     #[test]
@@ -1710,13 +1795,13 @@ mod event_match_tests {
         let env = exit_event("srv-123", 0);
         let mut env = env;
         env.topic = "/containers/create".to_string();
-        assert!(match_task_exit_event(&env, "srv-123").is_none());
+        assert!(match_task_exit_event(&env, "srv-123", Some(42)).is_none());
     }
 
     #[test]
     fn ignores_garbage_payload() {
         let env = envelope("/tasks/exit", vec![0xff, 0xff, 0xff]);
-        assert!(match_task_exit_event(&env, "srv-123").is_none());
+        assert!(match_task_exit_event(&env, "srv-123", Some(42)).is_none());
     }
 
     #[test]
@@ -1727,6 +1812,6 @@ mod event_match_tests {
             topic: "/tasks/exit".to_string(),
             event: None,
         };
-        assert!(match_task_exit_event(&env, "srv-123").is_none());
+        assert!(match_task_exit_event(&env, "srv-123", Some(42)).is_none());
     }
 }
