@@ -755,6 +755,9 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
             return;
         }
 
+        // Hand the downloaded file (and created parents) to the container user (#237).
+        crate::ownership::ensure_container_owned(fm.data_dir(), &target_path).await;
+
         send_json_response(ctx, true, None, None).await;
         return;
     }
