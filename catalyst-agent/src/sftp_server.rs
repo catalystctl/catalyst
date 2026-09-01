@@ -507,6 +507,10 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                 }
             })?;
 
+            // SFTP writes bypass FileManager, so ownership is fixed here:
+            // hand the file (and created parents) to the container user (#237).
+            crate::ownership::ensure_container_owned(fm.data_dir(), &full_path).await;
+
             Ok(Self::status_ok(id))
         }
     }

@@ -19,6 +19,7 @@ mod file_tunnel;
 mod firewall_manager;
 mod net_utils;
 mod network_manager;
+mod ownership;
 mod runtime_manager;
 mod sftp_server;
 mod shell_utils;
@@ -153,6 +154,21 @@ impl CatalystAgent {
             self.ws_handler
                 .queue_startup_error(format!("Storage heal on startup failed: {}", e))
                 .await;
+        }
+
+        // One-time repair for server files created by earlier versions that
+        // left them owned by root (issue #237). Background: chowning a large
+        // tree must not delay startup; new writes are fixed inline from here.
+        {
+            let data_dir = self.config.server.data_dir.clone();
+            let ws = self.ws_handler.clone();
+            tokio::spawn(async move {
+                if let Err(e) = crate::ownership::repair_existing_servers(&data_dir).await {
+                    warn!("Ownership repair on startup failed: {}", e);
+                    ws.queue_startup_error(format!("Ownership repair on startup failed: {}", e))
+                        .await;
+                }
+            });
         }
 
         // Run an initial resource snapshot immediately (captures current usage at startup)

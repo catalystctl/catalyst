@@ -35,8 +35,7 @@ pub(crate) type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 pub(crate) type WsWrite = SplitSink<WsStream, Message>;
 pub(crate) const CONTAINER_SERVER_DIR: &str = "/data";
-pub(crate) const CONTAINER_UID: u32 = 1000;
-pub(crate) const CONTAINER_GID: u32 = 1000;
+pub(crate) use crate::ownership::chown_tree as chown_to_container_user;
 pub(crate) const MAX_BACKUP_UPLOAD_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10GB
 pub(crate) const MAX_RESTORE_STREAM_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10 GB, matches MAX_BACKUP_UPLOAD_BYTES
 pub(crate) const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
@@ -411,25 +410,6 @@ pub(crate) fn parse_auto_restart_config(msg: &Value) -> AutoRestartConfig {
         .and_then(Value::as_u64)
         .unwrap_or(config.window_secs);
     config
-}
-
-/// Set ownership of a directory to the container user (uid 1000:gid 1000)
-/// so the game server process can read/write its data.
-pub(crate) async fn chown_to_container_user(dir: &std::path::Path) -> std::io::Result<()> {
-    use tokio::process::Command;
-    let status = Command::new("chown")
-        .arg("-R")
-        .arg(format!("{}:{}", CONTAINER_UID, CONTAINER_GID))
-        .arg(dir)
-        .status()
-        .await?;
-    if !status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            format!("chown failed with exit code {:?}", status.code()),
-        ));
-    }
-    Ok(())
 }
 
 pub struct WebSocketHandler {
@@ -3157,6 +3137,9 @@ impl WebSocketHandler {
             )
             .await
             .map_err(|e| AgentError::IoError(format!("Failed to write eula.txt: {}", e)))?;
+            // The container process owns eula.txt at runtime — hand it over (#237).
+            crate::ownership::ensure_container_owned(&self.config.server.data_dir, &eula_file)
+                .await;
 
             info!("EULA accepted for server {}", server_uuid);
             self.emit_console_output(

@@ -28,6 +28,13 @@ impl FileManager {
         self.max_file_size.load(Ordering::Relaxed)
     }
 
+    /// The agent data directory. Server directories live at
+    /// `{data_dir}/{server_uuid}`; ownership fixups use this as the boundary
+    /// below which everything is handed to the container user.
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+
     /// Apply the panel-wide upload cap. Zero is ignored.
     pub fn set_max_file_size(&self, bytes: u64) {
         if bytes == 0 {
@@ -290,6 +297,10 @@ impl FileManager {
             AgentError::FileSystemError(format!("Failed to rename temp file: {}", e))
         })?;
 
+        // The agent runs as root; hand the new file (and any created parents)
+        // to the container user so the server process can modify it (#237).
+        crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
+
         info!("File written successfully: {:?}", full_path);
 
         Ok(())
@@ -332,6 +343,10 @@ impl FileManager {
             .await
             .map_err(|e| AgentError::FileSystemError(format!("Failed to rename: {}", e)))?;
 
+        // Rename preserves ownership: if the source was root-owned (legacy
+        // files from #237), re-hand the destination to the container user.
+        crate::ownership::ensure_container_owned(&self.data_dir, &to_path).await;
+
         info!("Renamed successfully: {:?} -> {:?}", from_path, to_path);
 
         Ok(())
@@ -349,6 +364,9 @@ impl FileManager {
             if let Err(e) = fs::create_dir_all(&full_path).await {
                 // Not fatal if it already exists or is a mount point we can read.
                 debug!("create_dir_all for list root {:?}: {}", full_path, e);
+            } else {
+                // Fresh server root: hand it to the container user (#237).
+                crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
             }
         }
 
@@ -454,6 +472,9 @@ impl FileManager {
                 })?;
         }
 
+        // Hand the new entry (and created parents) to the container user (#237).
+        crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
+
         info!("Entry created: {:?}", full_path);
         Ok(())
     }
@@ -494,6 +515,9 @@ impl FileManager {
         fs::rename(&temp_path, &full_path).await.map_err(|e| {
             AgentError::FileSystemError(format!("Failed to rename temp file: {}", e))
         })?;
+
+        // Hand the uploaded file (and created parents) to the container user (#237).
+        crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
 
         info!("File bytes written: {:?} ({} bytes)", full_path, data.len());
         Ok(())
@@ -539,6 +563,10 @@ impl FileManager {
         }
 
         info!("File stream written: {:?} ({} bytes)", full_path, total);
+
+        // Hand the streamed file (and created parents) to the container user (#237).
+        crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
+
         Ok(())
     }
 
@@ -579,6 +607,8 @@ impl FileManager {
         fs::create_dir_all(&resolved).await.map_err(|e| {
             AgentError::FileSystemError(format!("Failed to create directory: {}", e))
         })?;
+        // Hand the new directory (and created parents) to the container user (#237).
+        crate::ownership::ensure_container_owned(&self.data_dir, &resolved).await;
         info!("Directory created: {:?}", resolved);
         Ok(())
     }
@@ -719,6 +749,14 @@ impl FileManager {
         // pointing outside the server directory (e.g., to /etc/cron.d).
         self.validate_extracted_symlinks(&target_full, server_id)
             .await?;
+
+        // Extraction runs as root: hand the whole tree to the container user (#237).
+        if let Err(e) = crate::ownership::chown_tree(&target_full).await {
+            warn!(
+                "Failed to hand extracted archive to the container user: {}",
+                e
+            );
+        }
 
         info!(
             "Archive decompressed: {:?} -> {:?}",
