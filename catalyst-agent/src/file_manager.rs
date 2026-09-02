@@ -1530,7 +1530,11 @@ mod tests {
             let _ = stream.read(&mut buf); // discard the request head
             stream
                 .write_all(
-                    format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes(),
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    )
+                    .as_bytes(),
                 )
                 .unwrap();
             stream.write_all(body).unwrap();
@@ -1557,7 +1561,10 @@ mod tests {
         server.await.unwrap();
 
         // The temp file must still exist while the caller holds the handle.
-        assert!(temp.path().exists(), "temp file deleted before caller rename");
+        assert!(
+            temp.path().exists(),
+            "temp file deleted before caller rename"
+        );
 
         let dest = fm.resolve_path("srv1", "maps/file.bsp").unwrap();
         tokio::fs::rename(temp.path(), &dest).await.unwrap();
