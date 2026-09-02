@@ -55,6 +55,11 @@ export type PluginEventHandler = (data: any) => Promise<void> | void;
  * panel's file tunnel (agent long-poll + HTTP staging). Requests are
  * permission-checked, capped per node, and time out after 60s (longer for
  * large uploads).
+ *
+ * Binary payloads are typed as Node's Buffer. The SDK compiles with
+ * "types": [] (environment-neutral), so Buffer is referenced structurally
+ * via the Uint8Array base class it extends at runtime — every Buffer is a
+ * Uint8Array, and Buffer.isArray/members used by plugins operate on it.
  */
 export interface PluginFileTunnel {
   queueRequest(
@@ -63,8 +68,8 @@ export interface PluginFileTunnel {
     serverUuid: string,
     filePath: string,
     data?: Record<string, unknown>,
-    uploadData?: Buffer,
-  ): Promise<{ requestId: string; success: boolean; data?: unknown; error?: string; body?: Buffer }>;
+    uploadData?: Uint8Array,
+  ): Promise<{ requestId: string; success: boolean; data?: unknown; error?: string; body?: Uint8Array }>;
 }
 
 /**
