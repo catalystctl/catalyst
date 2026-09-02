@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  // Full typecheck including test files (pnpm run typecheck). Tests import
+  // the external catalyst-plugins checkout (frontend/embedded plugin sources),
+  // so this config is only meaningful in a dev checkout that has that repo at
+  // ../catalyst-plugins — not inside the Docker build, which uses the base
+  // tsconfig (tests excluded) via `pnpm run build`.
+  "exclude": ["node_modules", "dist"]
+}
