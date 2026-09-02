@@ -1,7 +1,6 @@
 packages:
   - catalyst-backend
   - catalyst-frontend
-  - catalyst-plugins/*
   - packages/*
 # pnpm 11+ only reads auth/registry from .npmrc. Linker/hoist settings must live here
 # (see https://pnpm.io/settings). Keep hoisted layout for local dev + Docker expectations.

@@ -80,3 +80,6 @@ SESSION_BRIDGE_CATCODE_OPENCODE.md
 
 # Dedicated templates repo (own git project: catalystctl/catalyst-templates)
 /catalyst-template/
+
+# Plugins live in the standalone catalystctl/catalyst-plugins repo (checked out as a sibling or symlinked here for monorepo dev)
+/catalyst-plugins
