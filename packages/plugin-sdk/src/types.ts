@@ -51,6 +51,23 @@ export type PluginTaskHandler = () => Promise<void> | void;
 export type PluginEventHandler = (data: any) => Promise<void> | void;
 
 /**
+ * Awaited file-operation RPC against a node's server directory, backed by the
+ * panel's file tunnel (agent long-poll + HTTP staging). Requests are
+ * permission-checked, capped per node, and time out after 60s (longer for
+ * large uploads).
+ */
+export interface PluginFileTunnel {
+  queueRequest(
+    nodeId: string,
+    operation: 'list' | 'download' | 'upload' | 'write' | 'create' | 'delete' | 'rename' | 'permissions' | 'compress' | 'decompress' | string,
+    serverUuid: string,
+    filePath: string,
+    data?: Record<string, unknown>,
+    uploadData?: Buffer,
+  ): Promise<{ requestId: string; success: boolean; data?: unknown; error?: string; body?: Buffer }>;
+}
+
+/**
  * Minimal pino-compatible logger surface used by the typed context wrapper.
  * Structural subset of `pino.Logger` so the SDK does not hard-depend on pino.
  */
@@ -141,6 +158,8 @@ export interface PluginBackendContext {
   getUserId?(request: any): string | null;
   hasPermission?(request: any, ...required: string[]): boolean;
   requirePermission?(...required: string[]): (request: any, reply: any) => Promise<any> | any;
+  /** Awaited file operations against node server directories (file tunnel). Present when the host provides it. */
+  fileTunnel?: PluginFileTunnel;
 }
 
 /**

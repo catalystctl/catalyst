@@ -393,6 +393,7 @@ export class PluginLoader {
         (this.fastify as any).authenticate,
         this.registry,
         () => this.effectiveGrants.get(manifest.name) ?? [],
+        (this.fastify as any).fileTunnel,
       );
 
       loadedPlugin.context = context;

@@ -12,6 +12,7 @@ import type {
   PluginCollectionAPI,
   PluginCollectionOptions,
   PluginEventSchema,
+  PluginFileTunnel,
   ScopedPluginDB,
 } from './types';
 import type { PluginRegistry } from './registry';
@@ -629,6 +630,7 @@ export function createPluginContext(
   authenticate?: Function,
   registry?: PluginRegistry,
   permissionsProvider?: () => string[],
+  fileTunnel?: PluginFileTunnel,
 ): PluginBackendContext {
   const pluginLogger = logger.child({ plugin: manifest.name });
 
@@ -646,6 +648,7 @@ export function createPluginContext(
     db: scopedDb,
     logger: pluginLogger,
     wsGateway,
+    fileTunnel,
 
     registerRoute(options: RouteOptions) {
       // Prefix route path with plugin namespace

@@ -1,0 +1,55 @@
+{
+  "name": "fastdl-sync",
+  "version": "1.0.0",
+  "displayName": "Auto FastDL",
+  "description": "Automatic Fast Download (sv_downloadurl) content sync. Scans game servers for downloadable content (maps, models, sounds, materials) and mirrors it to a FastDL server on the same node — upload once, clients get everything.",
+  "author": "Catalyst Team",
+  "catalystVersion": ">=1.16.0",
+  "permissions": [
+    "server.read",
+    "server.write",
+    "files.read",
+    "files.write"
+  ],
+  "backend": {
+    "entry": "backend/index.js"
+  },
+  "frontend": {
+    "entry": "frontend/index.ts",
+    "hasTabs": true,
+    "hasComponents": false
+  },
+  "config": {
+    "syncIntervalCron": {
+      "type": "string",
+      "default": "*/5 * * * *",
+      "description": "Cron schedule for automatic syncs (panel timezone)"
+    },
+    "syncEnabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable scheduled automatic syncs"
+    },
+    "generateBzip2": {
+      "type": "boolean",
+      "default": false,
+      "description": "Generate .bz2 twins for large files (cuts HL1 client bandwidth 60-80%, costs CPU per sync)"
+    },
+    "bz2MinSizeMb": {
+      "type": "number",
+      "default": 2,
+      "description": "Only generate .bz2 twins for files at least this large"
+    },
+    "maxFileSizeMb": {
+      "type": "number",
+      "default": 512,
+      "description": "Skip files larger than this"
+    },
+    "deleteRemoved": {
+      "type": "boolean",
+      "default": true,
+      "description": "Delete FastDL copies when the source file is deleted or excluded"
+    }
+  },
+  "dependencies": {}
+}

@@ -180,6 +180,23 @@ export type PluginWebSocketHandler = (data: any, clientId?: string) => Promise<v
 export type PluginTaskHandler = () => Promise<void> | void;
 
 /**
+ * Awaited file-operation RPC against a node's server directory, backed by the
+ * panel's file tunnel (agent long-poll + HTTP staging). Requests are
+ * permission-checked, capped per node, and time out after 60s (longer for
+ * large uploads).
+ */
+export interface PluginFileTunnel {
+  queueRequest(
+    nodeId: string,
+    operation: string,
+    serverUuid: string,
+    filePath: string,
+    data?: Record<string, unknown>,
+    uploadData?: Buffer,
+  ): Promise<{ requestId: string; success: boolean; data?: unknown; error?: string; body?: Buffer }>;
+}
+
+/**
  * Event handler
  */
 export type PluginEventHandler = (data: any) => Promise<void> | void;
@@ -249,6 +266,12 @@ export interface PluginBackendContext {
    * Host auth still runs first; this layers capability checks on top.
    */
   requirePermission(...required: string[]): (request: any, reply: any) => Promise<any> | any;
+
+  /**
+   * Awaited file operations against node server directories via the panel's
+   * file tunnel. Present when the host provides it (standard deployment).
+   */
+  fileTunnel?: PluginFileTunnel;
 }
 
 /**
