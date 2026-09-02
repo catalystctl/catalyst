@@ -105,7 +105,8 @@ FROM node:22-alpine
 
 # curl: healthcheck. docker-cli + compose: panel Update button talks to the
 # mounted docker.sock. su-exec: drop root after joining the socket group.
-RUN apk add --no-cache curl docker-cli docker-cli-compose su-exec
+# bzip2: plugin .bz2 twin generation (e.g. fastdl-sync marketplace plugin).
+RUN apk add --no-cache curl docker-cli docker-cli-compose su-exec bzip2
 
 WORKDIR /app
 

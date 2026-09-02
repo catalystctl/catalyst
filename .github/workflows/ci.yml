@@ -69,6 +69,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Plugin frontends under catalyst-plugins/ compile into the panel build
+      # (build-time discovery via import.meta.glob). The plugins live in their
+      # own repo: catalystctl/catalyst-plugins.
+      - name: Checkout plugins repository
+        uses: actions/checkout@v6
+        with:
+          repository: catalystctl/catalyst-plugins
+          ref: main
+          path: catalyst-plugins
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -206,6 +216,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Checkout plugins repository
+        uses: actions/checkout@v6
+        with:
+          repository: catalystctl/catalyst-plugins
+          ref: main
+          path: catalyst-plugins
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -309,6 +326,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Checkout plugins repository
+        uses: actions/checkout@v6
+        with:
+          repository: catalystctl/catalyst-plugins
+          ref: main
+          path: catalyst-plugins
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -516,6 +540,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Checkout plugins repository
+        uses: actions/checkout@v6
+        with:
+          repository: catalystctl/catalyst-plugins
+          ref: main
+          path: catalyst-plugins
 
       - name: Setup Blacksmith Builder
         uses: useblacksmith/setup-docker-builder@v1

@@ -38,6 +38,10 @@ COPY catalyst-frontend/src ./catalyst-frontend/src
 # drops still need a rebuild to ship new frontend assets.
 COPY catalyst-plugins ./catalyst-plugins
 
+# Plugin frontends import @catalyst/plugin-sdk/frontend, which vite.config.ts
+# aliases to the SDK source (no dist build-order dependency).
+COPY packages/plugin-sdk/src ./packages/plugin-sdk/src
+
 # Build
 WORKDIR /app/catalyst-frontend
 RUN pnpm run build

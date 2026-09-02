@@ -501,6 +501,16 @@ jobs:
         with:
           ref: v${{ needs.version.outputs.new_version }}
 
+      # catalyst-frontend/Dockerfile COPYs catalyst-plugins/ (embedded plugin
+      # frontends) — the plugins live in their own repo, not in this checkout.
+      - name: Checkout plugins repository
+        if: matrix.image == 'frontend'
+        uses: actions/checkout@v6
+        with:
+          repository: catalystctl/catalyst-plugins
+          ref: main
+          path: catalyst-plugins
+
       - name: Setup Blacksmith Builder
         uses: useblacksmith/setup-docker-builder@v1
 
