@@ -1,5 +1,6 @@
 import { Worker } from 'worker_threads';
 import path from 'path';
+import { describeError } from '../../utils/describe-error.js';
 import type { PluginManifest } from '../types';
 
 interface PendingRequest {
@@ -45,7 +46,7 @@ export class PluginWorkerHost {
 
     const worker = this.worker;
     worker.on('message', (msg: any) => this.handleMessage(msg));
-    worker.on('error', (err: unknown) => this.handleError(err instanceof Error ? err : new Error(String(err))));
+    worker.on('error', (err: unknown) => this.handleError(err instanceof Error ? err : new Error(describeError(err))));
     worker.on('exit', (code) => this.handleExit(code));
 
     await new Promise<void>((resolve, reject) => {

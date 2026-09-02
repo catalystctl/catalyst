@@ -24,6 +24,7 @@ export const queryClient = new QueryClient({
         level: 'error',
         component: describeMutationComponent(mutation.options.mutationKey, error),
         message: describeError(error),
+        stack: error instanceof Error ? error.stack : undefined,
         metadata: { mutationKey: String(mutation.options.mutationKey ?? 'unknown') },
       });
     },

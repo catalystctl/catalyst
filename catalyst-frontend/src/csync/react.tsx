@@ -26,6 +26,9 @@ const SyncClientContext = createContext<QueryClient | null>(null);
 /** Optional fallback when hooks run outside provider (tests / rare bootstrap). */
 let fallbackClient: QueryClient | null = null;
 
+/** Sequence for auto-generated mutation labels when no owner name is derivable. */
+let autoMutationSeq = 0;
+
 export function setFallbackQueryClient(client: QueryClient | null) {
   fallbackClient = client;
 }
@@ -322,6 +325,33 @@ export function useMutation<
   const client = useQueryClient();
   const optionsRef = useRef(options);
   optionsRef.current = options;
+
+  // Auto-name mutations for system error reports: when no mutationKey is
+  // declared, derive a stable label from the calling component's function
+  // name via a one-time stack parse (works in dev; minified-but-stable in
+  // prod builds). This keeps MutationCache.onError from reporting
+  // "Mutation:unknown" for keyless mutations.
+  const autoKeyRef = useRef<string | null>(null);
+  if (autoKeyRef.current === null) {
+    const declaredKey = Array.isArray(options.mutationKey)
+      ? options.mutationKey.filter((p) => typeof p === 'string' && p.length > 0).join(':')
+      : options.mutationKey;
+    if (declaredKey) {
+      autoKeyRef.current = String(declaredKey);
+    } else {
+      const frames = (new Error().stack ?? '').split('\n');
+      let caller: string | undefined;
+      for (const frame of frames) {
+        const m = frame.match(/^\s*at (\w+)[ (]/);
+        if (m && m[1] !== 'useMutation') {
+          caller = m[1];
+          break;
+        }
+      }
+      autoKeyRef.current = caller ?? `mutation-${++autoMutationSeq}`;
+    }
+  }
+  optionsRef.current = { ...optionsRef.current, mutationKey: [autoKeyRef.current] };
 
   const [state, setState] = useState<{
     data: TData | undefined;

@@ -12,6 +12,7 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyMultipart from "@fastify/multipart";
 import fastifySwagger from "@fastify/swagger";
+import { describeError } from "./utils/describe-error.js";
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import pino from "pino";
 import { prisma } from "./db";
@@ -1084,7 +1085,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				);
 				return reply.status(502).send({
 					error: "Failed to download agent binary",
-					details: err instanceof Error ? err.message : String(err),
+					details: describeError(err),
 				});
 			}
 		});
@@ -1131,7 +1132,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			} catch (err) {
 				return reply.status(502).send({
 					error: "Failed to fetch agent checksum",
-					details: err instanceof Error ? err.message : String(err),
+					details: describeError(err),
 				});
 			}
 		});
@@ -1938,7 +1939,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		captureSystemError({
 			level: 'critical',
 			component: 'Bootstrap',
-			message: err instanceof Error ? err.message : String(err),
+			message: describeError(err),
 			stack: err instanceof Error ? err.stack : undefined,
 		}).catch(() => {});
 		process.exit(1);
@@ -2057,12 +2058,12 @@ function captureFatalProcessError(
 	}
 	capturingFatal = true;
 	try {
-		const err = reason instanceof Error ? reason : new Error(String(reason));
+		const err = reason instanceof Error ? reason : new Error(describeError(reason));
 		logger.error({ err, kind }, kind);
 		void captureSystemError({
 			level: "critical",
 			component: "Process",
-			message: err.message || kind,
+			message: describeError(reason) || kind,
 			stack: err.stack,
 			metadata: { kind },
 		})
@@ -2090,7 +2091,7 @@ const run = () => bootstrap().catch((err) => {
 	captureSystemError({
 		level: 'critical',
 		component: 'Bootstrap',
-		message: err instanceof Error ? err.message : String(err),
+		message: describeError(err),
 		stack: err instanceof Error ? err.stack : undefined,
 	}).catch(() => {});
 	process.exit(1);

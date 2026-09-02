@@ -11,6 +11,7 @@ import {
   resolveGitHubAsset,
 } from "./_helpers.js";
 import path from "path";
+import { describeError } from "../../utils/describe-error.js";
 import { promises as fs } from "fs";
 import { fileURLToPath } from "url";
 
@@ -247,7 +248,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
         }));
         return reply.send({ success: true, data: mapped });
       } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
+        const msg = describeError(error);
         return reply.status(502).send({ error: `Failed to fetch releases: ${msg}` });
       }
     }
@@ -312,7 +313,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
       try {
         asset = await resolveGitHubAsset(fw.repo, String(tag).trim(), fw.assetPattern, fw.assetExclude);
       } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
+        const msg = describeError(error);
         return reply.status(502).send({ error: msg });
       }
 
@@ -403,7 +404,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
             errors.push(`${p}: ${res.error}`);
           }
         } catch (error: unknown) {
-          const msg = error instanceof Error ? error.message : String(error);
+          const msg = describeError(error);
           if (!msg.toLowerCase().includes("not found") && !msg.toLowerCase().includes("no such")) errors.push(`${p}: ${msg}`);
         }
       }
@@ -493,7 +494,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
         });
         return reply.send({ success: true });
       } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
+        const msg = describeError(error);
         return reply.status(400).send({ error: msg || "Failed to uninstall plugin" });
       }
     }
@@ -551,7 +552,7 @@ async function installFrameworkArchive(
     }
     return true;
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
+    const msg = describeError(error);
     if (!reply.sent) reply.status(500).send({ error: msg || "Failed to install framework" });
     return false;
   }

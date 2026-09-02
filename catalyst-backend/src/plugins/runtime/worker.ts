@@ -1,5 +1,6 @@
 import { parentPort, workerData, isMainThread } from 'worker_threads';
 import type { PluginManifest } from '../types';
+import { describeError } from '../../utils/describe-error.js';
 
 if (isMainThread) {
   throw new Error('worker.ts should only be run inside a worker thread');
@@ -102,7 +103,7 @@ async function init() {
   } catch (err: any) {
     port.postMessage({
       type: 'error',
-      error: err.message || String(err),
+      error: describeError(err),
       stack: err.stack,
     });
   }

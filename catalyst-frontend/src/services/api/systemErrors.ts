@@ -1,3 +1,5 @@
+import { describeError } from '../../utils/errors';
+
 const normalizeBaseUrl = (value?: string) => {
   if (!value) return '';
   if (value === '/api') return '';
@@ -62,7 +64,14 @@ export async function reportSystemError(opts: {
   metadata?: Record<string, any>;
 }): Promise<void> {
   try {
-    const { level = 'error', component, message, stack, metadata } = opts;
+    const { level = 'error', component, stack, metadata } = opts;
+
+    // Defense in depth: callers sometimes pass a caught value straight
+    // through as `message`. If it is not already a string, run it through
+    // describeError so reports never contain "[object Object]".
+    const message = typeof opts.message === 'string'
+      ? opts.message
+      : describeError((opts as { message?: unknown }).message);
 
     const key = getDedupKey(component, message);
     const now = Date.now();

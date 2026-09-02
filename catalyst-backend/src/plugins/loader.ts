@@ -1,4 +1,5 @@
 import fs from 'fs/promises';
+import { describeError } from '../utils/describe-error.js';
 import path from 'path';
 import { watch } from 'chokidar';
 import type { PrismaClient } from '@prisma/client';
@@ -64,7 +65,7 @@ export class PluginLoader {
       captureSystemError({
         level: 'error',
         component: 'PluginLoader',
-        message: `Failed to create plugins directory: ${error?.message || String(error)}`,
+        message: `Failed to create plugins directory: ${describeError(error)}`,
         stack: error instanceof Error ? error.stack : undefined,
         metadata: { pluginsDir: this.pluginsDir },
       }).catch(() => {});
@@ -122,7 +123,7 @@ export class PluginLoader {
           captureSystemError({
             level: 'warn',
             component: 'PluginLoader',
-            message: `Failed to read/validate plugin manifest: ${error?.message || String(error)}`,
+            message: `Failed to read/validate plugin manifest: ${describeError(error)}`,
             stack: error?.stack,
             metadata: { plugin: dir.name },
           }).catch(() => {});
@@ -169,7 +170,7 @@ export class PluginLoader {
       captureSystemError({
         level: 'error',
         component: 'PluginLoader',
-        message: `Plugin discovery failed: ${error?.message || String(error)}`,
+        message: `Plugin discovery failed: ${describeError(error)}`,
         stack: error?.stack,
       }).catch(() => {});
       this.logger.error({ error: error.message }, 'Plugin discovery failed');
@@ -501,7 +502,7 @@ export class PluginLoader {
       captureSystemError({
         level: 'error',
         component: 'PluginLoader',
-        message: `Failed to load plugin: ${error?.message || String(error)}`,
+        message: `Failed to load plugin: ${describeError(error)}`,
         stack: error?.stack,
         metadata: { plugin: pluginName },
       }).catch(() => {});
@@ -604,7 +605,7 @@ export class PluginLoader {
       captureSystemError({
         level: 'error',
         component: 'PluginLoader',
-        message: `Failed to enable plugin: ${error?.message || String(error)}`,
+        message: `Failed to enable plugin: ${describeError(error)}`,
         stack: error?.stack,
         metadata: { plugin: name },
       }).catch(() => {});
@@ -684,7 +685,7 @@ export class PluginLoader {
       captureSystemError({
         level: 'error',
         component: 'PluginLoader',
-        message: `Failed to disable plugin: ${error?.message || String(error)}`,
+        message: `Failed to disable plugin: ${describeError(error)}`,
         stack: error?.stack,
         metadata: { plugin: name },
       }).catch(() => {});
@@ -762,7 +763,7 @@ export class PluginLoader {
       captureSystemError({
         level: 'error',
         component: 'PluginLoader',
-        message: `Failed to unload plugin: ${error?.message || String(error)}`,
+        message: `Failed to unload plugin: ${describeError(error)}`,
         stack: error?.stack,
         metadata: { plugin: name },
       }).catch(() => {});
@@ -859,7 +860,7 @@ export class PluginLoader {
           captureSystemError({
             level: 'warn',
             component: 'PluginLoader',
-            message: `Hot-reload failed: ${error?.message || String(error)}`,
+            message: `Hot-reload failed: ${describeError(error)}`,
             stack: error?.stack,
             metadata: { plugin: pluginName, file: filePath },
           }).catch(() => {});
@@ -915,7 +916,7 @@ export class PluginLoader {
         captureSystemError({
           level: 'error',
           component: 'PluginLoader',
-          message: `Error unloading plugin during shutdown: ${error?.message || String(error)}`,
+          message: `Error unloading plugin during shutdown: ${describeError(error)}`,
           stack: error instanceof Error ? error.stack : undefined,
           metadata: { plugin: plugin.manifest.name },
         }).catch(() => {});

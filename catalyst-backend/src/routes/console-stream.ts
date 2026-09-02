@@ -17,6 +17,7 @@ import type { WebSocketGateway } from '../websocket/gateway';
 import { prisma } from '../db.js';
 import { hasNodeAccess } from '../lib/permissions.js';
 import { captureSystemError } from '../services/error-logger.js';
+import { describeError } from '../utils/describe-error.js';
 import { ErrorCodes } from '../shared-types.js';
 import { checkIsAdmin } from './servers/_helpers.js';
 import { openSseStream, formatSse as formatSseMessage } from '../utils/sse.js';
@@ -189,11 +190,11 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         captureSystemError({
           level: 'error',
           component: 'ConsoleStream',
-          message: err.message || 'Failed to send console command via SSE route',
+          message: describeError(err) || 'Failed to send console command via SSE route',
           stack: err.stack,
           metadata: { serverId, userId },
         }).catch(() => {});
-        reply.status(500).send({ error: err.message || 'Failed to send command' });
+        reply.status(500).send({ error: describeError(err) || 'Failed to send command' });
       }
     },
   );

@@ -9,6 +9,7 @@ import { MigrationService } from "../services/migration/index.js";
 
 import { serialize } from "../utils/serialize.js";
 import { captureSystemError } from "../services/error-logger.js";
+import { describeError } from "../utils/describe-error.js";
 import { SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../utils/java-memory.js";
 
 // Singleton migration service
@@ -299,7 +300,7 @@ export async function migrationRoutes(app: FastifyInstance) {
       captureSystemError({
         level: 'error',
         component: 'MigrationService',
-        message: err.message || 'Failed to start migration',
+        message: describeError(err) || 'Failed to start migration',
         stack: err.stack,
         metadata: { route: '/api/admin/migration' },
       }).catch(() => {});

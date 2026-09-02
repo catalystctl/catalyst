@@ -6,6 +6,7 @@ import { pipeline } from "stream/promises";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { captureSystemError, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, isArchiveName, path, validateAndNormalizePath } from './_helpers.js';
+import { describeError } from '../../utils/describe-error.js';
 import { getSecuritySettings, MAX_UPLOAD_MB_CEILING, maxUploadBytesFromMb } from "../../services/mailer.js";
 
 export async function serverFilesRoutes(app: FastifyInstance) {
@@ -477,7 +478,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         captureSystemError({
           level: 'warn',
           component: 'ServerRoutes',
-          message: `Failed to read archive contents: ${error?.message || String(error)}`,
+          message: `Failed to read archive contents: ${describeError(error)}`,
           stack: error?.stack,
           metadata: { archivePath },
         }).catch(() => {});

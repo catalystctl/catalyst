@@ -4,6 +4,7 @@ import { createAuditLog } from '../../middleware/audit.js';
 import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { minimumDiskMbFromHints } from "../../utils/egg-import.js";
+import { describeError } from "../../utils/describe-error.js";
 import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../../utils/java-memory.js";
 import { SimpleCache } from "../../lib/cache.js";
 
@@ -2410,7 +2411,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           const msg =
             error instanceof DatabaseProvisioningError
               ? error.message
-              : error?.message || String(error);
+              : describeError(error);
           dbDropFailures.push({ id: database.id, name: database.name, error: msg });
           app.log.warn(
             { serverId, databaseId: database.id, error: msg },

@@ -1,5 +1,6 @@
 import { prisma } from '../db.js'
 import pino from 'pino'
+import { describeError } from '../utils/describe-error.js'
 
 let wsGatewayRef: any = null
 
@@ -67,7 +68,7 @@ export async function wrapAsync<T>(name: string, fn: () => Promise<T>): Promise<
     await captureSystemError({
       level: 'error',
       component: name,
-      message: error?.message || String(error),
+      message: describeError(error),
       stack: error?.stack,
     })
     return undefined

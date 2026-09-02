@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import type { ZodIssue } from 'zod';
+import { describeError } from '../utils/describe-error.js';
 
 /**
  * Password complexity requirements
@@ -235,7 +236,7 @@ export const validateRequestBody = <T extends z.ZodSchema>(
       }
       return reply.status(400).send({
         error: 'Invalid request body',
-        details: (error instanceof Error ? error.message : String(error)),
+        details: (describeError(error)),
       });
     }
   };
@@ -259,7 +260,7 @@ export const validateRequestQuery = <T extends z.ZodSchema>(
       }
       return reply.status(400).send({
         error: 'Invalid request query',
-        details: (error instanceof Error ? error.message : String(error)),
+        details: (describeError(error)),
       });
     }
   };
@@ -283,7 +284,7 @@ export const validateRequestParams = <T extends z.ZodSchema>(
       }
       return reply.status(400).send({
         error: 'Invalid request parameters',
-        details: (error instanceof Error ? error.message : String(error)),
+        details: (describeError(error)),
       });
     }
   };

@@ -18,6 +18,8 @@
  *   - File denylist: Preserve for runtime enforcement
  */
 
+import { describeError } from './describe-error.js';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -986,7 +988,7 @@ export function importPterodactylEggSafe(
 		const result = importPterodactylEgg(egg, options);
 		return { result, errors: validationErrors };
 	} catch (err: unknown) {
-		const message = err instanceof Error ? err.message : String(err);
+		const message = describeError(err);
 		return {
 			errors: [
 				...validationErrors,

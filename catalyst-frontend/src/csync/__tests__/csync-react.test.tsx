@@ -144,6 +144,40 @@ describe('csync react hooks', () => {
     expect(onError).toHaveBeenCalled();
   });
 
+  it('keyless mutations get an auto-generated mutationKey for error reporting', async () => {
+    const notifyError = vi.fn();
+    const autoClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+      mutationCache: {
+        notifyError,
+        subscribe: () => () => {},
+      } as any,
+    });
+    setFallbackQueryClient(autoClient);
+
+    const { result } = renderHook(
+      () =>
+        useMutation({
+          mutationFn: async () => {
+            throw new Error('auto-key-boom');
+          },
+        }),
+      { wrapper: createWrapper(autoClient) },
+    );
+
+    await act(async () => {
+      await result.current.mutateAsync().catch(() => undefined);
+    });
+
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    const reported = notifyError.mock.calls[0][0] as { mutation: { options: { mutationKey?: unknown } } };
+    const key = reported.mutation.options.mutationKey;
+    expect(Array.isArray(key) ? key.join(':') : key).toMatch(/^(TestComponent|useMutation|[a-z]+-mutation-\d+)$/i);
+    expect(String(Array.isArray(key) ? key.join(':') : key)).not.toBe('unknown');
+    autoClient.clear();
+    setFallbackQueryClient(client);
+  });
+
   it('useQuery select normalizes data on every read (including setQueryData)', async () => {
     // Regression: task list cache can hold `{ tasks: [...] }` from raw API/SSE
     // writers. select must run on every observer read so consumers always get arrays.

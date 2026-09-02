@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient } from "@prisma/client";
 import { createReadStream } from "fs";
 import * as fs from "fs/promises";
+import { describeError } from '../utils/describe-error.js';
 import { PassThrough } from "stream";
 import * as path from "path";
 import {
@@ -227,7 +228,7 @@ export async function backupRoutes(app: FastifyInstance) {
             captureSystemError({
               level: 'warn',
               component: 'BackupRoutes',
-              message: `Failed to read backup size: ${err?.message || String(err)}`,
+              message: `Failed to read backup size: ${describeError(err)}`,
               stack: err?.stack,
               metadata: { backupId: backup.id, path: backup.path },
             }).catch(() => {});

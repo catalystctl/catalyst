@@ -6,6 +6,7 @@ import { auth } from '../auth';
 import { ServerState } from '../shared-types';
 import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
+import { describeError } from '../utils/describe-error.js';
 import { createAuditLog, buildServerAuditDetails, enrichAuditDetails, resolveActorDetails } from '../middleware/audit';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
 import {
@@ -1876,7 +1877,7 @@ export async function adminRoutes(app: FastifyInstance) {
                 try {
                   await dropDatabase(database.host, database.name, database.username);
                 } catch (error: any) {
-                  const msg = error?.message || String(error);
+                  const msg = describeError(error);
                   dbDropFailures.push({ id: database.id, name: database.name, error: msg });
                   app.log?.warn?.({
                     serverId: server.id,

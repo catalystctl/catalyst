@@ -17,6 +17,7 @@ import type {
 import type { PluginRegistry } from './registry';
 import cron from 'node-cron';
 import type { ScheduledTask } from 'node-cron';
+import { describeError } from '../utils/describe-error.js';
 import EventEmitter from 'events';
 import { captureSystemError } from '../services/error-logger';
 import { createCollectionStorage } from './storage/collection-storage';
@@ -685,7 +686,7 @@ export function createPluginContext(
           return result;
         } catch (err: any) {
           success = false;
-          errorMessage = err?.message || String(err);
+          errorMessage = describeError(err);
           throw err;
         } finally {
           recordAudit(prisma, manifest.name, 'route.accessed', {
@@ -740,7 +741,7 @@ export function createPluginContext(
           captureSystemError({
             level: 'warn',
             component: 'PluginWebSocket',
-            message: `Failed to send WebSocket message: ${error?.message || String(error)}`,
+            message: `Failed to send WebSocket message: ${describeError(error)}`,
             stack: error?.stack,
             metadata: { plugin: manifest.name, target },
           }).catch(() => {});
@@ -776,7 +777,7 @@ export function createPluginContext(
           captureSystemError({
             level: 'error',
             component: 'PluginTaskScheduler',
-            message: `Plugin task execution failed: ${error?.message || String(error)}`,
+            message: `Plugin task execution failed: ${describeError(error)}`,
             stack: error?.stack,
             metadata: { plugin: manifest.name, cron: cronExpression, taskId },
           }).catch(() => {});
@@ -921,7 +922,7 @@ export function createPluginContext(
                 return result;
               } catch (err: any) {
                 success = false;
-                errorMessage = err?.message || String(err);
+                errorMessage = describeError(err);
                 throw err;
               } finally {
                 recordAudit(prisma, manifest.name, `collection.${String(prop)}`, { collection: name, args }, {
@@ -1075,7 +1076,7 @@ export async function runMiddleware(
     // Express-style: (req, reply, next) - next is error-first callback
     await new Promise<void>((resolve, reject) => {
       const done = (err?: any) => {
-        if (err) reject(err instanceof Error ? err : new Error(String(err)));
+        if (err) reject(err instanceof Error ? err : new Error(describeError(err)));
         else resolve();
       };
       try {

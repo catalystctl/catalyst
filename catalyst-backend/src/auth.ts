@@ -4,6 +4,7 @@ import { admin, bearer, twoFactor, jwt as jwtPlugin, genericOAuth, createAccessC
 import { passkey } from "@better-auth/passkey";
 import { prisma } from "./db";
 import { captureSystemError } from "./services/error-logger";
+import { describeError } from "./utils/describe-error.js";
 
 const baseUrl = process.env.BETTER_AUTH_URL || process.env.PUBLIC_URL || process.env.BACKEND_EXTERNAL_ADDRESS || "http://localhost:3000";
 const authSecret = process.env.BETTER_AUTH_SECRET;
@@ -406,7 +407,7 @@ export function initAuth() {
             captureSystemError({
               level: 'warn',
               component: 'AuthHooks',
-              message: `Passkey lockout check failed: ${err?.message || String(err)}`,
+              message: `Passkey lockout check failed: ${describeError(err)}`,
               metadata: { hook: 'before', path },
             }).catch(() => {});
             // Don't block the request if the check itself fails
@@ -443,7 +444,7 @@ export function initAuth() {
               captureSystemError({
                 level: 'warn',
                 component: 'AuthHooks',
-                message: `Failed to send welcome email: ${emailErr?.message || String(emailErr)}`,
+                message: `Failed to send welcome email: ${describeError(emailErr)}`,
                 metadata: { emailError: emailErr?.message },
               }).catch(() => {});
             }

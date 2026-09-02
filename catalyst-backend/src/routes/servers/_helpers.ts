@@ -2,6 +2,7 @@ import { prisma } from '../../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient } from "@prisma/client";
 import { serialize } from '../../utils/serialize';
+import { describeError } from '../../utils/describe-error.js';
 import { v4 as uuidv4 } from "uuid";
 import { randomBytes } from "crypto";
 import { decryptBackupConfig, encryptBackupConfig, redactBackupConfig } from "../../services/backup-credentials";
@@ -414,7 +415,7 @@ try {
   captureSystemError({
     level: 'warn',
     component: 'ServerRoutes',
-    message: `Failed to load security settings for file rate limits: ${error?.message || String(error)}`,
+    message: `Failed to load security settings for file rate limits: ${describeError(error)}`,
     stack: error?.stack,
   }).catch(() => {});
   console.warn("Failed to load security settings for file rate limits");
@@ -567,7 +568,7 @@ export const loadProviderConfig = async (provider: string) => {
     captureSystemError({
       level: 'error',
       component: 'ServerRoutes',
-      message: `Failed to load mod-manager provider config '${provider}': ${error?.message || String(error)}`,
+      message: `Failed to load mod-manager provider config '${provider}': ${describeError(error)}`,
       stack: error?.stack,
     }).catch(() => {});
     return null;
@@ -591,7 +592,7 @@ export const loadCs2ProviderConfig = async (provider: string) => {
     captureSystemError({
       level: 'error',
       component: 'ServerRoutes',
-      message: `Failed to load CS2 framework provider config '${provider}': ${error?.message || String(error)}`,
+      message: `Failed to load CS2 framework provider config '${provider}': ${describeError(error)}`,
       stack: error?.stack,
     }).catch(() => {});
     return null;
@@ -615,7 +616,7 @@ export const loadPluginProviderConfig = async (provider: string) => {
     captureSystemError({
       level: 'error',
       component: 'ServerRoutes',
-      message: `Failed to load plugin-manager provider config '${provider}': ${error?.message || String(error)}`,
+      message: `Failed to load plugin-manager provider config '${provider}': ${describeError(error)}`,
       stack: error?.stack,
     }).catch(() => {});
     return null;

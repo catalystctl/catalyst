@@ -29,6 +29,24 @@ const SENSITIVE_PATTERNS = [
   { regex: /(\bpassword\b["']?\s*[:=]\s*["']?)[^"']+/gi, mask: '$1[REDACTED]' },
 ];
 
+// describeError lives in utils/errors.ts but importing it here would create a
+// cycle risk with queryClient → systemErrors → this module's consumers, so the
+// same stringify-not-String() behavior is inlined via a tiny local helper.
+function describeError(reason: unknown): string {
+  if (typeof reason === 'string') return reason;
+  if (reason instanceof Error) return reason.message;
+  if (reason === null || reason === undefined) return 'Unhandled rejection';
+  if (typeof reason !== 'object') return String(reason);
+  const message = (reason as { message?: unknown }).message;
+  if (typeof message === 'string' && message.length > 0) return message;
+  try {
+    const json = JSON.stringify(reason);
+    return json === undefined || json === '' ? String(reason) : json;
+  } catch {
+    return String(reason);
+  }
+}
+
 function redact(input: string): string {
   return SENSITIVE_PATTERNS.reduce((acc, { regex, mask }) => acc.replace(regex, mask), input);
 }
@@ -283,7 +301,7 @@ function handleUnhandledRejection(event: Event & { reason?: unknown }): void {
   const err = reason instanceof Error ? reason : undefined;
   reportClientError({
     component: 'UnhandledRejection',
-    message: err?.message ?? String(reason ?? 'Unhandled rejection'),
+    message: describeError(reason),
     stack: err?.stack,
     metadata: { type: 'unhandledrejection' },
   });

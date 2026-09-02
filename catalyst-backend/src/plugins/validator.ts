@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Logger } from 'pino';
 import { captureSystemError } from '../services/error-logger';
+import { describeError } from '../utils/describe-error.js';
 
 // Config key validation - must be alphanumeric with hyphens/underscores, max 50 chars
 const CONFIG_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,50}$/;
@@ -106,7 +107,7 @@ export function validateManifest(data: unknown): z.infer<typeof PluginManifestSc
     captureSystemError({
       level: 'warn',
       component: 'PluginValidator',
-      message: `Manifest validation error: ${error?.message || String(error)}`,
+      message: `Manifest validation error: ${describeError(error)}`,
       stack: error?.stack,
     }).catch(() => {});
     throw error;

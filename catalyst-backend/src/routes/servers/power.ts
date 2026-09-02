@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { describeError } from "../../utils/describe-error.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
@@ -63,7 +64,7 @@ async function sendPowerCommand(
       }
       return { mode: "acked", result, requestId };
     } catch (err: any) {
-      const error = err instanceof Error ? err : new Error(String(err));
+      const error = err instanceof Error ? err : new Error(describeError(err));
       const msg = error.message || "";
       if (msg.includes("timed out") || msg.includes("timeout")) {
         return { mode: "timeout", error };
