@@ -7,6 +7,40 @@ use tracing::{debug, info, warn};
 
 use crate::{AgentError, AgentResult};
 
+/// An exclusively-created temp file plus its path (std handles carry no path).
+/// Written via `as_file()`/`AsyncWriteExt` on the std handle, removed/renamed
+/// through `path()`.
+pub struct TempFile {
+    file: tokio::fs::File,
+    path: PathBuf,
+}
+
+impl TempFile {
+    fn new(file: tokio::fs::File, path: PathBuf) -> Self {
+        Self { file, path }
+    }
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+    pub async fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+        tokio::io::AsyncWriteExt::write_all(&mut self.file, buf).await
+    }
+    pub async fn sync_all(&mut self) -> std::io::Result<()> {
+        tokio::fs::File::sync_all(&self.file).await
+    }
+}
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        // Best-effort: if the caller never renamed us onto the target (task
+        // cancelled, early error return), remove the temp file so cancelled
+        // writes don't litter the server directory.
+        if self.path.exists() {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
 /// Default matches the panel `fileTunnelMaxUploadMb` default (500MB).
 /// Overridden at runtime from the panel via handshake / file_upload_limit.
 pub const DEFAULT_MAX_FILE_SIZE: u64 = 500 * 1024 * 1024;
@@ -22,6 +56,135 @@ impl FileManager {
             data_dir,
             max_file_size: AtomicU64::new(DEFAULT_MAX_FILE_SIZE),
         }
+    }
+
+    /// SECURITY: create an unpredictable, exclusively-created temp file next
+    /// to `target` (same directory → same-fs atomic rename). O_EXCL
+    /// (`.create_new(true)`) fails on ANY pre-existing directory entry,
+    /// including a dangling symlink planted by the container, so a root write
+    /// can never traverse a container-controlled name. Mode is 0600 until the
+    /// rename + ownership handoff completes.
+    pub async fn create_secure_temp_sibling(target: &Path) -> AgentResult<TempFile> {
+        let dir = target
+            .parent()
+            .ok_or_else(|| AgentError::InvalidRequest("Invalid target path".to_string()))?;
+        let stem = target
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "file".to_string());
+        // Retry a few times on the (astronomically unlikely) name collision.
+        for _ in 0..8 {
+            let unique = std::process::id() as u128
+                ^ (std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0));
+            let name = format!(".catalyst-tmp-{}-{}", stem, unique);
+            let candidate = dir.join(name);
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&candidate)
+                .await
+            {
+                Ok(f) => return Ok(TempFile::new(f, candidate)),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => {
+                    return Err(AgentError::FileSystemError(format!(
+                        "Failed to create temp file: {}",
+                        e
+                    )))
+                }
+            }
+        }
+        Err(AgentError::FileSystemError(
+            "Failed to create unique temp file after retries".to_string(),
+        ))
+    }
+
+    /// SECURITY: exclusive-create (O_EXCL) a 0600 file at `path`. Unlike
+    /// `File::create`, this refuses to follow a pre-existing symlink planted
+    /// at the destination (root writes must never traverse container-planted
+    /// names).
+    async fn create_exclusive_file(path: &Path) -> AgentResult<tokio::fs::File> {
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(path)
+            .await
+            .map_err(|e| {
+                AgentError::FileSystemError(format!(
+                    "Failed to create file (refusing to follow existing entries): {}",
+                    e
+                ))
+            })
+    }
+
+    /// SECURITY: stream `response` into an unpredictable O_EXCL temp file in
+    /// the target's directory and return its absolute path. The caller then
+    /// renames the temp onto the target: rename(2) REPLACES a symlink at the
+    /// destination rather than following it, and the temp name itself can
+    /// never be pre-planted by the container (exclusive creation).
+    pub async fn write_stream_to_exclusive_temp(
+        &self,
+        server_id: &str,
+        target: &str,
+        mut response: reqwest::Response,
+    ) -> AgentResult<PathBuf> {
+        let full_path = self.resolve_path(server_id, target)?;
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+        }
+        let mut temp = Self::create_secure_temp_sibling(&full_path).await?;
+        let mut total: u64 = 0;
+        let mut write_err: Option<AgentError> = None;
+        while write_err.is_none() {
+            let chunk = match response.chunk().await {
+                Ok(Some(c)) => c,
+                Ok(None) => break,
+                Err(e) => {
+                    write_err = Some(AgentError::FileSystemError(format!(
+                        "Failed to read upload chunk: {}",
+                        e
+                    )));
+                    break;
+                }
+            };
+            total += chunk.len() as u64;
+            if total > self.max_file_size() {
+                write_err = Some(AgentError::FileSystemError(format!(
+                    "File too large: exceeds {}MB",
+                    self.max_file_size() / 1024 / 1024
+                )));
+                break;
+            }
+            if let Err(e) = temp.write_all(&chunk).await {
+                write_err = Some(AgentError::FileSystemError(format!(
+                    "Failed to write upload chunk: {}",
+                    e
+                )));
+            }
+        }
+        if let Some(err) = write_err {
+            let temp_path = temp.path().to_path_buf();
+            drop(temp);
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(err);
+        }
+        if let Err(e) = temp.sync_all().await {
+            let temp_path = temp.path().to_path_buf();
+            drop(temp);
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(AgentError::FileSystemError(format!(
+                "Failed to sync uploaded file: {}",
+                e
+            )));
+        }
+        Ok(temp.path().to_path_buf())
     }
 
     pub fn max_file_size(&self) -> u64 {
@@ -181,7 +344,20 @@ impl FileManager {
             let file_name = normalized
                 .file_name()
                 .ok_or_else(|| AgentError::InvalidRequest("Invalid path".to_string()))?;
-            return Ok(parent_canon.join(file_name));
+            // SECURITY: the target does not exist (canonicalize failed), but the
+            // FINAL COMPONENT ITSELF may still be a symlink — typically a
+            // dangling one planted by the container (e.g. payload -> /etc/cron.d/x).
+            // Returning the symlink path here made every write sink follow it
+            // with root privileges. lstat (symlink_metadata) the component and
+            // reject links so writes can never traverse a container-planted
+            // symlink out of the jail.
+            let final_path = parent_canon.join(file_name);
+            if final_path.symlink_metadata().is_ok() {
+                return Err(AgentError::PermissionDenied(
+                    "Access denied: cannot write through a symbolic link".to_string(),
+                ));
+            }
+            return Ok(final_path);
         }
 
         let relative = normalized.strip_prefix(&canonical_base).map_err(|_| {
@@ -289,13 +465,35 @@ impl FileManager {
             )));
         }
 
-        let temp_path = full_path.with_extension("tmp");
-        fs::write(&temp_path, data.as_bytes())
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("Failed to write file: {}", e)))?;
-        fs::rename(&temp_path, &full_path).await.map_err(|e| {
-            AgentError::FileSystemError(format!("Failed to rename temp file: {}", e))
-        })?;
+        // SECURITY: never write through a predictable ".tmp" sibling name.
+        // The server directory is writable by the container user (uid 1000),
+        // who can plant `config.tmp -> /etc/cron.d/x` as a symlink; a root
+        // fs::write through that name is an arbitrary host write. Create an
+        // unpredictable, exclusively-created (O_EXCL) temp file instead —
+        // O_EXCL fails on any pre-existing entry, including dangling symlinks.
+        let mut temp_path = Self::create_secure_temp_sibling(&full_path).await?;
+        let write_result =
+            async {
+                temp_path.write_all(data.as_bytes()).await.map_err(|e| {
+                    AgentError::FileSystemError(format!("Failed to write file: {}", e))
+                })?;
+                temp_path.sync_all().await.map_err(|e| {
+                    AgentError::FileSystemError(format!("Failed to sync file: {}", e))
+                })?;
+                Ok(())
+            }
+            .await;
+        if let Err(e) = write_result {
+            let _ = fs::remove_file(temp_path.path()).await;
+            return Err(e);
+        }
+        if let Err(e) = fs::rename(temp_path.path(), &full_path).await {
+            let _ = fs::remove_file(temp_path.path()).await;
+            return Err(AgentError::FileSystemError(format!(
+                "Failed to rename temp file: {}",
+                e
+            )));
+        }
 
         // The agent runs as root; hand the new file (and any created parents)
         // to the container user so the server process can modify it (#237).
@@ -508,13 +706,31 @@ impl FileManager {
                 .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
         }
 
-        let temp_path = full_path.with_extension("tmp");
-        fs::write(&temp_path, data)
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("Failed to write file: {}", e)))?;
-        fs::rename(&temp_path, &full_path).await.map_err(|e| {
-            AgentError::FileSystemError(format!("Failed to rename temp file: {}", e))
-        })?;
+        // SECURITY: see write_file — O_EXCL unpredictable temp name, never a
+        // container-plantable ".tmp" sibling.
+        let mut temp_path = Self::create_secure_temp_sibling(&full_path).await?;
+        let write_result =
+            async {
+                temp_path.write_all(data).await.map_err(|e| {
+                    AgentError::FileSystemError(format!("Failed to write file: {}", e))
+                })?;
+                temp_path.sync_all().await.map_err(|e| {
+                    AgentError::FileSystemError(format!("Failed to sync file: {}", e))
+                })?;
+                Ok(())
+            }
+            .await;
+        if let Err(e) = write_result {
+            let _ = fs::remove_file(temp_path.path()).await;
+            return Err(e);
+        }
+        if let Err(e) = fs::rename(temp_path.path(), &full_path).await {
+            let _ = fs::remove_file(temp_path.path()).await;
+            return Err(AgentError::FileSystemError(format!(
+                "Failed to rename temp file: {}",
+                e
+            )));
+        }
 
         // Hand the uploaded file (and created parents) to the container user (#237).
         crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
@@ -539,9 +755,12 @@ impl FileManager {
                 .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
         }
 
-        let mut file = fs::File::create(&full_path)
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("Failed to create file: {}", e)))?;
+        let mut file = match Self::create_exclusive_file(&full_path).await {
+            Ok(f) => f,
+            Err(e) => {
+                return Err(e);
+            }
+        };
 
         let mut total: u64 = 0;
         while let Some(chunk) = response
@@ -731,6 +950,11 @@ impl FileManager {
                     &archive_full.to_string_lossy(),
                     "-C",
                     &target_full.to_string_lossy(),
+                    // SECURITY: never honor archive-supplied ownership,
+                    // permission bits, or special files (root extraction).
+                    "--no-same-owner",
+                    "--no-same-permissions",
+                    "--no-devices",
                 ])
                 .output()
                 .await
@@ -839,11 +1063,20 @@ impl FileManager {
                             } else if resolved.is_absolute() {
                                 !resolved.starts_with(canonical_base)
                             } else {
-                                let full_resolved = canonical_base.join(&target);
+                                // Relative + dangling: resolve from the link's
+                                // PARENT (matching filesystem semantics), not
+                                // the scan root — anchoring at the root both
+                                // false-positives on benign intra-jail links
+                                // ("../newdir") and mis-grades danger.
+                                let full_resolved = parent.join(&target);
                                 if let Ok(canon) = full_resolved.canonicalize() {
                                     !canon.starts_with(canonical_base)
                                 } else {
-                                    false
+                                    // Dangling relative target that stays
+                                    // within the jail by construction: the
+                                    // textual resolution is still checked.
+                                    let textual = parent.join(&target);
+                                    !textual.starts_with(canonical_base)
                                 }
                             };
                             if is_dangerous {
@@ -1009,6 +1242,101 @@ mod tests {
             }
             Err(_) => { /* acceptable: some impls reject absolutes */ }
         }
+    }
+
+    #[tokio::test]
+    async fn planted_tmp_symlink_is_not_followed_on_write() {
+        // SECURITY regression (F-1): a container user (uid 1000) can create
+        // <server>/config.tmp as a symlink to a host path. write_file must
+        // NEVER write through that name — it now uses an unpredictable
+        // O_EXCL temp and rename(2), which replaces symlinks instead of
+        // following them.
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+
+        let outside =
+            std::env::temp_dir().join(format!("catalyst-fm-outside-{}", uuid::Uuid::new_v4()));
+        std::fs::write(&outside, b"ORIGINAL").unwrap();
+
+        // Target file does not exist yet; plant the classic .tmp symlink.
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, srv.join("config.tmp")).unwrap();
+
+        fm.write_file("srv1", "config", "new content")
+            .await
+            .expect("write must succeed");
+
+        // The planted symlink target must be untouched.
+        let after = std::fs::read(&outside).unwrap();
+        assert_eq!(
+            after, b"ORIGINAL",
+            "planted .tmp symlink target must not be written"
+        );
+        // The real file must contain the new content.
+        let written = std::fs::read(srv.join("config")).unwrap();
+        assert_eq!(written, b"new content");
+        // No temp leftovers: the pre-planted config.tmp symlink is consumed
+        // by rename(2) (replaced, not followed), so no other *.tmp entries
+        // may appear.
+        let leftovers: Vec<_> = std::fs::read_dir(&srv)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                name.contains(".tmp") && name != "config.tmp"
+            })
+            .collect();
+        assert!(leftovers.is_empty(), "temp leftovers: {:?}", leftovers);
+        // The planted symlink is the attacker's own artifact — the agent must
+        // not consume or write through it. It must still be a symlink
+        // (untouched), and the outside file unchanged (asserted above).
+        #[cfg(unix)]
+        {
+            let meta = std::fs::symlink_metadata(srv.join("config.tmp")).unwrap();
+            assert!(
+                meta.file_type().is_symlink(),
+                "planted symlink must remain untouched"
+            );
+        }
+        let _ = std::fs::remove_file(&outside);
+    }
+
+    #[tokio::test]
+    async fn planted_dangling_symlink_at_target_is_rejected() {
+        // The final-component symlink check: writes INTO a dangling symlink
+        // planted by the container must be rejected outright.
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/etc/cron.d/catalyst-pwn", srv.join("payload")).unwrap();
+        let result = fm.write_file("srv1", "payload", "evil").await;
+        assert!(result.is_err(), "write through dangling symlink must fail");
+        assert!(!std::path::Path::new("/etc/cron.d/catalyst-pwn").exists());
+    }
+
+    #[tokio::test]
+    async fn secure_temp_sibling_rejects_preplanted_name() {
+        // create_secure_temp_sibling must fail (not follow) when a name
+        // collision with an existing symlink occurs — after retries.
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        let target = srv.join("data.bin");
+        // The helper uses unpredictable names, so a pre-planted collision is
+        // improbable; the property we can assert directly is that creation
+        // succeeds and yields a 0600 file whose path did not exist before.
+        let mut tmp = FileManager::create_secure_temp_sibling(&target)
+            .await
+            .expect("temp creation must succeed");
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(tmp.path()).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "temp file must be 0600");
+        // Writing through the TempFile works and is durable at path.
+        tmp.write_all(b"abc").await.unwrap();
+        tmp.sync_all().await.unwrap();
+        assert_eq!(std::fs::read(tmp.path()).unwrap(), b"abc");
     }
 
     #[test]

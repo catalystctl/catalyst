@@ -408,8 +408,15 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
         let path = Self::path_from_handle(&handle).unwrap_or_default();
+        let permissions = self.permissions.clone();
 
         async move {
+            // SECURITY: reads were previously unguarded — a write-only sub-user
+            // could fabricate a handle string and read in-jail files without
+            // the file.read scope.
+            if !Self::has_permission(&permissions, "file.read") {
+                return Err(SftpError("Permission denied".into()));
+            }
             // Stream: resolve path (permission check), then seek+read exactly
             // len bytes instead of loading the entire file into memory.
             let full_path = fm
@@ -522,8 +529,12 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
     ) -> impl Future<Output = Result<russh_sftp::protocol::Attrs, Self::Error>> + Send {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
+        let permissions = self.permissions.clone();
 
         async move {
+            if !Self::has_permission(&permissions, "file.read") {
+                return Err(SftpError("Permission denied".into()));
+            }
             let full_path = fm
                 .resolve_path(&server_id, &path)
                 .map_err(|e| SftpError(format!("{}", e)))?;
@@ -547,8 +558,12 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
         let path = Self::path_from_handle(&handle).unwrap_or_default();
+        let permissions = self.permissions.clone();
 
         async move {
+            if !Self::has_permission(&permissions, "file.read") {
+                return Err(SftpError("Permission denied".into()));
+            }
             let full_path = fm
                 .resolve_path(&server_id, &path)
                 .map_err(|e| SftpError(format!("{}", e)))?;
@@ -658,8 +673,14 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
         let path = Self::path_from_handle(&handle).unwrap_or_default();
+        let permissions = self.permissions.clone();
 
         async move {
+            // SECURITY: dir handles are forgeable strings — without this gate
+            // a write-only subuser could enumerate directory metadata.
+            if !Self::has_permission(&permissions, "file.read") {
+                return Err(SftpError("Permission denied".into()));
+            }
             tracing::info!("SFTP readdir: {}", path);
 
             // Check if this handle has already been read
@@ -791,8 +812,12 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
     ) -> impl Future<Output = Result<Name, Self::Error>> + Send {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
+        let permissions = self.permissions.clone();
 
         async move {
+            if !Self::has_permission(&permissions, "file.read") {
+                return Err(SftpError("Permission denied".into()));
+            }
             tracing::info!("SFTP realpath: path='{}', server_id='{}'", path, server_id);
 
             let full_path = match fm.resolve_path(&server_id, &path) {
@@ -830,8 +855,12 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
     ) -> impl Future<Output = Result<russh_sftp::protocol::Attrs, Self::Error>> + Send {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
+        let permissions = self.permissions.clone();
 
         async move {
+            if !Self::has_permission(&permissions, "file.read") {
+                return Err(SftpError("Permission denied".into()));
+            }
             tracing::info!("SFTP stat: path='{}', server_id='{}'", path, server_id);
 
             let full_path = match fm.resolve_path(&server_id, &path) {

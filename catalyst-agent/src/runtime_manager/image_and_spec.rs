@@ -270,6 +270,12 @@ pub(crate) fn linux_memory_resources(
         let total_bytes = total_mb.saturating_mul(1024 * 1024);
         let capped = std::cmp::min(total_bytes, 1024u64 * 1024 * 1024 * 1024);
         memory.insert("swap".into(), serde_json::json!(capped as i64));
+    } else {
+        // SECURITY/robustness: with swap allocation 0 the cgroup's
+        // memory.swap.max used to stay at "max" (unlimited swap), defeating
+        // memory accounting under pressure. Setting swap == limit disables
+        // swap for the cgroup entirely (Wings-style default).
+        memory.insert("swap".into(), serde_json::json!(mem_limit));
     }
     let unified = serde_json::json!({
         "memory.high": mem_high.to_string()
@@ -805,11 +811,13 @@ mod tests {
     }
 
     #[test]
-    fn memory_resources_omit_swap_when_zero() {
+    fn memory_resources_disables_swap_when_zero() {
         let (memory, unified) = linux_memory_resources(2048, 0, 0);
         let limit = 2048i64 * 1024 * 1024;
         assert_eq!(memory.get("limit"), Some(&serde_json::json!(limit)));
-        assert!(!memory.contains_key("swap"));
+        // SECURITY: swap allocation 0 must DISABLE swap (swap == limit), not
+        // leave the cgroup at the kernel default "max" (unlimited).
+        assert_eq!(memory.get("swap"), Some(&serde_json::json!(limit)));
         assert!(!memory.contains_key("reservation"));
         assert_eq!(
             unified.get("memory.high"),

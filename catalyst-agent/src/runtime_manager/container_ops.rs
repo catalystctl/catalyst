@@ -408,7 +408,28 @@ impl ContainerdRuntime {
             "linux": {
                 "namespaces": [{"type":"pid"},{"type":"ipc"},{"type":"uts"},{"type":"mount"}],
                 "maskedPaths": masked_paths(), "readonlyPaths": readonly_paths(),
-                "seccomp": default_seccomp_profile()
+                "seccomp": default_seccomp_profile(),
+                // SECURITY: installers parse the most attacker-influenced
+                // input (egg install scripts) but historically ran with NO
+                // cgroup path and NO resource limits — a fork bomb or malloc
+                // loop in an installer OOMs the whole node for every tenant.
+                // Apply the same resource discipline as runtime containers.
+                "cgroupsPath": format!("/catalyst/{}", container_id),
+                "resources": {
+                    "memory": {"limit": 2147483648i64, "swap": 2147483648i64},
+                    "cpu": {"shares": 1024i64, "quota": 200000i64, "period": 100000i64},
+                    "pids": {"limit": 512i64},
+                    "devices": [
+                        {"allow": false, "access": "rwm"},
+                        {"allow": true, "type": "c", "major": 1, "minor": 3, "access": "rwm"},
+                        {"allow": true, "type": "c", "major": 1, "minor": 5, "access": "rwm"},
+                        {"allow": true, "type": "c", "major": 1, "minor": 7, "access": "rwm"},
+                        {"allow": true, "type": "c", "major": 1, "minor": 8, "access": "rwm"},
+                        {"allow": true, "type": "c", "major": 1, "minor": 9, "access": "rwm"},
+                        {"allow": true, "type": "c", "major": 5, "minor": 0, "access": "rwm"},
+                        {"allow": true, "type": "c", "major": 5, "minor": 1, "access": "rwm"}
+                    ]
+                }
             }
         });
         let spec_any = Any {

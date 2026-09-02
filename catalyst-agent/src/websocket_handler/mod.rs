@@ -610,7 +610,11 @@ impl WebSocketHandler {
         // Dedup: suppress duplicate reports within the window
         {
             let mut dedup = self.error_dedup.lock().await;
-            let key = format!("{}|{}", component, &message[..message.len().min(200)]);
+            // SECURITY/robustness: slice on CHAR boundaries — byte slicing can
+            // land inside a multi-byte UTF-8 sequence (container-controlled
+            // error text) and panic the reporting task.
+            let truncated: String = message.chars().take(200).collect();
+            let key = format!("{}|{}", component, truncated);
             let now = std::time::Instant::now();
             if let Some(last) = dedup.get(&key) {
                 if now.duration_since(*last) < std::time::Duration::from_secs(DEDUP_WINDOW_SECS) {
@@ -2666,6 +2670,13 @@ impl WebSocketHandler {
         let allocated_disk_mb = msg["allocatedDiskMb"]
             .as_u64()
             .ok_or_else(|| AgentError::InvalidRequest("Missing allocatedDiskMb".to_string()))?;
+
+        // SECURITY: server_uuid is joined into data_dir/<uuid> and the image
+        // path images/<uuid>.img feeding fallocate/resize2fs/e2fsck. Reject
+        // traversal/absolute ids so a malformed message cannot target
+        // arbitrary host paths.
+        crate::shell_utils::validate_safe_path_segment(server_id, "serverId")?;
+        crate::shell_utils::validate_safe_path_segment(server_uuid, "serverUuid")?;
 
         let server_dir = PathBuf::from(self.config.server.data_dir.as_path()).join(server_uuid);
         let allow_online_grow = true;

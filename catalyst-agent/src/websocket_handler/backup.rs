@@ -334,6 +334,12 @@ impl WebSocketHandler {
             .arg(&actual_backup_file)
             .arg("-C")
             .arg(&tmp_dir)
+            // SECURITY: extract as agent-controlled, not archive-controlled —
+            // never restore archive-supplied ownership/permissions/special
+            // files (root tar otherwise honors --same-owner and suid bits).
+            .arg("--no-same-owner")
+            .arg("--no-same-permissions")
+            .arg("--no-devices")
             .output()
             .await
             .map_err(|e| AgentError::IoError(format!("Failed to run tar: {}", e)))?;
@@ -1207,11 +1213,17 @@ impl WebSocketHandler {
 
         // Spawn tar with stdin piped. stdin stays in the Child so
         // write_restore_stream_chunk can access it via child.stdin.as_mut().
+        // SECURITY: same hardening flags as the non-streaming restore —
+        // never honor archive-supplied ownership/permissions/special files
+        // during root extraction.
         let child = tokio::process::Command::new("tar")
             .arg("-xf")
             .arg("-")
             .arg("-C")
             .arg(&tmp_dir)
+            .arg("--no-same-owner")
+            .arg("--no-same-permissions")
+            .arg("--no-devices")
             .stdin(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()

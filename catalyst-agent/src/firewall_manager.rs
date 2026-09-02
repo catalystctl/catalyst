@@ -535,10 +535,15 @@ impl FirewallManager {
         //   [ 1] 25565/tcp    ALLOW IN    Anywhere                   (catalyst-game-server)
         // We need to parse from bottom to top when deleting.
         let mut matching_numbers: Vec<String> = Vec::new();
+        let port_str = port.to_string();
         for line in stdout.lines() {
-            if (line.contains(&format!("{}/tcp", port)) || line.contains(&format!("{}/udp", port)))
-                && line.contains("catalyst-game-server")
-            {
+            // SECURITY: match the port only as the exact PORT/PROTO column
+            // token — substring matching made port 25 also match 22525/tcp
+            // lines with the same comment, deleting OTHER servers' rules.
+            let is_port_match = line.split_whitespace().any(|tok| {
+                tok == format!("{}/tcp", port_str) || tok == format!("{}/udp", port_str)
+            });
+            if is_port_match && line.contains("catalyst-game-server") {
                 // Extract the number between [ and ].
                 if let Some(start) = line.find('[') {
                     if let Some(end) = line[start..].find(']') {
@@ -750,10 +755,18 @@ impl FirewallManager {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let mut numbers: Vec<usize> = Vec::new();
             for line in stdout.lines() {
-                if line.contains("catalyst-game-server")
-                    && line.contains(&port_str)
-                    && line.contains(protocol)
-                {
+                if line.contains("catalyst-game-server") && line.contains(protocol) {
+                    // SECURITY: match the port only in its dpt:/spt: field —
+                    // substring matching on the whole line made port "25"
+                    // also match "25565" and container IPs containing "25",
+                    // deleting OTHER servers' rules.
+                    let is_port_match = line.split_whitespace().any(|tok| {
+                        (tok.starts_with("dpt:") || tok.starts_with("spt:"))
+                            && tok.trim_start_matches("dpt:").trim_start_matches("spt:") == port_str
+                    });
+                    if !is_port_match {
+                        continue;
+                    }
                     if let Some(num_str) = line.split_whitespace().next() {
                         if let Ok(num) = num_str.parse::<usize>() {
                             numbers.push(num);
@@ -838,7 +851,12 @@ impl FirewallManager {
                 let mut found_num: Option<usize> = None;
 
                 for line in stdout.lines() {
-                    if line.contains("catalyst-container") && (line.contains(container_ip)) {
+                    // SECURITY: match the IP only as a whole whitespace token —
+                    // substring matching made 10.42.0.1 also match 10.42.0.15
+                    // rules, deleting OTHER containers' rules.
+                    if line.contains("catalyst-container")
+                        && line.split_whitespace().any(|tok| tok == container_ip)
+                    {
                         if let Some(num_str) = line.split_whitespace().next() {
                             if let Ok(num) = num_str.parse::<usize>() {
                                 found_num = Some(num);

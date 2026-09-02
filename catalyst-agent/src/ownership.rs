@@ -58,7 +58,12 @@ fn ancestors_below(stop_at: &Path, path: &Path) -> Vec<PathBuf> {
 /// silently ignored (the caller may chown before the file exists), anything
 /// else is logged.
 async fn chown_one(path: &Path) {
-    match std::os::unix::fs::chown(path, Some(CONTAINER_UID), Some(CONTAINER_GID)) {
+    // SECURITY: chown with AT_SYMLINK_NOFOLLOW (lchown semantics) — chown(2)
+    // follows symlinks, so a container racing the agent could swap an in-jail
+    // ancestor directory for a symlink during the resolve→chown window and
+    // make root chown an attacker-chosen HOST path. Not-following means a
+    // swapped symlink is chowned itself (harmless) instead of its target.
+    match std::os::unix::fs::lchown(path, Some(CONTAINER_UID), Some(CONTAINER_GID)) {
         Ok(()) => debug!(
             "Handed {:?} to the container user ({}:{})",
             path, CONTAINER_UID, CONTAINER_GID

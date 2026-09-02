@@ -331,13 +331,23 @@ async fn read_or_empty(path: &Path) -> AgentResult<String> {
 }
 
 async fn atomic_write(path: &Path, content: &str) -> AgentResult<()> {
-    let tmp = path.with_extension("catalyst-cfg-tmp");
-    tokio::fs::write(&tmp, content.as_bytes())
+    // SECURITY: the temp name used to be a predictable sibling
+    // ("*.catalyst-cfg-tmp"), and this module does not go through
+    // FileManager::resolve_path — so a container-planted symlink at that name
+    // would make the root write traverse it (arbitrary host write). Use the
+    // shared exclusive-create unpredictable temp helper + rename(2), which
+    // replaces rather than follows symlinks at the destination.
+    let mut tmp = crate::file_manager::FileManager::create_secure_temp_sibling(path)
         .await
-        .map_err(|e| AgentError::FileSystemError(format!("write temp: {}", e)))?;
-    tokio::fs::rename(&tmp, path)
-        .await
-        .map_err(|e| AgentError::FileSystemError(format!("rename temp: {}", e)))?;
+        .map_err(|e| AgentError::FileSystemError(format!("create temp: {}", e)))?;
+    if let Err(e) = tmp.write_all(content.as_bytes()).await {
+        let _ = tokio::fs::remove_file(tmp.path()).await;
+        return Err(AgentError::FileSystemError(format!("write temp: {}", e)));
+    }
+    if let Err(e) = tokio::fs::rename(tmp.path(), path).await {
+        let _ = tokio::fs::remove_file(tmp.path()).await;
+        return Err(AgentError::FileSystemError(format!("rename temp: {}", e)));
+    }
     Ok(())
 }
 

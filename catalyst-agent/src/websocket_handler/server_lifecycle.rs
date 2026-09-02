@@ -1410,6 +1410,13 @@ impl WebSocketHandler {
         server_id: &str,
         server_uuid: &str,
     ) -> AgentResult<()> {
+        // SECURITY: these identifiers are joined into filesystem paths
+        // (data_dir/<id>) and used in remove_dir_all below. An absolute or
+        // traversal id would escape the data dir and delete arbitrary host
+        // directories as root (Path::join replaces the base on "/..." and
+        // "../" escapes it). Validate both as single safe segments.
+        crate::shell_utils::validate_safe_path_segment(server_id, "serverId")?;
+        crate::shell_utils::validate_safe_path_segment(server_uuid, "serverUuid")?;
         info!("Deleting server: {} (uuid: {})", server_id, server_uuid);
 
         // Stop monitoring

@@ -354,25 +354,36 @@ async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelReques
         .await
     {
         Ok(resp) if resp.status().is_success() => {
-            // Stream response body directly to a temp file, then atomically rename
-            let temp_path = format!("{}.tmp", req.path);
-            match fm
-                .write_file_stream(&req.server_uuid, &temp_path, resp)
+            // SECURITY: stream into an unpredictable, exclusively-created
+            // temp file in the target directory instead of a container-writable
+            // "<target>.tmp" — a planted `<target>.tmp` symlink would turn the
+            // root upload stream into an arbitrary host write. rename(2) then
+            // replaces (rather than follows) any symlink at the destination.
+            let temp_path = match fm
+                .write_stream_to_exclusive_temp(&req.server_uuid, &req.path, resp)
                 .await
             {
-                Ok(()) => {
-                    if let Err(e) = fm
-                        .rename_file(&req.server_uuid, &temp_path, &req.path)
-                        .await
-                    {
-                        let _ = fm.delete_file(&req.server_uuid, &temp_path).await;
-                        send_json_response(ctx, false, None, Some(e.to_string())).await;
-                        return;
-                    }
-                    send_json_response(ctx, true, None, None).await;
-                }
+                Ok(p) => p,
                 Err(e) => {
-                    let _ = fm.delete_file(&req.server_uuid, &temp_path).await;
+                    send_json_response(ctx, false, None, Some(e.to_string())).await;
+                    return;
+                }
+            };
+            // Resolve the destination now (it passed resolve_path via the
+            // write_stream call) and rename the temp onto it.
+            match fm.resolve_path(&req.server_uuid, &req.path) {
+                Ok(dest) => match tokio::fs::rename(&temp_path, &dest).await {
+                    Ok(()) => {
+                        crate::ownership::ensure_container_owned(fm.data_dir(), &dest).await;
+                        send_json_response(ctx, true, None, None).await;
+                    }
+                    Err(e) => {
+                        let _ = tokio::fs::remove_file(&temp_path).await;
+                        send_json_response(ctx, false, None, Some(e.to_string())).await;
+                    }
+                },
+                Err(e) => {
+                    let _ = tokio::fs::remove_file(&temp_path).await;
                     send_json_response(ctx, false, None, Some(e.to_string())).await;
                 }
             }
