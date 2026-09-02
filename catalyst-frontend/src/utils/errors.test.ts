@@ -91,6 +91,18 @@ describe('describeMutationComponent', () => {
     // Stack name "k" is minified → skipped; endpoint missing → falls back to key "k".
     expect(describeMutationComponent(['k'], err)).toBe('Mutation:k');
   });
+
+  it('rejects 2-char PascalCase-looking minified names like "Ke" (regression)', () => {
+    const err = new Error('Failed to enable 2FA: HTTP 500');
+    err.stack = [
+      'Error: Failed to enable 2FA: HTTP 500',
+      '    at Object.enableTwoFactor (https://panel.example.com/assets/ProfilePage-C61zddDt.js:1:3488)',
+      '    at async Ke (https://panel.example.com/assets/queryClient-DC8ZeF5t.js:2:973)',
+    ].join('\n');
+    // "Ke" was previously accepted as PascalCase; the stack-derived method
+    // name must win instead.
+    expect(describeMutationComponent(['Ke'], err)).toBe('Mutation:enableTwoFactor');
+  });
 });
 
 describe('describeErrorFunction', () => {

@@ -1445,6 +1445,7 @@ function UsersPage() {
  </span>
  <Input
  type="password"
+ autoComplete={editingUserId ? 'current-password' : 'new-password'}
  value={editingUserId ? editPassword : createPassword}
  onChange={(e) => editingUserId ? setEditPassword(e.target.value) : setCreatePassword(e.target.value)}
  placeholder={editingUserId ? 'Leave blank to keep current' : '********'}

@@ -345,9 +345,9 @@ export function useMutation<
       let caller: string | undefined;
       for (const frame of frames) {
         const m = frame.match(/^\s*at (\w+)[ (]/);
-        // Minified names (1–3 chars, not PascalCase) are noise in prod.
+        // Minified names (≤2 chars, e.g. "k", "Ke") are noise in prod.
         const readable =
-          m && m[1] !== 'useMutation' && !/^[a-z$][\w$]{0,2}$/.test(m[1]);
+          m && m[1] !== 'useMutation' && m[1].length > 2 && !/^[a-z$][\w$]{0,2}$/.test(m[1]);
         if (m && readable) {
           caller = m[1];
           break;

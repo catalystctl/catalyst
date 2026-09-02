@@ -344,11 +344,11 @@ export default function ProfilePage() {
  {hasPw ? (
  <div className="space-y-3">
  <div className="relative">
- <Input type={showCurPw ? 'text' : 'password'} value={curPw} onChange={(e) => setCurPw(e.target.value)} placeholder="Current password" className="pr-10" />
+ <Input type={showCurPw ? 'text' : 'password'} autoComplete="current-password" value={curPw} onChange={(e) => setCurPw(e.target.value)} placeholder="Current password" className="pr-10" />
  <button onClick={() => setShowCurPw(!showCurPw)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">{showCurPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
  </div>
  <div className="relative">
- <Input type={showNewPw ? 'text' : 'password'} value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="New password" className="pr-10" />
+ <Input type={showNewPw ? 'text' : 'password'} autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="New password" className="pr-10" />
  <button onClick={() => setShowNewPw(!showNewPw)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">{showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
  </div>
  <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
@@ -361,7 +361,7 @@ export default function ProfilePage() {
  </div>
  ) : (
  <div className="space-y-3">
- <Input type="password" value={setPwVal} onChange={(e) => setSetPwVal(e.target.value)} placeholder="New password" />
+ <Input type="password" autoComplete="new-password" value={setPwVal} onChange={(e) => setSetPwVal(e.target.value)} placeholder="New password" />
  <Button size="sm" onClick={() => setPwMutation.mutate()} disabled={!setPwVal || setPwMutation.isPending} className="w-full">
  {setPwMutation.isPending ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Setting…</> : 'Set Password'}
  </Button>
@@ -376,7 +376,9 @@ export default function ProfilePage() {
  {t2fa && <Badge variant="outline" className="border-success/40 text-success text-[10px]">Enabled</Badge>}
  </div>
  <div className="space-y-3">
- <Input type="password" value={tfaPw} onChange={(e) => setTfaPw(e.target.value)} placeholder="Confirm password" />
+ {/* autocomplete="current-password" so password managers offer the saved
+     login instead of generating a new password for re-auth fields. */}
+ <Input type="password" name="current-password" autoComplete="current-password" value={tfaPw} onChange={(e) => setTfaPw(e.target.value)} placeholder="Confirm password" />
  <div className="flex flex-wrap gap-2">
  {!t2fa && <Button size="sm" onClick={() => enableTfaMutation.mutate()} disabled={!tfaPw || enableTfaMutation.isPending}>{enableTfaMutation.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <><QrCode className="mr-1.5 h-3.5 w-3.5" />Enable 2FA</>}</Button>}
  {t2fa && (<>

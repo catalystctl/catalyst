@@ -130,6 +130,7 @@ function InvitesPage() {
  Password
  <input
  type="password"
+ autoComplete="new-password"
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
  value={registerPassword}
  onChange={(event) => setRegisterPassword(event.target.value)}

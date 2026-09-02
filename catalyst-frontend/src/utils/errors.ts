@@ -71,10 +71,12 @@ export function describeError(error: unknown): string {
 
 /**
  * Heuristic: names produced by production minifiers (single letter or
- * letter+digits like "k", "t3", "eA") are useless as labels. Real names are
- * camelCase/PascalCase words, or contain dots/slashes (methods, paths).
+ * letter+digits like "k", "t3", "eA", "Ke") are useless as labels. Real
+ * names are at least 3 characters of camelCase/PascalCase words, or contain
+ * dots/slashes (methods, paths).
  */
 function isMinifiedName(name: string): boolean {
+  if (name.length <= 2) return true;
   return /^[a-zA-Z$_][0-9a-zA-Z$_]{0,2}$/.test(name) && !/^[A-Z][a-z]/.test(name);
 }
 

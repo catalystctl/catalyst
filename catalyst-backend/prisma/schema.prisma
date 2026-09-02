@@ -126,10 +126,14 @@ model verification {
 }
 
 model twoFactor {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   secret      String
   backupCodes String
-  verified    Boolean @default(true)
+  verified    Boolean  @default(true)
+  // better-auth two-factor plugin brute-force protection fields (schema.prisma
+  // must match the plugin's expected model or adapter creates fail with 500).
+  failedVerificationCount Int @default(0)
+  lockedUntil             DateTime?
   userId      String
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 

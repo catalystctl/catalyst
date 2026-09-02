@@ -229,7 +229,7 @@ function SystemPage() {
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
  <Lock className="h-3 w-3" /> Password
  </span>
- <Input type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} placeholder="••••••••" className="border-border/40" />
+ <Input type="password" autoComplete="off" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} placeholder="••••••••" className="border-border/40" />
  </label>
  <label className="block space-y-1">
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
@@ -307,13 +307,13 @@ function SystemPage() {
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
  <ShieldCheck className="h-3 w-3" /> CurseForge API Key
  </span>
- <Input type="password" value={curseforgeApiKey} onChange={(e) => setCurseforgeApiKey(e.target.value)} placeholder="••••••••" className="border-border/40" />
+ <Input type="password" autoComplete="off" value={curseforgeApiKey} onChange={(e) => setCurseforgeApiKey(e.target.value)} placeholder="••••••••" className="border-border/40" />
  </label>
  <label className="block space-y-1">
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
  <ShieldCheck className="h-3 w-3" /> Modrinth API Key
  </span>
- <Input type="password" value={modrinthApiKey} onChange={(e) => setModrinthApiKey(e.target.value)} placeholder="••••••••" className="border-border/40" />
+ <Input type="password" autoComplete="off" value={modrinthApiKey} onChange={(e) => setModrinthApiKey(e.target.value)} placeholder="••••••••" className="border-border/40" />
  </label>
  </div>
  </Section>
@@ -357,7 +357,7 @@ function SystemPage() {
  </label>
  <label className="block space-y-1">
  <span className="text-xs font-medium text-muted-foreground">Cloudflare API token</span>
- <Input type="password" value={dnsCloudflareApiToken} onChange={(e) => setDnsCloudflareApiToken(e.target.value)} placeholder="••••••••" className="border-border/40" />
+ <Input type="password" autoComplete="off" value={dnsCloudflareApiToken} onChange={(e) => setDnsCloudflareApiToken(e.target.value)} placeholder="••••••••" className="border-border/40" />
  </label>
  <label className="block space-y-1">
  <span className="text-xs font-medium text-muted-foreground">Cloudflare Zone ID</span>

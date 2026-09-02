@@ -467,6 +467,7 @@ function DatabasePage() {
  </span>
  <Input
  type="password"
+ autoComplete={editingHost ? 'current-password' : 'new-password'}
  value={dbPassword}
  onChange={(e) => setDbPassword(e.target.value)}
  placeholder="••••••••"

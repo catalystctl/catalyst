@@ -273,6 +273,7 @@ function BackupSection({
  </span>
  <input
  type="password"
+ autoComplete="off"
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={s3SecretAccessKey}
  onChange={(event) => setS3SecretAccessKey(event.target.value)}
@@ -338,6 +339,7 @@ function BackupSection({
  </span>
  <input
  type="password"
+ autoComplete="off"
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={sftpPassword}
  onChange={(event) => setSftpPassword(event.target.value)}
@@ -364,6 +366,7 @@ function BackupSection({
  </span>
  <input
  type="password"
+ autoComplete="off"
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={sftpPrivateKeyPassphrase}
  onChange={(event) => setSftpPrivateKeyPassphrase(event.target.value)}
