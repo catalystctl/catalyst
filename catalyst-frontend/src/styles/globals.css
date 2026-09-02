@@ -392,6 +392,20 @@ select option {
   background-color: transparent !important;
 }
 
+/*
+ * xterm 6's DOM renderer measures glyphs with a probe inside .xterm-helpers,
+ * which inherits the app-wide `body { letter-spacing: -0.011em }`. Its inline
+ * per-row letter-spacing compensation then overrides that value, so painted
+ * glyphs drift right of the cell grid (~0.2px/char). Symptoms: mouse
+ * selections land a couple of characters ahead of the text (drift grows with
+ * column), and long lines clip at the grid width. Isolate the whole terminal
+ * subtree from inherited letter-spacing so measurement == paint == grid.
+ */
+.xterm-console-host .xterm,
+.xterm-console-host .xterm * {
+  letter-spacing: normal !important;
+}
+
 .console-line {
   padding: 1px 0;
   transition: background-color var(--duration-fast) var(--ease-standard);
