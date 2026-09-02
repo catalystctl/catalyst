@@ -46,6 +46,15 @@ export default defineConfig(async ({ mode }) => {
       alias: [
         { find: '@', replacement: path.resolve(import.meta.dirname, './src') },
         { find: '@plugins', replacement: path.resolve(import.meta.dirname, '../catalyst-plugins') },
+        // Plugin frontends (embedded via import.meta.glob) import the SDK by
+        // package name. The standalone plugins repo is not a pnpm workspace
+        // member, so nothing links @catalyst/plugin-sdk into node_modules.
+        // Resolve it from the monorepo source: no dependency on the SDK's
+        // dist build order, and the panel bundles the same code the SDK ships.
+        {
+          find: '@catalyst/plugin-sdk/frontend',
+          replacement: path.resolve(import.meta.dirname, '../packages/plugin-sdk/src/frontend/index.ts'),
+        },
       ],
     },
     server: {

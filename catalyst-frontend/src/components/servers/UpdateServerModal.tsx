@@ -40,6 +40,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   const [cpu, setCpu] = useState('1');
   const [disk, setDisk] = useState('10240');
   const [databaseAllocation, setDatabaseAllocation] = useState('0');
+  const [backupRetentionCount, setBackupRetentionCount] = useState('0');
   const [name, setName] = useState('');
   const [primaryIp, setPrimaryIp] = useState('');
   const [allocationId, setAllocationId] = useState('');
@@ -131,6 +132,15 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     onError: () => notifyError('Failed to update server'),
   });
 
+  // Retention rides the dedicated backup-settings endpoint; the plain server
+  // update payload doesn't carry it.
+  const backupSettingsMutation = useMutation({
+    mutationFn: async (retentionCount: number) =>
+      serversApi.updateBackupSettings(serverId, { retentionCount }),
+    onSuccess: () => notifySuccess('Backup retention updated'),
+    onError: () => notifyError('Failed to update backup retention'),
+  });
+
   useEffect(() => {
     if (!open || !server) return;
     setName(server.name ?? '');
@@ -138,6 +148,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     setCpu(String(server.allocatedCpuCores ?? 1));
     setDisk(String(server.allocatedDiskMb ?? 10240));
     setDatabaseAllocation(String(server.databaseAllocation ?? 0));
+    setBackupRetentionCount(String(server.backupRetentionCount ?? 0));
     setPrimaryIp(server.primaryIp ?? '');
   }, [open, server]);
 
@@ -248,6 +259,25 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
 
   // SSE resize handler closes the modal directly via the callback above
 
+  // Empty input means "leave unchanged" (matches the Backups tab semantics);
+  // Number('') is 0, so guard against that before parsing.
+  const retentionRaw = backupRetentionCount.trim();
+  const retentionValue = Number(retentionRaw);
+  const retentionChanged =
+    retentionRaw !== '' &&
+    Number.isFinite(retentionValue) &&
+    retentionValue >= 0 &&
+    retentionValue !== (server?.backupRetentionCount ?? 0);
+  const retentionInvalid =
+    retentionRaw !== '' && (!Number.isFinite(retentionValue) || retentionValue < 0);
+
+  const handleSave = () => {
+    if (retentionChanged) {
+      backupSettingsMutation.mutate(retentionValue);
+    }
+    mutation.mutate();
+  };
+
   return (
     <>
       {controlledOpen === undefined && (
@@ -330,6 +360,21 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 Set to 0 to disable database provisioning.
               </span>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="update-server-backup-retention">Backup retention</Label>
+              <Input
+                id="update-server-backup-retention"
+                value={backupRetentionCount}
+                onChange={(e) => setBackupRetentionCount(e.target.value)}
+                type="number"
+                min={0}
+                max={1000}
+                step={1}
+              />
+              <span className="text-xs text-muted-foreground">
+                Keep at most this many backups (0 = unlimited).
+              </span>
+            </div>
             {isIpamNetwork ? (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
@@ -393,8 +438,14 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
               Cancel
             </Button>
             <Button
-              onClick={() => mutation.mutate()}
-              disabled={mutation.isPending || (isRunning && isShrink) || disabled}
+              onClick={handleSave}
+              disabled={
+                mutation.isPending ||
+                backupSettingsMutation.isPending ||
+                retentionInvalid ||
+                (isRunning && isShrink) ||
+                disabled
+              }
             >
               Save changes
             </Button>
