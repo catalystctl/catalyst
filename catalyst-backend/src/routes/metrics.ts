@@ -81,7 +81,13 @@ export async function metricsRoutes(app: FastifyInstance) {
       // (server.read / admin), or node assignment
       const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+      // SECURITY: bare node assignment must not expose other tenants'
+      // metrics — require the node.update management pairing
+      // (decideServerAccess node-manage contract). Wildcard admins pass via
+      // rolePerms("*")/server.read below.
+      const hasNodeAccessToServer =
+        (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+        (rolePerms.includes("node.update") || rolePerms.includes("*"));
       const canReadMetrics =
         server.ownerId === userId ||
         Boolean(access?.permissions?.includes("server.read")) ||
@@ -309,7 +315,13 @@ export async function metricsRoutes(app: FastifyInstance) {
       // (server.read / admin), or node assignment
       const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+      // SECURITY: bare node assignment must not expose other tenants'
+      // metrics — require the node.update management pairing
+      // (decideServerAccess node-manage contract). Wildcard admins pass via
+      // rolePerms("*")/server.read below.
+      const hasNodeAccessToServer =
+        (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+        (rolePerms.includes("node.update") || rolePerms.includes("*"));
       const canReadMetrics =
         server.ownerId === userId ||
         Boolean(access?.permissions?.includes("server.read")) ||

@@ -52,7 +52,7 @@ export async function taskRoutes(app: FastifyInstance) {
       },
     });
 
-    const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+    const nodeGrant = await hasNodeAccess(prisma, userId, server.nodeId);
 
     // Server-scoped role resolution: global roles + RoleServerGrant +
     // RoleNodeGrant rows covering this server (mirrors decideServerAccess's
@@ -63,6 +63,13 @@ export async function taskRoutes(app: FastifyInstance) {
       rolePerms.includes('*') ||
       rolePerms.includes('admin.write') ||
       rolePerms.includes('server.schedule');
+
+    // SECURITY: a bare node assignment must NOT grant scheduling (tasks can
+    // run arbitrary console commands via action "command" in ANY server's
+    // container on the node). Node access only counts when paired with the
+    // node.update management permission — mirrors routes/backups.ts and
+    // decideServerAccess's node-manage path.
+    const hasNodeAccessToServer = nodeGrant && rolePerms.includes('node.update');
 
     if (!serverAccess && !hasNodeAccessToServer && !roleAllowed) {
       reply.status(403).send({ error: message });
@@ -286,22 +293,39 @@ export async function taskRoutes(app: FastifyInstance) {
       if (nextRunAt) updateData.nextRunAt = nextRunAt;
       if (enabled !== undefined) updateData.enabled = enabled;
 
-      const task = await prisma.scheduledTask.update({
-        where: { id: taskId },
+      // SECURITY: scope the write to this server — without serverId scoping a
+      // caller with schedule rights on server A could rewrite (incl. injecting
+      // a command payload) or delete any other server's task by ID (IDOR).
+      const task = await prisma.scheduledTask.updateMany({
+        where: { id: taskId, serverId },
         data: updateData,
       });
+
+      if (task.count === 0) {
+        return reply.status(404).send({ error: 'Task not found' });
+      }
 
       // Reload task in scheduler
       const scheduler = (app as any).taskScheduler;
       if (scheduler) {
-        if (task.enabled) {
-          scheduler.scheduleTask(task);
+        const updatedTask = await prisma.scheduledTask.findUnique({
+          where: { id: taskId },
+        });
+        if (!updatedTask) {
+          return reply.status(404).send({ error: 'Task not found' });
+        }
+        if (updatedTask.enabled) {
+          scheduler.scheduleTask(updatedTask);
         } else {
-          scheduler.unscheduleTask(task.id);
+          scheduler.unscheduleTask(updatedTask.id);
         }
       }
 
-      reply.send(serialize({ success: true, task }));
+      const reloadedTask = await prisma.scheduledTask.findUnique({
+        where: { id: taskId },
+      });
+
+      reply.send(serialize({ success: true, task: reloadedTask }));
 
       // Broadcast task_updated event
       const wsGatewayTaskUpdated = (app as any).wsGateway;
@@ -309,8 +333,8 @@ export async function taskRoutes(app: FastifyInstance) {
         wsGatewayTaskUpdated.pushToAdminSubscribers('task_updated', {
           type: 'task_updated',
           serverId,
-          taskId: task.id,
-          taskName: task.name,
+          taskId,
+          taskName: reloadedTask?.name,
           updatedBy: user.userId,
           timestamp: new Date().toISOString(),
         });
@@ -334,10 +358,14 @@ export async function taskRoutes(app: FastifyInstance) {
       );
       if (!canSchedule) return;
 
-      // Delete task
-      await prisma.scheduledTask.delete({
-        where: { id: taskId },
+      // SECURITY: scope the delete to this server (see update handler note).
+      const deleted = await prisma.scheduledTask.deleteMany({
+        where: { id: taskId, serverId },
       });
+
+      if (deleted.count === 0) {
+        return reply.status(404).send({ error: 'Task not found' });
+      }
 
       // Unschedule in scheduler
       const scheduler = (app as any).taskScheduler;

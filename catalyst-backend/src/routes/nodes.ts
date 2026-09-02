@@ -459,6 +459,25 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (!ensurePermission(request, reply, "node.create")) return;
 			const { nodeId } = request.params as { nodeId: string };
 
+			// SECURITY: the deployment flow provisions an agent API key for this
+			// node. Require the node-manage path (admin, or node assignment +
+			// node.update), not just the node.create catalog permission.
+			const { hasNodeAccess } = await import("../lib/permissions.js");
+			const { resolveServerPermissions } = await import(
+				"../lib/permissions-catalog.js"
+			);
+			const rolePerms = await resolveServerPermissions(
+				request.user.userId,
+				"",
+				nodeId,
+			);
+			const nodeManageAllowed =
+				(await hasNodeAccess(prisma, request.user.userId, nodeId)) &&
+				(rolePerms.includes("node.update") || rolePerms.includes("*"));
+			if (!nodeManageAllowed) {
+				return reply.status(403).send({ error: "Node management access required" });
+			}
+
 			const node = await prisma.node.findUnique({
 				where: { id: nodeId },
 			});
@@ -603,6 +622,27 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (!ensurePermission(request, reply, "node.create")) return;
 			const { nodeId } = request.params as { nodeId: string };
 			const { regenerate } = (request.body as { regenerate?: boolean }) || {};
+
+			// SECURITY: minting an agent API key makes the caller a valid agent
+			// for this node (verifyAgentApiKey keys on nodeId+key). Require the
+			// node-manage path (admin, or node assignment + node.update), not
+			// just the node.create catalog permission.
+			const { checkIsAdmin } = await import("./servers/_helpers.js");
+			const { hasNodeAccess } = await import("../lib/permissions.js");
+			const { resolveServerPermissions } = await import(
+				"../lib/permissions-catalog.js"
+			);
+			const rolePerms = await resolveServerPermissions(
+				request.user.userId,
+				"",
+				nodeId,
+			);
+			const nodeManageAllowed =
+				(await hasNodeAccess(prisma, request.user.userId, nodeId)) &&
+				(rolePerms.includes("node.update") || rolePerms.includes("*"));
+			if (!nodeManageAllowed) {
+				return reply.status(403).send({ error: "Node management access required" });
+			}
 
 			const node = await prisma.node.findUnique({
 				where: { id: nodeId },
@@ -821,7 +861,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 				},
 			});
 
-			reply.send(serialize({ success: true, data: updated }));
+			// SECURITY: never echo the node secret back — every GET route omits
+			// it via `omit: { secret: true }`; the update response must match.
+			reply.send(
+				serialize({ success: true, data: { ...updated, secret: undefined } })
+			);
 
 			// Broadcast node_updated event
 			const wsGatewayNodeUpdated = (app as any).wsGateway;

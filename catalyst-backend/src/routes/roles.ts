@@ -776,6 +776,36 @@ export async function roleRoutes(app: FastifyInstance) {
         }
       }
 
+      // SECURITY: role scopes carry their own permissions (RoleServerGrant /
+      // RoleNodeGrant) that the global-permission check above never sees.
+      // A functionary holding only user.set_roles could otherwise assign a
+      // scoped role granting file.write/backup.restore on servers or nodes
+      // they do not manage. Require the assigner to hold every scoped
+      // permission too (wildcard still bypasses).
+      if (!hasWildcard) {
+        const scopedGrants = await prisma.roleServerGrant.findMany({
+          where: { roleId },
+          select: { permissions: true },
+        });
+        const scopedNodeGrants = await prisma.roleNodeGrant.findMany({
+          where: { roleId },
+          select: { permissions: true },
+        });
+        const scopedPerms = [
+          ...new Set(
+            [...scopedGrants, ...scopedNodeGrants].flatMap((g) => g.permissions),
+          ),
+        ];
+        const cantGrantScoped = scopedPerms.filter(
+          (p) => !currentUserPerms.includes(p),
+        );
+        if (cantGrantScoped.length > 0) {
+          return reply.status(403).send({
+            error: `Cannot assign role with scoped permissions you don't have: ${cantGrantScoped.join(', ')}`,
+          });
+        }
+      }
+
       // Check if user already has this role
       const existingRole = await prisma.user.findFirst({
         where: {

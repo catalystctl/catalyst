@@ -67,7 +67,12 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       const hasRoleConsoleRead = rolePerms.includes('console.read');
-      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
+      // SECURITY: bare node assignment must not grant console read/write for
+      // every server on the node — require the node.update pairing
+      // (decideServerAccess node-manage contract).
+      const hasNodeAccessResult =
+        (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+        rolePerms.includes('node.update');
 
       if (!isOwner && !hasConsoleRead && !isAdmin && !hasNodeAccessResult && !hasRoleConsoleRead) {
         reply.status(403).send({ error: 'Access denied' });
@@ -153,13 +158,18 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         return;
       }
 
-      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
       const isAdmin = checkIsAdmin(request, 'admin.read');
       const access = server.access.find((a) => a.userId === userId);
       // Server-scoped resolution: global roles + RoleServerGrant +
       // RoleNodeGrant rows covering this server.
       const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+      // SECURITY: bare node assignment must not grant console read/write for
+      // every server on the node — require the node.update pairing
+      // (decideServerAccess node-manage contract).
+      const hasNodeAccessResult =
+        (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+        rolePerms.includes('node.update');
       const hasRoleConsoleWrite = rolePerms.includes('console.write');
       const hasWritePermission =
         access?.permissions?.includes('console.write') ||

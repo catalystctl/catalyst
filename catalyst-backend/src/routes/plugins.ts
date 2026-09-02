@@ -53,6 +53,70 @@ const ensureAdmin = (
   return true;
 };
 
+/**
+ * Pure admin predicate — unlike ensureAdmin it does NOT send a 403, so it is
+ * safe to use inside expressions where the response body is still being built
+ * (read endpoints that degrade gracefully for non-admin callers).
+ */
+const isAdminCaller = (
+  request: any,
+  requiredPermission: 'admin.read' | 'admin.write' = 'admin.read',
+) => {
+  const perms: string[] = request.user?.permissions ?? [];
+  return (
+    perms.includes('*') ||
+    perms.includes('admin.write') ||
+    (requiredPermission === 'admin.read' && perms.includes('admin.read'))
+  );
+};
+
+/**
+ * SECURITY: strip runtime config VALUES of password-typed fields from plugin
+ * manifests before returning them to non-admins. After loader rehydration
+ * `manifest.config` maps field keys to plain runtime values (e.g.
+ * `ghToken: "ghp_…"`), so password-typed entries (egg-explorer's ghToken)
+ * would otherwise leak live secrets to any authenticated user via the detail
+ * / frontend-manifest endpoints. The schema (originalConfig) declares which
+ * keys are password-typed; keys absent from the schema are also dropped
+ * (fail closed) since their sensitivity is unknown.
+ */
+function redactPluginConfigForNonAdmin(
+  config: unknown,
+  configSchema: unknown,
+): Record<string, unknown> {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return {};
+  }
+  const passwordKeys = new Set<string>();
+  let schemaIsObject = false;
+  if (configSchema && typeof configSchema === 'object' && !Array.isArray(configSchema)) {
+    schemaIsObject = true;
+    for (const [key, field] of Object.entries(configSchema)) {
+      if (
+        field &&
+        typeof field === 'object' &&
+        (field as Record<string, unknown>).type === 'password'
+      ) {
+        passwordKeys.add(key);
+      }
+    }
+  }
+  if (!schemaIsObject) {
+    // No schema available → sensitivity of every value is unknown. Fail closed.
+    return {};
+  }
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(config as Record<string, unknown>)) {
+    if (passwordKeys.has(key)) continue;
+    // Not declared in the schema → unknown sensitivity, fail closed.
+    if (!(key in (configSchema as Record<string, unknown>))) {
+      continue;
+    }
+    safe[key] = value;
+  }
+  return safe;
+}
+
 /** Safety-relevant columns from the Plugin table. */
 const SAFETY_SELECT = {
   safetyAcceptedAt: true,
@@ -418,6 +482,8 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
 
       const row = await prisma.plugin.findUnique({ where: { name }, select: SAFETY_SELECT });
 
+      const isAdminUser = isAdminCaller(request, 'admin.read');
+
       return {
         success: true,
         data: {
@@ -434,8 +500,14 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           error: plugin.error?.message,
           hasBackend: !!plugin.manifest.backend,
           hasFrontend: !!plugin.manifest.frontend,
-          config: plugin.manifest.config,
-          configSchema: plugin.context.originalConfig,
+          // SECURITY: password-typed config values are only revealed to admins.
+          config: isAdminUser
+            ? plugin.manifest.config
+            : redactPluginConfigForNonAdmin(
+                plugin.manifest.config,
+                plugin.context.originalConfig,
+              ),
+          configSchema: isAdminUser ? plugin.context.originalConfig : undefined,
           capabilities: {
             routes: plugin.routes.map((r) => ({ method: r.method, url: r.url })),
             tasks: Array.from(plugin.tasks.values()).map((t) => ({ cron: t.cron })),
@@ -745,7 +817,14 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           name: plugin.manifest.name,
           displayName: plugin.manifest.displayName,
           entry: plugin.manifest.frontend.entry,
-          config: plugin.manifest.config,
+          // SECURITY: see redactPluginConfigForNonAdmin — do not leak stored
+          // secret values (password fields) to non-admin callers.
+          config: isAdminCaller(request, 'admin.read')
+            ? plugin.manifest.config
+            : redactPluginConfigForNonAdmin(
+                plugin.manifest.config,
+                plugin.context.originalConfig,
+              ),
           permissions: plugin.manifest.permissions ?? [],
           events: plugin.manifest.events,
         },

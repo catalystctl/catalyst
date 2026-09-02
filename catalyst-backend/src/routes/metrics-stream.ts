@@ -78,7 +78,16 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
 
       const allowedUsers = [server.ownerId, ...server.access.map((a) => a.userId)];
       if (!userId || !allowedUsers.includes(userId)) {
-        const isAdmin = await hasNodeAccess(prisma, userId, server.nodeId);
+        // SECURITY: bare node assignment must not expose live metrics of
+        // every server on the node — require the node.update pairing
+        // (decideServerAccess node-manage contract).
+        const { resolveServerPermissions } = await import(
+          '../lib/permissions-catalog.js'
+        );
+        const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+        const isAdmin =
+          (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+          (rolePerms.includes('node.update') || rolePerms.includes('*'));
         if (!isAdmin) {
           reply.status(403).send({ error: 'Access denied' });
           return;

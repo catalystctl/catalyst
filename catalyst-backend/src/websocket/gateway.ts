@@ -3042,7 +3042,6 @@ export class WebSocketGateway {
         const access = await this.prisma.serverAccess.findUnique({
           where: { userId_serverId: { userId: client.userId, serverId: server.id } },
         });
-        const nodeAccess = await hasNodeAccess(this.prisma, client.userId, server.nodeId);
         // Server-scoped role permissions: global roles + RoleServerGrant +
         // RoleNodeGrant rows covering this server (mirrors the REST checks).
         const rolePerms = await this.getUserServerRolePermissions(
@@ -3050,6 +3049,13 @@ export class WebSocketGateway {
           server.id,
           server.nodeId,
         );
+        // SECURITY: a bare node assignment must not grant console output or
+        // server event visibility for every server on the node — require the
+        // node.update management pairing (same contract as server_control
+        // authorization and routes/backups.ts).
+        const nodeAccess =
+          (await hasNodeAccess(this.prisma, client.userId, server.nodeId)) &&
+          rolePerms.includes("node.update");
         const roleCanServerRead =
           rolePerms.includes("server.read") ||
           rolePerms.includes("admin.write") ||
@@ -3202,9 +3208,48 @@ export class WebSocketGateway {
         // Route to agent
         const agent = this.agents.get(server.nodeId);
         if (agent && agent.socket.readyState === 1) {
+          // SECURITY: forward an explicit whitelist only. `...event` preserved
+          // every client-supplied key, and the agent honors dockerImage/image/
+          // startupCommand on server_control restarts — a sub-user with only
+          // server.stop could restart another tenant's server into an
+          // attacker-chosen image/startup command with the victim's data
+          // mounted. Power control never carries template/image payloads:
+          // panel-initiated config changes use the dedicated install_server /
+          // rebuild_server messages built server-side (routes/servers/power.ts).
+          const whitelisted: Record<string, unknown> = {
+            type: "server_control",
+            serverId: event.serverId,
+            action: event.action,
+          };
+          const maybeRequestId = (event as unknown as Record<string, unknown>)
+            .requestId;
+          if (typeof maybeRequestId === "string") {
+            whitelisted.requestId = maybeRequestId;
+          }
+          const maybeTemplate = (event as unknown as Record<string, unknown>)
+            .template;
+          if (
+            maybeTemplate &&
+            typeof maybeTemplate === "object" &&
+            !Array.isArray(maybeTemplate)
+          ) {
+            // Graceful stop policy only (template.stopCommand / sendSignalTo);
+            // startup/image fields are intentionally excluded.
+            const t = maybeTemplate as Record<string, unknown>;
+            const stopPolicy: Record<string, unknown> = {};
+            if (typeof t.stopCommand === "string") {
+              stopPolicy.stopCommand = t.stopCommand.slice(0, 500);
+            }
+            if (typeof t.sendSignalTo === "string") {
+              stopPolicy.sendSignalTo = t.sendSignalTo.slice(0, 32);
+            }
+            if (Object.keys(stopPolicy).length > 0) {
+              whitelisted.template = stopPolicy;
+            }
+          }
           agent.socket.send(
             JSON.stringify({
-              ...event,
+              ...whitelisted,
               serverUuid: server.uuid,
               suspended: Boolean(server.suspendedAt),
             })
@@ -3320,8 +3365,18 @@ export class WebSocketGateway {
           agentState: agent?.socket?.readyState 
         }, "Routing console_input to agent");
         if (agent && agent.socket.readyState === 1) {
+          // SECURITY: forward an explicit whitelist (serverId/data + DB-derived
+          // serverUuid). `...event` forwarded every client-supplied key to the
+          // privileged agent; harmless today (the agent reads only these three
+          // fields) but the same pattern that made server_control dangerous.
+          const data = (event as unknown as Record<string, unknown>).data;
           agent.socket.send(
-            JSON.stringify({ ...event, serverUuid: server.uuid })
+            JSON.stringify({
+              type: "console_input",
+              serverId: event.serverId,
+              serverUuid: server.uuid,
+              ...(typeof data === "string" ? { data } : {}),
+            })
           );
           this.logger.info({ nodeId: server.nodeId }, "Console input sent to agent");
         } else if (client.socket.readyState === 1) {

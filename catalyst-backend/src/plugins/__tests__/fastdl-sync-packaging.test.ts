@@ -45,6 +45,7 @@ describe('fastdl-sync plugin packaging', () => {
       getConfig: (k) => undefined,
       requirePermission: () => undefined,
       registerRoute: (r) => routes.push(r),
+      scheduleTask: () => {},
       collection: () => ({
         find: async () => [],
         findOne: async () => null,
@@ -65,8 +66,9 @@ describe('fastdl-sync plugin packaging', () => {
     expect(urls).toContain('POST /pairings/:id/sync');
     expect(urls).toContain('GET /pairings/:id/log');
 
-    // onEnable with syncEnabled default true but invalid cron -> warn, no crash
+    // onEnable with syncEnabled default true registers the host cron task;
+    // onDisable must clean it up without throwing.
     await backend.onEnable(ctx);
-    backend.disableCron();
+    await backend.onDisable(ctx);
   });
 });

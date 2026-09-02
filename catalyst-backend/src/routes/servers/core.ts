@@ -278,14 +278,11 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               }
               try {
                 const regex = new RegExp(pattern);
-                // Test with timeout protection
-                const startTime = Date.now();
-                const result = regex.test(value);
-                if (Date.now() - startTime > 1000) {
-                  return reply.status(400).send({
-                    error: `Variable ${variable.name} regex validation timeout`,
-                  });
-                }
+                // SECURITY: bound the regex test — cap the value length before
+                // running (the historical post-hoc Date.now() check could never
+                // abort a long-running synchronous test on the event loop).
+                const testValue = value.length > 4096 ? value.slice(0, 4096) : value;
+                const result = regex.test(testValue);
                 if (!result) {
                   return reply.status(400).send({
                     error: `Variable ${variable.name} does not match required pattern`,

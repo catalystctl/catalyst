@@ -298,6 +298,14 @@ export const allocateIpForServer = async (
     return null;
   }
 
+  // Migrate away from the legacy soft-release model: delete any released
+  // rows in this pool so their (poolId, ip) unique-index slots free up for
+  // re-allocation (rows soft-released before the hard-delete change would
+  // otherwise block their IPs forever).
+  await prisma.ipAllocation.deleteMany({
+    where: { poolId: pool.id, releasedAt: { not: null } },
+  });
+
   const reserved = getReservedIps(pool);
   const range = getPoolRange(pool);
   const used = new Set(pool.allocations.map((allocation) => allocation.ip));
@@ -326,13 +334,25 @@ export const allocateIpForServer = async (
       throw new Error("Requested IP is already allocated");
     }
 
-    await prisma.ipAllocation.create({
-      data: {
-        poolId: pool.id,
-        serverId,
-        ip: requestedIp,
-      },
-    });
+    // Retry once on the (poolId, ip) unique constraint: a concurrent
+    // allocation may have claimed the IP between the `used` snapshot and
+    // the create (TOCTOU). Retrying re-reads `used` via the outer caller's
+    // next attempt — here we simply surface a clear conflict instead of a
+    // raw P2002 → 500.
+    try {
+      await prisma.ipAllocation.create({
+        data: {
+          poolId: pool.id,
+          serverId,
+          ip: requestedIp,
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === "P2002") {
+        throw new Error("Requested IP is already allocated");
+      }
+      throw err;
+    }
 
     return requestedIp;
   }
@@ -391,9 +411,12 @@ export const releaseIpForServer = async (
     return null;
   }
 
-  await prisma.ipAllocation.update({
+  // SECURITY/reliability: hard-delete released allocations. The
+  // @@unique([poolId, ip]) index covers released rows too, so soft-released
+  // IPs could never be re-allocated — every release permanently shrank the
+  // pool until "No available IPs in pool" (P2002 → 409 on create/transfer).
+  await prisma.ipAllocation.delete({
     where: { id: allocation.id },
-    data: { releasedAt: new Date() },
   });
 
   return allocation.ip;

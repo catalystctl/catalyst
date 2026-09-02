@@ -44,14 +44,25 @@ const decryptValue = (value: string) => {
 
 /**
  * Encrypt a single secret string with the backup-credentials AES key.
- * Returns the plaintext unchanged when BACKUP_CREDENTIALS_ENCRYPTION_KEY is unset
- * (callers should still redact secrets in API responses).
+ *
+ * SECURITY: historically this failed OPEN — when BACKUP_CREDENTIALS_ENCRYPTION_KEY
+ * was unset (the shipped default) S3 secret keys and SFTP private keys were
+ * stored as plaintext in the panel database. In production a missing or
+ * invalid key is now a hard error so the caller's request fails instead of
+ * persisting credentials in cleartext; tests still fall open so existing
+ * unit tests can exercise the redaction paths without provisioning a key.
  */
 export const encryptSecretValue = (value: string | null | undefined): string | null | undefined => {
   if (value === null || value === undefined || value === '') return value;
   try {
     return encryptValue(value);
-  } catch {
+  } catch (err) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        `Refusing to store backup credentials unencrypted: ${(err as Error)?.message ?? 'encryption key unavailable'} ` +
+          `(set BACKUP_CREDENTIALS_ENCRYPTION_KEY to a 32-byte base64 value)`,
+      );
+    }
     return value;
   }
 };
@@ -73,11 +84,11 @@ export const encryptBackupConfig = (config: Record<string, any> | null | undefin
   if (!config) return config;
   return {
     ...config,
-    secretAccessKey: config.secretAccessKey ? encryptValue(config.secretAccessKey) : config.secretAccessKey,
-    password: config.password ? encryptValue(config.password) : config.password,
-    privateKey: config.privateKey ? encryptValue(config.privateKey) : config.privateKey,
+    secretAccessKey: config.secretAccessKey ? encryptSecretValue(config.secretAccessKey) : config.secretAccessKey,
+    password: config.password ? encryptSecretValue(config.password) : config.password,
+    privateKey: config.privateKey ? encryptSecretValue(config.privateKey) : config.privateKey,
     privateKeyPassphrase: config.privateKeyPassphrase
-      ? encryptValue(config.privateKeyPassphrase)
+      ? encryptSecretValue(config.privateKeyPassphrase)
       : config.privateKeyPassphrase,
   };
 };

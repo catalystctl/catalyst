@@ -224,13 +224,64 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         return;
       }
 
+      // SECURITY: backup settings include storage destination and S3/SFTP
+      // credentials — a subuser holding only server.start could previously
+      // redirect every future backup to an attacker-controlled endpoint
+      // (full server exfiltration). Backup-management permission is required;
+      // credential changes additionally demand the admin/node-manage path.
       const canUpdate = await ensureServerAccess(
         id,
         request.user.userId,
-        "server.start",
+        "backup.create",
         reply
       );
       if (!canUpdate) return;
+
+      const credentialChange =
+        (storageMode !== undefined && storageMode !== server.backupStorageMode) ||
+        s3Config !== undefined ||
+        sftpConfig !== undefined;
+      if (credentialChange) {
+        const credServer = await prisma.server.findUnique({
+          where: { id },
+          select: { ownerId: true, nodeId: true },
+        });
+        const { decideServerAccess } = await import("../../lib/server-access.js");
+        const { resolveServerPermissions } = await import(
+          "../../lib/permissions-catalog.js"
+        );
+        const serverAccessRow = await prisma.serverAccess.findFirst({
+          where: { serverId: id, userId: request.user.userId },
+          select: { permissions: true },
+        });
+        const rolePerms = await resolveServerPermissions(
+          request.user.userId,
+          id,
+          credServer?.nodeId ?? null
+        );
+        const nodeManagePath = credServer?.nodeId
+          ? (await import("../../lib/permissions.js").then((m) =>
+              m.hasNodeAccess(prisma, request.user.userId, credServer.nodeId)
+            )) && rolePerms.includes("node.update")
+          : false;
+        const decision = decideServerAccess({
+          isOwner: credServer?.ownerId === request.user.userId,
+          hasExplicitServerAccess: Boolean(serverAccessRow),
+          rolePermissions: rolePerms,
+          hasNodeAccess: nodeManagePath,
+          requiredPermission: "backup.create",
+        });
+        if (
+          !decision.allowed ||
+          decision.reason === "server_access" ||
+          decision.reason === "role_permission"
+        ) {
+          reply
+            .status(403)
+            .send({ error: "Storage/credential changes require admin or node-manage access" });
+          return;
+        }
+      }
 
       const encryptedS3Config = s3Config ? encryptBackupConfig(s3Config) : undefined;
       const encryptedSftpConfig = sftpConfig ? encryptBackupConfig(sftpConfig) : undefined;

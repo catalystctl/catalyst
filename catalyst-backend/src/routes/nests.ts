@@ -22,10 +22,11 @@ const ensureAdmin = async (userId: string, reply: FastifyReply) => {
     select: { permissions: true, name: true },
   });
   const permissions = roles.flatMap((role) => role.permissions);
+  // SECURITY: permission bits only — never role names (user-created roles
+  // can be named "Administrator"; see roles.ts name reservation).
   const isAdmin =
     permissions.includes("*") ||
-    permissions.includes("admin.write") ||
-    roles.some((role) => role.name.toLowerCase() === "administrator");
+    permissions.includes("admin.write");
   if (!isAdmin) {
     reply.status(403).send({ error: "Admin access required" });
     return false;

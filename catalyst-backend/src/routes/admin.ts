@@ -317,6 +317,31 @@ export async function adminRoutes(app: FastifyInstance) {
               });
             }
           }
+          // SECURITY: scoped grants (RoleServerGrant / RoleNodeGrant) carry
+          // permissions the global role.permissions array never shows. Same
+          // authority rule as the roles-assignment route: the creator must
+          // hold every scoped permission too.
+          const scopedGrants = await prisma.roleServerGrant.findMany({
+            where: { roleId: { in: roleIds } },
+            select: { permissions: true },
+          });
+          const scopedNodeGrants = await prisma.roleNodeGrant.findMany({
+            where: { roleId: { in: roleIds } },
+            select: { permissions: true },
+          });
+          const scopedPerms = [
+            ...new Set(
+              [...scopedGrants, ...scopedNodeGrants].flatMap((g) => g.permissions),
+            ),
+          ];
+          const cantGrantScoped = scopedPerms.filter(
+            (p) => !actingPerms.includes(p),
+          );
+          if (cantGrantScoped.length > 0) {
+            return reply.status(403).send({
+              error: `Cannot assign role with scoped permissions you don't have: ${cantGrantScoped.join(', ')}`,
+            });
+          }
         }
       }
 

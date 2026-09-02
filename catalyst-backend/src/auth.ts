@@ -11,6 +11,30 @@ const authSecret = process.env.BETTER_AUTH_SECRET;
 if (!authSecret && process.env.NODE_ENV !== "test") {
   throw new Error("BETTER_AUTH_SECRET is required");
 }
+// SECURITY: refuse to boot with the placeholder secrets shipped in
+// .env.example — they are public values in a public repository, and a
+// known BETTER_AUTH_SECRET means forgeable session cookies (full admin
+// takeover). The install.sh generator always replaces them, but manual
+// "cp .env.example .env" installs skip that step.
+const PLACEHOLDER_PATTERN = /^CHANGE_ME/;
+const INSECURE_SECRETS: Array<[string, string | undefined]> = [
+  ["BETTER_AUTH_SECRET", authSecret],
+  ["API_KEY_SECRET", process.env.API_KEY_SECRET],
+  ["POSTGRES_PASSWORD", process.env.POSTGRES_PASSWORD],
+  ["REDIS_PASSWORD", process.env.REDIS_PASSWORD],
+  [
+    "BACKUP_CREDENTIALS_ENCRYPTION_KEY",
+    process.env.BACKUP_CREDENTIALS_ENCRYPTION_KEY,
+  ],
+];
+for (const [name, value] of INSECURE_SECRETS) {
+  if (value && PLACEHOLDER_PATTERN.test(value)) {
+    throw new Error(
+      `${name} is still set to the public placeholder from .env.example — ` +
+        `generate a real secret before starting the panel`,
+    );
+  }
+}
 
 /** Validate that a URL is http(s) — allows localhost, ports, paths. */
 function validateDiscoveryUrl(url: string, label: string): string {

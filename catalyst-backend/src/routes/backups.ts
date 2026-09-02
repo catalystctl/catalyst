@@ -90,7 +90,13 @@ export async function backupRoutes(app: FastifyInstance) {
       rolePerms.includes("*") ||
       rolePerms.includes("admin.write") ||
       rolePerms.includes(permission);
-    const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+    // SECURITY: bare node assignment must NOT grant backup operations
+    // (read/download = full cross-tenant data exfiltration, restore/delete =
+    // destruction). Mirror decideServerAccess: the node path only counts when
+    // paired with the node.update management permission.
+    const hasNodeAccessToServer =
+      rolePerms.includes("node.update") &&
+      (await hasNodeAccess(prisma, userId, server.nodeId));
     if (!access && !hasNodeAccessToServer && !roleAllowed) {
       reply.status(403).send({ error: "Forbidden" });
       return null;

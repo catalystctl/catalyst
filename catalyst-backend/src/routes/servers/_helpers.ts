@@ -1279,14 +1279,13 @@ export const isAdminUser = async (userId: string, required: "admin.read" | "admi
     select: { name: true, permissions: true },
   });
   const permissions = roles.flatMap((role) => role.permissions);
-  if (
+  // SECURITY: permission bits only — never role names (user-created roles
+  // can be named "Administrator").
+  return (
     permissions.includes("*") ||
     permissions.includes("admin.write") ||
     (required === "admin.read" && permissions.includes("admin.read"))
-  ) {
-    return true;
-  }
-  return roles.some((role) => role.name.toLowerCase() === "administrator");
+  );
 };
 
 /**
@@ -1586,6 +1585,15 @@ export const validateVariableRule = (
         return null;
       }
       case "regex": {
+        // SECURITY: regex rules run on user-supplied values synchronously on
+        // the event loop. Cap value and pattern length to bound worst-case
+        // backtracking cost, and reject obviously dangerous constructs.
+        if (value.length > 4096) {
+          return `Invalid format`;
+        }
+        if (param.length > 256 || /(\+|\*)\)[+*{]|\(\?[=:!]/.test(param)) {
+          return `Invalid rule configuration`;
+        }
         try {
           const re = new RegExp(param);
           if (!re.test(value)) {

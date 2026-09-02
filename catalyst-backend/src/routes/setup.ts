@@ -66,10 +66,43 @@ export async function setupRoutes(app: FastifyInstance) {
 			request.headers as Record<string, string | string[] | undefined>,
 		);
 
+	// SECURITY: persistent setup-completion flag. The historical guard was the
+	// live count of users holding the "Administrator" role — which re-arms the
+	// unauthenticated wizard whenever the last admin disappears (admin
+	// self-delete via /api/auth/profile/delete, admin deletion by a user with
+	// user.delete, or DB maintenance), letting an unauthenticated attacker
+	// mint themselves a fresh administrator. A dedicated SystemSetting row
+	// (same pattern as the "security" settings row) survives those events.
+	const SETUP_COMPLETED_KEY = "setup:completed";
+	const isSetupCompleted = async (): Promise<boolean> => {
+		try {
+			const row = await prisma.systemSetting.findUnique({
+				where: { id: "setup" },
+				select: { updatedAt: true, createdAt: true },
+			});
+			return Boolean(row);
+		} catch {
+			// Fail closed: if the settings table is unreadable, treat setup as done.
+			return true;
+		}
+	};
+	const markSetupCompleted = async (): Promise<void> => {
+		await prisma.systemSetting.upsert({
+			where: { id: "setup" },
+			create: { id: "setup" },
+			update: {},
+		});
+	};
+
 	// ── Check if setup is needed ───────────────────────────────────────
 	app.get(
 		"/status",
 		async (_request: FastifyRequest, reply: FastifyReply) => {
+			// SECURITY: once setup has completed (flag row exists), the wizard is
+			// closed permanently regardless of the live user/admin counts.
+			if (await isSetupCompleted()) {
+				return reply.send({ setupRequired: false });
+			}
 			const userCount = await prisma.user.count();
 			return reply.send({ setupRequired: userCount === 0 });
 		},
@@ -194,6 +227,10 @@ export async function setupRoutes(app: FastifyInstance) {
 			create: { id: "security", registrationEnabled: false },
 			update: { registrationEnabled: false },
 		});
+		// SECURITY: recovery completions must persist the setup-completed flag too,
+		// otherwise a legacy install (no flag yet) that recovers a half-created
+		// admin re-arms the wizard the moment that admin is deleted.
+		await markSetupCompleted();
 
 		// 4. Fetch full user record and return success
 		const fullUser = await prisma.user.findUnique({
@@ -235,16 +272,28 @@ export async function setupRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			// 1. Ensure no users exist yet
 			//
-			// The gate keys off the administrator count, not the raw user count:
-			// a panel with users but no administrator is still "in setup", and the
-			// recovery path below must only ever promote the account the operator
-			// actually specified in this request (never an arbitrary first user).
+			// SECURITY: the persistent completion flag is the primary guard — if
+			// setup ever ran, the wizard stays closed even when the last admin
+			// account is later deleted (which would previously re-arm the
+			// unauthenticated admin-creation path below).
+			if (await isSetupCompleted()) {
+				return reply.status(409).send({
+					error: "Setup has already been completed",
+				});
+			}
+
+			// The admin-count gate is a secondary check covering installs that
+			// predate the flag row: if any administrator currently exists, setup
+			// is complete.
 			let userCount = await prisma.user.count();
 			let adminCount = await prisma.user.count({
 				where: { roles: { some: { name: "Administrator" } } },
 			});
 
 			if (adminCount > 0) {
+				// Backfill the flag so the wizard cannot be re-armed later if all
+				// admins are deleted after this point.
+				await markSetupCompleted().catch(() => {});
 				return reply.status(409).send({
 					error: "Setup has already been completed",
 				});
@@ -266,14 +315,42 @@ export async function setupRoutes(app: FastifyInstance) {
 			// already exist (e.g. a previous attempt crashed after user creation
 			// but before role assignment). Finish its setup instead of rejecting,
 			// but only when it is the account named in this setup request.
+			//
+			// SECURITY: this branch runs on a panel that has users but no
+			// administrator. Promotion must never be grantable to an
+			// unauthenticated caller who merely knows an email address —
+			// require proof of control of the named account (its current
+			// password) before elevating it. A single generic error is returned
+			// whether or not the email exists, so this endpoint cannot be used
+			// to enumerate accounts.
 			if (adminCount === 0 && userCount > 0) {
 				const namedUser = await prisma.user.findUnique({
 					where: { email: parsed.data.email },
 				});
 				if (!namedUser) {
-					return reply.status(400).send({
+					// Same status as the wrong-password path — a 400-vs-403 split
+					// here would be an account-enumeration oracle.
+					return reply.status(403).send({
 						error:
-							"Setup cannot be completed: an administrator already exists",
+							"Setup cannot be completed: verify the operator account credentials",
+					});
+				}
+				// Verify the caller controls this account via its existing password.
+				try {
+					const verify = await auth.api.signInEmail({
+						headers: getHeaders(request),
+						body: { email: parsed.data.email, password: parsed.data.password },
+					});
+					if (!verify?.user || (verify as any).user?.id !== namedUser.id) {
+						return reply.status(403).send({
+							error:
+								"Setup cannot be completed: verify the operator account credentials",
+						});
+					}
+				} catch {
+					return reply.status(403).send({
+						error:
+							"Setup cannot be completed: verify the operator account credentials",
 					});
 				}
 				return ensureSetupComplete(reply, parsed.data, namedUser);
@@ -314,9 +391,30 @@ export async function setupRoutes(app: FastifyInstance) {
 						where: { email: parsed.data.email },
 					});
 					if (!namedUser) {
-						return reply.status(400).send({
+						// Same status as the wrong-password path — a 400-vs-403 split
+						// here would be an account-enumeration oracle.
+						return reply.status(403).send({
 							error:
-								"Setup cannot be completed: an administrator already exists",
+								"Setup cannot be completed: verify the operator account credentials",
+						});
+					}
+					// SECURITY: same proof-of-control requirement as the pre-lock
+					// recovery branch — see the detailed comment there.
+					try {
+						const verify = await auth.api.signInEmail({
+							headers: getHeaders(request),
+							body: { email: parsed.data.email, password: parsed.data.password },
+						});
+						if (!verify?.user || (verify as any).user?.id !== namedUser.id) {
+							return reply.status(403).send({
+								error:
+									"Setup cannot be completed: verify the operator account credentials",
+							});
+						}
+					} catch {
+						return reply.status(403).send({
+							error:
+								"Setup cannot be completed: verify the operator account credentials",
 						});
 					}
 					return ensureSetupComplete(reply, parsed.data, namedUser);
@@ -431,7 +529,12 @@ export async function setupRoutes(app: FastifyInstance) {
 					update: { registrationEnabled: false },
 				});
 
-				// 9. Forward auth headers (set-cookie) so user is immediately logged in
+				// 9. Persist the setup-completed flag — permanently closes the
+				// unauthenticated setup wizard, even if every administrator is
+				// later deleted (see the isSetupCompleted guard on POST /complete).
+				await markSetupCompleted();
+
+				// 10. Forward auth headers (set-cookie) so user is immediately logged in
 				forwardAuthHeaders(response, reply);
 
 				// 10. Fetch full user record and return success

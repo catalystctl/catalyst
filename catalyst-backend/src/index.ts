@@ -1295,23 +1295,43 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					select: { permissions: true },
 				});
 
-				// Check admin status — admins get wildcard permissions
+				// SECURITY: a suspended server must not accept SFTP sessions —
+				// the HTTP file routes already 423 on suspension, and SFTP would
+				// otherwise bypass that enforcement for the lifetime of a minted
+				// token (up to 1 year).
+				const sftpvServer = await prisma.server.findUnique({
+					where: { id: result.serverId },
+					select: { uuid: true, suspendedAt: true },
+				});
+				if (
+					process.env.SUSPENSION_ENFORCED !== "false" &&
+					sftpvServer?.suspendedAt
+				) {
+					return reply.send({ success: true, data: { valid: false } });
+				}
+
+				// Check admin status — admins get wildcard permissions.
+				// SECURITY: the legacy `role` column is not synced with RBAC
+				// (demoting a user via roles does not rewrite it), so derive
+				// admin from live permission bits instead of the column.
 				const user = await prisma.user.findUnique({
 					where: { id: result.userId },
-					select: { role: true },
+					select: { role: true, roles: { select: { permissions: true } } },
 				});
 
-				const isAdmin = user?.role === "administrator";
+				const rolePerms = (user?.roles ?? []).flatMap(
+					(r: { permissions: string[] }) => r.permissions as string[],
+				);
+				const isAdmin =
+					rolePerms.includes("*") ||
+					rolePerms.includes("admin.write") ||
+					user?.role === "administrator";
 				const permissions = isAdmin
 					? ["*"]
 					: serverAccess?.permissions ?? [];
 
-				// Look up the server UUID — the agent's FileManager uses
-				// the UUID as the data directory name (e.g. /var/lib/catalyst/<uuid>).
-				const server = await prisma.server.findUnique({
-					where: { id: result.serverId },
-					select: { uuid: true },
-				});
+				// The server UUID names the agent's FileManager data directory
+				// (e.g. /var/lib/catalyst/<uuid>).
 
 				return reply.send({
 					success: true,
@@ -1319,7 +1339,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 						valid: true,
 						userId: result.userId,
 						serverId: result.serverId,
-						serverUuid: server?.uuid ?? result.serverId,
+						serverUuid: sftpvServer?.uuid ?? result.serverId,
 						permissions,
 					},
 				});
@@ -1342,6 +1362,47 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					return reply
 						.status(400)
 						.send({ error: "serverId query parameter is required" });
+				}
+
+				// SECURITY: only callers with access to this server may mint an
+				// SFTP token for it. Without this check any authenticated user
+				// could generate tokens bound to arbitrary server IDs (and learn
+				// node host/port metadata via the response).
+				const { resolveServerPermissions } = await import(
+					"./lib/permissions-catalog.js"
+				);
+				const { decideServerAccess } = await import("./lib/server-access.js");
+				const sftpServerRow = await prisma.server.findUnique({
+					where: { id: serverId },
+					select: { ownerId: true, nodeId: true },
+				});
+				if (!sftpServerRow) {
+					return reply.status(404).send({ error: "Server not found" });
+				}
+				const sftpAccessRow = await prisma.serverAccess.findFirst({
+					where: { serverId, userId },
+					select: { permissions: true },
+				});
+				const sftpRolePerms = await resolveServerPermissions(
+					userId,
+					serverId,
+					sftpServerRow.nodeId
+				);
+				const sftpHasNodeAccess = await (async () => {
+					const { hasNodeAccess } = await import(
+						"./routes/servers/_helpers.js"
+					);
+					return hasNodeAccess(prisma, userId, sftpServerRow.nodeId);
+				})();
+				const sftpDecision = decideServerAccess({
+					isOwner: sftpServerRow.ownerId === userId,
+					hasExplicitServerAccess: Boolean(sftpAccessRow),
+					rolePermissions: sftpRolePerms,
+					hasNodeAccess: sftpHasNodeAccess,
+					requiredPermission: "server.read",
+				});
+				if (!sftpDecision.allowed) {
+					return reply.status(403).send({ error: "Forbidden" });
 				}
 
 				// Look up the server's node for SFTP host/port
@@ -1407,6 +1468,44 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 
 				if (!userId || !serverId) {
 					return reply.status(400).send({ error: "serverId is required" });
+				}
+
+				// SECURITY: mirror connection-info access check for rotation.
+				const { resolveServerPermissions } = await import(
+					"./lib/permissions-catalog.js"
+				);
+				const { decideServerAccess } = await import("./lib/server-access.js");
+				const rotServerRow = await prisma.server.findUnique({
+					where: { id: serverId },
+					select: { ownerId: true, nodeId: true },
+				});
+				if (!rotServerRow) {
+					return reply.status(404).send({ error: "Server not found" });
+				}
+				const rotAccessRow = await prisma.serverAccess.findFirst({
+					where: { serverId, userId },
+					select: { permissions: true },
+				});
+				const rotRolePerms = await resolveServerPermissions(
+					userId,
+					serverId,
+					rotServerRow.nodeId
+				);
+				const rotHasNodeAccess = await (async () => {
+					const { hasNodeAccess } = await import(
+						"./routes/servers/_helpers.js"
+					);
+					return hasNodeAccess(prisma, userId, rotServerRow.nodeId);
+				})();
+				const rotDecision = decideServerAccess({
+					isOwner: rotServerRow.ownerId === userId,
+					hasExplicitServerAccess: Boolean(rotAccessRow),
+					rolePermissions: rotRolePerms,
+					hasNodeAccess: rotHasNodeAccess,
+					requiredPermission: "server.read",
+				});
+				if (!rotDecision.allowed) {
+					return reply.status(403).send({ error: "Forbidden" });
 				}
 
 				const result = rotateSftpToken(userId, serverId, ttlMs);
@@ -1685,17 +1784,41 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 							.send({ error: "component and message are required" });
 					}
 
+					// SECURITY: this endpoint is unauthenticated. Cap every field
+					// (mirroring /api/client-errors) so it cannot be used to flood
+					// the SystemError table with multi-MB rows or amplify into the
+					// admin WS feed.
+					const safeComponent = body.component.trim().slice(0, 128);
+					const safeStack =
+						typeof body.stack === "string"
+							? body.stack.slice(0, 10_000)
+							: undefined;
+					let safeMetadata: unknown = body.metadata;
+					if (safeMetadata !== undefined && safeMetadata !== null) {
+						try {
+							const serialized = JSON.stringify(safeMetadata);
+							if (serialized.length > 4096) {
+								safeMetadata = {
+									truncated: true,
+									preview: serialized.slice(0, 2048),
+								};
+							}
+						} catch {
+							safeMetadata = { error: "unserializable metadata dropped" };
+						}
+					}
+
 					await captureSystemError({
 						level: body.level || "error",
-						component: body.component,
-						message: body.message,
-						stack: body.stack,
-						metadata: body.metadata,
+						component: safeComponent,
+						message: (body.message as string).slice(0, 2000),
+						stack: safeStack,
+						metadata: safeMetadata,
 						...(request.user?.userId ? { userId: request.user.userId } : {}),
 					});
 
 					logger.info(
-						{ component: body.component, level: body.level || "error" },
+						{ component: safeComponent, level: body.level || "error" },
 						"Frontend error reported",
 					);
 

@@ -15,8 +15,11 @@ import { createGatedHandler, DEFAULT_GATE_CONFIG, setPluginGateEnabled } from '.
 import { normalizePermissionList } from './safety';
 import EventEmitter from 'events';
 import { buildRuntimeConfig, isStoredSchemaPollution, getDeclaredFieldType } from './config-utils';
+import { getCurrentVersion } from '../lib/panel-version';
 
-const CATALYST_VERSION = '1.0.0';
+// Real panel version (package.json) — hardcoded values rejected every plugin
+// whose manifest declared a realistic minimum catalystVersion.
+const CATALYST_VERSION = getCurrentVersion();
 
 export class PluginLoader {
   private pluginsDir: string;

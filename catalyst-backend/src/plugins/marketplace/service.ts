@@ -88,12 +88,23 @@ interface CacheSlot {
 const indexCache = new Map<string, CacheSlot>();
 const INDEX_TTL_MS = 5 * 60 * 1000;
 
-/** Configured marketplace index URLs. Comma-separated env var. */
+/**
+ * Official first-party marketplace index, served from the public
+ * catalyst-plugins repository. Used when PLUGIN_MARKETPLACE_URLS is unset so
+ * the marketplace works out of the box; explicitly configured sources are
+ * appended after it (first source wins on name conflicts).
+ */
+export const OFFICIAL_MARKETPLACE_INDEX_URL =
+  'https://raw.githubusercontent.com/catalystctl/catalyst-plugins/main/index.json';
+
+/** Configured marketplace index URLs. Comma-separated env var, defaulting to the official index. */
 export function getMarketplaceIndexUrls(): string[] {
-  return (process.env.PLUGIN_MARKETPLACE_URLS ?? '')
+  const configured = (process.env.PLUGIN_MARKETPLACE_URLS ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  if (configured.length > 0) return configured;
+  return [OFFICIAL_MARKETPLACE_INDEX_URL];
 }
 
 export async function browseMarketplaces(

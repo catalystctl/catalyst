@@ -17,11 +17,11 @@ export async function alertRoutes(app: FastifyInstance) {
     });
 
     const permissions = userRoles.flatMap((role) => role.permissions);
-    if (permissions.includes('*') || permissions.includes('admin.read')) {
-      return true;
-    }
-
-    return userRoles.some((role) => role.name.toLowerCase() === 'administrator');
+    // SECURITY: authorization must key on permission bits only. The previous
+    // `role.name === 'administrator'` fallback let any user-held role that
+    // happened to be NAMED "Administrator" (custom roles are user-created)
+    // receive full alert-rule admin treatment.
+    return permissions.includes('*') || permissions.includes('admin.read');
   };
   const ensureServerAccess = async ({
     userId,
@@ -57,8 +57,14 @@ export async function alertRoutes(app: FastifyInstance) {
     if (access) {
       return server;
     }
-    // Check for node access
-    const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+    // SECURITY: bare node assignment must not grant alert management for
+    // every server on the node — require the node.update pairing
+    // (decideServerAccess node-manage contract).
+    const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
+    const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+    const hasNodeAccessToServer =
+      (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+      rolePerms.includes('node.update');
     if (hasNodeAccessToServer) {
       return server;
     }
