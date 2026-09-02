@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { StateCreator } from 'zustand/vanilla';
 import { authApi } from '../services/api/auth';
 import { reportSystemError } from '../services/api/systemErrors';
+import { describeError } from '../utils/errors';
 import type { User } from '../types/user';
 import type { LoginSchema, RegisterSchema } from '../validators/auth';
 
@@ -107,7 +108,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           reportSystemError({
             level: 'error',
             component: 'AuthStore:login',
-            message: err instanceof Error ? err.message : String(err),
+            message: describeError(err),
             stack: err instanceof Error ? err.stack : undefined,
           });
           throw err;
@@ -119,7 +120,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         reportSystemError({
           level: 'error',
           component: 'AuthStore:login',
-          message: err instanceof Error ? err.message : String(err),
+          message: describeError(err),
           stack: err instanceof Error ? err.stack : undefined,
         });
         throw err;
@@ -142,7 +143,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         reportSystemError({
           level: 'error',
           component: 'AuthStore:register',
-          message: err instanceof Error ? err.message : String(err),
+          message: describeError(err),
           stack: err instanceof Error ? err.stack : undefined,
         });
         throw err;
@@ -178,7 +179,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           reportSystemError({
             level: 'warn',
             component: 'AuthStore:refresh',
-            message: error instanceof Error ? error.message : String(error),
+            message: describeError(error),
             stack: error instanceof Error ? error.stack : undefined,
           });
           throw error;
@@ -199,7 +200,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         reportSystemError({
           level: 'error',
           component: 'AuthStore:refresh',
-          message: error instanceof Error ? error.message : String(error),
+          message: describeError(error),
           stack: error instanceof Error ? error.stack : undefined,
         });
         throw error;
@@ -291,7 +292,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         reportSystemError({
           level: 'error',
           component: 'AuthStore:verify2FA',
-          message: err instanceof Error ? err.message : String(err),
+          message: describeError(err),
           stack: err instanceof Error ? err.stack : undefined,
         });
         throw err;

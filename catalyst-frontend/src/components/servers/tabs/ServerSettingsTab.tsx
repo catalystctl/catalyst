@@ -6,6 +6,7 @@ import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
 import { notifySuccess, notifyError } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
+import { describeError } from '../../../utils/errors';
 import CloneServerDialog from '../CloneServerDialog';
 import { ConfirmDialog } from '../../shared/ConfirmDialog';
 import type { Server } from '../../../types/server';
@@ -79,7 +80,7 @@ export default function ServerSettingsTab({
  reportSystemError({
  level: 'error',
  component: 'ServerSettingsTab',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'reinstall server' },
  });

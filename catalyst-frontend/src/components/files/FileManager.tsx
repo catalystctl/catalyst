@@ -26,6 +26,7 @@ import {
  Shield,
 } from 'lucide-react';
 import FileEditor from './FileEditor';
+import { describeError } from '../../utils/errors';
 import FileList from './FileList';
 import FileTree from './FileTree';
 import FileUploader from './FileUploader';
@@ -587,7 +588,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  reportSystemError({
  level: 'error',
  component: 'FileManager',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'read archive' },
  });

@@ -1,5 +1,6 @@
 import apiClient from './client';
 import { reportSystemError } from './systemErrors';
+import { describeError } from '../../utils/errors';
 import type { LoginSchema, RegisterSchema } from '../../validators/auth';
 import type { User } from '../../types/user';
 import { authClient } from '../authClient';
@@ -154,7 +155,7 @@ export const authApi = {
       reportSystemError({
         level: 'error',
         component: 'ApiAuth',
-        message: error instanceof Error ? error.message : String(error),
+        message: describeError(error),
         stack: error instanceof Error ? error.stack : undefined,
         metadata: { action: 'login' },
       });

@@ -5,6 +5,7 @@ import { queryClient } from '@/lib/queryClient';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
+import { describeError } from '../../utils/errors';
 import { reportSystemError } from '../../services/api/systemErrors';
 import {
   Dialog,
@@ -170,7 +171,7 @@ export function NodeAssignmentsSelector({
  reportSystemError({
  level: 'error',
  component: 'NodeAssignmentsSelector',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'update wildcard assignment' },
  });
@@ -224,7 +225,7 @@ export function NodeAssignmentsSelector({
  reportSystemError({
  level: 'error',
  component: 'NodeAssignmentsSelector',
- message: _error instanceof Error ? _error.message : String(_error),
+ message: describeError(_error),
  stack: _error instanceof Error ? _error.stack : undefined,
  metadata: { context: 'toggle node' },
  });
@@ -256,7 +257,7 @@ export function NodeAssignmentsSelector({
  reportSystemError({
  level: 'error',
  component: 'NodeAssignmentsSelector',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'assign node' },
  });
@@ -292,7 +293,7 @@ export function NodeAssignmentsSelector({
  reportSystemError({
  level: 'error',
  component: 'NodeAssignmentsSelector',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'unassign node' },
  });
@@ -345,7 +346,7 @@ export function NodeAssignmentsSelector({
  reportSystemError({
  level: 'error',
  component: 'NodeAssignmentsSelector',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'update expiration' },
  });

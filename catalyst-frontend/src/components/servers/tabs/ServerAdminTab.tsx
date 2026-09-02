@@ -21,6 +21,7 @@ import { serversApi } from '../../../services/api/servers';
 import Combobox from '@/components/ui/combobox';
 import { notifySuccess, notifyError } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
+import { describeError } from '../../../utils/errors';
 import UpdateServerModal from '../UpdateServerModal';
 import TransferServerModal from '../TransferServerModal';
 import DeleteServerDialog from '../DeleteServerDialog';
@@ -407,7 +408,7 @@ export default function ServerAdminTab({
  reportSystemError({
  level: 'error',
  component: 'ServerAdminTab',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'rebuild container' },
  });
@@ -445,7 +446,7 @@ export default function ServerAdminTab({
  reportSystemError({
  level: 'error',
  component: 'ServerAdminTab',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'change image variant' },
  });
@@ -468,7 +469,7 @@ export default function ServerAdminTab({
  reportSystemError({
  level: 'error',
  component: 'ServerAdminTab',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'kill server' },
  });
@@ -490,7 +491,7 @@ export default function ServerAdminTab({
  reportSystemError({
  level: 'error',
  component: 'ServerAdminTab',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'reinstall server' },
  });
@@ -515,7 +516,7 @@ export default function ServerAdminTab({
  reportSystemError({
  level: 'error',
  component: 'ServerAdminTab',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'transfer ownership' },
  });

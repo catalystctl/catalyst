@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Settings, Server, Loader2 } from 'lucide-react';
 import { useUpdateApiKey } from '../../hooks/useApiKeys';
 import { type ApiKey } from '../../services/apiKeys';
+import { describeError } from '../../utils/errors';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -84,7 +85,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  reportSystemError({
  level: 'error',
  component: 'EditApiKeyDialog',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'update API key' },
  });

@@ -5,6 +5,7 @@
  * Adds first-class tag revalidation + patch helpers for SSE-driven UIs.
  */
 import { reportSystemError } from '../services/api/systemErrors';
+import { describeError, describeMutationComponent } from '../utils/errors';
 import { Scheduler } from './scheduler';
 import {
   type DefaultOptions,
@@ -161,19 +162,11 @@ export class QueryClient {
       config.mutationCache ??
       new MutationCache({
         onError: ({ error, mutation }) => {
-          const mutationKey = String(mutation.options.mutationKey ?? 'unknown');
-          const message =
-            error instanceof Error
-              ? error.message
-              : (error as any)?.message ||
-                (error as any)?.response?.data?.error ||
-                (error as any)?.response?.data?.message ||
-                String(error);
           reportSystemError({
             level: 'error',
-            component: `Mutation:${mutationKey}`,
-            message,
-            metadata: { mutationKey },
+            component: describeMutationComponent(mutation.options.mutationKey, error),
+            message: describeError(error),
+            metadata: { mutationKey: String(mutation.options.mutationKey ?? 'unknown') },
           });
         },
       });

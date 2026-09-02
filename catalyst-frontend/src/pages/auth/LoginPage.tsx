@@ -10,7 +10,7 @@ import { loginSchema } from '../../validators/auth';
 import { authClient } from '../../services/authClient';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { notifyError } from '../../utils/notify';
-import { getErrorMessage } from '../../utils/errors';
+import { getErrorMessage, describeError } from '../../utils/errors';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { useSetupStatus } from '../../hooks/useSetupStatus';
@@ -97,7 +97,7 @@ function LoginPage() {
  reportSystemError({
  level: 'error',
  component: 'LoginPage',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'syncPasskeySession' },
  });
@@ -133,7 +133,7 @@ function LoginPage() {
  reportSystemError({
  level: 'error',
  component: 'LoginPage',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'onSubmit' },
  });
@@ -186,7 +186,7 @@ function LoginPage() {
  reportSystemError({
  level: 'error',
  component: 'LoginPage',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'handlePasskeySignIn' },
  });
@@ -208,7 +208,7 @@ function LoginPage() {
  reportSystemError({
  level: 'error',
  component: 'LoginPage',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'handleProvider' },
  });
@@ -238,7 +238,7 @@ function LoginPage() {
  reportSystemError({
  level: 'error',
  component: 'LoginPage',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'handleTotpSubmit' },
  });

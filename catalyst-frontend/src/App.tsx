@@ -13,6 +13,7 @@ import { useThemeStore } from './stores/themeStore';
 import { themeApi } from './services/api/theme';
 import { adminApi } from './services/api/admin';
 import { reportSystemError } from './services/api/systemErrors';
+import { describeError } from './utils/errors';
 import { useAuthStore } from './stores/authStore';
 
 import LoginPage from './pages/auth/LoginPage';
@@ -107,7 +108,7 @@ function App() {
  reportSystemError({
  level: 'error',
  component: 'App',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'loadThemeSettings' },
  });
@@ -144,7 +145,7 @@ function App() {
  reportSystemError({
  level: 'error',
  component: 'App',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'loadAdminCustomCss' },
  });

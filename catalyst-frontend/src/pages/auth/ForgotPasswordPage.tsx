@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { getErrorMessage } from '../../utils/errors';
+import { getErrorMessage, describeError } from '../../utils/errors';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { BrandFooter } from '../../components/shared/BrandFooter';
@@ -34,7 +34,7 @@ function ForgotPasswordPage() {
  reportSystemError({
  level: 'error',
  component: 'ForgotPasswordPage',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'handleSubmit' },
  });

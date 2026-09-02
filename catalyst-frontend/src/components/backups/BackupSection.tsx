@@ -4,6 +4,7 @@ import { qk } from '../../lib/queryKeys';
 import { useBackups } from '../../hooks/useBackups';
 import { notifyError, notifyInfo } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
+import { describeError } from '../../utils/errors';
 import TabHeader from '../servers/tabs/TabHeader';
 import SectionHeader from '../servers/tabs/SectionHeader';
 import ServerTabCard from '../servers/tabs/ServerTabCard';
@@ -141,7 +142,7 @@ function BackupSection({
       reportSystemError({
         level: 'error',
         component: 'BackupSection',
-        message: error instanceof Error ? error.message : String(error),
+        message: describeError(error),
         stack: error instanceof Error ? error.stack : undefined,
         metadata: { context: 'download backup' },
       });
@@ -478,7 +479,7 @@ function BackupSection({
  reportSystemError({
  level: 'error',
  component: 'BackupSection',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'update backup settings' },
  });

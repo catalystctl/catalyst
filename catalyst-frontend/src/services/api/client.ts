@@ -25,7 +25,11 @@ const normalizeBaseUrl = (value?: string) => {
 
 const BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL) || '';
 
-export interface ApiError {
+export class ApiError extends Error {
+  status?: number;
+  method?: string;
+  path?: string;
+  retryAfterMs?: number;
   response?: {
     status?: number;
     data?: {
@@ -35,9 +39,26 @@ export interface ApiError {
     };
     headers?: Record<string, string>;
   };
-  status?: number;
-  retryAfterMs?: number;
-  message?: string;
+
+  constructor(args: {
+    message: string;
+    status?: number;
+    method?: string;
+    path?: string;
+    retryAfterMs?: number;
+    response?: ApiError['response'];
+  }) {
+    super(args.message);
+    // Restore the prototype chain broken by extending built-ins when the
+    // TS target is ES5 (needed for `instanceof ApiError` / `instanceof Error`).
+    Object.setPrototypeOf(this, ApiError.prototype);
+    this.name = 'ApiError';
+    this.status = args.status;
+    this.method = args.method;
+    this.path = args.path;
+    this.retryAfterMs = args.retryAfterMs;
+    this.response = args.response;
+  }
 }
 
 function parseRetryAfterMs(value: string | null): number | undefined {
@@ -204,16 +225,18 @@ class ApiClient {
       const hdr: Record<string, string> = {};
       const raw = response.headers.get('Retry-After');
       if (raw) hdr['retry-after'] = raw;
-      const error: ApiError = {
+      const error = new ApiError({
+        message: errorData.message || errorData.error || `HTTP ${response.status}`,
         status: response.status,
+        method,
+        path,
         retryAfterMs,
         response: {
           status: response.status,
           data: errorData,
           headers: Object.keys(hdr).length ? hdr : undefined,
         },
-        message: errorData.message || errorData.error || `HTTP ${response.status}`,
-      };
+      });
       throw error;
     }
 

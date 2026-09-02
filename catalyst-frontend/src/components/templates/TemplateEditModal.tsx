@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { reportSystemError } from '../../services/api/systemErrors';
+import { describeError } from '../../utils/errors';
 
 type VariableDraft = {
  id: string;
@@ -321,7 +322,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  reportSystemError({
  level: 'error',
  component: 'TemplateEditModal',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'parse import file' },
  });

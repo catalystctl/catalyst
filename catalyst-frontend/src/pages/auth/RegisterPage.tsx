@@ -6,6 +6,7 @@ import { useAuthStore } from '../../stores/authStore';
 import type { RegisterSchema } from '../../validators/auth';
 import { registerSchema } from '../../validators/auth';
 import { reportSystemError } from '../../services/api/systemErrors';
+import { describeError } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,7 +39,7 @@ function RegisterPage() {
  reportSystemError({
  level: 'error',
  component: 'RegisterPage',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'onSubmit' },
  });

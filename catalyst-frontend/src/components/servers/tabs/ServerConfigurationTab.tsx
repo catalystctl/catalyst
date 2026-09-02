@@ -9,7 +9,7 @@ import {
  type ConfigMap,
  type ConfigNode,
 } from '../../../utils/configFormats';
-import { getErrorMessage } from '../../../utils/errors';
+import { getErrorMessage, describeError } from '../../../utils/errors';
 import { notifyError, notifySuccess } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
 import SectionHeader from './SectionHeader';
@@ -217,7 +217,7 @@ export default function ServerConfigurationTab({
  reportSystemError({
  level: 'error',
  component: 'ServerConfigurationTab',
- message: error instanceof Error ? error.message : String(error),
+ message: describeError(error),
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'load config file' },
  });

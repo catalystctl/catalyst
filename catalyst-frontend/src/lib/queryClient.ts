@@ -1,5 +1,6 @@
 import { QueryClient, MutationCache, setFallbackQueryClient } from '../csync';
 import { reportSystemError } from '../services/api/systemErrors';
+import { describeError, describeMutationComponent } from '../utils/errors';
 
 /**
  * App-wide Catalyst Sync client (replaces TanStack QueryClient).
@@ -19,19 +20,11 @@ export const queryClient = new QueryClient({
   },
   mutationCache: new MutationCache({
     onError: ({ error, mutation }) => {
-      const mutationKey = String(mutation.options.mutationKey ?? 'unknown');
-      const message =
-        error instanceof Error
-          ? error.message
-          : (error as any)?.message ||
-            (error as any)?.response?.data?.error ||
-            (error as any)?.response?.data?.message ||
-            String(error);
       reportSystemError({
         level: 'error',
-        component: `Mutation:${mutationKey}`,
-        message,
-        metadata: { mutationKey },
+        component: describeMutationComponent(mutation.options.mutationKey, error),
+        message: describeError(error),
+        metadata: { mutationKey: String(mutation.options.mutationKey ?? 'unknown') },
       });
     },
   }),

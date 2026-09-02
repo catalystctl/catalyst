@@ -6,6 +6,7 @@ import { useSetupStatus } from '../../hooks/useSetupStatus';
 import apiClient from '../../services/api/client';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 import { reportSystemError } from '../../services/api/systemErrors';
+import { describeError } from '../../utils/errors';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generatePalette';
 import { cn } from '../../lib/utils';
@@ -108,7 +109,7 @@ function SetupPage() {
  reportSystemError({
  level: 'error',
  component: 'SetupPage',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'checkSetupStatus' },
  });
@@ -278,7 +279,7 @@ function SetupPage() {
  reportSystemError({
  level: 'error',
  component: 'SetupPage',
- message: err instanceof Error ? err.message : String(err),
+ message: describeError(err),
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'handleSubmit' },
  });
