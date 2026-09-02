@@ -70,10 +70,36 @@ export function describeError(error: unknown): string {
 }
 
 /**
+ * Heuristic: names produced by production minifiers (single letter or
+ * letter+digits like "k", "t3", "eA") are useless as labels. Real names are
+ * camelCase/PascalCase words, or contain dots/slashes (methods, paths).
+ */
+function isMinifiedName(name: string): boolean {
+  return /^[a-zA-Z$_][0-9a-zA-Z$_]{0,2}$/.test(name) && !/^[A-Z][a-z]/.test(name);
+}
+
+/**
+ * Extract a readable function name from an error stack. Property/method
+ * names (e.g. "Object.enableTwoFactor") survive minification, so this often
+ * yields the exact API wrapper that failed even in production builds.
+ */
+export function describeErrorFunction(error: unknown): string | undefined {
+  const stack = error instanceof Error ? error.stack : undefined;
+  if (!stack) return undefined;
+  for (const frame of stack.split('\n')) {
+    // Matches "Object.enableTwoFactor", "ProfilePage", "async enableTwoFactor" etc.
+    const m = frame.match(/(?:at\s+(?:async\s+)?|Object\.)([A-Za-z_$][\w$]*)\s*(?:\(|$)/);
+    if (m && !isMinifiedName(m[1])) return m[1];
+  }
+  return undefined;
+}
+
+/**
  * Derive a human-readable component label for mutation error reports.
- * Uses the declared mutationKey when present; otherwise falls back to the
- * API endpoint extracted from the thrown error (e.g. "POST /api/servers/:id/backups")
- * so keyless mutations no longer show up as "Mutation:unknown".
+ * Priority: declared mutationKey → function name parsed from the error
+ * stack (property names survive minification) → API endpoint from ApiError
+ * → "unknown". Keyless mutations no longer show up as "Mutation:unknown"
+ * or "Mutation:k".
  */
 export function describeMutationComponent(
   mutationKey: unknown,
@@ -84,7 +110,10 @@ export function describeMutationComponent(
     : typeof mutationKey === 'string' && mutationKey.length > 0
       ? mutationKey
       : undefined;
-  if (key) return `Mutation:${key}`;
+  if (key && !isMinifiedName(key)) return `Mutation:${key}`;
+
+  const fromStack = describeErrorFunction(error);
+  if (fromStack) return `Mutation:${fromStack}`;
 
   const method = (error as { method?: unknown })?.method;
   const path = (error as { path?: unknown })?.path;
@@ -92,6 +121,8 @@ export function describeMutationComponent(
     const m = typeof method === 'string' && method.length > 0 ? method : 'HTTP';
     return `Mutation:${m} ${path}`;
   }
+
+  if (key) return `Mutation:${key}`;
 
   return 'Mutation:unknown';
 }

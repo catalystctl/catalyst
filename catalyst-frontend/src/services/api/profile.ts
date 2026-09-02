@@ -126,7 +126,13 @@ export const profileApi = {
   // ── 2FA ──
   async enableTwoFactor(payload: { password: string }) {
     const res = await authClient.twoFactor.enable({ password: payload.password });
-    if (res.error) throw new Error(res.error.message || 'Failed to enable 2FA');
+    if (res.error) {
+      // Surface whatever detail better-auth provides (status, code, message)
+      // so the system-error report shows the real cause, not just the action.
+      const e = res.error as { message?: string; status?: number | string; code?: string };
+      const detail = e.message || e.code || (e.status !== undefined ? `HTTP ${e.status}` : '');
+      throw new Error(detail ? `Failed to enable 2FA: ${detail}` : 'Failed to enable 2FA');
+    }
     return res.data;
   },
   async disableTwoFactor(payload: { password: string }) {

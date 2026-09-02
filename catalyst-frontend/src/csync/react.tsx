@@ -328,9 +328,11 @@ export function useMutation<
 
   // Auto-name mutations for system error reports: when no mutationKey is
   // declared, derive a stable label from the calling component's function
-  // name via a one-time stack parse (works in dev; minified-but-stable in
-  // prod builds). This keeps MutationCache.onError from reporting
-  // "Mutation:unknown" for keyless mutations.
+  // name via a one-time stack parse. Minified production names ("k", "t3")
+  // are rejected so we fall through to a stable sequence label instead —
+  // describeMutationComponent later recovers a real name from the error's
+  // own stack (property names like Object.enableTwoFactor survive
+  // minification).
   const autoKeyRef = useRef<string | null>(null);
   if (autoKeyRef.current === null) {
     const declaredKey = Array.isArray(options.mutationKey)
@@ -343,7 +345,10 @@ export function useMutation<
       let caller: string | undefined;
       for (const frame of frames) {
         const m = frame.match(/^\s*at (\w+)[ (]/);
-        if (m && m[1] !== 'useMutation') {
+        // Minified names (1–3 chars, not PascalCase) are noise in prod.
+        const readable =
+          m && m[1] !== 'useMutation' && !/^[a-z$][\w$]{0,2}$/.test(m[1]);
+        if (m && readable) {
           caller = m[1];
           break;
         }
