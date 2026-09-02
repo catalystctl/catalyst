@@ -43,14 +43,21 @@ services:
     image: redis:7-alpine
     container_name: catalyst-redis
     restart: unless-stopped
-    command: redis-server
+    # SECURITY: enforce the generated REDIS_PASSWORD instead of running an
+    # unauthenticated redis (the .env generator creates the credential).
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
     ports:
       - "${REDIS_PORT:-127.0.0.1:6379}:6379"
     healthcheck:
-      test: "redis-cli ping | grep PONG"
+      # REDISCLI_AUTH is read by redis-cli automatically — avoids putting the
+      # password on the healthcheck command line (visible in docker inspect
+      # and the container process list).
+      test: "redis-cli --no-auth-warning ping | grep PONG"
       interval: 10s
       timeout: 5s
       retries: 5
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
 
   # ===========================================================================
   # Backend
@@ -65,7 +72,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV:-production}
       TZ: ${TZ:-UTC}
       LOG_LEVEL: info
       PORT: 3000
@@ -81,6 +88,7 @@ services:
       DATABASE_URL: postgresql://catalyst:${POSTGRES_PASSWORD}@postgres:5432/catalyst_db
 
       # Redis
+      # NOTE: no Redis client exists in the backend yet — kept for future use.
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
 
       # Auth / Security
@@ -149,6 +157,8 @@ services:
 
       # Plugins
       PLUGINS_DIR: /var/lib/catalyst/plugins
+      # Marketplace sources; empty = official catalyst-plugins index (built in).
+      PLUGIN_MARKETPLACE_URLS: ${PLUGIN_MARKETPLACE_URLS:-}
 
       # OAuth (optional — leave empty to disable)
       WHMCS_OIDC_CLIENT_ID: ${WHMCS_OIDC_CLIENT_ID:-}

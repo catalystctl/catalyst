@@ -717,6 +717,10 @@ phase_configure() {
     # the real .env is not left in a half-configured state.
     STAGING_ENV="${DEST}/.env.staging.$$"
     cp "${DEST}/.env.example" "$STAGING_ENV"
+    # SECURITY: this file will hold every generated secret (auth secret,
+    # API key secret, DB/redis passwords). Restrict from creation onward
+    # instead of relying on umask.
+    chmod 600 "$STAGING_ENV" 2>/dev/null || true
     ok "Preparing .env configuration..."
 
     # ── Secrets: reuse existing non-placeholder values when present ───────
@@ -731,7 +735,11 @@ phase_configure() {
         prev_api=$(env_get "$previous_env" API_KEY_SECRET)
     fi
 
-    local NEW_PG_PASS NEW_AUTH_SECRET NEW_REDIS_PASS NEW_API_KEY_SECRET
+    local NEW_PG_PASS NEW_AUTH_SECRET NEW_REDIS_PASS NEW_API_KEY_SECRET NEW_BACKUP_CRED_KEY
+    local prev_backup_cred=""
+    if [[ -n "$previous_env" && -f "$previous_env" ]]; then
+        prev_backup_cred=$(env_get "$previous_env" BACKUP_CREDENTIALS_ENCRYPTION_KEY)
+    fi
     local reused_pg=false reused_auth=false reused_redis=false reused_api=false
 
     if ! is_placeholder_secret "$prev_pg"; then
@@ -780,6 +788,24 @@ phase_configure() {
         printf '\n# HMAC secret for panel/agent API keys\nAPI_KEY_SECRET=%s\n' "${NEW_API_KEY_SECRET}" >> "$STAGING_ENV"
     fi
 
+    # SECURITY: backup S3/SFTP credentials are encrypted at rest with this key;
+    # without it the backend now refuses to store them in production rather
+    # than writing plaintext secrets into Postgres. It must remain STABLE —
+    # rotating it makes previously stored credentials undecryptable — so an
+    # existing non-placeholder value is preserved like the other secrets.
+    if ! is_placeholder_secret "$prev_backup_cred" && [[ -n "$prev_backup_cred" ]]; then
+        NEW_BACKUP_CRED_KEY="$prev_backup_cred"
+    else
+        NEW_BACKUP_CRED_KEY=$(openssl rand -base64 32)
+    fi
+    if grep -q '^BACKUP_CREDENTIALS_ENCRYPTION_KEY=' "$STAGING_ENV"; then
+        sed -i "s~^BACKUP_CREDENTIALS_ENCRYPTION_KEY=.*~BACKUP_CREDENTIALS_ENCRYPTION_KEY=${NEW_BACKUP_CRED_KEY}~" "$STAGING_ENV"
+    elif grep -q '^# *BACKUP_CREDENTIALS_ENCRYPTION_KEY=' "$STAGING_ENV"; then
+        sed -i "s~^# *BACKUP_CREDENTIALS_ENCRYPTION_KEY=.*~BACKUP_CREDENTIALS_ENCRYPTION_KEY=${NEW_BACKUP_CRED_KEY}~" "$STAGING_ENV"
+    else
+        printf '\n# AES key for encrypting backup S3/SFTP credentials at rest\nBACKUP_CREDENTIALS_ENCRYPTION_KEY=%s\n' "${NEW_BACKUP_CRED_KEY}" >> "$STAGING_ENV"
+    fi
+
     if $reused_pg || $reused_auth || $reused_redis || $reused_api; then
         ok "Preserved existing secrets (Postgres password is only applied on first volume init)"
         $reused_pg    && info "Reused POSTGRES_PASSWORD from previous .env"
@@ -791,7 +817,7 @@ phase_configure() {
         ! $reused_redis && info "Generated new REDIS_PASSWORD"
         ! $reused_api   && info "Generated new API_KEY_SECRET"
     else
-        ok "Generated POSTGRES_PASSWORD, BETTER_AUTH_SECRET, REDIS_PASSWORD, API_KEY_SECRET"
+        ok "Generated POSTGRES_PASSWORD, BETTER_AUTH_SECRET, REDIS_PASSWORD, API_KEY_SECRET, BACKUP_CREDENTIALS_ENCRYPTION_KEY"
     fi
 
     # ── Detect default PUBLIC_URL ─────────────────────────────────────────
@@ -893,11 +919,15 @@ phase_configure() {
     ok "CATALYST_COMPOSE_DIR=${COMPOSE_DIR}"
     # Container user catalyst must traverse parents of the bind mount.
     chmod o+x "$(dirname "$COMPOSE_DIR")" 2>/dev/null || true
+    # SECURITY: open read access for the container user, but never on the
+    # .env (it holds all generated secrets) or its staging/backup variants.
     chmod -R a+rX "$COMPOSE_DIR" 2>/dev/null || true
+    find "$COMPOSE_DIR" -maxdepth 1 -name ".env*" -exec chmod 600 {} \; 2>/dev/null || true
 
     # ── Commit: atomically move staging → .env ────────────────────────────
     # All prompts answered, all values written.  Now it's safe to commit.
     mv "$STAGING_ENV" "${DEST}/.env"
+    chmod 600 "${DEST}/.env" 2>/dev/null || true
     STAGING_ENV=""   # clear so cleanup trap doesn't remove it
     ok "Configuration complete!"
 

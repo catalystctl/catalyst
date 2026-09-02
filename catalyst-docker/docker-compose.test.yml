@@ -55,6 +55,7 @@ services:
       NODE_ENV: test
       LOG_LEVEL: debug
       DATABASE_URL: postgresql://catalyst:${POSTGRES_PASSWORD}@postgres:5432/catalyst_db
+      # NOTE: no Redis client exists in the backend yet — kept for future use.
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       API_KEY_SECRET: ${API_KEY_SECRET:-${BETTER_AUTH_SECRET}}
