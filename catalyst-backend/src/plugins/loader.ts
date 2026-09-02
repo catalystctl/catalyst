@@ -99,7 +99,9 @@ export class PluginLoader {
 
     try {
       const entries = await fs.readdir(this.pluginsDir, { withFileTypes: true });
-      const pluginDirs = entries.filter((e) => e.isDirectory());
+      // Skip hidden dirs (`.backups`, `.staging`) — they are install plumbing,
+      // not plugins, and have no plugin.json.
+      const pluginDirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.'));
 
       // ── Pass 1: Read all manifests ──────────────────────────────────────
       const manifestEntries: { dirName: string; pluginPath: string; manifest: PluginManifest }[] = [];
@@ -830,6 +832,9 @@ export class PluginLoader {
       persistent: true,
       ignoreInitial: true,
       depth: 2,
+      // `.backups` / `.staging` are install plumbing, not plugins.
+      ignored: (watchedPath: string) =>
+        path.relative(this.pluginsDir, watchedPath).split(path.sep).some((seg) => seg.startsWith('.')),
     });
 
     this.watcher.on('change', async (filePath) => {

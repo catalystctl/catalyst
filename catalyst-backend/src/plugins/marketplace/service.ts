@@ -164,10 +164,14 @@ export class PluginMarketplaceService {
       allowLocal: this.opts.allowLocalDownloads ?? false,
     });
 
+    // Extract onto the plugins volume (hidden `.staging`) so the final
+    // promote is a same-filesystem rename. `/tmp` is a different device in
+    // the Docker image, and rename(2) then fails with EXDEV.
+    const stagingRoot = path.join(this.pluginsDir, '.staging');
+    await fsp.mkdir(stagingRoot, { recursive: true });
+    const stagedDir = await fsp.mkdtemp(path.join(stagingRoot, 'catpkg-'));
+
     try {
-      // Stage into a sibling temp dir so promoteIntoPlace can rename on the
-      // same filesystem (atomic on POSIX).
-      const stagedDir = path.join(path.dirname(tmpPath), 'extracted');
       const { manifest } = await extractPackage(tmpPath, stagedDir);
 
       const name = String(manifest.name);
@@ -175,7 +179,6 @@ export class PluginMarketplaceService {
 
       const existingRow = await this.prisma.plugin.findUnique({ where: { name }, select: { version: true } });
       if (existingRow && existingRow.version === version) {
-        await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
         throw new PackagingError('ALREADY_INSTALLED', `Plugin ${name}@${version} is already installed`);
       }
 
@@ -193,6 +196,7 @@ export class PluginMarketplaceService {
       return { name, version, upgraded: !!existingRow, sha256 };
     } finally {
       await fsp.rm(tmpPath, { force: true }).catch(() => {});
+      await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
     }
   }
 

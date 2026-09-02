@@ -313,8 +313,24 @@ export async function extractPackage(
 }
 
 /**
- * Atomically place an extracted plugin directory under pluginsDir/<name>,
- * swapping out any previous installation via rename-aside + fallback restore.
+ * Move `src` onto `dest`. `rename(2)` is atomic on the same filesystem;
+ * Docker (and any split /tmp vs data volume) returns EXDEV, in which case
+ * we copy then remove the source so installs still land.
+ */
+export async function renameOrCopy(src: string, dest: string): Promise<void> {
+  try {
+    await fsp.rename(src, dest);
+  } catch (err: any) {
+    if (err?.code !== 'EXDEV') throw err;
+    await fsp.cp(src, dest, { recursive: true, errorOnExist: true, force: false });
+    await fsp.rm(src, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Place an extracted plugin directory under pluginsDir/<name>, swapping out
+ * any previous installation via rename-aside + fallback restore. Falls back
+ * to copy+remove when src and dest sit on different devices (EXDEV).
  */
 export async function promoteIntoPlace(
   stagedDir: string,
@@ -338,15 +354,16 @@ export async function promoteIntoPlace(
   const stat = await fsp.stat(finalDir).catch(() => null);
   if (stat?.isDirectory()) {
     movedOldTo = path.join(backups, `${pluginName}-${Date.now()}`);
-    await fsp.rename(finalDir, movedOldTo);
+    await renameOrCopy(finalDir, movedOldTo);
   }
 
   try {
-    await fsp.rename(stagedDir, finalDir);
+    await renameOrCopy(stagedDir, finalDir);
   } catch (err) {
     // Best-effort rollback so an old version is never silently lost
+    await fsp.rm(finalDir, { recursive: true, force: true }).catch(() => {});
     if (movedOldTo) {
-      await fsp.rename(movedOldTo, finalDir).catch(() => {});
+      await renameOrCopy(movedOldTo, finalDir).catch(() => {});
     }
     throw err;
   }

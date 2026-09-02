@@ -8,6 +8,7 @@ import {
   assertInstallableUrl,
   extractPackage,
   promoteIntoPlace,
+  renameOrCopy,
   PackagingError,
   MAX_EXTRACTED_BYTES,
 } from '../marketplace/packaging';
@@ -160,6 +161,62 @@ describe('promoteIntoPlace', () => {
 
   it('refuses names escaping the plugins root', async () => {
     await expect(promoteIntoPlace(path.join(tmpRoot, 'x'), tmpRoot, '..')).rejects.toThrow();
+  });
+
+  it('copies across devices when rename returns EXDEV', async () => {
+    const tmpDev = (await fsp.stat(tmpRoot)).dev;
+    let otherRoot: string | null = null;
+    for (const candidate of ['/dev/shm', '/tmp', process.cwd()]) {
+      const st = await fsp.stat(candidate).catch(() => null);
+      if (st && st.dev !== tmpDev) {
+        otherRoot = candidate;
+        break;
+      }
+    }
+    if (!otherRoot) {
+      // Single-filesystem environments cannot reproduce EXDEV.
+      return;
+    }
+
+    const pluginsDir = path.join(tmpRoot, 'plugins-exdev');
+    await fsp.mkdir(pluginsDir, { recursive: true });
+    const staged = await fsp.mkdtemp(path.join(otherRoot, 'catpkg-exdev-'));
+    try {
+      await fsp.writeFile(path.join(staged, 'new.txt'), 'from-other-device');
+      await promoteIntoPlace(staged, pluginsDir, 'exdevpack');
+      expect(await fsp.readFile(path.join(pluginsDir, 'exdevpack', 'new.txt'), 'utf-8')).toBe(
+        'from-other-device',
+      );
+      await expect(fsp.access(staged)).rejects.toBeTruthy();
+    } finally {
+      await fsp.rm(staged, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+});
+
+describe('renameOrCopy', () => {
+  it('falls back to copy+remove when rename throws EXDEV', async () => {
+    const src = path.join(tmpRoot, 'rename-src');
+    const dest = path.join(tmpRoot, 'rename-dest');
+    await fsp.mkdir(src, { recursive: true });
+    await fsp.writeFile(path.join(src, 'file.txt'), 'copied');
+
+    const originalRename = fsp.rename;
+    const spy = async (from: string, to: string) => {
+      if (from === src) {
+        const err = Object.assign(new Error('EXDEV: cross-device link not permitted'), { code: 'EXDEV' });
+        throw err;
+      }
+      return originalRename(from, to);
+    };
+    (fsp as any).rename = spy;
+    try {
+      await renameOrCopy(src, dest);
+      expect(await fsp.readFile(path.join(dest, 'file.txt'), 'utf-8')).toBe('copied');
+      await expect(fsp.access(src)).rejects.toBeTruthy();
+    } finally {
+      (fsp as any).rename = originalRename;
+    }
   });
 });
 
