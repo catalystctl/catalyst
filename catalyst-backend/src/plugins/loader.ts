@@ -12,6 +12,7 @@ import { createPluginContext, runMiddleware } from './context';
 import { captureSystemError } from '../services/error-logger';
 import { PluginRegistry } from './registry';
 import { createGatedHandler, DEFAULT_GATE_CONFIG, setPluginGateEnabled } from './runtime/request-gate';
+import { PluginRouteTable, registerPluginRouteDispatcher } from './route-table';
 import { normalizePermissionList } from './safety';
 import EventEmitter from 'events';
 import { buildRuntimeConfig, isStoredSchemaPollution, getDeclaredFieldType } from './config-utils';
@@ -35,6 +36,9 @@ export class PluginLoader {
   private readonly HOT_RELOAD_DEBOUNCE_MS = 500;
   /** Live effective permission grants per plugin name (admin-controlled). */
   private effectiveGrants = new Map<string, string[]>();
+  /** Plugin HTTP handlers served by the catch-all dispatcher (post-listen safe). */
+  private readonly routeTable = new PluginRouteTable();
+  private dispatcherRegistered = false;
 
   constructor(
     pluginsDir: string,
@@ -76,6 +80,10 @@ export class PluginLoader {
       throw error;
     }
 
+    // Catch-all for /api/plugins/:name/* must exist before listen() so
+    // marketplace installs can attach handlers without Fastify.route().
+    this.ensureDispatcher();
+
     // Discover and load plugins (with dependency ordering)
     await this.discoverPlugins();
 
@@ -85,6 +93,12 @@ export class PluginLoader {
     }
 
     this.logger.info({ count: this.registry.count() }, 'Plugin system initialized');
+  }
+
+  private ensureDispatcher(): void {
+    if (this.dispatcherRegistered) return;
+    registerPluginRouteDispatcher(this.fastify, this.routeTable);
+    this.dispatcherRegistered = true;
   }
 
   /**
@@ -495,7 +509,9 @@ export class PluginLoader {
 
         // registerRoute() in context.ts already prefixes with /api/plugins/{name}/…
         // Do NOT prefix again here — that produced /api/plugins/{name}/api/plugins/{name}/…
-        this.fastify.route(route);
+        // Fastify cannot add routes after listen(); the catch-all dispatcher
+        // (registered in initialize()) forwards to these handlers instead.
+        this.routeTable.register(manifest.name, route);
       }
 
       // Register plugin in registry
@@ -513,6 +529,7 @@ export class PluginLoader {
         metadata: { plugin: pluginName },
       }).catch(() => {});
       this.logger.error({ plugin: pluginName, error: error.message }, 'Failed to load plugin');
+      this.routeTable.removePlugin(pluginName);
 
       // Register as error state
       const errorPlugin: LoadedPlugin = {
@@ -752,7 +769,8 @@ export class PluginLoader {
       // Drop live grants entry (re-seeded from DB on next load)
       this.effectiveGrants.delete(name);
 
-      // Keep Fastify route handlers denied after unload (routes stay registered)
+      // Drop dispatched handlers so a later install/reload can rebind them.
+      this.routeTable.removePlugin(name);
       setPluginGateEnabled(name, false);
       if (plugin.enabledRef) {
         plugin.enabledRef.value = false;
