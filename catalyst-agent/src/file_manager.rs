@@ -123,16 +123,17 @@ impl FileManager {
     }
 
     /// SECURITY: stream `response` into an unpredictable O_EXCL temp file in
-    /// the target's directory and return its absolute path. The caller then
-    /// renames the temp onto the target: rename(2) REPLACES a symlink at the
-    /// destination rather than following it, and the temp name itself can
-    /// never be pre-planted by the container (exclusive creation).
+    /// the target's directory and return it. The caller must hold the TempFile
+    /// until it has renamed it onto the target: rename(2) REPLACES a symlink
+    /// at the destination rather than following it, the temp name itself can
+    /// never be pre-planted by the container (exclusive creation), and the
+    /// Drop guard deletes the temp file if the caller bails out early.
     pub async fn write_stream_to_exclusive_temp(
         &self,
         server_id: &str,
         target: &str,
         mut response: reqwest::Response,
-    ) -> AgentResult<PathBuf> {
+    ) -> AgentResult<TempFile> {
         let full_path = self.resolve_path(server_id, target)?;
         if let Some(parent) = full_path.parent() {
             fs::create_dir_all(parent)
@@ -184,7 +185,9 @@ impl FileManager {
                 e
             )));
         }
-        Ok(temp.path().to_path_buf())
+        // Hand ownership to the caller; dropping it here would trigger the
+        // Drop guard and delete the just-written file before the rename.
+        Ok(temp)
     }
 
     pub fn max_file_size(&self) -> u64 {
@@ -1512,5 +1515,53 @@ mod tests {
             .resolve_path("", "world.txt")
             .expect_err("empty server id must fail");
         assert!(err.to_string().contains("Invalid server id"), "{err}");
+    }
+
+    /// Serve `body` once over loopback HTTP so tests can obtain a real
+    /// streaming reqwest::Response without extra dev-dependencies.
+    async fn serve_one_body(body: &'static [u8]) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = tokio::task::spawn_blocking(move || {
+            let (stream, _) = listener.accept().expect("no inbound connection");
+            use std::io::{Read, Write};
+            let mut stream = stream;
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf); // discard the request head
+            stream
+                .write_all(
+                    format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes(),
+                )
+                .unwrap();
+            stream.write_all(body).unwrap();
+        });
+        (format!("http://127.0.0.1:{port}/"), handle)
+    }
+
+    #[tokio::test]
+    async fn uploaded_stream_survives_until_caller_renames() {
+        // Regression: write_stream_to_exclusive_temp used to return only the
+        // temp path; the TempFile's Drop guard then deleted the just-written
+        // file, so the caller's rename failed with ENOENT and every upload
+        // died with "No such file or directory (os error 2)".
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+
+        let (url, server) = serve_one_body(b"uploaded-bytes").await;
+        let resp = reqwest::get(&url).await.expect("mock upload fetch");
+        let temp = fm
+            .write_stream_to_exclusive_temp("srv1", "maps/file.bsp", resp)
+            .await
+            .expect("stream write should succeed");
+        server.await.unwrap();
+
+        // The temp file must still exist while the caller holds the handle.
+        assert!(temp.path().exists(), "temp file deleted before caller rename");
+
+        let dest = fm.resolve_path("srv1", "maps/file.bsp").unwrap();
+        tokio::fs::rename(temp.path(), &dest).await.unwrap();
+        drop(temp);
+        assert_eq!(std::fs::read(&dest).unwrap(), b"uploaded-bytes");
     }
 }
