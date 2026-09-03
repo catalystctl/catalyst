@@ -206,3 +206,39 @@ describe('summarizeReport', () => {
     ).toBe('3 copied, 1 deleted');
   });
 });
+
+describe('listEntries', () => {
+  it('accepts the agent list payload (data is the array itself)', async () => {
+    const { listEntries } = await import('../../../../catalyst-plugins/fastdl-sync/backend/sync-engine.js');
+    const entries = listEntries([
+      { name: 'cstrike', isDirectory: true, size: 0, modified: '2026-01-01T00:00:00Z' },
+      { name: 'readme.txt', type: 'file', size: 12 },
+    ]);
+    expect(entries.map((e) => e.name)).toEqual(['cstrike', 'readme.txt']);
+    expect(entries[0].isDirectory).toBe(true);
+    expect(entries[1].isDirectory).toBe(false);
+    expect(entries[1].size).toBe(12);
+  });
+
+  it('does not treat Array.prototype.entries as a file list', async () => {
+    const { listEntries } = await import('../../../../catalyst-plugins/fastdl-sync/backend/sync-engine.js');
+    const data = [{ name: 'cstrike', isDirectory: true, size: 0 }];
+    expect(typeof data.entries).toBe('function');
+    expect(listEntries(data).map((e) => e.name)).toEqual(['cstrike']);
+  });
+
+  it('accepts { entries: [...] } and type=directory', async () => {
+    const { listEntries } = await import('../../../../catalyst-plugins/fastdl-sync/backend/sync-engine.js');
+    const entries = listEntries({
+      entries: [{ name: 'maps', type: 'directory' }],
+    });
+    expect(entries).toEqual([{ name: 'maps', isDirectory: true, size: 0, mtimeMs: 0 }]);
+  });
+
+  it('returns [] for missing or unusable data', async () => {
+    const { listEntries } = await import('../../../../catalyst-plugins/fastdl-sync/backend/sync-engine.js');
+    expect(listEntries(undefined)).toEqual([]);
+    expect(listEntries(null)).toEqual([]);
+    expect(listEntries({ ok: true })).toEqual([]);
+  });
+});
