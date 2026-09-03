@@ -1,6 +1,6 @@
 {
 	"name": "catalyst-backend",
-	"version": "1.35.2",
+	"version": "1.35.3",
 	"description": "Catalyst - Production-Grade Game Server Management System Backend",
 	"main": "dist/index.js",
 	"type": "module",
