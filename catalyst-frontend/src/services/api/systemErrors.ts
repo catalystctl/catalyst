@@ -73,6 +73,20 @@ export async function reportSystemError(opts: {
       ? opts.message
       : describeError((opts as { message?: unknown }).message);
 
+    const trimmedMessage = message.length > MAX_MESSAGE_LENGTH
+      ? message.slice(0, MAX_MESSAGE_LENGTH)
+      : message;
+    const trimmedStack = stack && stack.length > MAX_STACK_LENGTH
+      ? stack.slice(0, MAX_STACK_LENGTH)
+      : stack;
+
+    try {
+      const log = level === 'warn' ? console.warn : console.error;
+      log(`[system-error][${component}]`, redact(trimmedMessage), trimmedStack ? redact(trimmedStack) : undefined, metadata ?? {});
+    } catch {
+      // console is best-effort
+    }
+
     const key = getDedupKey(component, message);
     const now = Date.now();
     const lastReported = dedupMap.get(key);
@@ -80,13 +94,6 @@ export async function reportSystemError(opts: {
       return;
     }
     dedupMap.set(key, now);
-
-    const trimmedMessage = message.length > MAX_MESSAGE_LENGTH
-      ? message.slice(0, MAX_MESSAGE_LENGTH)
-      : message;
-    const trimmedStack = stack && stack.length > MAX_STACK_LENGTH
-      ? stack.slice(0, MAX_STACK_LENGTH)
-      : stack;
 
     const body = {
       level,

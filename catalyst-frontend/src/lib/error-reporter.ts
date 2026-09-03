@@ -2,8 +2,9 @@
  * Unified frontend error capture: window errors, unhandled rejections,
  * and React error-boundary reports.
  *
- * Tries POST /api/client-errors, then the existing /api/system-errors/report
- * endpoint, then console.error. Deduplicates bursts and queues while offline.
+ * Logs to console and POSTs to /api/client-errors, then the existing
+ * /api/system-errors/report endpoint. Deduplicates backend bursts and
+ * queues while offline.
  */
 
 const normalizeBaseUrl = (value?: string) => {
@@ -207,7 +208,6 @@ async function deliver(payload: ClientErrorPayload): Promise<'ok' | 'fail' | 'lo
     if (legacy === 'ok') return 'ok';
     if (legacy === 'fail') return 'fail';
 
-    logToConsole(payload);
     return 'logged';
   } finally {
     delivering = false;
@@ -225,7 +225,6 @@ async function flushQueue(): Promise<void> {
         item.retries += 1;
         if (item.retries >= MAX_RETRIES) {
           queue.shift();
-          logToConsole(item.payload);
         }
         break;
       }
@@ -252,6 +251,11 @@ function normalizePayload(partial: ClientErrorPayload): ClientErrorPayload {
 /** Report a captured client error (React or ad-hoc). Fire-and-forget. */
 export function reportClientError(partial: ClientErrorPayload): void {
   const payload = normalizePayload(partial);
+  try {
+    logToConsole(payload);
+  } catch {
+    // console is best-effort
+  }
   if (isDuplicate(payload)) return;
 
   const task = (async () => {
