@@ -85,6 +85,7 @@ interface ServerInfo {
  backupRetentionCount?: number;
  backupRetentionDays?: number;
  backupAllocationMb?: number;
+ databaseAllocation?: number;
  networkMode?: string;
  startupCommand?: string | null;
  template?: {
@@ -770,6 +771,22 @@ export default function ServerAdminTab({
           <DataField label="CPU" value={`${server.allocatedCpuCores ?? 0} cores`} />
           <DataField label="Disk" value={`${server.allocatedDiskMb ?? 0} MB`} />
           <DataField label="Swap" value={`${server.allocatedSwapMb ?? 0} MB`} />
+          <DataField
+            label="Backup allocation"
+            value={
+              (server.backupAllocationMb ?? 0) > 0
+                ? `${server.backupAllocationMb} MB`
+                : 'Disabled'
+            }
+          />
+          <DataField
+            label="Database allocation"
+            value={
+              (server.databaseAllocation ?? 0) > 0
+                ? `${server.databaseAllocation} databases`
+                : 'Disabled'
+            }
+          />
           <div className="mt-3 flex flex-wrap gap-2">
             <UpdateServerModal serverId={serverId} disabled={isSuspended} />
             <TransferServerModal serverId={serverId} disabled={isSuspended} />

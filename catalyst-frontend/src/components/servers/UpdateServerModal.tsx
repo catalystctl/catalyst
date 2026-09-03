@@ -40,6 +40,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   const [cpu, setCpu] = useState('1');
   const [disk, setDisk] = useState('10240');
   const [databaseAllocation, setDatabaseAllocation] = useState('0');
+  const [backupAllocationMb, setBackupAllocationMb] = useState('0');
   const [backupRetentionCount, setBackupRetentionCount] = useState('0');
   const [name, setName] = useState('');
   const [primaryIp, setPrimaryIp] = useState('');
@@ -99,6 +100,16 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
       ) {
         updates.databaseAllocation = databaseAllocationValue;
       }
+      const backupAllocationValue =
+        backupAllocationMb.trim() === '' ? undefined : Number(backupAllocationMb);
+      if (
+        backupAllocationValue !== undefined &&
+        Number.isFinite(backupAllocationValue) &&
+        backupAllocationValue >= 0 &&
+        backupAllocationValue !== (server?.backupAllocationMb ?? 0)
+      ) {
+        updates.backupAllocationMb = backupAllocationValue;
+      }
       if (isIpamNetwork && primaryIp !== (server?.primaryIp ?? '')) {
         updates.primaryIp = primaryIp.trim() || null;
       }
@@ -148,6 +159,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     setCpu(String(server.allocatedCpuCores ?? 1));
     setDisk(String(server.allocatedDiskMb ?? 10240));
     setDatabaseAllocation(String(server.databaseAllocation ?? 0));
+    setBackupAllocationMb(String(server.backupAllocationMb ?? 0));
     setBackupRetentionCount(String(server.backupRetentionCount ?? 0));
     setPrimaryIp(server.primaryIp ?? '');
   }, [open, server]);
@@ -270,6 +282,11 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     retentionValue !== (server?.backupRetentionCount ?? 0);
   const retentionInvalid =
     retentionRaw !== '' && (!Number.isFinite(retentionValue) || retentionValue < 0);
+  const backupAllocationRaw = backupAllocationMb.trim();
+  const backupAllocationParsed = Number(backupAllocationRaw);
+  const backupAllocationInvalid =
+    backupAllocationRaw !== '' &&
+    (!Number.isFinite(backupAllocationParsed) || backupAllocationParsed < 0);
 
   const handleSave = () => {
     if (retentionChanged) {
@@ -296,7 +313,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
           <DialogHeader>
             <DialogTitle>Update server</DialogTitle>
             <DialogDescription>
-              Change this server's name, resources, and network allocation.
+              Change this server's name, resources, backup and database allocations, and network allocation.
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-3">
@@ -358,6 +375,20 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
               />
               <span className="text-xs text-muted-foreground">
                 Set to 0 to disable database provisioning.
+              </span>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="update-server-backup-allocation">Backup allocation (MB)</Label>
+              <Input
+                id="update-server-backup-allocation"
+                value={backupAllocationMb}
+                onChange={(e) => setBackupAllocationMb(e.target.value)}
+                type="number"
+                min={0}
+                step={128}
+              />
+              <span className="text-xs text-muted-foreground">
+                Set to 0 to disable backups. Local and Stream modes require an allocation.
               </span>
             </div>
             <div className="space-y-2">
@@ -443,6 +474,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 mutation.isPending ||
                 backupSettingsMutation.isPending ||
                 retentionInvalid ||
+                backupAllocationInvalid ||
                 (isRunning && isShrink) ||
                 disabled
               }

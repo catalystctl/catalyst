@@ -155,6 +155,7 @@ export const serversApi = {
       storageMode?: BackupStorageMode;
       retentionCount?: number;
       retentionDays?: number;
+      backupAllocationMb?: number;
       s3Config?: Record<string, unknown>;
       sftpConfig?: Record<string, unknown>;
     },
