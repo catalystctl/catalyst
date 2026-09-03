@@ -1,10 +1,71 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark" style="background-color: #0c0c14">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0c0c14" />
     <link rel="icon" href="/favicon.ico" />
     <title>Catalyst</title>
+    <style>
+      html {
+        background-color: #0c0c14;
+      }
+      html.light {
+        background-color: #f5f4f2;
+      }
+    </style>
+    <script>
+      // Pre-paint theme boot: replay the last saved palette + custom CSS
+      // before first paint so custom themes never flash the default.
+      (function () {
+        try {
+          var theme = null;
+          try {
+            var persisted = JSON.parse(localStorage.getItem('catalyst-theme') || 'null');
+            if (persisted && persisted.state && (persisted.state.theme === 'light' || persisted.state.theme === 'dark')) {
+              theme = persisted.state.theme;
+            }
+          } catch (e) {}
+          var vars = null;
+          var css = null;
+          try {
+            var cached = JSON.parse(localStorage.getItem('catalyst-theme-cache-v1') || 'null');
+            if (cached && (cached.theme === 'light' || cached.theme === 'dark') && cached.cssVars) {
+              vars = cached.cssVars;
+              css = cached.customCss || null;
+              if (!theme) {
+                var def = cached.settings && cached.settings.defaultTheme;
+                if (def === 'light' || def === 'dark') theme = def;
+                else if (def === 'system' && window.matchMedia) {
+                  theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                } else theme = cached.theme;
+              }
+            }
+          } catch (e) {}
+          if (!theme) theme = 'dark';
+          var root = document.documentElement;
+          root.classList.remove('light', 'dark');
+          root.classList.add(theme);
+          root.style.colorScheme = theme;
+          if (vars) {
+            for (var key in vars) {
+              if (Object.prototype.hasOwnProperty.call(vars, key)) root.style.setProperty(key, vars[key]);
+            }
+            if (vars['--background']) root.style.backgroundColor = 'hsl(' + vars['--background'] + ')';
+          } else {
+            root.style.backgroundColor = theme === 'light' ? '#f5f4f2' : '#0c0c14';
+          }
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'light' ? '#f5f4f2' : '#0c0c14');
+          if (css) {
+            var style = document.createElement('style');
+            style.id = 'catalyst-custom-css';
+            style.textContent = css;
+            document.head.appendChild(style);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="min-h-screen">
     <div id="root"></div>

@@ -62,6 +62,111 @@ export const defaultThemeColors: ThemeColors = {
   borderRadius: '0.625rem',
 };
 
+export const THEME_CACHE_KEY = 'catalyst-theme-cache-v1';
+export const CUSTOM_CSS_ELEMENT_ID = 'catalyst-custom-css';
+const MAX_CUSTOM_CSS_CHARS = 100_000;
+
+interface CachedTheme {
+  theme: Theme;
+  settings: PublicThemeSettings;
+  customCss: string | null;
+  cssVars: Record<string, string>;
+  savedAt: number;
+}
+
+function sanitizeCustomCss(css: string | null | undefined): string | null {
+  if (!css || !css.trim()) return null;
+  let safe = css.trim().slice(0, MAX_CUSTOM_CSS_CHARS);
+  safe = safe
+    .replace(/expression\s*\(/gi, '/*blocked*/(')
+    .replace(/behavior\s*:/gi, '/*blocked*/:')
+    .replace(/-moz-binding\s*:/gi, '/*blocked*/:')
+    .replace(/javascript\s*:/gi, '/*blocked*/:')
+    .replace(/@import\b/gi, '/*blocked-import*/');
+  return safe || null;
+}
+
+function resolveThemeName(
+  explicitChoice: string | null | undefined,
+  defaultTheme: string | null | undefined,
+): Theme {
+  if (explicitChoice === 'light' || explicitChoice === 'dark') return explicitChoice;
+  if (defaultTheme === 'light' || defaultTheme === 'dark') return defaultTheme;
+  if (defaultTheme === 'system' && typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  return 'dark';
+}
+
+function readPersistedThemeChoice(): Theme | null {
+  try {
+    const raw = localStorage.getItem('catalyst-theme');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { state?: { theme?: unknown } };
+    return parsed?.state?.theme === 'light' || parsed?.state?.theme === 'dark'
+      ? parsed.state.theme
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function readThemeCache(): CachedTheme | null {
+  try {
+    const raw = localStorage.getItem(THEME_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CachedTheme>;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (parsed.theme !== 'light' && parsed.theme !== 'dark') return null;
+    if (!parsed.settings || typeof parsed.settings !== 'object') return null;
+    if (!parsed.cssVars || typeof parsed.cssVars !== 'object') return null;
+    return {
+      theme: parsed.theme,
+      settings: parsed.settings as PublicThemeSettings,
+      customCss: typeof parsed.customCss === 'string' ? parsed.customCss : null,
+      cssVars: parsed.cssVars as Record<string, string>,
+      savedAt: typeof parsed.savedAt === 'number' ? parsed.savedAt : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeThemeCache(entry: Omit<CachedTheme, 'savedAt'>): void {
+  try {
+    const payload: CachedTheme = { ...entry, savedAt: Date.now() };
+    localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Storage full or unavailable — theme still applies for this session.
+  }
+}
+
+// Synchronous pre-paint apply for startup (main.tsx + index.html boot).
+// Reads only localStorage + DOM, never the store, so it runs before React.
+export function preApplyCachedTheme(): boolean {
+  try {
+    const cached = readThemeCache();
+    if (!cached) return false;
+    const root = document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(cached.theme);
+    for (const [name, value] of Object.entries(cached.cssVars)) {
+      root.style.setProperty(name, value);
+    }
+    const existing = document.getElementById(CUSTOM_CSS_ELEMENT_ID);
+    if (existing?.parentNode) existing.parentNode.removeChild(existing);
+    if (cached.customCss) {
+      const style = document.createElement('style');
+      style.id = CUSTOM_CSS_ELEMENT_ID;
+      style.textContent = cached.customCss;
+      document.head.appendChild(style);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Pure color utilities ───
 
 function hexToHSL(hex: string): string {
@@ -126,41 +231,38 @@ function luminance(hsl: string): number {
 }
 
 // ─── Pure DOM application (no store dependency) ───
-// This is the single source of truth for writing CSS variables to <html>.
+// Build the variable map first so startup can cache + replay it pre-paint.
 
-function applyThemeToDOM(
+function buildThemeCssVars(
   theme: Theme,
   primaryColor: string,
   secondaryColor: string,
   accentColor: string,
   colors: ThemeColors,
-) {
-  const root = document.documentElement;
-  root.classList.remove('light', 'dark');
-  root.classList.add(theme);
+): Record<string, string> {
+  const vars: Record<string, string> = {};
+  const set = (name: string, value: string) => {
+    vars[name] = value;
+  };
 
-  // ── Primary color + full scale ──
   const primaryHSL = hexToHSL(primaryColor);
   const primaryScale = generateColorScale(primaryHSL);
-  root.style.setProperty('--primary', primaryHSL);
+  set('--primary', primaryHSL);
   for (const [shade, value] of Object.entries(primaryScale)) {
-    root.style.setProperty(`--primary-${shade}`, value);
+    set(`--primary-${shade}`, value);
   }
   const isLightPrimary = luminance(primaryHSL) > 0.55;
-  root.style.setProperty('--primary-foreground', isLightPrimary ? '0 0% 9%' : '0 0% 100%');
+  set('--primary-foreground', isLightPrimary ? '0 0% 9%' : '0 0% 100%');
 
-  // ── Secondary (brand) ──
   const secondaryHSL = hexToHSL(secondaryColor);
-  root.style.setProperty('--secondary', secondaryHSL);
+  set('--secondary', secondaryHSL);
   const isLightSecondary = luminance(secondaryHSL) > 0.55;
-  root.style.setProperty('--secondary-foreground', isLightSecondary ? '0 0% 9%' : '0 0% 100%');
+  set('--secondary-foreground', isLightSecondary ? '0 0% 9%' : '0 0% 100%');
 
-  // ── Accent + ring ──
   const accentHSL = hexToHSL(accentColor);
-  root.style.setProperty('--accent', accentHSL);
-  root.style.setProperty('--ring', primaryHSL);
+  set('--accent', accentHSL);
+  set('--ring', primaryHSL);
 
-  // ── Semantic colors ──
   const semanticKeys: (keyof ThemeColors)[] = ['successColor', 'warningColor', 'dangerColor', 'infoColor'];
   const cssVarMap: Record<string, string> = {
     successColor: 'success',
@@ -173,14 +275,13 @@ function applyThemeToDOM(
     if (!hex) continue;
     const hsl = hexToHSL(hex);
     const varName = cssVarMap[key];
-    root.style.setProperty(`--${varName}`, hsl);
-    root.style.setProperty(`--${varName}-muted`, mutedVariant(hsl));
+    set(`--${varName}`, hsl);
+    set(`--${varName}-muted`, mutedVariant(hsl));
     if (key === 'dangerColor') {
-      root.style.setProperty('--destructive', hsl);
+      set('--destructive', hsl);
     }
   }
 
-  // ── Surfaces (dark / light) ──
   const isDark = theme === 'dark';
   const bgKey = isDark ? 'darkBackground' : 'lightBackground';
   const fgKey = isDark ? 'darkForeground' : 'lightForeground';
@@ -192,49 +293,64 @@ function applyThemeToDOM(
   const s3Key = isDark ? 'darkSurface3' : 'lightSurface3';
 
   if (colors[bgKey]) {
-    root.style.setProperty('--background', hexToHSL(colors[bgKey]));
-    root.style.setProperty('--surface-0', hexToHSL(colors[bgKey]));
+    set('--background', hexToHSL(colors[bgKey]));
+    set('--surface-0', hexToHSL(colors[bgKey]));
   }
-  if (colors[fgKey]) root.style.setProperty('--foreground', hexToHSL(colors[fgKey]));
+  if (colors[fgKey]) set('--foreground', hexToHSL(colors[fgKey]));
   if (colors[cardKey]) {
-    root.style.setProperty('--card', hexToHSL(colors[cardKey]));
-    root.style.setProperty('--card-foreground', hexToHSL(colors[fgKey] || (isDark ? '#fafafa' : '#09090b')));
+    set('--card', hexToHSL(colors[cardKey]));
+    set('--card-foreground', hexToHSL(colors[fgKey] || (isDark ? '#fafafa' : '#09090b')));
   }
   if (colors[borderKey]) {
-    root.style.setProperty('--border', hexToHSL(colors[borderKey]));
-    root.style.setProperty('--input', hexToHSL(colors[borderKey]));
+    set('--border', hexToHSL(colors[borderKey]));
+    set('--input', hexToHSL(colors[borderKey]));
   }
-  if (colors[s1Key]) root.style.setProperty('--surface-1', hexToHSL(colors[s1Key]));
+  if (colors[s1Key]) set('--surface-1', hexToHSL(colors[s1Key]));
   if (colors[s2Key]) {
-    root.style.setProperty('--surface-2', hexToHSL(colors[s2Key]));
+    set('--surface-2', hexToHSL(colors[s2Key]));
     // Keep muted as a surface tone so badges/inputs stay readable under customization.
-    root.style.setProperty('--muted', hexToHSL(colors[s2Key]));
+    set('--muted', hexToHSL(colors[s2Key]));
   }
-  if (colors[s3Key]) root.style.setProperty('--surface-3', hexToHSL(colors[s3Key]));
+  if (colors[s3Key]) set('--surface-3', hexToHSL(colors[s3Key]));
   if (colors[mutedKey]) {
-    root.style.setProperty('--muted-foreground', hexToHSL(colors[mutedKey]));
+    set('--muted-foreground', hexToHSL(colors[mutedKey]));
   }
 
   const fallbackBg = isDark ? '#09090b' : '#ffffff';
   const fallbackFg = isDark ? '#fafafa' : '#09090b';
-  root.style.setProperty('--popover', hexToHSL(colors[cardKey] || colors[bgKey] || fallbackBg));
-  root.style.setProperty('--popover-foreground', hexToHSL(colors[fgKey] || fallbackFg));
-  root.style.setProperty('--accent-foreground', hexToHSL(colors[bgKey] || fallbackBg));
-  root.style.setProperty('--destructive-foreground', '0 0% 100%');
+  set('--popover', hexToHSL(colors[cardKey] || colors[bgKey] || fallbackBg));
+  set('--popover-foreground', hexToHSL(colors[fgKey] || fallbackFg));
+  set('--accent-foreground', hexToHSL(colors[bgKey] || fallbackBg));
+  set('--destructive-foreground', '0 0% 100%');
 
-  // ── Border radius ──
   if (colors.borderRadius) {
-    root.style.setProperty('--radius', colors.borderRadius);
+    set('--radius', colors.borderRadius);
   }
 
-  // ── Accent-teal backward compat ──
-  root.style.setProperty('--accent-teal', primaryHSL);
-  root.style.setProperty('--accent-teal-light', accentHSL);
-  root.style.setProperty('--accent-teal-muted', mutedVariant(primaryHSL));
+  set('--accent-teal', primaryHSL);
+  set('--accent-teal-light', accentHSL);
+  set('--accent-teal-muted', mutedVariant(primaryHSL));
 
-  // ── Sonner ──
   const sonnerBg = colors[cardKey] || colors[s1Key] || fallbackBg;
-  root.style.setProperty('--sonner-background', `hsl(${hexToHSL(sonnerBg)})`);
+  set('--sonner-background', `hsl(${hexToHSL(sonnerBg)})`);
+  return vars;
+}
+
+function applyThemeToDOM(
+  theme: Theme,
+  primaryColor: string,
+  secondaryColor: string,
+  accentColor: string,
+  colors: ThemeColors,
+): Record<string, string> {
+  const vars = buildThemeCssVars(theme, primaryColor, secondaryColor, accentColor, colors);
+  const root = document.documentElement;
+  root.classList.remove('light', 'dark');
+  root.classList.add(theme);
+  for (const [name, value] of Object.entries(vars)) {
+    root.style.setProperty(name, value);
+  }
+  return vars;
 }
 
 // ─── RAF-batched preview ───
@@ -289,15 +405,29 @@ function flushPreview() {
   pendingPreview = null;
 }
 
+function initialTheme(): Theme {
+  if (typeof window === 'undefined') return 'dark';
+  const persisted = readPersistedThemeChoice();
+  if (persisted) return persisted;
+  const cached = readThemeCache();
+  if (cached) return resolveThemeName(null, cached.settings.defaultTheme);
+  return 'dark';
+}
+
+function initialThemeSettings(): PublicThemeSettings | null {
+  if (typeof window === 'undefined') return null;
+  return readThemeCache()?.settings ?? null;
+}
+
 // ─── Store ───
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: 'dark',
+      theme: initialTheme(),
       sidebarCollapsed: false,
       serverViewMode: 'card' as const,
-      themeSettings: null,
+      themeSettings: initialThemeSettings(),
       customCssElement: null,
 
       setTheme: (theme) => {
@@ -312,6 +442,12 @@ export const useThemeStore = create<ThemeState>()(
       setThemeSettings: (settings, customCss) => {
         flushPreview();
         debugLog('[themeStore] setThemeSettings called, customCss length:', customCss?.length ?? 0);
+        const hadCache = readThemeCache() !== null;
+        const hadChoice = readPersistedThemeChoice() !== null;
+        if (!hadCache && !hadChoice) {
+          const resolved = resolveThemeName(null, settings.defaultTheme);
+          if (resolved !== get().theme) set({ theme: resolved });
+        }
         set({ themeSettings: settings });
         get().applyTheme();
         if (customCss !== undefined) {
@@ -323,43 +459,26 @@ export const useThemeStore = create<ThemeState>()(
         const { customCssElement } = get();
         debugLog('[themeStore] injectCustomCss called, css length:', css?.length ?? 0);
 
-        // Remove tracked element
         if (customCssElement && customCssElement.parentNode) {
-          debugLog('[themeStore] removing existing tracked style element');
           customCssElement.parentNode.removeChild(customCssElement);
         }
-        // Also clean up any orphaned elements from previous sessions
-        const orphaned = document.getElementById('catalyst-custom-css');
+        const orphaned = document.getElementById(CUSTOM_CSS_ELEMENT_ID);
         if (orphaned && orphaned.parentNode) {
-          debugLog('[themeStore] removing orphaned style element');
           orphaned.parentNode.removeChild(orphaned);
         }
-        if (css && css.trim()) {
-          // Basic length cap + strip obviously dangerous constructs before DOM injection.
-          // Full CSS parsing is out of scope; this is a defense-in-depth bound only.
-          const MAX_CUSTOM_CSS_CHARS = 100_000; // 100 KB
-          let safeCss = css.trim();
-          if (safeCss.length > MAX_CUSTOM_CSS_CHARS) {
-            safeCss = safeCss.slice(0, MAX_CUSTOM_CSS_CHARS);
-            debugLog('[themeStore] custom CSS truncated to', MAX_CUSTOM_CSS_CHARS, 'chars');
-          }
-          // Neutralize common CSS injection vectors (expression, behavior, -moz-binding, javascript: urls)
-          safeCss = safeCss
-            .replace(/expression\s*\(/gi, '/*blocked*/(')
-            .replace(/behavior\s*:/gi, '/*blocked*/:')
-            .replace(/-moz-binding\s*:/gi, '/*blocked*/:')
-            .replace(/javascript\s*:/gi, '/*blocked*/:')
-            .replace(/@import\b/gi, '/*blocked-import*/');
-
+        const safeCss = sanitizeCustomCss(css);
+        if (safeCss) {
           const style = document.createElement('style');
-          style.id = 'catalyst-custom-css';
+          style.id = CUSTOM_CSS_ELEMENT_ID;
           style.textContent = safeCss;
           document.head.appendChild(style);
-          debugLog('[themeStore] injected style element into <head>, id:', style.id);
           set({ customCssElement: style });
         } else {
-          debugLog('[themeStore] css empty/null — no style element injected');
           set({ customCssElement: null });
+        }
+        const existing = readThemeCache();
+        if (existing) {
+          writeThemeCache({ ...existing, customCss: safeCss });
         }
       },
 
@@ -369,9 +488,15 @@ export const useThemeStore = create<ThemeState>()(
         const settings = themeSettings || defaultThemeSettings;
         const colors = settings.themeColors || defaultThemeColors;
 
-        applyThemeToDOM(theme, settings.primaryColor, settings.secondaryColor, settings.accentColor, colors);
+        const cssVars = applyThemeToDOM(theme, settings.primaryColor, settings.secondaryColor, settings.accentColor, colors);
+        const cached = readThemeCache();
+        writeThemeCache({
+          theme,
+          settings,
+          customCss: cached?.customCss ?? sanitizeCustomCss(settings.customCss) ?? null,
+          cssVars,
+        });
 
-        // ── Title & favicon (only from saved settings) ──
         document.title = settings.panelName;
         if (settings.faviconUrl) {
           let favicon = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
