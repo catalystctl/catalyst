@@ -31,9 +31,11 @@ import {
   fetchMarketplaceSources,
   installPlugin,
   updateMarketplaceSource,
+  type MarketplaceBrowseResult,
   type MarketplaceEntry,
   type MarketplaceSource,
 } from '../../../plugins/api';
+import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
 
 /** Host label for a marketplace URL that never throws on malformed input. */
@@ -81,8 +83,10 @@ export function MarketplaceDialog({
   const [newSourceUrl, setNewSourceUrl] = useState('');
   const [newSourceLabel, setNewSourceLabel] = useState('');
   const [pendingSourceId, setPendingSourceId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['plugins', 'marketplace'],
     queryFn: () => fetchMarketplace(true),
     enabled: open,
@@ -100,9 +104,38 @@ export function MarketplaceDialog({
     staleTime: 0,
   });
 
-  const refreshMarketplace = () => {
-    refetchSources();
-    refetch();
+  // Refresh bypasses the frontend stale guard and the backend 5-minute index
+  // cache, so it always re-reads the marketplace repo for new versions.
+  const refreshMarketplace = async (opts: { silent?: boolean } = {}) => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const [fresh, freshSources] = await Promise.all([
+        fetchMarketplace(true),
+        fetchMarketplaceSources().catch(() => undefined),
+      ]);
+      queryClient.setQueryData<MarketplaceBrowseResult>(['plugins', 'marketplace'], fresh);
+      if (freshSources) {
+        queryClient.setQueryData(['plugins', 'marketplace-sources'], freshSources);
+      } else {
+        await refetchSources().catch(() => undefined);
+      }
+      setLastChecked(new Date());
+      if (opts.silent) return;
+      const updates = fresh.entries.filter((entry) => {
+        const installed = entry.installedVersion ?? installedVersions?.[entry.name] ?? null;
+        return Boolean(entry.updateAvailable) || isNewerVersion(installed, entry.version);
+      }).length;
+      toast.success(
+        updates > 0
+          ? `Marketplace refreshed — ${updates} update${updates === 1 ? '' : 's'} available`
+          : 'Marketplace refreshed — up to date',
+      );
+    } catch (error: any) {
+      if (!opts.silent) toast.error(error?.message || 'Could not refresh marketplace');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const addSourceMutation = useMutation({
@@ -148,7 +181,7 @@ export function MarketplaceDialog({
         { duration: 6000 },
       );
       onInstalled();
-      refetch();
+      void refreshMarketplace({ silent: true });
     },
     onSettled: () => setInstallingName(null),
     onError: (error: any) => toast.error(error?.message || 'Install failed'),
@@ -346,14 +379,21 @@ export function MarketplaceDialog({
                 variant="outline"
                 size="icon-sm"
                 aria-label="Refresh marketplace"
+                title="Re-check the marketplace repo for new versions"
                 onClick={() => refreshMarketplace()}
+                disabled={refreshing}
               >
-                {isFetching ? (
+                {refreshing || isFetching ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <RefreshCw className="h-3.5 w-3.5" />
                 )}
               </Button>
+              {lastChecked && (
+                <span className="shrink-0 text-[11px] text-muted-foreground" title={lastChecked.toLocaleString()}>
+                  Checked {lastChecked.toLocaleTimeString()}
+                </span>
+              )}
             </div>
 
             {isLoading ? (
