@@ -1,6 +1,8 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@/csync';
 import apiClient from '../services/api/client';
+
+const SETUP_STATUS_TIMEOUT_MS = 15000;
 
 interface SetupStatus {
   setupRequired: boolean;
@@ -69,20 +71,31 @@ export function useSetupStatus(): SetupStatus {
     };
   }, [queryClient]);
 
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (isFetched) return;
+    const timer = setTimeout(() => setTimedOut(true), SETUP_STATUS_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isFetched]);
+
   // Block routing until the first attempt settles (success or terminal error).
   // Do NOT use csync's isLoading — it is false on the pre-fetch first paint.
-  const isLoading = !isFetched;
+  // Never block longer than the timeout — fail open so a stalled backend
+  // cannot leave the panel on the loading screen.
+  const isLoading = !isFetched && !timedOut;
 
   // Definitive false only after a successful response (or 404 mapped to false).
   // On terminal error, fail open to setup so first-run Docker installs are not
   // stranded on /login with zero users.
   const setupRequired = typeof data === 'boolean' ? data : true;
 
-  const error = queryError
-    ? queryError instanceof Error
-      ? queryError.message
-      : 'Failed to check setup status'
-    : null;
+  const error = timedOut && !isFetched
+    ? `Setup check timed out after ${SETUP_STATUS_TIMEOUT_MS}ms`
+    : queryError
+      ? queryError instanceof Error
+        ? queryError.message
+        : 'Failed to check setup status'
+      : null;
 
   return { setupRequired, isLoading, error, recheck };
 }

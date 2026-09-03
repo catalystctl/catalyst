@@ -25,6 +25,9 @@ const normalizeBaseUrl = (value?: string) => {
 
 const BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL) || '';
 
+const DEFAULT_TIMEOUT_MS = 15000;
+const BLOB_TIMEOUT_MS = 5 * 60 * 1000;
+
 export class ApiError extends Error {
   status?: number;
   method?: string;
@@ -95,6 +98,7 @@ class ApiClient {
       credentials?: RequestCredentials;
       signal?: AbortSignal;
       responseType?: 'json' | 'blob' | 'text';
+      timeoutMs?: number;
       onDownloadProgress?: (event: { loaded: number; total?: number }) => void;
     },
   ): Promise<T> {
@@ -105,7 +109,9 @@ class ApiClient {
       credentials = 'include',
       signal,
       responseType = 'json',
+      timeoutMs,
     } = options ?? {};
+    const effectiveTimeoutMs = timeoutMs ?? (responseType === 'blob' ? BLOB_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
 
     // Build URL with query params
     let url = `${this.baseUrl}${path}`;
@@ -157,6 +163,22 @@ class ApiClient {
     }
 
     let response: Response;
+    const timeoutController = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (effectiveTimeoutMs > 0) {
+      timeoutId = setTimeout(() => {
+        timeoutController.abort(
+          new DOMException(`Request timed out after ${effectiveTimeoutMs}ms: ${method} ${path}`, 'TimeoutError'),
+        );
+      }, effectiveTimeoutMs);
+    }
+    if (signal) {
+      if (signal.aborted) {
+        timeoutController.abort(signal.reason);
+      } else {
+        signal.addEventListener('abort', () => timeoutController.abort(signal.reason), { once: true });
+      }
+    }
     try {
       response = await fetch(url, {
         method,
@@ -165,9 +187,10 @@ class ApiClient {
         body: hasBody
           ? (body instanceof FormData ? body : typeof body === 'string' ? body : JSON.stringify(body))
           : undefined,
-        signal,
+        signal: timeoutController.signal,
       });
     } catch (networkError: any) {
+      if (timeoutId) clearTimeout(timeoutId);
       reportSystemError({
         level: 'error',
         component: 'ApiClient',
@@ -176,6 +199,7 @@ class ApiClient {
       });
       throw networkError;
     }
+    if (timeoutId) clearTimeout(timeoutId);
 
     // Handle errors — read body once, then throw with full error info
     if (!response.ok) {
@@ -283,23 +307,23 @@ class ApiClient {
     }
   }
 
-  get<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; responseType?: 'json' | 'blob' | 'text'; onDownloadProgress?: (event: { loaded: number; total?: number }) => void }): Promise<T> {
+  get<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; responseType?: 'json' | 'blob' | 'text'; timeoutMs?: number; onDownloadProgress?: (event: { loaded: number; total?: number }) => void }): Promise<T> {
     return this.request<T>('GET', path, options);
   }
 
-  post<T>(path: string, body?: unknown, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal }): Promise<T> {
+  post<T>(path: string, body?: unknown, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; timeoutMs?: number }): Promise<T> {
     return this.request<T>('POST', path, { ...options, body });
   }
 
-  put<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal }): Promise<T> {
+  put<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; timeoutMs?: number }): Promise<T> {
     return this.request<T>('PUT', path, { ...options, body });
   }
 
-  patch<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal }): Promise<T> {
+  patch<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; timeoutMs?: number }): Promise<T> {
     return this.request<T>('PATCH', path, { ...options, body });
   }
 
-  delete<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal }): Promise<T> {
+  delete<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; timeoutMs?: number }): Promise<T> {
     return this.request<T>('DELETE', path, options);
   }
 }

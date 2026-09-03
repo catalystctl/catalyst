@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import SetupPage from './pages/setup/SetupPage';
 import { useSetupStatus } from './hooks/useSetupStatus';
@@ -93,6 +93,22 @@ function App() {
  const isReady = useAuthStore((s) => s.isReady);
  const { setupRequired, isLoading: isSetupLoading } = useSetupStatus();
 
+ // Backstop so a stalled backend can never leave the panel on Loading...
+ // Auth and setup hooks have their own shorter timeouts; this covers any
+ // other hang in the boot path.
+ const [bootTimedOut, setBootTimedOut] = useState(false);
+ useEffect(() => {
+ const timer = setTimeout(() => {
+ setBootTimedOut(true);
+ reportSystemError({
+ level: 'warn',
+ component: 'App',
+ message: 'Boot loading timed out, continuing without blocking on init',
+ });
+ }, 20000);
+ return () => clearTimeout(timer);
+ }, []);
+
  // Load public theme settings (including custom CSS) once on mount
  const publicLoadedRef = useRef(false);
  useEffect(() => {
@@ -163,7 +179,7 @@ function App() {
  // Full-screen loading while auth initializes or setup status is checked.
  // useSetupStatus stays loading until the first /api/setup/status attempt
  // settles — never gate on csync's isLoading alone (false on first paint).
- if (!isReady || isSetupLoading) {
+ if ((!isReady || isSetupLoading) && !bootTimedOut) {
  return (
  <div className="flex h-screen items-center justify-center bg-background">
  <div className="flex flex-col items-center gap-3">
