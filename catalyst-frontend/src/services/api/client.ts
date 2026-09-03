@@ -202,10 +202,25 @@ class ApiClient {
           // cannot flash after the session dies.
           queryClient.clear();
           if (typeof window !== 'undefined') {
-            const path = window.location.pathname + window.location.search;
-            // Avoid redirect loops on the login page itself.
-            if (!path.startsWith('/login') && !path.startsWith('/two-factor')) {
-              const returnTo = encodeURIComponent(path);
+            const currentPath = window.location.pathname + window.location.search;
+            const isPublicRoute =
+              currentPath.startsWith('/login') ||
+              currentPath.startsWith('/two-factor') ||
+              currentPath.startsWith('/setup') ||
+              currentPath.startsWith('/register') ||
+              currentPath.startsWith('/forgot-password') ||
+              currentPath.startsWith('/reset-password') ||
+              currentPath.startsWith('/invites');
+            // Session probe and other public endpoints expect 401 when logged
+            // out (fresh install, expired session check). Never hard-redirect
+            // for them — React router guards handle navigation.
+            const isPublicEndpoint =
+              path.startsWith('/api/auth/me') ||
+              path.startsWith('/api/setup/status') ||
+              path.startsWith('/api/theme-settings/public');
+            // Avoid redirect loops on public pages and during first-run setup.
+            if (!isPublicRoute && !isPublicEndpoint) {
+              const returnTo = encodeURIComponent(currentPath);
               window.location.assign(`/login?from=${returnTo}`);
             }
           }
