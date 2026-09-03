@@ -166,6 +166,7 @@ export interface MarketplaceEntry {
   sha256?: string;
   homepage?: string;
   tags?: string[];
+  sourceUrl?: string;
   installed?: boolean;
   installedVersion?: string | null;
   updateAvailable?: boolean;
@@ -176,12 +177,51 @@ export interface MarketplaceBrowseResult {
   entries: MarketplaceEntry[];
 }
 
+/** A configured marketplace index and where it came from. */
+export interface MarketplaceSource {
+  id: string;
+  url: string;
+  label?: string | null;
+  enabled: boolean;
+  origin: 'official' | 'env' | 'custom';
+  removable: boolean;
+}
+
 /** Browse configured marketplace indexes (5-minute server-side cache). */
 export async function fetchMarketplace(forceRefresh = false): Promise<MarketplaceBrowseResult> {
   const data = await apiFetch<{ data: MarketplaceBrowseResult }>(
     `/api/plugins/marketplace${forceRefresh ? '?forceRefresh=true' : ''}`,
   );
   return data.data ?? { sources: [], entries: [] };
+}
+
+/** List every marketplace source for the in-panel source manager. */
+export async function fetchMarketplaceSources(): Promise<MarketplaceSource[]> {
+  const data = await apiFetch<{ data: MarketplaceSource[] }>('/api/plugins/marketplace/sources');
+  return data.data ?? [];
+}
+
+/** Add a marketplace index from the panel — no env edit or restart needed. */
+export async function addMarketplaceSource(url: string, label?: string): Promise<MarketplaceSource> {
+  const data = await apiFetch<{ data: MarketplaceSource }>('/api/plugins/marketplace/sources', {
+    method: 'POST',
+    body: { url, ...(label?.trim() ? { label: label.trim() } : {}) },
+  });
+  return data.data;
+}
+
+/** Enable or disable a panel-added marketplace source. */
+export async function updateMarketplaceSource(id: string, enabled: boolean): Promise<MarketplaceSource> {
+  const data = await apiFetch<{ data: MarketplaceSource }>(`/api/plugins/marketplace/sources/${id}`, {
+    method: 'PATCH',
+    body: { enabled },
+  });
+  return data.data;
+}
+
+/** Remove a panel-added marketplace source. */
+export async function deleteMarketplaceSource(id: string): Promise<void> {
+  await apiFetch(`/api/plugins/marketplace/sources/${id}`, { method: 'DELETE' });
 }
 
 /**

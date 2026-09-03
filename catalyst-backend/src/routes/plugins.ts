@@ -7,7 +7,7 @@ import path from 'path';
 import { z } from 'zod';
 import { getWsGateway } from '../websocket/gateway';
 import { isValidPluginName } from '../plugins/validator';
-import { PluginMarketplaceService, browseMarketplaces, annotateMarketplaceEntries, PackagingError } from '../plugins/marketplace/service';
+import { PluginMarketplaceService, browseMarketplaces, annotateMarketplaceEntries, PackagingError, listMarketplaceSources, addMarketplaceSource, setMarketplaceSourceEnabled, removeMarketplaceSource } from '../plugins/marketplace/service';
 import {
   DISCLAIMER_VERSION,
   computeConsentState,
@@ -221,8 +221,10 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   );
   /**
    * GET /api/plugins/marketplace
-   * Browse configured marketplace indexes (PLUGIN_MARKETPLACE_URLS, comma-
-   * separated JSON index documents). Cached per source for 5 minutes.
+   * Browse configured marketplace indexes together (official index first
+   * unless PLUGIN_MARKETPLACE_DISABLE_OFFICIAL is set, plus comma-separated
+   * PLUGIN_MARKETPLACE_URLS and panel-added sources). Cached per source for
+   * 5 minutes.
    */
   app.get(
     '/api/plugins/marketplace',
@@ -233,7 +235,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       const isAdmin = ensureAdmin(request, reply, 'admin.read');
       if (!isAdmin) return;
       const { forceRefresh } = request.query as { forceRefresh?: string };
-      const result = await browseMarketplaces(app.log, { forceRefresh: forceRefresh === 'true' });
+      const result = await browseMarketplaces(app.log, { forceRefresh: forceRefresh === 'true', prisma });
       const installedVersions = new Map(
         pluginLoader.getRegistry().getAll().map((p) => [p.manifest.name, p.manifest.version]),
       );
@@ -244,6 +246,112 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           entries: annotateMarketplaceEntries(result.entries, installedVersions),
         },
       };
+    },
+  );
+
+  /**
+   * GET /api/plugins/marketplace/sources
+   * List every marketplace source: official + env (read-only) plus sources
+   * added from the panel (editable). Powers the in-panel source manager.
+   */
+  app.get(
+    '/api/plugins/marketplace/sources',
+    {
+      onRequest: [app.authenticate],
+    },
+    async (request, reply) => {
+      const isAdmin = ensureAdmin(request, reply, 'admin.read');
+      if (!isAdmin) return;
+      const sources = await listMarketplaceSources(prisma);
+      return { success: true, data: sources };
+    },
+  );
+
+  const AddMarketplaceSourceSchema = z.object({
+    url: z.string().min(1).max(2048),
+    label: z.string().max(100).optional(),
+  });
+
+  /**
+   * POST /api/plugins/marketplace/sources
+   * Add a marketplace index from the panel — no env edit or restart needed.
+   */
+  app.post(
+    '/api/plugins/marketplace/sources',
+    {
+      onRequest: [app.authenticate],
+    },
+    async (request, reply) => {
+      const isAdmin = ensureAdmin(request, reply, 'admin.write');
+      if (!isAdmin) return;
+      const userId: string | undefined = request.user?.userId;
+      const body = AddMarketplaceSourceSchema.parse(request.body);
+      try {
+        const created = await addMarketplaceSource(prisma, body.url, body.label ?? null, userId ?? null);
+        await writeAudit(prisma, 'marketplace.source.added', 'marketplace', { url: created.url, label: created.label }, userId);
+        return { success: true, data: created };
+      } catch (error: any) {
+        if (error?.message === 'That marketplace is already configured') {
+          return reply.status(409).send({ success: false, error: error.message });
+        }
+        return reply.status(400).send({ success: false, error: error.message });
+      }
+    },
+  );
+
+  const UpdateMarketplaceSourceSchema = z.object({
+    enabled: z.boolean(),
+  });
+
+  /**
+   * PATCH /api/plugins/marketplace/sources/:id
+   * Enable or disable a panel-added source.
+   */
+  app.patch(
+    '/api/plugins/marketplace/sources/:id',
+    {
+      onRequest: [app.authenticate],
+    },
+    async (request, reply) => {
+      const isAdmin = ensureAdmin(request, reply, 'admin.write');
+      if (!isAdmin) return;
+      const userId: string | undefined = request.user?.userId;
+      const { id } = request.params as { id: string };
+      const body = UpdateMarketplaceSourceSchema.parse(request.body);
+      try {
+        const updated = await setMarketplaceSourceEnabled(prisma, id, body.enabled);
+        await writeAudit(prisma, 'marketplace.source.updated', 'marketplace', { url: updated.url, enabled: body.enabled }, userId);
+        return { success: true, data: updated };
+      } catch {
+        return reply.status(404).send({ success: false, error: 'Marketplace source not found' });
+      }
+    },
+  );
+
+  /**
+   * DELETE /api/plugins/marketplace/sources/:id
+   * Remove a panel-added source. Official and env sources are read-only.
+   */
+  app.delete(
+    '/api/plugins/marketplace/sources/:id',
+    {
+      onRequest: [app.authenticate],
+    },
+    async (request, reply) => {
+      const isAdmin = ensureAdmin(request, reply, 'admin.write');
+      if (!isAdmin) return;
+      const userId: string | undefined = request.user?.userId;
+      const { id } = request.params as { id: string };
+      if (id === 'official' || id.startsWith('env:')) {
+        return reply.status(400).send({ success: false, error: 'That marketplace source is managed outside the panel' });
+      }
+      try {
+        const removed = await removeMarketplaceSource(prisma, id);
+        await writeAudit(prisma, 'marketplace.source.removed', 'marketplace', { url: removed.url }, userId);
+        return { success: true, data: { id } };
+      } catch {
+        return reply.status(404).send({ success: false, error: 'Marketplace source not found' });
+      }
     },
   );
 

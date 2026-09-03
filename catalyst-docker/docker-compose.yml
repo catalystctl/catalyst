@@ -157,8 +157,10 @@ services:
 
       # Plugins
       PLUGINS_DIR: /var/lib/catalyst/plugins
-      # Marketplace sources; empty = official catalyst-plugins index (built in).
+      # Marketplace sources (comma-separated); browsed together with the official index.
       PLUGIN_MARKETPLACE_URLS: ${PLUGIN_MARKETPLACE_URLS:-}
+      # Set to true to browse only PLUGIN_MARKETPLACE_URLS (no official index).
+      # PLUGIN_MARKETPLACE_DISABLE_OFFICIAL: ${PLUGIN_MARKETPLACE_DISABLE_OFFICIAL:-false}
 
       # OAuth (optional — leave empty to disable)
       WHMCS_OIDC_CLIENT_ID: ${WHMCS_OIDC_CLIENT_ID:-}

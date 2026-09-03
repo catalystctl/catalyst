@@ -982,6 +982,21 @@ model PluginStorage {
   @@index([pluginName])
 }
 
+// Marketplace indexes added from the panel (Plugins → Marketplace → Sources).
+// Env-configured PLUGIN_MARKETPLACE_URLS and the official index stay read-only;
+// rows here are the easy in-panel way to add more marketplaces together.
+model MarketplaceSource {
+  id        String   @id @default(cuid())
+  url       String   @unique
+  label     String?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([enabled])
+}
+
 // ============================================================================
 // MIGRATION
 // ============================================================================

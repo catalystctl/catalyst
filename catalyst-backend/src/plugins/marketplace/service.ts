@@ -47,6 +47,8 @@ export interface MarketplaceEntry {
   sha256?: string;
   homepage?: string;
   tags?: string[];
+  /** Index URL the entry was merged from, so multi-source browsing stays attributable. */
+  sourceUrl?: string;
 }
 
 /** Marketplace listing annotated with the panel's currently installed copy. */
@@ -127,30 +129,210 @@ interface CacheSlot {
 const indexCache = new Map<string, CacheSlot>();
 const INDEX_TTL_MS = 5 * 60 * 1000;
 
+/** Test hook: drop cached index documents so browse tests fetch fresh. */
+export function clearMarketplaceCache(): void {
+  indexCache.clear();
+}
+
+/** Drop one cached index (after a source is removed/disabled) or all. */
+export function invalidateMarketplaceCache(url?: string): void {
+  if (url) indexCache.delete(url);
+  else indexCache.clear();
+}
+
+export const MAX_MARKETPLACE_URL_LENGTH = 2048;
+export const MAX_MARKETPLACE_LABEL_LENGTH = 100;
+
+/**
+ * Normalize and validate a marketplace index URL added from the panel.
+ * Throws a plain Error with an admin-readable message on invalid input.
+ */
+export function normalizeMarketplaceUrl(raw: string): string {
+  const url = raw.trim();
+  if (!url) throw new Error('Marketplace URL is required');
+  if (url.length > MAX_MARKETPLACE_URL_LENGTH) {
+    throw new Error(`Marketplace URL must be under ${MAX_MARKETPLACE_URL_LENGTH} characters`);
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error('Marketplace URL must be a valid http(s) URL');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Marketplace URL must start with http:// or https://');
+  }
+  return url;
+}
+
+/** Where a marketplace source came from. Env and official stay read-only. */
+export type MarketplaceSourceOrigin = 'official' | 'env' | 'custom';
+
+/** Panel-facing source row: configured indexes plus their editability. */
+export interface MarketplaceSourceInfo {
+  id: string;
+  url: string;
+  label?: string | null;
+  enabled: boolean;
+  origin: MarketplaceSourceOrigin;
+  removable: boolean;
+}
+
 /**
  * Official first-party marketplace index, served from the public
- * catalyst-plugins repository. Used when PLUGIN_MARKETPLACE_URLS is unset so
- * the marketplace works out of the box; explicitly configured sources are
- * appended after it (first source wins on name conflicts).
+ * catalyst-plugins repository. Always included first unless explicitly
+ * disabled via PLUGIN_MARKETPLACE_DISABLE_OFFICIAL=true, so custom sources
+ * configured via PLUGIN_MARKETPLACE_URLS are browsed together with it.
+ * When several sources list the same plugin name, the newest semver wins.
  */
 export const OFFICIAL_MARKETPLACE_INDEX_URL =
   'https://raw.githubusercontent.com/catalystctl/catalyst-plugins/main/index.json';
 
-/** Configured marketplace index URLs. Comma-separated env var, defaulting to the official index. */
+/** True when PLUGIN_MARKETPLACE_DISABLE_OFFICIAL opts out of the official index. */
+export function isOfficialMarketplaceDisabled(): boolean {
+  const raw = (process.env.PLUGIN_MARKETPLACE_DISABLE_OFFICIAL ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
+/**
+ * Configured marketplace index URLs, official first unless disabled.
+ * PLUGIN_MARKETPLACE_URLS is a comma-separated list; entries are trimmed,
+ * empties dropped and duplicates removed so every configured marketplace is
+ * fetched together on each browse.
+ */
 export function getMarketplaceIndexUrls(): string[] {
-  const configured = (process.env.PLUGIN_MARKETPLACE_URLS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (configured.length > 0) return configured;
-  return [OFFICIAL_MARKETPLACE_INDEX_URL];
+  const seen = new Set<string>();
+  const configured: string[] = [];
+  for (const part of (process.env.PLUGIN_MARKETPLACE_URLS ?? '').split(',')) {
+    const url = part.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    configured.push(url);
+  }
+  if (isOfficialMarketplaceDisabled()) return configured;
+  if (seen.has(OFFICIAL_MARKETPLACE_INDEX_URL)) {
+    return [OFFICIAL_MARKETPLACE_INDEX_URL, ...configured.filter((u) => u !== OFFICIAL_MARKETPLACE_INDEX_URL)];
+  }
+  return [OFFICIAL_MARKETPLACE_INDEX_URL, ...configured];
+}
+
+/** Minimal Prisma surface used for panel-managed sources (keeps tests mockable). */
+type MarketplaceSourceClient = Pick<PrismaClient, 'marketplaceSource'>;
+
+/** Enabled custom URLs added from the panel. Never throws — DB issues yield []. */
+async function getPanelMarketplaceUrls(prisma?: MarketplaceSourceClient): Promise<string[]> {
+  if (!prisma) return [];
+  try {
+    const rows = await prisma.marketplaceSource.findMany({
+      where: { enabled: true },
+      select: { url: true },
+    });
+    return rows.map((r) => r.url).filter((u): u is string => typeof u === 'string' && u.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Effective browse list: official first (unless disabled), then env URLs,
+ * then enabled panel-added sources. Deduped so every marketplace is fetched
+ * together exactly once.
+ */
+export async function getEffectiveMarketplaceUrls(prisma?: MarketplaceSourceClient): Promise<string[]> {
+  const base = getMarketplaceIndexUrls();
+  const panel = await getPanelMarketplaceUrls(prisma);
+  if (panel.length === 0) return base;
+  const seen = new Set(base);
+  const merged = [...base];
+  for (const url of panel) {
+    if (!seen.has(url)) {
+      seen.add(url);
+      merged.push(url);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Panel-facing source list: official + env (read-only) plus DB rows added
+ * from the panel (editable). Never throws — DB issues yield env-only rows.
+ */
+export async function listMarketplaceSources(prisma?: MarketplaceSourceClient): Promise<MarketplaceSourceInfo[]> {
+  const officialEnabled = !isOfficialMarketplaceDisabled();
+  const sources: MarketplaceSourceInfo[] = [];
+  if (officialEnabled) {
+    sources.push({
+      id: 'official',
+      url: OFFICIAL_MARKETPLACE_INDEX_URL,
+      label: 'Official',
+      enabled: true,
+      origin: 'official',
+      removable: false,
+    });
+  }
+  for (const url of getMarketplaceIndexUrls().filter((u) => u !== OFFICIAL_MARKETPLACE_INDEX_URL)) {
+    sources.push({ id: `env:${url}`, url, enabled: true, origin: 'env', removable: false });
+  }
+  if (!prisma) return sources;
+  try {
+    const rows = await prisma.marketplaceSource.findMany({ orderBy: { createdAt: 'asc' } });
+    for (const row of rows) {
+      sources.push({
+        id: row.id,
+        url: row.url,
+        label: row.label ?? null,
+        enabled: row.enabled,
+        origin: 'custom',
+        removable: true,
+      });
+    }
+  } catch {
+    // Table missing or DB down — panel still shows env sources.
+  }
+  return sources;
+}
+
+/** Add a panel-managed marketplace source. Throws on invalid/duplicate URLs. */
+export async function addMarketplaceSource(
+  prisma: MarketplaceSourceClient,
+  rawUrl: string,
+  label?: string | null,
+  createdBy?: string | null,
+) {
+  const url = normalizeMarketplaceUrl(rawUrl);
+  const cleanLabel = label?.trim() ? label.trim().slice(0, MAX_MARKETPLACE_LABEL_LENGTH) : null;
+  const existing = new Set(await getEffectiveMarketplaceUrls(prisma));
+  if (existing.has(url)) throw new Error('That marketplace is already configured');
+  const created = await prisma.marketplaceSource.create({
+    data: { url, label: cleanLabel, enabled: true, createdBy: createdBy ?? null },
+  });
+  invalidateMarketplaceCache(url);
+  return created;
+}
+
+/** Enable or disable a panel-added source. */
+export async function setMarketplaceSourceEnabled(
+  prisma: MarketplaceSourceClient,
+  id: string,
+  enabled: boolean,
+) {
+  const updated = await prisma.marketplaceSource.update({ where: { id }, data: { enabled } });
+  invalidateMarketplaceCache(updated.url);
+  return updated;
+}
+
+/** Remove a panel-added source. */
+export async function removeMarketplaceSource(prisma: MarketplaceSourceClient, id: string) {
+  const removed = await prisma.marketplaceSource.delete({ where: { id } });
+  invalidateMarketplaceCache(removed.url);
+  return removed;
 }
 
 export async function browseMarketplaces(
   logger: MarketplaceLogger,
-  opts: { allowLocal?: boolean; forceRefresh?: boolean } = {},
+  opts: { allowLocal?: boolean; forceRefresh?: boolean; prisma?: MarketplaceSourceClient; urls?: string[] } = {},
 ): Promise<{ sources: { url: string; ok: boolean; error?: string; entryCount: number }[]; entries: MarketplaceEntry[] }> {
-  const urls = getMarketplaceIndexUrls();
+  const urls = opts.urls ?? (opts.prisma ? await getEffectiveMarketplaceUrls(opts.prisma) : getMarketplaceIndexUrls());
   if (urls.length === 0) {
     return { sources: [], entries: [] };
   }
@@ -183,7 +365,24 @@ export async function browseMarketplaces(
   );
 
   const byName = new Map<string, MarketplaceEntry>();
-  for (const r of results) for (const e of r.entries) if (!byName.has(e.name)) byName.set(e.name, e);
+  for (const r of results) {
+    for (const e of r.entries) {
+      const existing = byName.get(e.name);
+      if (!existing) {
+        byName.set(e.name, { ...e, sourceUrl: r.url });
+        continue;
+      }
+      // Same plugin listed by several marketplaces: keep the newest semver so
+      // a newer release on any one source is visible when browsed together.
+      // Non-semver versions are not comparable — keep the first source's copy.
+      const prev = existing.version ?? '';
+      const next = e.version ?? '';
+      const comparable = /^\d+\.\d+\.\d+$/.test(prev) && /^\d+\.\d+\.\d+$/.test(next);
+      if (comparable && compareVersions(next, prev) > 0) {
+        byName.set(e.name, { ...e, sourceUrl: r.url });
+      }
+    }
+  }
 
   void opts.allowLocal;
   return {

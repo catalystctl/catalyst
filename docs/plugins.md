@@ -909,7 +909,7 @@ npx @catalyst/plugin-sdk pack            # → ./name-version.catpkg.zip + .sha2
 
 ### Marketplace index schema
 
-Point the panel at one or more index documents via comma-separated `PLUGIN_MARKETPLACE_URLS`. Any host publishes a catalog by serving this JSON (fetched with SSRF guards, cached 5 minutes):
+Configure one or more marketplace indexes together via comma-separated `PLUGIN_MARKETPLACE_URLS`. The official catalyst-plugins index is always browsed first; custom URLs are fetched together with it and merged into a single listing (the newest semver wins when several sources list the same plugin name). Set `PLUGIN_MARKETPLACE_DISABLE_OFFICIAL=true` for air-gapped deployments that should browse only custom sources. Any host publishes a catalog by serving this JSON (cached 5 minutes per source; one failing source never blocks the others):
 
 ```json
 {
@@ -931,6 +931,8 @@ Point the panel at one or more index documents via comma-separated `PLUGIN_MARKE
 ```
 
 Admins browse/install from **Plugins → Marketplace**. `sha256` pinning is strongly recommended for publishers.
+
+Add more marketplaces directly in the panel: open **Plugins → Marketplace** and use the **Marketplaces** section to add an index URL with an optional label. Panel-added sources are browsed together with the official index and any `PLUGIN_MARKETPLACE_URLS` entries, can be toggled on/off, and can be removed again. The official and env-configured sources are shown as read-only.
 
 ### Runtime frontends (frontend.mjs)
 
@@ -1034,11 +1036,10 @@ To enable hot reload, ensure the PluginLoader is initialized with `hotReload: tr
 |-------|--------|------------|
 | No true process isolation | A plugin crash can take down the server | Write defensive error handling; `runtime: "isolated"` is accepted but forced in-process until worker IPC is finished |
 | Repo plugin UI is compiled in | Build-time (`catalyst-plugins/*`) frontends require a panel rebuild to change | Marketplace-installed plugins ship self-contained `frontend.mjs` runtime bundles instead |
-| Ecosystem/tooling maturity | Install pipeline & index protocol are new; no official catalog yet | Configure `PLUGIN_MARKETPLACE_URLS`; publish indexes per schema above |
+| Ecosystem/tooling maturity | Install pipeline & index protocol are new; official catalog is minimal | The official index is browsed by default; add custom `PLUGIN_MARKETPLACE_URLS` to extend it |
 | Collection storage (legacy) not scalable | O(n) queries over JSON arrays | Set `"storageEngine": "dedicated"` for large collections |
 | No row-level security | Plugins with `server.read` see ALL servers | Filter results in the plugin; future host helpers may scope by requester |
 | Task scheduling is process-local | Tasks lost on server restart | Re-register tasks in `onEnable()` (host clears on disable) |
-| Marketplace opt-in via env | Browsing/install disabled until `PLUGIN_MARKETPLACE_URLS` is set | Configure one or more index URLs per [Marketplace](#marketplace--packaging) schema |
 | Config schema vs values | Admin UI needs field schemas; runtime needs plain values | Host unwraps schema → values in `getConfig`; `configSchema` is the original plugin.json |
 | Host auth user id shape | `request.user.userId` (not `.id`) | Use `context.getUserId(request)` |
 | RPC circuit breaker | Repeated failures open a 30s circuit | Keep plugin APIs fast; handle thrown circuit errors |

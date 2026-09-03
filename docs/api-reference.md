@@ -3693,6 +3693,10 @@ Update an existing scheduled task. All fields are optional — only provided fie
 | `POST` | `/api/plugins/install` | `admin.write` | Install/upgrade a `.catpkg.zip` by URL |
 | `POST` | `/api/plugins/:name/uninstall` | `admin.write` | Remove an installed plugin |
 | `GET` | `/api/plugins/marketplace` | `admin.read` | Browse configured marketplace indexes |
+| `GET` | `/api/plugins/marketplace/sources` | `admin.read` | List marketplace sources (official, env, panel-added) |
+| `POST` | `/api/plugins/marketplace/sources` | `admin.write` | Add a marketplace source from the panel |
+| `PATCH` | `/api/plugins/marketplace/sources/:id` | `admin.write` | Enable or disable a panel-added source |
+| `DELETE` | `/api/plugins/marketplace/sources/:id` | `admin.write` | Remove a panel-added source |
 | `GET` | `/plugins-assets/:name/:file` | auth | Serve installed-plugin runtime frontend assets |
 | `GET` | `/api/plugins/:name/frontend-manifest` | `admin.read` | Get plugin frontend manifest |
 
