@@ -33,10 +33,10 @@ COPY catalyst-frontend/public ./catalyst-frontend/public
 COPY catalyst-frontend/src ./catalyst-frontend/src
 
 # External plugin frontends (vite alias @plugins → ../catalyst-plugins).
-# Required so import.meta.glob('@plugins/**/frontend/index.ts') and Tailwind
-# content scanning can see in-tree plugins at build time. Production prefers
-# each plugin's /plugins-assets/<name>/frontend.mjs so marketplace updates
-# do not require a panel rebuild.
+# Required so import.meta.glob() can compile in-tree plugins into the panel
+# build: that copy shares the host React instance, so hooks work. The
+# /plugins-assets/<name>/frontend.mjs runtime bundles remain the fallback for
+# plugins with no build-time copy (third-party marketplace installs).
 COPY catalyst-plugins ./catalyst-plugins
 
 # Plugin frontends import @catalyst/plugin-sdk/frontend, which vite.config.ts

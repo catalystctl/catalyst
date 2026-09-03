@@ -936,7 +936,7 @@ Add more marketplaces directly in the panel: open **Plugins → Marketplace** an
 
 ### Runtime frontends (frontend.mjs)
 
-Historically plugin UI compiled into the panel build — installed plugins couldn't render. The host now **prefers** an installed plugin's self-contained bundle at `/plugins-assets/<name>/frontend.mjs` (cache-busted by version) so marketplace updates take effect without rebuilding the panel image. The build-time glob is only a fallback when no bundle is present. Contract:
+Historically plugin UI compiled into the panel build — installed plugins couldn't render. The host **prefers** the build-time copy when one exists because it shares the host React instance, so hooks work. An installed plugin's self-contained bundle at `/plugins-assets/<name>/frontend.mjs` (cache-busted by version) is the fallback for plugins with no build-time copy (third-party marketplace installs). Note the trade-off: the fallback bundle inlines its own React whose hooks dispatcher is never set by the host renderer, so hook calls in it throw — interactive runtime-only plugin UI requires a panel rebuild to compile in. Contract:
 
 - One ESM file built with Vite/Rollup **lib mode**, everything bundled inline (including React) — no bare imports, no import maps.
 - Exports exactly what a build-time frontend module does: `default FrontendPluginDefinition`, or legacy `AdminTab` / `ServerTab` / `UserPage` / `slots`.
@@ -1035,7 +1035,7 @@ To enable hot reload, ensure the PluginLoader is initialized with `hotReload: tr
 | Issue | Impact | Workaround |
 |-------|--------|------------|
 | No true process isolation | A plugin crash can take down the server | Write defensive error handling; `runtime: "isolated"` is accepted but forced in-process until worker IPC is finished |
-| Repo plugin UI is compiled in | Build-time (`catalyst-plugins/*`) frontends require a panel rebuild to change | Marketplace-installed plugins ship self-contained `frontend.mjs` runtime bundles instead |
+| Repo plugin UI is compiled in | Build-time (`catalyst-plugins/*`) frontends require a panel rebuild to change | First-party plugins ship in the image; marketplace-only plugins fall back to `frontend.mjs`, where hook calls throw (isolated React copy) |
 | Ecosystem/tooling maturity | Install pipeline & index protocol are new; official catalog is minimal | The official index is browsed by default; add custom `PLUGIN_MARKETPLACE_URLS` to extend it |
 | Collection storage (legacy) not scalable | O(n) queries over JSON arrays | Set `"storageEngine": "dedicated"` for large collections |
 | No row-level security | Plugins with `server.read` see ALL servers | Filter results in the plugin; future host helpers may scope by requester |

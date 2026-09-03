@@ -75,14 +75,12 @@ export async function loadPluginFrontend(
 
   const importer = frontendMap.get(manifest.name);
 
-  // Production: prefer the on-disk runtime bundle so a marketplace update
-  // takes effect without rebuilding the panel image. Dev keeps the glob so
-  // HMR works and we don't load a second copy of React from frontend.mjs.
-  if (import.meta.env.PROD) {
-    const runtimeMod = await loadRuntimeFrontend(manifest, opts);
-    if (runtimeMod) return registerFrontendModule(runtimeMod, manifest);
-  }
-
+  // Prefer the build-time module in every environment: it shares the host
+  // React copy, so hooks work. A self-contained runtime bundle inlines its
+  // own React whose hooks dispatcher is never set by the host renderer —
+  // any hook call in it throws (null dispatcher). The runtime bundle is
+  // only a fallback for plugins with no build-time copy (third-party
+  // marketplace installs).
   if (importer) {
     try {
       const mod = await importer();
@@ -99,10 +97,8 @@ export async function loadPluginFrontend(
     }
   }
 
-  if (!import.meta.env.PROD) {
-    const runtimeMod = await loadRuntimeFrontend(manifest, opts);
-    if (runtimeMod) return registerFrontendModule(runtimeMod, manifest);
-  }
+  const runtimeMod = await loadRuntimeFrontend(manifest, opts);
+  if (runtimeMod) return registerFrontendModule(runtimeMod, manifest);
 
   console.warn(`[PluginLoader] No frontend found for plugin "${manifest.name}"`);
   return empty;
