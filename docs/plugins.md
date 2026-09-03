@@ -1013,16 +1013,16 @@ this.watcher = watch(this.pluginsDir, {
 
 When a file changes, the loader:
 1. Extracts the plugin name from the file path
-2. Unloads the plugin (calls `onUnload`)
-3. Clears the Node.js module cache (`delete require.cache[...]`)
-4. Re-imports the backend module
+2. Unloads the plugin (calls `onUnload`, drops routes/tasks/sockets, removes the staged ESM copy)
+3. Copies the plugin dir to a unique staged path under `.cache/backend`
+4. Re-imports the backend module from the staged copy (fresh ESM evaluation, including sibling imports)
 5. Re-registers routes and handlers
 6. Re-enables the plugin if it was previously enabled
 
-**Known limitations:**
-- ESM modules cannot be reliably cache-invalidated (Node.js doesn't expose a public API for this). Hot-reload works inconsistently for ESM plugins.
-- A full server restart is recommended after making structural changes to ESM plugins.
-- The path extraction (`path.basename(path.dirname(filePath))`) is fragile for deeply nested files.
+Marketplace installs/updates use the same path via `POST /api/plugins/install`
+and `POST /api/plugins/:name/reload` — no panel reboot is needed. The frontend
+listens for `plugin_updated` admin events and swaps `frontend.mjs` bundles in
+place (version query string, timestamp for same-version reloads).
 
 To enable hot reload, ensure the PluginLoader is initialized with `hotReload: true`.
 
@@ -1035,7 +1035,6 @@ To enable hot reload, ensure the PluginLoader is initialized with `hotReload: tr
 | No true process isolation | A plugin crash can take down the server | Write defensive error handling; `runtime: "isolated"` is accepted but forced in-process until worker IPC is finished |
 | Repo plugin UI is compiled in | Build-time (`catalyst-plugins/*`) frontends require a panel rebuild to change | Marketplace-installed plugins ship self-contained `frontend.mjs` runtime bundles instead |
 | Ecosystem/tooling maturity | Install pipeline & index protocol are new; no official catalog yet | Configure `PLUGIN_MARKETPLACE_URLS`; publish indexes per schema above |
-| ESM hot-reload unreliable | Changes may not reload without restart | Restart backend after structural changes |
 | Collection storage (legacy) not scalable | O(n) queries over JSON arrays | Set `"storageEngine": "dedicated"` for large collections |
 | No row-level security | Plugins with `server.read` see ALL servers | Filter results in the plugin; future host helpers may scope by requester |
 | Task scheduling is process-local | Tasks lost on server restart | Re-register tasks in `onEnable()` (host clears on disable) |
@@ -1161,13 +1160,13 @@ catalyst-plugins/my-plugin/
 2. **Implement backend** — Register routes in `onLoad`, register handlers in `onEnable`.
 3. **Implement frontend** — Export tabs, routes, or slot components.
 4. **Test** — Enable the plugin in the admin panel and verify routes/handlers.
-5. **Hot reload** — File changes are detected automatically (ESM plugins may require restart).
+5. **Hot reload** — File changes are detected automatically with no reboot.
 
 ### Deployment Steps
 
 1. Place the plugin directory in `catalyst-plugins/` (or ensure it's on the plugins search path).
 2. Ensure the manifest is valid (Zod validation on discovery).
-3. Restart the backend to trigger discovery (or use the API to reload).
+3. Discover the backend via Marketplace install or `POST /api/plugins/:name/reload` (no reboot).
 4. Enable the plugin via admin panel or API: `POST /api/plugins/{name}/enable`.
 
 ### Plugin Directory Location

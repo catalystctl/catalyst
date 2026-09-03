@@ -611,7 +611,7 @@ export default function PluginsPage() {
       ) : !plugins || plugins.length === 0 ? (
         <TabEmptyState
           title="No plugins installed"
-          description="Add a plugin under catalyst-plugins/ with a plugin.json manifest, then restart the panel to discover it."
+          description="Add a plugin under catalyst-plugins/ with a plugin.json manifest, then use the Marketplace install or Reload action to discover it — no panel reboot required."
         />
       ) : filteredPlugins.length === 0 ? (
         <TabEmptyState

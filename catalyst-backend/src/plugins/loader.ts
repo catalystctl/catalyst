@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import { describeError } from '../utils/describe-error.js';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import { watch } from 'chokidar';
 import type { PrismaClient } from '@prisma/client';
 import type { Logger } from 'pino';
@@ -39,6 +40,13 @@ export class PluginLoader {
   /** Plugin HTTP handlers served by the catch-all dispatcher (post-listen safe). */
   private readonly routeTable = new PluginRouteTable();
   private dispatcherRegistered = false;
+  /**
+   * Staged backend copies per plugin name. Each load copies the plugin dir to
+   * a unique path so Node ESM (which caches by file URL, including transitive
+   * sibling imports) evaluates the latest on-disk code without a reboot.
+   */
+  private backendStageDirs = new Map<string, string>();
+  private loadSeq = 0;
 
   constructor(
     pluginsDir: string,
@@ -288,6 +296,44 @@ export class PluginLoader {
     return resolvedPath;
   }
 
+  private backendStageRoot(): string {
+    return path.join(this.pluginsDir, '.cache', 'backend');
+  }
+
+  /**
+   * Copy a plugin dir to a unique staged path for ESM import. Node caches ESM
+   * by file URL, so re-importing the same path returns stale code (including
+   * transitive sibling imports like `./sync-engine.js`). A fresh path forces
+   * a fresh evaluation of the latest on-disk code without rebooting the panel.
+   */
+  private async stageBackendForImport(pluginName: string, resolvedPath: string): Promise<string> {
+    const stagedDir = path.join(
+      this.backendStageRoot(),
+      `${pluginName}-${Date.now()}-${(this.loadSeq++).toString(36)}`,
+    );
+    await fs.mkdir(path.dirname(stagedDir), { recursive: true });
+    await fs.cp(resolvedPath, stagedDir, {
+      recursive: true,
+      force: true,
+      dereference: false,
+      filter: (src) => {
+        const rel = path.relative(resolvedPath, src);
+        if (!rel) return true;
+        // Never copy install plumbing or prior stage output.
+        return !rel.split(path.sep).some((seg) => seg === '.cache' || seg === '.staging' || seg === '.backups' || seg === 'node_modules' || seg === '.git');
+      },
+    });
+    this.backendStageDirs.set(pluginName, stagedDir);
+    return stagedDir;
+  }
+
+  private async cleanupBackendStage(pluginName: string): Promise<void> {
+    const stagedDir = this.backendStageDirs.get(pluginName);
+    if (!stagedDir) return;
+    this.backendStageDirs.delete(pluginName);
+    await fs.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
+  }
+
   /**
    * Load a plugin from directory
    */
@@ -295,6 +341,7 @@ export class PluginLoader {
     const pluginName = path.basename(pluginPath);
     const resolvedPath = this.resolvePluginDir(pluginPath);
     this.logger.info({ plugin: pluginName }, 'Loading plugin');
+    let stagedFor: string | null = null;
 
     try {
       // Read manifest
@@ -419,16 +466,23 @@ export class PluginLoader {
 
       // Load backend if exists
       if (manifest.backend?.entry) {
-        const backendPath = path.resolve(resolvedPath, manifest.backend.entry);
+        const requestedEntry = path.resolve(resolvedPath, manifest.backend.entry);
         // Prevent path traversal via manifest.backend.entry
         const canonicalPluginPath = path.resolve(resolvedPath);
         if (
-          !backendPath.startsWith(canonicalPluginPath + path.sep) &&
-          backendPath !== canonicalPluginPath
+          !requestedEntry.startsWith(canonicalPluginPath + path.sep) &&
+          requestedEntry !== canonicalPluginPath
         ) {
           throw new Error(`Backend entry path escapes plugin directory: ${manifest.backend.entry}`);
         }
-        const backendModule = await import(backendPath);
+        const entryRel = path.relative(canonicalPluginPath, requestedEntry);
+        // Stage to a unique dir so ESM re-evaluates latest code (incl. sibling
+        // imports). Same-path re-import would return the stale cached module.
+        const stagedRoot = await this.stageBackendForImport(manifest.name, resolvedPath);
+        stagedFor = manifest.name;
+        const backendPath = path.resolve(stagedRoot, entryRel);
+        const backendUrl = `${pathToFileURL(backendPath).href}?reload=${Date.now()}-${this.loadSeq}`;
+        const backendModule = await import(backendUrl);
         loadedPlugin.backend = backendModule.default || backendModule;
 
         // Call onLoad lifecycle hook
@@ -521,6 +575,10 @@ export class PluginLoader {
 
       this.logger.info({ plugin: manifest.name }, 'Plugin loaded successfully');
     } catch (error: any) {
+      await this.cleanupBackendStage(pluginName).catch(() => {});
+      if (stagedFor && stagedFor !== pluginName) {
+        await this.cleanupBackendStage(stagedFor).catch(() => {});
+      }
       captureSystemError({
         level: 'error',
         component: 'PluginLoader',
@@ -800,11 +858,16 @@ export class PluginLoader {
       }).catch(() => {});
       this.logger.error({ plugin: name, error: error.message }, 'Failed to unload plugin');
       throw error;
+    } finally {
+      // Always drop the staged ESM copy so reloads never reuse stale code.
+      await this.cleanupBackendStage(name).catch(() => {});
     }
   }
 
   /**
-   * Reload a plugin (hot-reload)
+   * Reload a plugin (hot-reload) without rebooting the panel. Unload drops
+   * routes/tasks/sockets from the live process, then load re-reads plugin.json
+   * and re-imports the backend from a fresh staged copy.
    */
   async reloadPlugin(name: string): Promise<void> {
     if (!isValidPluginName(name)) {
@@ -820,21 +883,9 @@ export class PluginLoader {
     const wasEnabled = plugin.status === 'enabled';
     const pluginPath = this.resolvePluginDir(path.join(this.pluginsDir, name));
 
-    // Unload existing plugin
+    // Unload drops live routes/tasks/sockets and removes the staged ESM copy,
+    // so the load below evaluates the latest on-disk code (no reboot needed).
     await this.unloadPlugin(name);
-
-    // Clear module cache - robust approach for both CJS and ESM
-    const backendPath = path.resolve(pluginPath, plugin.manifest.backend?.entry || '');
-    try {
-      // Try CJS cache clearing
-      delete require.cache[require.resolve(backendPath)];
-    } catch {
-      // Not in require cache, that's fine
-    }
-    // Note: ESM cache clearing is limited. Node.js does not expose a public API to clear
-    // the ESM module cache. The CJS require.cache clear below handles CJS interop.
-    // For full ESM cache invalidation, a server restart is recommended.
-    // This ensures ESM modules are re-imported fresh
 
     // Load plugin again
     await this.loadPlugin(pluginPath);
@@ -962,6 +1013,9 @@ export class PluginLoader {
     }
 
     this.registry.clear();
+    // Best-effort removal of staged ESM copies (per-plugin cleanup in
+    // unloadPlugin already handles the normal path).
+    await fs.rm(this.backendStageRoot(), { recursive: true, force: true }).catch(() => {});
     this.logger.info('Plugin system shut down');
   }
 }

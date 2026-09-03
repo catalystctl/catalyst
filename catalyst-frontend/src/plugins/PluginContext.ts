@@ -6,7 +6,7 @@ export interface PluginContextValue {
   loading: boolean;
   error: string | null;
   initialized: boolean;
-  reloadPlugins: () => Promise<void>;
+  reloadPlugins: (opts?: { forceReload?: boolean }) => Promise<void>;
 }
 
 export const PluginContext = createContext<PluginContextValue | null>(null);

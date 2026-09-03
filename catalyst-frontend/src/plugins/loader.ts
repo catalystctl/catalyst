@@ -39,11 +39,16 @@ const frontendMap = buildFrontendMap();
 /**
  * Load a marketplace-installed plugin's self-contained ESM bundle.
  * Cache-busted by version so an update is not stuck on a previously imported module.
+ * forceReload adds a timestamp for same-version reloads (backend changed, version did not).
  */
-async function loadRuntimeFrontend(manifest: PluginManifest): Promise<FrontendModule | null> {
+async function loadRuntimeFrontend(
+  manifest: PluginManifest,
+  opts: { forceReload?: boolean } = {},
+): Promise<FrontendModule | null> {
   const API_BASE = import.meta.env.VITE_API_URL ?? '';
   const version = encodeURIComponent(manifest.version || '0');
-  const runtimeUrl = `${API_BASE}/plugins-assets/${encodeURIComponent(manifest.name)}/frontend.mjs?v=${version}`;
+  const cacheBuster = opts.forceReload ? `&t=${Date.now()}` : '';
+  const runtimeUrl = `${API_BASE}/plugins-assets/${encodeURIComponent(manifest.name)}/frontend.mjs?v=${version}${cacheBuster}`;
   try {
     return (await import(/* @vite-ignore */ runtimeUrl)) as FrontendModule;
   } catch {
@@ -51,7 +56,10 @@ async function loadRuntimeFrontend(manifest: PluginManifest): Promise<FrontendMo
   }
 }
 
-export async function loadPluginFrontend(manifest: PluginManifest): Promise<LoadedPlugin> {
+export async function loadPluginFrontend(
+  manifest: PluginManifest,
+  opts: { forceReload?: boolean } = {},
+): Promise<LoadedPlugin> {
   const empty: LoadedPlugin = { manifest, routes: [], tabs: [], components: [] };
 
   if (!manifest.enabled || !manifest.hasFrontend) {
@@ -64,7 +72,7 @@ export async function loadPluginFrontend(manifest: PluginManifest): Promise<Load
   // takes effect without rebuilding the panel image. Dev keeps the glob so
   // HMR works and we don't load a second copy of React from frontend.mjs.
   if (import.meta.env.PROD) {
-    const runtimeMod = await loadRuntimeFrontend(manifest);
+    const runtimeMod = await loadRuntimeFrontend(manifest, opts);
     if (runtimeMod) return registerFrontendModule(runtimeMod, manifest);
   }
 
@@ -85,7 +93,7 @@ export async function loadPluginFrontend(manifest: PluginManifest): Promise<Load
   }
 
   if (!import.meta.env.PROD) {
-    const runtimeMod = await loadRuntimeFrontend(manifest);
+    const runtimeMod = await loadRuntimeFrontend(manifest, opts);
     if (runtimeMod) return registerFrontendModule(runtimeMod, manifest);
   }
 
@@ -236,5 +244,26 @@ function registerFrontendModule(mod: FrontendModule, manifest: PluginManifest): 
       }
     }
 
-  return { manifest, routes, tabs, components };
+  return { manifest, routes, tabs, components, module: mod };
+}
+
+/**
+ * Run a previously loaded frontend module's onUnmount (if it defines one)
+ * before it is replaced by a hot-reloaded copy.
+ */
+export function unmountPluginFrontend(loaded: LoadedPlugin): void {
+  const mod = (loaded as LoadedPlugin & { module?: any }).module;
+  const definition = mod?.default ?? mod;
+  if (definition && typeof definition.onUnmount === 'function') {
+    try {
+      const maybe = definition.onUnmount();
+      if (maybe && typeof (maybe as Promise<void>).then === 'function') {
+        (maybe as Promise<void>).catch((err) => {
+          console.error(`[PluginLoader] onUnmount failed for "${loaded.manifest.name}":`, err);
+        });
+      }
+    } catch (err) {
+      console.error(`[PluginLoader] onUnmount threw for "${loaded.manifest.name}":`, err);
+    }
+  }
 }
