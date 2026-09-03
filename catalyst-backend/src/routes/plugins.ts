@@ -7,7 +7,7 @@ import path from 'path';
 import { z } from 'zod';
 import { getWsGateway } from '../websocket/gateway';
 import { isValidPluginName } from '../plugins/validator';
-import { PluginMarketplaceService, browseMarketplaces, PackagingError } from '../plugins/marketplace/service';
+import { PluginMarketplaceService, browseMarketplaces, annotateMarketplaceEntries, PackagingError } from '../plugins/marketplace/service';
 import {
   DISCLAIMER_VERSION,
   computeConsentState,
@@ -234,12 +234,14 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       if (!isAdmin) return;
       const { forceRefresh } = request.query as { forceRefresh?: string };
       const result = await browseMarketplaces(app.log, { forceRefresh: forceRefresh === 'true' });
-      const installedNames = new Set(pluginLoader.getRegistry().getAll().map((p) => p.manifest.name));
+      const installedVersions = new Map(
+        pluginLoader.getRegistry().getAll().map((p) => [p.manifest.name, p.manifest.version]),
+      );
       return {
         success: true,
         data: {
           sources: result.sources,
-          entries: result.entries.map((e) => ({ ...e, installed: installedNames.has(e.name) })),
+          entries: annotateMarketplaceEntries(result.entries, installedVersions),
         },
       };
     },

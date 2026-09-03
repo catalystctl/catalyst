@@ -1564,23 +1564,40 @@ export {
 export { resolveModrinthGameVersion } from "../../services/modrinth-version-resolver.js";
 
 
+/**
+ * Evaluate a template-variable rule against a value (Laravel rule semantics,
+ * which imported Pterodactyl eggs rely on). Returns an error message or null.
+ *
+ * `between:min,max` follows Laravel: numeric range for numeric/integer rules,
+ * string-length range otherwise (e.g. MC_VERSION "1.21.1" with
+ * required|string|between:3,15 is valid, not a numeric range).
+ */
 export const validateVariableRule = (
     value: string,
-    rule: string
+    rule: string,
+    allRules: string[] = []
   ): string | null => {
     const [name, ...rest] = rule.split(":");
     const param = rest.join(":");
     switch (name) {
       case "between": {
         const [minStr, maxStr] = param.split(",");
-        const num = Number(value);
         const min = Number(minStr);
         const max = Number(maxStr);
-        if (Number.isNaN(num) || Number.isNaN(min) || Number.isNaN(max)) {
-          return `Invalid numeric value`;
+        if (Number.isNaN(min) || Number.isNaN(max) || min > max) {
+          return null; // malformed rule — leave enforcement to other rules
         }
-        if (num < min || num > max) {
-          return `Must be between ${min} and ${max}`;
+        const isNumericRule = allRules.includes("numeric") || allRules.includes("integer");
+        if (isNumericRule) {
+          const num = Number(value);
+          if (Number.isNaN(num) || num < min || num > max) {
+            return `Must be between ${min} and ${max}`;
+          }
+          return null;
+        }
+        const length = value.length;
+        if (length < min || length > max) {
+          return `Must be between ${min} and ${max} characters`;
         }
         return null;
       }
@@ -1591,11 +1608,16 @@ export const validateVariableRule = (
         if (value.length > 4096) {
           return `Invalid format`;
         }
-        if (param.length > 256 || /(\+|\*)\)[+*{]|\(\?[=:!]/.test(param)) {
+        // Ptero eggs wrap patterns in /.../ delimiters; strip them.
+        let pattern = param;
+        if (pattern.length >= 2 && pattern.startsWith("/") && pattern.endsWith("/")) {
+          pattern = pattern.slice(1, -1);
+        }
+        if (pattern.length > 256 || /(\+|\*)\)[+*{]|\(\?[=:!]/.test(pattern)) {
           return `Invalid rule configuration`;
         }
         try {
-          const re = new RegExp(param);
+          const re = new RegExp(pattern);
           if (!re.test(value)) {
             return `Invalid format`;
           }

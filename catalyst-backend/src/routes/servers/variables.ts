@@ -136,7 +136,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         // Rule validation
         const rules: string[] = varDef.rules ?? [];
         for (const rule of rules) {
-          const err = validateVariableRule(strValue, rule);
+          const err = validateVariableRule(strValue, rule, rules);
           if (err) {
             errors[name] = err;
             hasErrors = true;

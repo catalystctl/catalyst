@@ -24,6 +24,19 @@ import { Input } from '@/components/ui/input';
 import { fetchMarketplace, installPlugin, type MarketplaceEntry } from '../../../plugins/api';
 import { toast } from 'sonner';
 
+/** True when marketplace is a strictly newer x.y.z than the installed copy. */
+function isNewerVersion(installed: string | null | undefined, marketplace: string | null | undefined): boolean {
+  if (!installed || !marketplace) return false;
+  const parts = (v: string) => v.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const a = parts(installed);
+  const b = parts(marketplace);
+  for (let i = 0; i < 3; i++) {
+    if ((b[i] ?? 0) > (a[i] ?? 0)) return true;
+    if ((b[i] ?? 0) < (a[i] ?? 0)) return false;
+  }
+  return false;
+}
+
 /**
  * Marketplace browser: lists plugin packages from the configured index
  * sources and installs them into the panel. Installing places inert code —
@@ -33,20 +46,23 @@ export function MarketplaceDialog({
   open,
   onOpenChange,
   onInstalled,
+  installedVersions,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called after any successful install so lists refresh. */
   onInstalled: () => void;
+  /** Installed plugin name → version, used to flag updates even if the API omits it. */
+  installedVersions?: Record<string, string>;
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [installingName, setInstallingName] = useState<string | null>(null);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['plugins', 'marketplace'],
-    queryFn: () => fetchMarketplace(false),
+    queryFn: () => fetchMarketplace(true),
     enabled: open,
-    staleTime: 60_000,
+    staleTime: 0,
   });
 
   const installMutation = useMutation({
@@ -68,14 +84,21 @@ export function MarketplaceDialog({
   const filteredEntries = useMemo(() => {
     if (!data?.entries) return [];
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return data.entries;
-    return data.entries.filter((e) =>
+    const annotated = data.entries.map((entry) => {
+      const installedVersion = entry.installedVersion ?? installedVersions?.[entry.name] ?? null;
+      const installed = Boolean(entry.installed || installedVersion);
+      const updateAvailable =
+        Boolean(entry.updateAvailable) || isNewerVersion(installedVersion, entry.version);
+      return { ...entry, installed, installedVersion, updateAvailable };
+    });
+    if (!q) return annotated;
+    return annotated.filter((e) =>
       [e.displayName ?? '', e.name, e.description ?? '', e.author ?? '', ...(e.tags ?? [])]
         .join(' ')
         .toLowerCase()
         .includes(q),
     );
-  }, [data?.entries, searchQuery]);
+  }, [data?.entries, searchQuery, installedVersions]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -161,12 +184,16 @@ export function MarketplaceDialog({
                             v{entry.version}
                           </span>
                         )}
-                        {entry.installed && (
+                        {entry.updateAvailable ? (
+                          <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
+                            Update {entry.installedVersion ? `${entry.installedVersion} → ${entry.version}` : `v${entry.version}`}
+                          </Badge>
+                        ) : entry.installed ? (
                           <Badge variant="secondary" className="gap-1 text-[10px]">
                             <PackageCheck className="h-3 w-3" />
                             Installed
                           </Badge>
-                        )}
+                        ) : null}
                       </div>
                       <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                         {entry.description}
@@ -195,15 +222,21 @@ export function MarketplaceDialog({
                     </div>
                     <Button
                       size="sm"
-                      variant={entry.installed ? 'outline' : 'default'}
+                      variant={entry.updateAvailable ? 'default' : entry.installed ? 'outline' : 'default'}
                       onClick={() => installMutation.mutate({ entry })}
-                      disabled={installingName === entry.name}
-                      title={entry.installed ? `Reinstall / update ${entry.name}` : `Install ${entry.name}`}
+                      disabled={installingName === entry.name || (entry.installed && !entry.updateAvailable)}
+                      title={
+                        entry.updateAvailable
+                          ? `Update ${entry.name} to ${entry.version}`
+                          : entry.installed
+                            ? `${entry.name} is already ${entry.installedVersion ?? entry.version}`
+                            : `Install ${entry.name}`
+                      }
                     >
                       {installingName === entry.name && (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       )}
-                      {entry.installed ? 'Update' : 'Install'}
+                      {entry.updateAvailable ? 'Update' : entry.installed ? 'Installed' : 'Install'}
                     </Button>
                   </li>
                 ))}

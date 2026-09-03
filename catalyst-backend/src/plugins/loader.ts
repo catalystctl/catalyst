@@ -563,8 +563,15 @@ export class PluginLoader {
   /**
    * Discover and load a single freshly-installed plugin without restarting
    * the panel. Routes register immediately (gated by enabledRef as usual).
+   *
+   * Marketplace updates replace the on-disk copy of a plugin that is already
+   * in the registry — `loadPlugin` would no-op in that case, so we reload.
    */
   async discoverSingle(name: string): Promise<void> {
+    if (this.registry.has(name)) {
+      await this.reloadPlugin(name);
+      return;
+    }
     await this.loadPlugin(this.resolvePluginDir(path.join(this.pluginsDir, name)));
   }
 

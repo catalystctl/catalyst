@@ -1,10 +1,9 @@
-// Catalyst Service Worker v3 — caches static assets for faster loads
-// API/WebSocket requests are NEVER intercepted (pass through directly)
-// v3: bumped from v2 to force eviction of stale cached index.html that
-// contained broken /node_modules/@fontsource preload links (404). See
-// https://panel.arcadiamc.it 500s on fresh devices after 1.23.0.
+// Catalyst Service Worker v4 — caches static assets for faster loads
+// API/WebSocket/plugin-asset requests are NEVER intercepted (pass through directly)
+// v4: bumped from v3 so marketplace plugin frontend.mjs updates are not
+// served from a stale cache-first JS entry.
 
-const CACHE_NAME = 'catalyst-v3';
+const CACHE_NAME = 'catalyst-v4';
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = ['/index.html', '/favicon.ico'];
@@ -43,6 +42,7 @@ self.addEventListener('fetch', (event) => {
   const shouldPassThrough =
     request.method !== 'GET' ||
     url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/plugins-assets/') ||
     url.pathname.startsWith('/ws') ||
     url.pathname.startsWith('/auth/') ||
     url.pathname.startsWith('/docs') ||

@@ -37,64 +37,60 @@ function buildFrontendMap() {
 const frontendMap = buildFrontendMap();
 
 /**
- * Dynamically load plugin frontend components at runtime.
- *
- * Discovers frontends at build time via import.meta.glob from two locations:
- *   - src/plugins/{name}/components.tsx          (embedded, legacy)
- *   - catalyst-plugins/{name}/frontend/index.ts  (external, canonical)
- *
- * Each module can export:
- *   - default FrontendPluginDefinition  → SDK pattern (tabs, routes, components)
- *   - AdminTab   → tab injected into the admin panel sidebar
- *   - ServerTab  → tab injected into server detail pages
- *   - UserPage   → standalone page at /${manifest.name}
- *   - slots      → Record<string, React.ComponentType> for component slot injection
+ * Load a marketplace-installed plugin's self-contained ESM bundle.
+ * Cache-busted by version so an update is not stuck on a previously imported module.
  */
+async function loadRuntimeFrontend(manifest: PluginManifest): Promise<FrontendModule | null> {
+  const API_BASE = import.meta.env.VITE_API_URL ?? '';
+  const version = encodeURIComponent(manifest.version || '0');
+  const runtimeUrl = `${API_BASE}/plugins-assets/${encodeURIComponent(manifest.name)}/frontend.mjs?v=${version}`;
+  try {
+    return (await import(/* @vite-ignore */ runtimeUrl)) as FrontendModule;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadPluginFrontend(manifest: PluginManifest): Promise<LoadedPlugin> {
-  const tabs: PluginTabConfig[] = [];
-  const routes: PluginRouteConfig[] = [];
-  const components: PluginComponentSlot[] = [];
+  const empty: LoadedPlugin = { manifest, routes: [], tabs: [], components: [] };
 
   if (!manifest.enabled || !manifest.hasFrontend) {
-    return { manifest, routes: [], tabs, components };
+    return empty;
   }
 
   const importer = frontendMap.get(manifest.name);
-  if (!importer) {
-    // ── Runtime-installed plugin? ────────────────────────────────────────
-    // Marketplace-installed plugins ship a self-contained ESM bundle at
-    // frontend/frontend.mjs, served by the backend under /plugins-assets/.
-    // Everything (including React) is bundled by the author; no import map.
-    const API_BASE = import.meta.env.VITE_API_URL ?? '';
-    const runtimeUrl = `${API_BASE}/plugins-assets/${encodeURIComponent(manifest.name)}/frontend.mjs`;
-    let runtimeMod: FrontendModule | null = null;
+
+  // Production: prefer the on-disk runtime bundle so a marketplace update
+  // takes effect without rebuilding the panel image. Dev keeps the glob so
+  // HMR works and we don't load a second copy of React from frontend.mjs.
+  if (import.meta.env.PROD) {
+    const runtimeMod = await loadRuntimeFrontend(manifest);
+    if (runtimeMod) return registerFrontendModule(runtimeMod, manifest);
+  }
+
+  if (importer) {
     try {
-      runtimeMod = (await import(/* @vite-ignore */ runtimeUrl)) as FrontendModule;
-    } catch {
-      console.warn(`[PluginLoader] No frontend found for plugin "${manifest.name}"`);
-      return { manifest, routes: [], tabs, components };
+      const mod = await importer();
+      return registerFrontendModule(mod, manifest);
+    } catch (error) {
+      reportSystemError({
+        level: 'error',
+        component: 'loader',
+        message: describeError(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'Failed to load plugin frontend' },
+      });
+      console.error(`[PluginLoader] Failed to load frontend for "${manifest.name}":`, error);
     }
-
-    const mod = runtimeMod;
-    // Reuse the exact same registration paths as build-time modules below.
-    return registerFrontendModule(mod, manifest);
   }
 
-  try {
-    const mod = await importer();
-    return registerFrontendModule(mod, manifest);
-  } catch (error) {
-    reportSystemError({
-      level: 'error',
-      component: 'loader',
-      message: describeError(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      metadata: { context: 'Failed to load plugin frontend' },
-    });
-    console.error(`[PluginLoader] Failed to load frontend for "${manifest.name}":`, error);
+  if (!import.meta.env.PROD) {
+    const runtimeMod = await loadRuntimeFrontend(manifest);
+    if (runtimeMod) return registerFrontendModule(runtimeMod, manifest);
   }
 
-  return { manifest, routes, tabs, components };
+  console.warn(`[PluginLoader] No frontend found for plugin "${manifest.name}"`);
+  return empty;
 }
 
 /**

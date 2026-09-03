@@ -124,14 +124,22 @@ export default function ServerStartupVariablesSection({
  for (const rule of variable.rules) {
  const [ruleName, ...rest] = rule.split(':');
  const param = rest.join(':');
+ // Laravel semantics: between is a numeric range only for numeric/integer
+ // rules; otherwise it validates string length (imported Ptero eggs rely on
+ // this — e.g. MC_VERSION 1.21.1 with between:3,15 is a valid string).
  if (ruleName === 'between') {
  const [minStr, maxStr] = param.split(',');
- const num = Number(value);
  const min = Number(minStr);
  const max = Number(maxStr);
- if (!Number.isNaN(num) && !Number.isNaN(min) && !Number.isNaN(max)) {
- if (num < min || num > max) {
+ if (!Number.isNaN(min) && !Number.isNaN(max) && min <= max) {
+ const isNumericRule = variable.rules.includes('numeric') || variable.rules.includes('integer');
+ if (isNumericRule) {
+ const num = Number(value);
+ if (Number.isNaN(num) || num < min || num > max) {
  return `Must be between ${min} and ${max}`;
+ }
+ } else if (value.length < min || value.length > max) {
+ return `Must be between ${min} and ${max} characters`;
  }
  }
  }

@@ -7,6 +7,7 @@ import {
   promoteIntoPlace,
   PackagingError,
 } from './packaging';
+import { compareVersions } from '../validator';
 
 export { PackagingError };
 
@@ -46,6 +47,44 @@ export interface MarketplaceEntry {
   sha256?: string;
   homepage?: string;
   tags?: string[];
+}
+
+/** Marketplace listing annotated with the panel's currently installed copy. */
+export interface AnnotatedMarketplaceEntry extends MarketplaceEntry {
+  installed: boolean;
+  installedVersion: string | null;
+  updateAvailable: boolean;
+}
+
+/**
+ * True when the marketplace version is a strictly newer semver than the
+ * installed copy. Missing/invalid versions never count as an update.
+ */
+export function isPluginUpdateAvailable(
+  installedVersion: string | null | undefined,
+  marketplaceVersion: string | null | undefined,
+): boolean {
+  if (!installedVersion || !marketplaceVersion) return false;
+  if (!/^\d+\.\d+\.\d+$/.test(installedVersion) || !/^\d+\.\d+\.\d+$/.test(marketplaceVersion)) {
+    return installedVersion !== marketplaceVersion;
+  }
+  return compareVersions(marketplaceVersion, installedVersion) > 0;
+}
+
+/** Attach installed/update flags so the UI can tell 1.0.0 vs marketplace 1.0.1 apart. */
+export function annotateMarketplaceEntries(
+  entries: MarketplaceEntry[],
+  installedVersions: Map<string, string>,
+): AnnotatedMarketplaceEntry[] {
+  return entries.map((entry) => {
+    const installedVersion = installedVersions.get(entry.name) ?? null;
+    return {
+      ...entry,
+      installed: installedVersion !== null,
+      installedVersion,
+      updateAvailable: isPluginUpdateAvailable(installedVersion, entry.version),
+    };
+  });
 }
 
 export const MARKETPLACE_INDEX_SCHEMA_VERSION = 1;
@@ -124,7 +163,13 @@ export async function browseMarketplaces(
       }
       try {
         // Indexes are small JSON documents — plain https GET with SSRF guard
-        const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(15_000),
+          cache: 'no-store',
+          headers: opts.forceRefresh
+            ? { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
+            : undefined,
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = await res.json();
         const entries = MarketplaceIndexSchema.parse(body);

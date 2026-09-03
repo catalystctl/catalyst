@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
+import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, validateVariableRule, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { minimumDiskMbFromHints } from "../../utils/egg-import.js";
 import { describeError } from "../../utils/describe-error.js";
@@ -237,17 +237,17 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const resolvedDatabaseAllocation =
         databaseAllocation ?? (Number.isFinite(templateDatabaseAllocation) ? templateDatabaseAllocation : undefined);
 
-      // Validate variable values against rules
+      // Validate variable values against rules (Laravel semantics via shared validator)
       for (const variable of templateVariables) {
         const value = variable.name ? resolvedEnvironment[variable.name] : undefined;
         if (value && variable.rules) {
-          for (const rule of variable.rules) {
+          const rules: string[] = variable.rules;
+          for (const rule of rules) {
             if (rule.startsWith("between:")) {
-              const [min, max] = rule.substring(8).split(",").map(Number);
-              const numValue = Number(value);
-              if (numValue < min || numValue > max) {
+              const err = validateVariableRule(value, rule, rules);
+              if (err) {
                 return reply.status(400).send({
-                  error: `Variable ${variable.name} must be between ${min} and ${max}`,
+                  error: `Variable ${variable.name} ${err}`,
                 });
               }
             } else if (rule.startsWith("in:")) {
@@ -823,12 +823,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       for (const variable of templateVariables) {
         const value = resolvedEnvironment?.[variable.name];
         if (value && variable.rules) {
-          for (const rule of variable.rules) {
+          const rules: string[] = variable.rules;
+          for (const rule of rules) {
             if (rule.startsWith('between:')) {
-              const [min, max] = rule.substring(8).split(',').map(Number);
-              const numValue = Number(value);
-              if (numValue < min || numValue > max) {
-                return reply.status(400).send({ error: `Variable ${variable.name} must be between ${min} and ${max}` });
+              const err = validateVariableRule(value, rule, rules);
+              if (err) {
+                return reply.status(400).send({ error: `Variable ${variable.name} ${err}` });
               }
             } else if (rule.startsWith('in:')) {
               const allowedValues = rule.substring(3).split(',');

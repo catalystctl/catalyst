@@ -177,7 +177,7 @@ export function isVersionCompatible(required: string, current: string): boolean 
  * Compare two semver versions
  * Returns: -1 if a < b, 0 if a === b, 1 if a > b
  */
-function compareVersions(a: string, b: string): number {
+export function compareVersions(a: string, b: string): number {
   const aParts = a.split('.').map(Number);
   const bParts = b.split('.').map(Number);
 

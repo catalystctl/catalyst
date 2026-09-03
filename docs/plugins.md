@@ -934,7 +934,7 @@ Admins browse/install from **Plugins → Marketplace**. `sha256` pinning is stro
 
 ### Runtime frontends (frontend.mjs)
 
-Historically plugin UI compiled into the panel build — installed plugins couldn't render. Now the host falls back to serving an installed plugin's self-contained bundle at `/plugins-assets/<name>/frontend.mjs` when no build-time frontend exists. Contract:
+Historically plugin UI compiled into the panel build — installed plugins couldn't render. The host now **prefers** an installed plugin's self-contained bundle at `/plugins-assets/<name>/frontend.mjs` (cache-busted by version) so marketplace updates take effect without rebuilding the panel image. The build-time glob is only a fallback when no bundle is present. Contract:
 
 - One ESM file built with Vite/Rollup **lib mode**, everything bundled inline (including React) — no bare imports, no import maps.
 - Exports exactly what a build-time frontend module does: `default FrontendPluginDefinition`, or legacy `AdminTab` / `ServerTab` / `UserPage` / `slots`.

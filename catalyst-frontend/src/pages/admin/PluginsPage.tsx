@@ -17,7 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fetchPlugins, togglePlugin, reloadPlugin, updatePluginConfig, fetchPluginDetails, type SafetyConsentRequiredError } from '../../plugins/api';
+import { fetchPlugins, fetchMarketplace, togglePlugin, reloadPlugin, updatePluginConfig, fetchPluginDetails, type SafetyConsentRequiredError } from '../../plugins/api';
 import { toast } from 'sonner';
 import { usePluginContext } from '../../plugins/usePluginContext';
 import type { CapabilitySummary, PluginManifest } from '../../plugins/types';
@@ -66,6 +66,7 @@ function statusText(status: string) {
 function PluginRow({
   plugin,
   isProcessing,
+  latestMarketplaceVersion,
   onToggle,
   onReload,
   onSettings,
@@ -73,6 +74,7 @@ function PluginRow({
 }: {
   plugin: PluginManifest;
   isProcessing: boolean;
+  latestMarketplaceVersion?: string;
   onToggle: () => void;
   onReload: () => void;
   onSettings: () => void;
@@ -81,6 +83,7 @@ function PluginRow({
   const revoked = plugin.revokedPermissions?.length ?? 0;
   const declaredCount = plugin.declaredPermissions?.length ?? 0;
   const caps = plugin.capabilityCounts;
+  const updateAvailable = Boolean(latestMarketplaceVersion && latestMarketplaceVersion !== plugin.version);
 
   return (
     <div
@@ -99,6 +102,11 @@ function PluginRow({
           <Badge variant={statusBadgeVariant(plugin.status, plugin.error)} className="text-[10px]">
             {statusText(plugin.status)}
           </Badge>
+          {updateAvailable && (
+            <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
+              Update {plugin.version} → {latestMarketplaceVersion}
+            </Badge>
+          )}
           {plugin.legacyAcceptance && (
             <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
               <CircleAlert className="h-3 w-3" />
@@ -413,6 +421,25 @@ export default function PluginsPage() {
     staleTime: 60_000,
   });
 
+  const { data: marketplace } = useQuery({
+    queryKey: ['plugins', 'marketplace'],
+    queryFn: () => fetchMarketplace(false),
+    staleTime: 60_000,
+  });
+  const marketplaceByName = useMemo(() => {
+    const installed = new Map((plugins ?? []).map((p) => [p.name, p.version]));
+    const map = new Map<string, { version?: string; updateAvailable?: boolean }>();
+    for (const entry of marketplace?.entries ?? []) {
+      const installedVersion = entry.installedVersion ?? installed.get(entry.name);
+      const updateAvailable =
+        Boolean(entry.updateAvailable) ||
+        Boolean(installedVersion && entry.version && installedVersion !== entry.version &&
+          entry.version.localeCompare(installedVersion, undefined, { numeric: true }) > 0);
+      map.set(entry.name, { version: entry.version, updateAvailable });
+    }
+    return map;
+  }, [marketplace?.entries, plugins]);
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
     if (detailsPlugin) queryClient.invalidateQueries({ queryKey: qk.adminPlugin(detailsPlugin) });
@@ -598,6 +625,11 @@ export default function PluginsPage() {
               key={plugin.name}
               plugin={plugin}
               isProcessing={processingPlugin === plugin.name}
+              latestMarketplaceVersion={
+                marketplaceByName.get(plugin.name)?.updateAvailable
+                  ? marketplaceByName.get(plugin.name)?.version
+                  : undefined
+              }
               onToggle={() => requestToggle(plugin)}
               onReload={() => reloadMutation.mutate(plugin.name)}
               onSettings={() => setSettingsPlugin(plugin.name)}
@@ -625,9 +657,11 @@ export default function PluginsPage() {
       <MarketplaceDialog
         open={marketplaceOpen}
         onOpenChange={setMarketplaceOpen}
+        installedVersions={Object.fromEntries((plugins ?? []).map((p) => [p.name, p.version]))}
         onInstalled={() => {
           reloadPlugins();
           queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
+          queryClient.invalidateQueries({ queryKey: ['plugins', 'marketplace'] });
         }}
       />
 

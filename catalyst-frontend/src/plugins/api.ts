@@ -167,6 +167,8 @@ export interface MarketplaceEntry {
   homepage?: string;
   tags?: string[];
   installed?: boolean;
+  installedVersion?: string | null;
+  updateAvailable?: boolean;
 }
 
 export interface MarketplaceBrowseResult {
