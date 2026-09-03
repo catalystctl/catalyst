@@ -143,3 +143,44 @@ describe('buildDownloadUrl', () => {
     expect(buildDownloadUrl('0.0.0.0', 27025)).toBe('http://<node-public-ip>:27025');
   });
 });
+
+describe('resolvePairingNodes', () => {
+  it('reads the persisted sourceServerNodeId / fastdlServerNodeId fields', async () => {
+    const { resolvePairingNodes } = await import('../../../../catalyst-plugins/fastdl-sync/backend/sync-engine.js');
+    const nodes = resolvePairingNodes({
+      sourceServerUuid: 'src',
+      fastdlServerUuid: 'dst',
+      sourceServerNodeId: 'node-a',
+      fastdlServerNodeId: 'node-b',
+    });
+    expect(nodes).toEqual({
+      sourceNodeId: 'node-a',
+      fastdlNodeId: 'node-b',
+      sourceServerUuid: 'src',
+      fastdlServerUuid: 'dst',
+      missing: [],
+    });
+  });
+
+  it('falls back to the shorter aliases', async () => {
+    const { resolvePairingNodes } = await import('../../../../catalyst-plugins/fastdl-sync/backend/sync-engine.js');
+    const nodes = resolvePairingNodes({
+      sourceServerUuid: 'src',
+      fastdlServerUuid: 'dst',
+      sourceNodeId: 'node-a',
+      fastdlNodeId: 'node-b',
+    });
+    expect(nodes.sourceNodeId).toBe('node-a');
+    expect(nodes.fastdlNodeId).toBe('node-b');
+    expect(nodes.missing).toEqual([]);
+  });
+
+  it('reports missing node ids instead of scanning with undefined', async () => {
+    const { resolvePairingNodes } = await import('../../../../catalyst-plugins/fastdl-sync/backend/sync-engine.js');
+    const nodes = resolvePairingNodes({
+      sourceServerUuid: 'src',
+      fastdlServerUuid: 'dst',
+    });
+    expect(nodes.missing).toEqual(['sourceServerNodeId', 'fastdlServerNodeId']);
+  });
+});
