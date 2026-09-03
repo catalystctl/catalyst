@@ -184,3 +184,25 @@ describe('resolvePairingNodes', () => {
     expect(nodes.missing).toEqual(['sourceServerNodeId', 'fastdlServerNodeId']);
   });
 });
+
+describe('summarizeReport', () => {
+  it('puts the first error into the summary so the pairing card can show it', async () => {
+    const { summarizeReport } = await import('../../../../catalyst-plugins/fastdl-sync/backend/sync-engine.js');
+    expect(
+      summarizeReport({
+        copied: 0,
+        deleted: 0,
+        bz2Generated: 0,
+        skipped: 0,
+        errors: ['pairing is missing sourceServerNodeId', 'second'],
+      }),
+    ).toBe('0 copied, 2 errors: pairing is missing sourceServerNodeId');
+  });
+
+  it('omits the error clause on a clean run', async () => {
+    const { summarizeReport } = await import('../../../../catalyst-plugins/fastdl-sync/backend/sync-engine.js');
+    expect(
+      summarizeReport({ copied: 3, deleted: 1, bz2Generated: 0, skipped: 0, errors: [] }),
+    ).toBe('3 copied, 1 deleted');
+  });
+});
