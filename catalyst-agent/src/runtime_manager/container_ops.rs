@@ -417,7 +417,7 @@ impl ContainerdRuntime {
                 "cgroupsPath": format!("/catalyst/{}", container_id),
                 "resources": {
                     "memory": {"limit": 2147483648i64, "swap": 2147483648i64},
-                    "cpu": {"shares": 1024i64, "quota": 200000i64, "period": 100000i64},
+                    "cpu": {"shares": 1024i64, "quota": 200000i64, "period": 100000i64, "burst": 200000u64, "weight": 200u64},
                     "pids": {"limit": 512i64},
                     "devices": [
                         {"allow": false, "access": "rwm"},

@@ -247,6 +247,24 @@ pub fn default_seccomp_profile() -> serde_json::Value {
     })
 }
 
+/// OCI `linux.resources.cpu` for CFS bandwidth control.
+///
+/// Quota is enforced per 100ms period. Burst banks unused time as credit,
+/// up to one full period, so transient spikes spend credit instead of
+/// throttling the whole cgroup until the next refill. The long-term average
+/// stays capped at quota.
+pub(crate) fn linux_cpu_resources(cpu_cores: u64) -> serde_json::Value {
+    let quota = (cpu_cores as i64) * 100_000;
+    let burst = cpu_cores.saturating_mul(100_000);
+    let weight = cpu_cores.saturating_mul(100);
+    serde_json::json!({
+        "quota": quota,
+        "period": 100000u64,
+        "burst": burst,
+        "weight": weight,
+    })
+}
+
 /// OCI `linux.resources.memory` plus cgroup v2 `unified` map.
 /// `memory.high` is not a portable OCI field; runc applies it via unified.
 pub(crate) fn linux_memory_resources(
@@ -628,8 +646,7 @@ impl ContainerdRuntime {
             config.swap_mb,
             config.memory_reservation_mb,
         );
-        let cpu_quota = (config.cpu_cores as i64) * 100_000;
-        let cpu_weight = config.cpu_cores * 100;
+        let cpu = linux_cpu_resources(config.cpu_cores);
         let cgroup_path = format!("/{}/{}", self.namespace, config.container_id);
         // Runtime containers run as non-root (1000:1000) and need minimal capabilities.
         let caps = ["CAP_NET_BIND_SERVICE"];
@@ -696,7 +713,7 @@ impl ContainerdRuntime {
                 "noNewPrivileges":true,"rlimits":[{"type":"RLIMIT_NOFILE","hard":65536u64,"soft":65536u64}]},
             "root":{"path":"rootfs","readonly":false},"hostname":config.container_id,"mounts":mounts,
             "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":memory,
-                "cpu":{"quota":cpu_quota,"period":100000u64,"weight":cpu_weight},
+                "cpu":cpu,
                 "blockIO":{"weight":config.io_weight},
                 "pids":{"limit":512},
                 "devices":devices,"unified":unified},
@@ -841,5 +858,22 @@ mod tests {
             memory.get("reservation"),
             Some(&serde_json::json!(2048i64 * 1024 * 1024))
         );
+    }
+
+    #[test]
+    fn cpu_resources_banks_one_full_period_as_burst() {
+        // 2 cores -> 200ms quota per 100ms period, burst equals quota.
+        let cpu = linux_cpu_resources(2);
+        assert_eq!(cpu.get("quota"), Some(&serde_json::json!(200000i64)));
+        assert_eq!(cpu.get("period"), Some(&serde_json::json!(100000u64)));
+        assert_eq!(cpu.get("burst"), Some(&serde_json::json!(200000u64)));
+        assert_eq!(cpu.get("weight"), Some(&serde_json::json!(200u64)));
+    }
+
+    #[test]
+    fn cpu_resources_single_core_burst_equals_quota() {
+        let cpu = linux_cpu_resources(1);
+        assert_eq!(cpu.get("quota"), Some(&serde_json::json!(100000i64)));
+        assert_eq!(cpu.get("burst"), Some(&serde_json::json!(100000u64)));
     }
 }
