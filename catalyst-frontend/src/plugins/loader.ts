@@ -16,7 +16,12 @@ type FrontendModule = {
 };
 
 const embeddedFrontends = import.meta.glob<FrontendModule>('./*/components.tsx');
-const pluginFrontends = import.meta.glob<FrontendModule>('@plugins/**/frontend/index.ts');
+// Alias form (resolved via the @plugins alias) plus the equivalent relative
+// form. Some Vite versions do not resolve aliases inside glob patterns, which
+// silently yields an empty map and every external plugin falls back to the
+// runtime bundle. Registering both covers either behavior; the map dedupes.
+const pluginFrontendsAlias = import.meta.glob<FrontendModule>('@plugins/**/frontend/index.ts');
+const pluginFrontendsRelative = import.meta.glob<FrontendModule>('../../../catalyst-plugins/*/frontend/index.ts');
 
 function buildFrontendMap() {
   const map = new Map<string, () => Promise<FrontendModule>>();
@@ -26,9 +31,11 @@ function buildFrontendMap() {
     if (match) map.set(match[1], importer);
   }
 
-  for (const [path, importer] of Object.entries(pluginFrontends)) {
-    const match = path.match(/catalyst-plugins\/([^/]+)\/frontend\/index\.ts$/);
-    if (match) map.set(match[1], importer);
+  for (const frontends of [pluginFrontendsAlias, pluginFrontendsRelative]) {
+    for (const [path, importer] of Object.entries(frontends)) {
+      const match = path.match(/(?:catalyst-plugins\/|@plugins\/)([^/]+)\/frontend\/index\.ts$/);
+      if (match && !map.has(match[1])) map.set(match[1], importer);
+    }
   }
 
   return map;
@@ -130,6 +137,7 @@ function registerFrontendModule(mod: FrontendModule, manifest: PluginManifest): 
             component: tab.component,
             location: tab.location,
             order: tab.order ?? 50,
+            templateFilter: tab.templateFilter,
             requiredPermissions: tab.requiredPermissions ??
               (tab.location === 'admin' ? ['admin.read'] : ['server.read']),
           });

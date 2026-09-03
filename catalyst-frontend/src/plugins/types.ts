@@ -126,6 +126,22 @@ export interface PluginTabConfig {
   location: 'admin' | 'server';
   order?: number;
   requiredPermissions?: string[];
+  /**
+   * Restrict a server tab to matching game servers.
+   * Enforced in ServerDetailsPage via matchesTemplateFilter().
+   */
+  templateFilter?: PluginTabTemplateFilter;
+}
+
+/**
+ * Template/environment constraint for a server plugin tab.
+ * A tab with no filter shows for every server (subject to permissions).
+ */
+export interface PluginTabTemplateFilter {
+  /** Regex matched case-insensitively against the template name. */
+  namePattern?: string;
+  /** Server environment values that must all match (exact, case-insensitive). */
+  env?: Record<string, string>;
 }
 
 /**

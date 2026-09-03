@@ -19,6 +19,17 @@ export interface FrontendTabConfig {
   location: 'admin' | 'server';
   order?: number;
   requiredPermissions?: string[];
+  /**
+   * Restrict a server tab to matching game servers. When omitted the tab
+   * shows for every server (subject to permissions). A tab with a filter is
+   * hidden while the server is still loading (fail closed).
+   */
+  templateFilter?: {
+    /** Regex matched case-insensitively against the template name. */
+    namePattern?: string;
+    /** Server environment values that must all match (exact, case-insensitive). */
+    env?: Record<string, string>;
+  };
 }
 
 export interface FrontendRouteConfig {

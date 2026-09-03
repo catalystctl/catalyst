@@ -61,6 +61,7 @@ import ErrorBoundary from '../../components/shared/ErrorBoundary';
 import FileManager from '../../components/files/FileManager';
 import BackupSection from '../../components/backups/BackupSection';
 import { usePluginTabs } from '../../plugins/hooks';
+import { matchesTemplateFilter } from '../../plugins/templateFilter';
 import PluginErrorBoundary from '../../plugins/PluginErrorBoundary';
 import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 import EulaModal from '../../components/servers/EulaModal';
@@ -930,12 +931,14 @@ function ServerDetailsPage() {
 
  const filteredServerPluginTabs = useMemo(() => {
  return serverPluginTabs.filter((t) => {
+ // Template-scoped tabs (e.g. CS 1.6 Admin) only show for matching game servers.
+ if (!matchesTemplateFilter(t.templateFilter, server)) return false;
  if (!t.requiredPermissions || t.requiredPermissions.length === 0) return true;
  // Server-scoped tabs: allow if global perms match OR any required perm is on the server
  if (hasAnyPermission(userPermissions, t.requiredPermissions)) return true;
  return t.requiredPermissions.some((p) => hasServerPerm(p));
  });
- }, [serverPluginTabs, userPermissions, hasServerPerm]);
+ }, [serverPluginTabs, userPermissions, hasServerPerm, server]);
 
   const navTabs = useMemo<ServerNavTab[]>(() => {
     const id = server?.id;
