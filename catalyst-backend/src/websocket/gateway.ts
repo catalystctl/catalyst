@@ -245,6 +245,12 @@ export class WebSocketGateway {
   private agentMessageCounters = new Map<string, { count: number; resetAt: number }>();
   private agentMetricsCounters = new Map<string, { count: number; resetAt: number }>();
   private serverMetricsCounters = new Map<string, { count: number; resetAt: number }>();
+  // Throttle for ServerStat history writes on the continuous batch path:
+  // one row per server per minute is plenty for graphs (7-day retention).
+  // Without this, ServerStat only gains rows on on-demand immediate stats
+  // and the history graph looks frozen.
+  private serverStatLastWrite = new Map<string, number>();
+  private static readonly SERVER_STAT_MIN_INTERVAL_MS = 60_000;
   private agentLimitWarnings = new Map<string, { resetAt: number }>();
   private serverCommandCounters = new Map<string, { count: number; resetAt: number }>();
 
@@ -1917,10 +1923,12 @@ export class WebSocketGateway {
         const serverIds = Array.from(new Set(items.map((i) => i.serverId)));
         const servers = await this.prisma.server.findMany({
           where: { id: { in: serverIds }, nodeId },
-          select: { id: true, allocatedCpuCores: true },
+          select: { id: true, allocatedCpuCores: true, allocatedMemoryMb: true },
         });
         const coresByServer = new Map<string, number>();
         for (const s of servers) coresByServer.set(s.id, Math.max(1, s.allocatedCpuCores ?? 1));
+        const memMbByServer = new Map<string, number>();
+        for (const s of servers) memMbByServer.set(s.id, s.allocatedMemoryMb ?? 0);
         const allowed = new Set(coresByServer.keys());
         const filtered = items.filter((item) => {
           if (!allowed.has(item.serverId)) {
@@ -2057,6 +2065,30 @@ export class WebSocketGateway {
             };
             this.latestResourceStats.set(sid, payload);
             await this.routeToClients(sid, payload);
+            // Throttled history row so the stats graph grows continuously.
+            // Memory/disk columns are BIGINT bytes so 8GB+ allocations
+            // persist exactly — do NOT clamp to int4 max (2,147,483,647).
+            const lastStatWrite = this.serverStatLastWrite.get(sid) ?? 0;
+            if (Date.now() - lastStatWrite >= WebSocketGateway.SERVER_STAT_MIN_INTERVAL_MS) {
+              this.serverStatLastWrite.set(sid, Date.now());
+              const toStatBytesBig = (mb: number) => BigInt(Math.round(mb * 1024 * 1024));
+              const allocMb = memMbByServer.get(sid) ?? 0;
+              this.prisma.serverStat.create({
+                data: {
+                  serverId: sid,
+                  cpuPercent: latest.cpuPercent,
+                  memoryUsed: toStatBytesBig(latest.memoryUsageMb),
+                  memoryLimit: toStatBytesBig(allocMb),
+                  diskUsed: latest.diskUsageMb ? toStatBytesBig(latest.diskUsageMb) : null,
+                  netRx: latest.networkRxBytes !== null && latest.networkRxBytes !== undefined ? Number(latest.networkRxBytes.toString()) || null : null,
+                  netTx: latest.networkTxBytes !== null && latest.networkTxBytes !== undefined ? Number(latest.networkTxBytes.toString()) || null : null,
+                  blockRead: latest.diskIoMb ? Math.round(latest.diskIoMb * 1024 * 1024) : null,
+                  blockWrite: null,
+                },
+              }).catch((err) => {
+                this.logger.warn({ err, serverId: sid }, 'Failed to persist ServerStat from batch');
+              });
+            }
           }
         }
       } else if (message.type === "console_output") {
