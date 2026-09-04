@@ -116,6 +116,7 @@ const CRITICAL_OUTBOUND_TYPES = new Set([
   "delete_server",
   "install_server",
   "reinstall_server",
+  "cancel_install_server",
   "rebuild_server",
   "update_agent",
   "resize_storage",
@@ -2313,7 +2314,6 @@ export class WebSocketGateway {
               primaryPort: server.primaryPort,
               allocatedMemoryMb: server.allocatedMemoryMb,
               allocatedDiskMb: server.allocatedDiskMb,
-              subdomain: server.subdomain,
             },
             portBindings as Record<number, number> | undefined,
             {

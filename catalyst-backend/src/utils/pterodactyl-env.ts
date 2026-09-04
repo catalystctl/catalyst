@@ -12,7 +12,6 @@ export type PteroEnvServer = {
 	primaryPort: number;
 	allocatedMemoryMb: number;
 	allocatedDiskMb: number;
-	subdomain?: string | null;
 	location?: string | null;
 };
 
@@ -83,10 +82,6 @@ export function injectPterodactylCompatibilityVars(
 
 	if ("SERVER_PRIMARY_IP" in env && server.primaryIp) {
 		env.SERVER_PRIMARY_IP = server.primaryIp;
-	}
-
-	if ("SERVER_SUBDOMAIN" in env && server.subdomain) {
-		env.SERVER_SUBDOMAIN = server.subdomain;
 	}
 
 	if ("SERVER_DESCRIPTION" in env && server.name) {

@@ -40,7 +40,7 @@ const SERVER_ALLOWED_SELECT_FIELDS = new Set([
   'nodeId', 'ownerId', 'templateId', 'locationId',
   'allocatedMemoryMb', 'allocatedCpuCores', 'allocatedDiskMb', 'allocatedSwapMb',
   'containerId', 'containerName', 'networkMode', 'primaryPort', 'primaryIp',
-  'subdomain', 'environment', 'startupCommand', 'suspendedAt', 'suspensionReason',
+  'environment', 'startupCommand', 'suspendedAt', 'suspensionReason',
 ]);
 
 const USER_ALLOWED_SELECT_FIELDS = new Set([

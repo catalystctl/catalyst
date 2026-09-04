@@ -81,6 +81,10 @@ export const serversApi = {
     const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/install`);
     return data;
   },
+  cancelInstall: async (id: string) => {
+    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/cancel-install`);
+    return data;
+  },
   suspend: async (id: string, reason?: string) => {
     const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/suspend`, {
       reason,
@@ -367,9 +371,5 @@ export const serversApi = {
       payload,
     );
     return data;
-  },
-  updateSubdomain: async (id: string, subdomain: string | null) => {
-    const data = await apiClient.put<ApiResponse<Server>>(`/api/servers/${id}`, { subdomain });
-    return data.data;
   },
 };

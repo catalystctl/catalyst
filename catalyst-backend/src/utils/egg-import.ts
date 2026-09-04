@@ -121,8 +121,6 @@ export interface ImportedEggResult {
 	allocatedCpuCores: number;
 	features: Record<string, unknown>;
 	nestId?: string | null;
-	srvService?: string | null;
-	srvProtocol?: string;
 }
 
 // ============================================================================
@@ -633,7 +631,6 @@ export function importPterodactylEgg(
 		allocatedCpuCores: 2,
 		features,
 		nestId: options?.nestId || null,
-		srvProtocol: "tcp",
 	};
 }
 

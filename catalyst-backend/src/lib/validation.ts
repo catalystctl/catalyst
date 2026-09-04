@@ -75,11 +75,6 @@ export const serverCreateSchema = z.object({
   portBindings: z.record(z.string(), z.number().int().min(1).max(65535)).optional().default({}),
   primaryPort: z.number().int().min(1).max(65535),
   primaryIp: z.string().max(45).nullable().optional(),
-  subdomain: z.string()
-    .max(63, 'Subdomain must be at most 63 characters')
-    .regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/, 'Invalid subdomain format')
-    .nullable()
-    .optional(),
   allocationId: z.string().min(1).optional(),
   allocatedMemoryMb: z.number().int().min(512).max(131072),
   allocatedCpuCores: z.number().int().min(1).max(128),
@@ -102,11 +97,6 @@ export const serverCloneSchema = z.object({
   backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
   databaseAllocation: z.number().int().min(0).max(1048576).optional(),
   environment: z.record(z.string(), z.string().min(1).max(4096)).optional(),
-  subdomain: z.string()
-    .max(63, 'Subdomain must be at most 63 characters')
-    .regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/, 'Invalid subdomain format')
-    .nullable()
-    .optional(),
   ownerId: z.string().min(1).optional(),
   allocationId: z.string().min(1).optional(),
   networkMode: z.enum(['bridge', 'macvlan', 'host', 'mc-lan-static', 'mc-lan-dynamic']).optional(),
@@ -132,11 +122,6 @@ export const serverUpdateSchema = z.object({
   primaryIp: z.string().max(45).nullable().optional(),
   allocationId: z.string().max(64).optional(),
   networkMode: z.enum(['bridge', 'macvlan', 'host']).optional(),
-  subdomain: z.string()
-    .max(63, 'Subdomain must be at most 63 characters')
-    .regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/, 'Invalid subdomain format')
-    .nullable()
-    .optional(),
 });
 
 /**

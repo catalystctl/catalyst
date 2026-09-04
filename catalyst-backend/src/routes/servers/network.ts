@@ -96,7 +96,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         });
       }
 
-      reply.send({ success: true, data: allocations, subdomain: server.subdomain ?? null });
+      reply.send({ success: true, data: allocations });
     }
   );
 
