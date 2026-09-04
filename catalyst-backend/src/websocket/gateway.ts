@@ -1814,27 +1814,28 @@ export class WebSocketGateway {
         });
 
         // Persist to historical ServerStat table (fire-and-forget)
-        // Clamp to 32-bit signed int max to avoid Prisma overflow for large servers.
-        const INT32_MAX = 2_147_483_647;
-        const toStatBytes = (mb: number) => Math.min(Math.round(mb * 1024 * 1024), INT32_MAX);
+        // Memory/disk columns are BIGINT bytes so 8GB+ allocations persist exactly.
+        // Do NOT clamp to int4 max (2,147,483,647): that capped history at 2GiB.
+        const toStatBytesBig = (mb: number) => BigInt(Math.round(mb * 1024 * 1024));
+        const toStatBytesNum = (mb: number) => Math.round(mb * 1024 * 1024);
         this.prisma.serverStat.create({
           data: {
             serverId: server.id,
             cpuPercent: metricsData.cpuPercent,
-            memoryUsed: toStatBytes(metricsData.memoryUsageMb),
-            memoryLimit: toStatBytes(server.allocatedMemoryMb),
-            diskUsed: metricsData.diskUsageMb ? toStatBytes(metricsData.diskUsageMb) : null,
+            memoryUsed: toStatBytesBig(metricsData.memoryUsageMb),
+            memoryLimit: toStatBytesBig(server.allocatedMemoryMb),
+            diskUsed: metricsData.diskUsageMb ? toStatBytesBig(metricsData.diskUsageMb) : null,
             netRx: Number(networkRxBytes) || null,
             netTx: Number(networkTxBytes) || null,
             // Split halves when the agent provides them; otherwise legacy
             // fallback writes the combined counter into blockRead.
             blockRead:
               hasSplitIo && (diskReadMb as number) > 0
-                ? toStatBytes(diskReadMb as number)
+                ? toStatBytesNum(diskReadMb as number)
                 : metricsData.diskIoMb
-                  ? toStatBytes(metricsData.diskIoMb)
+                  ? toStatBytesNum(metricsData.diskIoMb)
                   : null,
-            blockWrite: hasSplitIo && (diskWriteMb as number) > 0 ? toStatBytes(diskWriteMb as number) : null,
+            blockWrite: hasSplitIo && (diskWriteMb as number) > 0 ? toStatBytesNum(diskWriteMb as number) : null,
           },
         }).catch((err) => {
           this.logger.warn({ err, serverId: server.id }, 'Failed to persist ServerStat');

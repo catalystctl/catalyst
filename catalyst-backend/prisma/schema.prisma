@@ -807,9 +807,9 @@ model ServerStat {
   id          String   @id @default(cuid())
   serverId    String
   cpuPercent  Float
-  memoryUsed  Int      // bytes
-  memoryLimit Int      // bytes
-  diskUsed    Int?
+  memoryUsed  BigInt   // bytes (BigInt: 8GB+ allocations exceed int4 2GiB ceiling)
+  memoryLimit BigInt   // bytes (BigInt: 8GB+ allocations exceed int4 2GiB ceiling)
+  diskUsed    BigInt?
   netRx       Float?   // bytes
   netTx       Float?   // bytes
   blockRead   Float?   // bytes
