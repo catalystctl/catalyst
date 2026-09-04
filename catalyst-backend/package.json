@@ -44,7 +44,7 @@
 		"@types/nodemailer": "~8.0.1",
 		"better-auth": "~1.6.26",
 		"chokidar": "~5.0.0",
-		"cron-parser": "~5.8.1",
+		"cron-parser": "~5.10.0",
 		"dotenv": "~17.4.2",
 		"extract-zip": "^2.0.1",
 		"fastify": "~5.11.3",
