@@ -1019,6 +1019,22 @@ impl WebSocketHandler {
             let is_java = crate::shell_utils::looks_like_java(&final_startup_command, docker_image);
             if java_fix_enabled && is_java {
                 let requested_heap = crate::shell_utils::parse_xmx_mb(&final_startup_command);
+                // Modded eggs (Forge/NeoForge/CurseForge/Modrinth) chain
+                // @user_jvm_args.txt / @unix_args.txt. Those files often ship a
+                // hardcoded -Xmx2G from the modpack. _JAVA_OPTIONS overrides
+                // them, but only up to the heap we plan here: when the CLI
+                // already requests less than the allocation we honor it, so a
+                // stale 2G entry is exactly how an 8GB server stays at ~2GB.
+                // Inspect the files on the host before start to name the culprit.
+                let mut argfile_heap: Option<(String, u64)> = None;
+                for name in ["user_jvm_args.txt", "unix_args.txt"] {
+                    let p = server_dir_path.join(name);
+                    if let Ok(text) = tokio::fs::read_to_string(&p).await {
+                        if let Some(mb) = crate::shell_utils::parse_xmx_mb(&text) {
+                            argfile_heap = Some((name.to_string(), mb));
+                        }
+                    }
+                }
                 let literal_xms = crate::shell_utils::parse_xms_mb(startup_command);
                 let requested_xms = xms_from_panel.or_else(|| {
                     xms_percent.map(|pct| (memory_mb * pct / 100).max(1))
@@ -1064,6 +1080,23 @@ impl WebSocketHandler {
                             ),
                         )
                         .await;
+                    if let Some(warning) = crate::shell_utils::heap_below_allocation_warning(
+                        memory_mb,
+                        requested_heap,
+                        argfile_heap.as_ref().map(|(n, mb)| (n.as_str(), *mb)),
+                    ) {
+                        warn!(
+                            "Java heap below allocation for {}: {}",
+                            server_id, warning
+                        );
+                        let _ = self
+                            .emit_console_output(
+                                server_id,
+                                "system",
+                                &format!("[Catalyst] {}\n", warning),
+                            )
+                            .await;
+                    }
                 }
             }
 

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { serialize } from "../../utils/serialize.js";
 import { canAccessServer } from './_helpers.js';
 
 export async function serverStatsRoutes(app: FastifyInstance) {
@@ -77,11 +78,28 @@ export async function serverStatsRoutes(app: FastifyInstance) {
         downsampled.push(bucket[0]);
       }
 
-      reply.send({
-        success: true,
-        data: downsampled,
-        meta: { from: from.toISOString(), to: to.toISOString(), interval, totalRaw: stats.length, returned: downsampled.length },
-      });
+      // BigInt byte columns serialize to strings via serialize(); keep the
+      // wire shape numeric (bytes fit safely in a JS number well past TiBs)
+      // so charts do not flatline or string-concat.
+      const toNum = (v: unknown) => (typeof v === "bigint" ? Number(v) : (v as number));
+      const data = downsampled.map((s) => ({
+        ...s,
+        memoryUsed: toNum((s as unknown as Record<string, unknown>).memoryUsed),
+        memoryLimit: toNum((s as unknown as Record<string, unknown>).memoryLimit),
+        diskUsed:
+          (s as unknown as Record<string, unknown>).diskUsed === null ||
+          (s as unknown as Record<string, unknown>).diskUsed === undefined
+            ? null
+            : toNum((s as unknown as Record<string, unknown>).diskUsed),
+      }));
+
+      reply.send(
+        serialize({
+          success: true,
+          data,
+          meta: { from: from.toISOString(), to: to.toISOString(), interval, totalRaw: stats.length, returned: data.length },
+        }),
+      );
     }
   );
 

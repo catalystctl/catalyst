@@ -151,6 +151,38 @@ pub fn plan_java_memory(
     }
 }
 
+/// Warn when the effective heap will sit well below the allocation.
+///
+/// Returns a message when an explicit `-Xmx` (startup CLI or modded
+/// `@argfile`) caps the heap below the server Memory allocation. This is the
+/// usual reason an 8GB Minecraft server never uses more than ~2GB: a stale
+/// `-Xmx2G` in the startup or in user_jvm_args.txt/unix_args.txt. Returns
+/// None when the heap already matches the allocation.
+pub fn heap_below_allocation_warning(
+    allocated_mb: u64,
+    requested_heap_mb: Option<u64>,
+    argfile_heap: Option<(&str, u64)>,
+) -> Option<String> {
+    if allocated_mb < 256 {
+        return None;
+    }
+    if let Some((name, mb)) = argfile_heap {
+        if mb > 0 && mb < allocated_mb {
+            return Some(format!(
+                "Heap capped at -Xmx{mb}M by {name} but server Memory is {allocated_mb}M, so usage will stay near {mb}M. Update {name} (or remove its -Xmx) and restart to use the full allocation."
+            ));
+        }
+    }
+    if let Some(req) = requested_heap_mb {
+        if req > 0 && req < allocated_mb {
+            return Some(format!(
+                "Startup requests -Xmx{req}M but server Memory is {allocated_mb}M, so usage will stay near {req}M. Update the startup command to -Xmx{allocated_mb}M (or remove the hardcoded -Xmx) and restart to use the full allocation."
+            ));
+        }
+    }
+    None
+}
+
 /// Parse the last `-Xmx` in a startup string into mebibytes.
 pub fn parse_xmx_mb(command: &str) -> Option<u64> {
     parse_xm_flag(command, 'x')
@@ -413,6 +445,18 @@ mod tests {
                 "{plan:?} off-heap does not fit cgroup"
             );
         }
+    }
+
+    #[test]
+    fn heap_warning_flags_2g_cap_on_8g_server() {
+        let msg = heap_below_allocation_warning(8192, Some(2048), None).expect("warns");
+        assert!(msg.contains("2048"), "got {msg}");
+        assert!(msg.contains("8192"), "got {msg}");
+        let arg = heap_below_allocation_warning(8192, None, Some(("user_jvm_args.txt", 2048)))
+            .expect("argfile warns");
+        assert!(arg.contains("user_jvm_args.txt"), "got {arg}");
+        assert!(heap_below_allocation_warning(8192, Some(8192), None).is_none());
+        assert!(heap_below_allocation_warning(8192, None, None).is_none());
     }
 
     #[test]
