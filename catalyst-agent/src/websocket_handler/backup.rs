@@ -2,6 +2,28 @@
 
 use super::*;
 
+/// Fsync every regular file under `dir` (non-recursive into other mounts) so
+/// this server's dirty pages reach disk before archiving. Scoped replacement
+/// for the node-wide `sync` previously run before every backup.
+async fn sync_dir_tree(dir: &Path) -> std::io::Result<()> {
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        let mut entries = tokio::fs::read_dir(&current).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let entry_path = entry.path();
+            let file_type = entry.file_type().await?;
+            if file_type.is_dir() {
+                stack.push(entry_path);
+            } else if file_type.is_file() {
+                if let Ok(f) = tokio::fs::File::open(&entry_path).await {
+                    let _ = f.sync_data().await;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 impl WebSocketHandler {
     pub(crate) async fn cleanup_all_uploads(&self) {
         let sessions: Vec<BackupUploadSession> = {
@@ -99,8 +121,11 @@ impl WebSocketHandler {
         );
 
         // Best-effort quiesce: warn if the server container is running (live backup),
-        // then run `sync` so dirty pages hit disk before tar. We deliberately do not
-        // stop the server — stopping is a panel/policy decision.
+        // then fsync the server's own directory tree so its dirty pages hit disk
+        // before tar. A node-wide `sync` (the previous approach) flushed every
+        // filesystem on the host at once, converting all servers' accumulated
+        // dirty pages into a synchronized writeback storm that stalled every
+        // game server on the node.
         let container_id = self.resolve_container_id(server_id, server_uuid).await;
         if !container_id.is_empty() {
             match self.runtime.is_container_running(&container_id).await {
@@ -119,19 +144,16 @@ impl WebSocketHandler {
                 }
             }
         }
-        match tokio::process::Command::new("sync").status().await {
-            Ok(status) if status.success() => {
-                debug!("fsync/sync completed before tar for backup {}", backup_name);
-            }
-            Ok(status) => {
-                warn!(
-                    "sync exited with status {} before backup {}; continuing",
-                    status, backup_name
+        match sync_dir_tree(&server_dir).await {
+            Ok(()) => {
+                debug!(
+                    "server directory fsync completed before tar for backup {}",
+                    backup_name
                 );
             }
             Err(e) => {
                 warn!(
-                    "Failed to run sync before backup {}: {}; continuing",
+                    "fsync of server directory before backup {} failed; continuing: {}",
                     backup_name, e
                 );
             }
@@ -753,41 +775,60 @@ impl WebSocketHandler {
             .decode(data)
             .map_err(|_| AgentError::InvalidRequest("Invalid chunk data".to_string()))?;
 
-        // Check size limit and write the chunk in-place using get_mut.
-        // This avoids the remove/insert race where a concurrent chunk finds
-        // the session temporarily missing from the map.
+        // Check size limit under the map lock, then write via a cloned file
+        // handle OUTSIDE the lock: holding the map write-lock across the disk
+        // write serialized every upload session (and the stale-upload GC /
+        // disconnect cleanup) behind one slow write. Chunks of one request are
+        // processed sequentially by the WS read loop, so ordering is preserved.
         let chunk_len = chunk.len() as u64;
         enum ChunkError {
-            TooLarge(String),
             WriteFailed(String),
             UnknownRequest,
         }
-        let write_result: Result<(), ChunkError> = {
-            let mut uploads = self.active_uploads.write().await;
-            match uploads.get_mut(request_id) {
+        let (write_target, current_len) = {
+            let uploads = self.active_uploads.read().await;
+            match uploads.get(request_id) {
                 Some(session) => {
                     let next_total = session.bytes_written.saturating_add(chunk_len);
                     if next_total > MAX_BACKUP_UPLOAD_BYTES {
-                        Err(ChunkError::TooLarge(format!(
+                        return Err(AgentError::InvalidRequest(format!(
                             "Upload too large (max {} bytes)",
                             MAX_BACKUP_UPLOAD_BYTES
-                        )))
-                    } else if let Err(e) = session.file.write_all(&chunk).await {
-                        Err(ChunkError::WriteFailed(format!("Write failed: {}", e)))
-                    } else {
-                        session.bytes_written = next_total;
-                        session.last_activity = tokio::time::Instant::now();
-                        Ok(())
+                        )));
+                    }
+                    match session.file.try_clone().await {
+                        Ok(f) => (Some(f), session.bytes_written),
+                        Err(e) => {
+                            return Err(AgentError::IoError(format!(
+                                "Failed to clone upload handle: {}",
+                                e
+                            )))
+                        }
                     }
                 }
-                None => Err(ChunkError::UnknownRequest),
+                None => (None, 0),
             }
+        };
+        let write_result: Result<(), ChunkError> = match write_target {
+            Some(mut f) => {
+                if let Err(e) = f.write_all(&chunk).await {
+                    Err(ChunkError::WriteFailed(format!("Write failed: {}", e)))
+                } else {
+                    let mut uploads = self.active_uploads.write().await;
+                    if let Some(session) = uploads.get_mut(request_id) {
+                        session.bytes_written = current_len + chunk_len;
+                        session.last_activity = tokio::time::Instant::now();
+                    }
+                    Ok(())
+                }
+            }
+            None => Err(ChunkError::UnknownRequest),
         };
 
         // On fatal errors, remove the session and clean up the file on disk.
         if let Err(ref err) = write_result {
             let path_to_clean = match err {
-                ChunkError::TooLarge(_) | ChunkError::WriteFailed(_) => {
+                ChunkError::WriteFailed(_) => {
                     let mut uploads = self.active_uploads.write().await;
                     uploads.remove(request_id).map(|s| s.path)
                 }
@@ -800,7 +841,7 @@ impl WebSocketHandler {
 
         if let Err(err) = write_result {
             let error_msg = match &err {
-                ChunkError::TooLarge(msg) | ChunkError::WriteFailed(msg) => msg.as_str(),
+                ChunkError::WriteFailed(msg) => msg.as_str(),
                 ChunkError::UnknownRequest => "Unknown upload request",
             };
             let event = json!({
@@ -844,35 +885,52 @@ impl WebSocketHandler {
             resolve_backup_upload_request_id(request_id, uploads.keys().map(|k| k.as_str()))
         };
 
-        // Check size limit and write the chunk in-place using get_mut.
-        // This avoids the remove/insert race where a concurrent chunk finds
-        // the session temporarily missing from the map.
+        // Check size limit under the map lock, then write via a cloned handle
+        // OUTSIDE the lock (see JSON chunk path above for the rationale).
         let data_len = data.len() as u64;
-        let write_result: Result<(), AgentError> = {
-            let mut uploads = self.active_uploads.write().await;
-            match uploads.get_mut(&resolved_id) {
+        let (write_target, current_len) = {
+            let uploads = self.active_uploads.read().await;
+            match uploads.get(&resolved_id) {
                 Some(session) => {
                     let next_total = session.bytes_written.saturating_add(data_len);
                     if next_total > MAX_BACKUP_UPLOAD_BYTES {
-                        Err(AgentError::InvalidRequest(format!(
+                        return Err(AgentError::InvalidRequest(format!(
                             "Upload too large (max {} bytes)",
                             MAX_BACKUP_UPLOAD_BYTES
-                        )))
-                    } else if let Err(e) = session.file.write_all(data).await {
-                        Err(AgentError::IoError(format!(
-                            "Failed to write backup chunk: {}",
-                            e
-                        )))
-                    } else {
-                        session.bytes_written = next_total;
-                        session.last_activity = tokio::time::Instant::now();
-                        Ok(())
+                        )));
+                    }
+                    match session.file.try_clone().await {
+                        Ok(f) => (Some(f), session.bytes_written),
+                        Err(e) => {
+                            return Err(AgentError::IoError(format!(
+                                "Failed to clone upload handle: {}",
+                                e
+                            )))
+                        }
                     }
                 }
-                None => Err(AgentError::InvalidRequest(
-                    "Unknown upload request".to_string(),
-                )),
+                None => (None, 0),
             }
+        };
+        let write_result: Result<(), AgentError> = match write_target {
+            Some(mut f) => {
+                if let Err(e) = f.write_all(data).await {
+                    Err(AgentError::IoError(format!(
+                        "Failed to write backup chunk: {}",
+                        e
+                    )))
+                } else {
+                    let mut uploads = self.active_uploads.write().await;
+                    if let Some(session) = uploads.get_mut(&resolved_id) {
+                        session.bytes_written = current_len + data_len;
+                        session.last_activity = tokio::time::Instant::now();
+                    }
+                    Ok(())
+                }
+            }
+            None => Err(AgentError::InvalidRequest(
+                "Unknown upload request".to_string(),
+            )),
         };
 
         // On fatal errors, remove the session and clean up the file on disk.

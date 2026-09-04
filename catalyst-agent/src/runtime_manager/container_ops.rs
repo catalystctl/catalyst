@@ -329,7 +329,10 @@ impl ContainerdRuntime {
             "destination": "/tmp",
             "type": "tmpfs",
             "source": "tmpfs",
-            "options": ["nosuid", "nodev", "mode=1777"]
+            // Size-bounded: tmpfs pages are cgroup memory. Without a size cap a
+            // large archive extract consumes the 2G limit and the installer is
+            // OOM-killed (exit 137, no diagnosis) instead of failing with ENOSPC.
+            "options": ["nosuid", "nodev", "mode=1777", "size=1073741824"]
         }));
 
         // Detect the correct shell interpreter for the install script.
@@ -393,7 +396,7 @@ impl ContainerdRuntime {
             container_id, data_dir
         );
 
-        let spec = serde_json::json!({
+        let mut spec = serde_json::json!({
             "ociVersion": "1.1.0",
             "process": {
                 "terminal": false, "user": {"uid":0,"gid":0},
@@ -417,8 +420,18 @@ impl ContainerdRuntime {
                 "cgroupsPath": format!("/catalyst/{}", container_id),
                 "resources": {
                     "memory": {"limit": 2147483648i64, "swap": 2147483648i64},
-                    "cpu": {"shares": 1024i64, "quota": 200000i64, "period": 100000i64, "burst": 200000u64, "weight": 200u64},
-                    "pids": {"limit": 512i64},
+                    // shares 1024 (=1 core) for cgroup v1; unified cpu.weight 200
+                    // below because runc 1.4.x ignores cpu.weight on cgroup v2.
+                    // burst only when the kernel supports cpu.max.burst (>= 5.14):
+                    // writing it elsewhere fails task creation on modern runc.
+                    "cpu": {
+                        "shares": 1024i64,
+                        "quota": 200000i64,
+                        "period": 100000i64,
+                        "weight": 200u64,
+                    },
+                    "pids": {"limit": 2048i64},
+                    "unified": {"cpu.weight": "200"},
                     "devices": [
                         {"allow": false, "access": "rwm"},
                         {"allow": true, "type": "c", "major": 1, "minor": 3, "access": "rwm"},
@@ -432,6 +445,12 @@ impl ContainerdRuntime {
                 }
             }
         });
+        // burst banks one period of unused CPU so short spikes don't stall the
+        // install; gated on kernel support (cpu.max.burst needs >= 5.14, and
+        // writing it on older kernels with modern runc fails task creation).
+        if crate::runtime_manager::helpers::kernel_supports_cpu_burst() {
+            spec["linux"]["resources"]["cpu"]["burst"] = serde_json::json!(200000u64);
+        }
         let spec_any = Any {
             type_url: SPEC_TYPE_URL.to_string(),
             value: spec.to_string().into_bytes(),
@@ -839,15 +858,34 @@ impl ContainerdRuntime {
         };
         if let Some(h) = handle {
             let input = input.to_string();
-            spawn_blocking(move || {
+            // The stdin FIFO is opened blocking (O_RDWR, no O_NONBLOCK), so a
+            // container that never reads stdin would block write_all forever
+            // on a full 64K pipe — wedging a blocking-pool thread and (before
+            // console_input was spawned) the whole WS read loop. Bound the
+            // write; on timeout the pipe is full and the process is not
+            // consuming input.
+            let write_fut = spawn_blocking(move || {
                 let mut w = h;
                 w.write_all(input.as_bytes())
                     .map_err(|e| AgentError::ContainerError(format!("stdin: {}", e)))?;
                 let _ = w.flush();
                 Ok::<(), AgentError>(())
-            })
-            .await
-            .map_err(|e| AgentError::ContainerError(e.to_string()))??;
+            });
+            match tokio::time::timeout(Duration::from_secs(5), write_fut).await {
+                Ok(Ok(Ok(()))) => {}
+                Ok(Ok(Err(e))) => return Err(e),
+                Ok(Err(join_err)) => {
+                    return Err(AgentError::ContainerError(format!(
+                        "stdin write task failed: {}",
+                        join_err
+                    )));
+                }
+                Err(_) => {
+                    return Err(AgentError::ContainerError(
+                        "stdin write timed out: container is not reading input".to_string(),
+                    ));
+                }
+            }
             return Ok(());
         }
 
@@ -1384,6 +1422,11 @@ impl ContainerdRuntime {
             network_tx_bytes: net_tx,
             block_read_bytes: blk_read,
             block_write_bytes: blk_write,
+            cpu_throttling: if cg.is_empty() {
+                None
+            } else {
+                read_cgroup_cpu_throttling(&cg).await
+            },
         })
     }
 

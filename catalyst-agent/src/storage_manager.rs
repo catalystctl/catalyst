@@ -770,7 +770,7 @@ impl StorageManager {
             move || {
                 command_utils::run_in_host_mount_ns(
                     "mount",
-                    &["-o", "loop,exec,nodev,nosuid", &image, &mount],
+                    &["-o", "loop,exec,nodev,nosuid,noatime", &image, &mount],
                 )?;
                 Ok::<(), AgentError>(())
             }

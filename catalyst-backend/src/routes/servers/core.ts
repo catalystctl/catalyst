@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, validateVariableRule, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
+import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, serverUpdateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, validateVariableRule, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { minimumDiskMbFromHints } from "../../utils/egg-import.js";
 import { describeError } from "../../utils/describe-error.js";
@@ -1759,7 +1759,10 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // Get historical stats for a server
   app.put(
     "/:serverId",
-    { onRequest: [app.authenticate] },
+    // Validate the body: without this, allocatedCpuCores bypassed the
+    // 1..128 integer bounds (floats reached Prisma's Int column as 500s,
+    // out-of-range values reached the agent's CFS quota math).
+    { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverUpdateSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;

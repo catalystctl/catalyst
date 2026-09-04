@@ -8,7 +8,7 @@ use reqwest::Url;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -136,6 +136,16 @@ pub(crate) struct ResourceStats<'a> {
     diskWriteMb: Option<u64>,
     diskUsageMb: u64,
     diskTotalMb: u64,
+    /// Cumulative CFS throttled time (usec) from cpu.stat. Deltas over the
+    /// sample window reveal throttle stalls that average CPU% hides: a
+    /// fully throttled cgroup still accrues usage_usec at quota rate, so
+    /// the CPU graph shows a tidy flat line while ticks freeze.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpuThrottledUsec: Option<u64>,
+    /// Cumulative nr_throttled / nr_periods ratio (0.0-1.0), sampled from
+    /// cpu.stat at the same moment as cpuThrottledUsec.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpuThrottledRatio: Option<f64>,
     timestamp: i64,
 }
 
@@ -156,6 +166,12 @@ pub(crate) struct ResourceStatsEntry {
     diskWriteMb: Option<u64>,
     diskUsageMb: u64,
     diskTotalMb: u64,
+    /// See ResourceStats: cumulative throttled time and throttle ratio
+    /// from cpu.stat; None on cgroup v1 (no usage/throttle fields there).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpuThrottledUsec: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpuThrottledRatio: Option<f64>,
     timestamp: i64,
 }
 
@@ -1687,12 +1703,46 @@ impl WebSocketHandler {
                 });
             }
             Some("delete_server") => {
-                let server_uuid = msg["serverUuid"].as_str().unwrap_or("");
-                let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
-                self.delete_server(server_id, server_uuid).await?;
+                // Spawned: delete walks the whole server directory tree
+                // (unmount + recursive removal) and can take minutes; inline
+                // execution stalled every other server's control traffic.
+                let handler = self.clone();
+                let msg = msg.clone();
+                tokio::spawn(async move {
+                    let server_uuid = msg["serverUuid"].as_str().unwrap_or("");
+                    let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
+                    if let Err(e) = handler.delete_server(server_id, server_uuid).await {
+                        error!("Error in delete_server handler: {}", e);
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:delete_server",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
+                    }
+                });
             }
-            Some("console_input") => self.handle_console_input(&msg).await?,
-            Some("file_operation") => self.handle_file_operation(&msg).await?,
+            Some("console_input") => {
+                // Kept inline (with the 5s-bounded stdin write) because
+                // console commands are order-sensitive: spawning would let a
+                // blocked command be overtaken by later ones. The bounded
+                // write caps the worst-case read-loop delay.
+                self.handle_console_input(&msg).await?
+            }
+            Some("file_operation") => {
+                // Spawned: a "read" of a large file (up to 500 MB, base64
+                // encoded) must not stall the shared read loop.
+                let handler = self.clone();
+                let msg = msg.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_file_operation(&msg).await {
+                        warn!("file_operation handler failed: {}", e);
+                    }
+                });
+            }
             Some("create_backup") => {
                 let handler = self.clone();
                 let msg = msg.clone();
@@ -1731,9 +1781,41 @@ impl WebSocketHandler {
                     }
                 });
             }
-            Some("delete_backup") => self.handle_delete_backup(&msg, write).await?,
-            Some("download_backup_start") => self.handle_download_backup_start(&msg, write).await?,
-            Some("download_backup") => self.handle_download_backup(&msg, write).await?,
+            // download_backup streams a potentially multi-GB archive chunk by
+            // chunk; resize_storage can run an unmount/fsck/resize cycle lasting
+            // minutes; finish_restore_stream awaits a full tar extraction.
+            // Spawned so none of them stall every other server's control
+            // traffic behind one slow storage operation.
+            Some("delete_backup") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_delete_backup(&msg, &write).await {
+                        warn!("delete_backup handler failed: {}", e);
+                    }
+                });
+            }
+            Some("download_backup_start") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_download_backup_start(&msg, &write).await {
+                        warn!("download_backup_start handler failed: {}", e);
+                    }
+                });
+            }
+            Some("download_backup") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_download_backup(&msg, &write).await {
+                        warn!("download_backup handler failed: {}", e);
+                    }
+                });
+            }
             Some("upload_backup_start") => self.handle_upload_backup_start(&msg, write).await?,
             Some("upload_backup_chunk") => self.handle_upload_backup_chunk(&msg, write).await?,
             Some("upload_backup_complete") => {
@@ -1761,7 +1843,17 @@ impl WebSocketHandler {
             Some("prepare_restore_stream") => {
                 self.handle_prepare_restore_stream(&msg, write).await?
             }
-            Some("finish_restore_stream") => self.handle_finish_restore_stream(&msg, write).await?,
+            Some("finish_restore_stream") => {
+                // Spawned: awaits tar extraction of up to MAX_BACKUP_UPLOAD_BYTES.
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_finish_restore_stream(&msg, &write).await {
+                        warn!("finish_restore_stream handler failed: {}", e);
+                    }
+                });
+            }
             Some("clone_server_files") => {
                 let handler = self.clone();
                 let msg = msg.clone();
@@ -1781,7 +1873,18 @@ impl WebSocketHandler {
                     }
                 });
             }
-            Some("resize_storage") => self.handle_resize_storage(&msg, write).await?,
+            Some("resize_storage") => {
+                // Spawned: shrink path can run an unmount + e2fsck cycle with a
+                // 1-hour timeout; inline execution froze all control traffic.
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_resize_storage(&msg, &write).await {
+                        warn!("resize_storage handler failed: {}", e);
+                    }
+                });
+            }
             Some("resume_console") => self.resume_console(&msg).await?,
             Some("request_immediate_stats") => {
                 let target = msg["serverId"].as_str();
@@ -3463,7 +3566,8 @@ async fn send_ws_with_timeout(
         .map_err(|e| AgentError::NetworkError(e.to_string()))
 }
 
-fn parse_df_output_mb(output: &str) -> Option<(u64, u64)> {
+#[cfg(test)]
+pub(crate) fn parse_df_output_mb(output: &str) -> Option<(u64, u64)> {
     let mut lines = output.lines().filter(|line| !line.trim().is_empty());
     let header = lines.next()?;
     if !header.to_lowercase().contains("filesystem") {
@@ -3609,6 +3713,8 @@ mod memory_parse_tests {
             diskWriteMb: Some(20),
             diskUsageMb: 1024,
             diskTotalMb: 20480,
+            cpuThrottledUsec: Some(42_000),
+            cpuThrottledRatio: Some(0.25),
             timestamp: 1_700_000_000_000,
         };
         let text = serde_json::to_string(&entry).unwrap();
@@ -3653,10 +3759,31 @@ mod memory_parse_tests {
             diskWriteMb: Some(3),
             diskUsageMb: 1024,
             diskTotalMb: 20480,
+            cpuThrottledUsec: Some(42_000),
+            cpuThrottledRatio: Some(0.25),
             timestamp: 1_700_000_000_000,
         };
         let text = serde_json::to_string(&fast).unwrap();
         assert!(text.contains(r#""diskReadMb":7"#), "got {text}");
         assert!(text.contains(r#""diskWriteMb":3"#), "got {text}");
+        // Throttle fields must round-trip and omit when None.
+        let none = ResourceStats {
+            ty: "resource_stats",
+            serverUuid: "cm0srv123",
+            cpuPercent: 12.5,
+            memoryUsageMb: 256,
+            networkRxBytes: 10,
+            networkTxBytes: 20,
+            diskIoMb: 30,
+            diskReadMb: None,
+            diskWriteMb: None,
+            diskUsageMb: 1024,
+            diskTotalMb: 20480,
+            cpuThrottledUsec: None,
+            cpuThrottledRatio: None,
+            timestamp: 1_700_000_000_000,
+        };
+        let text = serde_json::to_string(&none).unwrap();
+        assert!(!text.contains("cpuThrottled"), "got {text}");
     }
 }

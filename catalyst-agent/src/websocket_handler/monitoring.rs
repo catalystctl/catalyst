@@ -2,6 +2,52 @@
 
 use super::*;
 
+/// Convert ContainerStats cpu_throttling into wire fields: cumulative
+/// throttled time and the throttled-periods ratio.
+fn throttling_fields(t: &Option<(u64, u64, u64)>) -> (Option<u64>, Option<f64>) {
+    match t {
+        Some((periods, throttled, usec)) => {
+            let ratio = if *periods > 0 {
+                *throttled as f64 / *periods as f64
+            } else {
+                0.0
+            };
+            (Some(*usec), Some(ratio.clamp(0.0, 1.0)))
+        }
+        None => (None, None),
+    }
+}
+
+/// Resolve the host-side data dir for a container. Data dirs are keyed by
+/// server.uuid while containers are named by server.id; the stored start
+/// message (keyed by container id) carries the uuid. Falls back to the
+/// container id itself (older installs where the two coincide) and to None
+/// when the dir does not exist under the data root.
+async fn resolve_server_data_dir(
+    start_msgs: &RwLock<HashMap<String, Value>>,
+    root: &std::path::Path,
+    container_id: &str,
+) -> Option<std::path::PathBuf> {
+    let uuid = start_msgs
+        .read()
+        .await
+        .get(container_id)
+        .and_then(|msg| msg["serverUuid"].as_str())
+        .map(|s| s.to_string());
+    if let Some(u) = uuid {
+        let p = root.join(&u);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    let p = root.join(container_id);
+    if p.exists() {
+        Some(p)
+    } else {
+        None
+    }
+}
+
 impl WebSocketHandler {
     pub async fn send_health_report(&self) -> AgentResult<()> {
         debug!("Sending health report");
@@ -643,18 +689,24 @@ impl WebSocketHandler {
                 let disk_read_mb = stats.block_read_bytes / (1024 * 1024);
                 let disk_write_mb = stats.block_write_bytes / (1024 * 1024);
 
-                // For immediate requests use a very short df timeout — stale data is fine.
-                // On failure report zeros: block-IO counters measure throughput,
-                // not capacity, and must never stand in for disk usage.
-                let (disk_usage_mb, disk_total_mb) = match tokio::time::timeout(
-                    Duration::from_secs(1),
-                    self.runtime.exec(target, vec!["df", "-m", "/data"]),
+                // Disk usage from the host side: the container's /data is a
+                // bind of <data_dir>/<uuid>, so one statvfs replaces a fork+
+                // exec of `df` inside the container (3 gRPC round trips plus a
+                // shim fork per sample — O(N) process churn every 5 s).
+                // On failure report zeros: block-IO counters measure
+                // throughput, not capacity, and must never stand in for usage.
+                let (disk_usage_mb, disk_total_mb) = match resolve_server_data_dir(
+                    &self.start_server_messages,
+                    &self.config.server.data_dir,
+                    target,
                 )
                 .await
                 {
-                    Ok(Ok(output)) => parse_df_output_mb(&output).unwrap_or((0, 0)),
-                    _ => (0, 0),
+                    Some(p) => data_dir_disk_usage_mb(&p),
+                    None => (0, 0),
                 };
+                let (cpu_throttled_usec, cpu_throttled_ratio) =
+                    throttling_fields(&stats.cpu_throttling);
 
                 let payload = ResourceStats {
                     ty: "resource_stats",
@@ -668,6 +720,8 @@ impl WebSocketHandler {
                     diskWriteMb: Some(disk_write_mb),
                     diskUsageMb: disk_usage_mb,
                     diskTotalMb: disk_total_mb,
+                    cpuThrottledUsec: cpu_throttled_usec,
+                    cpuThrottledRatio: cpu_throttled_ratio,
                     timestamp: chrono::Utc::now().timestamp_millis(),
                 };
                 let payload_text = serde_json::to_string(&payload).unwrap_or_default();
@@ -742,6 +796,8 @@ impl WebSocketHandler {
             }
 
             let runtime = self.runtime.clone();
+            let data_root = self.config.server.data_dir.clone();
+            let start_msgs = self.start_server_messages.clone();
             let sem = sem.clone();
             let handle = tokio::spawn(async move {
                 let _permit = match sem.acquire().await {
@@ -776,18 +832,21 @@ impl WebSocketHandler {
                 let disk_read_mb = stats.block_read_bytes / (1024 * 1024);
                 let disk_write_mb = stats.block_write_bytes / (1024 * 1024);
 
-                // Prefer real df-based filesystem usage (same as immediate stats path).
-                // Fall back to block IO only if df fails/times out; total stays 0 then.
-                let (disk_usage_mb, disk_total_mb) = match tokio::time::timeout(
-                    Duration::from_secs(2),
-                    runtime.exec(&container.id, vec!["df", "-m", "/data"]),
-                )
-                .await
-                {
-                    Ok(Ok(output)) => parse_df_output_mb(&output).unwrap_or((disk_io_mb, 0)),
-                    _ => (disk_io_mb, 0),
+                // Disk usage via host-side statvfs on the bind source (see the
+                // fast-path comment): replaces an in-container `df` exec per
+                // container per tick. Data dirs are keyed by server.uuid; the
+                // container id here is server.id, so resolve via the stored
+                // start message. Unresolvable → (0, 0); block-IO counters are
+                // NOT substituted — they measure throughput, not capacity.
+                let server_path =
+                    resolve_server_data_dir(&start_msgs, &data_root, &container.id).await;
+                let (disk_usage_mb, disk_total_mb) = match server_path {
+                    Some(p) => data_dir_disk_usage_mb(&p),
+                    None => (0, 0),
                 };
 
+                let (cpu_throttled_usec, cpu_throttled_ratio) =
+                    throttling_fields(&stats.cpu_throttling);
                 Some(ResourceStatsEntry {
                     serverUuid: server_uuid,
                     cpuPercent: cpu_percent,
@@ -799,6 +858,8 @@ impl WebSocketHandler {
                     diskWriteMb: Some(disk_write_mb),
                     diskUsageMb: disk_usage_mb,
                     diskTotalMb: disk_total_mb,
+                    cpuThrottledUsec: cpu_throttled_usec,
+                    cpuThrottledRatio: cpu_throttled_ratio,
                     timestamp: chrono::Utc::now().timestamp_millis(),
                 })
             });

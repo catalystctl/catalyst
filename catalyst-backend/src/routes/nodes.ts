@@ -2054,7 +2054,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			// Use discovered resource defaults if user didn't specify values
 			const resolvedMemoryMb = allocatedMemoryMb ?? container.memoryLimitMb ?? template.allocatedMemoryMb;
-			const resolvedCpuCores = allocatedCpuCores ?? (container.cpuCores ? Math.ceil(container.cpuCores) : undefined) ?? template.allocatedCpuCores;
+			// Clamp cpu cores to >= 1: a 0 or missing value (unlimited imported
+			// container) reaches the agent as quota 0, which runc treats as "no
+			// CFS cap" — a silently uncapped noisy neighbor. Template default
+			// remains the fallback when the container exposes no quota.
+			const resolvedCpuCores = Math.max(1, Math.ceil(
+				allocatedCpuCores
+					?? (container.cpuCores ? Math.ceil(container.cpuCores) : undefined)
+					?? template.allocatedCpuCores
+					?? 1,
+			));
 
 			// Create server record — containerId IS the server.id (critical for agent sync)
 			const server = await prisma.server.create({

@@ -2,6 +2,46 @@
 
 use super::*;
 
+/// Read only the bytes appended to `path` since `pos` (seek-based tail).
+/// Replaces the previous full-file `read_to_string` each poll, which cost
+/// O(file size) — up to 10 MB re-read and re-validated every 50-200 ms per
+/// running container.
+///
+/// Returns the new bytes as a String (possibly empty). The caller advances
+/// `pos` by the processed length (excluding any trailing partial line), so
+/// this helper leaves `pos` untouched except when it must resync: after a
+/// truncate/rotate (pos > len, restart from 0) or when the appended chunk is
+/// not valid UTF-8 (skip it rather than wedge the tail on the same bytes).
+async fn read_new_tail_bytes(path: &Path, pos: &mut u64) -> std::io::Result<String> {
+    let meta = tokio::fs::metadata(path).await?;
+    let len = meta.len();
+    if *pos > len {
+        // File was truncated/rotated under us — start over.
+        *pos = 0;
+    }
+    if *pos >= len {
+        return Ok(String::new());
+    }
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+    let mut file = tokio::fs::File::open(path).await?;
+    file.seek(std::io::SeekFrom::Start(*pos)).await?;
+    let mut buf = Vec::with_capacity((len - *pos) as usize);
+    file.read_to_end(&mut buf).await?;
+    match String::from_utf8(buf) {
+        Ok(text) => Ok(text),
+        Err(_) => {
+            // Skip the undecodable chunk (byte offsets stay consistent) and
+            // resume from EOF instead of re-reading the same bytes forever.
+            warn!(
+                "console log {} had non-UTF-8 data; skipping chunk",
+                path.display()
+            );
+            *pos = len;
+            Ok(String::new())
+        }
+    }
+}
+
 impl WebSocketHandler {
     pub(crate) async fn resume_console(&self, msg: &Value) -> AgentResult<()> {
         let server_id = msg["serverId"]
@@ -792,15 +832,10 @@ impl WebSocketHandler {
                 .unwrap_or(false);
             let mut had_data = false;
 
-            match tokio::fs::read_to_string(&stdout_path).await {
-                Ok(content) => {
-                    // File truncated/rotated under us
-                    if (stdout_pos as usize) > content.len() {
-                        stdout_pos = 0;
-                    }
-                    if (stdout_pos as usize) < content.len() {
-                        let new_text = &content[stdout_pos as usize..];
-                        let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
+            match read_new_tail_bytes(&stdout_path, &mut stdout_pos).await {
+                Ok(new_text) => {
+                    if !new_text.is_empty() {
+                        let (lines, trailing) = shell_utils::split_terminal_lines(&new_text);
                         let processed_len = new_text.len() - trailing.len();
                         let mut batch = String::new();
                         for line in lines {
@@ -817,7 +852,7 @@ impl WebSocketHandler {
                                 .await?;
                         }
                         stdout_pos += processed_len as u64;
-                        had_data = !new_text.is_empty();
+                        had_data = true;
                         debug!(
                             "server {} stdout: read {} bytes, emitted {} bytes, pos now {}",
                             server_id,
@@ -834,14 +869,10 @@ impl WebSocketHandler {
                 }
             }
 
-            match tokio::fs::read_to_string(&stderr_path).await {
-                Ok(content) => {
-                    if (stderr_pos as usize) > content.len() {
-                        stderr_pos = 0;
-                    }
-                    if (stderr_pos as usize) < content.len() {
-                        let new_text = &content[stderr_pos as usize..];
-                        let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
+            match read_new_tail_bytes(&stderr_path, &mut stderr_pos).await {
+                Ok(new_text) => {
+                    if !new_text.is_empty() {
+                        let (lines, trailing) = shell_utils::split_terminal_lines(&new_text);
                         let processed_len = new_text.len() - trailing.len();
                         let mut batch = String::new();
                         for line in lines {
@@ -858,7 +889,7 @@ impl WebSocketHandler {
                                 .await?;
                         }
                         stderr_pos += processed_len as u64;
-                        had_data = had_data || !new_text.is_empty();
+                        had_data = true;
                         debug!(
                             "server {} stderr: read {} bytes, emitted {} bytes, pos now {}",
                             server_id,

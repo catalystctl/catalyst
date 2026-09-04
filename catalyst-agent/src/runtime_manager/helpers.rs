@@ -2,6 +2,25 @@
 
 use super::*;
 
+/// One-time probe: does this kernel support `cpu.max.burst` (cgroup v2,
+/// kernel >= 5.14)? Writing burst to an older kernel with a modern runc
+/// fails task creation outright, so the spec must omit the field there.
+/// Probed once via a scratch cgroup rather than parsed from uname.
+pub fn kernel_supports_cpu_burst() -> bool {
+    static SUPPORTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SUPPORTED.get_or_init(|| {
+        let probe = std::path::Path::new("/sys/fs/cgroup/catalyst/.burst-probe");
+        if std::fs::create_dir_all(probe).is_err() {
+            // Can't create a probe group (rootless agent, read-only cgroup
+            // mount): assume supported only if the file exists at the root.
+            return std::path::Path::new("/sys/fs/cgroup/cpu.max.burst").exists();
+        }
+        let supported = probe.join("cpu.max.burst").exists();
+        let _ = std::fs::remove_dir(probe);
+        supported
+    })
+}
+
 pub fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = 1024 * KB;
@@ -65,15 +84,16 @@ pub async fn read_block_io(cgroup_path: &str) -> Option<(u64, u64, String)> {
     let mut read_bytes: u64 = 0;
     let mut write_bytes: u64 = 0;
     for line in content.lines() {
-        if line.starts_with("8:") {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            for part in &parts {
-                if let Some(val) = part.strip_prefix("rbytes=") {
-                    read_bytes += val.parse::<u64>().unwrap_or(0);
-                }
-                if let Some(val) = part.strip_prefix("wbytes=") {
-                    write_bytes += val.parse::<u64>().unwrap_or(0);
-                }
+        // Sum every device: the old "8:" filter only matched SCSI/SATA
+        // majors, so NVMe (259), device-mapper (253/254) and virtio hosts
+        // reported 0 disk I/O forever.
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        for part in &parts {
+            if let Some(val) = part.strip_prefix("rbytes=") {
+                read_bytes += val.parse::<u64>().unwrap_or(0);
+            }
+            if let Some(val) = part.strip_prefix("wbytes=") {
+                write_bytes += val.parse::<u64>().unwrap_or(0);
             }
         }
     }
@@ -94,25 +114,14 @@ pub async fn rotate_logs(console_log_dir: &Path, container_id: &str) {
         let log_path = io_dir.join(log_name);
         if let Ok(metadata) = tokio::fs::metadata(&log_path).await {
             if metadata.len() > MAX_LOG_SIZE {
-                // Rotate: stdout -> stdout.1 -> stdout.2 (drop oldest)
-                for i in (1..=LOG_BACKUP_COUNT).rev() {
-                    let src = if i == 1 {
-                        log_path.clone()
-                    } else {
-                        io_dir.join(format!("{}.{}", log_name, i - 1))
-                    };
-                    let dst = io_dir.join(format!("{}.{}", log_name, i));
-                    let _ = tokio::fs::rename(&src, &dst).await;
-                }
-                // Compress the oldest rotated log
-                let oldest = io_dir.join(format!("{}.{}", log_name, LOG_BACKUP_COUNT));
-                let _ = tokio::process::Command::new("gzip")
-                    .arg("-f")
-                    .arg(&oldest)
-                    .status()
-                    .await;
-                // Create new empty log file
-                let _ = tokio::fs::File::create(&log_path).await;
+                // The containerd shim holds this file open with O_APPEND for the
+                // task's lifetime, so rename+create breaks the writer: the shim
+                // keeps appending to the renamed inode and console output goes
+                // dark. Copy-then-truncate keeps the inode (verified: the shim's
+                // next write lands at offset 0 after truncate).
+                let rotated = io_dir.join(format!("{}.1", log_name));
+                let _ = tokio::fs::copy(&log_path, &rotated).await;
+                let _ = tokio::fs::File::create(&log_path).await; // truncate in place
                 info!(
                     "Rotated log for container {}: {} (was {} bytes)",
                     container_id,
@@ -559,6 +568,29 @@ pub async fn read_cgroup_cpu_usage(path: &str) -> Option<u64> {
         }
     }
     Some(0)
+}
+
+/// CFS throttling counters from cgroup v2 `cpu.stat`. Returns
+/// `(nr_periods, nr_throttled, throttled_usec)`; None when the file or
+/// fields are absent (cgroup v1's cpu.stat has no throttled_usec layout
+/// readable this way). Without these counters a throttled server is
+/// indistinguishable from a busy one on CPU% graphs: usage_usec keeps
+/// accruing at quota rate while the whole cgroup freezes each period.
+pub async fn read_cgroup_cpu_throttling(path: &str) -> Option<(u64, u64, u64)> {
+    let content = tokio::fs::read_to_string(format!("{}/cpu.stat", path))
+        .await
+        .ok()?;
+    let (mut periods, mut throttled, mut throttled_usec) = (None, None, None);
+    for line in content.lines() {
+        let mut parts = line.split_whitespace();
+        match parts.next() {
+            Some("nr_periods") => periods = parts.next().and_then(|s| s.parse().ok()),
+            Some("nr_throttled") => throttled = parts.next().and_then(|s| s.parse().ok()),
+            Some("throttled_usec") => throttled_usec = parts.next().and_then(|s| s.parse().ok()),
+            _ => {}
+        }
+    }
+    Some((periods?, throttled?, throttled_usec?))
 }
 
 pub async fn read_cgroup_memory(path: &str) -> Option<u64> {

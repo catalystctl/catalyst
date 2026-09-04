@@ -1548,7 +1548,7 @@ export {
   shouldUseIpam,
 } from "../../utils/ipam.js";
 export { hasNodeAccess, getUserAccessibleNodes } from "../../lib/permissions.js";
-export { serverCloneSchema, serverCreateSchema, validateRequestBody } from "../../lib/validation.js";
+export { serverCloneSchema, serverCreateSchema, serverUpdateSchema, validateRequestBody } from "../../lib/validation.js";
 export {
   DatabaseProvisioningError,
   dropDatabase,

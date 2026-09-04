@@ -62,8 +62,12 @@ net.ipv4.ip_forward = 1
 net.ipv4.conf.all.forwarding = 1
 
 # Virtual memory
-vm.dirty_ratio = 40
-vm.dirty_background_ratio = 10
+# Dirty limits in absolute bytes: ratio-based limits scale with host RAM
+# (40% of 128 GB = 51 GB of dirty pages before forced writeback) and turn
+# world-save bursts into node-wide writeback storms that stall every
+# server's fsyncs for seconds.
+vm.dirty_background_bytes = 268435456
+vm.dirty_bytes = 1073741824
 vm.swappiness = 10
 vm.vfs_cache_pressure = 50
 EOF
@@ -119,8 +123,8 @@ cat > "${SERVICE_OVERRIDE}" <<'EOF'
 LimitNOFILE=1048576
 LimitNOFILESoft=1048576
 TasksMax=infinity
-MemoryMax=4G
-MemorySwapMax=0
+CPUWeight=1000
+IOWeight=1000
 EOF
 
 systemctl daemon-reload

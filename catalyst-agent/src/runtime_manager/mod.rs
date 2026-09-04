@@ -95,7 +95,6 @@ use crate::firewall_manager::FirewallManager;
 const RUNTIME_NAME: &str = "io.containerd.runc.v2";
 const SPEC_TYPE_URL: &str = "types.containerd.io/opencontainers/runtime-spec/1/Spec";
 const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024; // 10MB per file
-const LOG_BACKUP_COUNT: usize = 2;
 
 /// Tracks CPU usage samples per container to compute real percentage over time
 pub struct CpuTracker {
@@ -286,6 +285,9 @@ pub struct ContainerStats {
     /// Raw block I/O bytes (read, write) — cumulative counters.
     pub block_read_bytes: u64,
     pub block_write_bytes: u64,
+    /// Cumulative CFS throttle counters from cpu.stat (cgroup v2):
+    /// (nr_periods, nr_throttled, throttled_usec). None on v1.
+    pub cpu_throttling: Option<(u64, u64, u64)>,
 }
 
 /// Log stream providing async file handles for stdout/stderr
@@ -417,8 +419,8 @@ pub use helpers::{
     calculate_ip_range_from_subnet, create_fifo, detect_default_route_interface,
     detect_host_network, discover_cni_bin_dir, find_container_cgroup, grpc_err, is_not_found,
     load_named_cni_plugin_config, open_fifo_rdwr, parse_ctr_event_line, parse_signal,
-    read_block_io, read_cgroup_cpu_usage, read_cgroup_memory, read_cgroup_memory_limit,
-    read_network_io, rotate_logs, set_dir_perms,
+    read_block_io, read_cgroup_cpu_throttling, read_cgroup_cpu_usage, read_cgroup_memory,
+    read_cgroup_memory_limit, read_network_io, rotate_logs, set_dir_perms,
 };
 
 pub use image_and_spec::{

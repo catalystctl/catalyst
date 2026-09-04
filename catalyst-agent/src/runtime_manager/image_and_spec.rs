@@ -157,7 +157,7 @@ pub fn base_mounts(data_dir: &str) -> Vec<serde_json::Value> {
         serde_json::json!({"destination":"/proc","type":"proc","source":"proc"}),
         serde_json::json!({"destination":"/dev","type":"tmpfs","source":"tmpfs","options":["nosuid","strictatime","mode=755","size=65536k"]}),
         serde_json::json!({"destination":"/dev/pts","type":"devpts","source":"devpts","options":["nosuid","noexec","newinstance","ptmxmode=0666","mode=0620","gid=5"]}),
-        serde_json::json!({"destination":"/dev/shm","type":"tmpfs","source":"shm","options":["nosuid","noexec","nodev","mode=1777","size=65536k"]}),
+        serde_json::json!({"destination":"/dev/shm","type":"tmpfs","source":"shm","options":["nosuid","noexec","nodev","mode=1777","size=268435456"]}),
         serde_json::json!({"destination":"/dev/mqueue","type":"mqueue","source":"mqueue","options":["nosuid","noexec","nodev"]}),
         serde_json::json!({"destination":"/sys","type":"sysfs","source":"sysfs","options":["nosuid","noexec","nodev","ro"]}),
         serde_json::json!({"destination":"/sys/fs/cgroup","type":"cgroup","source":"cgroup","options":["nosuid","noexec","nodev","relatime","ro"]}),
@@ -254,15 +254,47 @@ pub fn default_seccomp_profile() -> serde_json::Value {
 /// throttling the whole cgroup until the next refill. The long-term average
 /// stays capped at quota.
 pub(crate) fn linux_cpu_resources(cpu_cores: u64) -> serde_json::Value {
+    // Defense in depth: quota 0 is runc's "unset" — an unlimited container.
+    // A malformed backend message must degrade to a sane cap, never to none.
+    let cpu_cores = cpu_cores.max(1);
+    // runc 1.4.x on cgroup v2 ignores `cpu.weight` (verified empirically:
+    // the cgroup keeps the default weight 100) but converts `shares`
+    // lossily (1024 -> 174) and applies `unified["cpu.weight"]` exactly.
+    // Emit shares (cgroup v1 + lossy v2 fallback) and unified weight
+    // (exact v2) so proportional fairness holds on both cgroup versions.
+    let burst_supported = crate::runtime_manager::helpers::kernel_supports_cpu_burst();
+    linux_cpu_resources_with(cpu_cores, burst_supported)
+}
+
+/// like `linux_cpu_resources`, with the kernel-burst support passed in so
+/// both branches are testable without root.
+pub(crate) fn linux_cpu_resources_with(cpu_cores: u64, burst_supported: bool) -> serde_json::Value {
+    let cpu_cores = cpu_cores.max(1);
     let quota = (cpu_cores as i64) * 100_000;
     let burst = cpu_cores.saturating_mul(100_000);
-    let weight = cpu_cores.saturating_mul(100);
-    serde_json::json!({
+    let shares = cpu_cores.saturating_mul(1024);
+    // cgroup v2 cpu.weight clamps to 1..=10000; a >100-core allocation
+    // must saturate instead of failing container creation at spec-parse.
+    let weight = cpu_cores.saturating_mul(100).min(10_000);
+    // cpu.max.burst exists only on kernel >= 5.14; runc writes it literally,
+    // so on older kernels with a modern runc the write fails task creation.
+    // Omit the field where the kernel cannot accept it.
+    let mut cpu = serde_json::json!({
         "quota": quota,
         "period": 100000u64,
-        "burst": burst,
+        "shares": shares,
         "weight": weight,
-    })
+    });
+    if burst_supported {
+        cpu["burst"] = serde_json::json!(burst);
+    }
+    cpu
+}
+
+/// Extra cgroup v2 (`unified`) keys for CPU fairness. Kept separate from
+/// `linux_memory_resources` because both callers merge into the same map.
+pub(crate) fn unified_cpu_weight(cpu_cores: u64) -> String {
+    (cpu_cores.max(1).saturating_mul(100).min(10_000)).to_string()
 }
 
 /// OCI `linux.resources.memory` plus cgroup v2 `unified` map.
@@ -276,7 +308,14 @@ pub(crate) fn linux_memory_resources(
     serde_json::Value,
 ) {
     let mem_limit = (memory_mb as i64) * 1024 * 1024;
-    let mem_high = mem_limit * 9 / 10;
+    // memory.high is the kernel's throttle-threshold: allocation stalls in
+    // synchronous reclaim once memory.current passes it. A 90% watermark
+    // freezes game threads below the advertised limit (JVM heap + native
+    // overhead routinely crosses it). Setting high == limit keeps the limit
+    // as the single boundary: working sets that fit run untouched; oversized
+    // ones hit a clean OOM kill (restartable) instead of recurring
+    // multi-second reclaim freezes.
+    let mem_high = mem_limit;
     let mut memory = serde_json::Map::new();
     memory.insert("limit".into(), serde_json::json!(mem_limit));
     if reservation_mb > 0 && reservation_mb < memory_mb {
@@ -641,11 +680,17 @@ impl ContainerdRuntime {
 
         let args = build_process_args(config.startup_command, image_entrypoint, image_cmd);
 
-        let (memory, unified) = linux_memory_resources(
+        let (memory, mut unified) = linux_memory_resources(
             config.memory_mb,
             config.swap_mb,
             config.memory_reservation_mb,
         );
+        if let Some(unified_map) = unified.as_object_mut() {
+            unified_map.insert(
+                "cpu.weight".to_string(),
+                serde_json::json!(unified_cpu_weight(config.cpu_cores)),
+            );
+        }
         let cpu = linux_cpu_resources(config.cpu_cores);
         let cgroup_path = format!("/{}/{}", self.namespace, config.container_id);
         // Runtime containers run as non-root (1000:1000) and need minimal capabilities.
@@ -699,6 +744,11 @@ impl ContainerdRuntime {
             serde_json::json!({"type":"ipc"}),
             serde_json::json!({"type":"uts"}),
             serde_json::json!({"type":"mount"}),
+            // Private cgroup namespace: without it the read-only /sys/fs/cgroup
+            // bind exposes the host's real hierarchy — sibling container IDs,
+            // the agent's cgroup, and node-level counters — to any process in
+            // the container. runc/Docker defaults include it.
+            serde_json::json!({"type":"cgroup"}),
         ];
         if !use_host_network {
             ns.push(serde_json::json!({"type":"network"}));
@@ -715,12 +765,39 @@ impl ContainerdRuntime {
             "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":memory,
                 "cpu":cpu,
                 "blockIO":{"weight":config.io_weight},
-                "pids":{"limit":512},
+                "pids":{"limit":2048},
                 "devices":devices,"unified":unified},
                 "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths(),
-                "seccomp": default_seccomp_profile()}
+                "seccomp": default_seccomp_profile(),
+                "sysctl": container_net_sysctls(use_host_network)}
         }))
     }
+}
+
+/// Per-network-namespace socket sysctls. A new netns inherits kernel
+/// defaults (rmem/wmem max ~208 KiB), silently clamping game servers'
+/// setsockopt(SO_RCVBUF) bursts above that — packet loss and jitter that
+/// hosts with tuned sysctls never see.
+///
+/// Only `net.ipv4.tcp_*` keys are set: runc writes net sysctls after
+/// netns creation while still holding the container's init privileges,
+/// and `net.core.*` writes require CAP_NET_ADMIN in that netns — the
+/// runtime spec grants only CAP_NET_BIND_SERVICE, so `net.core.*` here
+/// fails container creation (verified against runc 1.4.3). tcp_rmem/tcp_wmem
+/// autotuning maximums apply without extra caps and are the knobs that
+/// matter for throughput; UDP SO_RCVBUF requests still clamp to the
+/// inherited net.core.rmem_max, which node-level tuning (node-tuning.sh)
+/// raises for the whole host.
+/// Applied only when the container creates its own netns (host-network
+/// containers inherit the host's).
+fn container_net_sysctls(use_host_network: bool) -> serde_json::Value {
+    if use_host_network {
+        return serde_json::json!({});
+    }
+    serde_json::json!({
+        "net.ipv4.tcp_rmem": "4096 87380 16777216",
+        "net.ipv4.tcp_wmem": "4096 65536 16777216"
+    })
 }
 
 #[cfg(test)]
@@ -836,9 +913,11 @@ mod tests {
         // leave the cgroup at the kernel default "max" (unlimited).
         assert_eq!(memory.get("swap"), Some(&serde_json::json!(limit)));
         assert!(!memory.contains_key("reservation"));
+        // memory.high must equal the limit: a 90% watermark stalls game
+        // threads in synchronous reclaim below the advertised allocation.
         assert_eq!(
             unified.get("memory.high"),
-            Some(&serde_json::json!((limit * 9 / 10).to_string()))
+            Some(&serde_json::json!(limit.to_string()))
         );
     }
 
@@ -863,17 +942,60 @@ mod tests {
     #[test]
     fn cpu_resources_banks_one_full_period_as_burst() {
         // 2 cores -> 200ms quota per 100ms period, burst equals quota.
-        let cpu = linux_cpu_resources(2);
+        // shares feed cgroup v1 (and the lossy v2 fallback); unified
+        // cpu.weight is the exact v2 knob.
+        let cpu = linux_cpu_resources_with(2, true);
         assert_eq!(cpu.get("quota"), Some(&serde_json::json!(200000i64)));
         assert_eq!(cpu.get("period"), Some(&serde_json::json!(100000u64)));
         assert_eq!(cpu.get("burst"), Some(&serde_json::json!(200000u64)));
+        assert_eq!(cpu.get("shares"), Some(&serde_json::json!(2048i64)));
         assert_eq!(cpu.get("weight"), Some(&serde_json::json!(200u64)));
+        assert_eq!(unified_cpu_weight(2), "200");
     }
 
     #[test]
     fn cpu_resources_single_core_burst_equals_quota() {
-        let cpu = linux_cpu_resources(1);
+        let cpu = linux_cpu_resources_with(1, true);
         assert_eq!(cpu.get("quota"), Some(&serde_json::json!(100000i64)));
         assert_eq!(cpu.get("burst"), Some(&serde_json::json!(100000u64)));
+        assert_eq!(cpu.get("shares"), Some(&serde_json::json!(1024i64)));
+        assert_eq!(unified_cpu_weight(1), "100");
+    }
+
+    #[test]
+    fn cpu_resources_omit_burst_when_kernel_lacks_it() {
+        // Kernel < 5.14 + modern runc: writing cpu.max.burst fails task
+        // creation, so the field must be absent entirely.
+        let cpu = linux_cpu_resources_with(2, false);
+        assert!(cpu.get("burst").is_none());
+        assert_eq!(cpu.get("quota"), Some(&serde_json::json!(200000i64)));
+    }
+
+    #[test]
+    fn cpu_resources_zero_cores_degrades_to_one() {
+        // quota 0 is runc's "unset" (unlimited); a malformed allocation
+        // must clamp to 1 core, never produce an uncapped container.
+        let cpu = linux_cpu_resources_with(0, true);
+        assert_eq!(cpu.get("quota"), Some(&serde_json::json!(100000i64)));
+        assert_eq!(unified_cpu_weight(0), "100");
+    }
+
+    #[test]
+    fn cpu_resources_weight_clamps_at_kernel_max() {
+        // 128-core allocation: cpu.weight saturates at the kernel's 10000
+        // instead of failing container creation.
+        let cpu = linux_cpu_resources_with(128, true);
+        assert_eq!(cpu.get("weight"), Some(&serde_json::json!(10000u64)));
+        assert_eq!(unified_cpu_weight(128), "10000");
+    }
+
+    #[test]
+    fn cpu_resources_weight_scales_with_cores() {
+        // Proportional fairness: an 8-core server must weigh 8x a 1-core one
+        // on both cgroup versions (runc 1.4.x drops cpu.weight on v2, so the
+        // unified map is what actually lands there).
+        let cpu = linux_cpu_resources(8);
+        assert_eq!(cpu.get("shares"), Some(&serde_json::json!(8192i64)));
+        assert_eq!(unified_cpu_weight(8), "800");
     }
 }

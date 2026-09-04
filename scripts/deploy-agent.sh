@@ -458,8 +458,14 @@ prepare_host_kernel() {
     log "Enabling host kernel settings required by the sandboxed agent..."
     if command -v sysctl >/dev/null 2>&1; then
         sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || warn "Could not enable net.ipv4.ip_forward"
+        # Append (do not overwrite): node-tuning.sh owns the full
+        # 99-catalyst.conf tuning (conntrack, JVM max_map_count, inotify,
+        # socket buffers). Overwriting it silently reverted that tuning on
+        # every re-deploy.
         mkdir -p /etc/sysctl.d
-        printf 'net.ipv4.ip_forward = 1\n' > /etc/sysctl.d/99-catalyst.conf
+        touch /etc/sysctl.d/99-catalyst.conf
+        grep -q '^net.ipv4.ip_forward' /etc/sysctl.d/99-catalyst.conf || \
+            printf 'net.ipv4.ip_forward = 1\n' >> /etc/sysctl.d/99-catalyst.conf
     fi
     if command -v modprobe >/dev/null 2>&1; then
         modprobe loop >/dev/null 2>&1 || warn "Could not load loop module (disk quotas may fall back to a plain directory)"
@@ -966,6 +972,25 @@ main() {
     ensure_containerd_config "$init_system"
     prepare_directories
     prepare_host_kernel
+    # Apply node kernel tuning (sysctls, conntrack sizing, inotify limits,
+    # JVM-related knobs). Historically this script was never invoked by
+    # any install path, so nodes silently ran stock kernel defaults.
+    TUNING_SCRIPT="$(dirname "$0")/node-tuning.sh"
+    if [ ! -f "${TUNING_SCRIPT}" ]; then
+        # curl-pipe install: $0 is "bash", so fetch the script from the same
+        # source this script came from when possible.
+        if [ -n "${CATALYST_TUNING_URL:-}" ]; then
+            log "Fetching node-tuning.sh from ${CATALYST_TUNING_URL}..."
+            curl -fsSL "${CATALYST_TUNING_URL}" -o /tmp/catalyst-node-tuning.sh 2>/dev/null \
+                && TUNING_SCRIPT=/tmp/catalyst-node-tuning.sh
+        fi
+    fi
+    if [ -f "${TUNING_SCRIPT}" ]; then
+        log "Applying node tuning (node-tuning.sh)..."
+        bash "${TUNING_SCRIPT}" || warn "node-tuning.sh failed (node will run with default sysctls)"
+    else
+        warn "node-tuning.sh unavailable — skipping kernel tuning (run scripts/node-tuning.sh manually after install)"
+    fi
     install_agent_binary
     write_config
 

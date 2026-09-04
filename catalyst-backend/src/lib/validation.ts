@@ -120,10 +120,17 @@ export const serverUpdateSchema = z.object({
   name: serverNameSchema.optional(),
   description: z.string().max(500).optional(),
   environment: z.record(z.string(), z.string().min(1).max(4096)).optional(),
+  // Startup-command edits arrive from ServerDetailsPage as a string or null.
+  startupCommand: z.string().max(4096).nullable().optional(),
   portBindings: z.record(z.string(), z.number().int().min(1).max(65535)).optional(),
   allocatedMemoryMb: z.number().int().min(512).max(131072).optional(),
   allocatedCpuCores: z.number().int().min(1).max(128).optional(),
   allocatedDiskMb: z.number().int().min(1024).max(1048576).optional(),
+  backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
+  databaseAllocation: z.number().int().min(0).max(1024).optional(),
+  primaryPort: z.number().int().min(1).max(65535).optional(),
+  primaryIp: z.string().max(45).nullable().optional(),
+  allocationId: z.string().max(64).optional(),
   networkMode: z.enum(['bridge', 'macvlan', 'host']).optional(),
   subdomain: z.string()
     .max(63, 'Subdomain must be at most 63 characters')
