@@ -888,6 +888,8 @@ All require `admin.read` for lists, `admin.write` for mutations:
 | `GET /api/plugins/:name` | Full details incl. routes/tasks/events/WS/RPC inventory |
 | `POST /api/plugins/:name/enable` | Body `{ enabled, safety?: { disclaimerVersion } }`. Returns `409 SAFETY_CONSENT_REQUIRED` when a fresh acceptance is needed |
 | `PUT /api/plugins/:name/permissions` | Body `{ granted: string[] }` ⊆ declared permissions |
+| `POST /api/plugins/install` | Body `{ url, sha256? }`. Downloads, verifies and stages a package (stays inert until enabled) |
+| `POST /api/plugins/:name/uninstall` | Body `{ purgeData? }`. Disables, removes code and unloads; purge also deletes stored data + the Plugin row |
 
 ---
 

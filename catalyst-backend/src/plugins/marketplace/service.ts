@@ -7,7 +7,7 @@ import {
   promoteIntoPlace,
   PackagingError,
 } from './packaging';
-import { compareVersions } from '../validator';
+import { compareVersions, isValidPluginName } from '../validator';
 
 export { PackagingError };
 
@@ -423,7 +423,13 @@ export class PluginMarketplaceService {
 
       const existingRow = await this.prisma.plugin.findUnique({ where: { name }, select: { version: true } });
       if (existingRow && existingRow.version === version) {
-        throw new PackagingError('ALREADY_INSTALLED', `Plugin ${name}@${version} is already installed`);
+        // A leftover Plugin row from an uninstall without purge must not
+        // block reinstalling the same version — only skip when the code is
+        // still on disk.
+        const onDisk = await fsp.stat(path.join(this.pluginsDir, name)).catch(() => null);
+        if (onDisk?.isDirectory()) {
+          throw new PackagingError('ALREADY_INSTALLED', `Plugin ${name}@${version} is already installed`);
+        }
       }
 
       await promoteIntoPlace(stagedDir, this.pluginsDir, name);
@@ -445,8 +451,19 @@ export class PluginMarketplaceService {
   }
 
   async uninstall(name: string, opts: { purgeData?: boolean } = {}): Promise<void> {
-    const finalDir = path.join(this.pluginsDir, name);
+    if (!isValidPluginName(name)) {
+      throw new PackagingError('INVALID_NAME', `Invalid plugin name: ${name}`);
+    }
+    const pluginsRoot = path.resolve(this.pluginsDir);
+    const finalDir = path.join(pluginsRoot, name);
+    if (path.dirname(finalDir) !== pluginsRoot || finalDir === pluginsRoot) {
+      throw new PackagingError('INVALID_NAME', `Invalid plugin name: ${name}`);
+    }
     const stat = await fsp.stat(finalDir).catch(() => null);
+    const existingRow = await this.prisma.plugin.findUnique({ where: { name }, select: { name: true } }).catch(() => null);
+    if (!stat?.isDirectory() && !existingRow) {
+      throw new PackagingError('NOT_FOUND', `Plugin ${name} is not installed`);
+    }
 
     if (opts.purgeData) {
       await this.prisma.pluginStorage.deleteMany({ where: { pluginName: name } });

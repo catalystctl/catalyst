@@ -444,7 +444,18 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         if (loaded?.status === 'enabled') {
           await pluginLoader.disablePlugin(name);
         }
-        await marketplaceService.uninstall(name, { purgeData: body.purgeData });
+        try {
+          await marketplaceService.uninstall(name, { purgeData: body.purgeData });
+        } catch (uninstallError: any) {
+          // A registry-only copy (on-disk dir already gone) still needs to be
+          // dropped from memory so reinstalls start clean.
+          if (uninstallError instanceof PackagingError && uninstallError.code === 'NOT_FOUND' && loaded) {
+            await pluginLoader.unloadPlugin(name).catch(() => {});
+            await writeAudit(prisma, 'plugin.uninstalled', name, { purgeData: !!body.purgeData }, userId);
+            return { success: true, message: `Plugin ${name} uninstalled` };
+          }
+          throw uninstallError;
+        }
         try {
           await pluginLoader.unloadPlugin(name);
         } catch { /* not loaded — fine */ }
@@ -457,6 +468,9 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
 
         return { success: true, message: `Plugin ${name} uninstalled` };
       } catch (error: any) {
+        if (error instanceof PackagingError && error.code === 'NOT_FOUND') {
+          return reply.status(404).send({ success: false, error: error.message });
+        }
         return reply.status(400).send({ success: false, error: error.message });
       }
     },

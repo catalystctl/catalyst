@@ -78,10 +78,12 @@ export function PluginDetailsDialog({
   pluginName,
   open,
   onOpenChange,
+  onUninstallRequest,
 }: {
   pluginName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onUninstallRequest?: (name: string) => void;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: qk.adminPlugin(pluginName),
@@ -390,7 +392,19 @@ export function PluginDetailsDialog({
             </Tabs>
           )}
         </DialogBody>
-        <DialogFooter>
+        <DialogFooter className="sm:justify-between">
+          {onUninstallRequest && details ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-danger hover:text-danger"
+              onClick={() => onUninstallRequest(pluginName)}
+            >
+              Uninstall…
+            </Button>
+          ) : (
+            <span />
+          )}
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             Close
           </Button>

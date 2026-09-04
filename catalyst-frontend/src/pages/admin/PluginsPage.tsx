@@ -11,13 +11,14 @@ import {
   Settings,
   ShieldCheck,
   Store,
+  Trash2,
   Loader2,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fetchPlugins, fetchMarketplace, togglePlugin, reloadPlugin, updatePluginConfig, fetchPluginDetails, type SafetyConsentRequiredError } from '../../plugins/api';
+import { fetchPlugins, fetchMarketplace, togglePlugin, reloadPlugin, updatePluginConfig, fetchPluginDetails, uninstallPlugin, type SafetyConsentRequiredError } from '../../plugins/api';
 import { toast } from 'sonner';
 import { usePluginContext } from '../../plugins/usePluginContext';
 import type { CapabilitySummary, PluginManifest } from '../../plugins/types';
@@ -37,6 +38,7 @@ import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { PluginDetailsDialog } from './plugins/PluginDetailsDialog';
 import { SafetyConsentDialog, PLUGIN_DISCLAIMER_VERSION } from './plugins/SafetyConsentDialog';
 import { MarketplaceDialog } from './plugins/MarketplaceDialog';
+import { UninstallPluginDialog } from './plugins/UninstallPluginDialog';
 import { permissionLabel } from './plugins/permissionMeta';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -71,6 +73,7 @@ function PluginRow({
   onReload,
   onSettings,
   onDetails,
+  onUninstall,
 }: {
   plugin: PluginManifest;
   isProcessing: boolean;
@@ -79,6 +82,7 @@ function PluginRow({
   onReload: () => void;
   onSettings: () => void;
   onDetails: () => void;
+  onUninstall: () => void;
 }) {
   const revoked = plugin.revokedPermissions?.length ?? 0;
   const declaredCount = plugin.declaredPermissions?.length ?? 0;
@@ -149,6 +153,9 @@ function PluginRow({
         </Button>
         <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onSettings(); }} aria-label="Settings">
           <Settings className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onUninstall(); }} disabled={isProcessing} aria-label={`Uninstall ${plugin.name}`}>
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
         <Button variant="ghost" size="icon-sm" onClick={onDetails} aria-label="Details">
           <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -401,6 +408,8 @@ export default function PluginsPage() {
   const [settingsPlugin, setSettingsPlugin] = useState<string | null>(null);
   const [detailsPlugin, setDetailsPlugin] = useState<string | null>(null);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const [uninstallTarget, setUninstallTarget] = useState<PluginManifest | null>(null);
+  const [uninstallBusy, setUninstallBusy] = useState(false);
 
   // Safety consent flow state
   const [consentRequest, setConsentRequest] = useState<{
@@ -504,6 +513,26 @@ export default function PluginsPage() {
     },
     onError: (error: any) => toast.error(error.message || 'Failed to reload plugin'),
   });
+
+  const confirmUninstall = async (purgeData: boolean) => {
+    if (!uninstallTarget) return;
+    setUninstallBusy(true);
+    setProcessingPlugin(uninstallTarget.name);
+    try {
+      await uninstallPlugin(uninstallTarget.name, purgeData);
+      toast.success(`Plugin ${uninstallTarget.name} uninstalled${purgeData ? ' and data purged' : ''}`);
+      if (detailsPlugin === uninstallTarget.name) setDetailsPlugin(null);
+      setUninstallTarget(null);
+      reloadPlugins();
+      queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
+      queryClient.invalidateQueries({ queryKey: ['plugins', 'marketplace'] });
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to uninstall plugin');
+    } finally {
+      setUninstallBusy(false);
+      setProcessingPlugin(null);
+    }
+  };
 
   const enabledCount = plugins?.filter((p) => p.enabled).length ?? 0;
   const totalCount = plugins?.length ?? 0;
@@ -634,6 +663,7 @@ export default function PluginsPage() {
               onReload={() => reloadMutation.mutate(plugin.name)}
               onSettings={() => setSettingsPlugin(plugin.name)}
               onDetails={() => setDetailsPlugin(plugin.name)}
+              onUninstall={() => setUninstallTarget(plugin)}
             />
           ))}
         </ServerTabCard>
@@ -651,6 +681,13 @@ export default function PluginsPage() {
         pluginName={detailsPlugin ?? ''}
         open={!!detailsPlugin}
         onOpenChange={(open) => !open && setDetailsPlugin(null)}
+        onUninstallRequest={(name) => {
+          const target = plugins?.find((p) => p.name === name);
+          if (target) {
+            setDetailsPlugin(null);
+            setUninstallTarget(target);
+          }
+        }}
       />
 
       {/* ── Marketplace ── */}
@@ -679,6 +716,20 @@ export default function PluginsPage() {
         onAccept={confirmEnableWithConsent}
         onOpenChange={(open) => !open && setConsentRequest(null)}
       />
+
+      {/* ── Uninstall Confirmation ── */}
+      {uninstallTarget && (
+        <UninstallPluginDialog
+          pluginName={uninstallTarget.name}
+          displayName={uninstallTarget.displayName}
+          version={uninstallTarget.version}
+          enabled={uninstallTarget.enabled}
+          open={!!uninstallTarget}
+          busy={uninstallBusy}
+          onConfirm={confirmUninstall}
+          onOpenChange={(open) => !open && !uninstallBusy && setUninstallTarget(null)}
+        />
+      )}
     </div>
   );
 }
