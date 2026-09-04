@@ -346,7 +346,6 @@ export const buildConnectionInfo = (
     hostNetworkIp,
     host,
     port: resolvePrimaryHostPort(server),
-    subdomain: server.subdomain ?? null,
   };
 };
 
@@ -356,17 +355,6 @@ export const patchTemplateForRuntime = (template: any) => ({
   sendSignalTo: template.sendSignalTo ?? 'SIGTERM',
   installImage: template.installImage ?? 'alpine:3.19',
 });
-
-export const injectSubdomainEnvVar = (
-  environment: Record<string, string>,
-  server: { subdomain: string | null }
-): Record<string, string> => {
-  const env = { ...environment };
-  if (server.subdomain) {
-    env.CATALYST_SUBDOMAIN = server.subdomain;
-  }
-  return env;
-};
 
 export const withConnectionInfo = (server: any, fallbackNode?: { publicAddress?: string }) => ({
     ...server,

@@ -30,6 +30,7 @@ const KILLABLE: ServerStatus[] = ['running', 'starting', 'stopping', 'error', 'c
 function ServerControls({ serverId, status, permissions }: Props) {
   const queryClient = useQueryClient();
   const [showKillConfirm, setShowKillConfirm] = useState(false);
+  const [showCancelInstallConfirm, setShowCancelInstallConfirm] = useState(false);
 
   // Fail CLOSED: missing/empty permissions hide all power controls.
   const p = new Set(permissions ?? []);
@@ -38,6 +39,8 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const canStop = hasWildcard || p.has('server.stop');
   const canRestart = canStart && canStop;
   const canKill = canStop;
+  const canCancelInstall =
+    hasWildcard || p.has('server.install') || p.has('server.reinstall');
 
   async function snapshotAndOptimistic(nextStatus: ServerStatus) {
     await queryClient.cancelQueries({ queryKey: qk.server(serverId) });
@@ -118,11 +121,36 @@ function ServerControls({ serverId, status, permissions }: Props) {
     },
   });
 
-  if (!canStart && !canStop && !canKill) {
+  const cancelInstall = useMutation({
+    mutationFn: () => serversApi.cancelInstall(serverId),
+    onMutate: () => snapshotAndOptimistic('stopped'),
+    onError: (_err, _vars, prev) => {
+      if (prev) queryClient.setQueryData(qk.server(serverId), prev);
+      optimisticInvalidate(queryClient, qk.servers());
+      notifyError('Failed to cancel install');
+      setShowCancelInstallConfirm(false);
+    },
+    onSettled: () => {
+      optimisticInvalidate(queryClient, qk.server(serverId));
+      optimisticInvalidate(queryClient, qk.servers());
+      optimisticInvalidate(queryClient, qk.adminServers());
+    },
+    onSuccess: () => {
+      notifySuccess('Install cancelled');
+      setShowCancelInstallConfirm(false);
+    },
+  });
+
+  if (!canStart && !canStop && !canKill && !canCancelInstall) {
     return null;
   }
 
-  const busy = start.isPending || stop.isPending || restart.isPending || kill.isPending;
+  const busy =
+    start.isPending ||
+    stop.isPending ||
+    restart.isPending ||
+    kill.isPending ||
+    cancelInstall.isPending;
 
   return (
     <>
@@ -171,6 +199,17 @@ function ServerControls({ serverId, status, permissions }: Props) {
             Kill
           </Button>
         )}
+        {canCancelInstall && status === 'installing' && (
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={busy}
+            aria-busy={cancelInstall.isPending}
+            onClick={() => setShowCancelInstallConfirm(true)}
+          >
+            {cancelInstall.isPending ? 'Cancelling…' : 'Cancel install'}
+          </Button>
+        )}
       </div>
 
       <ConfirmDialog
@@ -183,6 +222,17 @@ function ServerControls({ serverId, status, permissions }: Props) {
         loading={kill.isPending}
         onConfirm={() => kill.mutate()}
         onCancel={() => setShowKillConfirm(false)}
+      />
+      <ConfirmDialog
+        open={showCancelInstallConfirm}
+        title="Cancel install?"
+        message="This will kill the stuck installer container and reset the server to stopped so you can reinstall. Partial install files are kept. Are you sure?"
+        confirmText="Cancel install"
+        cancelText="Keep installing"
+        variant="danger"
+        loading={cancelInstall.isPending}
+        onConfirm={() => cancelInstall.mutate()}
+        onCancel={() => setShowCancelInstallConfirm(false)}
       />
     </>
   );

@@ -154,7 +154,6 @@ export const qk = {
   adminRoles: () => ['admin-roles'] as const,
   adminSmtp: () => ['admin-smtp'] as const,
   adminModManager: () => ['admin-mod-manager'] as const,
-  adminDnsSettings: () => ['admin-dns-settings'] as const,
   adminSecuritySettings: () => ['admin-security-settings'] as const,
   adminAuthLockouts: (params?: Record<string, unknown>) =>
     params ? ['admin-auth-lockouts', params] as const : ['admin-auth-lockouts'] as const,

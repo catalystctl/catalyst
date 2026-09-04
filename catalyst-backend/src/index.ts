@@ -262,10 +262,6 @@ taskScheduler.setTaskExecutor({
 				);
 			}
 		}
-		if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
-			environment.CATALYST_SUBDOMAIN = server.subdomain;
-		}
-
 		if (action === "backup") {
 			// Use the same locking / quota / DB-row path as HTTP create-backup.
 			const result = await createServerBackup({

@@ -851,6 +851,7 @@ Resize the server's allocated disk space. Online grow is supported; shrinking re
 | `POST` | `/api/servers/:id/kill` | `server.stop` | Force kill server |
 | `POST` | `/api/servers/:id/install` | `server.install` | Install server (first deploy) |
 | `POST` | `/api/servers/:id/reinstall` | `server.reinstall` | Reinstall (wipe + install) |
+| `POST` | `/api/servers/:id/cancel-install` | `server.install` or `server.reinstall` | Kill stuck installer, reset to stopped |
 | `POST` | `/api/servers/:id/rebuild` | `server.rebuild` | Rebuild container (preserve data) |
 | `POST` | `/api/servers/:id/suspend` | `server.suspend` or `admin` | Suspend server |
 | `POST` | `/api/servers/:id/unsuspend` | `server.suspend` or `admin` | Unsuspend server |
@@ -873,6 +874,23 @@ Completely wipe the server's disk and reinstall from scratch. This is irreversib
 
 **Errors:**
 - `409` — Server must be stopped before reinstall
+
+#### POST `/api/servers/:id/cancel-install`
+
+Kill a stuck installer container and reset the server from `installing` to `stopped` so it can be reinstalled. Only valid while the server is `installing`. The installer kill is sent best-effort to the node; the panel state is reset even when the node is offline (the response then includes `agentNotified: false` and a warning).
+
+**Auth:** `server.install` or `server.reinstall`
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Install cancelled; installer kill sent to agent",
+  "agentNotified": true
+}
+```
+
+**Errors:**
+- `409` — Server is not installing
 
 #### POST `/api/servers/eula`
 
@@ -2664,8 +2682,6 @@ Remove a wildcard node assignment from a user or role.
 | `POST` | `/api/admin/database-hosts` | `admin.write` | Create database host |
 | `PUT` | `/api/admin/database-hosts/:hostId` | `admin.write` | Update database host |
 | `DELETE` | `/api/admin/database-hosts/:hostId` | `admin.write` | Delete database host |
-| `GET` | `/api/admin/dns-settings` | `admin.read` | Get DNS settings |
-| `PUT` | `/api/admin/dns-settings` | `admin.write` | Update DNS settings |
 | `GET` | `/api/admin/mod-manager` | `admin.read` | Get mod manager settings |
 | `PUT` | `/api/admin/mod-manager` | `admin.write` | Update mod manager settings |
 | `GET` | `/api/admin/auth-lockouts` | `admin.read` | List auth lockouts |
@@ -3324,9 +3340,7 @@ Create a new server template.
     "configFile": "serverconfig.txt",
     "startupDetection": { "done": "[success] Server started" }
   },
-  "nestId": "nest_xxx",
-  "srvService": null,
-  "srvProtocol": "tcp"
+  "nestId": "nest_xxx"
 }
 ```
 
@@ -3351,8 +3365,6 @@ Create a new server template.
 - `allocatedCpuCores` — default CPU allocation (required)
 - `features` — arbitrary feature flags object
 - `nestId` — optional nest to group under
-- `srvService` — optional SRV record service name
-- `srvProtocol` — SRV protocol, default `"tcp"`
 
 **Response (200):**
 ```json
@@ -3421,8 +3433,6 @@ Templates define how game servers are deployed:
     "startupDetection": { "done": "[success] Server started" }
   },
   "nestId": "nest_xxx",
-  "srvService": null,
-  "srvProtocol": "tcp",
   "createdAt": "2024-01-01T00:00:00Z",
   "updatedAt": "2024-01-01T00:00:00Z"
 }

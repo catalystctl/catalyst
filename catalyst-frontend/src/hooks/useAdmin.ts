@@ -173,15 +173,6 @@ export function useOidcConfig() {
   });
 }
 
-export function useDnsSettings() {
-  return useQuery({
-    queryKey: qk.adminDnsSettings(),
-    queryFn: adminApi.getDnsSettings,
-    staleTime: 10 * 60 * 1000,
-    placeholderData: (prev) => prev,
-  });
-}
-
 export function useSystemErrors(params?: {
   page?: number;
   limit?: number;

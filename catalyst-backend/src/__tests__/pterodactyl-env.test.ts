@@ -11,7 +11,6 @@ const baseServer = {
 	primaryPort: 25565,
 	allocatedMemoryMb: 4096,
 	allocatedDiskMb: 20480,
-	subdomain: 'play',
 	location: 'us-east',
 };
 

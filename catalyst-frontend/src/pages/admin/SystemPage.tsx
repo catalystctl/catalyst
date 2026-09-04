@@ -17,7 +17,7 @@ import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
 
-import { useAdminHealth, useAdminStats, useDnsSettings, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
+import { useAdminHealth, useAdminStats, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
 import UpdateSettings from '../../components/admin/UpdateSettings';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -66,7 +66,6 @@ function SystemPage() {
  const { data: health } = useAdminHealth();
  const { data: smtpSettings } = useSmtpSettings();
  const { data: modManagerSettings } = useModManagerSettings();
- const { data: dnsSettings } = useDnsSettings();
 
  const [smtpHost, setSmtpHost] = useState('');
  const [smtpPort, setSmtpPort] = useState('587');
@@ -81,11 +80,6 @@ function SystemPage() {
  const [smtpMaxMessages, setSmtpMaxMessages] = useState('');
  const [curseforgeApiKey, setCurseforgeApiKey] = useState('');
  const [modrinthApiKey, setModrinthApiKey] = useState('');
- const [dnsEnabled, setDnsEnabled] = useState(false);
- const [dnsProvider, setDnsProvider] = useState('cloudflare');
- const [dnsBaseDomain, setDnsBaseDomain] = useState('');
- const [dnsCloudflareApiToken, setDnsCloudflareApiToken] = useState('');
- const [dnsCloudflareZoneId, setDnsCloudflareZoneId] = useState('');
 
  const updateSmtpMutation = useMutation({
  mutationFn: () =>
@@ -107,22 +101,6 @@ function SystemPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminSmtp() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update SMTP settings'),
- });
-
- const updateDnsMutation = useMutation({
- mutationFn: () =>
- adminApi.updateDnsSettings({
- enabled: dnsEnabled,
- provider: dnsProvider.trim() || null,
- baseDomain: dnsBaseDomain.trim() || null,
- cloudflareApiToken: dnsCloudflareApiToken.trim() || null,
- cloudflareZoneId: dnsCloudflareZoneId.trim() || null,
- }),
- onSuccess: () => notifySuccess('DNS settings updated'),
- onSettled: () => {
- queryClient.invalidateQueries({ queryKey: qk.adminDnsSettings() });
- },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update DNS settings'),
  });
 
  const updateModManagerMutation = useMutation({
@@ -170,19 +148,6 @@ function SystemPage() {
  setModrinthApiKey(modManagerSettings.modrinthApiKey ?? '');
  }
  }
-
- const [prevDnsSettings, setPrevDnsSettings] = useState(dnsSettings);
- if (dnsSettings !== prevDnsSettings) {
- setPrevDnsSettings(dnsSettings);
- if (dnsSettings) {
- setDnsEnabled(Boolean(dnsSettings.enabled));
- setDnsProvider(dnsSettings.provider ?? 'cloudflare');
- setDnsBaseDomain(dnsSettings.baseDomain ?? '');
- setDnsCloudflareApiToken(dnsSettings.cloudflareApiToken ?? '');
- setDnsCloudflareZoneId(dnsSettings.cloudflareZoneId ?? '');
- }
- }
-
 
   return (
     <div className="space-y-5">
@@ -315,55 +280,6 @@ function SystemPage() {
  </span>
  <Input type="password" autoComplete="off" value={modrinthApiKey} onChange={(e) => setModrinthApiKey(e.target.value)} placeholder="••••••••" className="border-border/40" />
  </label>
- </div>
- </Section>
-
- {/* ── DNS Configuration ── */}
- <Section
- title="DNS Configuration"
- subtitle="Configure DNS provider integration for automatic subdomain management."
- icon={<Globe className="h-4 w-4 text-info" />}
- iconColor="bg-info/10"
- footer={
- <Button size="sm" disabled={updateDnsMutation.isPending} onClick={() => updateDnsMutation.mutate()}>
- {updateDnsMutation.isPending ? 'Saving…' : 'Save DNS settings'}
- </Button>
- }
- >
- <div className="space-y-4">
- <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
- <input
- type="checkbox"
- checked={dnsEnabled}
- onChange={(e) => setDnsEnabled(e.target.checked)}
- className="h-4 w-4 rounded border-border/40 bg-card text-primary"
- />
- Enable DNS integration
- </label>
- <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Provider</span>
- <select
- value={dnsProvider}
- onChange={(e) => setDnsProvider(e.target.value)}
- className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground"
- >
- <option value="cloudflare">Cloudflare</option>
- </select>
- </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Base domain</span>
- <Input value={dnsBaseDomain} onChange={(e) => setDnsBaseDomain(e.target.value)} placeholder="servers.example.com" className="border-border/40" />
- </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Cloudflare API token</span>
- <Input type="password" autoComplete="off" value={dnsCloudflareApiToken} onChange={(e) => setDnsCloudflareApiToken(e.target.value)} placeholder="••••••••" className="border-border/40" />
- </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Cloudflare Zone ID</span>
- <Input value={dnsCloudflareZoneId} onChange={(e) => setDnsCloudflareZoneId(e.target.value)} placeholder="zone-id" className="border-border/40" />
- </label>
- </div>
  </div>
  </Section>
 

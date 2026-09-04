@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
-import { useQueryClient, useMutation } from '@/csync';
+import { useQueryClient } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
 import { notifySuccess, notifyError } from '../../../utils/notify';
@@ -24,13 +24,10 @@ interface Props {
  onRename: () => void;
  isSuspended: boolean;
  serverStatus: string;
- subdomain: string | null;
  server: Server;
  /** Effective server permissions used to gate reinstall. */
  permissions?: string[];
 }
-
-const SUBDOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 
 export default function ServerSettingsTab({
  serverId,
@@ -40,35 +37,21 @@ export default function ServerSettingsTab({
  onRename,
  isSuspended,
  serverStatus,
- subdomain,
  server,
  permissions,
 }: Props) {
  const queryClient = useQueryClient();
- const [subdomainInput, setSubdomainInput] = useState(subdomain ?? '');
  const [showReinstallConfirm, setShowReinstallConfirm] = useState(false);
  const [reinstallPending, setReinstallPending] = useState(false);
+ const [showCancelInstallConfirm, setShowCancelInstallConfirm] = useState(false);
+ const [cancelInstallPending, setCancelInstallPending] = useState(false);
 
  const permSet = new Set(permissions ?? []);
  const canReinstall =
    permSet.has('*') ||
    permSet.has('server.install') ||
    permSet.has('server.reinstall');
-
- const updateSubdomainMutation = useMutation({
- mutationFn: (value: string | null) => serversApi.updateSubdomain(serverId, value),
- onSuccess: () => notifySuccess('Subdomain updated'),
- onSettled: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: qk.servers() });
- },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update subdomain'),
- });
-
- const isValidSubdomain = (value: string) => {
- if (!value) return true;
- return SUBDOMAIN_REGEX.test(value);
- };
+ const isInstalling = serverStatus === 'installing';
 
  const handleReinstall = async () => {
  setReinstallPending(true);
@@ -92,12 +75,34 @@ export default function ServerSettingsTab({
  }
  };
 
+ const handleCancelInstall = async () => {
+ setCancelInstallPending(true);
+ try {
+ await serversApi.cancelInstall(serverId);
+ notifySuccess('Install cancelled');
+ setShowCancelInstallConfirm(false);
+ } catch (error: unknown) {
+ reportSystemError({
+ level: 'error',
+ component: 'ServerSettingsTab',
+ message: describeError(error),
+ stack: error instanceof Error ? error.stack : undefined,
+ metadata: { context: 'cancel install' },
+ });
+ notifyError(error instanceof Error ? error.message : 'Failed to cancel install');
+ } finally {
+ setCancelInstallPending(false);
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
+ }
+ };
+
  return (
  <div className="space-y-4">
  <TabHeader
  icon={Settings}
  title="Settings"
- description="Manage server name, subdomain, and maintenance options."
+ description="Manage server name and maintenance options."
  />
     <ServerTabCard>
       <SettingsRow label="Name" description="Shown in lists and the server header.">
@@ -112,34 +117,6 @@ export default function ServerSettingsTab({
           Save
         </Button>
       </SettingsRow>
-      <SettingsRow label="Subdomain" description="Optional hostname label for this server.">
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2">
-            <Input
-              className="min-w-[160px] font-mono"
-              value={subdomainInput}
-              onChange={(e) => setSubdomainInput(e.target.value)}
-              placeholder="my-server"
-              disabled={isSuspended || updateSubdomainMutation.isPending}
-            />
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => updateSubdomainMutation.mutate(subdomainInput.trim() || null)}
-              disabled={
-                updateSubdomainMutation.isPending ||
-                isSuspended ||
-                !isValidSubdomain(subdomainInput.trim())
-              }
-            >
-              Save
-            </Button>
-          </div>
-          {subdomainInput && !isValidSubdomain(subdomainInput.trim()) && (
-            <p className="text-xs text-danger">Lowercase letters, numbers, and hyphens only.</p>
-          )}
-        </div>
-      </SettingsRow>
       <SettingsRow label="Maintenance">
         {canReinstall && (
           <Button
@@ -151,6 +128,17 @@ export default function ServerSettingsTab({
             onClick={() => setShowReinstallConfirm(true)}
           >
             Reinstall
+          </Button>
+        )}
+        {canReinstall && isInstalling && (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            disabled={isSuspended || cancelInstallPending}
+            onClick={() => setShowCancelInstallConfirm(true)}
+          >
+            {cancelInstallPending ? 'Cancelling…' : 'Cancel install'}
           </Button>
         )}
         <CloneServerDialog server={server} disabled={isSuspended} />
@@ -169,6 +157,17 @@ export default function ServerSettingsTab({
  loading={reinstallPending}
  onConfirm={() => { void handleReinstall(); }}
  onCancel={() => setShowReinstallConfirm(false)}
+ />
+ <ConfirmDialog
+ open={showCancelInstallConfirm}
+ title="Cancel install?"
+ message="This will kill the stuck installer container and reset the server to stopped so you can reinstall. Partial install files are kept. Are you sure?"
+ confirmText="Cancel install"
+ cancelText="Keep installing"
+ variant="danger"
+ loading={cancelInstallPending}
+ onConfirm={() => { void handleCancelInstall(); }}
+ onCancel={() => setShowCancelInstallConfirm(false)}
  />
  </div>
  );

@@ -342,12 +342,6 @@ model SystemSetting {
   // Defaults false (invite/admin-created users only). Admins may enable via security settings.
   // First setup also forces false after complete.
   registrationEnabled          Boolean  @default(false)
-  // DNS provider settings
-  dnsProvider           String?
-  dnsBaseDomain         String?
-  dnsCloudflareApiToken String?
-  dnsCloudflareZoneId   String?
-  dnsEnabled            Boolean  @default(false)
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }
@@ -531,8 +525,6 @@ model ServerTemplate {
   features          Json     @default("{}")
   nest        Nest?     @relation(fields: [nestId], references: [id])
   nestId      String?
-  srvService  String?
-  srvProtocol String   @default("tcp")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -577,7 +569,6 @@ model Server {
   networkMode  String  @default("bridge")
   primaryPort  Int
   primaryIp    String?
-  subdomain    String? @unique
   portBindings Json    @default("{}") // Record<number, number>
 
   // Configuration

@@ -98,6 +98,13 @@ impl WebSocketHandler {
             .map_err(|e| {
                 AgentError::IoError(format!("Failed to spawn installer container: {}", e))
             })?;
+        // Track the installer so cancel_install_server can kill this exact container.
+        {
+            self.active_installs
+                .write()
+                .await
+                .insert(server_id.to_string(), installer.container_id.clone());
+        };
 
         let mut stdout_pos = 0u64;
         let mut stderr_pos = 0u64;
@@ -208,10 +215,16 @@ impl WebSocketHandler {
                         }
                     }
                     let _ = installer.cleanup().await;
+                    {
+                        self.active_installs.write().await.remove(server_id);
+                    }
                     return Ok((exit_code, stdout_buffer, stderr_buffer));
                 }
                 Ok(Err(e)) => {
                     let _ = installer.cleanup().await;
+                    {
+                        self.active_installs.write().await.remove(server_id);
+                    }
                     return Err(AgentError::IoError(format!("Installer wait failed: {}", e)));
                 }
                 Err(_) => continue,
@@ -247,6 +260,12 @@ impl WebSocketHandler {
             })?;
 
         info!("Installing server: {} (UUID: {})", server_id, server_uuid);
+
+        // A fresh install supersedes any stale cancel flag left when a cancel
+        // arrived with no active installer to consume it.
+        {
+            self.cancelled_installs.write().await.remove(server_id);
+        }
 
         self.cleanup_all_server_containers(server_id, server_uuid)
             .await?;
@@ -432,9 +451,34 @@ impl WebSocketHandler {
                     continue;
                 }
                 Ok((code, out, err)) => break (code, out, err),
-                Err(e) => return Err(e),
+                Err(e) => {
+                    // A cancelled installer must exit quietly: the panel already
+                    // reset to stopped, so do not emit an error over it.
+                    if self.cancelled_installs.write().await.remove(server_id) {
+                        self.active_installs.write().await.remove(server_id);
+                        let _ = self
+                            .emit_console_output(
+                                server_id,
+                                "system",
+                                "[Catalyst] Installation cancelled.\n",
+                            )
+                            .await;
+                        return Ok(());
+                    }
+                    return Err(e);
+                }
             }
         };
+
+        // A kill that landed as a non-zero exit must also exit quietly without
+        // emitting an error state over the panel's stopped reset.
+        if self.cancelled_installs.write().await.remove(server_id) {
+            self.active_installs.write().await.remove(server_id);
+            let _ = self
+                .emit_console_output(server_id, "system", "[Catalyst] Installation cancelled.\n")
+                .await;
+            return Ok(());
+        }
 
         if exit_code != 0 {
             let stderr_trimmed = stderr_buffer.trim();
@@ -531,6 +575,87 @@ impl WebSocketHandler {
             .await?;
 
         info!("Server installed successfully: {}", server_uuid);
+        Ok(())
+    }
+
+    pub(crate) async fn cancel_install_server(&self, msg: &Value) -> AgentResult<()> {
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let server_uuid = msg["serverUuid"].as_str().unwrap_or("");
+
+        info!(
+            "Cancelling install for server: {} (UUID: {})",
+            server_id, server_uuid
+        );
+        // Flag so the in-flight install task exits quietly without emitting an
+        // error state over the panel's stopped reset.
+        {
+            self.cancelled_installs
+                .write()
+                .await
+                .insert(server_id.to_string());
+        }
+
+        let tracked = { self.active_installs.write().await.remove(server_id) };
+        if let Some(container_id) = tracked {
+            info!(
+                "Killing installer {} for server {}",
+                container_id, server_id
+            );
+            let _ = self.runtime.remove_container(&container_id).await;
+            let _ = self
+                .emit_console_output(
+                    server_id,
+                    "system",
+                    "[Catalyst] Installer killed; install cancelled.\n",
+                )
+                .await;
+            // Backend already reset panel state; this emit is idempotent when it
+            // arrives second and un-sticks listeners that missed the panel update.
+            let _ = self
+                .emit_server_state_update(
+                    server_id,
+                    "stopped",
+                    Some("Install cancelled by user".to_string()),
+                    None,
+                    None,
+                )
+                .await;
+            return Ok(());
+        }
+
+        // No tracked installer (agent restarted, or install predates tracking).
+        // Best-effort sweep of orphan installer containers so a stuck install
+        // cannot wedge the panel forever.
+        match self.runtime.list_containers().await {
+            Ok(containers) => {
+                let mut killed = 0;
+                for c in containers {
+                    if c.id.starts_with("catalyst-installer-") {
+                        info!(
+                            "Best-effort kill of orphan installer {} for cancel of {}",
+                            c.id, server_id
+                        );
+                        let _ = self.runtime.remove_container(&c.id).await;
+                        killed += 1;
+                    }
+                }
+                let _ = self
+                    .emit_console_output(
+                        server_id,
+                        "system",
+                        &format!(
+                            "[Catalyst] Install cancelled ({} installer container(s) cleaned).\n",
+                            killed
+                        ),
+                    )
+                    .await;
+            }
+            Err(e) => {
+                warn!("Failed to list installer containers for cancel: {}", e);
+            }
+        }
         Ok(())
     }
 

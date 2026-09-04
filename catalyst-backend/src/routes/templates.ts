@@ -264,8 +264,6 @@ export async function templateRoutes(app: FastifyInstance) {
 				allocatedCpuCores,
 				features,
 				nestId,
-				srvService,
-				srvProtocol,
 			} = request.body as {
 				name: string;
 				description?: string;
@@ -286,8 +284,6 @@ export async function templateRoutes(app: FastifyInstance) {
 				allocatedMemoryMb: number;
 				allocatedCpuCores: number;
 				features?: Record<string, any>;
-				srvService?: string | null;
-				srvProtocol?: string | null;
 				nestId?: string | null;
 			};
 
@@ -329,8 +325,6 @@ export async function templateRoutes(app: FastifyInstance) {
 						...(configFile ? { configFile } : {}),
 					},
 					nestId: nestId || null,
-					srvService: srvService || null,
-					srvProtocol: srvProtocol || 'tcp',
 				},
 				include: {
 					nest: {
@@ -398,8 +392,6 @@ export async function templateRoutes(app: FastifyInstance) {
 				allocatedCpuCores,
 				features,
 				nestId,
-				srvService,
-				srvProtocol,
 			} = request.body as {
 				name?: string;
 				description?: string;
@@ -419,8 +411,6 @@ export async function templateRoutes(app: FastifyInstance) {
 				allocatedCpuCores?: number;
 				nestId?: string | null;
 				features?: Record<string, any>;
-				srvService?: string | null;
-				srvProtocol?: string | null;
 			};
 			const nextData: Record<string, unknown> = {};
 			if (name !== undefined) nextData.name = name;
@@ -465,8 +455,6 @@ export async function templateRoutes(app: FastifyInstance) {
 				nextData.defaultImage = defaultImage || null;
 			}
 			if (nestId !== undefined) nextData.nestId = nestId || null;
-			if (srvService !== undefined) nextData.srvService = srvService || null;
-			if (srvProtocol !== undefined) nextData.srvProtocol = srvProtocol || 'tcp';
 
 			const updated = await prisma.serverTemplate.update({
 				where: { id: templateId },

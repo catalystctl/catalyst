@@ -310,7 +310,7 @@ pub struct EventStream {
 
 /// Installer container handle for interactive install scripts
 pub struct InstallerHandle {
-    container_id: String,
+    pub(crate) container_id: String,
     namespace: String,
     channel: tonic::transport::Channel,
     pub stdout_path: PathBuf,

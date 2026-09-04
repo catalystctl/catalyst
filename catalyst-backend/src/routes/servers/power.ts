@@ -184,9 +184,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: error.message });
         }
       }
-      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
-        environment.CATALYST_SUBDOMAIN = server.subdomain;
-      }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
 
       // Sync port environment variables with primaryPort
@@ -205,7 +202,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           primaryPort: server.primaryPort,
           allocatedMemoryMb: server.allocatedMemoryMb,
           allocatedDiskMb: server.allocatedDiskMb,
-          subdomain: server.subdomain,
         },
         portBindings,
         { startupCommand: runtimeTemplate.startup },
@@ -351,9 +347,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: error.message });
         }
       }
-      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
-        environment.CATALYST_SUBDOMAIN = server.subdomain;
-      }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
 
       // Sync port environment variables with primaryPort
@@ -372,7 +365,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           primaryPort: server.primaryPort,
           allocatedMemoryMb: server.allocatedMemoryMb,
           allocatedDiskMb: server.allocatedDiskMb,
-          subdomain: server.subdomain,
         },
         portBindings,
         { startupCommand: runtimeTemplate.startup },
@@ -423,6 +415,126 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         accepted: true,
         async: true,
         message: "Reinstall command accepted; completion is asynchronous",
+      });
+    }
+  );
+
+  // Cancel a stuck install (kills the installer container and resets status so
+  // the server can be reinstalled). Only valid from `installing`.
+  app.post(
+    "/:serverId/cancel-install",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const userId = request.user.userId;
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        include: {
+          node: true,
+        },
+      });
+
+      if (!server) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+
+      if (!ensureNotSuspended(server, reply)) {
+        return;
+      }
+
+      // Install and reinstall both land in `installing`; either permission can cancel.
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
+        const access = await prisma.serverAccess.findFirst({
+          where: {
+            userId,
+            serverId,
+            OR: [
+              { permissions: { has: "server.install" } },
+              { permissions: { has: "server.reinstall" } },
+            ],
+          },
+        });
+        if (!access) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
+      }
+
+      if (server.status !== ServerState.INSTALLING) {
+        return reply.status(409).send({
+          error: `Server is not installing (current state: ${server.status})`,
+        });
+      }
+
+      const gateway = (app as any).wsGateway;
+      if (!gateway) {
+        return reply.status(500).send({ error: "WebSocket gateway not available" });
+      }
+
+      // Best-effort kill on the agent. The DB reset below still runs when the
+      // node is offline so a stuck installer never wedges the panel forever.
+      let agentNotified = false;
+      if (server.node.isOnline) {
+        try {
+          agentNotified = await gateway.sendToAgent(server.nodeId, {
+            type: "cancel_install_server",
+            serverId: server.id,
+            serverUuid: server.uuid,
+          });
+        } catch {
+          agentNotified = false;
+        }
+      }
+
+      if (!ServerStateMachine.canTransition(server.status as ServerState, ServerState.STOPPED)) {
+        return reply.status(409).send({
+          error: `Cannot cancel install in ${server.status} state`,
+        });
+      }
+
+      await prisma.server.update({
+        where: { id: serverId },
+        data: { status: "stopped" },
+      });
+
+      await prisma.serverLog.create({
+        data: {
+          serverId,
+          stream: "system",
+          data: agentNotified
+            ? "Installation cancelled by user; installer kill sent to agent."
+            : "Installation cancelled by user; agent offline so only panel state was reset.",
+        },
+      });
+
+      emitServerStatusEvent(app, serverId, "stopped", { action: "cancel-install" });
+      emitServerOperationProgress((app as any).wsGateway, {
+        serverId,
+        operation: "install",
+        stage: "Installation cancelled",
+        progress: 100,
+        state: "stopped",
+      });
+
+      await createAuditLog(userId, {
+        action: "server.cancel-install",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          agentNotified,
+          newStatus: "stopped",
+          previousStatus: server.status,
+        }),
+      });
+
+      reply.send({
+        success: true,
+        message: agentNotified
+          ? "Install cancelled; installer kill sent to agent"
+          : "Install cancelled in panel; agent offline so node cleanup was not confirmed",
+        agentNotified,
+        ...(agentNotified ? {} : { warning: "Agent offline — verify no installer container remains on the node." }),
       });
     }
   );
@@ -586,9 +698,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: error.message });
         }
       }
-      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
-        environment.CATALYST_SUBDOMAIN = server.subdomain;
-      }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
       if (server.startupCommand) {
         runtimeTemplate.startup = server.startupCommand;
@@ -610,7 +719,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           primaryPort: server.primaryPort,
           allocatedMemoryMb: server.allocatedMemoryMb,
           allocatedDiskMb: server.allocatedDiskMb,
-          subdomain: server.subdomain,
         },
         portBindings,
         { startupCommand: runtimeTemplate.startup },
@@ -735,9 +843,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: error.message });
         }
       }
-      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
-        environment.CATALYST_SUBDOMAIN = server.subdomain;
-      }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
       if (server.startupCommand) {
         runtimeTemplate.startup = server.startupCommand;
@@ -761,7 +866,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           primaryPort: server.primaryPort,
           allocatedMemoryMb: server.allocatedMemoryMb,
           allocatedDiskMb: server.allocatedDiskMb,
-          subdomain: server.subdomain,
         },
         portBindings,
         { startupCommand: runtimeTemplate.startup },
@@ -1228,10 +1332,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: error.message });
         }
       }
-      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
-        environment.CATALYST_SUBDOMAIN = server.subdomain;
-      }
-
       // Sync port environment variables with primaryPort
       const portBindings = parseStoredPortBindings(server.portBindings);
       let syncedEnvironment = syncPortEnvironmentVariables(
@@ -1248,7 +1348,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           primaryPort: server.primaryPort,
           allocatedMemoryMb: server.allocatedMemoryMb,
           allocatedDiskMb: server.allocatedDiskMb,
-          subdomain: server.subdomain,
         },
         portBindings,
         { startupCommand: runtimeTemplate.startup },

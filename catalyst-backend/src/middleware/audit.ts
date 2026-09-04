@@ -36,7 +36,6 @@ export interface ServerAuditSnapshot {
   primaryPort?: number | null;
   primaryIp?: string | null;
   networkMode?: string | null;
-  subdomain?: string | null;
   templateId?: string | null;
   template?: { id?: string | null; name?: string | null; slug?: string | null } | null;
   node?: { id?: string | null; name?: string | null; publicAddress?: string | null; isOnline?: boolean | null } | null;
@@ -104,7 +103,6 @@ export function buildServerAuditDetails(
     primaryPort: server.primaryPort ?? undefined,
     primaryIp: server.primaryIp ?? undefined,
     networkMode: server.networkMode ?? undefined,
-    subdomain: server.subdomain ?? undefined,
     templateId: server.templateId ?? server.template?.id ?? undefined,
     templateName: server.template?.name ?? undefined,
     templateSlug: server.template?.slug ?? undefined,

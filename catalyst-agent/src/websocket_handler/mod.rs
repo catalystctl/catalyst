@@ -478,6 +478,12 @@ pub struct WebSocketHandler {
     pub(crate) pending_startup_errors: Arc<tokio::sync::RwLock<Vec<String>>>,
     /// PID of the ctr events subprocess, for explicit cleanup during shutdown.
     pub(crate) ctr_event_pid: Arc<tokio::sync::Mutex<Option<u32>>>,
+    /// Active installer containers keyed by server_id. Lets cancel_install_server
+    /// kill the exact container for a stuck install.
+    pub(crate) active_installs: Arc<RwLock<HashMap<String, String>>>,
+    /// Server ids with a pending install cancel. Checked by the install task so
+    /// a killed installer does not emit an error state over the panel reset.
+    pub(crate) cancelled_installs: Arc<RwLock<HashSet<String>>>,
     /// Shutdown signal sender — used by restart_agent command to trigger graceful shutdown.
     /// Set after construction via set_shutdown_tx(). Uses RwLock for interior mutability.
     pub(crate) shutdown_tx: Arc<RwLock<Option<broadcast::Sender<()>>>>,
@@ -531,6 +537,8 @@ impl Clone for WebSocketHandler {
             error_dedup: self.error_dedup.clone(),
             pending_startup_errors: self.pending_startup_errors.clone(),
             ctr_event_pid: self.ctr_event_pid.clone(),
+            active_installs: self.active_installs.clone(),
+            cancelled_installs: self.cancelled_installs.clone(),
             shutdown_tx: self.shutdown_tx.clone(),
         }
     }
@@ -588,6 +596,8 @@ impl WebSocketHandler {
             error_dedup: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
             pending_startup_errors: Arc::new(RwLock::new(Vec::new())),
             ctr_event_pid: Arc::new(tokio::sync::Mutex::new(None)),
+            active_installs: Arc::new(RwLock::new(HashMap::new())),
+            cancelled_installs: Arc::new(RwLock::new(HashSet::new())),
             shutdown_tx: Arc::new(RwLock::new(None)),
         }
     }
@@ -1451,6 +1461,24 @@ impl WebSocketHandler {
                             .report_error(
                                 ErrorLevel::Error,
                                 "agent:reinstall_server",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
+                    }
+                });
+            }
+            Some("cancel_install_server") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handler.cancel_install_server(&msg).await {
+                        error!("Error in cancel_install_server handler: {}", e);
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:cancel_install_server",
                                 &format!("{}", e),
                                 None,
                                 None,

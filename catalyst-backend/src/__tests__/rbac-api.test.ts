@@ -414,12 +414,12 @@ describe('RBAC - Route Protection Verification', () => {
       return { user: { userId: 'actor-1', permissions: perms } } as any;
     }
 
-    it('admin.read must NOT satisfy an admin.write check (dns-settings PUT)', async () => {
+    it('admin.read must NOT satisfy an admin.write check (smtp PUT)', async () => {
       const routes = await captureAdminRoutes();
-      const dnsPut = routes.find(
-        (r) => r.method === 'PUT' && r.url === '/dns-settings',
+      const smtpPut = routes.find(
+        (r) => r.method === 'PUT' && r.url === '/smtp',
       );
-      expect(dnsPut).toBeDefined();
+      expect(smtpPut).toBeDefined();
 
       // A user with only admin.read must be rejected with 403...
       const reply = {
@@ -427,27 +427,27 @@ describe('RBAC - Route Protection Verification', () => {
           send: (body: any) => ({ code, body }),
         }),
       };
-      const result = await dnsPut!.handler(
+      const result = await smtpPut!.handler(
         makeRequest(['admin.read']),
         reply,
       );
       expect(result.code).toBe(403);
 
-      // ...while admin.write passes the permission gate. A body missing the
-      // required DNS fields is rejected with 400 (validation) BEFORE any DB
-      // access, proving the request got past the isAdminUser check.
+      // ...while admin.write passes the permission gate. A body with an empty
+      // SMTP host is rejected with 400 (validation) BEFORE any DB access,
+      // proving the request got past the isAdminUser check.
       const okReply = {
         status: (code: number) => ({
           send: (body: any) => ({ code, body }),
         }),
       };
-      const okResult = await dnsPut!.handler(
-        { ...makeRequest(['admin.write']), body: { enabled: true } },
+      const okResult = await smtpPut!.handler(
+        { ...makeRequest(['admin.write']), body: { host: '' } },
         okReply,
       );
       expect(okResult.code).toBe(400);
       expect(okResult.body.error).toBe(
-        'Base domain and provider are required when DNS is enabled',
+        'SMTP fields cannot be empty strings',
       );
     });
   });
