@@ -370,12 +370,14 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
             permissions: { has: "server.transfer" },
           },
         });
-        if (!hasExplicitAccess) {
-          if (!(await canAccessServer(request.user.userId, {
-            id: server.id,
-            ownerId: server.ownerId,
-            nodeId: server.nodeId,
-          }))) {
+        if (!hasExplicitAccess && !checkIsAdmin(request, "admin.write")) {
+          const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+          const { hasNodeAccess } = await import("../../lib/permissions.js");
+          const rolePerms = await resolveServerPermissions(request.user.userId, server.id, server.nodeId);
+          const nodeManage =
+            (await hasNodeAccess(prisma, request.user.userId, server.nodeId)) &&
+            rolePerms.includes("node.update");
+          if (!rolePerms.includes("server.transfer") && !rolePerms.includes("*") && !nodeManage) {
             return reply.status(403).send({
               error: "You do not have permission to transfer this server",
             });
@@ -708,7 +710,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
   // Search users eligible as transfer-ownership targets (owner or admin.write)
   app.get(
     "/:serverId/transfer-candidates",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -719,36 +721,34 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         select: { id: true, ownerId: true },
       });
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return reply.status(404).send({ error: "Not found" });
       }
 
       const isAdmin = checkIsAdmin(request, "admin.write");
       if (server.ownerId !== userId && !isAdmin) {
-        return reply.status(403).send({ error: "Only the server owner or an admin can transfer ownership" });
+        return reply.status(404).send({ error: "Not found" });
       }
 
       const searchQuery = typeof search === "string" ? search.trim() : "";
-      const take = Math.min(Math.max(Number(limit) || 25, 1), 50);
+      if (searchQuery.length < 3) {
+        return reply.status(400).send({ error: "Invalid request" });
+      }
+      const take = Math.min(Math.max(Number(limit) || 10, 1), 10);
 
       const users = await prisma.user.findMany({
         where: {
           id: { not: server.ownerId },
           banned: false,
-          ...(searchQuery
-            ? {
-                OR: [
-                  { email: { contains: searchQuery, mode: "insensitive" as const } },
-                  { username: { contains: searchQuery, mode: "insensitive" as const } },
-                  { name: { contains: searchQuery, mode: "insensitive" as const } },
-                ],
-              }
-            : {}),
+          OR: [
+            { username: { contains: searchQuery, mode: "insensitive" as const } },
+            { name: { contains: searchQuery, mode: "insensitive" as const } },
+          ],
         },
         select: {
           id: true,
-          email: true,
           username: true,
           name: true,
+          ...(isAdmin ? { email: true } : {}),
         },
         orderBy: { username: "asc" },
         take,

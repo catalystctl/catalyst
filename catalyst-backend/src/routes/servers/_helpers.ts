@@ -81,6 +81,7 @@ export const DEFAULT_PERMISSION_PRESETS = {
     "backup.create",
     "backup.restore",
     "backup.delete",
+    "backup.download",
   ],
   full: [
     "server.read",
@@ -107,6 +108,7 @@ export const DEFAULT_PERMISSION_PRESETS = {
     "backup.create",
     "backup.restore",
     "backup.delete",
+    "backup.download",
     "server.delete",
   ],
 };
@@ -478,11 +480,21 @@ export const canManageSubusers = async (
   return decision.allowed && (decision.reason === "admin" || decision.reason === "node_manage");
 };
 
+export const enforceKeyScope = (
+  actor: { permissions?: string[]; apiKeyId?: string } | undefined,
+  permission: string,
+): boolean => {
+  if (!actor?.apiKeyId) return true;
+  const perms = actor.permissions ?? [];
+  return perms.includes("*") || perms.includes("admin.write") || perms.includes(permission);
+};
+
 export const ensureServerAccess = async (
   serverId: string,
   userId: string,
   permission: string,
-  reply: FastifyReply
+  reply: FastifyReply,
+  actor?: { permissions?: string[]; apiKeyId?: string },
 ) => {
   const server = await prisma.server.findUnique({
     where: { id: serverId },
@@ -532,6 +544,10 @@ export const ensureServerAccess = async (
   });
 
   if (!decision.allowed) {
+    reply.status(403).send({ error: "Forbidden" });
+    return null;
+  }
+  if (!enforceKeyScope(actor, permission)) {
     reply.status(403).send({ error: "Forbidden" });
     return null;
   }
@@ -1252,7 +1268,7 @@ export const ensureSuspendPermission = (
   reply: FastifyReply,
   message?: string
 ) => {
-  if (checkAnyPerm(request, ['*', 'admin.write', 'admin.read', 'server.suspend'])) {
+  if (checkAnyPerm(request, ['*', 'admin.write', 'server.suspend'])) {
     return true;
   }
   reply.status(403).send({ error: message || "Admin access required" });
@@ -1414,7 +1430,8 @@ export const ensureDatabasePermission = async (
   userId: string,
   reply: FastifyReply,
   permission: string,
-  message: string
+  message: string,
+  actor?: { permissions?: string[]; apiKeyId?: string },
 ) => {
   const server = await prisma.server.findUnique({
     where: { id: serverId },
@@ -1436,6 +1453,10 @@ export const ensureDatabasePermission = async (
   }
 
   if (server.ownerId === userId) {
+    if (!enforceKeyScope(actor, permission)) {
+      reply.status(403).send({ error: message });
+      return false;
+    }
     return true;
   }
 
@@ -1448,6 +1469,10 @@ export const ensureDatabasePermission = async (
   });
 
   if (access) {
+    if (!enforceKeyScope(actor, permission)) {
+      reply.status(403).send({ error: message });
+      return false;
+    }
     return true;
   }
 
@@ -1458,9 +1483,12 @@ export const ensureDatabasePermission = async (
   if (
     rolePermissions.includes("*") ||
     rolePermissions.includes("admin.write") ||
-    rolePermissions.includes(permission) ||
-    rolePermissions.includes("admin.read")
+    rolePermissions.includes(permission)
   ) {
+    if (!enforceKeyScope(actor, permission)) {
+      reply.status(403).send({ error: message });
+      return false;
+    }
     return true;
   }
   reply.status(403).send({ error: message });

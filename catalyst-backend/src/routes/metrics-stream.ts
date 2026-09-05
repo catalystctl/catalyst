@@ -8,9 +8,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocketGateway } from '../websocket/gateway';
 import { prisma } from '../db.js';
-import { auth } from '../auth.js';
-import { fromNodeHeaders } from 'better-auth/node';
-import { hasNodeAccess } from '../lib/permissions.js';
 import { openSseStream } from '../utils/sse.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
@@ -44,26 +41,19 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
   app.get<{ Params: { serverId: string } }>(
     '/:serverId/metrics/stream',
     {
+      onRequest: [(app as any).authenticate],
       config: { rateLimit: false },
     },
     async (request, reply) => {
       const { serverId } = request.params;
-
-      // Authenticate
-      let userId: string | null = null;
-      try {
-        const session = await auth.api.getSession({
-          headers: fromNodeHeaders(request.headers as ReqHeaders),
-        });
-        if (!session) {
-          reply.status(401).send({ error: 'Unauthorized' });
-          return;
-        }
-        userId = session.user.id;
-      } catch {
+      const userId = (request as any).user?.userId as string | undefined;
+      if (!userId) {
         reply.status(401).send({ error: 'Unauthorized' });
         return;
       }
+      const { ensureServerAccess } = await import('./servers/_helpers.js');
+      const accessServer = await ensureServerAccess(serverId, userId, 'server.read', reply, (request as any).user);
+      if (!accessServer) return;
 
       // Verify access to this server
       const server = await prisma.server.findUnique({
@@ -74,24 +64,6 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       if (!server) {
         reply.status(404).send({ error: 'Server not found' });
         return;
-      }
-
-      const allowedUsers = [server.ownerId, ...server.access.map((a) => a.userId)];
-      if (!userId || !allowedUsers.includes(userId)) {
-        // SECURITY: bare node assignment must not expose live metrics of
-        // every server on the node — require the node.update pairing
-        // (decideServerAccess node-manage contract).
-        const { resolveServerPermissions } = await import(
-          '../lib/permissions-catalog.js'
-        );
-        const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-        const isAdmin =
-          (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-          (rolePerms.includes('node.update') || rolePerms.includes('*'));
-        if (!isAdmin) {
-          reply.status(403).send({ error: 'Access denied' });
-          return;
-        }
       }
 
       const sse = openSseStream(request, reply);

@@ -3203,11 +3203,16 @@ export class WebSocketGateway {
             ? "server.start"
             : event.action === "stop"
               ? "server.stop"
-              // kill, restart, and reboot are destructive actions requiring server.stop permission
-              : event.action === "kill" || event.action === "restart" || event.action === "reboot"
+              // kill and reboot are destructive actions requiring server.stop permission
+              : event.action === "kill" || event.action === "reboot"
                 ? "server.stop"
-                : "server.start";
-        const roleAllows = rolePerms.includes(requiredPermission);
+                : event.action === "restart"
+                  ? "server.restart"
+                  : "server.start";
+        const roleAllows =
+          requiredPermission === "server.restart"
+            ? rolePerms.includes("server.start") && rolePerms.includes("server.stop")
+            : rolePerms.includes(requiredPermission);
         if (!isOwner && !access && !isAdmin && !nodeAccess && !roleAllows) {
           return client.socket.send(
             JSON.stringify({
@@ -3227,13 +3232,12 @@ export class WebSocketGateway {
               })
             );
         }
-        if (
-          !isOwner &&
-          !isAdmin &&
-          !nodeAccess &&
-          !roleAllows &&
-          !access?.permissions?.includes(requiredPermission)
-        ) {
+        const accessAllows =
+          requiredPermission === "server.restart"
+            ? access?.permissions?.includes("server.start") &&
+              access?.permissions?.includes("server.stop")
+            : access?.permissions?.includes(requiredPermission);
+        if (!isOwner && !isAdmin && !nodeAccess && !roleAllows && !accessAllows) {
           return client.socket.send(
             JSON.stringify({
               type: "error",
@@ -3330,11 +3334,12 @@ export class WebSocketGateway {
         });
         // Node assignment alone must not grant console write (the
         // decideServerAccess contract) — it requires node.update too.
-        const rolePerms = await this.getUserRolePermissions(client.userId);
+        const rolePerms = await this.getUserServerRolePermissions(client.userId, server.id, server.nodeId);
         const consoleNodeAccess =
           (await hasNodeAccess(this.prisma, client.userId, server.nodeId)) &&
           rolePerms.includes("node.update");
-        if (!access && server.ownerId !== client.userId && !isAdmin && !consoleNodeAccess) {
+        const roleConsoleWrite = rolePerms.includes("console.write");
+        if (!access && server.ownerId !== client.userId && !isAdmin && !consoleNodeAccess && !roleConsoleWrite) {
           if (client.socket.readyState === 1) {
             client.socket.send(
               JSON.stringify({
@@ -3350,7 +3355,8 @@ export class WebSocketGateway {
           !access?.permissions?.includes("console.write") &&
           server.ownerId !== client.userId &&
           !isAdmin &&
-          !consoleNodeAccess
+          !consoleNodeAccess &&
+          !roleConsoleWrite
         ) {
           if (client.socket.readyState === 1) {
             client.socket.send(

@@ -627,6 +627,21 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       // Check if user has admin write permissions (can see all servers)
       const perms: string[] = request.user?.permissions ?? [];
       const isAdmin = perms.includes('*') || perms.includes('admin.write');
+      const canManageNode = (nodeId: string) =>
+        (hasAccessToAllNodes || allowedNodeIds.includes(nodeId)) &&
+        (perms.includes('*') ||
+          perms.includes('admin.write') ||
+          perms.includes('node.update'));
+      const grantedServerIds = isAdmin
+        ? new Set<string>()
+        : new Set(
+            (
+              await prisma.serverAccess.findMany({
+                where: { userId, serverId: { in: serverIds } },
+                select: { serverId: true },
+              })
+            ).map((r) => r.serverId),
+          );
 
       // Filter servers based on authorization
       const filteredServers = servers.filter((server) => {
@@ -636,11 +651,13 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         // Users can see their own servers
         if (server.ownerId === userId) return true;
 
-        // Check if user has access via node assignment
-        if (hasAccessToAllNodes || allowedNodeIds.includes(server.nodeId)) return true;
+        // Explicit per-server grant.
+        if (grantedServerIds.has(server.id)) return true;
 
-        // Check server access table
-        return false; // Will be filtered out
+        // Node assignment alone is not enough; require the node.update pairing.
+        if (canManageNode(server.nodeId)) return true;
+
+        return false;
       });
 
       const serverMap = new Map(filteredServers.map((s) => [s.id, s]));

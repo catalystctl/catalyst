@@ -8,7 +8,26 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
   app.get(
     "/database-hosts",
     { onRequest: [app.authenticate] },
-    async (_request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = (request as any).user?.userId;
+      const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+      const rolePerms = await resolveServerPermissions(userId, "", "");
+      const isPrivileged =
+        rolePerms.includes("*") ||
+        rolePerms.includes("admin.write") ||
+        rolePerms.includes("admin.read") ||
+        rolePerms.includes("database.read") ||
+        rolePerms.includes("database.create") ||
+        rolePerms.includes("server.read");
+      const hasAnyServer = isPrivileged
+        ? true
+        : Boolean(
+            (await prisma.server.count({ where: { ownerId: userId } })) > 0 ||
+              (await prisma.serverAccess.count({ where: { userId } })) > 0,
+          );
+      if (!hasAnyServer) {
+        return reply.status(403).send({ error: "Forbidden" });
+      }
       const hosts = await prisma.databaseHost.findMany({
         orderBy: { name: "asc" },
         select: { id: true, name: true, host: true, port: true },
@@ -29,7 +48,8 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         userId,
         reply,
         "database.read",
-        "You do not have permission to view databases for this server"
+        "You do not have permission to view databases for this server",
+        request.user,
       );
       if (!canAccess) {
         return;
@@ -82,7 +102,8 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         userId,
         reply,
         "database.create",
-        "You do not have permission to create databases for this server"
+        "You do not have permission to create databases for this server",
+        request.user,
       );
       if (!canAccess) {
         return;
@@ -215,7 +236,8 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         userId,
         reply,
         "database.rotate",
-        "You do not have permission to rotate database credentials"
+        "You do not have permission to rotate database credentials",
+        request.user,
       );
       if (!canAccess) {
         return;
@@ -305,7 +327,8 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         userId,
         reply,
         "database.delete",
-        "You do not have permission to delete databases for this server"
+        "You do not have permission to delete databases for this server",
+        request.user,
       );
       if (!canAccess) {
         return;

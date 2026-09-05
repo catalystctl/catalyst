@@ -539,11 +539,17 @@ export async function adminRoutes(app: FastifyInstance) {
 
       const existingUser = await prisma.user.findUnique({
         where: { id: userId },
-        include: { roles: { select: { id: true } } },
+        include: { roles: { select: { id: true, permissions: true } } },
       });
 
       if (!existingUser) {
         return reply.status(404).send({ error: 'User not found' });
+      }
+      const targetPerms = existingUser.roles.flatMap((role) => (role.permissions as string[]) ?? []);
+      const targetIsAdminEquivalent =
+        targetPerms.includes('*') || targetPerms.includes('admin.write');
+      if (password && targetIsAdminEquivalent && !(user.permissions ?? []).includes('*')) {
+        return reply.status(403).send({ error: 'Insufficient permissions to reset this user password' });
       }
 
       // Role-change guards for Administrator demotion: removing the
@@ -1016,9 +1022,13 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Cannot ban yourself' });
       }
 
-      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      const existingUser = await prisma.user.findUnique({ where: { id: userId }, include: { roles: { select: { permissions: true } } } });
       if (!existingUser) {
         return reply.status(404).send({ error: 'User not found' });
+      }
+      const banTargetPerms = existingUser.roles.flatMap((role) => (role.permissions as string[]) ?? []);
+      if ((banTargetPerms.includes('*') || banTargetPerms.includes('admin.write')) && !(user.permissions ?? []).includes('*')) {
+        return reply.status(403).send({ error: 'Insufficient permissions to ban this user' });
       }
 
       if (existingUser.banned) {
@@ -1122,8 +1132,12 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'User update permission required' });
       }
       const { userId } = request.params as { userId: string };
-      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      const existingUser = await prisma.user.findUnique({ where: { id: userId }, include: { roles: { select: { permissions: true } } } });
       if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+      const targetPerms = existingUser.roles.flatMap((role) => (role.permissions as string[]) ?? []);
+      if ((targetPerms.includes('*') || targetPerms.includes('admin.write')) && !((request.user as any).permissions ?? []).includes('*')) {
+        return reply.status(403).send({ error: 'Insufficient permissions to modify this user' });
+      }
 
       const result = await prisma.passkey.deleteMany({ where: { userId } });
       await createAuditLog((request.user as any).userId, {
@@ -1146,8 +1160,12 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'User update permission required' });
       }
       const { userId } = request.params as { userId: string };
-      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      const existingUser = await prisma.user.findUnique({ where: { id: userId }, include: { roles: { select: { permissions: true } } } });
       if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+      const targetPerms = existingUser.roles.flatMap((role) => (role.permissions as string[]) ?? []);
+      if ((targetPerms.includes('*') || targetPerms.includes('admin.write')) && !((request.user as any).permissions ?? []).includes('*')) {
+        return reply.status(403).send({ error: 'Insufficient permissions to modify this user' });
+      }
 
       await prisma.twoFactor.deleteMany({ where: { userId } });
       await prisma.user.update({ where: { id: userId }, data: { twoFactorEnabled: false } });
@@ -3555,7 +3573,9 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'Admin read permission required' });
       }
       const settings = await getModManagerSettings();
-      reply.send(serialize({ success: true, data: settings }));
+      const mask = (v: string | null | undefined) =>
+        !v ? null : { configured: true, last4: v.slice(-4), length: v.length };
+      reply.send(serialize({ success: true, data: { curseforgeApiKey: mask(settings.curseforgeApiKey), modrinthApiKey: mask(settings.modrinthApiKey) } }));
     }
   );
 

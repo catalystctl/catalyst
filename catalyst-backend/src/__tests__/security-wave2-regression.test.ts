@@ -60,9 +60,9 @@ function makePrismaStub(): any {
 describe("WS server_control payload whitelist", () => {
   it("strips client-supplied image/startup fields before forwarding to the agent", async () => {
     const prisma: any = makePrismaStub();
-    // Sub-user with only server.stop — enough to authorize a restart.
+    // Restart requires both start and stop (mirrors HTTP POST /:id/restart).
     prisma.serverAccess.findUnique = async () => ({
-      permissions: ["server.stop"],
+      permissions: ["server.start", "server.stop"],
     });
     const gw: any = new WebSocketGateway(prisma, loggerStub);
     const agentReceived: any[] = [];

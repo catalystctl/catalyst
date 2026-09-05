@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { canAccessServer, ensureNotSuspended, validateVariableRule } from './_helpers.js';
+import { canAccessServer, checkIsAdmin, ensureNotSuspended, validateVariableRule } from './_helpers.js';
 
 export async function serverVariablesRoutes(app: FastifyInstance) {
   app.get(
@@ -19,9 +19,22 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      // Permission check: owner | ServerAccess | node+node.update | admin.write/*
-      if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
-        return reply.status(403).send({ error: "Forbidden" });
+      // Permission check: owner | ServerAccess with server.read | role server.read | node+node.update | admin.write/*
+      if (server.ownerId !== userId) {
+        const access = await prisma.serverAccess.findFirst({
+          where: { userId, serverId, permissions: { has: "server.read" } },
+        });
+        if (!access && !checkIsAdmin(request, "admin.write")) {
+          const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+          const { hasNodeAccess } = await import("../../lib/permissions.js");
+          const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+          const nodeManage =
+            (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+            rolePerms.includes("node.update");
+          if (!rolePerms.includes("server.read") && !rolePerms.includes("*") && !nodeManage) {
+            return reply.status(403).send({ error: "Forbidden" });
+          }
+        }
       }
 
       const templateVariables = (server.template?.variables as any[]) || [];
@@ -65,7 +78,8 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
       }
 
       // Permission check: owner | ServerAccess with server.rebuild | global
-      // role with server.rebuild/admin | node+node.update (canAccessServer)
+      // role with server.rebuild/admin | node+node.update. Environment flows
+      // into container startup, so unrelated grants must not suffice.
       if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
           where: {
@@ -84,8 +98,11 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
           rolePerms.includes("admin.write") ||
           rolePerms.includes("server.rebuild");
         if (!access && !roleAllowed) {
-          // Fall back to full canAccessServer (admin.write / node.update manage path).
-          if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
+          const { hasNodeAccess } = await import("../../lib/permissions.js");
+          const nodeManage =
+            (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+            rolePerms.includes("node.update");
+          if (!nodeManage) {
             return reply.status(403).send({ error: "Forbidden" });
           }
         }

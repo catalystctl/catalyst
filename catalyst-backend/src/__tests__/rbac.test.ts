@@ -685,9 +685,10 @@ describe('RBAC - Full Permission Coverage', () => {
     // Server
     'server.read', 'server.create', 'server.start', 'server.stop',
     'server.delete', 'server.suspend', 'server.transfer', 'server.schedule',
+    'server.update', 'server.install', 'server.reinstall', 'server.rebuild',
     // Node
     'node.read', 'node.create', 'node.update', 'node.delete',
-    'node.view_stats', 'node.manage_allocation',
+    'node.view_stats', 'node.manage_allocation', 'node.assign',
     // Location
     'location.read', 'location.create', 'location.update', 'location.delete',
     // Template
@@ -698,7 +699,7 @@ describe('RBAC - Full Permission Coverage', () => {
     // Role
     'role.read', 'role.create', 'role.update', 'role.delete',
     // Backup
-    'backup.read', 'backup.create', 'backup.delete', 'backup.restore',
+    'backup.read', 'backup.create', 'backup.delete', 'backup.restore', 'backup.download',
     // Files
     'file.read', 'file.write',
     // Console

@@ -38,6 +38,10 @@ export enum Permission {
   SERVER_SUSPEND = "server.suspend",
   SERVER_TRANSFER = "server.transfer",
   SERVER_SCHEDULE = "server.schedule",
+  SERVER_UPDATE = "server.update",
+  SERVER_INSTALL = "server.install",
+  SERVER_REINSTALL = "server.reinstall",
+  SERVER_REBUILD = "server.rebuild",
   // Node permissions
   NODE_READ = "node.read",
   NODE_CREATE = "node.create",
@@ -45,6 +49,7 @@ export enum Permission {
   NODE_DELETE = "node.delete",
   NODE_VIEW_STATS = "node.view_stats",
   NODE_MANAGE_ALLOCATION = "node.manage_allocation",
+  NODE_ASSIGN = "node.assign",
   // Location permissions
   LOCATION_READ = "location.read",
   LOCATION_CREATE = "location.create",
@@ -73,6 +78,7 @@ export enum Permission {
   BACKUP_CREATE = "backup.create",
   BACKUP_DELETE = "backup.delete",
   BACKUP_RESTORE = "backup.restore",
+  BACKUP_DOWNLOAD = "backup.download",
   // File and console permissions
   FILE_READ = "file.read",
   FILE_WRITE = "file.write",

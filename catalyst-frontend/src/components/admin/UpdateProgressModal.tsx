@@ -52,7 +52,7 @@ export function consumePostUpdateReloadToast(): boolean {
  * After the backend swaps containers the old process (and this page's
  * queries) are gone — the state endpoint can no longer report completion.
  * Instead, once `restarting` has held for RESTART_GRACE_MS, probe the
- * unauthenticated /api/update/check endpoint until the panel answers;
+ * public /health endpoint until the panel answers;
  * the first response means the new version is up. Reload shortly after.
  */
 function usePanelRestartWatch(active: boolean) {
@@ -63,7 +63,7 @@ function usePanelRestartWatch(active: boolean) {
     let cancelled = false;
     const graceTimeout = window.setTimeout(() => {
       const probe = () => {
-        fetch('/api/update/check', { credentials: 'include' })
+        fetch('/health', { credentials: 'include' })
           .then((res) => {
             if (!cancelled && res.ok) {
               setPanelBack(true);

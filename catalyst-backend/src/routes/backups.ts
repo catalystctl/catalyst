@@ -522,8 +522,12 @@ export async function backupRoutes(app: FastifyInstance) {
         backupId: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.read");
-      if (!accessServer) return;
+      const downloadServer = await ensureBackupAccess(serverId, userId, reply, "backup.download");
+      if (!downloadServer) {
+        const fallback = await ensureBackupAccess(serverId, userId, reply, "backup.read");
+        if (!fallback) return;
+        (request.log ?? app.log).warn({ serverId, userId }, "backup.download fallback to backup.read; backfill grants");
+      }
 
       const backup = await prisma.backup.findFirst({
         where: {

@@ -26,6 +26,10 @@ const updateApiKeySchema = z.object({
 
 export async function apiKeyRoutes(app: FastifyInstance) {
   const authenticate = (app as any).authenticate;
+  const isWriteAdmin = (request: any): boolean => {
+    const perms: string[] = request.user?.permissions ?? [];
+    return perms.includes("*") || perms.includes("admin.write");
+  };
 
   // Middleware: authenticate + check apikey.manage permission
   const requireApiKeyManage = async (request: any, reply: any) => {
@@ -237,7 +241,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       const body = updateApiKeySchema.parse(request.body);
 
       // Non-admins may only modify their own keys.
-      if (!isAdmin(request)) {
+      if (!isWriteAdmin(request)) {
         const ownsKey = await prisma.apikey.findFirst({
           where: { id, userId: request.user.userId },
           select: { id: true },
@@ -247,7 +251,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
           if (!exists) {
             return reply.status(404).send({ success: false, error: "API key not found" });
           }
-          return reply.status(403).send({ success: false, error: "Requires admin.read permission" });
+          return reply.status(403).send({ success: false, error: "Requires admin.write permission" });
         }
       }
 
@@ -316,8 +320,8 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       }
 
       // Non-admins may only delete their own keys.
-      if (apiKey.userId !== request.user.userId && !isAdmin(request)) {
-        return reply.status(403).send({ success: false, error: "Requires admin.read permission" });
+      if (apiKey.userId !== request.user.userId && !isWriteAdmin(request)) {
+        return reply.status(403).send({ success: false, error: "Requires admin.write permission" });
       }
 
       await deleteApiKeyService(id);

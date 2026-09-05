@@ -83,6 +83,32 @@ export async function taskRoutes(app: FastifyInstance) {
 
     return true;
   };
+  const ensureCommandPermission = async (
+    userId: string,
+    serverId: string,
+    nodeId: string,
+    reply: FastifyReply,
+  ) => {
+    const server = await prisma.server.findUnique({
+      where: { id: serverId },
+      select: { ownerId: true },
+    });
+    if (server?.ownerId === userId) return true;
+    const access = await prisma.serverAccess.findFirst({
+      where: { serverId, userId, permissions: { has: 'console.write' } },
+    });
+    if (access) return true;
+    const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
+    const rolePerms = await resolveServerPermissions(userId, serverId, nodeId);
+    if (rolePerms.includes('*') || rolePerms.includes('admin.write') || rolePerms.includes('console.write')) {
+      return true;
+    }
+    if ((await hasNodeAccess(prisma, userId, nodeId)) && rolePerms.includes('node.update')) {
+      return true;
+    }
+    reply.status(403).send({ error: 'You do not have permission to run console commands on this server' });
+    return false;
+  };
 
   // Create a scheduled task
   app.post(
@@ -127,6 +153,14 @@ export async function taskRoutes(app: FastifyInstance) {
         'You do not have permission to schedule tasks for this server',
       );
       if (!canSchedule) return;
+
+      if (action === 'command') {
+        const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
+        if (!serverRow || !(await ensureCommandPermission(user.userId, serverId, serverRow.nodeId, reply))) {
+          if (serverRow) return;
+          return reply.status(404).send({ error: 'Server not found' });
+        }
+      }
 
       let nextRunAt: Date | null = null;
       try {
@@ -255,6 +289,13 @@ export async function taskRoutes(app: FastifyInstance) {
         'You do not have permission to modify tasks for this server',
       );
       if (!canSchedule) return;
+      if (action === 'command') {
+        const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
+        if (!serverRow || !(await ensureCommandPermission(user.userId, serverId, serverRow.nodeId, reply))) {
+          if (serverRow) return;
+          return reply.status(404).send({ error: 'Server not found' });
+        }
+      }
 
       // Re-validate action against the same allowlist as create
       if (action !== undefined && !isValidTaskAction(action)) {
@@ -415,6 +456,13 @@ export async function taskRoutes(app: FastifyInstance) {
 
       if (!task) {
         return reply.status(404).send({ error: 'Task not found' });
+      }
+      if (task.action === 'command') {
+        const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
+        if (!serverRow || !(await ensureCommandPermission(user.userId, serverId, serverRow.nodeId, reply))) {
+          if (serverRow) return;
+          return reply.status(404).send({ error: 'Server not found' });
+        }
       }
 
       // Execute immediately

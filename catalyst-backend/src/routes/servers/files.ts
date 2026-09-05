@@ -76,7 +76,8 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     userId: string,
     permission: string,
     reply: FastifyReply,
-  ) => ensureServerAccess(serverId, userId, permission, reply);
+    actor?: { permissions?: string[]; apiKeyId?: string },
+  ) => ensureServerAccess(serverId, userId, permission, reply, actor);
 
   const notifyFileChange = (serverId: string, status: string, action: string, path?: string, from?: string, to?: string) => {
     const wsGateway = app.wsGateway;
@@ -109,7 +110,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       const { path: requestedPath } = request.query as { path?: string };
 
-      const server = await requireFileAccess(serverId, userId, "file.read", reply);
+      const server = await requireFileAccess(serverId, userId, "file.read", reply, request.user);
       if (!server) {
         return;
       }
@@ -157,7 +158,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path parameter" });
       }
 
-      const server = await requireFileAccess(serverId, userId, "file.read", reply);
+      const server = await requireFileAccess(serverId, userId, "file.read", reply, request.user);
       if (!server) {
         return;
       }
@@ -200,7 +201,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      const server = await requireFileAccess(serverId, userId, "file.write", reply);
+      const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
       if (!server) {
         return;
       }
@@ -299,7 +300,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path" });
       }
 
-      const server = await requireFileAccess(serverId, userId, "file.write", reply);
+      const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
       if (!server) {
         return;
       }
@@ -353,7 +354,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Unsupported archive type" });
       }
 
-      const server = await requireFileAccess(serverId, userId, "file.write", reply);
+      const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
       if (!server) {
         return;
       }
@@ -405,7 +406,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing archive or target path" });
       }
 
-      const server = await requireFileAccess(serverId, userId, "file.write", reply);
+      const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
       if (!server) {
         return;
       }
@@ -454,7 +455,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing archive path" });
       }
 
-      const server = await requireFileAccess(serverId, userId, "file.read", reply);
+      const server = await requireFileAccess(serverId, userId, "file.read", reply, request.user);
       if (!server) {
         return;
       }
@@ -500,7 +501,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       const { lines, stream } = request.query as { lines?: string; stream?: string };
 
-      const server = await requireFileAccess(serverId, userId, "console.read", reply);
+      const server = await requireFileAccess(serverId, userId, "console.read", reply, request.user);
       if (!server) {
         return;
       }
@@ -557,7 +558,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path or content" });
       }
 
-      const server = await requireFileAccess(serverId, userId, "file.write", reply);
+      const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
       if (!server) {
         return;
       }
@@ -621,7 +622,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path or mode" });
       }
 
-      const server = await requireFileAccess(serverId, userId, "file.write", reply);
+      const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
       if (!server) {
         return;
       }
@@ -688,7 +689,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path parameter" });
       }
 
-      const server = await requireFileAccess(serverId, userId, "file.write", reply);
+      const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
       if (!server) {
         return;
       }
@@ -745,7 +746,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing from or to path" });
       }
 
-      const server = await requireFileAccess(serverId, userId, "file.write", reply);
+      const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
       if (!server) {
         return;
       }

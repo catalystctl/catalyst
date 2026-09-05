@@ -556,7 +556,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
 
       // Require ownership, ServerAccess with start (install flow), or admin.write/*
       // EULA is part of install/start lifecycle — treat as server.start capability.
-      const server = await ensureServerAccess(serverId, userId, "server.start", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.start", reply, request.user);
       if (!server) {
         return;
       }

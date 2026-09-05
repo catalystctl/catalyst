@@ -563,6 +563,14 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
+			const apiKeyPerms: string[] = (request as any).user?.permissions ?? [];
+			const isApiKeyAdmin =
+				apiKeyPerms.includes("*") ||
+				apiKeyPerms.includes("admin.write") ||
+				apiKeyPerms.includes("admin.read");
+			if (!isApiKeyAdmin && !(await hasNodeAccess(prisma, (request as any).user.userId, nodeId))) {
+				return reply.status(403).send({ error: "Insufficient permissions" });
+			}
 
 			const node = await prisma.node.findUnique({
 				where: { id: nodeId },
@@ -744,6 +752,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.update")) return;
 			const { nodeId } = request.params as { nodeId: string };
+			const perms: string[] = (request as any).user?.permissions ?? [];
+			const isNodeAdmin = perms.includes("*") || perms.includes("admin.write");
+			if (!isNodeAdmin && !(await hasNodeAccess(prisma, (request as any).user.userId, nodeId))) {
+				return reply.status(403).send({ error: "Insufficient permissions" });
+			}
 			const {
 				name,
 				description,
@@ -1119,6 +1132,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.delete")) return;
 			const { nodeId } = request.params as { nodeId: string };
+			const perms: string[] = (request as any).user?.permissions ?? [];
+			const isNodeAdmin = perms.includes("*") || perms.includes("admin.write");
+			if (!isNodeAdmin && !(await hasNodeAccess(prisma, (request as any).user.userId, nodeId))) {
+				return reply.status(403).send({ error: "Insufficient permissions" });
+			}
 
 			const node = await prisma.node.findUnique({
 				where: { id: nodeId },

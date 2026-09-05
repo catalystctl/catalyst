@@ -39,6 +39,10 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
       { value: 'server.suspend', label: 'Suspend servers' },
       { value: 'server.transfer', label: 'Transfer ownership' },
       { value: 'server.schedule', label: 'Manage schedules/tasks' },
+      { value: 'server.update', label: 'Update server settings' },
+      { value: 'server.install', label: 'Install servers' },
+      { value: 'server.reinstall', label: 'Reinstall servers' },
+      { value: 'server.rebuild', label: 'Rebuild servers' },
     ],
   },
   {
@@ -52,6 +56,7 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
       { value: 'node.delete', label: 'Delete nodes' },
       { value: 'node.view_stats', label: 'View node statistics' },
       { value: 'node.manage_allocation', label: 'Manage allocations' },
+      { value: 'node.assign', label: 'Assign nodes' },
     ],
   },
   {
@@ -110,6 +115,7 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
       { value: 'backup.create', label: 'Create backups' },
       { value: 'backup.delete', label: 'Delete backups' },
       { value: 'backup.restore', label: 'Restore backups' },
+      { value: 'backup.download', label: 'Download backups' },
     ],
   },
   {
@@ -229,11 +235,11 @@ import { broadcastCacheInvalidate, onCacheInvalidate } from './cache-bus';
  */
 export const ALL_SERVER_PERMISSIONS = [
   'server.read', 'server.start', 'server.stop', 'server.install',
-  'server.reinstall', 'server.rebuild',
+  'server.reinstall', 'server.rebuild', 'server.update',
   'server.transfer', 'server.delete', 'server.schedule',
   'console.read', 'console.write',
   'file.read', 'file.write',
-  'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
+  'backup.read', 'backup.create', 'backup.restore', 'backup.delete', 'backup.download',
   'database.read', 'database.create', 'database.rotate', 'database.delete',
   'alert.read', 'alert.create', 'alert.update', 'alert.delete',
 ] as const;

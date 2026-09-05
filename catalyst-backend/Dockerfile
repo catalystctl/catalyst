@@ -59,7 +59,8 @@ RUN CI=true pnpm --filter catalyst-backend deploy --prod --legacy /app/deploy
 
 # Use the compiled dist (and not the TypeScript sources pnpm deploy copies).
 RUN rm -rf /app/deploy/dist /app/deploy/src \
- && cp -a /app/catalyst-backend/dist /app/deploy/dist
+ && cp -a /app/catalyst-backend/dist /app/deploy/dist \
+ && find /app/deploy/dist -name '*.map' -delete
 
 # Prisma generate writes the engine cache under the builder's .pnpm store.
 # Re-materialise it next to @prisma/client and at the deploy root so both

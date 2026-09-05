@@ -1761,6 +1761,36 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const hasAllocationUpdate = allocationId !== undefined;
       const normalizedPrimaryIp = typeof primaryIp === "string" ? primaryIp.trim() : null;
 
+      // Sensitive fields flow into container execution or infrastructure;
+      // rename/description stay available to any subuser, but these require rebuild-level control.
+      const touchesSensitiveFields =
+        environment !== undefined ||
+        startupCommand !== undefined ||
+        allocatedMemoryMb !== undefined ||
+        allocatedCpuCores !== undefined ||
+        allocatedDiskMb !== undefined ||
+        backupAllocationMb !== undefined ||
+        databaseAllocation !== undefined ||
+        primaryPort !== undefined ||
+        primaryIp !== undefined ||
+        portBindings !== undefined ||
+        allocationId !== undefined;
+      if (touchesSensitiveFields && server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
+        const sensitiveAccess = await prisma.serverAccess.findFirst({
+          where: { serverId, userId, permissions: { has: "server.rebuild" } },
+        });
+        if (!sensitiveAccess) {
+          const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+          const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+          const nodeManage =
+            (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+            rolePerms.includes("node.update");
+          if (!rolePerms.includes("server.rebuild") && !rolePerms.includes("*") && !nodeManage) {
+            return reply.status(403).send({ error: "Forbidden" });
+          }
+        }
+      }
+
       // Can only update resources if server is stopped
       if (
         (allocatedMemoryMb !== undefined ||
@@ -2285,8 +2315,13 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         const access = await prisma.serverAccess.findFirst({
           where: { serverId, userId, permissions: { has: "server.delete" } },
         });
-        if (!access) {
-          if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
+        if (!access && !checkIsAdmin(request, "admin.write")) {
+          const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+          const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+          const nodeManage =
+            (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+            rolePerms.includes("node.update");
+          if (!rolePerms.includes("server.delete") && !nodeManage && !rolePerms.includes("*")) {
             return reply.status(403).send({ error: "Forbidden" });
           }
         }

@@ -578,13 +578,15 @@ async function bootstrap() {
 		// Set DISABLE_RATE_LIMIT=1, BENCHMARK_DISABLE_RATE_LIMIT=1, or BENCHMARK_FAIR=1
 		// to bypass all rate limiting (global + per-route). Also disables external
 		// polling (auto-updater) and background retention noise for fair comparisons.
+		// Never honored in production.
 		const fairMode =
-			process.env.DISABLE_RATE_LIMIT === "1" ||
+			process.env.NODE_ENV !== "production" &&
+			(process.env.DISABLE_RATE_LIMIT === "1" ||
 			process.env.DISABLE_RATE_LIMIT === "true" ||
 			process.env.BENCHMARK_DISABLE_RATE_LIMIT === "1" ||
 			process.env.BENCHMARK_DISABLE_RATE_LIMIT === "true" ||
 			process.env.BENCHMARK_FAIR === "1" ||
-			process.env.BENCHMARK_FAIR === "true";
+			process.env.BENCHMARK_FAIR === "true");
 		if (fairMode) {
 			logger.warn("BENCHMARK FAIR MODE active: rate limiting disabled, external polling suppressed");
 		}
@@ -744,6 +746,13 @@ async function bootstrap() {
 				deepLinking: false,
 			},
 		});
+		app.addHook("onRequest", async (request, reply) => {
+			if (request.url === "/docs" || request.url.startsWith("/docs/")) {
+				if (process.env.DOCS_ENABLED !== "true" && process.env.NODE_ENV === "production") {
+					return reply.status(404).send({ error: "Not found" });
+				}
+			}
+		});
 
 		const wsMaxPayload = Number(process.env.WS_MAX_PAYLOAD_BYTES) || 8 * 1024 * 1024;
 		await app.register(fastifyWebsocket, {
@@ -760,11 +769,11 @@ async function bootstrap() {
 			},
 		});
 
-		// Health check (exempt from rate limiting)
+		// Health check (liveness only; no version or diagnostic detail).
 		app.get(
 			"/health",
 			{
-				config: { rateLimit: { max: 1000000000, timeWindow: "1 minute" } },
+				config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {
 				try {
@@ -777,18 +786,11 @@ async function bootstrap() {
 						stack: dbError?.stack,
 						metadata: { context: 'health_check' },
 					}).catch(() => {});
-					request.log.error(
-						{ err: dbError },
-						"Health check: database unreachable",
-					);
 					return reply.status(503).send({
 						status: "unhealthy",
-						error: "database unreachable",
-						details: dbError.message,
-						timestamp: new Date().toISOString(),
 					});
 				}
-				return { status: "ok", timestamp: new Date().toISOString() };
+				return { status: "ok" };
 			},
 		);
 
@@ -984,10 +986,11 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		// Migration routes (Pterodactyl → Catalyst)
 		await app.register((app) => migrationRoutes(app));
 
-		// Public panel + agent version (used by deploy-agent.sh to pin the binary).
+		// Panel + agent version (authenticated; bootstrap uses AGENT_VERSION env or default binary).
 		app.get(
 			"/api/agent/version",
 			{
+				preHandler: [(app as any).authenticate],
 				config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
 			},
 			async (_request, reply) => {
@@ -1013,7 +1016,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			const requested = query.version;
 			if (requested && !normalizePanelVersion(requested)) {
 				return reply.status(400).send({
-					error: "Invalid version format — expected semver (e.g. 1.12.2)",
+					error: "Invalid version format",
 				});
 			}
 
@@ -1033,7 +1036,6 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				);
 				reply.header("Content-Encoding", "identity");
 				reply.header("Content-Length", String(stat.size));
-				if (version) reply.header("X-Catalyst-Agent-Version", version);
 				return reply.send(fs.createReadStream(localPath));
 			}
 
@@ -1058,8 +1060,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 						`GitHub Releases returned ${response.status} for ${githubUrl}`,
 					);
 					return reply.status(502).send({
-						error: `Failed to download agent from GitHub Releases (HTTP ${response.status})`,
-						version: version ?? null,
+						error: `Failed to download agent binary`,
 					});
 				}
 
@@ -1069,7 +1070,6 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					`attachment; filename=${assetName}`,
 				);
 				reply.header("Content-Encoding", "identity");
-				if (version) reply.header("X-Catalyst-Agent-Version", version);
 
 				const buffer = Buffer.from(await response.arrayBuffer());
 				reply.header("Content-Length", String(buffer.length));
@@ -1081,7 +1081,6 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				);
 				return reply.status(502).send({
 					error: "Failed to download agent binary",
-					details: describeError(err),
 				});
 			}
 		});
@@ -1121,14 +1120,13 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					signal: AbortSignal.timeout(30_000),
 				});
 				if (!response.ok) {
-					return reply.status(502).send({ error: `GitHub returned ${response.status}` });
+					return reply.status(502).send({ error: `Failed to fetch agent checksum` });
 				}
 				const text = await response.text();
 				return reply.type("text/plain").send(text);
 			} catch (err) {
 				return reply.status(502).send({
 					error: "Failed to fetch agent checksum",
-					details: describeError(err),
 				});
 			}
 		});
@@ -1153,6 +1151,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				"Content-Disposition",
 				"attachment; filename=deploy-agent.sh",
 			);
+			reply.header("Cache-Control", "no-store");
 			return reply.send(fs.createReadStream(deployScriptPath));
 		});
 
@@ -1172,19 +1171,19 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			});
 
 			if (!deployToken || new Date() > deployToken.expiresAt) {
-				return reply.status(401).send({ error: "Invalid or expired token" });
+				return reply.status(401).send({ error: "Invalid deployment credentials" });
 			}
 
 			// Single-use: reject tokens already consumed by a successful deploy script fetch.
 			if (deployToken.usedAt) {
-				return reply.status(401).send({ error: "Deployment token has already been used" });
+				return reply.status(401).send({ error: "Invalid deployment credentials" });
 			}
 
 			const apiKeyValue = typeof apiKey === "string" ? apiKey.trim() : "";
 			if (!apiKeyValue) {
 				return reply
-					.status(400)
-					.send({ error: "Missing apiKey query parameter" });
+					.status(401)
+					.send({ error: "Invalid deployment credentials" });
 			}
 
 			const apiKeyValid = await verifyAgentApiKey(
@@ -1195,7 +1194,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			if (!apiKeyValid) {
 				return reply
 					.status(401)
-					.send({ error: "Invalid API key for this node" });
+					.send({ error: "Invalid deployment credentials" });
 			}
 
 			// Atomically mark the token used before emitting the script so concurrent
@@ -1205,7 +1204,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				data: { usedAt: new Date() },
 			});
 			if (consume.count !== 1) {
-				return reply.status(401).send({ error: "Deployment token has already been used" });
+				return reply.status(401).send({ error: "Invalid deployment credentials" });
 			}
 
 			// For the deploy script, use the externally-reachable address.
@@ -1379,6 +1378,11 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					where: { serverId, userId },
 					select: { permissions: true },
 				});
+				const sftpHasFileAccess = Boolean(
+					sftpAccessRow?.permissions?.includes('server.read') ||
+						sftpAccessRow?.permissions?.includes('file.read') ||
+						sftpAccessRow?.permissions?.includes('file.write'),
+				);
 				const sftpRolePerms = await resolveServerPermissions(
 					userId,
 					serverId,
@@ -1392,7 +1396,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				})();
 				const sftpDecision = decideServerAccess({
 					isOwner: sftpServerRow.ownerId === userId,
-					hasExplicitServerAccess: Boolean(sftpAccessRow),
+					hasExplicitServerAccess: sftpHasFileAccess,
 					rolePermissions: sftpRolePerms,
 					hasNodeAccess: sftpHasNodeAccess,
 					requiredPermission: "server.read",
@@ -1482,6 +1486,11 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					where: { serverId, userId },
 					select: { permissions: true },
 				});
+				const rotHasFileAccess = Boolean(
+					rotAccessRow?.permissions?.includes('server.read') ||
+						rotAccessRow?.permissions?.includes('file.read') ||
+						rotAccessRow?.permissions?.includes('file.write'),
+				);
 				const rotRolePerms = await resolveServerPermissions(
 					userId,
 					serverId,
@@ -1495,7 +1504,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				})();
 				const rotDecision = decideServerAccess({
 					isOwner: rotServerRow.ownerId === userId,
-					hasExplicitServerAccess: Boolean(rotAccessRow),
+					hasExplicitServerAccess: rotHasFileAccess,
 					rolePermissions: rotRolePerms,
 					hasNodeAccess: rotHasNodeAccess,
 					requiredPermission: "server.read",
@@ -1560,6 +1569,25 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				// visible to their owner only.
 				const { resolveServerPermissions } = await import("./lib/permissions-catalog.js");
 				const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+				const { decideServerAccess: decideSftpTokenAccess } = await import(
+					"./lib/server-access.js"
+				);
+				const { hasNodeAccess: checkSftpTokenNodeAccess } = await import(
+					"./routes/servers/_helpers.js"
+				);
+				const sftpTokenAccessRow = await prisma.serverAccess.findFirst({
+					where: { serverId, userId },
+					select: { userId: true },
+				});
+				const sftpTokenDecision = decideSftpTokenAccess({
+					isOwner,
+					hasExplicitServerAccess: Boolean(sftpTokenAccessRow),
+					rolePermissions: rolePerms,
+					hasNodeAccess: await checkSftpTokenNodeAccess(prisma, userId, server.nodeId),
+				});
+				if (!sftpTokenDecision.allowed) {
+					return reply.status(403).send({ error: "Forbidden" });
+				}
 				const canManageTokens =
 					isOwner ||
 					rolePerms.includes("*") ||
@@ -1681,8 +1709,8 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			},
 		);
 
-		// Public update check endpoint (unauthenticated)
-		app.get("/api/update/check", async (_request, reply) => {
+		// Update status (authenticated; restart probe uses /health for liveness).
+		app.get("/api/update/check", { preHandler: [(app as any).authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (_request, reply) => {
 			const { getUpdateStatus, checkForUpdate } = await import("./services/auto-updater");
 			const status = getUpdateStatus();
 			// Refresh cache if stale (> 5 min) so the frontend gets real data
@@ -1701,20 +1729,14 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			});
 		});
 
-		// Public theme settings endpoint (unauthenticated)
-		app.get("/api/theme-settings/public", async (_request, reply) => {
-			let settings = await prisma.themeSettings.findUnique({
+		// Public theme settings endpoint (unauthenticated, display fields only).
+		app.get("/api/theme-settings/public", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (_request, reply) => {
+			const settings = await prisma.themeSettings.findUnique({
 				where: { id: "default" },
 			});
 
-			if (!settings) {
-				settings = await prisma.themeSettings.create({
-					data: { id: "default" },
-				});
-			}
-
 			// Return only public fields
-			const oidcMeta = (settings.metadata as Record<string, any>) || {};
+			const oidcMeta = (settings?.metadata as Record<string, any>) || {};
 			const oidcDb =
 				(oidcMeta.oidcProviders as Record<string, Record<string, string>>) ||
 				{};
@@ -1728,18 +1750,20 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 						process.env[`${p.toUpperCase()}_OIDC_DISCOVERY_URL`])
 				);
 			};
+			const rawCss = typeof settings?.customCss === "string" ? settings.customCss : null;
 
+			reply.header("Cache-Control", "no-store");
 			reply.send({
 				success: true,
 				data: {
-					panelName: settings.panelName,
-					logoUrl: settings.logoUrl,
-					faviconUrl: settings.faviconUrl,
-					defaultTheme: settings.defaultTheme,
-					enabledThemes: settings.enabledThemes,
-					primaryColor: settings.primaryColor,
-					secondaryColor: settings.secondaryColor,
-					accentColor: settings.accentColor,
+					panelName: settings?.panelName ?? "Catalyst",
+					logoUrl: settings?.logoUrl ?? null,
+					faviconUrl: settings?.faviconUrl ?? null,
+					defaultTheme: settings?.defaultTheme ?? "dark",
+					enabledThemes: settings?.enabledThemes ?? null,
+					primaryColor: settings?.primaryColor ?? null,
+					secondaryColor: settings?.secondaryColor ?? null,
+					accentColor: settings?.accentColor ?? null,
 					// Expose which OAuth/SSO providers are configured so the frontend
 					// can hide login buttons and profile linking UI when not set up.
 					authProviders: {
@@ -1747,8 +1771,8 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 						paymenter: isProviderConfigured("paymenter"),
 					},
 					// Extended theme customization stored in metadata
-					themeColors: (settings.metadata as any)?.themeColors || null,
-					customCss: settings.customCss || null,
+					themeColors: (settings?.metadata as any)?.themeColors || null,
+					customCss: rawCss && rawCss.length > 20000 ? rawCss.slice(0, 20000) : rawCss,
 				},
 			});
 		});
@@ -1777,7 +1801,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					) {
 						return reply
 							.status(400)
-							.send({ error: "component and message are required" });
+							.send({ error: "Invalid request" });
 					}
 
 					// SECURITY: this endpoint is unauthenticated. Cap every field
@@ -1845,7 +1869,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				const message =
 					typeof body.message === "string" ? body.message.trim() : "";
 				if (!message) {
-					return reply.status(400).send({ error: "message is required" });
+					return reply.status(400).send({ error: "Invalid request" });
 				}
 
 				const allowedLevels = new Set(["error", "warn", "critical"]);

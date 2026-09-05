@@ -172,7 +172,8 @@ export async function authRoutes(app: FastifyInstance) {
       } catch (err: any) {
         const isDuplicate = err?.code === 'P2002' || (err?.message || '').includes('Unique constraint') || (err?.message || '').includes('already exists');
         if (isDuplicate) {
-          return reply.status(409).send({ error: 'Email or username already in use' });
+          await new Promise((r) => setTimeout(r, 100 + Math.floor(Math.random() * 150)));
+          return reply.status(400).send({ error: 'Registration failed' });
         }
         throw err;
       }
@@ -199,7 +200,11 @@ export async function authRoutes(app: FastifyInstance) {
 
       // Always check brute-force protection before any user lookup to prevent
       // email enumeration via timing differences and to rate-limit unknown emails.
-      await bruteForceProtection(prisma, normalizedEmail, request);
+      try {
+        await bruteForceProtection(prisma, normalizedEmail, request);
+      } catch (bfErr: any) {
+        return reply.status(429).send({ error: "Too many requests" });
+      }
 
       // Resolve the actual email (case-insensitive lookup)
       const userRecord = await prisma.user.findFirst({
@@ -208,6 +213,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       if (!userRecord) {
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
+        await new Promise((r) => setTimeout(r, 150 + Math.floor(Math.random() * 150)));
         return reply.status(401).send({ error: "Invalid credentials" });
       }
 
@@ -298,6 +304,7 @@ export async function authRoutes(app: FastifyInstance) {
         if (isCredentialError && userRecord) {
           await handleFailedLogin(prisma, request);
           await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
+          await new Promise((r) => setTimeout(r, 150 + Math.floor(Math.random() * 150)));
           return reply.status(401).send({ error: "Invalid credentials" });
         }
         
@@ -671,20 +678,22 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Validate reset token ─────────────────────────────────────────────
   app.post(
     "/reset-password/validate",
-    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
+    { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token } = request.body as { token?: string };
       if (!token) {
-        return reply.status(400).send({ error: "Token is required", valid: false });
+        await new Promise((r) => setTimeout(r, 100 + Math.floor(Math.random() * 100)));
+        return reply.status(400).send({ error: "Invalid request", valid: false });
       }
 
       try {
         const verification = await prisma.verification.findFirst({
           where: { value: token, expiresAt: { gt: new Date() }, identifier: { startsWith: 'reset-password' } },
         });
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 100 + Math.floor(Math.random() * 100)));
         reply.send({ success: Boolean(verification), valid: Boolean(verification), ...(verification ? {} : { error: "Invalid or expired token" }) });
       } catch {
+        await new Promise((r) => setTimeout(r, 100 + Math.floor(Math.random() * 100)));
         reply.send({ success: false, valid: false, error: "Invalid or expired token" });
       }
     }

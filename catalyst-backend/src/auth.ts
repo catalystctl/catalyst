@@ -176,7 +176,7 @@ export function initAuth() {
       cookie: {
         attributes: {
           sameSite: process.env.NODE_ENV === 'production' ? (process.env.FRONTEND_URL?.startsWith('https') ? 'none' : 'lax') : 'lax',
-          secure: process.env.NODE_ENV !== 'development' && process.env.COOKIE_SECURE !== 'false',
+          secure: process.env.NODE_ENV === 'production' && (process.env.FRONTEND_URL?.startsWith('https') ?? false) ? true : process.env.NODE_ENV !== 'development' && process.env.COOKIE_SECURE !== 'false',
           httpOnly: true,
           path: '/',
         }

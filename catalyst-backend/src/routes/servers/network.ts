@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../db.js";
-import { canAccessServer, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam, validateRequestBody } from './_helpers.js';
+import { canAccessServer, checkIsAdmin, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam, validateRequestBody } from './_helpers.js';
 
 /** Statuses that allow allocation changes. Stopped servers can always change allocations;
  *  running servers support hot-add / hot-remove (the agent will sync firewall rules). */
@@ -135,12 +135,14 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         (access) => access.userId === userId &&
           (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
       );
-      if (server.ownerId !== userId && !hasWriteAccess) {
-        if (!(await canAccessServer(userId, {
-          id: serverId,
-          ownerId: server.ownerId,
-          nodeId: server.nodeId,
-        }))) {
+      if (server.ownerId !== userId && !hasWriteAccess && !checkIsAdmin(request, "admin.write")) {
+        const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+        const { hasNodeAccess } = await import("../../lib/permissions.js");
+        const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+        const nodeManage =
+          (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+          rolePerms.includes("node.update");
+        if (!rolePerms.includes("server.update") && !rolePerms.includes("server.delete") && !rolePerms.includes("*") && !nodeManage) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -368,12 +370,14 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         (access) => access.userId === userId &&
           (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
       );
-      if (server.ownerId !== userId && !hasWriteAccess) {
-        if (!(await canAccessServer(userId, {
-          id: serverId,
-          ownerId: server.ownerId,
-          nodeId: server.nodeId,
-        }))) {
+      if (server.ownerId !== userId && !hasWriteAccess && !checkIsAdmin(request, "admin.write")) {
+        const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+        const { hasNodeAccess } = await import("../../lib/permissions.js");
+        const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+        const nodeManage =
+          (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+          rolePerms.includes("node.update");
+        if (!rolePerms.includes("server.update") && !rolePerms.includes("server.delete") && !rolePerms.includes("*") && !nodeManage) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -492,12 +496,14 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         (access) => access.userId === userId &&
           (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
       );
-      if (server.ownerId !== userId && !hasWriteAccess) {
-        if (!(await canAccessServer(userId, {
-          id: serverId,
-          ownerId: server.ownerId,
-          nodeId: server.nodeId,
-        }))) {
+      if (server.ownerId !== userId && !hasWriteAccess && !checkIsAdmin(request, "admin.write")) {
+        const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+        const { hasNodeAccess } = await import("../../lib/permissions.js");
+        const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+        const nodeManage =
+          (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+          rolePerms.includes("node.update");
+        if (!rolePerms.includes("server.update") && !rolePerms.includes("server.delete") && !rolePerms.includes("*") && !nodeManage) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
