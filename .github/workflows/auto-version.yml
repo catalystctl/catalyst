@@ -281,6 +281,13 @@ jobs:
           # Write notes to file for the next step (handles multiline)
           echo "$NOTES" > /tmp/release_notes.md
 
+      # Created as a DRAFT: the panel update check, agent self-update, and
+      # `docker compose pull` all key off the published release, while the
+      # agent binaries (agent-release) and container images (publish-images)
+      # take many more minutes to build. Publishing immediately would notify
+      # every panel of an update whose artifacts don't exist yet. The
+      # publish-release job below flips this to published once everything
+      # it needs is live.
       - name: Create GitHub Release
         if: steps.bump.outputs.bump != 'none'
         id: create_release
@@ -289,53 +296,9 @@ jobs:
           tag_name: v${{ steps.version.outputs.new_version }}
           name: v${{ steps.version.outputs.new_version }}
           body_path: /tmp/release_notes.md
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Notify Discord on Release
-        if: steps.bump.outputs.bump != 'none'
-        env:
-          DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
-          NEW_VERSION: ${{ steps.version.outputs.new_version }}
-        run: |
-          if [ -z "$DISCORD_RELEASE_WEBHOOK_URL" ]; then
-            echo "⊘ No DISCORD_RELEASE_WEBHOOK_URL secret set, skipping notification"
-            exit 0
-          fi
-
-          TAG="v${NEW_VERSION}"
-          RELEASE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
-          NOTES=$(cat /tmp/release_notes.md)
-
-          # Truncate notes to fit Discord embed description limit (1024 chars)
-          if [ ${#NOTES} -gt 1000 ]; then
-            DESCRIPTION="${NOTES:0:1000}…\n[View full release notes](<$RELEASE_URL>)"
-          else
-            DESCRIPTION="$NOTES"
-          fi
-
-          jq -n \
-            --arg username "Catalyst" \
-            --arg avatar_url "https://github.com/${GITHUB_REPOSITORY_OWNER}.png" \
-            --arg title "🚀 Release ${TAG}" \
-            --arg description "$DESCRIPTION" \
-            --arg url "$RELEASE_URL" \
-            --argjson color 5763719 \
-            --arg repo "$GITHUB_REPOSITORY" \
-            '{
-              username: $username,
-              avatar_url: $avatar_url,
-              embeds: [{
-                title: $title,
-                description: $description,
-                url: $url,
-                color: $color,
-                footer: { text: $repo },
-                timestamp: now | todateiso8601
-              }]
-            }' | curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_RELEASE_WEBHOOK_URL" -d @-
-
-          echo "✅ Discord release notification sent for ${TAG}"
 
   # ══════════════════════════════════════════════════════════════════════════════
   # Agent Release Build — builds release agent binaries and uploads them as
@@ -540,3 +503,70 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Publish the draft release created by the version job. Runs only after the
+  # agent binaries AND both container images are live. Until this flips the
+  # draft to published, `releases/latest` keeps serving the previous version,
+  # so panels don't notify (and can't pull) an update whose artifacts don't
+  # exist yet. If any build job fails this is skipped and the release stays
+  # a draft — announce nothing rather than a broken update.
+  # ══════════════════════════════════════════════════════════════════════════════
+  publish-release:
+    name: Publish GitHub Release
+    needs: [version, agent-release, publish-images]
+    if: needs.version.outputs.bump != 'none'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Publish draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "v${{ needs.version.outputs.new_version }}" --draft=false
+          echo "✅ Release v${{ needs.version.outputs.new_version }} published"
+
+      - name: Notify Discord on Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          NEW_VERSION: ${{ needs.version.outputs.new_version }}
+        run: |
+          if [ -z "$DISCORD_RELEASE_WEBHOOK_URL" ]; then
+            echo "⊘ No DISCORD_RELEASE_WEBHOOK_URL secret set, skipping notification"
+            exit 0
+          fi
+
+          TAG="v${NEW_VERSION}"
+          RELEASE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          NOTES=$(gh release view "$TAG" --json body --jq .body)
+
+          # Truncate notes to fit Discord embed description limit (1024 chars)
+          if [ ${#NOTES} -gt 1000 ]; then
+            DESCRIPTION="${NOTES:0:1000}…\n[View full release notes](<$RELEASE_URL>)"
+          else
+            DESCRIPTION="$NOTES"
+          fi
+
+          jq -n \
+            --arg username "Catalyst" \
+            --arg avatar_url "https://github.com/${GITHUB_REPOSITORY_OWNER}.png" \
+            --arg title "🚀 Release ${TAG}" \
+            --arg description "$DESCRIPTION" \
+            --arg url "$RELEASE_URL" \
+            --argjson color 5763719 \
+            --arg repo "$GITHUB_REPOSITORY" \
+            '{
+              username: $username,
+              avatar_url: $avatar_url,
+              embeds: [{
+                title: $title,
+                description: $description,
+                url: $url,
+                color: $color,
+                footer: { text: $repo },
+                timestamp: now | todateiso8601
+              }]
+            }' | curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_RELEASE_WEBHOOK_URL" -d @-
+
+          echo "✅ Discord release notification sent for ${TAG}"
