@@ -37,7 +37,11 @@ const dashboardApi = {
   },
 
   getResourceStats: async (): Promise<ResourceStats> => {
-    const data = await apiClient.get<{ success?: boolean; data?: ResourceStats }>('/api/dashboard/resources');
+    // Aggregates across nodes and is polled regularly — allow extra time
+    // under load instead of spamming timeout errors every minute.
+    const data = await apiClient.get<{ success?: boolean; data?: ResourceStats }>('/api/dashboard/resources', {
+      timeoutMs: 30_000,
+    });
     return data.data ?? (data as unknown as ResourceStats);
   },
 };

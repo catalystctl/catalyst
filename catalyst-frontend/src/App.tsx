@@ -4,7 +4,7 @@ import SetupPage from './pages/setup/SetupPage';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { motion, AnimatePresence } from 'framer-motion';
 import AppLayout from './components/layout/AppLayout';
-import ProtectedRoute, { hasAnyAdminPermission } from './components/auth/ProtectedRoute';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ToastProvider } from './components/providers/ToastProvider';
 import { useAuthInit } from './hooks/useAuthInit';
 import ErrorBoundary from './components/shared/ErrorBoundary';
@@ -97,8 +97,14 @@ function App() {
  // Auth and setup hooks have their own shorter timeouts; this covers any
  // other hang in the boot path.
  const [bootTimedOut, setBootTimedOut] = useState(false);
+ // Mirrors boot readiness so the backstop only reports when boot is
+ // genuinely still stuck — previously the timer always fired 20s after
+ // mount and reported on every session, even fast boots.
+ const bootReadyRef = useRef(false);
+ bootReadyRef.current = isReady && !isSetupLoading;
  useEffect(() => {
  const timer = setTimeout(() => {
+ if (bootReadyRef.current) return;
  setBootTimedOut(true);
  reportSystemError({
  level: 'warn',
@@ -140,11 +146,13 @@ function App() {
  if (!isAuthenticated || !user) return;
  if (adminLoadedRef.current) return;
 
+ // The theme endpoint requires admin.read exactly — broader admin-area
+ // permissions (node/server/...) still get a 403, so check the exact
+ // permission here instead of any-admin-access.
  const hasAdminAccess =
  user?.permissions?.includes('*') ||
  user?.permissions?.includes('admin.write') ||
- user?.permissions?.includes('admin.read') ||
- hasAnyAdminPermission(user?.permissions);
+ user?.permissions?.includes('admin.read');
 
  if (!hasAdminAccess) return;
 
@@ -158,6 +166,11 @@ function App() {
  injectCustomCss(fullSettings.customCss);
  }
  } catch (error) {
+ // A 403 just means the account lacks admin.read (expected for
+ // non-admin roles) — not a system error worth reporting.
+ if ((error as { status?: number })?.status === 403) {
+ return;
+ }
  reportSystemError({
  level: 'error',
  component: 'App',

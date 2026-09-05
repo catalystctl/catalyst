@@ -66,7 +66,11 @@ export const serversApi = {
     return data;
   },
   stop: async (id: string) => {
-    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/stop`);
+    // The backend waits up to 60s for graceful shutdown + container remove,
+    // so the default 15s timeout would abort (and report) healthy slow stops.
+    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/stop`, undefined, {
+      timeoutMs: 75_000,
+    });
     return data;
   },
   restart: async (id: string) => {
