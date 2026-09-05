@@ -59,9 +59,8 @@ export default function UpdateSettings() {
  const triggerMutation = useMutation({
  mutationFn: adminApi.triggerUpdate,
  onSuccess: (result) => {
- // Show the live progress modal regardless of immediate success: the
- // backend state endpoint reports pull/restart progress or the failure.
- setProgressOpen(true);
+ // Modal is already open (opened on click so logs stream from the start);
+ // the backend state endpoint reports pull/restart progress or the failure.
  if (!result.success) {
  notifyError(result.message || 'Update failed');
  }
@@ -95,7 +94,10 @@ export default function UpdateSettings() {
  <Button
  size="sm"
  disabled={isLoading || triggerMutation.isPending || !canTrigger}
- onClick={() => triggerMutation.mutate()}
+ onClick={() => {
+ setProgressOpen(true);
+ triggerMutation.mutate();
+ }}
  >
  {triggerMutation.isPending ? (
  <>

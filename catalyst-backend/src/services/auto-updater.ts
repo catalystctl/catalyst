@@ -31,6 +31,38 @@ export interface UpdateState {
 	message: string | null;
 	startedAt: string | null;
 	updatedAt: string | null;
+	logs: string[];
+}
+
+const MAX_UPDATE_LOG_LINES = 500;
+
+let updateLogs: string[] = [];
+
+function appendUpdateLog(line: string) {
+	const ansiPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+	const cleaned = line.replace(ansiPattern, "").trim();
+	if (!cleaned) return;
+	updateLogs.push(cleaned);
+	if (updateLogs.length > MAX_UPDATE_LOG_LINES) {
+		updateLogs = updateLogs.slice(updateLogs.length - MAX_UPDATE_LOG_LINES);
+	}
+	updateState = {
+		...updateState,
+		logs: [...updateLogs],
+		updatedAt: new Date().toISOString(),
+	};
+}
+
+function appendUpdateChunk(chunk: unknown) {
+	const text = String(chunk ?? "");
+	const parts = text.split(/\r?\n|\r/);
+	for (const part of parts) {
+		if (part.trim()) appendUpdateLog(part);
+	}
+}
+
+function clearUpdateLogs() {
+	updateLogs = [];
 }
 
 let updateState: UpdateState = {
@@ -38,9 +70,13 @@ let updateState: UpdateState = {
 	message: null,
 	startedAt: null,
 	updatedAt: null,
+	logs: [],
 };
 
 function setUpdateState(state: UpdateState["state"], message?: string | null) {
+	if (state === "pulling") {
+		clearUpdateLogs();
+	}
 	updateState = {
 		state,
 		message: message ?? null,
@@ -49,11 +85,12 @@ function setUpdateState(state: UpdateState["state"], message?: string | null) {
 				? new Date().toISOString()
 				: updateState.startedAt,
 		updatedAt: new Date().toISOString(),
+		logs: [...updateLogs],
 	};
 }
 
 export function getUpdateState(): UpdateState {
-	return updateState;
+	return { ...updateState, logs: [...updateLogs] };
 }
 
 let cachedStatus: UpdateStatus = {
@@ -347,6 +384,12 @@ export async function performUpdate(logger?: {
 	const inDocker =
 		process.env.AUTO_UPDATE_FORCE_DOCKER === "true" || isDocker();
 
+	// Fresh attempt (not already pulling/restarting): start with clean logs
+	// so a retry does not mix with the previous run. Ongoing runs keep theirs.
+	if (updateState.state === "idle" || updateState.state === "failed") {
+		clearUpdateLogs();
+	}
+
 	if (inDocker) {
 		const context = resolveComposeContext();
 		if (!context) {
@@ -355,6 +398,7 @@ export async function performUpdate(logger?: {
 				"(no com.docker.compose.project.working_dir label) and AUTO_UPDATE_DOCKER_COMPOSE_PATH is unset.";
 			logger?.error?.({ composePath: null }, message);
 			setUpdateState("failed", message);
+			appendUpdateLog(`Update failed: ${message}`);
 			return { success: false, message };
 		}
 		const { composePath } = context;
@@ -364,6 +408,9 @@ export async function performUpdate(logger?: {
 			"pulling",
 			"Downloading the latest Catalyst images (this can take a few minutes)…",
 		);
+		appendUpdateLog(`Panel update started (${new Date().toISOString()})`);
+		appendUpdateLog(`Compose file: ${composePath}`);
+		appendUpdateLog("$ docker compose pull");
 
 		try {
 			await new Promise<void>((resolve, reject) => {
@@ -371,14 +418,22 @@ export async function performUpdate(logger?: {
 
 				let stderr = "";
 
+				pull.stdout?.on("data", (data) => {
+					appendUpdateChunk(data.toString());
+				});
+
 				pull.stderr?.on("data", (data) => {
-					stderr += data.toString();
+					const text = data.toString();
+					stderr += text;
+					appendUpdateChunk(text);
 				});
 
 				pull.on("close", (code) => {
 					if (code === 0) {
+						appendUpdateLog("Pull complete — all images are up to date.");
 						resolve();
 					} else {
+						appendUpdateLog(`Pull failed with exit code ${code}.`);
 						reject(
 							new Error(
 								`docker compose pull exited with code ${code}: ${stderr}`,
@@ -388,6 +443,7 @@ export async function performUpdate(logger?: {
 				});
 
 				pull.on("error", (err) => {
+					appendUpdateLog(`Failed to start pull: ${err.message}`);
 					reject(err);
 				});
 			});
@@ -398,11 +454,20 @@ export async function performUpdate(logger?: {
 				"restarting",
 				"Images pulled. Restarting containers — the panel will be briefly unavailable.",
 			);
+			appendUpdateLog("$ docker compose up -d");
+			appendUpdateLog("Restarting containers — the panel will go down briefly.");
 			const apply = spawnComposeHelper(context, ["up", "-d"], {
 				detached: true,
 			});
+			apply.stdout?.on("data", (data) => {
+				appendUpdateChunk(data.toString());
+			});
+			apply.stderr?.on("data", (data) => {
+				appendUpdateChunk(data.toString());
+			});
 			apply.unref();
 			apply.on("error", (err) => {
+				appendUpdateLog(`Failed to start restart helper: ${err.message}`);
 				logger?.error?.({ err }, "failed to start compose apply helper");
 			});
 
@@ -417,6 +482,7 @@ export async function performUpdate(logger?: {
 				logger.error({ err: error }, "Docker update failed");
 			}
 			setUpdateState("failed", message);
+			appendUpdateLog(`Update failed: ${message}`);
 			captureSystemError({
 				level: "error",
 				component: "AutoUpdater",
@@ -432,6 +498,7 @@ export async function performUpdate(logger?: {
 		"Direct-mode auto-update requires manual restart. Please update Catalyst manually.";
 	logger?.warn?.(message);
 	setUpdateState("failed", message);
+	appendUpdateLog(`Update failed: ${message}`);
 	return { success: false, message };
 }
 

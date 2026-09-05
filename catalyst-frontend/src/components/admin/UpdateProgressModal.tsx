@@ -3,10 +3,13 @@ import { useQuery, useQueryClient } from '@/csync';
 import { motion } from 'framer-motion';
 import {
   ArrowUpCircle,
+  Check,
   CheckCircle2,
   Clock,
+  Copy,
   Loader2,
   RefreshCw,
+  Terminal,
   XCircle,
 } from 'lucide-react';
 import {
@@ -136,10 +139,74 @@ function PhaseStep({
 
 /**
  * Modal shown while a panel update runs. Polls GET /api/admin/update/state
- * (admin.write only) and renders a step list of what the backend is doing:
+ * (admin.write only) and renders a step list plus the live backend logs:
  * pulling images → restarting containers. Survives the flyout disappearing;
  * also mounted on the admin System page.
  */
+function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logs.length]);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(logs.join('\n'));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard unavailable
+    }
+  };
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-black">
+      <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
+        <div className="flex items-center gap-1.5 text-[11px] text-white/60">
+          <Terminal className="h-3.5 w-3.5" />
+          <span>Update logs</span>
+          {live && (
+            <span className="ml-1 inline-flex items-center gap-1 text-white/50">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+              live
+            </span>
+          )}
+        </div>
+        {logs.length > 0 && (
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        )}
+      </div>
+      <div
+        ref={scrollRef}
+        className="h-64 overflow-y-auto px-3 py-2 font-mono text-[11px] leading-relaxed"
+      >
+        {logs.length === 0 ? (
+          <div className="flex items-center gap-2 text-white/40">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Waiting for output — pull logs will appear here…
+          </div>
+        ) : (
+          logs.map((line, i) => (
+            <div key={i} className="whitespace-pre-wrap break-words text-white/80">
+              {line}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function UpdateProgressModal({
   open,
   onClose,
@@ -153,16 +220,35 @@ export default function UpdateProgressModal({
     queryKey: qk.adminUpdateState(),
     queryFn: adminApi.updateState,
     enabled: open,
-    refetchInterval: open ? 3_000 : false,
+    refetchInterval: open ? 2_000 : false,
   });
 
   const phase = state?.state ?? 'idle';
   const restarting = phase === 'restarting';
   const panelBack = usePanelRestartWatch(open && restarting);
 
+  const reloadScheduledRef = useRef(false);
+  const prevPhaseRef = useRef<string | undefined>(undefined);
+
+  // Keep the last known logs so the terminal does not go blank when the
+  // backend goes down for the restart (polls fail) or resets after reboot.
+  const [stickyLogs, setStickyLogs] = useState<string[]>([]);
+  useEffect(() => {
+    if (state?.logs?.length) setStickyLogs(state.logs);
+  }, [state?.logs]);
+  useEffect(() => {
+    if (!open) {
+      setStickyLogs([]);
+      reloadScheduledRef.current = false;
+      prevPhaseRef.current = undefined;
+    }
+  }, [open]);
+
+  const logs = state?.logs?.length ? state.logs : stickyLogs;
+  const live = (phase === 'pulling' || phase === 'restarting') && !panelBack;
+
   // When the panel answers again after a restart: persist the completion
   // toast flag, show "Update complete", then reload into the new version.
-  const reloadScheduledRef = useRef(false);
   useEffect(() => {
     if (!panelBack || reloadScheduledRef.current) return;
     reloadScheduledRef.current = true;
@@ -175,7 +261,6 @@ export default function UpdateProgressModal({
     return () => window.clearTimeout(t);
   }, [panelBack]);
 
-  const prevPhaseRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     const current = state?.state;
     if (prevPhaseRef.current && prevPhaseRef.current !== current) {
@@ -198,21 +283,22 @@ export default function UpdateProgressModal({
   const restartingStatus =
     phase === 'restarting' ? 'active' : phase === 'failed' ? 'pending' : 'pending';
 
-  const active =
-    phase === 'pulling' || phase === 'restarting' || phase === 'failed';
+  const starting = phase === 'idle' && !panelBack;
+  const running = phase === 'pulling' || phase === 'restarting' || starting;
+  const closeBlocked = running && !panelBack;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && active) return; onClose(); }}>
-      <DialogContent size="sm">
+    <Dialog open={open} onOpenChange={(next) => { if (!next && closeBlocked) return; onClose(); }}>
+      <DialogContent size="lg">
         <DialogHeader icon={<ArrowUpCircle className="h-4 w-4 text-primary" />}>
           <DialogTitle>Panel update</DialogTitle>
           <DialogDescription>
-            Live progress of the panel update. You can keep working — we&apos;ll keep this open.
+            Live progress of the panel update — pull output and restart status appear below.
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-4">
-          {panelBack ? (
+          {panelBack && (
             <div className="flex items-center gap-3 rounded-lg border border-success/20 bg-success-muted/30 px-3 py-3">
               <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
               <div>
@@ -224,27 +310,30 @@ export default function UpdateProgressModal({
                 </div>
               </div>
             </div>
-          ) : phase === 'idle' ? (
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-xs text-muted-foreground">
-              <RefreshCw className="h-3.5 w-3.5 shrink-0" />
-              Waiting for the update to start…
-            </div>
-          ) : (
+          )}
+          {!panelBack && (
             <motion.div layout className="space-y-4">
-              <div className="space-y-4">
-                <PhaseStep
-                  label={PHASE_STEPS[0].label}
-                  description={PHASE_STEPS[0].description}
-                  status={pullingStatus}
-                />
-                {phase !== 'failed' && (
+              {starting ? (
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-xs text-muted-foreground">
+                  <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                  Starting update — opening log stream…
+                </div>
+              ) : (
+                <div className="space-y-4">
                   <PhaseStep
-                    label={PHASE_STEPS[1].label}
-                    description={PHASE_STEPS[1].description}
-                    status={restartingStatus}
+                    label={PHASE_STEPS[0].label}
+                    description={PHASE_STEPS[0].description}
+                    status={pullingStatus}
                   />
-                )}
-              </div>
+                  {phase !== 'failed' && (
+                    <PhaseStep
+                      label={PHASE_STEPS[1].label}
+                      description={PHASE_STEPS[1].description}
+                      status={restartingStatus}
+                    />
+                  )}
+                </div>
+              )}
 
               {phase === 'failed' && (
                 <div className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger-muted/40 px-3 py-2.5 text-xs text-danger">
@@ -269,7 +358,7 @@ export default function UpdateProgressModal({
                 </div>
               )}
 
-              {state?.startedAt && !panelBack && (
+              {state?.startedAt && (
                 <div className="text-[11px] text-muted-foreground">
                   Started {formatRelativeTime(state.startedAt)}
                   {state.message && phase === 'pulling' ? ` — ${state.message}` : ''}
@@ -277,16 +366,17 @@ export default function UpdateProgressModal({
               )}
             </motion.div>
           )}
+          <UpdateLogViewer logs={logs} live={live} />
         </DialogBody>
 
         <DialogFooter>
           <Button
             size="sm"
             variant="outline"
-            disabled={active && !panelBack}
+            disabled={closeBlocked}
             onClick={onClose}
           >
-            {active && !panelBack ? 'Update in progress…' : 'Close'}
+            {closeBlocked ? 'Update in progress…' : 'Close'}
           </Button>
         </DialogFooter>
       </DialogContent>

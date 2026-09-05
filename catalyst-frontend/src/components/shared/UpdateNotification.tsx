@@ -114,10 +114,10 @@ export default function UpdateNotification() {
  }, [latestVersion]);
 
  const handleTriggerUpdate = useCallback(async () => {
+ setShowProgressModal(true);
  setTriggering(true);
  try {
  const result = await adminApi.triggerUpdate();
- setShowProgressModal(true);
  if (!result.success) {
  notifyError(result.message || 'Failed to trigger update');
  }

@@ -404,4 +404,5 @@ export interface UpdateStateResponse {
   message: string | null;
   startedAt: string | null;
   updatedAt: string | null;
+  logs?: string[];
 }
