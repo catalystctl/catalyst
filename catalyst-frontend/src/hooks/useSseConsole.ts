@@ -2,15 +2,16 @@
  * SSE-based real-time console hook.
  *
  * Correctness contract:
- *   1. History (REST) and live (SSE) share one buffer; live is NEVER wiped by a
- *      late history response.
- *   2. On first history load we seed the buffer, then append any live lines that
- *      arrived while history was in flight (deduped by content fingerprint).
+ *   1. History (REST) and live (SSE) share one buffer; the buffer is monotonic —
+ *      history fetches only ever append unseen rows, never replace the buffer,
+ *      so a stale or late history response cannot wipe newer live lines.
+ *   2. Identity is by stable DB id (backend `id` / SSE `logId`). Live lines
+ *      that already carry their DB id are registered in the seen set on arrival,
+ *      so a later history fetch containing the same row is skipped instead of
+ *      duplicated. Content is never used for dedupe (identical lines repeat).
  *   3. SSE events are batched via rAF so high-rate output does not thrash React.
- *   4. Polling only when the stream is fully down (not connecting/reconnecting).
- *
- * Note: backend still lacks SSE `id:` / Last-Event-ID replay; until that lands,
- * history+live merge is the reconnect path.
+ *   4. Polling every 2s when the stream is fully down; reconcile every 10s even
+ *      when connected to catch throttled or otherwise missed SSE lines.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -34,12 +35,36 @@ type ConsoleOptions = {
 };
 
 const MAX_BATCH_SIZE = 50;
+/** Cap the seen-id set so a multi-day session cannot grow unbounded. */
+const MAX_SEEN_IDS = 20000;
+const POLL_DOWN_MS = 2000;
+const RECONCILE_CONNECTED_MS = 10000;
 
 const normalizeData = (data: string) => data.replace(/\r\n/g, '\n');
 
-/** Cheap fingerprint for history↔live dedupe (stream + normalized body). */
-function entryKey(e: { stream: string; data: string }): string {
-  return `${e.stream}\0${e.data}`;
+function hashStr(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+
+/** Stable entry id for a history row. Prefers the DB id; falls back to a hash. */
+function historyEntryId(log: ServerLogEntry): string {
+  const raw = log.id ?? log.logId;
+  if (raw) return `hist:${raw}`;
+  const ts = typeof log.timestamp === 'string' ? log.timestamp : String(log.timestamp ?? '');
+  return `hist-fallback:${log.stream}\0${ts}\0${hashStr(normalizeData(log.data))}:${log.data.length}`;
+}
+
+function toHistoryEntry(log: ServerLogEntry): ConsoleEntry {
+  return {
+    id: historyEntryId(log),
+    stream: log.stream,
+    data: normalizeData(log.data),
+    timestamp: typeof log.timestamp === 'string' ? log.timestamp : String(log.timestamp ?? ''),
+  };
 }
 
 export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
@@ -52,6 +77,8 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
   const loadedKeyRef = useRef('');
   /** True once REST history has been applied for the current server key. */
   const historyAppliedRef = useRef(false);
+  /** Every history/live DB id already in the buffer (prevents dupes, never wipes). */
+  const seenIdsRef = useRef<Set<string>>(new Set());
   /**
    * Live lines that arrived before history finished. Flushed/merged into the
    * buffer when history lands so a late setEntries(history) cannot clobber them.
@@ -65,6 +92,21 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     (list: ConsoleEntry[]) => (list.length > maxEntries ? list.slice(-maxEntries) : list),
     [maxEntries],
   );
+
+  const rememberIds = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    const seen = seenIdsRef.current;
+    for (const id of ids) seen.add(id);
+    if (seen.size > MAX_SEEN_IDS) {
+      const overflow = seen.size - MAX_SEEN_IDS;
+      const it = seen.values();
+      for (let i = 0; i < overflow; i++) {
+        const next = it.next();
+        if (next.done) break;
+        seen.delete(next.value);
+      }
+    }
+  }, []);
 
   const flushBuffer = useCallback(() => {
     flushTimerRef.current = null;
@@ -93,10 +135,25 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
 
   const pushLive = useCallback(
     (entry: ConsoleEntry) => {
+      // Live rows that already carry their DB id must not be re-added when
+      // history later returns the same row.
+      if (entry.id.startsWith('hist:')) rememberIds([entry.id]);
       batchBuffer.current.push(entry);
       scheduleFlush();
     },
-    [scheduleFlush],
+    [scheduleFlush, rememberIds],
+  );
+
+  const pushLiveOutput = useCallback(
+    (stream: string, data: string, timestamp?: string, logId?: string) => {
+      pushLive({
+        id: logId ? `hist:${logId}` : `live-${nextId.current++}`,
+        stream,
+        data: normalizeData(data),
+        timestamp,
+      });
+    },
+    [pushLive],
   );
 
   // ── Load initial log history via REST ──
@@ -115,7 +172,10 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
             return Promise.reject(new Error('missing id'));
           })(),
     enabled: Boolean(serverId),
-    staleTime: 30_000,
+    // Console must always hit the network on refetch: csync fetchQuery serves
+    // cache when fresh, which made the 2s down-polling return the same stale
+    // rows and hide the latest logs.
+    staleTime: 0,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -129,6 +189,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     pendingLiveRef.current = [];
     historyAppliedRef.current = false;
     loadedKeyRef.current = '';
+    seenIdsRef.current = new Set();
     if (flushTimerRef.current !== null) {
       cancelAnimationFrame(flushTimerRef.current);
       flushTimerRef.current = null;
@@ -136,29 +197,14 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     setEntries([]);
   }, [serverId]);
 
-  // ── Apply history without destroying live lines ──
+  // ── Apply history monotonically: append unseen rows, never replace ──
   useEffect(() => {
     if (!serverId || !Array.isArray(logsQuery.data)) return;
 
     const key = `${serverId}:${initialLines}`;
-    const isInitialLoad = loadedKeyRef.current !== key;
-    const isPollRefresh =
-      !isInitialLoad &&
-      streamStatus !== 'connected' &&
-      streamStatus !== 'connecting' &&
-      streamStatus !== 'reconnecting';
+    const isInitialLoad = loadedKeyRef.current !== key || !historyAppliedRef.current;
+    const history: ConsoleEntry[] = logsQuery.data.map((log: ServerLogEntry) => toHistoryEntry(log));
 
-    if (!isInitialLoad && !isPollRefresh) return;
-
-    const history: ConsoleEntry[] = logsQuery.data.map((log: ServerLogEntry) => ({
-      id: String(nextId.current++),
-      stream: log.stream,
-      data: normalizeData(log.data),
-      timestamp: log.timestamp,
-    }));
-
-    // Drain any live lines that arrived while history was in flight, then
-    // dedupe against the history tail so late setEntries(history) never wipes live.
     if (flushTimerRef.current !== null) {
       cancelAnimationFrame(flushTimerRef.current);
       flushTimerRef.current = null;
@@ -167,16 +213,36 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
       pendingLiveRef.current.push(...batchBuffer.current);
       batchBuffer.current = [];
     }
+
+    if (isInitialLoad) {
+      const historyIds = new Set(history.map((e) => e.id));
+      rememberIds([...historyIds]);
+      // Live lines that arrived while history was in flight: keep any row whose
+      // stable id is not already in history (truly newer). Local-only rows
+      // (live-*) are always kept. Never filter by content — identical log
+      // lines repeat and content dedupe drops the latest output.
+      const pending = pendingLiveRef.current;
+      pendingLiveRef.current = [];
+      const freshPending = pending.filter((e) => (e.id.startsWith('hist:') ? !historyIds.has(e.id) : true));
+      rememberIds(freshPending.filter((e) => e.id.startsWith('hist:')).map((e) => e.id));
+      setEntries(trim(history.concat(freshPending)));
+      loadedKeyRef.current = key;
+      historyAppliedRef.current = true;
+      return;
+    }
+
+    // Subsequent fetches (down-polling, connected reconcile, manual retry):
+    // append only rows never seen. No wipe, no content matching.
+    const unseen = history.filter((e) => !seenIdsRef.current.has(e.id));
+    // Drain any stragglers held before the gate opened.
     const pending = pendingLiveRef.current;
     pendingLiveRef.current = [];
-
-    const historyKeys = new Set(history.map(entryKey));
-    const liveOnly = pending.filter((e) => !historyKeys.has(entryKey(e)));
-
-    setEntries(trim(history.concat(liveOnly)));
-    loadedKeyRef.current = key;
-    historyAppliedRef.current = true;
-  }, [logsQuery.data, serverId, initialLines, streamStatus, trim]);
+    const freshPending = pending.filter((e) => (e.id.startsWith('hist:') ? !seenIdsRef.current.has(e.id) : true));
+    const additions = unseen.concat(freshPending);
+    if (additions.length === 0) return;
+    rememberIds(additions.filter((e) => e.id.startsWith('hist:')).map((e) => e.id));
+    setEntries((prev) => trim(prev.concat(additions)));
+  }, [logsQuery.data, serverId, initialLines, trim, rememberIds]);
 
   // If history request fails, still open the live gate so SSE/commands aren't stuck.
   useEffect(() => {
@@ -211,12 +277,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
           break;
 
         case 'console_output': {
-          pushLive({
-            id: String(nextId.current++),
-            stream: event.stream,
-            data: normalizeData(event.data),
-            timestamp: event.timestamp,
-          });
+          pushLiveOutput(event.stream, event.data, event.timestamp, event.logId);
           break;
         }
 
@@ -226,7 +287,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
 
         case 'eula_required': {
           pushLive({
-            id: String(nextId.current++),
+            id: `live-${nextId.current++}`,
             stream: 'system',
             data: '[Catalyst] Server requires EULA acceptance. Please accept in the prompt.\n',
           });
@@ -247,7 +308,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
       }
       flushBuffer();
     };
-  }, [serverId, pushLive, flushBuffer]);
+  }, [serverId, pushLive, pushLiveOutput, flushBuffer]);
 
   // ── Fallback polling when SSE is fully down ──
   const refetchLogs = logsQuery.refetch;
@@ -263,8 +324,19 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
 
     const interval = setInterval(() => {
       refetchLogs().catch(() => {});
-    }, 2000);
+    }, POLL_DOWN_MS);
 
+    return () => clearInterval(interval);
+  }, [serverId, streamStatus, refetchLogs]);
+
+  // ── Connected reconcile: SSE can miss lines (throttle drops, leader gaps,
+  // reconnect windows). History is the source of truth, merged append-only.
+  useEffect(() => {
+    if (!serverId) return;
+    if (streamStatus !== 'connected') return;
+    const interval = setInterval(() => {
+      refetchLogs().catch(() => {});
+    }, RECONCILE_CONNECTED_MS);
     return () => clearInterval(interval);
   }, [serverId, streamStatus, refetchLogs]);
 
@@ -276,7 +348,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
       if (!trimmed) return;
 
       pushLive({
-        id: String(nextId.current++),
+        id: `live-${nextId.current++}`,
         stream: 'stdin',
         data: `> ${trimmed}\n`,
       });
@@ -286,7 +358,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Failed to send command';
         pushLive({
-          id: String(nextId.current++),
+          id: `live-${nextId.current++}`,
           stream: 'system',
           data: `[Error] ${msg}\n`,
         });
@@ -303,10 +375,10 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
   );
 
   const clear = useCallback(() => {
-    nextId.current = 0;
     batchBuffer.current = [];
     pendingLiveRef.current = [];
-    // Keep historyApplied so subsequent live lines still append (user clear ≠ reload).
+    // Keep historyApplied and seen ids so the next poll does not re-add the
+    // rows the user just cleared (user clear is display-only, not a reload).
     setEntries([]);
   }, []);
 

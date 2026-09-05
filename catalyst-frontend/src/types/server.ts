@@ -254,6 +254,8 @@ export interface ServerMetricsResponse {
 }
 
 export interface ServerLogEntry {
+  id?: string;
+  logId?: string;
   stream: string;
   data: string;
   timestamp: string;

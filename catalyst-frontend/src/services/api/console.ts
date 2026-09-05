@@ -11,7 +11,7 @@ import { subscribeSharedEventSource, type StreamStatus } from './sse-hub';
 
 export type ConsoleStreamEvent =
   | { type: 'connected'; serverId: string; timestamp: string }
-  | { type: 'console_output'; serverId: string; stream: string; data: string; timestamp?: string }
+  | { type: 'console_output'; serverId: string; stream: string; data: string; timestamp?: string; logId?: string }
   | { type: 'error'; serverId?: string; error: string }
   | { type: 'eula_required'; serverId: string; serverUuid: string; eulaText: string };
 
@@ -53,6 +53,7 @@ class ConsoleSseClient {
             stream: String(data.stream ?? 'stdout'),
             data: String(data.data ?? ''),
             timestamp: data.timestamp ? String(data.timestamp) : undefined,
+            logId: data.logId ? String(data.logId) : data.id ? String(data.id) : undefined,
           });
           return;
         }

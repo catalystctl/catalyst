@@ -514,7 +514,11 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           serverId,
           ...(streamFilter && { stream: streamFilter }),
         },
-        orderBy: { timestamp: "desc" },
+        // Timestamp alone is not unique: batch inserts share the same
+        // millisecond, so ordering by timestamp only returns an arbitrary
+        // subset for `take` and the console can show older rows instead of
+        // the true latest. Tie-break on id so "latest N" is deterministic.
+        orderBy: [{ timestamp: "desc" }, { id: "desc" }],
         take: lineCount,
       });
 
@@ -525,6 +529,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         success: true,
         data: {
           logs: reversedLogs.map(log => ({
+            id: log.id,
             stream: log.stream,
             data: log.data,
             timestamp: log.timestamp,

@@ -2126,14 +2126,19 @@ export class WebSocketGateway {
         if (message.serverId && message.data) {
           // Sanitize console output to prevent XSS attacks
           const sanitizedData = sanitizeInput(message.data);
+          // Persisted row id is forwarded as logId so the frontend can
+          // match live SSE lines against later history fetches by stable
+          // identity instead of content (identical log lines repeat).
           try {
-            await this.prisma.serverLog.create({
+            const created = await this.prisma.serverLog.create({
               data: {
                 serverId: message.serverId,
                 stream: message.stream || "stdout",
                 data: sanitizedData,
               },
             });
+            const createdId = (created as { id?: unknown } | undefined)?.id;
+            if (createdId) message.logId = String(createdId);
           } catch (err) {
             captureSystemError({
               level: 'error',
@@ -3644,6 +3649,7 @@ export class WebSocketGateway {
           data: message.data ?? '',
           timestamp: message.timestamp ?? new Date().toISOString(),
           type: message.type,
+          logId: message.logId ?? message.id ?? undefined,
           eulaText: message.eulaText,
           eulaServerUuid: message.serverUuid,
           error: message.error,
