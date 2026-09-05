@@ -2264,6 +2264,115 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   );
 
+  // Export system errors (requires admin.read)
+  app.get(
+    '/system-errors/export',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(checkPerm(request, 'admin.read'))) {
+        return reply.status(403).send({ error: 'Admin read permission required' });
+      }
+
+      const {
+        level,
+        component,
+        nodeId,
+        resolved,
+        from,
+        to,
+        format = 'json',
+      } = request.query as {
+        level?: string;
+        component?: string;
+        nodeId?: string;
+        resolved?: string;
+        from?: string;
+        to?: string;
+        format?: string;
+      };
+
+      if (format !== 'json' && format !== 'markdown') {
+        return reply.status(400).send({ error: 'Invalid export format' });
+      }
+
+      const where: any = {};
+      if (level) where.level = level;
+      if (component) where.component = { contains: component };
+      if (nodeId) where.nodeId = { contains: nodeId };
+      if (resolved !== undefined) where.resolved = resolved === 'true';
+      if (from || to) {
+        const parsedFrom = from ? new Date(from) : undefined;
+        const parsedTo = to ? new Date(to) : undefined;
+        if (parsedFrom && Number.isNaN(parsedFrom.getTime())) {
+          return reply.status(400).send({ error: 'Invalid from timestamp' });
+        }
+        if (parsedTo && Number.isNaN(parsedTo.getTime())) {
+          return reply.status(400).send({ error: 'Invalid to timestamp' });
+        }
+        where.createdAt = {
+          ...(parsedFrom ? { gte: parsedFrom } : {}),
+          ...(parsedTo ? { lte: parsedTo } : {}),
+        };
+      }
+
+      const errors = await prisma.systemError.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: 5000,
+      });
+
+      if (format === 'json') {
+        reply.send({
+          exportedAt: new Date().toISOString(),
+          count: errors.length,
+          filters: { level, component, nodeId, resolved, from, to },
+          errors,
+        });
+        return;
+      }
+
+      const fence = (value: string) => value.replace(/```/g, "'''");
+      const lines: string[] = [];
+      lines.push(`# System Errors Export`);
+      lines.push(``);
+      lines.push(`Exported: ${new Date().toISOString()}`);
+      lines.push(`Count: ${errors.length}`);
+      lines.push(``);
+      for (const error of errors) {
+        lines.push(`## [${error.level}] ${error.component}`);
+        lines.push(`- ID: ${error.id}`);
+        lines.push(`- Status: ${error.resolved ? 'Resolved' : 'Unresolved'}`);
+        lines.push(`- Timestamp: ${error.createdAt.toISOString()}`);
+        if (error.requestId) lines.push(`- Request ID: ${error.requestId}`);
+        if (error.userId) lines.push(`- User ID: ${error.userId}`);
+        if (error.nodeId) lines.push(`- Node ID: ${error.nodeId}`);
+        lines.push(``);
+        lines.push(`Message:`);
+        lines.push('```');
+        lines.push(fence(error.message));
+        lines.push('```');
+        if (error.stack) {
+          lines.push(``);
+          lines.push(`Stack:`);
+          lines.push('```');
+          lines.push(fence(error.stack));
+          lines.push('```');
+        }
+        if (error.metadata && typeof error.metadata === 'object' && Object.keys(error.metadata as object).length > 0) {
+          lines.push(``);
+          lines.push(`Metadata:`);
+          lines.push('```json');
+          lines.push(fence(JSON.stringify(error.metadata, null, 2)));
+          lines.push('```');
+        }
+        lines.push(``);
+        lines.push(`---`);
+        lines.push(``);
+      }
+      reply.type('text/markdown').send(lines.join('\n'));
+    }
+  );
+
   // Resolve a system error (requires admin.write)
   app.post(
     '/system-errors/:id/resolve',
@@ -2288,6 +2397,57 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true, error: updated });
+    }
+  );
+
+  // Resolve all matching system errors (requires admin.write)
+  app.post(
+    '/system-errors/resolve-all',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(checkPerm(request, 'admin.write'))) {
+        return reply.status(403).send({ error: 'Admin write permission required' });
+      }
+
+      const { level, component, nodeId, resolved, from, to } = (request.body ?? {}) as {
+        level?: string;
+        component?: string;
+        nodeId?: string;
+        resolved?: string | boolean;
+        from?: string;
+        to?: string;
+      };
+
+      const where: any = {};
+      if (level) where.level = level;
+      if (component) where.component = { contains: component };
+      if (nodeId) where.nodeId = { contains: nodeId };
+      if (resolved !== undefined && resolved !== '' && resolved !== null) {
+        where.resolved = resolved === true || resolved === 'true';
+      } else {
+        where.resolved = false;
+      }
+      if (from || to) {
+        const parsedFrom = from ? new Date(from) : undefined;
+        const parsedTo = to ? new Date(to) : undefined;
+        if (parsedFrom && Number.isNaN(parsedFrom.getTime())) {
+          return reply.status(400).send({ error: 'Invalid from timestamp' });
+        }
+        if (parsedTo && Number.isNaN(parsedTo.getTime())) {
+          return reply.status(400).send({ error: 'Invalid to timestamp' });
+        }
+        where.createdAt = {
+          ...(parsedFrom ? { gte: parsedFrom } : {}),
+          ...(parsedTo ? { lte: parsedTo } : {}),
+        };
+      }
+
+      const result = await prisma.systemError.updateMany({
+        where,
+        data: { resolved: true },
+      });
+
+      reply.send({ success: true, resolvedCount: result.count });
     }
   );
 

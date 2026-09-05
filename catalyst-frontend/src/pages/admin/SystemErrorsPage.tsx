@@ -6,10 +6,13 @@ import {
  Eye,
  Clock,
  CheckCircle2,
+ CheckCheck,
+ Download,
  Radio,
  Copy,
  Check,
  Server,
+ Loader2,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
@@ -24,7 +27,8 @@ import {
  SelectTrigger,
  SelectValue,
 } from '../../components/ui/select';
-import { useSystemErrors, useResolveSystemError } from '../../hooks/useAdmin';
+import { useSystemErrors, useResolveSystemError, useResolveAllSystemErrors } from '../../hooks/useAdmin';
+import { adminApi } from '../../services/api/admin';
 import type { SystemError } from '../../types/admin';
 import Pagination from '../../components/shared/Pagination';
 import {
@@ -445,6 +449,203 @@ function ErrorRow({
  );
 }
 
+// ── Export Modal ──
+const EXPORT_RANGES = [
+ { value: '1h', label: 'Last 1 hour', hours: 1 },
+ { value: '6h', label: 'Last 6 hours', hours: 6 },
+ { value: '24h', label: 'Last 24 hours', hours: 24 },
+ { value: '7d', label: 'Last 7 days', hours: 24 * 7 },
+ { value: '30d', label: 'Last 30 days', hours: 24 * 30 },
+ { value: 'all', label: 'All time', hours: null },
+] as const;
+
+type ExportRangeValue = (typeof EXPORT_RANGES)[number]['value'];
+
+function ExportErrorsModal({
+ filters,
+ onClose,
+}: {
+ filters: { level?: string; component?: string; nodeId?: string; resolved?: boolean };
+ onClose: () => void;
+}) {
+ const [range, setExportRange] = useState<ExportRangeValue>('24h');
+ const [format, setFormat] = useState<'markdown' | 'json'>('markdown');
+ const [isExporting, setIsExporting] = useState(false);
+ const [error, setError] = useState<string | null>(null);
+
+ const handleExport = async () => {
+  setIsExporting(true);
+  setError(null);
+  try {
+   const now = new Date();
+   const selected = EXPORT_RANGES.find((r) => r.value === range);
+   const from = selected?.hours ? new Date(now.getTime() - selected.hours * 3600_000).toISOString() : undefined;
+   const payload = await adminApi.exportSystemErrors({
+    level: filters.level || undefined,
+    component: filters.component || undefined,
+    nodeId: filters.nodeId || undefined,
+    resolved: filters.resolved,
+    from,
+    to: now.toISOString(),
+    format,
+   });
+   const mime = format === 'json' ? 'application/json' : 'text/markdown';
+   const ext = format === 'json' ? 'json' : 'md';
+   const blob = new Blob([payload], { type: mime });
+   const url = URL.createObjectURL(blob);
+   const link = document.createElement('a');
+   link.href = url;
+   link.download = `system-errors-${range}-${Date.now()}.${ext}`;
+   document.body.appendChild(link);
+   link.click();
+   link.remove();
+   URL.revokeObjectURL(url);
+   onClose();
+  } catch (err) {
+   setError(err instanceof Error ? err.message : 'Export failed');
+  } finally {
+   setIsExporting(false);
+  }
+ };
+
+ const activeFilterChips = [
+  filters.level ? `level: ${filters.level}` : null,
+  filters.component ? `component: ${filters.component}` : null,
+  filters.nodeId ? `node: ${filters.nodeId}` : null,
+  filters.resolved !== undefined ? `status: ${filters.resolved ? 'resolved' : 'unresolved'}` : null,
+ ].filter(Boolean) as string[];
+
+ return (
+  <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+   <DialogContent size="md">
+    <DialogHeader
+     icon={<Download className="h-4 w-4" />}
+    >
+     <DialogTitle>Export system errors</DialogTitle>
+     <DialogDescription>
+      Download a file you can upload to an agent for analysis. Up to 5,000 most recent errors are included.
+     </DialogDescription>
+    </DialogHeader>
+
+    <DialogBody className="space-y-5">
+     <div className="space-y-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Time range</span>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+       {EXPORT_RANGES.map((option) => (
+        <Button
+         key={option.value}
+         variant={range === option.value ? 'default' : 'outline'}
+         size="sm"
+         onClick={() => setExportRange(option.value)}
+        >
+         {option.label}
+        </Button>
+       ))}
+      </div>
+     </div>
+
+     <div className="space-y-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Format</span>
+      <Select value={format} onValueChange={(next) => setFormat(next as 'markdown' | 'json')}>
+       <SelectTrigger className="w-full border-border/40">
+        <SelectValue />
+       </SelectTrigger>
+       <SelectContent>
+        <SelectItem value="markdown">Markdown — best for AI agents</SelectItem>
+        <SelectItem value="json">JSON — raw data</SelectItem>
+       </SelectContent>
+      </Select>
+     </div>
+
+     {activeFilterChips.length > 0 ? (
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/30 bg-surface-2/40 px-3 py-2">
+       <span className="text-[11px] text-muted-foreground">Current list filters apply:</span>
+       {activeFilterChips.map((chip) => (
+        <Badge key={chip} variant="outline" className="text-[10px]">{chip}</Badge>
+       ))}
+      </div>
+     ) : (
+      <p className="text-xs text-muted-foreground">No list filters active — the full range will be exported.</p>
+     )}
+
+     {error && (
+      <p className="text-xs text-destructive">{error}</p>
+     )}
+    </DialogBody>
+
+    <DialogFooter>
+     <Button variant="outline" size="sm" onClick={onClose} disabled={isExporting}>
+      Cancel
+     </Button>
+     <Button size="sm" onClick={handleExport} disabled={isExporting} className="gap-1.5">
+      {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+      {isExporting ? 'Exporting…' : 'Export'}
+     </Button>
+    </DialogFooter>
+   </DialogContent>
+  </Dialog>
+ );
+}
+
+// ── Resolve All Confirm Modal ──
+function ResolveAllModal({
+ unresolvedCount,
+ filtersSummary,
+ isPending,
+ error,
+ onConfirm,
+ onClose,
+}: {
+ unresolvedCount: number | null;
+ filtersSummary: string[];
+ isPending: boolean;
+ error: string | null;
+ onConfirm: () => void;
+ onClose: () => void;
+}) {
+ return (
+  <Dialog open onOpenChange={(open) => { if (!open && !isPending) onClose(); }}>
+   <DialogContent size="sm">
+    <DialogHeader
+     icon={<CheckCheck className="h-4 w-4" />}
+    >
+     <DialogTitle>Resolve all errors?</DialogTitle>
+     <DialogDescription>
+      {unresolvedCount !== null
+       ? `This will mark ${unresolvedCount} unresolved error${unresolvedCount === 1 ? '' : 's'} as resolved.`
+       : 'This will mark all unresolved errors as resolved.'}
+     </DialogDescription>
+    </DialogHeader>
+
+    <DialogBody className="space-y-3">
+     {filtersSummary.length > 0 ? (
+      <div className="flex flex-wrap items-center gap-2">
+       <span className="text-[11px] text-muted-foreground">Matching filters:</span>
+       {filtersSummary.map((chip) => (
+        <Badge key={chip} variant="outline" className="text-[10px]">{chip}</Badge>
+       ))}
+      </div>
+     ) : (
+      <p className="text-xs text-muted-foreground">No filters active — every unresolved error will be resolved.</p>
+     )}
+     <p className="text-xs text-muted-foreground">This cannot be undone.</p>
+     {error && <p className="text-xs text-destructive">{error}</p>}
+    </DialogBody>
+
+    <DialogFooter>
+     <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>
+      Cancel
+     </Button>
+     <Button size="sm" onClick={onConfirm} disabled={isPending} className="gap-1.5">
+      {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
+      {isPending ? 'Resolving…' : 'Resolve all'}
+     </Button>
+    </DialogFooter>
+   </DialogContent>
+  </Dialog>
+ );
+}
+
 // ── Main Page ──
 function SystemErrorsPage() {
  const [page, setPage] = useState(1);
@@ -457,6 +658,9 @@ function SystemErrorsPage() {
  const [to, setTo] = useState(defaultRange.to);
  const [range, setRange] = useState('24h');
  const [selectedError, setSelectedError] = useState<SystemError | null>(null);
+ const [showExport, setShowExport] = useState(false);
+ const [showResolveAll, setShowResolveAll] = useState(false);
+ const [resolveAllError, setResolveAllError] = useState<string | null>(null);
 
  const sseStatus = useSseStatus();
  const isLive = sseStatus === 'connected';
@@ -475,6 +679,7 @@ function SystemErrorsPage() {
  });
 
  const resolveMutation = useResolveSystemError();
+ const resolveAllMutation = useResolveAllSystemErrors();
 
  const errors = data?.errors ?? [];
  const pagination = data?.pagination;
@@ -499,6 +704,38 @@ function SystemErrorsPage() {
  [resolveMutation],
  );
 
+ const resolveAllFiltersSummary = [
+  level ? `level: ${level}` : null,
+  component ? `component: ${component}` : null,
+  nodeId ? `node: ${nodeId}` : null,
+  resolved === 'false' ? 'status: unresolved' : null,
+  range ? `range: ${range}` : null,
+ ].filter(Boolean) as string[];
+ const resolveAllUnresolvedCount = resolved === 'false' ? (pagination?.total ?? null) : null;
+ const isResolveAllDisabled = resolved === 'true';
+
+ const handleResolveAllConfirm = () => {
+  setResolveAllError(null);
+  resolveAllMutation.mutate(
+   {
+    level: level || undefined,
+    component: component || undefined,
+    nodeId: nodeId || undefined,
+    resolved: resolved || undefined,
+    from: from ? new Date(from).toISOString() : undefined,
+    to: to ? new Date(to).toISOString() : undefined,
+   },
+   {
+    onSuccess: () => {
+     setShowResolveAll(false);
+    },
+    onError: (err) => {
+     setResolveAllError(err instanceof Error ? err.message : 'Resolve all failed');
+    },
+   },
+  );
+ };
+
  return (
  <div className="space-y-5">
  <TabHeader
@@ -506,7 +743,7 @@ function SystemErrorsPage() {
  title="System Errors"
  description="Real-time system error monitoring and resolution."
  actions={
- <div className="flex items-center gap-2">
+ <div className="flex flex-wrap items-center gap-2">
  {isLive && (
  <Badge variant="outline" className="gap-1.5 border-success/40 text-success text-xs">
  <span className="relative flex h-2 w-2">
@@ -525,6 +762,21 @@ function SystemErrorsPage() {
  <Badge variant="outline" className="text-xs">
  {data?.pagination?.total ?? errors.length} errors
  </Badge>
+ <Button variant="outline" size="sm" onClick={() => setShowExport(true)} className="gap-1.5">
+ <Download className="h-3.5 w-3.5" />
+ Export
+ </Button>
+ <Button
+  variant="outline"
+  size="sm"
+  onClick={() => { setResolveAllError(null); setShowResolveAll(true); }}
+  disabled={isResolveAllDisabled}
+  className="gap-1.5"
+  title={isResolveAllDisabled ? 'Nothing to resolve while filtering to resolved errors' : 'Resolve all matching errors'}
+ >
+ <CheckCheck className="h-3.5 w-3.5" />
+ Resolve all
+ </Button>
  <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1.5">
  <RotateCcw className="h-3.5 w-3.5" />
  Clear
@@ -710,6 +962,26 @@ function SystemErrorsPage() {
  {/* ── Error Detail Modal ── */}
  {selectedError && (
  <ErrorDetailModal error={selectedError} onClose={() => setSelectedError(null)} />
+ )}
+
+ {/* ── Export Modal ── */}
+ {showExport && (
+  <ExportErrorsModal
+   filters={{ level, component, nodeId, resolved: resolvedBool }}
+   onClose={() => setShowExport(false)}
+  />
+ )}
+
+ {/* ── Resolve All Modal ── */}
+ {showResolveAll && (
+  <ResolveAllModal
+   unresolvedCount={resolveAllUnresolvedCount}
+   filtersSummary={resolveAllFiltersSummary}
+   isPending={resolveAllMutation.isPending}
+   error={resolveAllError}
+   onConfirm={handleResolveAllConfirm}
+   onClose={() => { if (!resolveAllMutation.isPending) setShowResolveAll(false); }}
+  />
  )}
  </div>
  );

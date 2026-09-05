@@ -363,6 +363,35 @@ export const adminApi = {
     const data = await apiClient.post<{ success: boolean }>(`/api/admin/system-errors/${id}/resolve`);
     return data;
   },
+  exportSystemErrors: async (params?: {
+    level?: string;
+    component?: string;
+    nodeId?: string;
+    resolved?: boolean;
+    from?: string;
+    to?: string;
+    format?: 'json' | 'markdown';
+  }) => {
+    const data = await apiClient.get<string>('/api/admin/system-errors/export', {
+      params,
+      responseType: 'text',
+    });
+    return data;
+  },
+  resolveAllSystemErrors: async (payload?: {
+    level?: string;
+    component?: string;
+    nodeId?: string;
+    resolved?: string | boolean;
+    from?: string;
+    to?: string;
+  }) => {
+    const data = await apiClient.post<{ success: boolean; resolvedCount: number }>(
+      '/api/admin/system-errors/resolve-all',
+      payload ?? {},
+    );
+    return data;
+  },
   updateStatus: async () => {
     const data = await apiClient.get<UpdateStatusResponse>('/api/admin/update/status');
     return data;

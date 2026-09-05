@@ -229,3 +229,20 @@ export function useResolveSystemError() {
     },
   });
 }
+
+export function useResolveAllSystemErrors() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (filters: {
+      level?: string;
+      component?: string;
+      nodeId?: string;
+      resolved?: string | boolean;
+      from?: string;
+      to?: string;
+    }) => adminApi.resolveAllSystemErrors(filters),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.adminSystemErrors() });
+    },
+  });
+}
