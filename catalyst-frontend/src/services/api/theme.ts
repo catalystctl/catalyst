@@ -16,6 +16,9 @@ export interface ThemeColors {
   darkSurface3?: string;
   darkBorder?: string;
   darkMuted?: string;
+  darkMutedBackground?: string;
+  darkPopover?: string;
+  darkInput?: string;
 
   // Light mode surfaces
   lightBackground?: string;
@@ -26,6 +29,12 @@ export interface ThemeColors {
   lightSurface3?: string;
   lightBorder?: string;
   lightMuted?: string;
+  lightMutedBackground?: string;
+  lightPopover?: string;
+  lightInput?: string;
+
+  // Focus ring override (defaults to primary when unset)
+  ringColor?: string;
 
   // Layout
   borderRadius?: string;

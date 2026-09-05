@@ -5,18 +5,31 @@ import { debugLog } from '../lib/debug-log';
 
 type Theme = 'light' | 'dark';
 
+export type ThemePreference = 'panel' | 'light' | 'dark' | 'system';
+
+export interface PersonalColors {
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+}
+
 interface ThemeState {
   theme: Theme;
+  themePreference: ThemePreference;
+  personalColors: PersonalColors | null;
   sidebarCollapsed: boolean;
  serverViewMode: 'card' | 'list';
  themeSettings: PublicThemeSettings | null;
   customCssElement: HTMLStyleElement | null;
 
   setTheme: (theme: Theme) => void;
+  setThemePreference: (pref: ThemePreference) => void;
+  setPersonalColors: (colors: PersonalColors | null) => void;
+  clearPersonalTheme: () => void;
   setServerViewMode: (mode: 'card' | 'list') => void;
   toggleSidebar: () => void;
   setThemeSettings: (settings: PublicThemeSettings, customCss?: string | null) => void;
-  applyTheme: () => void;
+  applyTheme: (ignorePersonal?: boolean) => void;
   previewColors: (overrides: {
     primaryColor?: string;
     secondaryColor?: string;
@@ -51,6 +64,9 @@ export const defaultThemeColors: ThemeColors = {
   darkSurface3: '#303042',
   darkBorder: '#2a2a3a',
   darkMuted: '#9494a3',
+  darkMutedBackground: '#222230',
+  darkPopover: '#12121c',
+  darkInput: '#2a2a3a',
   lightBackground: '#f5f4f2',
   lightForeground: '#15141c',
   lightCard: '#fbfaf9',
@@ -59,6 +75,10 @@ export const defaultThemeColors: ThemeColors = {
   lightSurface3: '#e2e0dc',
   lightBorder: '#e1dfdb',
   lightMuted: '#6f6f7a',
+  lightMutedBackground: '#efeeec',
+  lightPopover: '#fbfaf9',
+  lightInput: '#e1dfdb',
+  ringColor: '#0d9488',
   borderRadius: '0.625rem',
 };
 
@@ -109,6 +129,53 @@ function readPersistedThemeChoice(): Theme | null {
   } catch {
     return null;
   }
+}
+
+function readPersistedThemePreference(): ThemePreference | null {
+  try {
+    const raw = localStorage.getItem('catalyst-theme');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { state?: { themePreference?: unknown } };
+    const pref = parsed?.state?.themePreference;
+    return pref === 'panel' || pref === 'light' || pref === 'dark' || pref === 'system' ? pref : null;
+  } catch {
+    return null;
+  }
+}
+
+function readPersistedPersonalColors(): PersonalColors | null {
+  try {
+    const raw = localStorage.getItem('catalyst-theme');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { state?: { personalColors?: unknown } };
+    const pc = parsed?.state?.personalColors as Record<string, unknown> | null | undefined;
+    if (!pc || typeof pc !== 'object') return null;
+    const out: PersonalColors = {};
+    for (const key of ['primaryColor', 'secondaryColor', 'accentColor'] as const) {
+      const v = pc[key];
+      if (typeof v === 'string' && /^#[0-9A-Fa-f]{6}$/.test(v)) out[key] = v;
+    }
+    return Object.keys(out).length > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveEffectiveTheme(
+  preference: ThemePreference | null | undefined,
+  adminDefault: string | null | undefined,
+  fallback: Theme,
+): Theme {
+  if (preference === 'light' || preference === 'dark') return preference;
+  if (preference === 'system' && typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  // 'panel' or unset — follow the admin default; fall back to the stored effective theme.
+  if (adminDefault === 'light' || adminDefault === 'dark') return adminDefault;
+  if (adminDefault === 'system' && typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  return fallback;
 }
 
 export function readThemeCache(): CachedTheme | null {
@@ -261,7 +328,7 @@ function buildThemeCssVars(
 
   const accentHSL = hexToHSL(accentColor);
   set('--accent', accentHSL);
-  set('--ring', primaryHSL);
+  set('--ring', colors.ringColor ? hexToHSL(colors.ringColor) : primaryHSL);
 
   const semanticKeys: (keyof ThemeColors)[] = ['successColor', 'warningColor', 'dangerColor', 'infoColor'];
   const cssVarMap: Record<string, string> = {
@@ -288,6 +355,9 @@ function buildThemeCssVars(
   const cardKey = isDark ? 'darkCard' : 'lightCard';
   const borderKey = isDark ? 'darkBorder' : 'lightBorder';
   const mutedKey = isDark ? 'darkMuted' : 'lightMuted';
+  const mutedBgKey = isDark ? 'darkMutedBackground' : 'lightMutedBackground';
+  const popoverKey = isDark ? 'darkPopover' : 'lightPopover';
+  const inputKey = isDark ? 'darkInput' : 'lightInput';
   const s1Key = isDark ? 'darkSurface1' : 'lightSurface1';
   const s2Key = isDark ? 'darkSurface2' : 'lightSurface2';
   const s3Key = isDark ? 'darkSurface3' : 'lightSurface3';
@@ -303,12 +373,20 @@ function buildThemeCssVars(
   }
   if (colors[borderKey]) {
     set('--border', hexToHSL(colors[borderKey]));
+  }
+  if (colors[inputKey]) {
+    set('--input', hexToHSL(colors[inputKey]));
+  } else if (colors[borderKey]) {
     set('--input', hexToHSL(colors[borderKey]));
   }
   if (colors[s1Key]) set('--surface-1', hexToHSL(colors[s1Key]));
   if (colors[s2Key]) {
     set('--surface-2', hexToHSL(colors[s2Key]));
-    // Keep muted as a surface tone so badges/inputs stay readable under customization.
+  }
+  // Muted background is its own token now; fall back to surface-2 for older saved themes.
+  if (colors[mutedBgKey]) {
+    set('--muted', hexToHSL(colors[mutedBgKey]));
+  } else if (colors[s2Key]) {
     set('--muted', hexToHSL(colors[s2Key]));
   }
   if (colors[s3Key]) set('--surface-3', hexToHSL(colors[s3Key]));
@@ -318,7 +396,7 @@ function buildThemeCssVars(
 
   const fallbackBg = isDark ? '#09090b' : '#ffffff';
   const fallbackFg = isDark ? '#fafafa' : '#09090b';
-  set('--popover', hexToHSL(colors[cardKey] || colors[bgKey] || fallbackBg));
+  set('--popover', hexToHSL(colors[popoverKey] || colors[cardKey] || colors[bgKey] || fallbackBg));
   set('--popover-foreground', hexToHSL(colors[fgKey] || fallbackFg));
   set('--accent-foreground', hexToHSL(colors[bgKey] || fallbackBg));
   set('--destructive-foreground', '0 0% 100%');
@@ -405,6 +483,21 @@ function flushPreview() {
   pendingPreview = null;
 }
 
+function initialThemePreference(): ThemePreference {
+  if (typeof window === 'undefined') return 'panel';
+  const pref = readPersistedThemePreference();
+  if (pref) return pref;
+  // Migrate legacy installs: an explicit stored light/dark choice becomes an explicit preference.
+  const legacy = readPersistedThemeChoice();
+  if (legacy === 'light' || legacy === 'dark') return legacy;
+  return 'panel';
+}
+
+function initialPersonalColors(): PersonalColors | null {
+  if (typeof window === 'undefined') return null;
+  return readPersistedPersonalColors();
+}
+
 function initialTheme(): Theme {
   if (typeof window === 'undefined') return 'dark';
   const persisted = readPersistedThemeChoice();
@@ -425,13 +518,47 @@ export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
       theme: initialTheme(),
+      themePreference: initialThemePreference(),
+      personalColors: initialPersonalColors(),
       sidebarCollapsed: false,
       serverViewMode: 'card' as const,
       themeSettings: initialThemeSettings(),
       customCssElement: null,
 
       setTheme: (theme) => {
-        set({ theme });
+        // Sidebar toggle and other direct theme switches are personal —
+        // they set an explicit preference without touching the admin default.
+        set({ theme, themePreference: theme });
+        get().applyTheme();
+      },
+
+      setThemePreference: (pref) => {
+        const { themeSettings, theme } = get();
+        const adminDefault = (themeSettings || defaultThemeSettings).defaultTheme;
+        const resolved = resolveEffectiveTheme(pref, adminDefault, theme);
+        set({ themePreference: pref, theme: resolved });
+        get().applyTheme();
+      },
+
+      setPersonalColors: (colors) => {
+        const cleaned: PersonalColors | null = (() => {
+          if (!colors) return null;
+          const out: PersonalColors = {};
+          for (const key of ['primaryColor', 'secondaryColor', 'accentColor'] as const) {
+            const v = colors[key];
+            if (typeof v === 'string' && /^#[0-9A-Fa-f]{6}$/.test(v)) out[key] = v;
+          }
+          return Object.keys(out).length > 0 ? out : null;
+        })();
+        set({ personalColors: cleaned });
+        get().applyTheme();
+      },
+
+      clearPersonalTheme: () => {
+        const { themeSettings, theme } = get();
+        const adminDefault = (themeSettings || defaultThemeSettings).defaultTheme;
+        const resolved = resolveEffectiveTheme('panel', adminDefault, theme);
+        set({ personalColors: null, themePreference: 'panel', theme: resolved });
         get().applyTheme();
       },
 
@@ -444,8 +571,13 @@ export const useThemeStore = create<ThemeState>()(
         debugLog('[themeStore] setThemeSettings called, customCss length:', customCss?.length ?? 0);
         const hadCache = readThemeCache() !== null;
         const hadChoice = readPersistedThemeChoice() !== null;
-        if (!hadCache && !hadChoice) {
+        const pref = get().themePreference;
+        // Only follow the admin default when this browser hasn't chosen its own mode.
+        if (!hadCache && !hadChoice && (!pref || pref === 'panel')) {
           const resolved = resolveThemeName(null, settings.defaultTheme);
+          if (resolved !== get().theme) set({ theme: resolved });
+        } else if (pref && pref !== 'panel') {
+          const resolved = resolveEffectiveTheme(pref, settings.defaultTheme, get().theme);
           if (resolved !== get().theme) set({ theme: resolved });
         }
         set({ themeSettings: settings });
@@ -482,16 +614,30 @@ export const useThemeStore = create<ThemeState>()(
         }
       },
 
-      applyTheme: () => {
+      applyTheme: (ignorePersonal) => {
         flushPreview();
-        const { theme, themeSettings } = get();
+        const { themePreference, personalColors, themeSettings } = get();
         const settings = themeSettings || defaultThemeSettings;
         const colors = settings.themeColors || defaultThemeColors;
 
-        const cssVars = applyThemeToDOM(theme, settings.primaryColor, settings.secondaryColor, settings.accentColor, colors);
+        // Effective mode: personal preference wins unless the caller previews the panel default.
+        const storedTheme = get().theme;
+        const effectiveTheme =
+          ignorePersonal || !themePreference || themePreference === 'panel'
+            ? ignorePersonal
+              ? resolveEffectiveTheme('panel', settings.defaultTheme, storedTheme)
+              : storedTheme
+            : resolveEffectiveTheme(themePreference, settings.defaultTheme, storedTheme);
+        if (effectiveTheme !== storedTheme) set({ theme: effectiveTheme });
+
+        const primary = !ignorePersonal && personalColors?.primaryColor ? personalColors.primaryColor : settings.primaryColor;
+        const secondary = !ignorePersonal && personalColors?.secondaryColor ? personalColors.secondaryColor : settings.secondaryColor;
+        const accent = !ignorePersonal && personalColors?.accentColor ? personalColors.accentColor : settings.accentColor;
+
+        const cssVars = applyThemeToDOM(effectiveTheme, primary, secondary, accent, colors);
         const cached = readThemeCache();
         writeThemeCache({
-          theme,
+          theme: effectiveTheme,
           settings,
           customCss: cached?.customCss ?? sanitizeCustomCss(settings.customCss) ?? null,
           cssVars,
@@ -541,7 +687,13 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: 'catalyst-theme',
-      partialize: (state) => ({ theme: state.theme, sidebarCollapsed: state.sidebarCollapsed, serverViewMode: state.serverViewMode }),
+      partialize: (state) => ({
+        theme: state.theme,
+        themePreference: state.themePreference,
+        personalColors: state.personalColors,
+        sidebarCollapsed: state.sidebarCollapsed,
+        serverViewMode: state.serverViewMode,
+      }),
     }
   )
 );

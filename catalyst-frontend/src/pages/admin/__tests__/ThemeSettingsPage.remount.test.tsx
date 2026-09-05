@@ -70,6 +70,12 @@ function openAdvancedTab() {
   fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
 }
 
+/** Brand fields live on the Brand tab (Presets is the landing tab). */
+async function openBrandTab() {
+  const btn = await screen.findByRole('button', { name: /Brand/ });
+  fireEvent.click(btn);
+}
+
 describe('ThemeSettingsPage — remount with cached query data', () => {
   beforeEach(() => {
     queryClient.clear();
@@ -85,6 +91,7 @@ describe('ThemeSettingsPage — remount with cached query data', () => {
   it('hydrates the form from a fresh fetch on first mount', async () => {
     renderPage();
 
+    await openBrandTab();
     expect(await screen.findByDisplayValue('My Custom Panel')).toBeInTheDocument();
     expect(screen.getByDisplayValue('https://cdn.example.com/logo.png')).toBeInTheDocument();
     // OIDC section (Advanced tab) hydrates too
@@ -95,12 +102,14 @@ describe('ThemeSettingsPage — remount with cached query data', () => {
 
   it('still shows saved settings when remounting from cache (Themes → Plugins → Themes)', async () => {
     const first = renderPage();
+    await openBrandTab();
     await screen.findByDisplayValue('My Custom Panel');
     first.unmount();
 
     // Second mount: the query is cached AND fresh (staleTime 10 min), so the
     // hook returns the exact same settings object reference it had before.
     renderPage();
+    await openBrandTab();
 
     expect(await screen.findByDisplayValue('My Custom Panel')).toBeInTheDocument();
     expect(screen.getByDisplayValue('https://cdn.example.com/logo.png')).toBeInTheDocument();

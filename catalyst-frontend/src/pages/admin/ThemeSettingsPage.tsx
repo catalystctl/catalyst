@@ -5,6 +5,8 @@ import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
 import { useThemeSettings, useOidcConfig } from '../../hooks/useAdmin';
 import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generatePalette';
+import { THEME_PRESETS } from '../../utils/themePresets';
+import { buildSharedTheme, parseSharedTheme, contrastRatio } from '../../utils/themeSharing';
 import { adminApi } from '../../services/api/admin';
 import { useThemeStore, defaultThemeColors } from '../../stores/themeStore';
 import type { ThemeColors } from '../../services/api/theme';
@@ -27,6 +29,10 @@ import {
  Eye,
  Globe,
  Palette,
+ Download,
+ Upload,
+ Copy,
+ Sparkles,
 } from 'lucide-react';
 
 // ─── Defaults ───
@@ -38,7 +44,7 @@ const DEFAULTS = {
  themeColors: { ...defaultThemeColors } satisfies ThemeColors,
 } as const;
 
-type TabId = 'brand' | 'palette' | 'colors' | 'surfaces' | 'layout' | 'advanced';
+type TabId = 'presets' | 'brand' | 'palette' | 'colors' | 'surfaces' | 'layout' | 'manage' | 'advanced';
 
 interface Tab {
  id: TabId;
@@ -47,11 +53,13 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
+ { id: 'presets', label: 'Presets', icon: Sparkles },
  { id: 'brand', label: 'Brand', icon: Globe },
  { id: 'palette', label: 'Palette', icon: Wand2 },
  { id: 'colors', label: 'Colors', icon: Palette },
  { id: 'surfaces', label: 'Surfaces', icon: Layers },
  { id: 'layout', label: 'Layout', icon: Layout },
+ { id: 'manage', label: 'Share', icon: Copy },
  { id: 'advanced', label: 'Advanced', icon: Code2 },
 ];
 
@@ -418,9 +426,13 @@ function ThemeSettingsPage() {
  const cancelPreview = useThemeStore((s) => s.cancelPreview);
  const injectCustomCss = useThemeStore((s) => s.injectCustomCss);
  const currentTheme = useThemeStore((s) => s.theme);
+ const setTheme = useThemeStore((s) => s.setTheme);
+ const personalColors = useThemeStore((s) => s.personalColors);
+ const themePreference = useThemeStore((s) => s.themePreference);
+ const clearPersonalTheme = useThemeStore((s) => s.clearPersonalTheme);
 
  // ── Tab state ──
- const [activeTab, setActiveTab] = useState<TabId>('brand');
+ const [activeTab, setActiveTab] = useState<TabId>('presets');
 
  // ── Branding ──
  const [panelName, setPanelName] = useState('Catalyst');
@@ -441,6 +453,10 @@ function ThemeSettingsPage() {
 
  // ── Custom CSS ──
  const [customCss, setCustomCss] = useState('');
+
+ // ── Share (import/export) ──
+ const [importText, setImportText] = useState('');
+ const [importError, setImportError] = useState<string | null>(null);
 
  // ── Palette Generator ──
  const [seedColor, setSeedColor] = useState<string>(DEFAULTS.primaryColor);
@@ -477,6 +493,95 @@ function ThemeSettingsPage() {
  pushPreview({ primaryColor: p, accentColor: acc, themeColors: tc });
  toast.success('Palette applied — review and save when ready');
  };
+
+ const handleApplyPreset = (presetId: string) => {
+ const preset = THEME_PRESETS.find((p) => p.id === presetId);
+ if (!preset) return;
+ setPrimaryColor(preset.primaryColor);
+ setSecondaryColor(preset.secondaryColor);
+ setAccentColor(preset.accentColor);
+ setSeedColor(preset.primaryColor);
+ const merged = { ...DEFAULTS.themeColors, ...preset.themeColors };
+ setThemeColors(merged);
+ if (preset.customCss !== undefined) {
+ setCustomCss(preset.customCss || '');
+ injectCustomCss(preset.customCss || null);
+ }
+ pushPreview({
+ primaryColor: preset.primaryColor,
+ secondaryColor: preset.secondaryColor,
+ accentColor: preset.accentColor,
+ themeColors: merged,
+ });
+ toast.success(`Preset "${preset.name}" applied — review and save when ready`);
+ };
+
+ const handleExportCopy = async () => {
+ const payload = buildSharedTheme({ primaryColor, secondaryColor, accentColor, themeColors, customCss });
+ try {
+ await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+ toast.success('Theme JSON copied to clipboard');
+ } catch {
+ toast.error('Could not copy — your browser blocked clipboard access');
+ }
+ };
+
+ const handleExportDownload = () => {
+ const payload = buildSharedTheme({ primaryColor, secondaryColor, accentColor, themeColors, customCss });
+ const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+ const url = URL.createObjectURL(blob);
+ const a = document.createElement('a');
+ a.href = url;
+ a.download = 'catalyst-theme.json';
+ a.click();
+ URL.revokeObjectURL(url);
+ };
+
+ const handleImportApply = () => {
+ setImportError(null);
+ let parsed: unknown;
+ try {
+ parsed = JSON.parse(importText);
+ } catch {
+ setImportError('That is not valid JSON.');
+ return;
+ }
+ const result = parseSharedTheme(parsed);
+ if (!result.ok) {
+ setImportError(result.error);
+ return;
+ }
+ const data = result.data;
+ setPrimaryColor(data.primaryColor);
+ setSecondaryColor(data.secondaryColor);
+ setAccentColor(data.accentColor);
+ setSeedColor(data.primaryColor);
+ const merged = { ...DEFAULTS.themeColors, ...data.themeColors };
+ setThemeColors(merged);
+ setCustomCss(data.customCss || '');
+ injectCustomCss(data.customCss || null);
+ pushPreview({
+ primaryColor: data.primaryColor,
+ secondaryColor: data.secondaryColor,
+ accentColor: data.accentColor,
+ themeColors: merged,
+ });
+ toast.success(data.name ? `Theme "${data.name}" imported — review and save` : 'Theme imported — review and save');
+ };
+
+ // Contrast helpers for the accessibility strip (dark + light text on background).
+ const contrastInfo = useMemo(() => {
+ const darkBg = themeColors.darkBackground;
+ const darkFg = themeColors.darkForeground;
+ const lightBg = themeColors.lightBackground;
+ const lightFg = themeColors.lightForeground;
+ return {
+ dark: darkBg && darkFg ? contrastRatio(darkBg, darkFg) : null,
+ light: lightBg && lightFg ? contrastRatio(lightBg, lightFg) : null,
+ };
+ }, [themeColors.darkBackground, themeColors.darkForeground, themeColors.lightBackground, themeColors.lightForeground]);
+
+ const hasPersonalOverride = Boolean(personalColors) || (themePreference && themePreference !== 'panel');
 
  // ── Initialize form from server ──
  // prev must start as undefined — NOT as `settings`. When the query cache
@@ -609,15 +714,18 @@ function ThemeSettingsPage() {
  applyTheme();
  };
 
- const handleResetSection = (section: 'brand' | 'semantic' | 'dark' | 'light' | 'layout') => {
+ const handleResetSection = (section: 'brand' | 'semantic' | 'dark' | 'light' | 'layout' | 'focus') => {
  switch (section) {
- case 'brand':
+ case 'brand': {
+ const updated = { ...themeColors, ringColor: DEFAULTS.themeColors.ringColor };
  setPrimaryColor(DEFAULTS.primaryColor);
  setSecondaryColor(DEFAULTS.secondaryColor);
  setAccentColor(DEFAULTS.accentColor);
  setSeedColor(DEFAULTS.primaryColor);
- pushPreview({ primaryColor: DEFAULTS.primaryColor, secondaryColor: DEFAULTS.secondaryColor, accentColor: DEFAULTS.accentColor });
+ setThemeColors(updated);
+ pushPreview({ primaryColor: DEFAULTS.primaryColor, secondaryColor: DEFAULTS.secondaryColor, accentColor: DEFAULTS.accentColor, themeColors: updated });
  break;
+ }
  case 'semantic': {
  const updated = {
  ...themeColors,
@@ -641,6 +749,9 @@ function ThemeSettingsPage() {
  darkSurface3: DEFAULTS.themeColors.darkSurface3,
  darkBorder: DEFAULTS.themeColors.darkBorder,
  darkMuted: DEFAULTS.themeColors.darkMuted,
+ darkMutedBackground: DEFAULTS.themeColors.darkMutedBackground,
+ darkPopover: DEFAULTS.themeColors.darkPopover,
+ darkInput: DEFAULTS.themeColors.darkInput,
  };
  setThemeColors(updated);
  pushPreview({ themeColors: updated });
@@ -657,7 +768,16 @@ function ThemeSettingsPage() {
  lightSurface3: DEFAULTS.themeColors.lightSurface3,
  lightBorder: DEFAULTS.themeColors.lightBorder,
  lightMuted: DEFAULTS.themeColors.lightMuted,
+ lightMutedBackground: DEFAULTS.themeColors.lightMutedBackground,
+ lightPopover: DEFAULTS.themeColors.lightPopover,
+ lightInput: DEFAULTS.themeColors.lightInput,
  };
+ setThemeColors(updated);
+ pushPreview({ themeColors: updated });
+ break;
+ }
+ case 'focus': {
+ const updated = { ...themeColors, ringColor: DEFAULTS.themeColors.ringColor };
  setThemeColors(updated);
  pushPreview({ themeColors: updated });
  break;
@@ -689,8 +809,11 @@ function ThemeSettingsPage() {
  { key: 'darkSurface2', label: 'Surface 2', desc: 'Secondary elevation' },
  { key: 'darkSurface3', label: 'Surface 3', desc: 'Tertiary elevation' },
  { key: 'darkBorder', label: 'Border', desc: 'Borders & dividers' },
+ { key: 'darkInput', label: 'Input', desc: 'Input borders' },
+ { key: 'darkPopover', label: 'Popover', desc: 'Menus & popovers' },
+ { key: 'darkMutedBackground', label: 'Muted bg', desc: 'Muted badges & wells' },
  { key: 'darkForeground', label: 'Foreground', desc: 'Primary text' },
- { key: 'darkMuted', label: 'Muted', desc: 'Secondary text & bg' },
+ { key: 'darkMuted', label: 'Muted text', desc: 'Secondary text' },
  ];
 
  const lightSurfaces: { key: keyof ThemeColors; label: string; desc: string }[] = [
@@ -700,8 +823,11 @@ function ThemeSettingsPage() {
  { key: 'lightSurface2', label: 'Surface 2', desc: 'Secondary elevation' },
  { key: 'lightSurface3', label: 'Surface 3', desc: 'Tertiary elevation' },
  { key: 'lightBorder', label: 'Border', desc: 'Borders & dividers' },
+ { key: 'lightInput', label: 'Input', desc: 'Input borders' },
+ { key: 'lightPopover', label: 'Popover', desc: 'Menus & popovers' },
+ { key: 'lightMutedBackground', label: 'Muted bg', desc: 'Muted badges & wells' },
  { key: 'lightForeground', label: 'Foreground', desc: 'Primary text' },
- { key: 'lightMuted', label: 'Muted', desc: 'Secondary text & bg' },
+ { key: 'lightMuted', label: 'Muted text', desc: 'Secondary text' },
  ];
 
  // ── Loading state ──
@@ -1041,6 +1167,140 @@ function ThemeSettingsPage() {
  );
  };
 
+ // ── Presets panel ──
+ const renderPresetsPanel = () => (
+ <div className="space-y-6">
+ <PanelSectionHeader
+ title="Preset Gallery"
+ description="One-click starting points. Applying fills every color — review and save when ready."
+ />
+ <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+ {THEME_PRESETS.map((preset) => (
+ <div key={preset.id} className="flex flex-col rounded-xl border border-border/30 bg-card p-4">
+ <div className="mb-1 flex items-center justify-between">
+ <p className="text-sm font-semibold text-foreground">{preset.name}</p>
+ {preset.customCss ? (
+ <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">+ CSS</span>
+ ) : null}
+ </div>
+ <p className="mb-3 min-h-8 text-[11px] leading-relaxed text-muted-foreground">{preset.description}</p>
+ <div className="mb-3 flex gap-1.5">
+ {[preset.primaryColor, preset.secondaryColor, preset.accentColor].map((c, i) => (
+ <div key={i} className="h-8 flex-1 rounded-md ring-1 ring-black/10" style={{ backgroundColor: c }} />
+ ))}
+ </div>
+ <div className="mb-4 flex gap-1">
+ {[preset.themeColors.darkBackground, preset.themeColors.darkSurface2, preset.themeColors.lightBackground, preset.themeColors.lightSurface2].map((c, i) => (
+ <div key={i} className="h-5 flex-1 rounded-sm ring-1 ring-black/10" style={{ backgroundColor: c }} />
+ ))}
+ </div>
+ <button
+ type="button"
+ onClick={() => handleApplyPreset(preset.id)}
+ className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-border/30 bg-surface-1 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-surface-2"
+ >
+ <Wand2 className="h-3.5 w-3.5" />
+ Apply {preset.name}
+ </button>
+ </div>
+ ))}
+ </div>
+ <div className="rounded-xl border border-border/30 bg-surface-1/50 p-4 text-[11px] leading-relaxed text-muted-foreground">
+ <p className="mb-1 font-semibold text-foreground">How presets work</p>
+ Presets fill the Brand, Colors, Surfaces, Layout, and Custom CSS fields below. Nothing is saved until you press
+ Save Changes, so you can preview freely and mix a preset with the Palette Studio.
+ </div>
+ </div>
+ );
+
+ // ── Share (import/export) panel ──
+ const renderManagePanel = () => {
+ const exportPreview = JSON.stringify(
+ buildSharedTheme({ primaryColor, secondaryColor, accentColor, themeColors, customCss }),
+ null,
+ 2,
+ );
+ return (
+ <div className="space-y-8">
+ <div>
+ <PanelSectionHeader title="Export Theme" description="Share this theme as JSON — colors, surfaces, radius, and custom CSS" />
+ <div className="flex flex-wrap gap-2">
+ <button
+ type="button"
+ onClick={handleExportCopy}
+ className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+ >
+ <Copy className="h-3.5 w-3.5" />
+ Copy JSON
+ </button>
+ <button
+ type="button"
+ onClick={handleExportDownload}
+ className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+ >
+ <Download className="h-3.5 w-3.5" />
+ Download .json
+ </button>
+ </div>
+ <pre className="mt-3 max-h-64 overflow-auto rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[10px] leading-relaxed text-muted-foreground">
+ {exportPreview}
+ </pre>
+ </div>
+
+ <hr className="border-border/30" />
+
+ <div>
+ <PanelSectionHeader title="Import Theme" description="Paste a previously exported theme JSON file to preview it" />
+ <div className="space-y-3">
+ <textarea
+ value={importText}
+ onChange={(e) => { setImportText(e.target.value); setImportError(null); }}
+ placeholder='{"version": 1, "primaryColor": "#0d9488", ...}'
+ rows={8}
+ spellCheck={false}
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ />
+ {importError && (
+ <p className="flex items-center gap-1.5 text-xs text-danger">
+ <AlertTriangle className="h-3.5 w-3.5" />
+ {importError}
+ </p>
+ )}
+ <div className="flex flex-wrap items-center gap-2">
+ <button
+ type="button"
+ onClick={handleImportApply}
+ disabled={!importText.trim()}
+ className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+ >
+ <Upload className="h-3.5 w-3.5" />
+ Preview Import
+ </button>
+ <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2">
+ <Upload className="h-3.5 w-3.5" />
+ Choose .json file
+ <input
+ type="file"
+ accept="application/json,.json"
+ className="hidden"
+ onChange={(e) => {
+ const f = e.target.files?.[0];
+ if (!f) return;
+ const reader = new FileReader();
+ reader.onload = () => { setImportText(String(reader.result || '')); setImportError(null); };
+ reader.readAsText(f);
+ e.target.value = '';
+ }}
+ />
+ </label>
+ </div>
+ <p className="text-[11px] text-muted-foreground">Import only previews — press Save Changes to keep it.</p>
+ </div>
+ </div>
+ </div>
+ );
+ };
+
  // ── Colors panel ──
  const renderColorsPanel = () => (
  <div className="space-y-8">
@@ -1136,6 +1396,24 @@ function ThemeSettingsPage() {
  {label}
  </span>
  ))}
+ </div>
+ </div>
+
+ <hr className="border-border/30" />
+
+ <div>
+ <PanelSectionHeader
+ title="Focus Ring"
+ description="Keyboard focus outline. Defaults to the primary color when cleared."
+ onReset={() => handleResetSection('focus')}
+ />
+ <div className="max-w-sm">
+ <ColorPicker
+ label="Ring Color"
+ description="Focus-visible outline for inputs and buttons"
+ value={themeColors.ringColor || ''}
+ onChange={(v) => updateThemeColor('ringColor', v)}
+ />
  </div>
  </div>
  </div>
@@ -1389,16 +1667,40 @@ function ThemeSettingsPage() {
 
  // ─── Render ───
  const activeTabContent = {
+ presets: renderPresetsPanel(),
  brand: renderBrandPanel(),
  palette: renderPalettePanel(),
  colors: renderColorsPanel(),
  surfaces: renderSurfacesPanel(),
  layout: renderLayoutPanel(),
+ manage: renderManagePanel(),
  advanced: renderAdvancedPanel(),
  };
 
  return (
  <div className="mx-auto max-w-5xl space-y-5">
+ {hasPersonalOverride && (
+ <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4">
+ <div className="flex items-start gap-2.5">
+ <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+ <div>
+ <p className="text-xs font-semibold text-foreground">Personal appearance override is active in this browser</p>
+ <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+ You are previewing your own Profile appearance, not the panel default. Reset it to judge the global theme accurately.
+ </p>
+ </div>
+ </div>
+ <button
+ type="button"
+ onClick={() => { clearPersonalTheme(); toast.success('Personal theme cleared — showing panel default'); }}
+ className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+ >
+ <RotateCcw className="h-3.5 w-3.5" />
+ Show panel default
+ </button>
+ </div>
+ )}
+
  {/* ── Page Header ── */}
  <TabHeader
  icon={Palette}
@@ -1440,8 +1742,44 @@ function ThemeSettingsPage() {
  {/* ── Live Preview Strip ── */}
  {renderLivePreviewStrip()}
 
+ <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/30 bg-card px-4 py-3">
+ <div className="flex items-center gap-2 text-xs text-muted-foreground">
+ <Eye className="h-3.5 w-3.5" />
+ Previewing {currentTheme === 'dark' ? 'dark' : 'light'} mode — edits apply live to this mode only for surfaces
+ </div>
+ <div className="flex items-center gap-2">
+ <div className="flex gap-1 rounded-lg bg-surface-1 p-1">
+ {(currentTheme === 'dark' ? ['dark', 'light'] : ['light', 'dark']).map((m) => (
+ <button
+ key={m}
+ type="button"
+ onClick={() => setTheme(m as 'light' | 'dark')}
+ className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+ (currentTheme === m)
+ ? 'bg-card text-foreground shadow-sm ring-1 ring-black/5'
+ : 'text-muted-foreground hover:text-foreground'
+ }`}
+ >
+ {m === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+ {m === 'dark' ? 'Dark' : 'Light'}
+ </button>
+ ))}
+ </div>
+ {(contrastInfo.dark !== null || contrastInfo.light !== null) && (
+ <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+ {contrastInfo.dark !== null && (
+ <span title="Dark background vs foreground contrast">Dark {contrastInfo.dark.toFixed(1)}:1</span>
+ )}
+ {contrastInfo.light !== null && (
+ <span title="Light background vs foreground contrast">Light {contrastInfo.light.toFixed(1)}:1</span>
+ )}
+ </div>
+ )}
+ </div>
+ </div>
+
  {/* ── Tab Navigation ── */}
- <div className="flex gap-1 rounded-xl border border-border/30 bg-surface-1 p-1">
+ <div className="flex gap-1 overflow-x-auto rounded-xl border border-border/30 bg-surface-1 p-1">
  {TABS.map((tab) => {
  const Icon = tab.icon;
  const isActive = activeTab === tab.id;

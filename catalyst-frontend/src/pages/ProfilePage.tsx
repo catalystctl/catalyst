@@ -13,6 +13,7 @@ import {
 import { useProfile, useProfileSsoAccounts, useSessions, useAuditLog, useProfileApiKeys } from '../hooks/useProfile';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
+import AppearanceSettings from '../components/profile/AppearanceSettings';
 import { profileApi } from '../services/api/profile';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { Button } from '@/components/ui/button';
@@ -338,6 +339,7 @@ export default function ProfilePage() {
  {/* Two-column grid */}
  <div className="grid gap-5 lg:grid-cols-2">
  <div className="space-y-5">
+ <AppearanceSettings />
  {/* Password */}
  <ServerTabCard>
  <SectionHeader icon={Key} title="Password" description={hasPw ? 'Update your password' : 'Set a password'} />
