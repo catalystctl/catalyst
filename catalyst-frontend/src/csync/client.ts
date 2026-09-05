@@ -391,19 +391,26 @@ export class QueryClient {
 
   async fetchQuery<TData = unknown, TError = Error>(
     options: QueryOptions<TData, TError>,
+    exec?: { force?: boolean },
   ): Promise<TData> {
     const query = this.ensureQuery(options);
     if ((options.enabled ?? true) === false) {
       if (query.state.data !== undefined) return query.state.data as TData;
       return Promise.reject(new Error(`Query disabled for ${query.queryHash}`));
     }
-    const staleTime = query.options.staleTime ?? 60_000;
-    const isStale =
-      query.state.isInvalidated ||
-      query.state.data === undefined ||
-      query.state.dataUpdatedAt === 0 ||
-      Date.now() - query.state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
-    if (!isStale && query.state.data !== undefined) return query.state.data as TData;
+    // Interval ticks pass force: a set refetchInterval means "refetch at
+    // this frequency" regardless of staleTime (TanStack semantics). Without
+    // this, an interval shorter than staleTime silently serves cached data
+    // and live views (e.g. the update progress modal) freeze.
+    if (!exec?.force) {
+      const staleTime = query.options.staleTime ?? 60_000;
+      const isStale =
+        query.state.isInvalidated ||
+        query.state.data === undefined ||
+        query.state.dataUpdatedAt === 0 ||
+        Date.now() - query.state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
+      if (!isStale && query.state.data !== undefined) return query.state.data as TData;
+    }
     return this.executeFetch(query);
   }
   async prefetchQuery<TData = unknown, TError = Error>(
@@ -635,7 +642,7 @@ export class QueryClient {
         })();
         if (inBg) return;
         if (query.options.queryFn) {
-          void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
+          void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>, { force: true }).catch(() => {});
         }
       }, ms);
       return;
@@ -659,7 +666,7 @@ export class QueryClient {
         if (!query.hasEnabledObserver()) return;
         if (shouldSkipBackground()) return;
         if (query.options.queryFn) {
-          void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
+          void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>, { force: true }).catch(() => {});
         }
       }, raw);
       return;
@@ -677,7 +684,7 @@ export class QueryClient {
         if (now - last >= ms) {
           last = now;
           if (query.options.queryFn) {
-            void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
+            void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>, { force: true }).catch(() => {});
           }
         }
       }, 500);

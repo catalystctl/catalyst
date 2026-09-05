@@ -401,7 +401,15 @@ export const adminApi = {
     return data;
   },
   triggerUpdate: async () => {
-    const data = await apiClient.post<{ success: boolean; message: string }>('/api/admin/update/trigger');
+    // The backend awaits the full image pull before responding, which takes
+    // minutes — far past the client's default 15s timeout. Without a long
+    // timeout the request aborts mid-pull and shows a spurious failure even
+    // though the update keeps running (progress streams via updateState).
+    const data = await apiClient.post<{ success: boolean; message: string }>(
+      '/api/admin/update/trigger',
+      undefined,
+      { timeoutMs: 10 * 60 * 1000 },
+    );
     return data;
   },
 };
