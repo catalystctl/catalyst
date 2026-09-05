@@ -24,6 +24,8 @@ tests/lib/node_modules/
 # Build artifacts
 *.tgz
 *.tar.gz
+*.har
+*.har.har
 node_modules/
 
 # pnpm (lockfile is committed — do NOT ignore it)
