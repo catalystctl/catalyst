@@ -1,6 +1,6 @@
 {
 	"name": "catalyst",
-	"version": "1.40.3",
+	"version": "1.41.0",
 	"private": true,
 	"type": "module",
 	"workspaces": [
