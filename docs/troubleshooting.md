@@ -605,7 +605,7 @@ npx prisma db seed -- --admin-password newpassword123
 ```
 
 ::: tip Reset Token Validation
-The `/api/auth/reset-password/validate` endpoint performs a constant-time comparison of the reset token. If the token is invalid or expired, a generic error is returned (no enumeration). Check `logs/backend` for the actual reason.
+The `/api/auth/reset-password/validate` endpoint performs a constant-time comparison of the reset token. If the token is invalid or expired, a generic error is returned (no enumeration). Check the backend container logs (`docker compose logs backend --tail=100`) for the actual reason. The backend logs to stdout only; there is no `logs/backend` file directory.
 :::
 
 ### 2FA Issues
@@ -887,9 +887,9 @@ docker compose exec backend curl -s http://localhost:3000/api/servers/SERVER_ID 
 # Verify the agent has a WebSocket connection
 sudo journalctl -u catalyst-agent -f --no-pager | grep "connected"
 
-# Check container logs (stdout/stderr)
-ls -la /var/log/catalyst/console/SERVER_ID/
-cat /var/log/catalyst/console/SERVER_ID/stdout
+# Check container logs (agent console output lives under the agent data dir)
+ls -la /var/lib/catalyst/console/SERVER_UUID/
+cat /var/lib/catalyst/console/SERVER_UUID/stdout
 ```
 
 **Common fixes:**
@@ -1512,8 +1512,8 @@ du -sh /var/lib/catalyst/servers/*/ | sort -rh | head -10
 # Check backup sizes
 du -sh /var/lib/catalyst/backups/
 
-# Check console log sizes (can grow large)
-du -sh /var/log/catalyst/console/*/
+# Check console log sizes (agent data dir; capped by console output limits)
+du -sh /var/lib/catalyst/console/*/
 ```
 
 **Fix:**
@@ -1541,15 +1541,9 @@ sudo systemctl restart catalyst-agent
 
 **Symptoms:** API returns 429 status with "Too many requests" message.
 
-**Current rate limits:**
+**Current rate limits (verify against `catalyst-backend/src/index.ts` and security settings):**
 
-| Tier | Limit | Window | Endpoints |
-|------|-------|--------|-----------|
-| **Critical** | 5 req/min | 1 minute | `/api/auth/login`, `/api/auth/register`, `/api/auth/forgot-password`, `/api/auth/reset-password` |
-| **High** | 10 req/min | 1 minute | `/api/servers/*` (create, start, stop, restart, delete) |
-| **Medium** | 30 req/min | 1 minute | File operations (list, read, write, upload, delete) |
-| **Normal** | 60 req/min | 1 minute | General API endpoints |
-| **Read** | 120 req/min | 1 minute | Read-only endpoints (GET /api/servers, GET /api/nodes, etc.) |
+Global Fastify limit is 1200 requests per minute per IP/user. Per-route overrides apply: `/health` 60/min, setup complete 5/min, auth endpoints use the dynamic `authRateLimitMax` default (60/min), file operations 180/min, console input 120/min, profile reads 120/min. API keys have their own per-key limits (default 100 per 60s). Check `X-RateLimit-*` headers and Admin → Security for the live values; do not rely on a fixed tier table.
 
 **Fix:**
 
@@ -1795,7 +1789,7 @@ The following are known limitations that are not bugs but may affect your deploy
 | **One restore stream at a time** | The agent only supports one backup restore at a time | Wait for the current restore to complete |
 | **Plugin hot reload is dev-only** | `PLUGIN_HOT_RELOAD=true` is intended for development | Set to `false` in production to prevent memory leaks |
 | **No built-in load balancing** | Only one backend instance is supported in Docker Compose | Use external load balancer (HAProxy, NGINX) for production |
-| **Rate limits are per-node** | Rate limiting applies per backend instance | Add more backend instances with external LB for high traffic |
+| **Rate limits are per-process** | Rate limiting applies per backend process | Keep `WORKERS=0` (single process) in Compose, or use sticky sessions behind an external load balancer |
 
 ::: tip Contributing
 If you find a bug or have a feature request, please open a GitHub issue. For documentation improvements, submit a pull request. See [development.md](./development.md) for contribution guidelines.

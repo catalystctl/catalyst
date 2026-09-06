@@ -77,7 +77,7 @@ The stack consists of four services:
 
 | Requirement | Minimum | Recommended | Notes |
 |---|---|---|---|
-| **OS** | Any Linux with Docker/Podman | Ubuntu 22.04+ / Debian 12+ | macOS and Windows are not supported for production |
+| **OS** | Ubuntu 22.04+/Debian 12+ and other systemd Linux with Docker/Podman | Ubuntu 22.04+ / Debian 12+ | Auto-install covers Ubuntu, Debian, RHEL/Rocky/Alma, Fedora, openSUSE, Alpine, Arch derivatives; other distros need manual Docker install. Requires `curl`, `tar`, `openssl`. |
 | **Docker** | 20.10+ | 26+ (rootless) | Rootless Docker is the most secure option |
 | **Podman** | 4.0+ | 5+ | Rootless Podman is fully supported |
 | **Compose** | V2 plugin or `podman-compose` | Latest stable | `docker compose` (space) not `docker-compose` (hyphen) |
@@ -156,9 +156,10 @@ The `install.sh` script performs these operations in order:
 - Otherwise, copies all files fresh
 
 **Step 6 — Generate Secrets**
-- Generates a 32-character PostgreSQL password: `openssl rand -base64 48 | tr -d '/+=' | head -c 32`
-- Generates a 32-byte base64 Better Auth secret: `openssl rand -base64 32`
-- Patches these into `.env` using `sed`
+- Generates all five secrets with `openssl rand`: 32-char `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `REDIS_PASSWORD`, `API_KEY_SECRET`, `BACKUP_CREDENTIALS_ENCRYPTION_KEY`
+- Reuses existing non-placeholder values; regenerates `CHANGE_ME*` placeholders and preserves an intentionally empty `REDIS_PASSWORD`
+- Writes atomically via a staging file (`.env.staging.$$`, `chmod 600`), preserving any existing `.env` as `.env.backup.$$`
+- Prompts `PUBLIC_URL` (defaults to the host LAN IP port 8080, scheme-forced, trailing `/` stripped), derives `PASSKEY_RP_ID`, sets `NODE_ENV=production` automatically for `https://` URLs, and offers a TLS overlay (`DOMAIN`/`ACME_EMAIL`) for `http://` URLs
 
 **Step 7 — Print Next Steps**
 - Displays the three required variables to set
@@ -276,12 +277,12 @@ docker compose exec redis redis-cli ping
 curl http://localhost:3000/health
 # Expected: {"status":"ok"}
 
-# 5. Check frontend is serving
-curl -I http://localhost:80
+# 5. Check frontend is serving (default install uses :8080 from .env.example; bare Compose fallback is :80)
+curl -I http://localhost:8080
 # Expected: HTTP/1.1 200 OK
 
 # 6. Check the full panel
-curl -s http://localhost:80 | head -5
+curl -s http://localhost:8080 | head -5
 # Expected: HTML containing "Catalyst"
 ```
 
@@ -404,11 +405,7 @@ When you first visit your Catalyst URL, the setup wizard detects that no users e
 2. The admin has full access to all features
 3. From the admin panel, configure SMTP, branding, and OAuth providers
 
-> **Alternative:** Run the seed script to create a default admin:
-> ```bash
-> docker compose exec -e NODE_ENV=development catalyst-backend pnpm run db:seed
-> ```
-> Default credentials: `admin@example.com` / `admin123` — **change this password immediately**.
+> **Production installs:** complete the `/setup` wizard or `bootstrap-production.ts`. Do not run `db:seed` in production (the backend image has no dev dependencies for seeding).
 
 ### Verify the Stack
 
@@ -429,8 +426,8 @@ docker compose ps
 | Service | URL | Notes |
 |---------|-----|-------|
 | Web Panel | Your `PUBLIC_URL` | e.g. `http://localhost:8080` |
-| REST API | `http://localhost:3000/api` | Backend API |
-| API Docs | `http://localhost:3000/docs` | Swagger/OpenAPI UI |
+| REST API | `http://localhost:3000/api` | Backend API (Compose publishes it on `127.0.0.1:3000` by default) |
+| API Docs | `http://localhost:3000/docs` | Swagger UI (requires `DOCS_ENABLED=true` in production) |
 | Health | `http://localhost:3000/health` | Returns `{"status":"ok"}` |
 | SFTP | `localhost:2022` | File transfer protocol |
 
@@ -520,10 +517,10 @@ See [TLS / HTTPS Configuration](#tls--https-configuration) for the three support
 **9. Backup Encryption Key**
 
 ```bash
-openssl rand -hex 32
+openssl rand -base64 32
 ```
 
-If using S3 backups, this key encrypts the S3 credentials stored in the database. **If lost, you cannot recover the credentials and backups will fail.** Back up this key separately.
+If using S3 backups, this key encrypts the S3 credentials stored in the database (same format `install.sh` generates). **If lost, you cannot recover the credentials and backups will fail.** Back up this key separately.
 
 **10. Auto-Updater Caution**
 
@@ -1048,8 +1045,8 @@ docker compose ps
 # 2. Verify backend health
 curl http://localhost:3000/health
 
-# 3. Check the panel loads
-curl -s http://localhost:80 | grep -i catalyst
+# 3. Check the panel loads (default install port is :8080)
+curl -s http://localhost:8080 | grep -i catalyst
 
 # 4. Verify agents are connected (in the admin panel)
 # Admin → Nodes → check status indicators
@@ -1213,19 +1210,17 @@ This section explains every variable in `.env.example` in detail.
 
 | Variable | Default | Required? | Description |
 |----------|---------|-----------|-------------|
-| `POSTGRES_USER` | `catalyst` | No | PostgreSQL username. |
+| `POSTGRES_USER` | `catalyst` | No | PostgreSQL username. Note: `docker-compose.yml` currently hardcodes the user/db (`catalyst`/`catalyst_db`) — this variable is informational until the compose file interpolates it. |
 | `POSTGRES_PASSWORD` | *(placeholder)* | **Yes** | Strong password. Generate: `openssl rand -base64 48 \| tr -d '/+=' \| head -c 32`. |
-| `POSTGRES_DB` | `catalyst_db` | No | Database name. |
+| `POSTGRES_DB` | `catalyst_db` | No | Database name. Note: `docker-compose.yml` currently hardcodes it — informational until the compose file interpolates it. |
 | `POSTGRES_PORT` | `127.0.0.1:5432` | No | Host port binding. `127.0.0.1` restricts to localhost. Comment out to disable external access entirely. |
 
 ### Redis
 
 | Variable | Default | Required? | Description |
 |----------|---------|-----------|-------------|
-| `REDIS_PASSWORD` | *(empty)* | No | Redis auth password. Leave empty for no password (acceptable when not exposed). |
+| `REDIS_PASSWORD` | *(auto-generated)* | **Yes (Docker)** | Redis auth password. `install.sh` generates it; the compose file refuses to boot Redis without it (`--requirepass ${REDIS_PASSWORD:?...}`). |
 | `REDIS_PORT` | *(commented out)* | No | Host port binding. Commented out by default — Redis is internal-only. |
-
-> Redis is optional. If unavailable, Catalyst falls back to in-memory caching gracefully.
 
 ### Authentication
 
@@ -1239,7 +1234,7 @@ This section explains every variable in `.env.example` in detail.
 | Variable | Default | Required? | Description |
 |----------|---------|-----------|-------------|
 | `FRONTEND_PORT` | `0.0.0.0:8080` | No | Web panel port. `0.0.0.0` = all interfaces; `127.0.0.1` = localhost only. |
-| `BACKEND_PORT` | `0.0.0.0:3000` | No | Backend API port. Should be `127.0.0.1` in production. |
+| `BACKEND_PORT` | `127.0.0.1:3000` | No | Backend API publish binding. Compose default is localhost-only; keep it that way in production. |
 
 ### SFTP
 
@@ -1259,7 +1254,7 @@ File size is the panel Admin → Security **Max upload size**.
 | `BACKUP_S3_SECRET_KEY` | *(commented out)* | For S3 | S3 secret access key. |
 | `BACKUP_S3_ENDPOINT` | *(commented out)* | For S3 | Custom endpoint (e.g., MinIO). |
 | `BACKUP_S3_PATH_STYLE` | `true` | For S3 | `true` for MinIO; `false` for AWS S3. |
-| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | For S3 | Encrypts S3 credentials in DB. Generate: `openssl rand -hex 32`. |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | For S3 | Encrypts S3 credentials in DB. `install.sh` generates base64 (`openssl rand -base64 32`). |
 
 ### Webhooks
 
@@ -1273,8 +1268,8 @@ File size is the panel Admin → Security **Max upload size**.
 | Variable | Default | Required? | Description |
 |----------|---------|-----------|-------------|
 | `SUSPENSION_ENFORCED` | `true` | No | Enforce suspension across all operations. |
-| `SUSPENSION_DELETE_BLOCKED` | `false` | No | Block file deletion on suspended servers. |
-| `SUSPENSION_DELETE_POLICY` | `keep` | No | `keep`, `block`, or `allow` deletion. |
+| `SUSPENSION_DELETE_BLOCKED` | Compose ships `false`; code default is blocked unless `false` | No | Block file deletion on suspended servers. |
+| `SUSPENSION_DELETE_POLICY` | Compose ships `keep`; code only treats exact `block` as blocking | No | Suspension delete policy. |
 
 ### OAuth Providers
 

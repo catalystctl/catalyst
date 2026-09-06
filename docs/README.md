@@ -45,6 +45,8 @@ For production deployments, custom setups, or when things go wrong:
 |-------|----------|-------------|
 | **[QUICKSTART](QUICKSTART.md)** | New users — 5-minute Docker setup | Simple |
 | **[Getting Started](getting-started.md)** | First-time users — walkthrough after install | Simple |
+| **[Deploy Your First Game Server](first-server-tutorial.md)** | First-time users — Minecraft Paper end to end | Simple |
+| **[Pterodactyl Migration](pterodactyl-migration.md)** | Pterodactyl admins — egg import mapping + compatibility | Medium |
 | **[Installation](installation.md)** | Devs & ops — full install instructions | Medium |
 | **[Installation (Detailed)](INSTALLATION_DETAILED.md)** | Production deployments — every option covered | Detailed |
 | **[Usage Examples](usage-examples.md)** | Everyone — copy-paste API, CLI, and automation snippets | Reference |
@@ -54,6 +56,8 @@ For production deployments, custom setups, or when things go wrong:
 | Document | Description |
 |----------|-------------|
 | [User Guide](user-guide.md) | Game server management: console, files, backups, databases, tasks, SFTP |
+| [First Game Server Tutorial](first-server-tutorial.md) | Minecraft Paper walkthrough with verified UI labels |
+| [Pterodactyl Migration](pterodactyl-migration.md) | Egg import conversion, compatibility table, troubleshooting |
 | [Troubleshooting](troubleshooting.md) | Common errors, solutions, and debugging workflows |
 
 ### Administration
@@ -129,4 +133,4 @@ If you find gaps in the documentation or encounter unclear sections:
 
 ---
 
-*Last updated: 2026-08-11 (v1.18.1 accuracy pass)
+*Last updated: 2026-09-05 (implementation-verified accuracy pass)

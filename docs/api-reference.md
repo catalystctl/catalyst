@@ -19,14 +19,13 @@ All responses follow a consistent JSON envelope:
 }
 ```
 
-Error responses omit `data`:
+Error responses use `{ error, code, requestId? }` (`requestId` is the Fastify request ID for log correlation):
 
 ```json
 {
   "error": "Human-readable error message",
-  "details": [
-    { "field": "email", "message": "Invalid email format" }
-  ]
+  "code": "NOT_FOUND",
+  "requestId": "req-abc123"
 }
 ```
 
@@ -143,6 +142,8 @@ Agent endpoints bypass global rate limiting when valid credentials are provided.
 
 ### Authentication Endpoints
 
+> The panel also exposes Better Auth's built-in routes under `/api/auth/*` (sign-in/out, password management, 2FA TOTP, passkeys, sessions, SSO). Only the custom Catalyst routes are listed in full below; `POST /api/auth/profile/sso/unlink` is the one custom SSO route. Unless a row says "No", these endpoints accept either a session cookie or a `catalyst_...` API key.
+
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `POST` | `/api/auth/register` | No | Register a new account |
@@ -176,7 +177,7 @@ Agent endpoints bypass global rate limiting when valid credentials are provided.
 | `GET` | `/api/auth/profile/api-keys` | Session | List user's API keys |
 | `POST` | `/api/auth/profile/resend-verification` | Session | Resend email verification |
 | `POST` | `/api/auth/forgot-password` | No | Request password reset email |
-| `GET` | `/api/auth/reset-password/validate` | No | Validate reset token |
+| `POST` | `/api/auth/reset-password/validate` | No | Validate reset token |
 | `POST` | `/api/auth/reset-password` | No | Reset password with token |
 
 #### POST `/api/auth/register`
@@ -737,7 +738,7 @@ Export all user data as an inline JSON response. Includes profile, sessions, acc
 **Errors:**
 - `400` — Export already pending (wait for current to complete)
 
-#### GET `/api/auth/reset-password/validate`
+#### POST `/api/auth/reset-password/validate`
 
 Validate a password reset token. Used by the frontend to check if the token is valid before showing the reset form.
 
@@ -805,8 +806,10 @@ All server routes are under `/api/servers`. Each server has a unique `id` and `u
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/api/servers` | `server.read` | List user's accessible servers |
-| `POST` | `/api/servers` | `admin.write` or node-assigned | Create a new server |
+| `POST` | `/api/servers` | `server.create` (or `admin.write` / target-node assignment) | Create a new server |
 | `GET` | `/api/servers/:id` | `server.read` | Get server details |
+| `POST` | `/api/servers/:id/clone` | `server.create` + source access | Clone a server |
+| `GET` | `/api/servers/:id/transfer-candidates` | owner / `admin.write` | List users eligible for ownership transfer |
 | `PUT` | `/api/servers/:id` | `server.update` | Update server configuration |
 | `DELETE` | `/api/servers/:id` | `server.delete` | Delete a server (must be stopped) |
 | `POST` | `/api/servers/:id/storage/resize` | `file.write` or `server.update` | Resize server disk |
@@ -1137,6 +1140,7 @@ Rotate the database password. Returns the full updated database object including
 | `GET` | `/api/servers/:id/permissions` | `server.read` | List server access & permissions |
 | `GET` | `/api/servers/:id/invites` | `server.read` | List pending invites |
 | `POST` | `/api/servers/:id/invites` | Owner only | Create invite |
+| `POST` | `/api/servers/:id/invites/:inviteId/regenerate` | Owner only | Regenerate invite token |
 | `DELETE` | `/api/servers/:id/invites/:inviteId` | Owner only | Cancel invite |
 | `POST` | `/api/servers/:id/access` | Owner only | Add/update access |
 | `DELETE` | `/api/servers/:id/access/:targetUserId` | Owner only | Remove access |
@@ -1381,6 +1385,12 @@ Get a paginated log of server activity events (power actions, file ops, console 
 | `POST` | `/api/servers/:id/plugin-manager/uninstall` | `file.write` | Uninstall a plugin |
 | `POST` | `/api/servers/:id/plugin-manager/check-updates` | `server.read` | Check for plugin updates |
 | `POST` | `/api/servers/:id/plugin-manager/update` | `file.write` | Update a plugin |
+| `GET` | `/api/servers/:id/cs2/frameworks` | `server.read` | List CS2 frameworks |
+| `GET` | `/api/servers/:id/cs2/frameworks/:framework/releases` | `server.read` | List CS2 framework releases |
+| `GET` | `/api/servers/:id/cs2/plugins` | `server.read` | List installed CS2 plugins |
+| `POST` | `/api/servers/:id/cs2/frameworks/:framework/install` | `file.write` | Install a CS2 framework |
+| `POST` | `/api/servers/:id/cs2/frameworks/:framework/uninstall` | `file.write` | Uninstall a CS2 framework |
+| `POST` | `/api/servers/:id/cs2/plugins/uninstall` | `file.write` | Uninstall a CS2 plugin |
 
 #### GET `/api/servers/:id/mod-manager/game-versions`
 
@@ -1640,7 +1650,7 @@ Remove an installed plugin.
 |--------|----------|------|-------------|
 | `PATCH` | `/api/servers/:id/restart-policy` | `server.start` | Set auto-restart policy |
 | `POST` | `/api/servers/:id/reset-crash-count` | `server.start` | Reset crash count |
-| `PATCH` | `/api/servers/:id/backup-settings` | `server.start` | Update backup configuration |
+| `PATCH` | `/api/servers/:id/backup-settings` | `backup.create` | Update backup configuration |
 | `POST` | `/api/servers/:id/transfer` | `server.transfer` | Transfer server to another node |
 | `POST` | `/api/servers/:id/transfer-ownership` | `admin.write` or owner | Transfer ownership to another user |
 | `POST` | `/api/servers/:id/archive` | `server.suspend` or `admin` | Archive server |
@@ -1968,9 +1978,9 @@ Check the status of up to 200 servers in a single request. Returns server detail
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/api/servers/:id/console` | `console.write` | Send command to console |
+| `POST` | `/api/servers/:id/console/command` | `console.write` | Send command to console |
 
-#### POST `/api/servers/:id/console`
+#### POST `/api/servers/:id/console/command`
 
 Send a command to the server console. Maximum 4096 characters. A newline is automatically appended.
 
@@ -2070,7 +2080,7 @@ Send a command to the server console via HTTP. The command is forwarded to the a
 | `GET` | `/api/servers/:serverId/backups/:backupId` | `backup.read` | Get backup details |
 | `POST` | `/api/servers/:serverId/backups/:backupId/restore` | `backup.restore` | Restore from backup |
 | `DELETE` | `/api/servers/:serverId/backups/:backupId` | `backup.delete` | Delete a backup |
-| `GET` | `/api/servers/:serverId/backups/:backupId/download` | `backup.read` | Download backup file |
+| `GET` | `/api/servers/:serverId/backups/:backupId/download` | `backup.download` (falls back to `backup.read`) | Download backup file |
 
 #### GET `/api/servers/:serverId/backups`
 
@@ -2179,7 +2189,7 @@ Delete a backup. Removes the backup record and deletes the backup file from stor
 
 Download a backup file directly. For local storage, returns the file as `application/octet-stream`. For S3/SFTP, proxies the download.
 
-**Auth:** Session (`backup.read`)  
+**Auth:** Session (`backup.download`, falls back to `backup.read`)  
 **Response (200):** Binary file stream (`Content-Type: application/octet-stream`)
 
 **Response (404):**
@@ -2218,6 +2228,13 @@ Download a backup file directly. For local storage, returns the file as `applica
 | `DELETE` | `/api/nodes/assign-wildcard/:targetType/:targetId` | `node.assign` | Remove wildcard assignment |
 | `GET` | `/api/nodes/accessible` | `node.read` | Get nodes accessible to user |
 | `GET` | `/api/nodes/:id/unregistered-containers` | `admin.write` | List unregistered containers |
+| `GET` | `/api/nodes/:id/agent/status` | `node.read` | Agent status |
+| `GET` | `/api/nodes/:id/agent/logs` | `node.read` | Agent logs (`/logs/stream` streams) |
+| `GET` | `/api/nodes/:id/agent/config` | `node.read` | Agent configuration |
+| `PUT` | `/api/nodes/:id/agent/config` | `node.update` | Update agent configuration |
+| `POST` | `/api/nodes/:id/agent/restart` | `node.update` | Restart agent |
+| `POST` | `/api/nodes/:id/agent/update` | `node.update` | Update agent binary |
+| `POST` | `/api/nodes/:id/agent/ping` | `node.read` | Ping agent |
 | `GET` | `/api/nodes/:id/unregistered-containers/:cid/suggest-template` | `admin.write` | Suggest template match |
 | `POST` | `/api/nodes/:id/import-server` | `admin.write` | Import container as server |
 
@@ -2671,7 +2688,15 @@ Remove a wildcard node assignment from a user or role.
 | `GET` | `/api/admin/events` | `admin.read` | SSE admin event stream |
 | `GET` | `/api/admin/health` | `admin.read` | System health check (DB + nodes) |
 | `GET` | `/api/admin/system-errors` | `admin.read` | List system errors with filtering |
+| `GET` | `/api/admin/system-errors/export` | `admin.read` | Export system errors |
 | `POST` | `/api/admin/system-errors/:id/resolve` | `admin.write` | Resolve a system error |
+| `POST` | `/api/admin/system-errors/resolve-all` | `admin.write` | Resolve all system errors |
+| `POST` | `/api/admin/users/:id/ban` | `user.ban` | Ban a user |
+| `POST` | `/api/admin/users/:id/unban` | `user.unban` | Unban a user |
+| `GET` | `/api/admin/roles` | `role.read` | List roles (admin view) |
+| `GET` | `/api/admin/db-status` | `admin.read` | Database connectivity status |
+| `GET` | `/api/admin/smtp` | `admin.read` | Get SMTP settings |
+| `GET` | `/api/admin/settings/file-tunnel-upload-limit` | `admin.read` | File tunnel upload limit |
 | `GET` | `/api/admin/security-settings` | `admin.read` | Get security settings |
 | `PUT` | `/api/admin/security-settings` | `admin.write` | Update security settings |
 | `GET` | `/api/admin/ip-pools` | `admin.read` | List IPAM pools |
@@ -2690,8 +2715,10 @@ Remove a wildcard node assignment from a user or role.
 | `PATCH` | `/api/admin/oidc-config` | `admin.write` | Update OIDC provider config |
 | `GET` | `/api/admin/theme-settings` | `admin.read` | Get theme settings |
 | `PATCH` | `/api/admin/theme-settings` | `admin.write` | Update theme settings |
-| `GET` | `/api/update/status` | `admin.write` | Check for panel updates |
-| `POST` | `/api/update/trigger` | `admin.write` | Trigger panel update |
+| `GET` | `/api/admin/update/status` | `admin.write` | Check for panel updates |
+| `POST` | `/api/admin/update/trigger` | `admin.write` | Trigger panel update |
+| `GET` | `/api/admin/update/state` | `admin.write` | Read update state machine |
+| `GET` | `/api/update/check` | Session (any authenticated user) | Lightweight update check |
 
 #### GET `/api/admin/audit-logs/export`
 
@@ -2809,7 +2836,7 @@ Create a new user account. Optionally grant server access on creation.
 
 #### GET `/api/admin/stats` — System Statistics
 
-**Auth:** `admin.read` or any resource read permission (`user.read`, `role.read`, `node.read`, `location.read`, `template.read`, `server.read`, `apikey.manage`). Returns only counts the caller is authorized to view.
+**Auth:** `admin.read` or any resource read permission (`user.read`, `role.read`, `node.read`, `location.read`, `template.read`, `server.read`, `apikey.manage`). Returns the full counts object to anyone passing the gate.
 
 **Response:**
 ```json
@@ -3224,19 +3251,16 @@ The special permission `*` grants all permissions.
 | `PUT` | `/api/nests/:id` | `admin.write` | Update a nest |
 | `DELETE` | `/api/nests/:id` | `admin.write` | Delete a nest |
 
-**Note on nest deletion:** Deleting a nest does **not** delete its templates. The templates' `nestId` is set to `null`, making them orphaned. You can reassign orphaned templates to a new nest later.
+**Note on nest deletion:** Deleting a nest does **not** delete its templates. The templates' `nestId` is set to `null`, making them orphaned. You can reassign orphaned templates to a new nest later. Locations are documented under [Location Management](#location-management).
 
-| `GET` | `/api/locations` | `admin.read` | List all locations |
-| `GET` | `/api/locations/:id` | `admin.read` | Get location with nodes |
-| `POST` | `/api/locations` | `admin.write` | Create a location |
-| `PUT` | `/api/locations/:id` | `admin.write` | Update a location |
-| `DELETE` | `/api/locations/:id` | `admin.write` | Delete a location |
 | `GET` | `/api/templates` | `template.read` | List all templates |
 | `GET` | `/api/templates/:id` | `template.read` | Get template details |
 | `POST` | `/api/templates` | `template.create` | Create a template |
 | `PUT` | `/api/templates/:id` | `template.update` | Update a template |
 | `DELETE` | `/api/templates/:id` | `template.delete` | Delete a template (if not in use) |
 | `POST` | `/api/templates/import-pterodactyl` | `template.create` | Import Pterodactyl egg |
+| `POST` | `/api/templates/import-pterodactyl-batch` | `template.create` | Import eggs from a GitHub repo (`{nestId?, repoUrl?}`, batches of 5; `207` on partial failure) |
+| `GET` | `/api/permissions/server` | Session | List server-scoped permission names |
 
 #### GET `/api/providers/status` — Provider API Key Availability
 
@@ -3257,39 +3281,37 @@ Reports which mod/plugin provider API keys are configured. Booleans only — key
 
 #### POST `/api/templates/import-pterodactyl`
 
-Import a Pterodactyl egg (template configuration) into Catalyst. Converts the egg format to Catalyst's template schema.
+Import a Pterodactyl egg (template configuration) into Catalyst. Converts the egg format to Catalyst's template schema. Send the raw egg JSON in the request body, with an optional sibling `nestId` to place the template.
 
-**Auth:** `template.create`  
-**Body:**
+**Auth:** `template.create`
+**Body:** raw Pterodactyl egg JSON, optionally with `nestId`:
 ```json
 {
-  "eggId": "abc123",
-  "nestId": "nest_xxx",
-  "name": "Minecraft - Paper",
+  "name": "Paper",
   "description": "Paper Minecraft server",
-  "author": "Community"
+  "author": "Pterodactyl",
+  "docker_images": { "Java 21": "ghcr.io/pterodactyl/yolks:java_21" },
+  "startup": "java -Xms128M -XX:MaxRAMPercentage=95.0 -jar {{SERVER_JARFILE}}",
+  "variables": [],
+  "nestId": "nest_xxx"
 }
 ```
 
-**Response (200):**
+**Response (201):**
 ```json
 {
   "success": true,
-  "data": {
-    "imported": true,
-    "templateId": "tpl_new",
-    "variablesConverted": 12,
-    "features": {
-      "configFile": "server.properties",
-      "startupDetection": { "done": "[Server thread/INFO]: Done" }
-    }
-  }
+  "data": { /* created template object */ },
+  "warnings": []
 }
 ```
 
 **Errors:**
-- `400` — Invalid egg ID or nest mismatch
-- `409` — Template with same name already exists in this nest
+- `400` — Nest not found (bad `nestId`)
+- `409` — Template with same name already exists
+- `422` — Egg validation failed (`MISSING_NAME`, `MISSING_STARTUP`, `MISSING_IMAGES`, `INVALID_IMAGE_REF`, `DUPLICATE_VARIABLE`, `CIRCULAR_VARIABLE_REF`, `INSTALL_SCRIPT_TOO_LARGE`, `TOO_MANY_VARIABLES`, and related codes)
+
+See [Pterodactyl Migration](pterodactyl-migration.md) for the full field mapping, compatibility table, and troubleshooting.
 
 #### POST `/api/templates` — Create Template
 
@@ -3973,6 +3995,8 @@ Get the frontend manifest for a plugin. Returns information about registered rou
 
 ### API Key Management
 
+All rows require `apikey.manage`. Non-admin callers only see their own keys (list/get/usage scoped to self); updating or deleting another user's key requires `admin.write`.
+
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/api/admin/api-keys/permissions-catalog` | `apikey.manage` | List all permissions |
@@ -4305,7 +4329,8 @@ Retry a failed migration step. Useful after fixing the underlying issue that cau
 | `GET` | `/api/dashboard/stats` | `server.read` (permission-scoped response) | Dashboard statistics |
 | `GET` | `/api/dashboard/activity` | `server.read` (permission-scoped response) | Recent activity feed |
 | `GET` | `/api/dashboard/resources` | `node.read` or `admin` | Cluster resource utilization |
-| `GET` | `/api/metrics` | `server.read` | Cluster/server metrics |
+| `GET` | `/api/servers/:serverId/metrics` | `server.read` | Server metrics REST endpoint |
+| `GET` | `/api/servers/:serverId/stats` | `server.read` | Server stats REST endpoint |
 | `GET` | `/api/servers/:serverId/metrics/stream` | `server.read` | SSE server metrics stream |
 | `GET` | `/api/servers/:serverId/metrics` | `server.read` | Server metrics REST endpoint |
 | `GET` | `/api/nodes/:nodeId/metrics` | `admin.read` | Node metrics REST endpoint |
@@ -4682,11 +4707,15 @@ No content — the upload was sent as part of the poll request.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/agent/version` | No | Running panel version (install script pin) |
+| `GET` | `/api/agent/version` | Session or API key | Running panel version (install script pin) |
 | `GET` | `/api/agent/download` | No | Download agent binary |
 | `GET` | `/api/agent/download-checksum` | No | SHA-256 sidecar for the agent binary |
 | `GET` | `/api/agent/deploy-script` | No | Get deployment script |
 | `GET` | `/api/deploy/:token` | No | Get deployment script for token |
+| `GET` | `/api/nodes/:nodeId/agent/logs/stream` | `node.read` | SSE stream of agent logs |
+| `GET` | `/api/nodes/:nodeId/agent/update-status` | `node.read` | Agent update status |
+| `POST` | `/api/client-errors` | No | Client-side error ingest (companion to `/api/system-errors/report`) |
+| `GET` | `/api/providers/status` | Session or API key | Provider API key availability (booleans only) |
 
 #### GET `/api/agent/version`
 
@@ -4716,7 +4745,6 @@ Get the canonical deployment script for a deployment token.
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `POST` | `/api/setup/complete` | No | Complete first-time setup |
-| `GET` | `/api/setup/status` | No | Check setup status |
 | `GET` | `/api/setup/status` | No | Check setup status |
 
 #### POST `/api/setup/complete`
@@ -4802,9 +4830,9 @@ Check whether first-time setup is required. Returns `false` if a user already ex
 
 | Method | Endpoint | Auth | Rate Limit |
 |--------|----------|------|------------|
-| `GET` | `/health` | No | 1/minute (exempt) |
-| `GET` | `/api/update/status` | No | 600/minute |
-| `GET` | `/api/theme-settings/public` | No | 600/minute |
+| `GET` | `/health` | No | 60/minute |
+| `GET` | `/api/admin/update/status` | Session + `admin.write` | Update status |
+| `GET` | `/api/theme-settings/public` | No | 60/minute |
 | `POST` | `/api/system-errors/report` | No | 30/minute |
 | `GET` | `/docs` | No | N/A (Swagger UI) |
 
@@ -4819,17 +4847,16 @@ The WebSocket gateway is the bidirectional communication channel between the bac
 ### Connection Flow
 
 1. Client upgrades to WebSocket with `Cookie: better-auth.session_token=...`
-2. After connection, client sends a handshake message to authenticate:
+2. After connection, browser clients are already authenticated via the upgrade cookie. Non-browser clients send a handshake message:
 
 ```json
 {
-  "type": "auth",
-  "token": "session-token",
-  "serverId": "srv_xxx"
+  "type": "client_handshake",
+  "token": "<session Bearer token>"
 }
 ```
 
-3. Backend responds with `auth_success` or `auth_error`
+No success reply is sent; failures arrive as an error event. Clients then send `subscribe` / `unsubscribe`, `server_control`, or `console_input` messages. Sending `console_input` requires `console.write`; subscribing requires `server.read` or `console.read` (owners, access grants, and role/node grants also satisfy this).
 
 ### Server Subscriptions
 
@@ -4846,7 +4873,7 @@ Clients subscribe to server events:
 
 - **Agent connections** use `X-Node-Id` + `X-Node-Api-Key` headers in the HTTP upgrade request
 - **User connections** use session cookies (`better-auth.session_token`)
-- After connection, users send an `auth` message with their session token
+- After connection, non-browser clients send a `client_handshake` message with their session Bearer token (no success reply is sent)
 - Agent connections are authenticated at the TCP level during the WebSocket handshake
 
 ### Agent → Backend Messages
@@ -4862,8 +4889,9 @@ Clients subscribe to server events:
 | `server_state_sync_complete` | Agent → Backend | Reconciliation completion with missing container detection |
 | `discovered_servers` | Agent → Backend | Auto-import container discovery |
 | `backup_stream_complete` | Agent → Backend | Backup stream finished |
-| `download_backup` | Agent → Backend | Binary backup download frames |
-| `file_operation_response` | Agent → Backend | Response to a legacy WS `file_operation` (not used by the HTTP file tunnel) |
+| `backup_complete` / `backup_restore_complete` / `backup_delete_complete` | Agent → Backend | Backup lifecycle completion |
+| `backup_download_chunk` / `backup_download_response` | Agent → Backend | Backup download frames |
+| `eula_required` | Agent → Backend | Server requires EULA acceptance |
 
 ### Backend → Agent Messages
 
@@ -5119,17 +5147,19 @@ Global rate limiting is enforced via `@fastify/rate-limit`:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `max` | 600 requests | Per-IP/User limit |
+| `max` | 1200 requests | Per-IP/User limit |
 | `timeWindow` | 1 minute | Window duration |
 
 ### Exceptions
 
 - **Agent endpoints** — bypass rate limiting when valid `X-Catalyst-Node-Token` is provided
 - **Internal endpoints** — `/api/internal/*` bypass rate limiting
-- **Health check** — exempt (`/health`)
+- **Health check** — rate-limited at 60/minute (`/health`)
 - **Auth endpoints** — configurable via security settings (usually stricter)
-- **SSE streams** — exempt (long-lived connections)
-- **WebSocket** — authenticated via handshake, not rate-limited
+- **SSE streams** — long-lived connections with per-server caps (50 console streams and 100 events per server); file, mod-manager, and plugin routes still enforce their own rate limits
+- **WebSocket** — authenticated via handshake with limits (`10000/min` on `/ws`, 240 messages per 10s per client, 1 MB message cap, 3s client handshake timeout, progressive agent auth lockout)
+
+> Path parameters use the code's names (`:serverId`, `:nodeId`, `:roleId`, `:templateId`, `:nestId`). Using `:id` in these positions returns `404`.
 
 ### API Key Rate Limiting
 
@@ -5142,10 +5172,10 @@ Each API key has its own rate limit:
 
 ## Pagination
 
-List endpoints support standard pagination:
+Only some list endpoints paginate with `?page&limit&search` (admin users, admin servers, admin audit logs, admin system errors, admin auth lockouts, server stats history, server backups, alerts, admin migration). Shapes vary (`{ pagination: { page, limit, total, totalPages } }` versus `{ page, pageSize, total }`). Most lists (nodes, templates, roles, allocations, invites, tasks) return the full collection without pagination:
 
 ```
-GET /api/servers?page=1&limit=20
+GET /api/admin/users?page=1&limit=20
 ```
 
 **Response:**
@@ -5185,10 +5215,8 @@ GET /api/servers?page=1&limit=20
 ```json
 {
   "error": "Validation failed",
-  "details": [
-    { "field": "email", "message": "Invalid email format" },
-    { "field": "password", "message": "Password must be at least 8 characters" }
-  ]
+  "code": "VALIDATION_ERROR",
+  "requestId": "req-abc123"
 }
 ```
 
@@ -5227,11 +5255,13 @@ GET /api/servers?page=1&limit=20
 | Permission | Description |
 |-----------|-------------|
 | `server.read` | View server details |
+| `server.create` | Create servers and clone existing servers |
 | `server.start` | Start server |
 | `server.stop` | Stop server |
 | `server.update` | Update server configuration |
 | `server.delete` | Delete server |
-| `server.install` | Install/reinstall server |
+| `server.install` | Install server (first deploy) |
+| `server.reinstall` | Reinstall server (wipe and reinstall) |
 | `server.rebuild` | Rebuild server |
 | `server.suspend` | Suspend/unsuspend server |
 | `server.transfer` | Transfer server (between nodes) |
@@ -5259,6 +5289,7 @@ GET /api/servers?page=1&limit=20
 | `backup.create` | Create backups |
 | `backup.restore` | Restore from backups |
 | `backup.delete` | Delete backups |
+| `backup.download` | Download backup archives |
 
 ### Database Permissions
 
@@ -5298,6 +5329,8 @@ GET /api/servers?page=1&limit=20
 | `user.create` | Create users |
 | `user.update` | Update users |
 | `user.delete` | Delete users |
+| `user.ban` | Ban users |
+| `user.unban` | Unban users |
 | `user.set_roles` | Assign/remove roles |
 
 ### Template Permissions
@@ -5321,7 +5354,15 @@ GET /api/servers?page=1&limit=20
 | Permission | Description |
 |-----------|-------------|
 | `apikey.manage` | Manage API keys |
-| `view_stats` | View system statistics |
+| `node.view_stats` | View node resource stats (full name; `view_stats` alone is not a permission) |
+| `location.read` | View locations |
+| `location.create` | Create locations |
+| `location.update` | Update locations |
+| `location.delete` | Delete locations |
+| `role.read` | View roles |
+| `role.create` | Create roles |
+| `role.update` | Update roles |
+| `role.delete` | Delete roles |
 
 ---
 
@@ -5348,4 +5389,4 @@ Keys can be scoped:
 
 ---
 
-*This documentation covers the complete API surface. All 150+ endpoints across 23 route files are documented. For the most current API surface, check the Swagger UI at `/docs` when the panel is running.*
+*This documentation covers the complete API surface. For the most current API surface, check the Swagger UI at `/docs` when the panel is running (`DOCS_ENABLED=true` is required in production).*

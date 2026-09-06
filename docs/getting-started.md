@@ -143,7 +143,7 @@ After your first login, update your admin profile:
 
 It's strongly recommended to enable 2FA for admin accounts:
 
-1. Go to **Profile** → **Security** → **Two-Factor Authentication** (or navigate to `/two-factor`).
+1. Go to **Profile** (sidebar user entry → `/profile`) → **Security** → **Two-Factor Authentication**. (There is no standalone `/two-factor` page — that route redirects to `/login`; 2FA setup is inline.)
 2. Click **Enable 2FA**.
 3. Enter your password to confirm your identity.
 4. A **QR code** is displayed — open your authenticator app (Google Authenticator, Authy, Microsoft Authenticator, etc.) and scan the code.
@@ -232,16 +232,16 @@ A node is a physical or virtual machine that runs game server containers via the
 | **Max CPU Cores** | Total CPU cores available | `16` |
 | **Server Data Dir** | (Optional) Override data directory path | `/var/lib/catalyst` |
 
-4. Click **Save**
+4. Click **Register node**
 
 After creation, the node will appear in the list with an **offline** status until the agent connects.
 
 ### Node Allocations
 
-Allocations define the IP:port combinations available on a node. You can add them when creating the node or later:
+Allocations define the IP:port combinations available on a node. They are managed on a separate page, not in the creation wizard:
 
 1. Select the node from the list
-2. Go to the **Allocations** tab
+2. Click **Allocations** (opens `/admin/nodes/:nodeId/allocations`)
 3. Click **Add Allocation**
 4. Enter the IP address and port range:
    - **IP:** `192.168.1.100` or a CIDR range like `10.0.0.0/24`
@@ -252,12 +252,11 @@ When creating a server, you'll assign it an allocation from the available pool.
 
 ### Generate Agent API Key
 
-The agent needs an API key to authenticate with the panel:
+The agent needs an API key to authenticate with the panel. Node details has no separate **Agent** tab — key management lives on the node details page:
 
 1. Select the node
-2. Go to the **Agent** tab (or click **Generate API Key**)
-3. Click **Generate API Key**
-4. **Copy the API key** — you'll need it for the agent configuration
+2. Click **Generate Key** (or **Regenerate Key** if one exists)
+3. **Copy the API key** — you'll need it for the agent configuration
 
 > **Important:** The API key is only shown once. Store it securely.
 
@@ -281,12 +280,12 @@ On each node machine:
 
 The easiest way to deploy the agent:
 
-1. In the panel, select your node and go to the **Agent** tab
-2. Click **Generate Deployment Token**
+1. In the panel, open the node details page and click **Deploy**
+2. Click **Generate Deployment Token** if needed
 3. This creates a one-time deployment URL (valid for 24 hours) and an API key
-4. On the node machine, run the deployment command:
+4. On the node machine, run the deployment command shown in the dialog (form: `curl -s 'deployUrl?apiKey=...' | sudo bash -x`; use **Copy** to grab it exactly), for example:
    ```bash
-   curl -fsSL https://your-panel.com/api/deploy/YOUR_TOKEN | sudo bash
+   curl -s 'https://your-panel.com/api/deploy/YOUR_TOKEN?apiKey=...' | sudo bash -x
    ```
 
 The deployment script will:
@@ -307,7 +306,7 @@ If you prefer manual installation:
    sudo cp target/release/catalyst-agent /usr/local/bin/
    ```
 
-2. **Create the configuration file** at `/etc/catalyst/config.toml`:
+2. **Create the configuration file** at `/opt/catalyst-agent/config.toml` (the path shown in the panel; `CATALYST_CONFIG_PATH` overrides it):
    ```toml
    [server]
    backend_url = "wss://panel.example.com/ws"
@@ -335,7 +334,7 @@ If you prefer manual installation:
 
    [Service]
    Type=simple
-   ExecStart=/usr/local/bin/catalyst-agent /etc/catalyst/config.toml
+   ExecStart=/usr/local/bin/catalyst-agent --config /opt/catalyst-agent/config.toml
    Restart=always
    RestartSec=5s
 
@@ -459,7 +458,7 @@ java -Xms1024M -Xmx2048M -jar paper.jar nogui
 
 ## Step 7: Create Your First Server
 
-1. Navigate to **Servers** → **Create Server** (or click **+** on the dashboard)
+1. Navigate to **Servers** → **New server** (the dashboard **Create Server** shortcut links to `/servers`)
 2. Fill in the server details:
 
 #### Basic Settings
@@ -475,25 +474,30 @@ java -Xms1024M -Xmx2048M -jar paper.jar nogui
 
 | Field | Description | Example |
 |---|---|---|
-| **Memory (MB)** | RAM to allocate | `2048` |
-| **CPU Cores** | CPU cores to allocate | `2` |
-| **Disk (MB)** | Disk space to allocate | `10240` |
+| **Memory (MB)** | RAM to allocate (backend range 512–131072) | `2048` |
+| **CPU Cores** | CPU cores to allocate (backend range 1–128) | `2` |
+| **Disk (MB)** | Disk space to allocate (backend range 1024–1048576) | `10240` |
+
+Optional extras on the same step: **Swap (MB)**, **Backup (MB)**, and **Database Allocation** (blank = provider defaults). If the template defines **Image Variants**, pick one on the details step.
 
 #### Network Settings
 
+The creation wizard offers two **Network Modes**: `Host (port mapping)` and `Macvlan`.
+
 | Field | Description | Example |
 |---|---|---|
-| **Primary Port** | Main server port | `25565` |
-| **Primary IP** | IP address (for IPAM networks) | Auto-assigned |
-| **Network Mode** | `mc-lan-static`, `bridge`, or `host` | `mc-lan-static` |
+| **Primary Allocation** | Allocation picked from the node's pool (host mode) | `192.168.1.100:25565` |
+| **Primary Port** | Read-only in host mode — populated from the allocation | `25565` |
+| **Additional Port Bindings** | Extra allocation → container-port mappings | `25566` |
+| **Interface / IP Allocation** | Macvlan interface + `Auto-assign` | `eth0` |
 
 #### Template Variables
 
 Fill in the template-specific variables (e.g., for Minecraft: Memory, Version, Build). Required fields are marked with an asterisk.
 
-3. Click **Create Server**
+3. Click **Create server**
 
-The server is created in a **stopped** state. You need to install it before starting.
+The server is created and installation **starts immediately** — you land on `/servers/:id/console`. The server is **not** left stopped waiting for a manual install.
 
 ### Accepting an Invite (Optional)
 
@@ -593,7 +597,7 @@ Access your server files through the web UI:
    - **Edit** text files directly in the browser
    - **Create** new files and directories
    - **Delete** files and directories
-   - **Compress / decompress** archives (`.tar.gz`, `.zip`)
+   - **Compress / decompress** archives (`.tar.gz`)
    - **Rename** files and directories
 
 ### SFTP Access
@@ -615,20 +619,17 @@ For SFTP access (agent-hosted on the **game node**):
 Create and manage server backups:
 
 1. Go to your server → **Backups** tab
-2. Click **Create Backup**
-3. Backups can be stored locally or on S3 (configured in panel settings)
+2. Click **Create backup** (button label is sentence-case)
+3. Backups can be stored locally or on S3 (configured per-server in **Backups** → storage settings; hidden when allocation is zero)
 4. Download existing backups or restore them to the server
 
 ### Server Settings
 
-Configure your server from the **Settings** tab:
+Configure your server across two tabs:
 
-- **General:** Rename the server, update description
-- **Resources:** Adjust memory, CPU, and disk allocations
-- **Environment:** Edit template variables
-- **Ports:** Change port bindings
-- **Startup:** Modify the startup command and stop signal
-- **Reinstall:** Re-run the installation script
+- **Settings:** rename the server, update description, adjust memory/CPU/disk
+- **Configuration:** edit template (startup) variables
+- **Admin** (owner or admin-write/server-delete holders): node transfer, ownership transfer, port allocations, restart policy, suspension, archive/restore, delete, reinstall
 
 ---
 

@@ -57,9 +57,8 @@ The dashboard is the first page you see after logging in. It provides an overvie
 
 The dashboard displays:
 
-- **Greeting** — time-based greeting with your username
-- **Stats cards** — servers online, nodes online, and unacknowledged alerts
-- **Resource metrics** — CPU utilization, memory usage, and network throughput across your servers
+- **Stats cards** — total servers plus running count (admins also see nodes plus connected count, and alerts plus unacknowledged count)
+- **Resource metrics** — CPU and memory utilization percentages across your servers
 - **Quick actions** — shortcuts to create a server, view servers, or manage your profile
 - **Recent activity** — latest server events and actions
 
@@ -81,10 +80,10 @@ Navigate to **Servers** to see all servers you have access to.
 
 The server list supports:
 
-- **Search** — filter by server name or node name
-- **Status filter** — Running, Stopped, Transitioning, Issues (crashed/suspended)
+- **Search** — placeholder **Search by name or node…**
+- **Status filter** — per-state values: `running`, `stopped`, `installing`, `starting`, `stopping`, `crashed`, `transferring`, `cloning`, `suspended` (there is no `Transitioning` or `Issues` filter; issue counts appear only as stat cards)
 - **Access filter** — All, Owned (servers you created), Other (shared with you)
-- **View modes** — Grid or list layout
+- **View modes** — Cards or List layout
 
 Each server card shows:
 
@@ -105,7 +104,11 @@ Each server card shows:
 | `crashed` | Server process exited unexpectedly |
 | `suspended` | Server has been suspended by an admin |
 | `transferring` | Server is being moved between nodes |
-| `archived` | Server is archived (preserved, inactive) |
+| `cloning` | Server files are being copied for a clone |
+| `restoring` | Server is being restored from a backup |
+| `creating_backup` | Server is creating a backup |
+| `error` | Server entered an error state (see console and system errors) |
+| `archived` | Server is archived (preserved, inactive; still counts toward node capacity) |
 
 ---
 
@@ -119,21 +122,25 @@ Each server card shows:
 
 ### Steps
 
-1. Navigate to **Servers** and click **Create Server**.
+1. Navigate to **Servers** and click **New server**.
 2. Fill in the configuration:
    - **Name** — a descriptive name for your server
    - **Description** — optional description
    - **Node** — select a target node from the dropdown (only shows nodes you have access to)
-   - **Template** — select a game server template
+   - **Template** — select a game server template (the panel derives the required location from the node)
+   - **Disk (MB)** — storage allocation (backend minimum 1024 MB)
+   - **Primary Port / Allocation** — pick from the node's pool; `allocationId` for bridge/host modes, auto-assigned IP for IPAM networks
 3. Configure resources:
-   - **Memory (MB)** — RAM allocation (minimum from template default)
-   - **CPU Cores** — number of CPU cores to allocate
+   - **Memory (MB)** — RAM allocation (backend range 512–131072 MB; the UI also gates at 256 MB, but the backend minimum wins)
+   - **CPU Cores** — number of CPU cores to allocate (backend range 1–128)
 4. Set environment variables — template-specific settings (ports, game modes, etc.)
 5. Configure networking:
-   - **Primary Port** — the main game port
-   - **Port Bindings** — additional port mappings (container port → host port)
-   - **Network Mode** — bridge (default), host, or macvlan
-6. Click **Create**.
+   - **Primary Allocation** — pick from the node's pool (host mode); the primary port is read-only and populated from the allocation
+   - **Port Bindings** — additional port mappings (allocation → container port)
+   - **Network Mode** — **Host (port mapping)** or **Macvlan** in the UI (the API also accepts `bridge`, `mc-lan-static`, and `mc-lan-dynamic`)
+6. Click **Create server**. Creation creates a `stopped` server row and then starts installation (the UI calls install immediately and takes you to the **Console** tab).
+
+> Java images report inflated placement sizes: small heaps add 64 MB overhead, larger heaps add up to 30% (640–1024 MB cap) unless disabled. An "insufficient memory" error may cite a larger number than the heap you entered.
 
 ### What Happens Next
 
@@ -164,11 +171,11 @@ The server details page organizes features into tabs:
 | **Alerts** | Configure alert rules for this server |
 | **Mod Manager** | Browse and install mods (CurseForge, Modrinth, Paper) |
 | **Plugin Manager** | Browse and install plugins (Modrinth, Spigot, Paper) |
-| **Configuration** | Edit server configuration files |
-| **Activity Log** | View recent actions performed on this server |
+| **Configuration** | Edit template (startup) variables |
+| **Activity** | View recent actions performed on this server |
 | **Users** | Manage sub-users and invites |
-| **Settings** | Server settings (name, resources, ports, startup) |
-| **Admin** *(owner only)* | Advanced admin settings (backup storage, network, reinstall) |
+| **Settings** | Server name and resource allocations |
+| **Admin** *(owner, `admin.write`, or `server.delete` holders)* | Node transfer, ownership transfer, allocations, restart policy, suspension, archive/restore, reinstall, delete |
 
 ### Server Controls
 
@@ -197,7 +204,7 @@ The console provides real-time interaction with your server.
 
 ### Accessing the Console
 
-Navigate to your server → **Console** tab, or use the dedicated console page at `/servers/:serverId/console`.
+Navigate to your server → **Console** tab (route `/servers/:serverId/console`, i.e. the `console` tab of `/servers/:serverId/:tab?`).
 
 ### Features
 
@@ -323,7 +330,7 @@ File operations use a secure tunnel system where the panel communicates with nod
 
 ### Server Logs
 
-Access raw server logs from the **Logs** tab or via the API:
+Access the server log file via the API (`GET /api/servers/:id/logs`) or the **Files** tab (there is no separate **Logs** tab):
 
 ```bash
 GET /api/servers/:serverId/logs
@@ -406,7 +413,7 @@ curl -sftp -u "<server-id>:sftp_<token>" \
 ### Creating a Backup
 
 1. Navigate to your server → **Backups** tab.
-2. Click **Create Backup**.
+2. Click **Create backup**.
 3. Optionally enter a custom backup name.
 4. The backup is created as a `.tar.gz` archive of your server's files.
 
@@ -454,7 +461,7 @@ Admins can configure retention policies per server:
 
 ## Server Settings
 
-The **Settings** tab allows you to configure various aspects of your server.
+The **Settings** tab covers name, description, and resource allocations. Template (startup) variables live under the **Configuration** tab; node transfer, ownership transfer, allocations, restart policy, suspension, archive/restore, reinstall, and delete live under the **Admin** tab (see the tab table above).
 
 ### Server Information
 
@@ -466,23 +473,18 @@ The **Settings** tab allows you to configure various aspects of your server.
 - **Memory (MB)** — adjust RAM allocation
 - **CPU Cores** — adjust CPU core allocation
 
-### Startup
+### Startup (Configuration tab)
 
-- **Startup Command** — the command used to start the server (supports `{{VARIABLE}}` interpolation)
-- **Stop Command** — command sent for graceful shutdown
-- **Signal** — signal sent if stop command fails (`SIGTERM`, `SIGINT`, `SIGKILL`)
+- **Startup variables** — template variables with descriptions and validation rules (supports `{{VARIABLE}}` interpolation)
+- The template's startup/stop command and signal are template-level settings, not per-server edits
 
-### Environment Variables
+### Port Bindings (Admin tab)
 
-View and edit server environment variables. Template variables are shown with their descriptions and validation rules.
-
-### Port Bindings
-
-- **Primary Port** — the main game port
+- **Primary Allocation** — the main game allocation (read-only in host mode)
 - **Additional Bindings** — map container ports to host ports
 - **Allocations** — view and select from node-level port allocations
 
-### Advanced Settings
+### Advanced Settings (Admin tab)
 
 | Setting | Description |
 |---------|-------------|
@@ -491,8 +493,8 @@ View and edit server environment variables. Template variables are shown with th
 | **Archive** | Archive the server (requires admin access; stops the server if running) |
 | **Restore** | Restore a server from archive (requires admin access; server must be archived) |
 | **Transfer** | Transfer server to another node (requires `server.transfer` permission, server must be stopped) |
-| **Transfer Ownership** | Transfer server ownership to another user (server owner only) |
-| **Delete** | Permanently delete the server (requires `server.delete` permission, server must be stopped) |
+| **Transfer Ownership** | Transfer server ownership to another user (server owner or `admin.write`; pick from **transfer candidates**, not by typing an email) |
+| **Delete** | Permanently delete the server (requires `server.delete` permission; allowed from `stopped`, `error`, `crashed`, or `installing`) |
 | **Suspend** | Suspend the server (admin only; prevents all server operations) |
 | **Unsuspend** | Resume a suspended server (admin only) |
 | **Restart Policy** | Configure auto-restart behavior on crash (see below) |
@@ -508,7 +510,7 @@ Server owners can transfer a server to another node on the cluster:
 4. Confirm the transfer.
 
 **Requirements:**
-- You must have `server.transfer` permission, or be the server owner.
+- You must be the server owner or hold `admin.write` (ownership transfer does not use `server.transfer`; node transfer does).
 - The server must be **stopped**.
 - The target node must be **online**.
 - The target node must have enough resources (CPU and memory) to accommodate the server.
@@ -528,7 +530,7 @@ Server owners can transfer ownership to another user:
 2. Enter the target user's email or username.
 3. Confirm the transfer.
 
-The target user must have an existing account on the panel. Requires `server.transfer` permission.
+The target user must have an existing account on the panel. Pick them from the transfer-candidates list (search needs at least 3 characters). Ownership transfer requires owner or `admin.write`.
 
 ### Restart Policy
 
@@ -560,7 +562,7 @@ Create automated tasks (cron jobs) that run on a schedule for your server.
 
 ### Creating a Task
 
-1. Navigate to your server → **Tasks** tab.
+1. Navigate to your server → **Tasks** tab (header **Scheduled Tasks**).
 2. Click **Create Task**.
 3. Configure:
    - **Name** — descriptive name for the task
@@ -708,13 +710,13 @@ If the server template supports plugin management, a **Plugin Manager** tab is a
 
 ---
 
-## Server Activity Log
+## Server Activity
 
-The **Activity Log** tab shows a timeline of all actions performed on this server.
+The **Activity** tab shows a timeline of all actions performed on this server.
 
 ### Viewing Activity
 
-1. Navigate to your server → **Activity Log** tab.
+1. Navigate to your server → **Activity** tab.
 2. The log displays the most recent 25 actions with:
    - **Action type** — e.g., "Server started", "Backup created", "Console command sent"
    - **Timestamp** — when the action occurred

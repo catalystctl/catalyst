@@ -76,10 +76,10 @@ Catalyst has multiple components you can contribute to:
 
 ### Prerequisites
 
-- **Node.js 20+** - For backend and frontend
+- **Node.js 22+** (with `pnpm`) - For backend and frontend
 - **Rust 1.95** (toolchain pin in `catalyst-agent/rust-toolchain.toml`) - For agent development
-- **Docker & Docker Compose** - For local development
-- **PostgreSQL 14+** - Database (or use Docker)
+- **Docker & Docker Compose** (or Podman) - For local development
+- **PostgreSQL 16** - Database (or use `pnpm run dev:infra`)
 - **Git** - Version control
 
 ### Backend Setup
@@ -108,8 +108,8 @@ Backend runs on **http://localhost:3000**
 ```bash
 pnpm run dev          # Start dev server with watch
 pnpm run build        # Compile TypeScript
-npm start            # Start production server
-pnpm run lint         # Run ESLint
+pnpm start            # Start production server (from catalyst-backend/)
+pnpm run lint         # Run ESLint (root `pnpm run lint` also works; bare `eslint src --ext` fails on ESLint v9+)
 pnpm run lint -- --fix # Auto-fix linting issues
 pnpm run db:studio    # Open Prisma Studio GUI
 pnpm run db:migrate   # Create versioned migration
@@ -435,12 +435,13 @@ cd tests
 ./01-auth.test.sh
 ./04-servers.test.sh
 ```
+Test files live in `tests/` (numbered bash suites) and `catalyst-backend/src/__tests__/` (Vitest). Frontend E2E uses Playwright (`pnpm run test:e2e` in `catalyst-frontend/`; `pnpm test` there runs Vitest in watch mode, so CI uses `vitest run`).
 
 **Quick Smoke Tests:**
 ```bash
 # From project root
-./test-backend.sh              # API smoke test
-./test-api-integration.sh      # Extended API tests
+pnpm run dev:infra      # postgres+redis via podman-compose/docker compose fallback
+pnpm run dev            # backend :3000 + frontend :5173
 ```
 
 ---
@@ -463,8 +464,8 @@ cd tests
 
 2. **Run tests:**
    ```bash
-   cd catalyst-backend && npm test
-   cd catalyst-frontend && npm test
+   cd catalyst-backend && pnpm test
+   cd catalyst-frontend && pnpm test
    cd catalyst-agent && cargo test
    ```
 
@@ -731,9 +732,8 @@ We welcome documentation improvements! Areas that need help:
 ### Resources
 
 - **Documentation:** [docs/](docs/)
-- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Features:** [docs/FEATURES.md](docs/FEATURES.md)
-- **API Reference:** [docs/README.md](docs/README.md)
+- **Architecture:** [docs/architecture.md](docs/architecture.md)
+- **API Reference:** [docs/api-reference.md](docs/api-reference.md)
 
 ### Community
 
@@ -750,7 +750,7 @@ Look for issues labeled `good first issue` if you're new to the project.
 
 ## License
 
-By contributing to Catalyst, you agree that your contributions will be licensed under the MIT License.
+By contributing to Catalyst, you agree that your contributions will be licensed under the GPLv3 License (see `LICENSE`).
 
 ---
 

@@ -191,13 +191,13 @@ Catalyst uses a granular role-based access control (RBAC) system. Permissions ar
 | Category | Permissions |
 |----------|------------|
 | **Administration** | `*` (Super Admin), `admin.read`, `admin.write` |
-| **Servers** | `server.read`, `server.create`, `server.start`, `server.stop`, `server.delete`, `server.suspend`, `server.transfer` (**move to another node**, not ownership), `server.schedule`. Ownership transfer requires **owner** or `admin.write`. Install/reinstall/rebuild are owner/admin/`ServerAccess` scoped. |
-| **Nodes** | `node.read`, `node.create`, `node.update`, `node.delete`, `node.view_stats`, `node.manage_allocation` |
+| **Servers** | `server.read`, `server.create`, `server.update`, `server.start`, `server.stop`, `server.delete`, `server.suspend`, `server.transfer` (**ownership transfer**, not node moves — node moves use `POST /:id/transfer` with `server.transfer`), `server.schedule`, `server.install`, `server.reinstall`, `server.rebuild`. Ownership transfer requires **owner** or `admin.write`. |
+| **Nodes** | `node.read`, `node.create`, `node.update`, `node.delete`, `node.view_stats`, `node.manage_allocation`, `node.assign` |
+| **Backups** | `backup.read`, `backup.create`, `backup.restore`, `backup.delete`, `backup.download` (download falls back to `backup.read`) |
 | **Locations** | `location.read`, `location.create`, `location.update`, `location.delete` |
 | **Templates** | `template.read`, `template.create`, `template.update`, `template.delete` |
 | **Users** | `user.read`, `user.create`, `user.update`, `user.delete`, `user.ban`, `user.unban`, `user.set_roles` |
 | **Roles** | `role.read`, `role.create`, `role.update`, `role.delete` |
-| **Backups** | `backup.read`, `backup.create`, `backup.delete`, `backup.restore` |
 | **Files** | `file.read`, `file.write` |
 | **Console** | `console.read`, `console.write` |
 | **Databases** | `database.read`, `database.create`, `database.delete`, `database.rotate` |
@@ -213,7 +213,7 @@ Catalyst ships with four role presets that can be used as starting points:
 | **Administrator** | Full system access | `*` |
 | **Moderator** | Can manage most resources but not users/roles | `node.read`, `node.update`, `node.view_stats`, `location.read`, `template.read`, `user.read`, `server.read`, `server.start`, `server.stop`, `file.read`, `file.write`, `console.read`, `console.write`, `alert.read`, `alert.create`, `alert.update`, `alert.delete` |
 | **Support** | Read-only access for support staff | `node.read`, `node.view_stats`, `location.read`, `template.read`, `server.read`, `file.read`, `console.read`, `alert.read`, `user.read` |
-| **User** | Basic access to own servers | `server.read` |
+| **User** | Basic access to own servers | `server.read` (fresh setup seeds the **User** role with `server.read/start/stop`, `file.read/write`, `console.read/write`) |
 
 ### Creating a Custom Role
 
@@ -264,21 +264,21 @@ Nodes are the compute machines that run game server containers. Each node runs t
    - **Max Memory (MB)** — total RAM available for server allocation
    - **Max CPU Cores** — total CPU cores available for server allocation
    - **Server Data Dir** — optional custom path for server files (default: configured via `SERVER_DATA_DIR` env var)
-4. Click **Create**.
+4. Click **Register node**.
 
-After creation, a **secret key** is generated for the node. This is used for agent authentication.
+After creation, generate credentials from the node details page: **Generate Key** (or **Regenerate Key**) for the agent API key, and **Deploy** → **Generate Deployment Token** for the one-time deploy URL.
 
 ### Node Deployment
 
 After creating a node, deploy the agent:
 
-1. Click **Generate Deployment Token** on the node.
+1. Click **Deploy** on the node details page (dialog title **Deploy agent**).
 2. A one-time deployment URL and API key are generated (valid for 24 hours).
 3. Run the deploy script on the target machine using the provided URL.
 
-Alternatively, generate a persistent API key:
+Alternatively, manage the persistent agent key on the same page:
 
-1. Click **Generate API Key** on the node.
+1. Click **Generate Key** (or **Regenerate Key** if one exists).
 2. The key is prefixed with `catalyst_` and is stored with metadata linking it to the node.
 3. Use `regenerate: true` to replace an existing key.
 
@@ -389,13 +389,13 @@ Each template has the following properties:
 | `defaultImage` | No | Default image when user doesn't select one |
 | `installImage` | No | Container image for install script execution |
 | `startup` | Yes | Startup command (supports `{{VARIABLE}}` interpolation) |
-| `stopCommand` | Yes | Command sent to stdin for graceful shutdown |
+| `stopCommand` | Only when `sendSignalTo` is `SIGTERM` (signal stops `SIGINT`/`SIGKILL` need no command) | Command sent to stdin for graceful shutdown |
 | `sendSignalTo` | Yes | Signal on timeout: `SIGTERM`, `SIGINT`, or `SIGKILL` |
 | `variables` | Yes | Array of environment variable definitions |
 | `installScript` | No | Shell script for server installation |
 | `supportedPorts` | Yes | Array of port numbers the server uses |
-| `allocatedMemoryMb` | Yes | Default RAM allocation (min 128 MB) |
-| `allocatedCpuCores` | Yes | Default CPU core allocation (min 1) |
+| `allocatedMemoryMb` | Yes | Default RAM allocation (server creation enforces 512–131072 MB; no minimum is checked at template creation) |
+| `allocatedCpuCores` | Yes | Default CPU core allocation (server creation enforces 1–128; no minimum is checked at template creation) |
 | `features` | No | Feature flags (mod manager, config file, etc.) |
 
 ### Template Variables
@@ -441,13 +441,15 @@ The selected image is resolved at server start time via the `IMAGE_VARIANT` envi
 
 ### Importing Pterodactyl Eggs
 
-Catalyst can import Pterodactyl egg configurations:
+Catalyst can import Pterodactyl egg configurations (requires `template.create`):
 
 1. Navigate to **Admin → Templates**.
-2. Click **Import Pterodactyl Egg**.
-3. Paste the egg JSON configuration.
+2. Click **Import** (dialog **Import template**).
+3. Single file or URL (`From Local File` / `From URL`) prefills the manual form via client-side conversion — review and click **Create template**. Selecting multiple files creates each one via `POST /api/templates` with per-file toasts. `Import All Pterodactyl Eggs` calls the batch endpoint (`POST /api/templates/import-pterodactyl-batch`, batches of 5, partial failures return `207`).
 4. Optionally assign to a Nest.
-5. Click **Import**.
+5. Submit the form.
+
+See [Pterodactyl Migration](pterodactyl-migration.md) for the full conversion mapping, compatibility table, and troubleshooting.
 
 The import process maps:
 
@@ -551,7 +553,7 @@ Catalyst supports local, S3, and SFTP backup storage. Admins can configure backu
 ### Creating a Backup
 
 1. Navigate to a server's **Backups** tab.
-2. Click **Create Backup**.
+2. Click **Create backup**.
 3. Optionally provide a custom name (sanitized to alphanumeric + `._-`).
 4. The backup is created as a `.tar.gz` archive.
 
