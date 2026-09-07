@@ -360,6 +360,28 @@ The backend entrypoint automatically runs database migrations on startup. No man
 
 ## Troubleshooting
 
+### One-click diagnostics (redacted — safe to share)
+
+If anything is broken, run the bundle script from this directory and share
+the output file with support or your AI agent. Secrets are replaced with
+`[REDACTED]`; hostnames and ports are kept for routing debugging.
+
+```bash
+cd catalyst-docker
+bash diagnose.sh
+# → catalyst-diagnostics-<timestamp>.txt (+ .tar.gz)
+```
+
+Options: `--lines=N` (default 500), `--full` (2000 lines + inspect),
+`--mask-hosts` (also hide IPs/domains), `--skip-agent` (panel only).
+
+On an older install without `diagnose.sh` yet:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/catalyst-docker/diagnose.sh -o /tmp/diagnose.sh \
+  && bash /tmp/diagnose.sh --compose-dir ~/catalyst-docker
+```
+
 ### Containers won't start or keep restarting
 
 ```bash
@@ -387,7 +409,7 @@ docker compose logs --tail=50 redis
 # Check individual health
 docker compose exec backend curl -sf http://localhost:3000/health || echo "UNHEALTHY"
 docker compose exec postgres pg_isready -U catalyst || echo "UNHEALTHY"
-docker compose exec redis redis-cli ping || echo "UNHEALTHY"
+docker compose exec redis redis-cli --no-auth-warning ping || echo "UNHEALTHY"
 ```
 
 **PostgreSQL failing health check:**
@@ -516,7 +538,7 @@ Before exposing Catalyst to the internet, complete this checklist:
 - [ ] Set `PASSKEY_RP_ID` to match your domain
 - [ ] Restrict `BACKEND_PORT` to `127.0.0.1:3000` (localhost only)
 - [ ] Disable external PostgreSQL access (keep `POSTGRES_PORT=127.0.0.1:5432`)
-- [ ] Disable external Redis access (comment out `REDIS_PORT`)
+- [ ] Keep Redis localhost-only (`REDIS_PORT=127.0.0.1:6379`); never publish `0.0.0.0:6379`
 - [ ] Generate a backup encryption key: `openssl rand -hex 32`
 - [ ] Configure SMTP for password resets and notifications
 - [ ] Set up automated database backups

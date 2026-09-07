@@ -447,11 +447,23 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         });
       }
 
-      // Server must be stopped to transfer
+      // Server must be stopped to transfer. Claim TRANSFERRING atomically so
+      // concurrent transfers (or transfer vs power/delete) cannot both proceed.
       if (server.status !== "stopped") {
         return reply.status(400).send({
           error: "Server must be stopped before transfer",
           currentStatus: server.status,
+        });
+      }
+      const claimed = await prisma.server.updateMany({
+        where: { id, status: "stopped" },
+        data: { status: ServerState.TRANSFERRING },
+      });
+      if (claimed.count === 0) {
+        const fresh = await prisma.server.findUnique({ where: { id }, select: { status: true } });
+        return reply.status(409).send({
+          error: "Server state changed before transfer could start",
+          currentStatus: fresh?.status ?? "unknown",
         });
       }
 
@@ -462,12 +474,6 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
           stream: "system",
           data: `Transfer initiated from node ${server.node.name} to ${targetNode.name}`,
         },
-      });
-
-      // Update server status to transferring
-      await prisma.server.update({
-        where: { id },
-        data: { status: ServerState.TRANSFERRING },
       });
 
 

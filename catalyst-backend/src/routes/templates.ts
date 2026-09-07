@@ -779,20 +779,17 @@ export async function templateRoutes(app: FastifyInstance) {
 							continue;
 						}
 
-						// Determine nest — auto-create from egg category if no nestId provided
+						// Determine nest — auto-create from egg category if no nestId provided.
+						// Upsert so concurrent batch imports do not duplicate nests.
 						let resolvedNestId = nestId || null;
 						if (!resolvedNestId && eggData._category) {
-							const existingNest = await prisma.nest.findFirst({
+							const nest = await prisma.nest.upsert({
 								where: { name: eggData._category },
+								create: { name: eggData._category },
+								update: {},
+								select: { id: true },
 							});
-							if (existingNest) {
-								resolvedNestId = existingNest.id;
-							} else {
-								const newNest = await prisma.nest.create({
-									data: { name: eggData._category },
-								});
-								resolvedNestId = newNest.id;
-							}
+							resolvedNestId = nest.id;
 						}
 
 						const template = await prisma.serverTemplate.create({
@@ -820,6 +817,12 @@ export async function templateRoutes(app: FastifyInstance) {
 						});
 						imported.push({ name: converted.name, template });
 					} catch (dbErr: any) {
+						// Concurrent importers racing on the same name hit the
+						// unique constraint: treat as skip, not failure.
+						if (dbErr?.code === 'P2002') {
+							skipped.push({ name: converted.name });
+							continue;
+						}
 						failed.push({
 							egg: eggName,
 							errors: [{

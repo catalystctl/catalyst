@@ -251,6 +251,25 @@ const permissionsCache = new SimpleCache<string, string[]>(30_000);
 const scopedPermissionsCache = new SimpleCache<string, string[]>(15_000);
 
 /**
+ * Resolve a user's effective permissions from their roles, bypassing the
+ * 30s cache. Use only for privilege-escalation guards where a stale snapshot
+ * could let a recently-demoted editor grant permissions they no longer hold.
+ */
+export async function resolveUserPermissionsLive(userId: string): Promise<string[]> {
+  const roles = await prisma.role.findMany({
+    where: { users: { some: { id: userId } } },
+    select: { permissions: true },
+  });
+  const permissions = new Set<string>();
+  for (const role of roles) {
+    for (const perm of role.permissions) {
+      permissions.add(perm);
+    }
+  }
+  return [...permissions];
+}
+
+/**
  * Resolve a user's effective permissions from their roles.
  * Returns a flat array of unique permission strings.
  */
@@ -342,6 +361,9 @@ export async function resolveServerPermissions(
  */
 export function invalidateUserPermissions(userId: string): void {
   permissionsCache.delete(userId);
+  // Scoped entries are keyed `${userId}:${serverId}` with no prefix scan, so
+  // clear the scoped map locally instead of relying on the broadcast round-trip.
+  scopedPermissionsCache.clear();
   broadcastCacheInvalidate('permissions', { userId });
 }
 

@@ -10,6 +10,22 @@
 
 import crypto from "crypto";
 import { prisma } from "../db.js";
+import { broadcastCacheInvalidate, onCacheInvalidate } from "../lib/cache-bus.js";
+
+function broadcastSftpRevoke(): void {
+  try {
+    broadcastCacheInvalidate("sftp", { flushAll: true });
+  } catch { /* degraded */ }
+}
+
+onCacheInvalidate("sftp", () => {
+  // Remote revoke: drop all local tokens so revalidation hits the database.
+  // Tokens are short-lived and re-minted on demand; coarse clear is safe.
+  for (const entry of sftpTokenCache.values()) {
+    try { unindexToken(entry.token); } catch { /* ignore */ }
+  }
+  sftpTokenCache.clear();
+});
 
 const sftpTokenCache = new Map<string, SftpTokenEntry>();
 
@@ -136,7 +152,7 @@ export function generateSftpToken(
 }
 
 /** How often a token's ban/lock snapshot is re-verified against the DB. */
-const USER_STATUS_RECHECK_INTERVAL_MS = 60 * 1000;
+const USER_STATUS_RECHECK_INTERVAL_MS = 30 * 1000;
 
 /** userId -> last DB recheck timestamp (throttles live status refreshes). */
 const lastUserStatusCheck = new Map<string, number>();
@@ -253,6 +269,7 @@ export function invalidateSftpToken(userId: string, serverId: string): void {
     unindexToken(entry.token);
   }
   sftpTokenCache.delete(`${userId}:${serverId}`);
+  broadcastSftpRevoke();
 }
 
 /**
@@ -319,6 +336,7 @@ export function revokeSftpToken(
     unindexToken(entry.token);
   }
   sftpTokenCache.delete(key);
+  if (existed) broadcastSftpRevoke();
   return existed;
 }
 
@@ -335,6 +353,7 @@ export function revokeAllSftpTokensForServer(serverId: string): number {
       count++;
     }
   }
+  if (count > 0) broadcastSftpRevoke();
   return count;
 }
 
@@ -353,6 +372,7 @@ export function revokeSftpTokensForUser(userId: string, serverId?: string): numb
       count++;
     }
   }
+  if (count > 0) broadcastSftpRevoke();
   return count;
 }
 

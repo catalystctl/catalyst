@@ -20,6 +20,9 @@ import "./types"; // Load type augmentations
 import { WebSocketGateway, setWsGateway } from "./websocket/gateway";
 import { setErrorLoggerGateway, captureSystemError } from "./services/error-logger";
 import { mapHttpError } from "./lib/http-error";
+import { applyRemoteCacheInvalidate } from "./lib/cache-bus";
+import { subscribeCacheInvalidations } from "./lib/event-bus";
+import { closeRedis, getRedis, getRedisStats } from "./lib/redis";
 import { authRoutes } from "./routes/auth";
 import { nodeRoutes } from "./routes/nodes";
 import { serverRoutes } from "./routes/servers";
@@ -190,6 +193,12 @@ app.setNotFoundHandler((_request, reply) => {
 const wsGateway = new WebSocketGateway(prisma, logger);
 setWsGateway(wsGateway);
 setErrorLoggerGateway(wsGateway);
+// Cross-host cache coherence: apply Redis invalidations locally (no-op without REDIS_URL).
+subscribeCacheInvalidations((channel, payload) => {
+  applyRemoteCacheInvalidate(channel, payload);
+}).catch(() => { /* degraded mode */ });
+// Best-effort Redis connect so the first command does not pay dial latency.
+getRedis()?.connect().catch(() => { /* degraded mode */ });
 const taskScheduler = new TaskScheduler(prisma, logger);
 const webhookService = new WebhookService(prisma, logger);
 const alertService = new AlertService(prisma, logger);
@@ -770,6 +779,7 @@ async function bootstrap() {
 		});
 
 		// Health check (liveness only; no version or diagnostic detail).
+		// Redis is OPTIONAL: degraded Redis never fails liveness, it is reported.
 		app.get(
 			"/health",
 			{
@@ -790,7 +800,11 @@ async function bootstrap() {
 						status: "unhealthy",
 					});
 				}
-				return { status: "ok" };
+				const redis = getRedisStats();
+				return {
+					status: "ok",
+					redis: redis.configured ? redis.status : "disabled",
+				};
 			},
 		);
 
@@ -2176,6 +2190,7 @@ async function shutdown(signal: string) {
 	wsGateway?.destroy();
 	pluginLoader?.shutdown().catch(() => {});
 	fileTunnel?.destroy();
+	await closeRedis().catch(() => {});
 	if (auditRetentionInterval) clearInterval(auditRetentionInterval);
 	if (statRetentionInterval) clearInterval(statRetentionInterval);
 	if (backupRetentionInterval) clearInterval(backupRetentionInterval);

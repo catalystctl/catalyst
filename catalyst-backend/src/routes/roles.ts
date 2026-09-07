@@ -21,6 +21,7 @@ import {
 import {
   invalidateUserPermissions,
   flushPermissionsCache,
+  resolveUserPermissionsLive,
   ALL_SERVER_PERMISSIONS,
 } from '../lib/permissions-catalog';
 
@@ -28,6 +29,19 @@ import {
 function flushAllPermissionCaches(): void {
   flushPermissionsCache();
   flushRbacCaches();
+}
+
+/**
+ * Fresh editor permissions for escalation guards. request.user.permissions is
+ * cached up to 30s, so a recently-demoted editor could otherwise still grant
+ * permissions they no longer hold. Always resolve live here.
+ */
+async function freshEditorPermissions(userId: string, fallback: string[]): Promise<string[]> {
+  try {
+    return await resolveUserPermissionsLive(userId);
+  } catch {
+    return fallback;
+  }
 }
 
 /** Shape of the role wizard's scoped-access step (server/node grants). */
@@ -313,7 +327,8 @@ export async function roleRoutes(app: FastifyInstance) {
       }
 
       // Validate user can grant these permissions (prevent privilege escalation)
-      const userPerms: string[] = request.user?.permissions ?? [];
+      // Use freshly resolved permissions, not the cached request snapshot.
+      const userPerms: string[] = await freshEditorPermissions(userId, request.user?.permissions ?? []);
       const hasWildcard = userPerms.includes('*');
       if (!hasWildcard) {
         const cantGrant = permissions.filter(
@@ -446,7 +461,8 @@ export async function roleRoutes(app: FastifyInstance) {
         }
 
         // Validate user can grant these permissions (prevent privilege escalation)
-        const userPerms: string[] = request.user?.permissions ?? [];
+        // Use freshly resolved permissions, not the cached request snapshot.
+        const userPerms: string[] = await freshEditorPermissions(userId, request.user?.permissions ?? []);
         const hasWildcard = userPerms.includes('*');
         if (!hasWildcard) {
           const cantGrant = permissions.filter(
@@ -471,7 +487,7 @@ export async function roleRoutes(app: FastifyInstance) {
       let scopeChanged = false;
       if (scope !== undefined) {
         try {
-          const editorPerms: string[] = request.user?.permissions ?? [];
+          const editorPerms: string[] = await freshEditorPermissions(userId, request.user?.permissions ?? []);
           await applyRoleScope(roleId, scope, editorPerms);
           scopeChanged = true;
         } catch (err) {
@@ -591,7 +607,8 @@ export async function roleRoutes(app: FastifyInstance) {
       }
 
       // Validate user can grant this permission (prevent privilege escalation)
-      const userPerms: string[] = request.user?.permissions ?? [];
+      // Use freshly resolved permissions, not the cached request snapshot.
+      const userPerms: string[] = await freshEditorPermissions(userId, request.user?.permissions ?? []);
       const hasWildcard = userPerms.includes('*');
       if (!hasWildcard && !userPerms.includes(permission)) {
         return reply.status(403).send({
@@ -763,7 +780,8 @@ export async function roleRoutes(app: FastifyInstance) {
 
       // Validate current user has all permissions in the target role
       // This prevents privilege escalation via role assignment
-      const currentUserPerms: string[] = request.user?.permissions ?? [];
+      // Use freshly resolved permissions, not the cached request snapshot.
+      const currentUserPerms: string[] = await freshEditorPermissions(currentUserId, request.user?.permissions ?? []);
       const hasWildcard = currentUserPerms.includes('*');
       if (!hasWildcard && role.permissions.length > 0) {
         const cantGrant = role.permissions.filter(

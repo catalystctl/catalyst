@@ -117,7 +117,7 @@ Catalyst is a **three-tier architecture** consisting of a React frontend SPA, a 
 | Service | Dependency | Purpose |
 |---------|------------|---------|
 | Backend | PostgreSQL | Primary data store (users, servers, nodes, templates, etc.) |
-| Backend | Redis (compose service; optional) | **Not** used as session/cache store in current backend code (in-memory / DB sessions) |
+| Backend | Redis (compose service; optional) | Shared cache/coordination: config cache, cross-instance invalidations, realtime fan-out, locks, rate limits, idempotency. Degrades to Postgres + local state when down. See `docs/redis.md`. |
 | Backend | Better Auth | Authentication (session management, OAuth) |
 | Backend | Plugin SDK | Plugin runtime and extension system |
 | Agent | containerd | Container orchestration on nodes |
@@ -953,7 +953,7 @@ iptables -A FORWARD -s 172.18.0.2 -p udp --dport 25565 -j ACCEPT
 
 | Approach | Supported? | Notes |
 |----------|------------|-------|
-| Multiple backend instances | ⚠️ Partial | Shared secrets and in-memory state (SFTP tokens) limit multi-instance deployments. Redis is in compose but **not** a session store in current backend code. |
+| Multiple backend instances | ✅ Supported with Redis | Cross-instance invalidations and realtime fan-out use Redis pub/sub; without Redis each instance serves only its own subscribers. SFTP mint stays process-local with broadcast revokes. |
 | Worker threads | ✅ Yes | The backend supports `WORKERS` env var for Cluster API multi-process mode. |
 | Reverse proxy | ✅ Yes | Nginx, Caddy, Traefik all supported as load balancers. |
 
@@ -969,7 +969,7 @@ iptables -A FORWARD -s 172.18.0.2 -p udp --dport 25565 -j ACCEPT
 
 | Component | Scaling Strategy |
 |-----------|-----------------|
-| Backend | Increase RAM/CPU, optimize Prisma connection pool (`DB_POOL_MAX`), add Redis |
+| Backend | Increase RAM/CPU, optimize Prisma connection pool (`DB_POOL_MAX`), scale with Redis fan-out |
 | Database | PostgreSQL read replicas (not yet implemented) |
 | Agent | Increase CPU for more concurrent container operations |
 | Frontend | Static assets served via CDN; SPA is stateless |
@@ -1146,7 +1146,7 @@ The following architecture aspects are **partially documented** or **under-speci
 | Database ER diagram (textual) | ✅ Included | See Section 5.1 |
 | Performance benchmarks | 📋 Gap | No published baseline numbers |
 | Multi-region / federation | ⚠️ Low priority | Not yet implemented |
-| Redis session storage | ⚠️ Partial | Redis available but not used for sessions |
+| Redis session storage | ✅ Intentionally not used | Sessions stay on Postgres (Better Auth); Redis is cache/coordination only |
 | Read replica support | ⚠️ Low priority | PostgreSQL supports it; Prisma supports it; not yet configured |
 
 ---

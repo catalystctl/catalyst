@@ -80,8 +80,11 @@ export async function authRoutes(app: FastifyInstance) {
     fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>);
 
   // ── Register ─────────────────────────────────────────────────────────
+  // Per-route cap so enumeration/creation abuse is bounded even though the
+  // global limiter is per-process. DB lockout remains the enforcement SoT.
   app.post(
     "/register",
+    { config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       // Validate all registration fields using the pre-built schema
       const regValidation = userRegistrationSchema.safeParse(request.body);
@@ -181,8 +184,10 @@ export async function authRoutes(app: FastifyInstance) {
   );
 
   // ── Login ────────────────────────────────────────────────────────────
+  // Per-route cap; DB-backed brute-force lockout remains the enforcement SoT.
   app.post(
     "/login",
+    { config: { rateLimit: { max: 30, timeWindow: '15 minutes' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       // Validate login fields using the pre-built schema
       const loginValidation = userLoginSchema.safeParse(request.body);
@@ -561,7 +566,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Personal audit log ──────────────────────────────────────────────
   app.get(
     "/profile/audit-log",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { limit = 50, offset = 0 } = request.query as { limit?: string; offset?: string };
       const [logs, total] = await Promise.all([
@@ -579,9 +584,10 @@ export async function authRoutes(app: FastifyInstance) {
   );
 
   // ── Export account data (GDPR) ──────────────────────────────────────
+  // Fans out 6 parallel queries per hit: keep a strict per-route cap.
   app.get(
     "/profile/export",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const [user, sessions, accounts, apiKeys, auditLogs, serverAccess] = await Promise.all([

@@ -1,12 +1,9 @@
 /**
- * Multi-worker in-process cache invalidation bus.
+ * Cache invalidation bus (cluster IPC + Redis pub/sub).
  *
- * There is no Redis in this codebase (`lib/cache.ts` is an in-memory LRU).
- * When Node's `cluster` module is active (WORKERS > 0), cache invalidations
- * must be broadcast to sibling workers via IPC so process-local Maps stay
- * coherent after role/API-key mutations.
- *
- * Single-process mode (WORKERS unset/0): handlers run only locally.
+ * Process-local Maps stay coherent via Node cluster IPC on a single host
+ * and via Redis pub/sub across hosts. This module is the single Redis
+ * publisher for invalidations; event-bus delegates here.
  *
  * Message shape on process IPC:
  *   { type: 'catalyst:cache-invalidate', channel, payload }
@@ -17,12 +14,35 @@
  */
 
 import cluster from 'cluster';
+import { randomUUID } from 'crypto';
+import { RedisChannels } from './cache-keys';
+import { getRedis } from './redis';
+
+const cacheBusInstanceId = randomUUID();
+
+export function getCacheBusInstanceId(): string {
+  return cacheBusInstanceId;
+}
+
+/**
+ * Apply a remote invalidation locally only (no rebroadcast).
+ * Used for Redis cross-host events to avoid publish loops.
+ */
+export function applyRemoteCacheInvalidate(
+  channel: CacheInvalidateChannel,
+  payload: CacheInvalidatePayload = {},
+): void {
+  ensureIpcListener();
+  applyLocal(channel, payload);
+}
 
 export type CacheInvalidateChannel =
   | 'agent-auth'
   | 'permissions'
   | 'admin-user'
-  | 'node-access';
+  | 'node-access'
+  | 'config'
+  | 'sftp';
 
 export type CacheInvalidatePayload = {
   /** Optional node id for agent-auth scoped invalidation */
@@ -120,6 +140,15 @@ export function broadcastCacheInvalidate(
 
   // Always apply locally first so the mutating worker is consistent.
   applyLocal(channel, payload);
+
+  // Cross-host: best-effort Redis publish (ignored when Redis is disabled).
+  try {
+    const redis = getRedis();
+    if (redis) {
+      const envelope = JSON.stringify({ origin: cacheBusInstanceId, channel, payload, ts: Date.now() });
+      redis.publish(RedisChannels.cacheInvalidate(), envelope).catch(() => { /* degraded */ });
+    }
+  } catch { /* degraded */ }
 
   const workersEnv = Number(process.env.WORKERS || 0);
   if (!workersEnv || workersEnv <= 0) {

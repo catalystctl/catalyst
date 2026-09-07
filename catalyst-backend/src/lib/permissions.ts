@@ -181,27 +181,13 @@ export async function hasPermission(
   prisma: PrismaClient,
   userId: string,
   requiredPermission: string,
-  resourceId?: string
+  resourceId?: string,
+  preResolved?: Iterable<string>,
 ): Promise<boolean> {
-  // Get user's roles and their permissions
-  const userRoles = await prisma.role.findMany({
-    where: {
-      users: {
-        some: { id: userId },
-      },
-    },
-    select: {
-      permissions: true,
-    },
-  });
-
-  // Aggregate all permissions from all roles
-  const allPermissions = new Set<string>();
-  for (const role of userRoles) {
-    for (const perm of role.permissions) {
-      allPermissions.add(perm);
-    }
-  }
+  const allPermissions =
+    preResolved !== undefined
+      ? new Set(preResolved)
+      : await getUserPermissions(prisma, userId);
 
   // Check if any permission matches the required permission
   for (const userPerm of allPermissions) {
@@ -226,11 +212,16 @@ export async function hasAnyPermission(
   prisma: PrismaClient,
   userId: string,
   requiredPermissions: string[],
-  resourceId?: string
+  resourceId?: string,
+  preResolved?: Iterable<string>,
 ): Promise<boolean> {
+  const allPermissions =
+    preResolved !== undefined
+      ? new Set(preResolved)
+      : await getUserPermissions(prisma, userId);
   for (const perm of requiredPermissions) {
-    if (await hasPermission(prisma, userId, perm, resourceId)) {
-      return true;
+    for (const userPerm of allPermissions) {
+      if (permissionMatches(userPerm, perm, resourceId)) return true;
     }
   }
   return false;
@@ -249,12 +240,22 @@ export async function hasAllPermissions(
   prisma: PrismaClient,
   userId: string,
   requiredPermissions: string[],
-  resourceId?: string
+  resourceId?: string,
+  preResolved?: Iterable<string>,
 ): Promise<boolean> {
+  const allPermissions =
+    preResolved !== undefined
+      ? new Set(preResolved)
+      : await getUserPermissions(prisma, userId);
   for (const perm of requiredPermissions) {
-    if (!(await hasPermission(prisma, userId, perm, resourceId))) {
-      return false;
+    let matched = false;
+    for (const userPerm of allPermissions) {
+      if (permissionMatches(userPerm, perm, resourceId)) {
+        matched = true;
+        break;
+      }
     }
+    if (!matched) return false;
   }
   return true;
 }
@@ -388,20 +389,14 @@ export async function hasResourcePermission(
   prisma: PrismaClient,
   userId: string,
   requiredPermission: string,
-  resourceOwnerId?: string,
+  _resourceOwnerId?: string,
   ownsAllResource?: boolean
 ): Promise<boolean> {
-  // If user owns all resources of this type, check for global permission
-  if (ownsAllResource) {
-    return hasPermission(prisma, userId, requiredPermission);
-  }
-
-  // Check if user is the resource owner
-  if (resourceOwnerId && resourceOwnerId === userId) {
-    return true; // Owner can access their own resources
-  }
-
-  // Check for scoped permission to this specific resource
+  // Ownership alone never grants a permission. Every caller must hold the
+  // required permission explicitly; the owner id is accepted only so existing
+  // signatures keep compiling while callers migrate to decideServerAccess.
+  void _resourceOwnerId;
+  void ownsAllResource;
   return hasPermission(prisma, userId, requiredPermission);
 }
 
@@ -645,7 +640,10 @@ export async function hasNodeAccess(
   });
 
   if (userWildcard) {
-    nodeAccessCache.set(cacheKey, true);
+    const ttl = userWildcard.expiresAt
+      ? Math.max(1000, Math.min(30_000, new Date(userWildcard.expiresAt).getTime() - Date.now()))
+      : 30_000;
+    nodeAccessCache.set(cacheKey, true, ttl);
     return true;
   }
 
@@ -662,7 +660,10 @@ export async function hasNodeAccess(
   });
 
   if (userAssignment) {
-    nodeAccessCache.set(cacheKey, true);
+    const ttl = userAssignment.expiresAt
+      ? Math.max(1000, Math.min(30_000, new Date(userAssignment.expiresAt).getTime() - Date.now()))
+      : 30_000;
+    nodeAccessCache.set(cacheKey, true, ttl);
     return true;
   }
 
@@ -692,7 +693,10 @@ export async function hasNodeAccess(
     });
 
     if (roleWildcard) {
-      nodeAccessCache.set(cacheKey, true);
+      const ttl = (roleWildcard as { expiresAt?: Date | string | null }).expiresAt
+        ? Math.max(1000, Math.min(30_000, new Date((roleWildcard as { expiresAt?: Date | string | null }).expiresAt as Date).getTime() - Date.now()))
+        : 30_000;
+      nodeAccessCache.set(cacheKey, true, ttl);
       return true;
     }
 
@@ -709,7 +713,10 @@ export async function hasNodeAccess(
     });
 
     if (roleAssignment) {
-      nodeAccessCache.set(cacheKey, true);
+      const ttl = (roleAssignment as { expiresAt?: Date | string | null }).expiresAt
+        ? Math.max(1000, Math.min(30_000, new Date((roleAssignment as { expiresAt?: Date | string | null }).expiresAt as Date).getTime() - Date.now()))
+        : 30_000;
+      nodeAccessCache.set(cacheKey, true, ttl);
       return true;
     }
   }
@@ -1077,7 +1084,7 @@ export async function assignNode(
     }
   }
 
-  return prisma.nodeAssignment.create({
+  const created = await prisma.nodeAssignment.create({
     data: {
       nodeId,
       userId: targetType === "user" ? targetId : null,
@@ -1086,6 +1093,15 @@ export async function assignNode(
       expiresAt,
     },
   });
+
+  // Node access is cached 30s: invalidate immediately so grant/revoke applies.
+  // Role assignments affect unknown member sets, so flush broadly.
+  if (targetType === "user") {
+    invalidateNodeAccessCache(targetId);
+  } else {
+    invalidateNodeAccessCache();
+  }
+  return created;
 }
 
 /**
@@ -1099,7 +1115,13 @@ export async function removeNodeAssignment(
   prisma: PrismaClient,
   assignmentId: string
 ) {
-  return prisma.nodeAssignment.delete({
+  const deleted = await prisma.nodeAssignment.delete({
     where: { id: assignmentId },
   });
+  if (deleted.userId) {
+    invalidateNodeAccessCache(deleted.userId);
+  } else {
+    invalidateNodeAccessCache();
+  }
+  return deleted;
 }

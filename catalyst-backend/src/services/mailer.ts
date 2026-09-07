@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { prisma } from '../db.js';
+import { cachedConfig, invalidateConfig } from '../lib/config-cache.js';
 
 export type SmtpSettings = {
   host?: string | null;
@@ -131,6 +132,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
 };
 
 export const getSmtpSettings = async (): Promise<SmtpSettings> => {
+  return cachedConfig('smtp', async () => {
   const settings = await prisma.systemSetting.findUnique({ where: { id: SMTP_SETTING_ID } });
   if (!settings) {
     return {
@@ -160,10 +162,11 @@ export const getSmtpSettings = async (): Promise<SmtpSettings> => {
     maxConnections: settings.smtpMaxConnections,
     maxMessages: settings.smtpMaxMessages,
   };
+  });
 };
 
 export const upsertSmtpSettings = async (payload: SmtpSettings) => {
-  return prisma.systemSetting.upsert({
+  const result = await prisma.systemSetting.upsert({
     where: { id: SMTP_SETTING_ID },
     create: {
       id: SMTP_SETTING_ID,
@@ -193,6 +196,8 @@ export const upsertSmtpSettings = async (payload: SmtpSettings) => {
       smtpMaxMessages: payload.maxMessages ?? null,
     },
   });
+  await invalidateConfig('smtp');
+  return result;
 };
 
 export const getSecuritySettings = async (): Promise<SecuritySettings> => {
@@ -222,6 +227,7 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
       fileTunnelConcurrentMax: 100,
     };
   }
+  const cached = await cachedConfig('security', async () => {
   const settings = await prisma.systemSetting.findUnique({ where: { id: SECURITY_SETTING_ID } });
   if (!settings) {
     return { ...DEFAULT_SECURITY_SETTINGS };
@@ -251,22 +257,25 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
     fileTunnelMaxUploadMb: sanitizeMaxUploadMb(settings.fileTunnelMaxUploadMb),
     maxBufferMb: settings.maxBufferMb ?? DEFAULT_SECURITY_SETTINGS.maxBufferMb,
     requireEmailVerification: settings.requireEmailVerification ?? DEFAULT_SECURITY_SETTINGS.requireEmailVerification,
-    // Prefer explicit env override; otherwise DB (default false — invite/admin only).
-    registrationEnabled: (() => {
-      const env = process.env.REGISTRATION_ENABLED;
-      if (env !== undefined && env !== '') {
-        return !['0', 'false', 'no', 'off'].includes(env.toLowerCase());
-      }
-      return settings.registrationEnabled ?? DEFAULT_SECURITY_SETTINGS.registrationEnabled;
-    })(),
+    registrationEnabled: settings.registrationEnabled ?? DEFAULT_SECURITY_SETTINGS.registrationEnabled,
     fileTunnelRateLimitMax: settings.fileTunnelRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitMax,
     fileTunnelRateLimitWindowMs: resolveWindow(settings.fileTunnelRateLimitWindowMs, DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitWindowMs),
     fileTunnelMaxPendingPerNode: settings.fileTunnelMaxPendingPerNode ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
     fileTunnelConcurrentMax: settings.fileTunnelConcurrentMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
   };
+  });
+  const env = process.env.REGISTRATION_ENABLED;
+  if (env !== undefined && env !== '') {
+    return {
+      ...cached,
+      registrationEnabled: !['0', 'false', 'no', 'off'].includes(env.toLowerCase()),
+    };
+  }
+  return cached;
 };
 
 export const getModManagerSettings = async (): Promise<ModManagerSettings> => {
+  return cachedConfig('mod_manager', async () => {
   const settings = await prisma.systemSetting.findUnique({ where: { id: MOD_MANAGER_SETTING_ID } });
   const fallback = await prisma.systemSetting.findUnique({ where: { id: SMTP_SETTING_ID } });
   const source = settings ?? fallback;
@@ -277,10 +286,11 @@ export const getModManagerSettings = async (): Promise<ModManagerSettings> => {
     curseforgeApiKey: source.curseforgeApiKey ?? null,
     modrinthApiKey: source.modrinthApiKey ?? null,
   };
+  });
 };
 
 export const upsertModManagerSettings = async (payload: ModManagerSettings) => {
-  return prisma.systemSetting.upsert({
+  const result = await prisma.systemSetting.upsert({
     where: { id: MOD_MANAGER_SETTING_ID },
     create: {
       id: MOD_MANAGER_SETTING_ID,
@@ -292,6 +302,8 @@ export const upsertModManagerSettings = async (payload: ModManagerSettings) => {
       modrinthApiKey: payload.modrinthApiKey ?? null,
     },
   });
+  await invalidateConfig('mod_manager');
+  return result;
 };
 
 export const upsertSecuritySettings = async (payload: SecuritySettings) => {
@@ -310,7 +322,7 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
   const fileTunnelRateLimitWindowMs = isValidTimeWindowMs(payload.fileTunnelRateLimitWindowMs)
     ? payload.fileTunnelRateLimitWindowMs
     : DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitWindowMs;
-  return prisma.systemSetting.upsert({
+  const result = await prisma.systemSetting.upsert({
     where: { id: SECURITY_SETTING_ID },
     create: {
       id: SECURITY_SETTING_ID,
@@ -364,6 +376,8 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       fileTunnelConcurrentMax: payload.fileTunnelConcurrentMax,
     },
   });
+  await invalidateConfig('security');
+  return result;
 };
 
 const createTransporter = (settings: SmtpSettings) => {

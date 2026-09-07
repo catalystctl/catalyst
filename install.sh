@@ -1055,6 +1055,8 @@ print_summary() {
     echo ""
     echo -e "  ${YLW}Tip:${RST} First registered user becomes admin."
     echo -e "  ${YLW}Tip:${RST} Edit config anytime: ${CYN}nano ${DEST}/.env${RST}"
+    echo -e "  ${YLW}Tip:${RST} Something wrong? Collect a redacted support bundle:"
+    echo -e "       ${CYN}bash ${DEST}/diagnose.sh${RST}  (share the .txt with support / your AI agent)"
     echo -e "  ${YLW}Tip:${RST} Do not change POSTGRES_PASSWORD after first start without wiping the postgres volume,"
     echo -e "       ${DIM}or you will get Prisma P1000 password authentication failures.${RST}"
     echo -e "  ${DIM}Log: ${LOGFILE}${RST}"

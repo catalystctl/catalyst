@@ -275,14 +275,18 @@ export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | nu
       return null; // Rate limited
     }
 
-    await prisma.apikey.update({
-      where: { id: apiKeyRecord.id },
+    // Atomic consume: only one concurrent request wins when remaining is low.
+    const consumed = await prisma.apikey.updateMany({
+      where: { id: apiKeyRecord.id, remaining: { gt: 0 } },
       data: {
         remaining: { decrement: 1 },
         lastRequest: now,
         requestCount: { increment: 1 },
       },
     });
+    if (consumed.count === 0) {
+      return null; // Lost the race — budget exhausted
+    }
   } else {
     await prisma.apikey.update({
       where: { id: apiKeyRecord.id },

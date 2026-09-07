@@ -534,6 +534,17 @@ export function initAuth() {
               const { revokeSftpTokensForUser } = await import('./services/sftp-token-manager');
               await revokeSftpTokensForUser(userId);
             } catch { /* non-critical */ }
+            try {
+              const { invalidateAgentApiKeyCache } = await import('./lib/agent-auth');
+              invalidateAgentApiKeyCache();
+            } catch { /* non-critical */ }
+            try {
+              const { invalidateUserPermissions } = await import('./lib/permissions-catalog');
+              const { invalidateAdminUserCache, invalidateNodeAccessCache } = await import('./lib/permissions');
+              invalidateUserPermissions(userId);
+              invalidateAdminUserCache(userId);
+              invalidateNodeAccessCache(userId);
+            } catch { /* non-critical */ }
 
             // Disconnect WebSocket sessions
             try {

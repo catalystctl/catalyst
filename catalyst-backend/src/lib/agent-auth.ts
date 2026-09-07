@@ -46,9 +46,9 @@ function getCachedVerification(nodeId: string, hashedKey: string): boolean | nul
   return true;
 }
 
-function setCachedVerification(nodeId: string, hashedKey: string): void {
+function setCachedVerification(nodeId: string, hashedKey: string, ttlMs = CACHE_TTL_MS): void {
   const cacheKey = `${nodeId}:${hashedKey}`;
-  verifiedKeyCache.set(cacheKey, Date.now() + CACHE_TTL_MS);
+  verifiedKeyCache.set(cacheKey, Date.now() + Math.max(1000, Math.min(CACHE_TTL_MS, ttlMs)));
   // Periodically prune stale entries
   if (verifiedKeyCache.size > 1000) {
     const now = Date.now();
@@ -88,6 +88,8 @@ export async function verifyAgentApiKey(
         enabled: true,
         expiresAt: true,
         metadata: true,
+        userId: true,
+        user: { select: { banned: true } },
       },
     });
 
@@ -101,11 +103,19 @@ export async function verifyAgentApiKey(
           enabled: true,
           expiresAt: true,
           metadata: true,
+          userId: true,
+          user: { select: { banned: true } },
         },
       });
     }
 
     if (!apiKeyRecord || !apiKeyRecord.enabled) {
+      return false;
+    }
+
+    // Node agent keys are machine credentials, but a banned owner must not
+    // keep a live agent session: fail closed on ban.
+    if ((apiKeyRecord as { user?: { banned?: boolean } }).user?.banned) {
       return false;
     }
 
@@ -123,8 +133,15 @@ export async function verifyAgentApiKey(
       return false;
     }
 
-    // Cache successful verification
-    setCachedVerification(nodeId, hashedKey);
+    // Cache successful verification, clamped so a cached entry never outlives
+    // the key itself. Keys expiring within 5s are not cached at all.
+    if (apiKeyRecord.expiresAt) {
+      const msLeft = new Date(apiKeyRecord.expiresAt).getTime() - Date.now();
+      if (msLeft <= 5000) return true;
+      setCachedVerification(nodeId, hashedKey, msLeft);
+    } else {
+      setCachedVerification(nodeId, hashedKey);
+    }
 
     // Fire-and-forget: track usage (requestCount + lastRequest)
     prisma.apikey.update({

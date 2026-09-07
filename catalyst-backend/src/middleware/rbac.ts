@@ -12,7 +12,20 @@ import {
   hasAnyPermission,
   hasAllPermissions,
   isAdminUser,
+  permissionMatches,
 } from "../lib/permissions";
+
+function requestPermissions(request: FastifyRequest): string[] | null {
+  const perms = (request as unknown as { user?: { permissions?: unknown } }).user?.permissions;
+  return Array.isArray(perms) ? (perms as string[]) : null;
+}
+
+function matchesAny(perms: string[], required: string, resourceId?: string): boolean {
+  for (const p of perms) {
+    if (permissionMatches(p, required, resourceId)) return true;
+  }
+  return false;
+}
 
 /**
  * Create a middleware factory that closes over prisma instance
@@ -39,7 +52,11 @@ export function createRbacMiddleware(prisma: PrismaClient) {
         ? (request.params as Record<string, string>)?.[resourceIdFromParam]
         : undefined;
 
-      const hasPerm = await hasPermission(prisma, userId, permission, resourceId);
+      const cached = requestPermissions(request);
+      const hasPerm =
+        cached !== null
+          ? matchesAny(cached, permission, resourceId)
+          : await hasPermission(prisma, userId, permission, resourceId);
       if (!hasPerm) {
         return reply.status(403).send({ error: "Forbidden" });
       }
@@ -68,7 +85,11 @@ export function createRbacMiddleware(prisma: PrismaClient) {
         ? (request.params as Record<string, string>)?.[resourceIdFromParam]
         : undefined;
 
-      const hasPerm = await hasAnyPermission(prisma, userId, permissions, resourceId);
+      const cachedAny = requestPermissions(request);
+      const hasPerm =
+        cachedAny !== null
+          ? permissions.some((p) => matchesAny(cachedAny, p, resourceId))
+          : await hasAnyPermission(prisma, userId, permissions, resourceId);
       if (!hasPerm) {
         return reply.status(403).send({ error: "Forbidden" });
       }
@@ -97,7 +118,11 @@ export function createRbacMiddleware(prisma: PrismaClient) {
         ? (request.params as Record<string, string>)?.[resourceIdFromParam]
         : undefined;
 
-      const hasPerm = await hasAllPermissions(prisma, userId, permissions, resourceId);
+      const cachedAll = requestPermissions(request);
+      const hasPerm =
+        cachedAll !== null
+          ? permissions.every((p) => matchesAny(cachedAll, p, resourceId))
+          : await hasAllPermissions(prisma, userId, permissions, resourceId);
       if (!hasPerm) {
         return reply.status(403).send({ error: "Forbidden" });
       }

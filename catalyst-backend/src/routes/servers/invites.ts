@@ -675,6 +675,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         create: { userId: targetUserId, serverId, permissions: sanitizedPermissions },
         update: { permissions: sanitizedPermissions },
       });
+      try { (app as any).wsGateway?.invalidateServerAccess?.(serverId); } catch { /* ignore */ }
 
       await createAuditLog(userId, {
         action: "server.access.update",
@@ -734,6 +735,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
       // Instantly revoke SFTP tokens for the removed user on this server
       revokeSftpTokensForUser(targetUserId, serverId);
+      try { (app as any).wsGateway?.invalidateServerAccess?.(serverId); } catch { /* ignore */ }
 
       await createAuditLog(userId, {
         action: "server.access.remove",

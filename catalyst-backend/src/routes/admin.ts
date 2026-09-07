@@ -15,6 +15,7 @@ import {
   invalidateNodeAccessCache,
 } from '../lib/permissions.js';
 import { invalidateUserPermissions } from '../lib/permissions-catalog.js';
+import { invalidateAgentApiKeyCache } from '../lib/agent-auth.js';
 import { captureSystemError } from '../services/error-logger';
 // Permission checks use request.user.permissions (populated by auth middleware)
 // No DB queries needed — works for both session and API key auth.
@@ -744,6 +745,11 @@ export async function adminRoutes(app: FastifyInstance) {
         for (const removed of removedAccess) {
           revokeSftpTokensForUser(userId, removed.serverId);
         }
+        try {
+          const gw = (app as any).wsGateway;
+          for (const removed of removedAccess) gw?.invalidateServerAccess?.(removed.serverId);
+          for (const sid of uniqueServerIds) gw?.invalidateServerAccess?.(sid);
+        } catch { /* ignore */ }
         const existingAccess = await prisma.serverAccess.findMany({
           where: { userId, serverId: { in: uniqueServerIds } },
           select: { serverId: true, permissions: true },
@@ -955,6 +961,14 @@ export async function adminRoutes(app: FastifyInstance) {
 
       // Revoke all SFTP tokens for this user across all servers
       revokeSftpTokensForUser(userId);
+      // Agent API keys cascade-delete with the user, but success cache lives
+      // up to 30s: flush it now so a deleted user's node key stops working.
+      invalidateAgentApiKeyCache();
+      invalidateUserPermissions(userId);
+      invalidateAdminUserCache(userId);
+      invalidateNodeAccessCache(userId);
+      // Drop gateway fan-out allow-lists that may still include this user.
+      try { (app as any).wsGateway?.invalidateServerAccess?.(); } catch { /* ignore */ }
 
       // Disconnect all WebSocket sessions for this user
       const wsGateway = (app as any).wsGateway;
@@ -2653,6 +2667,19 @@ export async function adminRoutes(app: FastifyInstance) {
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       const staleNodes = nodes.filter((n) => n.lastSeenAt && n.lastSeenAt < fiveMinutesAgo);
 
+      const { getRedisStats } = await import('../lib/redis.js');
+      const { getWsGateway } = await import('../websocket/gateway.js');
+      const { getConfigCacheStats } = await import('../lib/config-cache.js');
+      const redis = getRedisStats();
+      const configCache = getConfigCacheStats();
+      const reliability = (() => {
+        try {
+          return getWsGateway()?.getReliabilityStats() ?? null;
+        } catch {
+          return null;
+        }
+      })();
+
       reply.send({
         status: dbHealthy && offlineNodes === 0 ? 'healthy' : 'degraded',
         database: dbHealthy ? 'connected' : 'disconnected',
@@ -2662,6 +2689,21 @@ export async function adminRoutes(app: FastifyInstance) {
           offline: offlineNodes,
           stale: staleNodes.length,
         },
+        redis: {
+          configured: redis.configured,
+          disabledReason: redis.disabledReason,
+          status: redis.status,
+          commandsTotal: redis.commandsTotal,
+          errorsTotal: redis.errorsTotal,
+          unavailableTotal: redis.unavailableTotal,
+          circuitOpensTotal: redis.circuitOpensTotal,
+          avgLatencyMs: redis.avgLatencyMs,
+          reconnects: redis.reconnects,
+          lastError: redis.lastError,
+          connectedAt: redis.connectedAt,
+          configCache,
+        },
+        realtime: reliability,
         timestamp: new Date().toISOString(),
       });
     }

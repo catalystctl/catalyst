@@ -1731,7 +1731,26 @@ sudo ctr -n catalyst images pull docker.io/your-image:tag
 ### Before Opening a GitHub Issue
 
 1. **Search existing issues** — your problem may already be reported or fixed
-2. **Gather diagnostic information:**
+2. **Run the one-click diagnostics bundle** (redacted — safe to share).
+   From your install directory it collects host info, compose status,
+   service health, logs, redacted `.env`, and agent status:
+
+   ```bash
+   cd catalyst-docker
+   bash diagnose.sh
+   # → catalyst-diagnostics-<timestamp>.txt (+ .tar.gz)
+   ```
+
+   On an older install without `diagnose.sh` yet:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/catalyst-docker/diagnose.sh -o /tmp/diagnose.sh \
+     && bash /tmp/diagnose.sh --compose-dir ~/catalyst-docker
+   ```
+
+   Attach the `.txt` (or `.tar.gz`) to your issue or paste it to your AI
+   agent, along with what you did, what you expected, and what happened.
+   If you prefer to gather logs manually instead:
    ```bash
    # Panel backend logs
    docker compose logs backend --tail=100

@@ -50,9 +50,10 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gatew
           ],
         },
         {
-          // Skip servers currently creating a backup — their in-progress backup
-          // has no size yet and could be incorrectly targeted for deletion.
-          status: { not: ServerState.CREATING_BACKUP },
+          // Skip servers with in-progress backup/restore work — their
+          // in-progress backup has no size yet and restore targets must not
+          // be garbage-collected mid-restore.
+          status: { notIn: [ServerState.CREATING_BACKUP, ServerState.RESTORING] },
         },
       ],
     },

@@ -122,11 +122,11 @@ async function checkIpRateLimit(
     }
 
     if (windowExpired) {
-      // Reset window
+      // Reset window — conditional so concurrent probes do not both reset.
       count = 1;
       resetAt = now + IP_RATE_LIMIT_WINDOW_MS;
-      await prisma.authLockout.update({
-        where: { id: existing.id },
+      const reset = await prisma.authLockout.updateMany({
+        where: { id: existing.id, firstFailedAt: existing.firstFailedAt },
         data: {
           failureCount: 1,
           firstFailedAt: new Date(now),
@@ -135,6 +135,20 @@ async function checkIpRateLimit(
           userAgent: request.headers['user-agent']?.slice(0, 512) ?? null,
         },
       });
+      if (reset.count === 0) {
+        // Lost the race — re-read shared state instead of overwriting.
+        const fresh = await prisma.authLockout.findUnique({ where: { id: existing.id } });
+        if (fresh) {
+          setLocalIpCache(ip, fresh.failureCount, fresh.lockedUntil ? fresh.lockedUntil.getTime() : now + IP_RATE_LIMIT_WINDOW_MS);
+          if (fresh.lockedUntil && fresh.lockedUntil.getTime() > now) {
+            const minutesRemaining = Math.ceil((fresh.lockedUntil.getTime() - now) / 60000);
+            throw new Error(
+              `Too many login attempts. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+            );
+          }
+          return;
+        }
+      }
     } else {
       count = existing.failureCount + 1;
       resetAt = windowStart + IP_RATE_LIMIT_WINDOW_MS;
@@ -143,15 +157,30 @@ async function checkIpRateLimit(
       if (count > IP_RATE_LIMIT_MAX_ATTEMPTS) {
         lockedUntil = new Date(resetAt);
       }
-      await prisma.authLockout.update({
-        where: { id: existing.id },
+      // Conditional increment so concurrent probes cannot both read N/write N+1.
+      const claimed = await prisma.authLockout.updateMany({
+        where: { id: existing.id, failureCount: existing.failureCount },
         data: {
-          failureCount: count,
+          failureCount: { increment: 1 },
           lastFailedAt: new Date(now),
           lockedUntil,
           userAgent: request.headers['user-agent']?.slice(0, 512) ?? null,
         },
       });
+      if (claimed.count === 0) {
+        // Another probe won — re-read and enforce from shared state.
+        const fresh = await prisma.authLockout.findUnique({ where: { id: existing.id } });
+        const freshCount = fresh?.failureCount ?? count;
+        const freshLocked = fresh?.lockedUntil ? fresh.lockedUntil.getTime() : null;
+        setLocalIpCache(ip, freshCount, freshLocked ?? resetAt);
+        if (freshLocked && freshLocked > now) {
+          const minutesRemaining = Math.ceil((freshLocked - now) / 60000);
+          throw new Error(
+            `Too many login attempts. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+          );
+        }
+        return;
+      }
 
       if (count > IP_RATE_LIMIT_MAX_ATTEMPTS) {
         setLocalIpCache(ip, count, resetAt);
@@ -162,16 +191,30 @@ async function checkIpRateLimit(
       }
     }
   } else {
-    await prisma.authLockout.create({
-      data: {
-        email: syntheticEmail,
-        ipAddress: ip,
-        failureCount: 1,
-        firstFailedAt: new Date(now),
-        lastFailedAt: new Date(now),
-        userAgent: request.headers['user-agent']?.slice(0, 512) ?? null,
-      },
-    });
+    try {
+      await prisma.authLockout.create({
+        data: {
+          email: syntheticEmail,
+          ipAddress: ip,
+          failureCount: 1,
+          firstFailedAt: new Date(now),
+          lastFailedAt: new Date(now),
+          userAgent: request.headers['user-agent']?.slice(0, 512) ?? null,
+        },
+      });
+    } catch (err: any) {
+      // P2002: concurrent first probe created the row — fall back to shared state.
+      if (err?.code !== 'P2002') throw err;
+      const fresh = await prisma.authLockout.findUnique({
+        where: { email_ipAddress: { email: syntheticEmail, ipAddress: ip } },
+      });
+      if (fresh?.lockedUntil && fresh.lockedUntil.getTime() > now) {
+        const minutesRemaining = Math.ceil((fresh.lockedUntil.getTime() - now) / 60000);
+        throw new Error(
+          `Too many login attempts. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+        );
+      }
+    }
   }
 
   setLocalIpCache(ip, count, resetAt);
@@ -313,6 +356,16 @@ export const handleFailedLogin = async (
         lockedUntil: lockedUntil.toISOString(),
       });
     } catch { /* ignore — WS push is best-effort */ }
+    // A locked account must lose live sessions promptly: revoke SFTP tokens
+    // and drop cached agent-key verifications so the 30s/60s windows close.
+    try {
+      const { revokeSftpTokensForUser } = await import('../services/sftp-token-manager.js');
+      revokeSftpTokensForUser(user.id);
+    } catch { /* best-effort */ }
+    try {
+      const { invalidateAgentApiKeyCache } = await import('../lib/agent-auth.js');
+      invalidateAgentApiKeyCache();
+    } catch { /* best-effort */ }
   }
 };
 

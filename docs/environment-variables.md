@@ -263,7 +263,8 @@ Webhooks include an `X-Webhook-Signature` header with an HMAC-SHA256 hash of the
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `REDIS_URL` | Redis connection string | — | Reserved. There is currently no Redis client in the backend (`REDIS_URL` is never read); Redis runs in Compose but is inert. Leave as Compose sets it. Example: `redis://:password@localhost:6379/0`. |
+| `REDIS_URL` | Redis connection string | Compose default | Shared cache/coordination (config cache, invalidations, realtime fan-out, locks, rate limits, idempotency). Optional: when unset or unreachable the backend degrades to Postgres + process-local state. `REDIS_ENABLED=false` forces degraded mode. Example: `redis://:password@localhost:6379/0`. See `docs/redis.md`. |
+| `REDIS_ENABLED` | `true` \| `false` | `true` | Set to `false` to disable Redis even when `REDIS_URL` is set (single-process fallback). |
 
 ### Performance & Scaling
 

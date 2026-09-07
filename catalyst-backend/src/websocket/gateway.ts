@@ -20,6 +20,7 @@ import { normalizeHostIp } from "../utils/ipam";
 import { captureSystemError } from "../services/error-logger";
 import { injectPterodactylCompatibilityVars } from "../utils/pterodactyl-env.js";
 import { getSecuritySettings, maxUploadBytesFromMb } from "../services/mailer";
+import { publishFanout, subscribeFanout, type FanoutEvent } from "../lib/event-bus.js";
 
 /**
  * Simple capped Map that evicts the oldest entries when max size is reached.
@@ -257,6 +258,15 @@ export class WebSocketGateway {
   // Cache server access lists to avoid DB query on every routeToClients call.
   // Refreshed every 30 seconds per server.
   private serverAccessCache = new CappedMap<string, { allowedUsers: Set<string>; expiresAt: number }>(5000);
+
+  /** Drop a cached server access list after grant/revoke/transfer/user-delete. */
+  invalidateServerAccess(serverId?: string): void {
+    if (!serverId) {
+      this.serverAccessCache.clear();
+      return;
+    }
+    this.serverAccessCache.delete(serverId);
+  }
   private latestResourceStats = new CappedMap<string, Record<string, unknown>>(5000);
   private static readonly SERVER_ACCESS_TTL_MS = 30_000;
   private serverConsoleBytes = new Map<string, { count: number; resetAt: number }>();
@@ -665,6 +675,29 @@ export class WebSocketGateway {
     this.refreshConsoleLimits().catch((err) =>
       this.logger.warn({ err }, "Failed to load console rate limits")
     );
+    // Cross-instance fan-out is best-effort: without Redis every instance
+    // only reaches its own local subscribers (single-process behavior).
+    subscribeFanout((event) => this.deliverRemoteFanout(event)).catch(() => {
+      // Degraded mode — local delivery still works
+    });
+  }
+
+  /**
+   * Deliver a fan-out event received from another backend instance.
+   * Local subscriber maps are the last hop; never republish to Redis here.
+   */
+  private async deliverRemoteFanout(event: FanoutEvent & { origin: string }): Promise<void> {
+    try {
+      if (event.scope === 'server' && event.serverId) {
+        await this.deliverToLocalSubscribers(event.serverId, event.payload);
+      } else if (event.scope === 'global') {
+        this.deliverToLocalGlobalSubscribers(event.eventType, event.payload);
+      } else if (event.scope === 'admin') {
+        this.deliverToLocalAdminSubscribers(event.eventType, event.payload);
+      }
+    } catch (err) {
+      this.logger.debug({ err }, "Remote fan-out delivery failed");
+    }
   }
 
   private async refreshConsoleLimits() {
@@ -3511,6 +3544,83 @@ export class WebSocketGateway {
         try { sub.push(eventType, eventData); } catch { /* ignore */ }
       }
     }
+
+    publishFanout({ scope: 'server', serverId, eventType, payload: messageToSend });
+  }
+
+  private async deliverToLocalSubscribers(serverId: string, message: unknown): Promise<void> {
+    const msg = message as { type?: string };
+    const eventType = typeof msg?.type === 'string' ? msg.type : 'message';
+    await this.deliverServerFanoutLocally(serverId, eventType, message);
+  }
+
+  private deliverToLocalGlobalSubscribers(eventType: string, data: unknown): void {
+    const eventData = JSON.stringify(data);
+    const payloadServerId =
+      data && typeof data === 'object' && typeof (data as { serverId?: unknown }).serverId === 'string'
+        ? ((data as { serverId: string }).serverId)
+        : undefined;
+    for (const [, sub] of this.globalSseSubscribers) {
+      if (!sub.eventTypes.includes(eventType)) continue;
+      if (payloadServerId && sub.serverIds && !sub.serverIds.has(payloadServerId)) continue;
+      sub.lastActivity = Date.now();
+      try {
+        sub.push(eventType, eventData);
+      } catch { /* ignore */ }
+    }
+  }
+
+  private deliverToLocalAdminSubscribers(eventType: string, data: unknown): void {
+    const eventData = JSON.stringify(data);
+    for (const [, sub] of this.adminEventSubscribers) {
+      if (sub.eventTypes.includes(eventType)) {
+        sub.lastActivity = Date.now();
+        try {
+          sub.push(eventType, eventData);
+        } catch { /* ignore */ }
+      }
+    }
+  }
+
+  /** Unified remote delivery for server-scoped events (access-checked). */
+  private async deliverServerFanoutLocally(serverId: string, eventType: string, payload: unknown): Promise<void> {
+    const server = await this.prisma.server.findUnique({
+      where: { id: serverId },
+      include: { access: { select: { userId: true } } },
+    });
+    if (!server) return;
+    const allowedUsers = new Set([server.ownerId, ...server.access.map((a) => a.userId)]);
+    const data = JSON.stringify(payload);
+    for (const [, client] of this.clients) {
+      if (!client.subscriptions.has(serverId)) continue;
+      if (!allowedUsers.has(client.userId)) continue;
+      if (client.socket.readyState === 1) {
+        try { client.socket.send(data); } catch { /* ignore */ }
+      }
+    }
+    const sseEventSubs = this.sseEventSubscribers.get(serverId);
+    if (sseEventSubs) {
+      for (const [, sub] of sseEventSubs) {
+        if (!sub.eventTypes.includes(eventType)) continue;
+        sub.lastActivity = Date.now();
+        try { sub.push(eventType, data); } catch { /* ignore */ }
+      }
+    }
+    for (const [, sub] of this.globalSseSubscribers) {
+      if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
+      if (!sub.eventTypes.includes(eventType)) continue;
+      sub.lastActivity = Date.now();
+      try { sub.push(eventType, data); } catch { /* ignore */ }
+    }
+    if (eventType === 'console_output' || eventType === 'eula_required' || eventType === 'error' || eventType === 'connected') {
+      const sseSubs = this.sseSubscribers.get(serverId);
+      if (sseSubs) {
+        for (const [, sub] of sseSubs) {
+          sub.lastActivity = Date.now();
+          try { sub.push(eventType, data); } catch { /* ignore */ }
+        }
+      }
+    }
   }
 
   /**
@@ -3544,6 +3654,7 @@ export class WebSocketGateway {
         // subscriber connection closed — will be cleaned up
       }
     }
+    publishFanout({ scope: 'global', eventType, payload: data });
   }
 
 
@@ -3563,6 +3674,7 @@ export class WebSocketGateway {
         }
       }
     }
+    publishFanout({ scope: 'admin', eventType, payload: data });
   }
 
   /**
@@ -3622,45 +3734,46 @@ export class WebSocketGateway {
       }
     }
 
+    const msgType = message.type;
+
+    // Console SSE subscribers only need console_output, eula_required, error, and connected.
+    // Skip high-frequency non-console events (resource_stats, server_state_update, etc.)
+    // to avoid flooding the SSE connection with irrelevant data.
+    if (
+      msgType !== 'console_output' &&
+      msgType !== 'eula_required' &&
+      msgType !== 'error' &&
+      msgType !== 'connected'
+    ) {
+      return;
+    }
+
+    const event = msgType === 'console_output'
+      ? 'console_output'
+      : msgType === 'error'
+        ? 'error'
+        : msgType === 'eula_required'
+          ? 'eula_required'
+          : 'message';
+
+    const payload = event === 'message'
+      ? { ...sanitizedMessage }
+      : {
+        serverId: message.serverId,
+        stream: message.stream ?? 'stdout',
+        data: (sanitizedMessage as any).data ?? '',
+        timestamp: message.timestamp ?? new Date().toISOString(),
+        type: message.type,
+        logId: message.logId ?? message.id ?? undefined,
+        eulaText: message.eulaText,
+        eulaServerUuid: message.serverUuid,
+        error: message.error,
+      };
+    const eventData = JSON.stringify(payload);
+
     // Also push to SSE subscribers (HTTP/2 streaming)
     const sseSubs = this.sseSubscribers.get(serverId);
     if (sseSubs) {
-      const msgType = message.type;
-
-      // Console SSE subscribers only need console_output, eula_required, error, and connected.
-      // Skip high-frequency non-console events (resource_stats, server_state_update, etc.)
-      // to avoid flooding the SSE connection with irrelevant data.
-      if (
-        msgType !== 'console_output' &&
-        msgType !== 'eula_required' &&
-        msgType !== 'error' &&
-        msgType !== 'connected'
-      ) {
-        return;
-      }
-
-      const event = msgType === 'console_output'
-        ? 'console_output'
-        : msgType === 'error'
-          ? 'error'
-          : msgType === 'eula_required'
-            ? 'eula_required'
-            : 'message';
-
-      const eventData = event === 'message'
-        ? JSON.stringify(message)
-        : JSON.stringify({
-          serverId: message.serverId,
-          stream: message.stream ?? 'stdout',
-          data: message.data ?? '',
-          timestamp: message.timestamp ?? new Date().toISOString(),
-          type: message.type,
-          logId: message.logId ?? message.id ?? undefined,
-          eulaText: message.eulaText,
-          eulaServerUuid: message.serverUuid,
-          error: message.error,
-        });
-
       for (const [, sub] of sseSubs) {
         sub.lastActivity = Date.now();
         try {
@@ -3670,6 +3783,9 @@ export class WebSocketGateway {
         }
       }
     }
+    // Always fan out so viewers on other instances receive console output
+    // even when this instance has no local SSE subscribers.
+    publishFanout({ scope: 'server', serverId, eventType: event, payload });
   }
 
   // ── SSE Subscriber Management ────────────────────────────────────────────────

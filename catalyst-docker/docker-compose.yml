@@ -45,7 +45,34 @@ services:
     restart: unless-stopped
     # SECURITY: enforce the generated REDIS_PASSWORD instead of running an
     # unauthenticated redis (the .env generator creates the credential).
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    # ROLE: ephemeral cache + coordination (pub/sub, locks, rate limits,
+    # idempotency). NOT a persistent queue: no AOF/RDB, no volume — cached
+    # data is reconstructible from Postgres and all callers fall back to the
+    # database when Redis is down. maxmemory + allkeys-lru bounds a buggy
+    # writer so Redis can evict cold cache keys instead of OOMing the host.
+    # Locks/presence/idempotency keys always carry short TTLs and tolerate
+    # eviction (callers re-acquire or fall back to DB guards).
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --appendonly
+      - "no"
+      - --save
+      - ""
+      - --maxclients
+      - "500"
+      - --timeout
+      - "0"
+      - --tcp-keepalive
+      - "60"
+      - --client-output-buffer-limit
+      - normal 0 0 0 replica 256mb 64mb 60 pubsub 32mb 8mb 60""
+    mem_limit: 512m
     ports:
       - "${REDIS_PORT:-127.0.0.1:6379}:6379"
     healthcheck:
@@ -56,6 +83,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     environment:
       REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
 
@@ -69,8 +97,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+    # Redis is intentionally NOT a startup dependency: the backend degrades
+    # to Postgres + process-local state when Redis is down, so a Redis
+    # crash-loop must never take the API down with it at (re)start.
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       TZ: ${TZ:-UTC}
@@ -87,8 +116,8 @@ services:
       # characters, URL-encode them in a full DATABASE_URL override instead.
       DATABASE_URL: postgresql://catalyst:${POSTGRES_PASSWORD}@postgres:5432/catalyst_db
 
-      # Redis
-      # NOTE: no Redis client exists in the backend yet — kept for future use.
+      # Redis (optional shared cache/coordination; backend degrades to
+      # Postgres + process-local state when REDIS_URL is unset/unreachable).
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
 
       # Auth / Security

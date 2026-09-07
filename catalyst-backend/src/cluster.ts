@@ -33,8 +33,9 @@ if (cluster.isWorker && process.env.CATALYST_BACKGROUND_JOB_OWNER === '1') {
  *     forked worker; by PID so replacements after a crash inherit the role)
  *
  * Process-local caches (agent-auth, permissions, admin-user, node-access):
- * There is no Redis. Invalidations are broadcast across workers via the
- * cluster IPC bus in `lib/cache-bus.ts`. Primary relays worker→worker.
+ * Invalidations are broadcast across workers via the cluster IPC bus in
+ * `lib/cache-bus.ts` and additionally via Redis pub/sub when REDIS_URL is
+ * set, so multi-host backends stay coherent. Primary relays worker→worker.
  * Brute-force account lockouts and IP rate limits are stored in Postgres
  * (User + AuthLockout) so they are inherently multi-worker-safe.
  *
@@ -54,7 +55,7 @@ export function bootstrapCluster(mainFn: () => Promise<void>) {
     console.warn(
       `[cluster] Primary ${process.pid} forking ${workers} worker(s). ` +
         `Background jobs will run only on the tracked background-job worker. ` +
-        `Cache invalidations use cluster IPC (no Redis).`,
+        `Cache invalidations use cluster IPC with Redis pub/sub across hosts.`,
     );
     if (workers > 1) {
       // Agent WebSocket sessions and requestFromAgent pending maps are

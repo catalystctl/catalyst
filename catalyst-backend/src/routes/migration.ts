@@ -209,6 +209,19 @@ export async function migrationRoutes(app: FastifyInstance) {
         return;
       }
 
+      // Re-check under the assumption that a concurrent creator may have
+      // just inserted: if another active job appeared, fail closed with 409.
+      const recheck = await prisma.migrationJob.findFirst({
+        where: { status: { in: ["pending", "running", "validating"] } },
+      });
+      if (recheck) {
+        reply.status(409).send({
+          error: "A migration is already in progress",
+          jobId: recheck.id,
+        });
+        return;
+      }
+
       // Create migration job with a bypass token for file-tunnel size limits
       const bypassToken = randomUUID();
       // Encrypt source API key at rest when BACKUP_CREDENTIALS_ENCRYPTION_KEY is set;
@@ -240,6 +253,22 @@ export async function migrationRoutes(app: FastifyInstance) {
           },
         },
       });
+
+      // Post-hoc race guard: two concurrent creators can both pass the
+      // pre-checks. If more than one active job exists, the newer one loses.
+      const rivals = await prisma.migrationJob.findMany({
+        where: { status: { in: ["pending", "running", "validating"] } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+      if (rivals.length > 1 && rivals[0].id !== job.id) {
+        await prisma.migrationJob.delete({ where: { id: job.id } }).catch(() => {});
+        reply.status(409).send({
+          error: "A migration is already in progress",
+          jobId: rivals[0].id,
+        });
+        return;
+      }
 
       // Notify admin SSE subscribers immediately so Migration UI updates without poll.
       try {
