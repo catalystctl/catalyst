@@ -99,6 +99,7 @@ nano .env
 |---|---|---|
 | `PASSKEY_RP_ID` | `localhost` | Set to hostname from `PUBLIC_URL` for passkeys |
 | `FRONTEND_PORT` | `0.0.0.0:8080` | Change to `127.0.0.1:8080` to block external access |
+| `PORT` | `80` | Nginx listen port inside the frontend container (same mechanism as the backend's `PORT`). Advanced use — to move the panel for users, change `FRONTEND_PORT` instead. |
 | `BACKEND_PORT` | `127.0.0.1:3000` | Change to `127.0.0.1:3000` for localhost-only API |
 
 > SFTP is served by the node agent (default port `2022`), not by this compose stack.
@@ -432,6 +433,32 @@ ss -tlnp | grep :3000
 FRONTEND_PORT=0.0.0.0:8081
 BACKEND_PORT=127.0.0.1:3001
 ```
+
+> **Internal vs external frontend port:** `FRONTEND_PORT` changes the host
+> port users visit. The nginx port *inside* the container is `PORT` (default
+> 80, backend-style env var) — Compose publishes `"FRONTEND_HOST:PORT"`, and
+> the Caddy/Traefik overlays follow `PORT` automatically. Only change `PORT`
+> for advanced setups (e.g. a proxy you own targets a nonstandard container
+> port); it does not affect which port users type into the browser.
+
+### Customizing the nginx configuration (advanced)
+
+The frontend container renders its nginx config from a template at startup
+(`/etc/nginx/templates/default.conf.template` → `/etc/nginx/conf.d/default.conf`,
+with `${PORT}` substituted). To customize further, don't edit the running
+container — copy `catalyst-docker/nginx/default.conf.template`, edit the copy,
+and point an override file at it:
+
+```yaml
+# docker-compose.override.yml
+services:
+  frontend:
+    volumes:
+      - ./nginx/my-default.conf.template:/etc/nginx/templates/default.conf.template:ro
+```
+
+Then `docker compose up -d`. Verify your render with:
+`docker compose exec frontend grep listen /etc/nginx/conf.d/default.conf`
 
 ### Database connection issues
 

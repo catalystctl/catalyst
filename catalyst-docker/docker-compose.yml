@@ -240,6 +240,12 @@ services:
 
   # ===========================================================================
   # Frontend (Nginx)
+  # PORT = port nginx listens on inside the container (backend-style env var).
+  # FRONTEND_PORT = host publish "<host-ip>:<host-port>" only. Compose injects
+  # the container side (${PORT:-80}) automatically, so the two are independent:
+  #   • Move the panel for users → change FRONTEND_PORT's left side (or PORT)
+  #   • Change the internal nginx listen port → change PORT (rarely needed)
+  # The Caddy/Traefik overlays read the same PORT variable.
   # ===========================================================================
   frontend:
     image: ghcr.io/catalystctl/catalyst-frontend:latest
@@ -248,10 +254,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    environment:
+      PORT: ${PORT:-80}
     ports:
-      - "${FRONTEND_PORT:-0.0.0.0:80}:80"
+      - "${FRONTEND_PORT:-0.0.0.0:80}:${PORT:-80}"
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
 
 volumes:
   catalyst-postgres-data:

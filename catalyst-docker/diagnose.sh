@@ -241,7 +241,9 @@ collect "config: required vars present? (names only, no values)" bash -c 'for k 
 collect_file "config: docker-compose.yml" "$COMPOSE_DIR/docker-compose.yml"
 collect_file "config: docker-compose.caddy.yml" "$COMPOSE_DIR/docker-compose.caddy.yml"
 collect_file "config: docker-compose.traefik.yml" "$COMPOSE_DIR/docker-compose.traefik.yml"
-collect_file "config: nginx/default.conf" "$COMPOSE_DIR/nginx/default.conf"
+# Older installs have nginx/default.conf; newer ones the .template variant.
+collect_file "config: nginx/default.conf.template" "$COMPOSE_DIR/nginx/default.conf.template"
+collect_file "config: nginx/default.conf (pre-template install)" "$COMPOSE_DIR/nginx/default.conf"
 collect_file "config: caddy/Caddyfile" "$COMPOSE_DIR/caddy/Caddyfile"
 collect_file "config: traefik/traefik.yml" "$COMPOSE_DIR/traefik/traefik.yml"
 
@@ -250,6 +252,15 @@ PUBLIC_URL="$(grep '^PUBLIC_URL=' "$COMPOSE_DIR/.env" 2>/dev/null | head -1 | cu
 collect "health: backend /health (localhost:3000)" bash -c 'curl -fsS -m 10 http://localhost:3000/health 2>&1 || echo "backend :3000/health unreachable from this host"'
 collect "health: backend via PUBLIC_URL" bash -c 'if [ -n "'"$PUBLIC_URL"'" ]; then curl -fsS -m 10 "'"${PUBLIC_URL}"'/health" 2>&1 || curl -fsS -m 10 "'"${PUBLIC_URL}"'/api/health" 2>&1 || echo "PUBLIC_URL health check failed"; else echo "(no PUBLIC_URL in .env)" ; fi'
 collect "health: frontend (localhost:8080 + :80)" bash -c 'curl -sS -o /dev/null -m 10 -w "8080 -> %{http_code}\n" http://localhost:8080/ 2>&1; curl -sS -o /dev/null -m 10 -w "80 -> %{http_code}\n" http://localhost:80/ 2>&1 || true'
+# Frontend internal port: configured (PORT in .env) vs actually rendered
+# (listen directive) vs running (nginx in the container).
+collect "frontend: internal PORT (env/rendered/running)" bash -c '
+PORT_ENV="$(grep -E "^PORT=" "'"$COMPOSE_DIR"'/.env" 2>/dev/null | head -1 | cut -d= -f2-)"
+echo "PORT in .env: ${PORT_ENV:-<unset, compose default 80>}"
+RENDERED="$(docker exec catalyst-frontend sh -c "grep -m1 \"listen \" /etc/nginx/conf.d/default.conf" 2>/dev/null | grep -oE "[0-9]+" | head -1)"
+[ -n "$RENDERED" ] || RENDERED="$(podman exec catalyst-frontend sh -c "grep -m1 \"listen \" /etc/nginx/conf.d/default.conf" 2>/dev/null | grep -oE "[0-9]+" | head -1)"
+echo "rendered listen port in container: ${RENDERED:-<frontend container not found or nginx down>}"
+'
 if [[ -z "$COMPOSE_CMD" ]]; then
     sec "health: postgres pg_isready"
     echo "(no compose command found)" >> "$BUNDLE"

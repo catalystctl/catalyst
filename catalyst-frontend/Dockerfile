@@ -53,12 +53,18 @@ FROM nginx:alpine
 # Remove default config
 RUN rm /etc/nginx/conf.d/default.conf
 
-# Copy nginx config (proxies /api, /auth, /ws, /docs to backend)
-COPY catalyst-frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# Default internal listen port; overridable at runtime via the PORT env var.
+ENV PORT=80
+
+# Copy nginx config (proxies /api, /auth, /ws, /docs to backend).
+# Installed as a template: the nginx image's entrypoint renders
+# /etc/nginx/templates/*.template with envsubst, substituting ${PORT}
+# from the environment (backend-style PORT env var, defaults to 80).
+COPY catalyst-frontend/nginx.conf /etc/nginx/templates/default.conf.template
 
 # Copy built assets
 COPY --from=build /app/catalyst-frontend/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE ${PORT}
 
 CMD ["nginx", "-g", "daemon off;"]

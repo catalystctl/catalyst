@@ -3,5 +3,5 @@
 # Everything else (TLS, HTTP→HTTPS redirect, OCSP) is automatic.
 
 {$DOMAIN} {
-	reverse_proxy frontend:80
+	reverse_proxy frontend:{$PORT:80}
 }

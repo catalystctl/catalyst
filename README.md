@@ -73,6 +73,7 @@ All configuration lives in `.env`. The install script generates it automatically
 | `POSTGRES_PASSWORD` | ✅ | auto-generated | PostgreSQL password |
 | `BETTER_AUTH_SECRET` | ✅ | auto-generated | Session encryption key |
 | `FRONTEND_PORT` | | `0.0.0.0:8080` | Panel port |
+| `PORT` | | `80` | Port nginx listens on inside the frontend container (advanced; `FRONTEND_PORT` is what users need) |
 | `BACKEND_PORT` | | `127.0.0.1:3000` | API port (localhost-only by default) |
 
 > SFTP is served by the node agent (default port `2022`), not by the Docker stack.

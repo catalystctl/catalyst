@@ -31,7 +31,7 @@ services:
       - "traefik.http.routers.frontend.rule=Host(`${DOMAIN:?DOMAIN is required when using the Traefik overlay}`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.services.frontend.loadbalancer.server.port=${PORT:-80}"
       # HTTP → HTTPS redirect
       - "traefik.http.routers.frontend-http.rule=Host(`${DOMAIN:?DOMAIN is required when using the Traefik overlay}`)"
       - "traefik.http.routers.frontend-http.entrypoints=web"

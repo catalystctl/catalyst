@@ -40,6 +40,9 @@ services:
       DOMAIN: ${DOMAIN:?DOMAIN is required when using the Caddy overlay}
       # Optional: email for Let's Encrypt expiry notifications
       ACME_EMAIL: ${ACME_EMAIL:-}
+      # Internal nginx port of the frontend service (must match PORT in .env;
+      # see docker-compose.yml frontend service).
+      PORT: ${PORT:-80}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

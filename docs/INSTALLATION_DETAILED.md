@@ -230,7 +230,7 @@ podman compose up -d
 | `docker-compose.caddy.yml` | Caddy TLS reverse proxy overlay |
 | `docker-compose.traefik.yml` | Traefik TLS reverse proxy overlay |
 | `.env.example` | Template with all variables documented |
-| `nginx/default.conf` | Nginx configuration for the frontend |
+| `nginx/default.conf.template` | Nginx configuration template for the frontend (`${PORT}` is substituted at container startup) |
 | `caddy/Caddyfile` | Caddy configuration (used by Caddy overlay) |
 | `traefik/traefik.yml` | Traefik static configuration |
 
@@ -602,7 +602,7 @@ Caddy automatically obtains and renews Let's Encrypt certificates with zero conf
 
 ```caddy
 {$DOMAIN}
-reverse_proxy frontend:80
+reverse_proxy frontend:{$PORT:80}
 ```
 
 That's the entire configuration. Caddy handles:
