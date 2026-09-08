@@ -359,6 +359,10 @@ keeping your `.env` (and any `docker-compose.override.yml`) untouched:
 bash update.sh            # or: bash update.sh --dry-run to preview
 ```
 
+Same thing via the installer (works even when this directory predates
+`update.sh` — it fetches the script first): `bash install.sh --update`
+run from the directory *above* this one.
+
 `update.sh` backs up your current files first (undo:
 `bash update.sh --restore <backup-dir>`), applies known file renames, and
 appends any new `.env` variables from `.env.example` with their defaults
