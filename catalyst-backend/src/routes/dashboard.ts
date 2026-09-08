@@ -1,8 +1,17 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { SimpleCache } from '../lib/cache.js';
 
-let dashboardCache: { data: any; timestamp: number; key: string } | null = null;
-const CACHE_TTL = 10_000; // 10 seconds
+// Per-viewer+permission-shape cache (10s TTL). A single-entry slot thrashed
+// to 0% hit rate with two alternating users; a capped multi-entry map keeps
+// every dashboard viewer's poll on-cache.
+const dashboardCache = new SimpleCache<string, any>(10_000, 200);
+
+// /resources aggregates are fleet-global (identical for every viewer) and
+// polled every 30s per open dashboard. A shared 10s cache turns N viewers
+// into ~1 query set per interval instead of N.
+let resourcesCache: { data: any; timestamp: number } | null = null;
+const RESOURCES_CACHE_TTL = 10_000;
 
 function buildCacheKey(user: any): string {
   const perms: string[] = user?.permissions ?? [];
@@ -20,8 +29,9 @@ export async function dashboardRoutes(app: FastifyInstance) {
       const user = request.user;
       const cacheKey = buildCacheKey(user);
 
-      if (dashboardCache && dashboardCache.key === cacheKey && Date.now() - dashboardCache.timestamp < CACHE_TTL) {
-        return reply.send({ data: dashboardCache.data });
+      const cachedStats = dashboardCache.get(cacheKey);
+      if (cachedStats !== undefined) {
+        return reply.send({ data: cachedStats });
       }
 
       const perms: string[] = user?.permissions ?? [];
@@ -86,7 +96,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         alertsUnacknowledged,
       };
 
-      dashboardCache = { data, timestamp: Date.now(), key: cacheKey };
+      dashboardCache.set(cacheKey, data);
 
       return reply.send({ data });
     }
@@ -153,6 +163,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
         });
       }
 
+      if (resourcesCache && Date.now() - resourcesCache.timestamp < RESOURCES_CACHE_TTL) {
+        return reply.send({ data: resourcesCache.data });
+      }
+
       // Get nodes with their latest resource usage metrics.
       const nodes = await prisma.node.findMany({
         where: { isOnline: true },
@@ -202,13 +216,14 @@ export async function dashboardRoutes(app: FastifyInstance) {
       const runningServers = await prisma.server.count({ where: { status: 'running' } });
       const networkThroughput = Math.min(100, runningServers * 5); // Placeholder calculation
 
-      return reply.send({
-        data: {
-          cpuUtilization,
-          memoryUtilization,
-          networkThroughput,
-        },
-      });
+      const payload = {
+        cpuUtilization,
+        memoryUtilization,
+        networkThroughput,
+      };
+      resourcesCache = { data: payload, timestamp: Date.now() };
+
+      return reply.send({ data: payload });
     }
   );
 }

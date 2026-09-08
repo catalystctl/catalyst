@@ -18,6 +18,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { Permission } from "../shared-types";
 import { SimpleCache } from "./cache";
 import { broadcastCacheInvalidate, onCacheInvalidate } from "./cache-bus";
+import { registerCacheStats } from "./cache";
 
 // 30-second TTL cache for isAdminUser results
 const adminUserCache = new SimpleCache<string, boolean>(30_000);
@@ -26,6 +27,10 @@ const adminUserCache = new SimpleCache<string, boolean>(30_000);
 // TTL of 30s balances freshness with query reduction.
 const nodeAccessCache = new SimpleCache<string, boolean>(30_000);
 const userAccessibleNodesCache = new SimpleCache<string, { nodeIds: string[]; hasWildcard: boolean }>(30_000);
+
+registerCacheStats('permissions.adminUser', () => adminUserCache.stats());
+registerCacheStats('permissions.nodeAccess', () => nodeAccessCache.stats());
+registerCacheStats('permissions.accessibleNodes', () => userAccessibleNodesCache.stats());
 
 /** Local-only clear (no broadcast) — used by IPC receivers. */
 function clearAdminUserCacheLocal(userId?: string): void {
@@ -271,25 +276,14 @@ export async function getUserPermissions(
   prisma: PrismaClient,
   userId: string
 ): Promise<Set<string>> {
-  const userRoles = await prisma.role.findMany({
-    where: {
-      users: {
-        some: { id: userId },
-      },
-    },
-    select: {
-      permissions: true,
-    },
-  });
-
-  const allPermissions = new Set<string>();
-  for (const role of userRoles) {
-    for (const perm of role.permissions) {
-      allPermissions.add(perm);
-    }
-  }
-
-  return allPermissions;
+  // Delegate to the cached catalog resolver (30s TTL with invalidation on
+  // role mutations) instead of running an uncached role query per request.
+  // The caller's prisma is passed through so tests/embedders can inject a
+  // client; the resolver's cache is keyed per user so a foreign client
+  // cannot poison another caller's entries.
+  // Lazy import avoids a cycle with permissions-catalog.ts.
+  const { resolveUserPermissionsWithClient } = await import('./permissions-catalog.js');
+  return new Set(await resolveUserPermissionsWithClient(prisma, userId));
 }
 
 /**
@@ -726,6 +720,16 @@ export async function hasNodeAccess(
 }
 
 /**
+ * Cache TTL clamped to a node assignment's expiry (min 1s, max 30s) so an
+ * expiring grant cannot stay effective for the full cache TTL.
+ */
+function assignmentTtlMs(expiresAt?: Date | string | null): number {
+  if (!expiresAt) return 30_000;
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  return Math.max(1000, Math.min(30_000, ms));
+}
+
+/**
  * Get all nodes accessible to a user
  * Includes nodes from direct assignments and role assignments
  * Wildcard assignments grant access to all nodes
@@ -756,6 +760,9 @@ export async function getUserAccessibleNodes(
   const now = new Date();
   const accessibleNodeIds = new Set<string>();
   const hasWildcard = false;
+  // The whole cached result must expire no later than the soonest expiring
+  // assignment that contributed to it.
+  let minTtlMs = 30_000;
 
   // Check for wildcard assignment for user
   const userWildcard = await prisma.nodeAssignment.findFirst({
@@ -767,6 +774,7 @@ export async function getUserAccessibleNodes(
         { expiresAt: { gt: now } },
       ],
     },
+    select: { expiresAt: true },
   });
 
   if (userWildcard) {
@@ -775,7 +783,8 @@ export async function getUserAccessibleNodes(
       select: { id: true },
     });
     const result = { nodeIds: allNodes.map((n) => n.id), hasWildcard: true };
-    userAccessibleNodesCache.set(cacheKey, result);
+    minTtlMs = Math.min(minTtlMs, assignmentTtlMs(userWildcard.expiresAt));
+    userAccessibleNodesCache.set(cacheKey, result, minTtlMs);
     return result;
   }
 
@@ -789,13 +798,14 @@ export async function getUserAccessibleNodes(
         { expiresAt: { gt: now } },
       ],
     },
-    select: { nodeId: true },
+    select: { nodeId: true, expiresAt: true },
   });
 
   for (const assignment of userAssignments) {
     if (assignment.nodeId) {
       accessibleNodeIds.add(assignment.nodeId);
     }
+    minTtlMs = Math.min(minTtlMs, assignmentTtlMs(assignment.expiresAt));
   }
 
   // Get role-based assignments
@@ -821,6 +831,7 @@ export async function getUserAccessibleNodes(
           { expiresAt: { gt: now } },
         ],
       },
+      select: { expiresAt: true },
     });
 
     if (roleWildcard) {
@@ -829,7 +840,8 @@ export async function getUserAccessibleNodes(
         select: { id: true },
       });
       const result = { nodeIds: allNodes.map((n) => n.id), hasWildcard: true };
-      userAccessibleNodesCache.set(cacheKey, result);
+      minTtlMs = Math.min(minTtlMs, assignmentTtlMs(roleWildcard.expiresAt));
+      userAccessibleNodesCache.set(cacheKey, result, minTtlMs);
       return result;
     }
 
@@ -842,18 +854,19 @@ export async function getUserAccessibleNodes(
           { expiresAt: { gt: now } },
         ],
       },
-      select: { nodeId: true },
+      select: { nodeId: true, expiresAt: true },
     });
 
     for (const assignment of roleAssignments) {
       if (assignment.nodeId) {
         accessibleNodeIds.add(assignment.nodeId);
       }
+      minTtlMs = Math.min(minTtlMs, assignmentTtlMs(assignment.expiresAt));
     }
   }
 
   const result = { nodeIds: Array.from(accessibleNodeIds), hasWildcard };
-  userAccessibleNodesCache.set(cacheKey, result);
+  userAccessibleNodesCache.set(cacheKey, result, minTtlMs);
   return result;
 }
 

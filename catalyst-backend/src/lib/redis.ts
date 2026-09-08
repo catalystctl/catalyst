@@ -27,6 +27,7 @@ type Pending = {
 type RedisUrlParts = {
   host: string;
   port: number;
+  username?: string;
   password?: string;
   db: number;
   tls: boolean;
@@ -36,10 +37,14 @@ function parseRedisUrl(raw: string): RedisUrlParts {
   const url = new URL(raw);
   const tlsOn = url.protocol === 'rediss:';
   const db = Number(url.pathname?.replace('/', '') || '0') || 0;
+  const username = url.username && url.username !== 'default'
+    ? decodeURIComponent(url.username)
+    : undefined;
   const password = url.password ? decodeURIComponent(url.password) : undefined;
   return {
     host: url.hostname || '127.0.0.1',
     port: Number(url.port || '6379'),
+    username,
     password,
     db,
     tls: tlsOn,
@@ -111,6 +116,8 @@ const COMMAND_TIMEOUT_MS = 2500;
 const MAX_BACKOFF_MS = 30_000;
 const CIRCUIT_FAILURES = 5;
 const CIRCUIT_COOLDOWN_MS = 10_000;
+/** Failure events are emitted (logged/alerted) at most this often. */
+const FAILURE_LOG_WINDOW_MS = 30_000;
 
 export class CatalystRedis {
   private parts: RedisUrlParts;
@@ -124,6 +131,14 @@ export class CatalystRedis {
   private backoffMs = 500;
   private closed = false;
   private connectPromise: Promise<void> | null = null;
+  /** In-flight dial shared by concurrent commands/reconnects. */
+  private connecting: Promise<void> | null = null;
+  /** In-flight subscriber dial shared by concurrent subscribe() calls. */
+  private subConnecting: Promise<void> | null = null;
+  /** Last recordFailure log time — Redis failures are logged at most once per window. */
+  private lastFailureLogAt = 0;
+  /** Hook for structured observability (circuit opens, sustained failures). */
+  failureEventSink: ((event: 'failure' | 'circuit-open') => void) | null = null;
 
   commandsTotal = 0;
   errorsTotal = 0;
@@ -153,6 +168,10 @@ export class CatalystRedis {
     return this.status;
   }
 
+  isClosed(): boolean {
+    return this.closed;
+  }
+
   async connect(): Promise<void> {
     if (this.connectPromise) return this.connectPromise;
     this.connectPromise = this.dial(false).then(() => undefined);
@@ -173,6 +192,9 @@ export class CatalystRedis {
       const sock: net.Socket = useTls
         ? tls.connect({ host: this.parts.host, port: this.parts.port } as tls.ConnectionOptions) as unknown as net.Socket
         : net.createConnection({ host: this.parts.host, port: this.parts.port });
+      // Client-side keepalive: detects half-open peers (NAT idle drops) on
+      // split-host deployments where the server-side probe may not reach us.
+      sock.setKeepAlive(true, 30_000);
       const timer = setTimeout(() => {
         try { sock.destroy(); } catch { /* ignore */ }
         reject(new Error('Redis connect timeout'));
@@ -191,6 +213,14 @@ export class CatalystRedis {
     });
   }
 
+  private authArgs(): Array<string | number> {
+    // ACL-style AUTH [username] password; falls back to AUTH password for
+    // classic requirepass-only instances.
+    return this.parts.username
+      ? ['AUTH', this.parts.username, this.parts.password ?? '']
+      : ['AUTH', this.parts.password ?? ''];
+  }
+
   private async ensureConnected(): Promise<void> {
     if (this.closed) throw new Error('Redis client closed');
     if (Date.now() < this.circuitOpenUntil) {
@@ -198,6 +228,18 @@ export class CatalystRedis {
       throw new Error('Redis circuit open (recent failures)');
     }
     if (this.socket && !this.socket.destroyed && this.status === 'ready') return;
+    // Single-flight: concurrent commands during a reconnect share one dial
+    // instead of each opening (and leaking) its own socket.
+    if (this.connecting) return this.connecting;
+    this.connecting = this.doConnect();
+    try {
+      await this.connecting;
+    } finally {
+      this.connecting = null;
+    }
+  }
+
+  private async doConnect(): Promise<void> {
     this.status = 'connecting';
     try {
       const sock = await this.dial(false);
@@ -205,7 +247,7 @@ export class CatalystRedis {
       this.parser = new RespParser();
       this.attach(sock, false);
       if (this.parts.password) {
-        await this.raw('AUTH', this.parts.password);
+        await this.raw(...this.authArgs());
       }
       if (this.parts.db) {
         await this.raw('SELECT', String(this.parts.db));
@@ -214,20 +256,36 @@ export class CatalystRedis {
       this.connectedAt = new Date().toISOString();
       this.backoffMs = 500;
       this.consecutiveFailures = 0;
+      // First healthy data connection after boot/degradation: recover a
+      // subscriber subscription that failed while Redis was down. Without
+      // this, cross-instance fan-out stays dead for the process lifetime.
+      if (this.subChannels.length > 0 && (!this.subSocket || this.subSocket.destroyed)) {
+        void this.resubscribe();
+      }
     } catch (err) {
       this.status = 'degraded';
-      this.recordFailure(err);
       throw err;
     }
   }
 
   private attach(sock: net.Socket, isSubscriber: boolean): void {
     sock.on('data', (chunk: Buffer) => {
-      if (isSubscriber) {
-        for (const msg of this.subParser.feed(chunk)) this.handlePush(msg);
+      // A protocol desync leaves the parser buffer wedged (every subsequent
+      // chunk would re-throw at the same offset) — destroy the socket so a
+      // clean reconnect replaces silently-dropped replies.
+      let msgs: unknown[];
+      try {
+        msgs = isSubscriber ? this.subParser.feed(chunk) : this.parser.feed(chunk);
+      } catch {
+        this.recordFailure(new Error('Redis protocol desync'));
+        try { sock.destroy(); } catch { /* ignore */ }
         return;
       }
-      for (const msg of this.parser.feed(chunk)) {
+      if (isSubscriber) {
+        for (const msg of msgs) this.handlePush(msg);
+        return;
+      }
+      for (const msg of msgs) {
         const pending = this.queue.shift();
         if (!pending) continue;
         clearTimeout(pending.timer);
@@ -235,13 +293,16 @@ export class CatalystRedis {
         else pending.resolve(msg);
       }
     });
+    // Per-command failures are counted in command(); counting here too would
+    // double-count one failure. Subscriber failures have no command wrapper.
     sock.on('error', (err) => {
-      this.recordFailure(err);
-      if (!isSubscriber) {
-        this.status = 'degraded';
-        this.socket = null;
-        this.failQueue(err);
+      if (isSubscriber) {
+        this.recordFailure(err);
+        return;
       }
+      this.status = 'degraded';
+      this.socket = null;
+      this.failQueue(err);
     });
     sock.on('close', () => {
       if (!isSubscriber) {
@@ -277,14 +338,37 @@ export class CatalystRedis {
 
   private recordFailure(err: unknown): void {
     this.errorsTotal += 1;
-    this.consecutiveFailures += 1;
     const message = err instanceof Error ? err.message : String(err);
     this.lastError = message.slice(0, 300);
+    // During circuit-open cooldown rejections are fast-fails without fresh
+    // evidence; counting them would let the first failure after cooldown
+    // instantly re-open the circuit.
+    if (Date.now() < this.circuitOpenUntil) return;
+    this.consecutiveFailures += 1;
     if (this.consecutiveFailures >= CIRCUIT_FAILURES) {
       this.circuitOpenUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
       this.consecutiveFailures = 0;
       this.circuitOpensTotal += 1;
+      this.emitFailureEvent('circuit-open');
+    } else {
+      this.emitFailureEvent('failure');
     }
+  }
+
+  /**
+   * Emit a failure event at most once per FAILURE_LOG_WINDOW_MS so a Redis
+   * outage produces a bounded number of log/system-error records instead of
+   * one per request.
+   */
+  private emitFailureEvent(event: 'failure' | 'circuit-open'): void {
+    const now = Date.now();
+    const sink = this.failureEventSink;
+    if (!sink) return;
+    if (event === 'failure' && now - this.lastFailureLogAt < FAILURE_LOG_WINDOW_MS) return;
+    this.lastFailureLogAt = now;
+    try {
+      sink(event);
+    } catch { /* observability must not throw into the data path */ }
   }
 
   private async scheduleReconnect(): Promise<void> {
@@ -444,12 +528,25 @@ export class CatalystRedis {
 
   private async ensureSubscriber(): Promise<void> {
     if (this.subSocket && !this.subSocket.destroyed) return;
+    // Single-flight: concurrent subscribe() calls (fanout + cache
+    // invalidations at boot) must share one dial instead of leaking a
+    // duplicate subscriber socket and interleaving two parsers.
+    if (this.subConnecting) return this.subConnecting;
+    this.subConnecting = this.doConnectSubscriber();
+    try {
+      await this.subConnecting;
+    } finally {
+      this.subConnecting = null;
+    }
+  }
+
+  private async doConnectSubscriber(): Promise<void> {
     const sock = await this.dial(true);
     this.subSocket = sock;
     this.subParser = new RespParser();
     this.attach(sock, true);
     if (this.parts.password) {
-      await this.subCommand('AUTH', this.parts.password);
+      await this.subCommand(...this.authArgs());
     }
     if (this.parts.db) {
       await this.subCommand('SELECT', String(this.parts.db));
@@ -558,7 +655,15 @@ export function isRedisConfigured(): boolean {
 /** Singleton client, or null when Redis is disabled (degraded mode). */
 export function getRedis(): CatalystRedis | null {
   const url = getRedisUrl();
-  if (!url) return null;
+  if (!url) {
+    // Runtime kill switch: drop the live singleton so its sockets and
+    // reconnect loop do not outlive the disabled state.
+    if (singleton && !singleton.isClosed()) {
+      void singleton.quit();
+    }
+    singleton = null;
+    return null;
+  }
   if (!singleton) {
     singleton = new CatalystRedis(url);
   }

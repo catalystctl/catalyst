@@ -6,6 +6,7 @@ import net from 'net';
 import { renderAlertEmail, sendEmail } from './mailer';
 import { captureSystemError } from '../services/error-logger';
 import { getWsGateway } from '../websocket/gateway';
+import { withDistributedLock } from '../lib/distributed-lock';
 
 interface AlertConditions {
   cpuThreshold?: number;
@@ -38,7 +39,10 @@ export class AlertService {
   async start() {
     this.logger.info('Starting alert service...');
 
-    // Check for alert conditions every 30 seconds
+    // Check for alert conditions every 30 seconds. The distributed lock
+    // deduplicates the tick across backend hosts/instances when Redis is up
+    // (losers skip this cycle and retry in 30s); without Redis, each host
+    // runs it as before (single-process semantics).
     this.checkInterval = setInterval(() => {
       this.evaluateAlerts().catch((err) => {
         captureSystemError({ level: 'error', component: 'AlertService', message: 'Failed to evaluate alerts', stack: err?.stack }).catch(() => {});
@@ -69,14 +73,25 @@ export class AlertService {
    */
   async evaluateAlerts() {
     try {
-      const rules = await this.prisma.alertRule.findMany({
-        where: { enabled: true },
-      });
+      // Cross-host singleton: only one backend instance evaluates alerts per
+      // cycle when Redis is available. The TTL bounds the tick (25s) so a
+      // crashed holder cannot wedge future cycles.
+      await withDistributedLock('alert-evaluation-tick', 25_000, async () => {
+        const rules = await this.prisma.alertRule.findMany({
+          where: { enabled: true },
+        });
 
-      for (const rule of rules) {
-        await this.evaluateRule(rule);
-      }
+        for (const rule of rules) {
+          await this.evaluateRule(rule);
+        }
+      }, 0);
     } catch (error) {
+      // Lock contention ("already held") is expected under multi-host
+      // deployment — another instance owns this cycle.
+      if (error instanceof Error && error.message.includes('already held')) {
+        this.logger.debug('Alert evaluation skipped: another instance holds the cycle lock');
+        return;
+      }
       captureSystemError({ level: 'error', component: 'AlertService', message: 'Failed to evaluate alerts', stack: error instanceof Error ? error.stack : undefined }).catch(() => {});
       this.logger.error(error, 'Failed to evaluate alerts');
     }
@@ -607,7 +622,10 @@ export class AlertService {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
           redirect: 'manual',
-        });
+          // A hanging webhook target must not stall the sequential alert
+          // loop for every subsequent rule.
+          signal: AbortSignal.timeout(10_000),
+        } as any);
         if (response.status >= 300 && response.status < 400) {
           const location = response.headers.get('location');
           if (!location) break;
@@ -759,7 +777,8 @@ export class AlertService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      });
+        signal: AbortSignal.timeout(10_000),
+      } as any);
       if (!response.ok) {
         const body = await response.text();
         throw new Error(`Webhook response ${response.status}: ${body}`);

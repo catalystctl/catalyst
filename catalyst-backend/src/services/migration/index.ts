@@ -139,7 +139,12 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
     this.activeJobs.set(jobId, activeFlag);
 
     try {
-      await state.startJob(jobId);
+      // Atomic claim — a second instance attempting the same start loses
+      // this claim and aborts instead of running the phases concurrently.
+      const claimed = await state.startJob(jobId);
+      if (!claimed) {
+        throw new Error("Migration already running");
+      }
       this.logger.info({ jobId, url: job.sourceUrl }, "Starting migration");
 
       // Create client — decrypt source keys if they were encrypted at rest.
@@ -1003,10 +1008,17 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
               },
             });
             if (existingAlloc) {
-              await this.prisma.nodeAllocation.update({
-                where: { id: existingAlloc.id },
+              // Atomic claim: only link if still unassigned. The prior
+              // read-then-update let two concurrent migrations both link the
+              // same allocation (duplicate port assignment).
+              const claimed = await this.prisma.nodeAllocation.updateMany({
+                where: { id: existingAlloc.id, serverId: null },
                 data: { serverId: targetId },
               });
+              if (claimed.count === 0) {
+                // Lost the race — allocation went to another server.
+                continue;
+              }
             } else {
               // No pre-existing allocation — create one with the allocation IP
               // from the primary port's allocation (same subnet)

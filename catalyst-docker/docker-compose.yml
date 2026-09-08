@@ -40,7 +40,7 @@ services:
   # Redis
   # ===========================================================================
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     container_name: catalyst-redis
     restart: unless-stopped
     # SECURITY: enforce the generated REDIS_PASSWORD instead of running an
@@ -70,8 +70,20 @@ services:
       - "0"
       - --tcp-keepalive
       - "60"
+      # Pubsub buffer caps: a flooding publisher cannot OOM the container via
+      # slow subscribers. Values: (hard limit bytes, soft limit bytes, seconds
+      # of sustained soft-limit overflow before disconnect).
       - --client-output-buffer-limit
-      - normal 0 0 0 replica 256mb 64mb 60 pubsub 32mb 8mb 60""
+      - normal 0 0 0 replica 256mb 64mb 60 pubsub 32mb 8mb 60
+      # Ephemeral cache workload: allkeys-lru eviction and constant 5-45s key
+      # churn are the designed steady state. Lazyfree moves deallocation of
+      # evicted/expired values off the single-threaded main loop so eviction
+      # bursts do not add tail latency to cache/pubsub commands. No durability
+      # interactions (no AOF/RDB by design).
+      - --lazyfree-lazy-eviction
+      - "yes"
+      - --lazyfree-lazy-expire
+      - "yes"
     mem_limit: 512m
     ports:
       - "${REDIS_PORT:-127.0.0.1:6379}:6379"

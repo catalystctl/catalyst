@@ -3,6 +3,12 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient } from "@prisma/client";
 import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
+import { SimpleCache } from '../lib/cache.js';
+
+// History payloads are polled every 30s per open server tab and each miss
+// scans up to 10k metric rows. TTL matches the poll cadence (time-series
+// data: TTL-only, no invalidation possible).
+const metricsHistoryCache = new SimpleCache<string, unknown>(10_000, 500);
 
 export async function metricsRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -23,6 +29,17 @@ export async function metricsRoutes(app: FastifyInstance) {
       const hoursBack = Number.isFinite(parsedHours) ? Math.min(Math.max(parsedHours, 1), 168) : 1;
       const maxRecords = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 1000) : 100;
       const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
+
+      // Cache key is serverId + requested window (authz is checked below the
+      // shared fetch, so a cache hit can never bypass permission checks).
+      const cacheKey = `${serverId}:${hoursBack}h:${maxRecords}`;
+      const cached = metricsHistoryCache.get(cacheKey);
+      if (cached !== undefined) {
+        return reply.send(serialize({
+          success: true,
+          data: cached,
+        }));
+      }
 
       // Run ALL queries in parallel - server, metrics, and access all at once
       const queryStart = Date.now();
@@ -238,14 +255,17 @@ export async function metricsRoutes(app: FastifyInstance) {
       const totalTime = Date.now() - startTime;
       app.log.info({ serverId, totalMs: totalTime }, "Total metrics endpoint time");
 
+      const payload = {
+        latest,
+        averages: avg,
+        history: normalizedMetrics, // chronological
+        count: normalizedMetrics.length,
+      };
+      metricsHistoryCache.set(cacheKey, payload);
+
       reply.send(serialize({
         success: true,
-        data: {
-          latest,
-          averages: avg,
-          history: normalizedMetrics, // chronological
-          count: normalizedMetrics.length,
-        },
+        data: payload,
       }));
     }
   );

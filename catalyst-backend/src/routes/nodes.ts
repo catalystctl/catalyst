@@ -44,6 +44,7 @@ import {
 	getNodeAssignments,
 	assignNode,
 	removeNodeAssignment,
+	invalidateNodeAccessCache,
 } from "../lib/permissions";
 
 const ensurePermission = (
@@ -294,6 +295,10 @@ export async function nodeRoutes(app: FastifyInstance) {
 					cpuOverallocatePercent: validatedCpuOverallocatePercent,
 				},
 			});
+
+			// A new node changes wildcard-assignment reachability — evict
+			// node-access caches so accessible-node lists include it now.
+			invalidateNodeAccessCache();
 
 			// Log warning about wildcard node assignments if any exist
 			const wildcardAssignments = await prisma.nodeAssignment.findMany({

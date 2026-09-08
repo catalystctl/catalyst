@@ -463,7 +463,7 @@ curl http://localhost:3000/health
 
 # Check individual service health
 docker compose exec postgres pg_isready -U catalyst -d catalyst_db
-docker compose exec redis redis-cli -a "$REDIS_PASSWORD" ping
+docker compose exec redis redis-cli --no-auth-warning ping
 ```
 
 ---

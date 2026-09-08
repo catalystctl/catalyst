@@ -94,3 +94,112 @@ export async function subscribeFanout(
     fanoutSubscribed = false;
   }
 }
+
+// ── Agent command relay ─────────────────────────────────────────────────────
+// An agent WebSocket lives in exactly one backend process. Without a relay,
+// a control command (start/stop/console input) landing on a sibling instance
+// is queued in that instance's local outbox and silently expires.
+//
+// Delivery uses an acknowledge handshake so the caller never claims success
+// without a socket owner actually receiving the command:
+//   publisher → toAgent {relayId, nodeId, message} → socket owner delivers
+//   socket owner → toAgentReply {relayId} → publisher resolves
+// The PUBLISH receiver count distinguishes "no sibling subscribed" (count 1
+// = this instance only) from "a sibling exists" (count ≥ 2): in the former
+// case the caller falls back to its local outbox immediately, preserving
+// single-instance replay-on-reconnect semantics.
+
+export type AgentCommandEnvelope = {
+  origin: string;
+  nodeId: string;
+  relayId: string;
+  message: unknown;
+};
+
+const AGENT_COMMAND_ACK_WAIT_MS = 250;
+
+const agentCommandHandlers = new Set<(nodeId: string, relayId: string, message: unknown) => void>();
+const pendingAgentCommandAcks = new Map<string, () => void>();
+let agentCommandsSubscribed = false;
+
+export type AgentCommandRelayResult = 'delivered' | 'no-subscribers' | 'timeout';
+
+/**
+ * Publish an agent command for delivery by the instance that owns the socket.
+ * Resolves 'delivered' only when some instance acknowledged local delivery.
+ */
+export async function publishAgentCommand(nodeId: string, message: unknown): Promise<AgentCommandRelayResult> {
+  const redis = getRedis();
+  if (!redis) return 'no-subscribers';
+  try {
+    const relayId = randomUUID();
+    const envelope = JSON.stringify({
+      origin: instanceId,
+      nodeId,
+      relayId,
+      message,
+    } satisfies AgentCommandEnvelope);
+    const receivers = await redis.publish(RedisChannels.toAgent(), envelope);
+    if (receivers <= 1) {
+      // Only this instance is subscribed (or Redis has no subscribers at
+      // all) — no sibling can own the socket.
+      return 'no-subscribers';
+    }
+    return await new Promise<AgentCommandRelayResult>((resolve) => {
+      const timer = setTimeout(() => {
+        pendingAgentCommandAcks.delete(relayId);
+        resolve('timeout');
+      }, AGENT_COMMAND_ACK_WAIT_MS);
+      pendingAgentCommandAcks.set(relayId, () => {
+        clearTimeout(timer);
+        resolve('delivered');
+      });
+    });
+  } catch {
+    return 'no-subscribers';
+  }
+}
+
+/** Register to receive agent commands published by sibling instances. */
+export async function subscribeAgentCommand(
+  deliver: (nodeId: string, relayId: string, message: unknown) => void,
+): Promise<void> {
+  agentCommandHandlers.add(deliver);
+  if (agentCommandsSubscribed) return;
+  const redis = getRedis();
+  if (!redis) return;
+  agentCommandsSubscribed = true;
+  try {
+    await redis.subscribe(RedisChannels.toAgent(), (raw) => {
+      try {
+        const parsed = JSON.parse(raw) as AgentCommandEnvelope;
+        if (!parsed || typeof parsed.nodeId !== 'string' || parsed.origin === instanceId) return;
+        for (const fn of agentCommandHandlers) {
+          try { fn(parsed.nodeId, parsed.relayId, parsed.message); } catch { /* ignore */ }
+        }
+      } catch { /* malformed remote message */ }
+    });
+    await redis.subscribe(RedisChannels.toAgentReply(), (raw) => {
+      try {
+        const parsed = JSON.parse(raw) as { relayId?: string };
+        if (!parsed?.relayId) return;
+        const ack = pendingAgentCommandAcks.get(parsed.relayId);
+        if (ack) {
+          pendingAgentCommandAcks.delete(parsed.relayId);
+          ack();
+        }
+      } catch { /* malformed remote message */ }
+    });
+  } catch {
+    agentCommandsSubscribed = false;
+  }
+}
+
+/** Acknowledge a relayed command after successful local delivery. */
+export function acknowledgeAgentCommand(relayId: string): void {
+  const redis = getRedis();
+  if (!redis) return;
+  redis
+    .publish(RedisChannels.toAgentReply(), JSON.stringify({ relayId, origin: instanceId }))
+    .catch(() => { /* best-effort */ });
+}

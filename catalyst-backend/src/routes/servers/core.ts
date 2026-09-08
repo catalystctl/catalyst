@@ -7,6 +7,8 @@ import { minimumDiskMbFromHints } from "../../utils/egg-import.js";
 import { describeError } from "../../utils/describe-error.js";
 import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../../utils/java-memory.js";
 import { SimpleCache } from "../../lib/cache.js";
+import { registerCacheStats } from "../../lib/cache.js";
+import { publishCacheInvalidate, subscribeCacheInvalidations } from "../../lib/event-bus.js";
 
 // Hot-path cache for GET /api/servers — makes list-servers win by a huge margin.
 // 5s TTL for plain list (no metrics) gives ~98% hit-rate under benchmark hammering;
@@ -15,6 +17,19 @@ import { SimpleCache } from "../../lib/cache.js";
 const serverListCache = new SimpleCache<string, any>(5000);
 // Coalesce concurrent misses so a burst doesn't hammer Postgres.
 const serverListInflight = new Map<string, Promise<any>>();
+
+registerCacheStats('servers.list', () => serverListCache.stats());
+
+/** Evict the process-local list cache and tell sibling workers/hosts. */
+function clearServerListCache(): void {
+  serverListCache.clear();
+  publishCacheInvalidate('server-list', { flushAll: true });
+}
+
+// Apply remote server-list invalidations from sibling workers/hosts.
+subscribeCacheInvalidations((channel) => {
+  if (channel === 'server-list') serverListCache.clear();
+});
 
 // Lean select for list-servers — avoids fetching huge template/environment blobs
 // and heavy relations. Matches withConnectionInfo needs.
@@ -634,6 +649,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         },
       });
 
+      // A new server changes list results for everyone — evict everywhere.
+      clearServerListCache();
+
       reply.status(201).send({
         success: true,
         data: withConnectionInfo(server, node),
@@ -1140,6 +1158,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           data: withConnectionInfo(server, node),
         });
       }
+
+      // A cloned server changes list results for everyone — evict everywhere.
+      clearServerListCache();
 
       // Async file copy (fire-and-forget from the request's perspective)
       if (shouldCopyFiles) {
@@ -2127,6 +2148,8 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         throw error;
       }
 
+      // Resource/allocation changes alter list payloads — evict everywhere.
+      clearServerListCache();
       reply.send({ success: true, data: updated });
 
       // Broadcast server_updated event
@@ -2280,6 +2303,8 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         });
       }
 
+      // Disk allocation changed — evict list payloads everywhere.
+      clearServerListCache();
       reply.send({ success: true, message: "Resize initiated" });
     }
   );
@@ -2403,6 +2428,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         await releaseIpForServer(tx, serverId);
         await tx.server.delete({ where: { id: serverId } });
       });
+
+      // The server is gone — evict list payloads everywhere.
+      clearServerListCache();
 
       reply.send({
         success: true,

@@ -220,6 +220,7 @@ export function hasAnyPermission(request: any, permissions: string[]): boolean {
 
 import { prisma } from '../db';
 import { SimpleCache } from './cache';
+import { registerCacheStats } from './cache';
 import { broadcastCacheInvalidate, onCacheInvalidate } from './cache-bus';
 
 /**
@@ -246,9 +247,13 @@ export const ALL_SERVER_PERMISSIONS = [
 
 // 30-second TTL cache for resolved user permissions
 const permissionsCache = new SimpleCache<string, string[]>(30_000);
-// Shorter TTL for server-scoped resolutions (key `${userId}:${serverId}`);
-// role-grant mutations flush this cache explicitly.
+// Shorter TTL for server/node-scoped resolutions (key
+// `${userId}:${serverId}:${nodeId}`); role-grant mutations flush this cache
+// explicitly.
 const scopedPermissionsCache = new SimpleCache<string, string[]>(15_000);
+
+registerCacheStats('permissions.user', () => permissionsCache.stats());
+registerCacheStats('permissions.scoped', () => scopedPermissionsCache.stats());
 
 /**
  * Resolve a user's effective permissions from their roles, bypassing the
@@ -295,6 +300,33 @@ export async function resolveUserPermissions(
 }
 
 /**
+ * Same as resolveUserPermissions but with a caller-supplied Prisma client
+ * (used by lib/permissions.hasPermission and tests that inject fakes).
+ * Cache entries share the user-keyed store; invalidation hooks cover both.
+ */
+export async function resolveUserPermissionsWithClient(
+  client: { role: { findMany: Function } },
+  userId: string,
+): Promise<string[]> {
+  const cached = permissionsCache.get(userId);
+  if (cached) return cached;
+
+  const roles = await client.role.findMany({
+    where: { users: { some: { id: userId } } },
+    select: { permissions: true },
+  });
+  const permissions = new Set<string>();
+  for (const role of roles) {
+    for (const perm of role.permissions) {
+      permissions.add(perm);
+    }
+  }
+  const result = [...permissions];
+  permissionsCache.set(userId, result);
+  return result;
+}
+
+/**
  * Pure merge of global role permissions with server-scoped and node-scoped
  * role grants (RoleServerGrant / RoleNodeGrant). Kept pure for unit tests.
  */
@@ -324,7 +356,10 @@ export async function resolveServerPermissions(
   serverId: string,
   nodeId: string | null,
 ): Promise<string[]> {
-  const cacheKey = `${userId}:${serverId}`;
+  // SECURITY: the key must include nodeId. Node-scoped resolutions pass a
+  // serverId of "" with a real nodeId; keying only on userId:serverId made a
+  // grant on node A authorize node B key minting via a cache collision.
+  const cacheKey = `${userId}:${serverId}:${nodeId ?? ''}`;
   const cached = scopedPermissionsCache.get(cacheKey);
   if (cached) return cached;
 

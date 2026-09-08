@@ -22,6 +22,8 @@ export type RateLimitDecision = {
   remaining: number;
   resetMs: number;
   limited: boolean;
+  /** Raw counter value within the current window (for store adapters). */
+  count: number;
 };
 
 type MemoryEntry = { count: number; resetAt: number };
@@ -38,7 +40,7 @@ function memoryConsume(key: string, max: number, windowMs: number): RateLimitDec
         if (now >= v.resetAt) memoryBuckets.delete(k);
       }
     }
-    return { allowed: 1 <= max, remaining: Math.max(0, max - 1), resetMs: windowMs, limited: 1 > max };
+    return { allowed: 1 <= max, remaining: Math.max(0, max - 1), resetMs: windowMs, limited: 1 > max, count: 1 };
   }
   entry.count += 1;
   const resetMs = Math.max(0, entry.resetAt - now);
@@ -47,6 +49,7 @@ function memoryConsume(key: string, max: number, windowMs: number): RateLimitDec
     remaining: Math.max(0, max - entry.count),
     resetMs,
     limited: entry.count > max,
+    count: entry.count,
   };
 }
 
@@ -72,6 +75,7 @@ export async function checkRateLimit(
       remaining: Math.max(0, safeMax - count),
       resetMs: Number.isFinite(ttl) && ttl >= 0 ? ttl : safeWindow,
       limited: count > safeMax,
+      count,
     };
   } catch {
     return memoryConsume(`${scope}:${id}:${windowId}`, safeMax, safeWindow);

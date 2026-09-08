@@ -42,13 +42,21 @@ export type CacheInvalidateChannel =
   | 'admin-user'
   | 'node-access'
   | 'config'
-  | 'sftp';
+  | 'sftp'
+  | 'template'
+  | 'server-list'
+  | 'server-access'
+  | 'apikey';
 
 export type CacheInvalidatePayload = {
   /** Optional node id for agent-auth scoped invalidation */
   nodeId?: string;
   /** Optional user id for permissions / admin-user scoped invalidation */
   userId?: string;
+  /** Optional server id for server-access scoped invalidation */
+  serverId?: string;
+  /** Optional API key hash prefix for apikey scoped invalidation */
+  keyHash?: string;
   /** When true, flush the entire cache for the channel */
   flushAll?: boolean;
 };

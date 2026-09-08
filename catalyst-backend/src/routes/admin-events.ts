@@ -121,11 +121,13 @@ export function adminEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGate
       };
 
       // Subscribe to all admin event types
-      const unsubscribe = wsGateway.addAdminEventSubscriber(ADMIN_EVENT_TYPES, push);
+      const { unsubscribe, touch } = wsGateway.addAdminEventSubscriber(ADMIN_EVENT_TYPES, push);
 
       const heartbeatTimer = setInterval(() => {
         try {
           sse.comment('heartbeat');
+          // Keep the gateway subscriber alive while the browser stream lives.
+          touch();
         } catch {
           clearInterval(heartbeatTimer);
         }

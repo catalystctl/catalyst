@@ -3,6 +3,7 @@ import { prisma } from "../../db.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { allocateIpForServer, canAccessServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, OWNER_SERVER_PERMISSIONS, path, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
+import { publishCacheInvalidate } from "../../lib/event-bus.js";
 import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../../utils/java-memory.js";
 
 export async function serverAdminopsRoutes(app: FastifyInstance) {
@@ -848,6 +849,12 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
 
       // Broadcast server_updated event (ownership transfer)
       const wsGatewayOwnership = (app as any).wsGateway;
+      // SECURITY: the previous owner must stop receiving console/stream
+      // fan-out immediately, not when the 30s access cache expires.
+      wsGatewayOwnership?.invalidateServerAccess?.(serverId);
+      try {
+        publishCacheInvalidate('server-access', { serverId });
+      } catch { /* degraded */ }
       if (wsGatewayOwnership?.pushToAdminSubscribers) {
         wsGatewayOwnership.pushToAdminSubscribers('server_updated', {
           type: 'server_updated',

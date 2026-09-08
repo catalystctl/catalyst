@@ -18,6 +18,8 @@ import { captureSystemError } from "./error-logger";
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const STUCK_BACKUP_STATE_INTERVAL_MS = parseInt(process.env.STUCK_BACKUP_STATE_INTERVAL_MS ?? "", 10) || 120_000;
 const STUCK_BACKUP_STATE_TIMEOUT_MS = parseInt(process.env.STUCK_BACKUP_STATE_TIMEOUT_MS ?? "", 10) || 900_000;
+/** TRANSFERRING/CLONING watchdog window (default 60 min). */
+const STUCK_TRANSFER_STATE_TIMEOUT_MS = parseInt(process.env.STUCK_TRANSFER_STATE_TIMEOUT_MS ?? "", 10) || 3_600_000;
 
 export function startBackupRetention(
   prisma: PrismaClient,
@@ -196,12 +198,18 @@ export function startStuckBackupStateWatchdog(
 async function cleanupStuckBackupStates(prisma: PrismaClient, logger: pino.Logger, gateway?: WebSocketGateway) {
   const timeoutMs = STUCK_BACKUP_STATE_TIMEOUT_MS;
   const cutoff = new Date(Date.now() - timeoutMs);
+  // TRANSFERRING/CLONING get a much longer window: transfers legitimately run
+  // for tens of minutes on large servers, and a backend crash mid-transfer
+  // otherwise wedges the server permanently (no start/stop/delete/restore).
+  const transferCutoff = new Date(Date.now() - STUCK_TRANSFER_STATE_TIMEOUT_MS);
 
   const stuckServers = await prisma.server.findMany({
     where: {
       OR: [
         { status: ServerState.CREATING_BACKUP, updatedAt: { lt: cutoff } },
         { status: ServerState.RESTORING, updatedAt: { lt: cutoff } },
+        { status: ServerState.TRANSFERRING, updatedAt: { lt: transferCutoff } },
+        { status: ServerState.CLONING, updatedAt: { lt: transferCutoff } },
       ],
     },
     select: {

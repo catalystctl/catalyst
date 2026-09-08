@@ -7,6 +7,7 @@
 
 import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { flushPermissionsCache, invalidateUserPermissions } from '../lib/permissions-catalog';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { auth } from '../auth';
@@ -53,6 +54,13 @@ describe('RBAC - Permission Utilities', () => {
     let adminRole: { id: string };
     let moderatorRole: { id: string };
     let scopedRole: { id: string };
+
+    // These tests mutate role assignments directly via Prisma, bypassing
+    // the app-level mutation paths that invalidate the permission cache —
+    // clear it before every assertion-bearing test.
+    beforeEach(() => {
+      flushPermissionsCache();
+    });
 
     beforeAll(async () => {
       // Create test user
@@ -316,6 +324,10 @@ describe('RBAC - Permission Utilities', () => {
     let testUserId: string;
     let role1: { id: string };
     let role2: { id: string };
+
+    beforeEach(() => {
+      flushPermissionsCache();
+    });
 
     beforeAll(async () => {
       const user = await prisma.user.create({

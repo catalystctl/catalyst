@@ -149,11 +149,14 @@ export const getSmtpSettings = async (): Promise<SmtpSettings> => {
       maxMessages: null,
     };
   }
+  // SECURITY: the password is deliberately excluded from the cached payload
+  // (process-local L1 map and Redis L2 are not credential stores). It is
+  // fetched fresh per transport creation in createTransporter().
   return {
     host: settings.smtpHost,
     port: settings.smtpPort,
     username: settings.smtpUsername,
-    password: settings.smtpPassword,
+    password: null,
     from: settings.smtpFrom,
     replyTo: settings.smtpReplyTo,
     secure: settings.smtpSecure,
@@ -380,10 +383,15 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
   return result;
 };
 
-const createTransporter = (settings: SmtpSettings) => {
+const createTransporter = async (settings: SmtpSettings) => {
   if (!settings.host || !settings.port) {
     throw new Error('SMTP settings incomplete');
   }
+  // The password is never cached (see getSmtpSettings) — read it fresh so
+  // SMTP credentials live only in Postgres and the transport, not in any
+  // process-local or Redis cache.
+  const row = await prisma.systemSetting.findUnique({ where: { id: SMTP_SETTING_ID }, select: { smtpPassword: true } });
+  const password = row?.smtpPassword ?? null;
   return nodemailer.createTransport({
     host: settings.host,
     port: settings.port,
@@ -397,7 +405,7 @@ const createTransporter = (settings: SmtpSettings) => {
     socketTimeout: 15_000,
     maxConnections: settings.maxConnections ?? undefined,
     maxMessages: settings.maxMessages ?? undefined,
-    auth: settings.username && settings.password ? { user: settings.username, pass: settings.password } : undefined,
+    auth: settings.username && password ? { user: settings.username, pass: password } : undefined,
   } as any);
 };
 
@@ -418,7 +426,7 @@ export const sendEmail = async (payload: {
   text?: string;
 }) => {
   const settings = await getSmtpSettings();
-  const transporter = createTransporter(settings);
+  const transporter = await createTransporter(settings);
   const from = settings.from || settings.username || 'no-reply@catalyst.local';
   await transporter.sendMail({
     from,

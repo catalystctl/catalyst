@@ -5,6 +5,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import { z } from "zod";
 import { captureSystemError } from "../services/error-logger";
 import { withRegistrationBypass } from "../lib/registration-gate.js";
+import { invalidateConfig } from "../lib/config-cache.js";
 
 const setupSchema = z.object({
 	email: z.string().email("Invalid email format"),
@@ -520,6 +521,8 @@ export async function setupRoutes(app: FastifyInstance) {
 						metadata,
 					},
 				});
+				// Theme settings are cached for the public endpoint — evict.
+				await invalidateConfig("theme_default").catch(() => {});
 
 				// Disable open self-registration after first setup completes.
 				// Admins can re-enable via security settings or REGISTRATION_ENABLED=true.

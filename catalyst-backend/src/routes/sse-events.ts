@@ -231,7 +231,7 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       // For non-admins always pass an explicit list (may be empty). Only full
       // admins pass undefined (= unfiltered). Empty must NOT become unfiltered.
       const wasFirstSubscriber = !isGlobal && wsGateway.getSseEventSubscriberCount(serverId) === 0;
-      const unsubscribe = isGlobal
+      const { unsubscribe, touch } = isGlobal
         ? wsGateway.addGlobalSseSubscriber(
             EVENT_TYPES,
             push,
@@ -277,6 +277,9 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       const heartbeatTimer = setInterval(() => {
         try {
           sse.comment('heartbeat');
+          // Keep the gateway subscriber alive while the browser stream lives
+          // (otherwise the idle sweeper drops it after 300s of quiet).
+          touch();
         } catch {
           clearInterval(heartbeatTimer);
         }

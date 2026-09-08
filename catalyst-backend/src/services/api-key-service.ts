@@ -260,15 +260,19 @@ export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | nu
       apiKeyRecord.refillAmount &&
       elapsed >= apiKeyRecord.refillInterval
     ) {
+      // CAS-style refill: the update only lands if lastRefillAt is unchanged,
+      // so concurrent requests cannot each apply a full refill window.
       const refilled = Math.min(
         (apiKeyRecord.remaining ?? 0) + apiKeyRecord.refillAmount,
         apiKeyRecord.rateLimitMax,
       );
-      await prisma.apikey.update({
-        where: { id: apiKeyRecord.id },
+      const refillClaim = await prisma.apikey.updateMany({
+        where: { id: apiKeyRecord.id, lastRefillAt: apiKeyRecord.lastRefillAt ?? null },
         data: { remaining: refilled, lastRefillAt: now },
       });
-      apiKeyRecord.remaining = refilled;
+      if (refillClaim.count > 0) {
+        apiKeyRecord.remaining = refilled;
+      }
     }
 
     if ((apiKeyRecord.remaining ?? 0) <= 0) {

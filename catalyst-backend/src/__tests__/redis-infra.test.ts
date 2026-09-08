@@ -155,6 +155,8 @@ describe('Idempotency store', () => {
 describe('RBAC fast path (no N+1)', () => {
   it('hasAny/hasAll resolve with a single role fetch', async () => {
     const { hasAnyPermission, hasAllPermissions, hasPermission } = await import('../lib/permissions');
+    const { flushPermissionsCache } = await import('../lib/permissions-catalog');
+    flushPermissionsCache();
     let fetchCount = 0;
     const fakePrisma: any = {
       role: {
@@ -168,8 +170,9 @@ describe('RBAC fast path (no N+1)', () => {
     expect(await hasAnyPermission(fakePrisma, 'u1', ['server.delete', 'node.read'], 'node_1')).toBe(true);
     expect(await hasAllPermissions(fakePrisma, 'u1', ['server.read', 'node.read'], 'node_1')).toBe(true);
     expect(await hasAllPermissions(fakePrisma, 'u1', ['server.read', 'server.delete'])).toBe(false);
-    // One fetch per call (not one per permission checked)
-    expect(fetchCount).toBe(4);
+    // The delegated resolver caches per user: one DB fetch serves every
+    // call for the same user (previously one fetch per call).
+    expect(fetchCount).toBe(1);
   });
 
   it('pre-resolved permissions avoid DB entirely', async () => {

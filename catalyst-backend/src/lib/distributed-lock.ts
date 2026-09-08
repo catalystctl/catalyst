@@ -64,20 +64,37 @@ export async function acquireLock(
 }
 
 /**
- * Run `fn` under a Redis lock when Redis is available.
- * When Redis is unavailable the function still runs (single-process mode),
- * so callers must ensure the database also has an atomic guard for the
- * critical section (e.g. conditional updateMany). Returns fn's result.
+ * Run `fn` under a Redis lock when Redis is available. On contention the
+ * loser THROWS instead of running the critical section concurrently —
+ * silently running unguarded would defeat the lock's purpose.
+ *
+ * Degraded mode (Redis unavailable): the lock cannot be acquired, so `fn`
+ * still runs (single-process fallback), but callers MUST pair it with a
+ * database-side atomic guard (conditional updateMany / unique constraint)
+ * for correctness across instances.
+ *
+ * TTL caveat: there is no renewal. Keep the critical section well under
+ * ttlMs or the lock expires mid-flight and a second owner may enter.
  */
 export async function withDistributedLock<T>(
   name: string,
   ttlMs: number,
   fn: () => Promise<T>,
+  waitMs = 0,
 ): Promise<T> {
-  const lock = await acquireLock(name, ttlMs, 0);
+  const lock = await acquireLock(name, ttlMs, waitMs);
+  if (!lock) {
+    const redis = getRedis();
+    if (!redis) {
+      // Degraded mode — documented fallback: run without cross-instance
+      // exclusion and rely on the caller's DB-side guard.
+      return fn();
+    }
+    throw new Error(`Lock "${name}" already held`);
+  }
   try {
     return await fn();
   } finally {
-    if (lock) await lock.release();
+    await lock.release();
   }
 }

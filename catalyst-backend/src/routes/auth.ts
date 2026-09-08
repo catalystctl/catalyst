@@ -8,6 +8,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import { logAuthAttempt } from "../middleware/audit";
 import { serialize } from '../utils/serialize';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
+import { publishCacheInvalidate } from '../lib/event-bus';
 import {
   bruteForceProtection,
   handleFailedLogin,
@@ -770,6 +771,10 @@ export async function authRoutes(app: FastifyInstance) {
       if (wsGateway?.disconnectUser) {
         await wsGateway.disconnectUser(userId);
       }
+      // Drop the deleted user from every cached server-access allowlist
+      // (local + sibling workers/hosts), not just on TTL expiry.
+      try { wsGateway?.invalidateServerAccess?.(); } catch { /* ignore */ }
+      try { publishCacheInvalidate('server-access', { flushAll: true }); } catch { /* degraded */ }
 
       // Fire webhook
       const webhookService: any = (app as any).webhookService;

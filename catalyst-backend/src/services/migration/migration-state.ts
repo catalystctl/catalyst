@@ -131,21 +131,28 @@ export class MigrationStateManager {
     return job;
   }
 
-  async startJob(jobId: string) {
-    const job = await this.prisma.migrationJob.update({
-      where: { id: jobId },
+  async startJob(jobId: string): Promise<boolean> {
+    // Atomic claim: only transition a non-running job to running. Prevents
+    // two backend instances from both passing the check-then-act race and
+    // running every migration phase concurrently.
+    const claimed = await this.prisma.migrationJob.updateMany({
+      where: { id: jobId, status: { not: "running" } },
       data: {
         status: "running",
         startedAt: new Date(),
       },
     });
+    if (claimed.count === 0) {
+      return false;
+    }
+    const job = await this.prisma.migrationJob.findUnique({ where: { id: jobId } });
     emitAdminMigrationEvent("migration_job_updated", {
       jobId,
       status: "running",
-      currentPhase: job.currentPhase,
-      progress: job.progress,
+      currentPhase: job?.currentPhase,
+      progress: job?.progress,
     });
-    return job;
+    return true;
   }
 
   // ========================================================================

@@ -107,7 +107,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Create a backup
   app.post(
     "/:serverId/backups",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { name } = request.body as { name?: string };
@@ -172,7 +172,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // List backups for a server
   app.get(
     "/:serverId/backups",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { limit = "50", page = "1" } = request.query as {
@@ -260,7 +260,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Get a specific backup
   app.get(
     "/:serverId/backups/:backupId",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;
@@ -302,7 +302,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Restore from backup
   app.post(
     "/:serverId/backups/:backupId/restore",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;
@@ -444,7 +444,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Delete a backup
   app.delete(
     "/:serverId/backups/:backupId",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;
@@ -515,7 +515,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Download a backup
   app.get(
     "/:serverId/backups/:backupId/download",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;

@@ -30,6 +30,7 @@ services:
   redis:
     ports:
       - "${REDIS_PORT:-127.0.0.1:6379}:6379"
+    mem_limit: 512m
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     healthcheck:

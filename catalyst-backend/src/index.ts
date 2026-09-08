@@ -9,6 +9,7 @@ import crypto from "crypto";
 import fastifyWebsocket from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
 import fastifyRateLimit from "@fastify/rate-limit";
+import { RedisRateLimitStore } from "./lib/rate-limit-store";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyMultipart from "@fastify/multipart";
 import fastifySwagger from "@fastify/swagger";
@@ -22,6 +23,7 @@ import { setErrorLoggerGateway, captureSystemError } from "./services/error-logg
 import { mapHttpError } from "./lib/http-error";
 import { applyRemoteCacheInvalidate } from "./lib/cache-bus";
 import { subscribeCacheInvalidations } from "./lib/event-bus";
+import { cachedConfig } from "./lib/config-cache";
 import { closeRedis, getRedis, getRedisStats } from "./lib/redis";
 import { authRoutes } from "./routes/auth";
 import { nodeRoutes } from "./routes/nodes";
@@ -196,9 +198,33 @@ setErrorLoggerGateway(wsGateway);
 // Cross-host cache coherence: apply Redis invalidations locally (no-op without REDIS_URL).
 subscribeCacheInvalidations((channel, payload) => {
   applyRemoteCacheInvalidate(channel, payload);
+  // Keep the gateway's server-access allowlist coherent across workers/hosts:
+  // a revocation on instance A must not keep streaming on instance B for 30s.
+  if (channel === 'server-access') {
+    wsGateway.invalidateServerAccess(payload.flushAll ? undefined : payload.serverId);
+  }
 }).catch(() => { /* degraded mode */ });
 // Best-effort Redis connect so the first command does not pay dial latency.
 getRedis()?.connect().catch(() => { /* degraded mode */ });
+// Bounded observability for Redis outages: at most one warn log / SystemError
+// per 30s window (enforced by the client), plus a signal when the circuit opens.
+const redisClient = getRedis();
+if (redisClient) {
+  redisClient.failureEventSink = (event) => {
+    const message = event === 'circuit-open'
+      ? 'Redis circuit opened — degraded mode until it recovers'
+      : 'Redis failure — operating in degraded mode';
+    logger.warn({ component: 'Redis', event }, message);
+    if (event === 'circuit-open') {
+      void captureSystemError({
+        component: 'Redis',
+        level: 'warn',
+        message,
+        metadata: { stats: getRedisStats() },
+      });
+    }
+  };
+}
 const taskScheduler = new TaskScheduler(prisma, logger);
 const webhookService = new WebhookService(prisma, logger);
 const alertService = new AlertService(prisma, logger);
@@ -604,6 +630,10 @@ async function bootstrap() {
 			global: true,
 			max: fairMode ? 1_000_000 : 1200, // 1M/min in fair mode = effectively disabled; 1200 normal
 			timeWindow: "1 minute",
+			// Shared counters across workers/hosts via Redis (atomic INCR+PEXPIRE
+			// Lua); the store falls back to per-process memory when Redis is
+			// unavailable, so degraded mode keeps single-process behavior.
+			store: fairMode ? undefined : RedisRateLimitStore,
 			// In fair mode, never block on errors — ensure max throughput
 			skipOnError: !!fairMode,
 			errorResponseBuilder: (_req, context) => {
@@ -1744,32 +1774,32 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		});
 
 		// Public theme settings endpoint (unauthenticated, display fields only).
+		// The computed public payload is cached (L1 process-local + L2 Redis);
+		// the raw DB row is NOT cached because metadata holds OIDC secrets.
 		app.get("/api/theme-settings/public", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (_request, reply) => {
-			const settings = await prisma.themeSettings.findUnique({
-				where: { id: "default" },
-			});
+			const data = await cachedConfig("theme_default", async () => {
+				const settings = await prisma.themeSettings.findUnique({
+					where: { id: "default" },
+				});
 
-			// Return only public fields
-			const oidcMeta = (settings?.metadata as Record<string, any>) || {};
-			const oidcDb =
-				(oidcMeta.oidcProviders as Record<string, Record<string, string>>) ||
-				{};
-			const isProviderConfigured = (p: string) => {
-				const db = oidcDb[p];
-				return !!(
-					(db?.clientId || process.env[`${p.toUpperCase()}_OIDC_CLIENT_ID`]) &&
-					(db?.clientSecret ||
-						process.env[`${p.toUpperCase()}_OIDC_CLIENT_SECRET`]) &&
-					(db?.discoveryUrl ||
-						process.env[`${p.toUpperCase()}_OIDC_DISCOVERY_URL`])
-				);
-			};
-			const rawCss = typeof settings?.customCss === "string" ? settings.customCss : null;
+				// Return only public fields
+				const oidcMeta = (settings?.metadata as Record<string, any>) || {};
+				const oidcDb =
+					(oidcMeta.oidcProviders as Record<string, Record<string, string>>) ||
+					{};
+				const isProviderConfigured = (p: string) => {
+					const db = oidcDb[p];
+					return !!(
+						(db?.clientId || process.env[`${p.toUpperCase()}_OIDC_CLIENT_ID`]) &&
+						(db?.clientSecret ||
+							process.env[`${p.toUpperCase()}_OIDC_CLIENT_SECRET`]) &&
+						(db?.discoveryUrl ||
+							process.env[`${p.toUpperCase()}_OIDC_DISCOVERY_URL`])
+					);
+				};
+				const rawCss = typeof settings?.customCss === "string" ? settings.customCss : null;
 
-			reply.header("Cache-Control", "no-store");
-			reply.send({
-				success: true,
-				data: {
+				return {
 					panelName: settings?.panelName ?? "Catalyst",
 					logoUrl: settings?.logoUrl ?? null,
 					faviconUrl: settings?.faviconUrl ?? null,
@@ -1787,7 +1817,13 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					// Extended theme customization stored in metadata
 					themeColors: (settings?.metadata as any)?.themeColors || null,
 					customCss: rawCss && rawCss.length > 20000 ? rawCss.slice(0, 20000) : rawCss,
-				},
+				};
+			});
+
+			reply.header("Cache-Control", "no-store");
+			reply.send({
+				success: true,
+				data,
 			});
 		});
 

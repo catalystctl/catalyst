@@ -3,6 +3,7 @@ import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, canManageSubusers, captureSystemError, getEffectiveServerPermissions, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
 import { isMailConfigured } from '../../services/mailer.js';
+import { publishCacheInvalidate } from '../../lib/event-bus.js';
 import { withRegistrationBypass } from '../../lib/registration-gate.js';
 
 export async function serverInvitesRoutes(app: FastifyInstance) {
@@ -418,6 +419,11 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         data: { acceptedAt: new Date() },
       });
     });
+
+    // The new subuser should receive live console/stream data immediately,
+    // not after the 30s gateway access cache expires.
+    try { app.wsGateway?.invalidateServerAccess?.(invite.serverId); } catch { /* ignore */ }
+    try { publishCacheInvalidate('server-access', { serverId: invite.serverId }); } catch { /* degraded */ }
 
     await createAuditLog(args.userId, {
       action: "server.invite.accept",

@@ -6,11 +6,20 @@ import { githubRawFileUrl, githubRepoTreeUrl, parseGithubOwnerRepo } from "../li
 import { importPterodactylEgg as convertEgg, importPterodactylEggSafe, importPterodactylEggsBatch, convertStartupCommand, convertInstallScript, parseStopCommand } from "../utils/egg-import";
 import type { ImportError, ImportSafeResult, BatchImportResult, ImportedEggResult } from "../utils/egg-import";
 import { SimpleCache } from "../lib/cache.js";
+import { registerCacheStats } from "../lib/cache.js";
+import { publishCacheInvalidate, subscribeCacheInvalidations } from "../lib/event-bus.js";
 
 // Hot-path cache for GET /api/templates — 261 templates with large JSON blobs.
 // 10s TTL gives ~90% hit rate under benchmark hammering; coalesces burst.
 const templateListCache = new SimpleCache<string, any>(10000);
 const templateListInflight = new Map<string, Promise<any>>();
+
+// Process-local guard: only one batch egg import at a time (a full repo
+// takes minutes and burns the GitHub rate budget; overlaps double both).
+// Cross-instance duplication is bounded by the GitHub 403s failing the run.
+let batchImportInFlight = false;
+
+registerCacheStats('templates.list', () => templateListCache.stats());
 
 // Lean select for list: exclude heavy installScript for throughput,
 // but keep all fields required by TemplatesPage list view.
@@ -41,7 +50,15 @@ const templateListSelect = {
 
 function clearTemplateCache() {
   templateListCache.clear();
+  // Cross-worker/host coherence for the process-local list cache (contract
+  // documented in lib/cache.ts): local clear + broadcast to siblings.
+  publishCacheInvalidate('template', { flushAll: true });
 }
+
+// Apply remote template invalidations from sibling workers/hosts.
+subscribeCacheInvalidations((channel) => {
+  if (channel === 'template') templateListCache.clear();
+});
 
 const ensurePermission = async (
 	prisma: any,
@@ -700,10 +717,19 @@ export async function templateRoutes(app: FastifyInstance) {
 
 			request.log.info({ count: treeEntries.length }, "Found eggs in repo");
 
-			// 2. Download and import each egg with partial-failure handling
-			const imported: Array<{ name: string; template: any }> = [];
-			const skipped: Array<{ name: string }> = [];
-			const failed: Array<{ egg: string; errors: ImportError[] }> = [];
+			// Guard against overlapping imports: a full repo takes minutes
+			// inline and burns the unauthenticated GitHub budget; a concurrent
+			// trigger would double both.
+			if (batchImportInFlight) {
+				return reply.status(409).send({ error: "A batch import is already in progress. Wait for it to finish." });
+			}
+			batchImportInFlight = true;
+
+			try {
+				// 2. Download and import each egg with partial-failure handling
+				const imported: Array<{ name: string; template: any }> = [];
+				const skipped: Array<{ name: string }> = [];
+				const failed: Array<{ egg: string; errors: ImportError[] }> = [];
 
 			// Process eggs in batches of 5 to avoid overwhelming GitHub or the DB
 			const BATCH_SIZE = 5;
@@ -870,6 +896,9 @@ export async function templateRoutes(app: FastifyInstance) {
 				return reply.status(207).send({ success: false, data: result });
 			}
 			reply.send({ success: true, data: result });
-		},
-	);
+		} finally {
+			batchImportInFlight = false;
+		}
+	},
+);
 }

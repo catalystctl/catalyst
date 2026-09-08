@@ -15,6 +15,8 @@ import {
   invalidateNodeAccessCache,
 } from '../lib/permissions.js';
 import { invalidateUserPermissions } from '../lib/permissions-catalog.js';
+import { publishCacheInvalidate } from '../lib/event-bus.js';
+import { invalidateConfig } from '../lib/config-cache.js';
 import { invalidateAgentApiKeyCache } from '../lib/agent-auth.js';
 import { captureSystemError } from '../services/error-logger';
 // Permission checks use request.user.permissions (populated by auth middleware)
@@ -641,6 +643,9 @@ export async function adminRoutes(app: FastifyInstance) {
         }
         // Invalidate the target user's existing sessions after a password change.
         await prisma.session.deleteMany({ where: { userId } }).catch(() => {});
+        // A hijacked session's open WebSocket must not keep streaming after a
+        // credential reset — mirror the ban path's live revocation.
+        try { (app as any).wsGateway?.disconnectUser?.(userId); } catch { /* ignore */ }
       }
 
       const updatedUser = await prisma.user.update({
@@ -969,6 +974,7 @@ export async function adminRoutes(app: FastifyInstance) {
       invalidateNodeAccessCache(userId);
       // Drop gateway fan-out allow-lists that may still include this user.
       try { (app as any).wsGateway?.invalidateServerAccess?.(); } catch { /* ignore */ }
+      try { publishCacheInvalidate('server-access', { flushAll: true }); } catch { /* degraded */ }
 
       // Disconnect all WebSocket sessions for this user
       const wsGateway = (app as any).wsGateway;
@@ -2670,11 +2676,38 @@ export async function adminRoutes(app: FastifyInstance) {
       const { getRedisStats } = await import('../lib/redis.js');
       const { getWsGateway } = await import('../websocket/gateway.js');
       const { getConfigCacheStats } = await import('../lib/config-cache.js');
+      const { getAllCacheStats } = await import('../lib/cache.js');
       const redis = getRedisStats();
       const configCache = getConfigCacheStats();
+      const caches = getAllCacheStats();
       const reliability = (() => {
         try {
           return getWsGateway()?.getReliabilityStats() ?? null;
+        } catch {
+          return null;
+        }
+      })();
+
+      // Server-side Redis health (memory/evictions/clients) — best-effort
+      // INFO read so eviction pressure on the ephemeral cache is visible.
+      const redisInfo = await (async () => {
+        try {
+          const { getRedis } = await import('../lib/redis.js');
+          const client = getRedis();
+          if (!client) return null;
+          const [memory, stats] = await Promise.all([client.info('memory'), client.info('stats')]);
+          const pick = (block: string, field: string): string | null => {
+            const marker = `${field}:`;
+            const line = block.split('\r\n').find((l) => l.startsWith(marker));
+            return line ? line.slice(marker.length).trim() : null;
+          };
+          return {
+            usedMemory: pick(memory, 'used_memory_human'),
+            maxmemory: pick(memory, 'maxmemory_human'),
+            evictedKeys: pick(stats, 'evicted_keys'),
+            expiredKeys: pick(stats, 'expired_keys'),
+            connectedClients: pick(memory, 'connected_clients') ?? pick(stats, 'connected_clients'),
+          };
         } catch {
           return null;
         }
@@ -2702,6 +2735,8 @@ export async function adminRoutes(app: FastifyInstance) {
           lastError: redis.lastError,
           connectedAt: redis.connectedAt,
           configCache,
+          caches,
+          server: redisInfo,
         },
         realtime: reliability,
         timestamp: new Date().toISOString(),
@@ -3772,6 +3807,9 @@ export async function adminRoutes(app: FastifyInstance) {
         create: { id: 'default', ...updateData },
       });
 
+      // The public theme payload is cached (L1+Redis) — evict it immediately.
+      await invalidateConfig('theme_default').catch(() => {});
+
       await createAuditLog(user.userId, {
         request,
         action: 'theme_settings.update',
@@ -3981,6 +4019,8 @@ export async function adminRoutes(app: FastifyInstance) {
         update: { metadata: meta },
         create: { id: 'default', metadata: meta },
       });
+      // Provider configuration feeds the public authProviders flags — evict.
+      await invalidateConfig('theme_default').catch(() => {});
 
       // Bootstrap env vars for current process
       for (const [key, cfg] of Object.entries(meta.oidcProviders as Record<string, Record<string, string>>)) {

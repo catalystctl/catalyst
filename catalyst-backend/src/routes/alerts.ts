@@ -8,20 +8,12 @@ export async function alertRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
   const authenticate = (app as any).authenticate;
   const isAdminUser = async (userId: string) => {
-    const userRoles = await prisma.role.findMany({
-      where: {
-        users: {
-          some: { id: userId },
-        },
-      },
-    });
-
-    const permissions = userRoles.flatMap((role) => role.permissions);
-    // SECURITY: authorization must key on permission bits only. The previous
-    // `role.name === 'administrator'` fallback let any user-held role that
-    // happened to be NAMED "Administrator" (custom roles are user-created)
-    // receive full alert-rule admin treatment.
-    return permissions.includes('*') || permissions.includes('admin.read');
+    // Consume the shared 30s permission cache (lib/permissions-catalog)
+    // instead of an uncached role query per request. Kept permission-bit-only
+    // semantics: '*' or 'admin.read' (admin.write alone does NOT pass).
+    const { getUserPermissions } = await import('../lib/permissions.js');
+    const permissions = await getUserPermissions(prisma, userId);
+    return permissions.has('*') || permissions.has('admin.read');
   };
   const ensureServerAccess = async ({
     userId,

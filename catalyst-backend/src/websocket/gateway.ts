@@ -20,7 +20,7 @@ import { normalizeHostIp } from "../utils/ipam";
 import { captureSystemError } from "../services/error-logger";
 import { injectPterodactylCompatibilityVars } from "../utils/pterodactyl-env.js";
 import { getSecuritySettings, maxUploadBytesFromMb } from "../services/mailer";
-import { publishFanout, subscribeFanout, type FanoutEvent } from "../lib/event-bus.js";
+import { acknowledgeAgentCommand, publishAgentCommand, publishFanout, subscribeAgentCommand, subscribeFanout, type AgentCommandRelayResult, type FanoutEvent } from "../lib/event-bus.js";
 
 /**
  * Simple capped Map that evicts the oldest entries when max size is reached.
@@ -308,6 +308,11 @@ export class WebSocketGateway {
     const n = Number(process.env.AGENT_BACKPRESSURE_BYTES);
     return Number.isFinite(n) && n > 0 ? n : 4 * 1024 * 1024;
   })();
+
+  // Browser-facing watermark: a suspended/slow tab must not make Node buffer
+  // unbounded userland bytes during a console flood. Drop non-critical pushes
+  // above this; the SSE/WS connection self-heals on the next poll/reconnect.
+  private static readonly CLIENT_BACKPRESSURE_BYTES = 1024 * 1024;
 
   // ── Reliability counters (per node, since process start) ──────────────────
   private readonly reliabilityConnections = new Map<string, number[]>();
@@ -680,6 +685,28 @@ export class WebSocketGateway {
     subscribeFanout((event) => this.deliverRemoteFanout(event)).catch(() => {
       // Degraded mode — local delivery still works
     });
+    // Receive agent commands published by sibling instances (multi-instance
+    // deployments: the agent socket lives in exactly one process).
+    subscribeAgentCommand((nodeId, relayId, message) => {
+      if (this.deliverAgentCommandLocally(nodeId, message)) {
+        acknowledgeAgentCommand(relayId);
+      }
+    }).catch(() => { /* degraded mode */ });
+  }
+
+  /**
+   * Deliver a command from a sibling instance if (and only if) the agent
+   * socket is local. Returns true when delivered.
+   */
+  private deliverAgentCommandLocally(nodeId: string, message: unknown): boolean {
+    const agent = this.agents.get(nodeId);
+    if (!agent || !agent.authenticated || agent.socket.readyState !== 1) return false;
+    try {
+      agent.socket.send(JSON.stringify(message));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -3485,24 +3512,8 @@ export class WebSocketGateway {
    */
   async routeToClients(serverId: string, message: any): Promise<void> {
     // Use cached server access list
-    const now = Date.now();
-    const cached = this.serverAccessCache.get(serverId);
-    let allowedUsers: Set<string>;
-
-    if (cached && cached.expiresAt > now) {
-      allowedUsers = cached.allowedUsers;
-    } else {
-      const server = await this.prisma.server.findUnique({
-        where: { id: serverId },
-        include: { access: { select: { userId: true } } },
-      });
-      if (!server) return;
-      allowedUsers = new Set([
-        server.ownerId,
-        ...server.access.map((a) => a.userId),
-      ]);
-      this.serverAccessCache.set(serverId, { allowedUsers, expiresAt: now + WebSocketGateway.SERVER_ACCESS_TTL_MS });
-    }
+    const allowedUsers = await this.getAllowedUsersForServer(serverId);
+    if (!allowedUsers) return;
 
 
     // Sanitize console data before relaying to prevent XSS
@@ -3514,11 +3525,21 @@ export class WebSocketGateway {
       };
     }
 
+    // Serialize once — the same payload goes to every WS client and SSE
+    // subscriber below. Per-client JSON.stringify in this loop was the
+    // hottest avoidable allocation on the realtime path.
+    const wire = JSON.stringify(messageToSend);
+
     for (const [, client] of this.clients) {
       if (!client.subscriptions.has(serverId)) continue;
       if (allowedUsers.has(client.userId)) {
         if (client.socket.readyState === 1) {
-          client.socket.send(JSON.stringify(messageToSend));
+          // Skip clients whose socket is congested — mirrors the agent
+          // backpressure guard and bounds per-connection buffering.
+          if (Number(client.socket.bufferedAmount ?? 0) > WebSocketGateway.CLIENT_BACKPRESSURE_BYTES) {
+            continue;
+          }
+          client.socket.send(wire);
         }
       }
     }
@@ -3526,22 +3547,20 @@ export class WebSocketGateway {
     const eventType = messageToSend.type;
     const sseEventSubs = this.sseEventSubscribers.get(serverId);
     if (sseEventSubs) {
-      const eventData = JSON.stringify(messageToSend);
       for (const [, sub] of sseEventSubs) {
         if (sub.eventTypes.includes(eventType)) {
           sub.lastActivity = Date.now();
-          try { sub.push(eventType, eventData); } catch { /* ignore */ }
+          try { sub.push(eventType, wire); } catch { /* ignore */ }
         }
       }
     }
 
     // Also push to global SSE subscribers (serverIds filter applies)
-    const eventData = JSON.stringify(messageToSend);
     for (const [, sub] of this.globalSseSubscribers) {
       if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
       if (sub.eventTypes.includes(eventType)) {
         sub.lastActivity = Date.now();
-        try { sub.push(eventType, eventData); } catch { /* ignore */ }
+        try { sub.push(eventType, wire); } catch { /* ignore */ }
       }
     }
 
@@ -3584,12 +3603,8 @@ export class WebSocketGateway {
 
   /** Unified remote delivery for server-scoped events (access-checked). */
   private async deliverServerFanoutLocally(serverId: string, eventType: string, payload: unknown): Promise<void> {
-    const server = await this.prisma.server.findUnique({
-      where: { id: serverId },
-      include: { access: { select: { userId: true } } },
-    });
-    if (!server) return;
-    const allowedUsers = new Set([server.ownerId, ...server.access.map((a) => a.userId)]);
+    const allowedUsers = await this.getAllowedUsersForServer(serverId);
+    if (!allowedUsers) return;
     const data = JSON.stringify(payload);
     for (const [, client] of this.clients) {
       if (!client.subscriptions.has(serverId)) continue;
@@ -3684,34 +3699,47 @@ export class WebSocketGateway {
   addAdminEventSubscriber(
     eventTypes: string[],
     push: (event: string, data: any) => void,
-  ): () => void {
+  ): { unsubscribe: () => void; touch: () => void } {
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     this.adminEventSubscribers.set(subscriberId, { eventTypes, push, lastActivity: Date.now() });
     this.logger.debug({ subscriberId, eventTypes }, 'Admin SSE subscriber added');
-    return () => {
+    const unsubscribe = () => {
       this.adminEventSubscribers.delete(subscriberId);
       this.logger.debug({ subscriberId }, 'Admin SSE subscriber removed');
     };
+    // Heartbeat keepalive for the idle sweeper (see addSseEventSubscriber).
+    const touch = () => {
+      const sub = this.adminEventSubscribers.get(subscriberId);
+      if (sub) sub.lastActivity = Date.now();
+    };
+    return { unsubscribe, touch };
+  }
+
+  /**
+   * Resolve the server's allowed-user set through the 30s access cache.
+   * Returns null when the server no longer exists. The console path used to
+   * run an uncached findUnique per console line — at the configured console
+   * rate cap that is a per-line DB flood across every instance.
+   */
+  private async getAllowedUsersForServer(serverId: string): Promise<Set<string> | null> {
+    const now = Date.now();
+    const cached = this.serverAccessCache.get(serverId);
+    if (cached && cached.expiresAt > now) return cached.allowedUsers;
+    const server = await this.prisma.server.findUnique({
+      where: { id: serverId },
+      include: { access: { select: { userId: true } } },
+    });
+    if (!server) return null;
+    const allowedUsers = new Set([server.ownerId, ...server.access.map((a) => a.userId)]);
+    this.serverAccessCache.set(serverId, { allowedUsers, expiresAt: now + WebSocketGateway.SERVER_ACCESS_TTL_MS });
+    return allowedUsers;
   }
 
   private async routeConsoleToSubscribers(serverId: string, message: any) {
-    const server = await this.prisma.server.findUnique({
-      where: { id: serverId },
-      include: {
-        access: {
-          select: { userId: true },
-        },
-      },
-    });
-
-    if (!server) {
+    const allowedUsers = await this.getAllowedUsersForServer(serverId);
+    if (!allowedUsers) {
       return;
     }
-
-    const allowedUsers = [
-      server.ownerId,
-      ...server.access.map((a) => a.userId),
-    ];
 
     // Sanitize console data before relaying to clients to prevent XSS
     const sanitizedMessage = {
@@ -3719,14 +3747,21 @@ export class WebSocketGateway {
       data: typeof message.data === 'string' ? sanitizeInput(message.data) : message.data,
     };
 
+    // One serialization for all clients — per-client stringify was O(N)
+    // allocations per console line on the hottest path.
+    const wire = JSON.stringify(sanitizedMessage);
+
     for (const [, client] of this.clients) {
       if (!client.subscriptions.has(serverId)) {
         continue;
       }
-      if (allowedUsers.includes(client.userId)) {
+      if (allowedUsers.has(client.userId)) {
         try {
-          if (client.socket.readyState === 1) {
-            client.socket.send(JSON.stringify(sanitizedMessage));
+          if (
+            client.socket.readyState === 1 &&
+            Number(client.socket.bufferedAmount ?? 0) <= WebSocketGateway.CLIENT_BACKPRESSURE_BYTES
+          ) {
+            client.socket.send(wire);
           }
         } catch {
           // Stale socket — ignore
@@ -3854,7 +3889,7 @@ export class WebSocketGateway {
     serverId: string,
     eventTypes: string[],
     push: (event: string, data: any) => void,
-  ): () => void {
+  ): { unsubscribe: () => void; touch: () => void } {
     if (!this.sseEventSubscribers.has(serverId)) {
       this.sseEventSubscribers.set(serverId, new Map());
     }
@@ -3868,7 +3903,7 @@ export class WebSocketGateway {
     }
     this.logger.debug({ serverId, subscriberId, eventTypes }, 'SSE event subscriber added');
 
-    return () => {
+    const unsubscribe = () => {
       const subs = this.sseEventSubscribers.get(serverId);
       if (subs) {
         subs.delete(subscriberId);
@@ -3878,6 +3913,17 @@ export class WebSocketGateway {
         this.logger.debug({ serverId, subscriberId }, 'SSE event subscriber removed');
       }
     };
+
+    // Heartbeat keepalive: without touching lastActivity, the idle sweeper
+    // removes live-but-quiet subscribers after 300s while the browser still
+    // shows a connected stream.
+    const touch = () => {
+      const subs = this.sseEventSubscribers.get(serverId);
+      const sub = subs?.get(subscriberId);
+      if (sub) sub.lastActivity = Date.now();
+    };
+
+    return { unsubscribe, touch };
   }
 
   /**
@@ -3903,7 +3949,7 @@ export class WebSocketGateway {
     eventTypes: string[],
     push: (event: string, data: any) => void,
     serverIds?: string[],
-  ): () => void {
+  ): { unsubscribe: () => void; touch: () => void } {
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     this.globalSseSubscribers.set(subscriberId, {
       eventTypes,
@@ -3915,10 +3961,18 @@ export class WebSocketGateway {
     this.logger.debug({ subscriberId, eventTypes, serverIds }, 'Global SSE subscriber added');
 
 
-    return () => {
+    const unsubscribe = () => {
       this.globalSseSubscribers.delete(subscriberId);
       this.logger.debug({ subscriberId }, 'Global SSE subscriber removed');
     };
+
+    // Heartbeat keepalive for the idle sweeper (see addSseEventSubscriber).
+    const touch = () => {
+      const sub = this.globalSseSubscribers.get(subscriberId);
+      if (sub) sub.lastActivity = Date.now();
+    };
+
+    return { unsubscribe, touch };
   }
 
   private allowConsoleCommand(clientId: string) {
@@ -4236,8 +4290,19 @@ export class WebSocketGateway {
   async sendToAgent(nodeId: string, message: any): Promise<boolean> {
     const agent = this.agents.get(nodeId);
     if (!agent || !agent.authenticated || agent.socket.readyState !== 1) {
+      // Multi-instance: hand the command to the sibling that owns the agent
+      // socket. Only a positive ack means someone actually received it.
+      const relayResult: AgentCommandRelayResult = await publishAgentCommand(nodeId, message);
+      if (relayResult === 'delivered') {
+        this.logger.debug(
+          { nodeId, type: typeof message?.type === "string" ? message.type : undefined },
+          "Agent on sibling instance — command relayed via Redis",
+        );
+        return true;
+      }
       // Agent mid-reconnect: queue control-plane commands (bounded, with TTL)
-      // so they are replayed on reconnect instead of vanishing.
+      // so they are replayed on reconnect instead of vanishing. Without the
+      // relay this outbox is process-local and only drains on THIS instance.
       if (this.queueInOutbox(nodeId, message)) {
         this.logger.debug(
           { nodeId, type: typeof message?.type === "string" ? message.type : undefined },

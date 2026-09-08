@@ -98,7 +98,7 @@ function powerFailureStatus(result: PowerSendResult): number {
 export async function serverPowerRoutes(app: FastifyInstance) {
   app.post(
     "/:serverId/install",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -261,7 +261,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Reinstall server (stops server, wipes data, runs install script)
   app.post(
     "/:serverId/reinstall",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -423,7 +423,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // the server can be reinstalled). Only valid from `installing`.
   app.post(
     "/:serverId/cancel-install",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -542,7 +542,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Respond to EULA prompt (accept or decline)
   app.post(
     "/eula",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, accepted } = request.body as {
         serverId: string;
@@ -606,7 +606,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Rebuild server (stops server, removes container, recreates from image, preserves data)
   app.post(
     "/:serverId/rebuild",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -757,7 +757,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Start server (sends start command to agent)
   app.post(
     "/:serverId/start",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -957,7 +957,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Stop server (sends stop command to agent)
   app.post(
     "/:serverId/stop",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1103,7 +1103,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Kill server (force stop command to agent)
   app.post(
     "/:serverId/kill",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1244,7 +1244,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Restart server (stop then start)
   app.post(
     "/:serverId/restart",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1428,7 +1428,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // List port allocations
   app.post(
     "/:serverId/suspend",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1579,7 +1579,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Unsuspend server
   app.post(
     "/:serverId/unsuspend",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;

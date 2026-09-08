@@ -7,12 +7,19 @@ backend falls back to Postgres and process-local state.
 
 ## Why Redis
 
-- Eliminate 2–4 `SystemSetting` reads per HTTP request (30s config cache).
+- Eliminate 2–4 `SystemSetting` reads per HTTP request (30s config cache) and
+  the public theme payload per page load (45s cache).
 - Share cache invalidations across backend instances (permissions, agent
-  keys, node access, config, SFTP revokes).
+  keys, node access, config, SFTP revokes, template/server lists, server
+  access allowlists, API keys).
 - Fan out server/global/admin realtime events to SSE viewers on any instance.
-- Provide atomic distributed primitives (locks, rate limits, idempotency)
-  without adding a queue framework.
+- Relay agent control commands (start/stop/console input) to the instance
+  that owns the agent WebSocket — without the relay, a command landing on a
+  sibling instance would be queued in its local outbox and silently expire.
+- Shared rate-limit counters across workers/hosts (atomic INCR+PEXPIRE Lua
+  via the `@fastify/rate-limit` store), with per-process memory fallback.
+- Cross-host singleton for background cycles that must not double-run
+  (alert evaluation), and distributed locks with safe release semantics.
 
 Redis is **not** used for: sessions (Better Auth stays on Postgres),
 metrics history, audit logs, lockout enforcement, or bulk binary relay.
@@ -32,9 +39,13 @@ Container role: **ephemeral cache + coordination**. No AOF/RDB, no volume.
 `--maxclients 500` caps connection churn, `--tcp-keepalive 60` detects dead
 peers, `--timeout 0` keeps idle pub/sub subscribers, and a capped pubsub
 output buffer sheds slow consumers instead of OOMing;
+`--lazyfree-lazy-eviction/--lazyfree-lazy-expire` move eviction/expiry
+deallocation off the main thread (the churn of short-TTL keys is by design
+and there is no durability to interact with);
 locks/presence/idempotency keys carry short TTLs and tolerate eviction.
 `mem_limit: 512m` is defense-in-depth. Healthcheck uses `REDISCLI_AUTH` so
-the password never appears on the process list.
+the password never appears on the process list. Redis is pinned to
+`redis:7.4-alpine` for reproducible restarts.
 
 ## Key namespaces
 
@@ -47,6 +58,7 @@ catalyst:{env}:cache:templates:list_{hash}
 catalyst:{env}:cache:template:{id}
 catalyst:{env}:cache:perms:user_{userId}
 catalyst:{env}:cache:perms:server_{userId}_{serverId}
+catalyst:{env}:cache:apikey:{hash16}          (designed; not yet written)
 catalyst:{env}:ratelimit:{scope}:{id}:{windowId}
 catalyst:{env}:lock:{name}
 catalyst:{env}:idempotency:{scope}:{hash}
@@ -56,7 +68,9 @@ catalyst:{env}:pubsub:{fanout,to-agent,to-agent-reply,presence,cache-invalidate}
 ```
 
 User-controlled parts are sanitized (`safeKeyPart`): no spaces, `:*?[]`,
-or control characters, max 128 chars.
+or control characters, max 128 chars. Rate-limit store keys add a
+`{method}:{route}` scope segment so identical client keys cannot collide
+across routes.
 
 ## TTL strategy
 
@@ -95,26 +109,32 @@ publish realtime update (fan-out)
 | Feature | Mode | Redis down behavior |
 |---------|------|---------------------|
 | Config/template/permission caches | OPTIONAL | fall back to Postgres |
-| Rate limiting | DEGRADED | per-process memory buckets |
+| Rate limiting | DEGRADED | per-process memory buckets (store fallback) |
 | Locks | DEGRADED | run directly; DB atomic guards still hold |
 | Idempotency | DEGRADED | process-local map (single instance) |
 | Pub/sub fan-out | OPTIONAL | local subscribers only |
+| Agent command relay | OPTIONAL | falls back to local outbox; `sendToAgent` then returns false when no local socket |
 | Presence | OPTIONAL | DB `isOnline` remains the read model |
 
 Reconnect uses exponential backoff with jitter plus a circuit breaker
 (5 failures → 10s cooldown) so a down Redis never causes retry storms.
-`GET /health` reports `redis: disabled|ready|degraded` but never fails
-liveness on Redis alone. `GET /api/admin/health` exposes Redis counters,
-realtime reliability stats, and node status.
+Failures are logged at most once per 30s window and a circuit-open event
+raises a `warn` SystemError (visible in the admin feed); reconnects after
+boot re-subscribe automatically. `GET /health` reports
+`redis: disabled|ready|degraded` but never fails liveness on Redis alone.
+`GET /api/admin/health` exposes Redis counters, realtime reliability stats,
+and node status.
 
 ## Observability
 
 - `GET /api/admin/health`: Redis commands/errors/unavailable/circuit-open counts,
   average latency, reconnects, last error, connection timestamp, disabled
-  reason, config-cache hit/miss/serialization counters, plus gateway
-  reliability stats.
-- `SimpleCache.stats()`: per-cache hits/misses/hit-rate (no high-cardinality
-  labels).
+  reason, config-cache hit/miss/serialization counters, per-cache
+  hit/miss/eviction stats for the named process-local caches, best-effort
+  Redis server INFO (used memory, maxmemory, evicted/expired keys, client
+  count), plus gateway reliability stats.
+- `SimpleCache.stats()`: per-cache hits/misses/hit-rate/evictions (no
+  high-cardinality labels).
 - `X-Cache: HIT/MISS` on template lists; pino debug logs for slow paths.
 - Never log Redis values containing secrets; never label metrics by
   user/server/IP.
@@ -122,7 +142,9 @@ realtime reliability stats, and node status.
 ## Security
 
 - Redis binds localhost-only behind compose networking; password required.
-- Never store plaintext secrets longer than needed; API-key hashes only.
+- The SMTP password is never cached (not in the L1 map, not in Redis L2);
+  it is read from Postgres per transport creation. API-key lookups key on
+  hashes only.
 - Key parts from users are sanitized to prevent cross-tenant collisions.
 - Permission caches never widen access: revocation flushes immediately and
   session/key/ban checks stay uncached per request.
