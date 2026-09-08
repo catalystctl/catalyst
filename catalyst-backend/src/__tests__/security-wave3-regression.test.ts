@@ -155,7 +155,10 @@ describe("nginx X-Forwarded-For overwrite (static contract)", () => {
   it("both nginx configs overwrite XFF with $remote_addr instead of appending", async () => {
     const fs = await import("fs");
     const backendConf = await fs.promises.readFile(
-      new URL("../../../catalyst-docker/nginx/default.conf", import.meta.url),
+      new URL(
+        "../../../catalyst-docker/nginx/default.conf.template",
+        import.meta.url,
+      ),
       "utf8",
     );
     const frontendConf = await fs.promises.readFile(
