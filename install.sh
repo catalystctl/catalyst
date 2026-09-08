@@ -26,6 +26,9 @@ for arg in "$@"; do
         --uninstall)
             MODE=uninstall
             ;;
+        --update)
+            MODE=update
+            ;;
         --reconfigure)
             FORCE_RECONFIGURE=true
             ;;
@@ -36,6 +39,7 @@ for arg in "$@"; do
             echo "  -y, --yes, --non-interactive   Accept all defaults / use env var overrides"
             echo "  --dry-run                      Show what would be done without making changes"
             echo "  --uninstall                    Remove the Catalyst Docker stack"
+            echo "  --update                       Update stack files in ./catalyst-docker (keeps .env)"
             echo "  --reconfigure                  Re-run the .env configuration prompts"
             echo "  -h, --help                     Show this help"
             echo ""
@@ -1069,6 +1073,36 @@ print_summary() {
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Update mode: refresh stack files via the shipped updater ─────────────────
+# Works for old installs too: if ./catalyst-docker/update.sh doesn't exist yet
+# (deployed before the updater shipped), fetch just that script from upstream.
+phase_update() {
+    local dest="${PWD}/${TARGET_DIR}"
+    if [[ ! -f "${dest}/docker-compose.yml" ]]; then
+        err "'${TARGET_DIR}' not found in ${PWD} — nothing to update"
+        info "Run this installer without --update first."
+        exit 1
+    fi
+
+    if [[ ! -f "${dest}/update.sh" ]]; then
+        warn "update.sh not present (older install) — fetching it from upstream"
+        local url="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${TARGET_DIR}/update.sh"
+        curl -fsSL "$url" -o "${dest}/update.sh" || {
+            err "Could not download update.sh — check your internet connection"
+            exit 1
+        }
+        chmod +x "${dest}/update.sh"
+        ok "Fetched ${url}"
+    fi
+
+    info "Updating stack files in ${dest} (.env is preserved)"
+    bash "${dest}/update.sh"
+    local rc=$?
+    if [[ $rc -ne 0 ]]; then
+        exit $rc
+    fi
+}
+
 main() {
     print_banner
 
@@ -1076,6 +1110,11 @@ main() {
         # Need runtime for compose down
         phase_check_runtime
         phase_uninstall
+        exit 0
+    fi
+
+    if [[ "$MODE" == "update" ]]; then
+        phase_update
         exit 0
     fi
 

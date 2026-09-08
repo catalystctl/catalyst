@@ -180,8 +180,12 @@ while IFS= read -r LINE; do
                 P="${REL:+$REL/}$NAME"
                 is_preserved "$P" || ADDED_LIST+=("$P")
             else
-                LOCAL="${DIR#./}"
-                P="${LOCAL:+$LOCAL/}$NAME"
+                if [[ "$DIR" == "." ]]; then
+                    P="$NAME"
+                else
+                    LOCAL="${DIR#./}"
+                    P="${LOCAL:+$LOCAL/}$NAME"
+                fi
                 is_preserved "$P" || REMOVED_LIST+=("$P")
             fi
             ;;
