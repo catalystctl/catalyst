@@ -231,6 +231,7 @@ podman compose up -d
 | `docker-compose.traefik.yml` | Traefik TLS reverse proxy overlay |
 | `.env.example` | Template with all variables documented |
 | `nginx/default.conf.template` | Nginx configuration template for the frontend (`${PORT}` is substituted at container startup) |
+| `update.sh` | Refreshes stack files from the upstream repo, preserving your `.env` (run before `docker compose pull`) |
 | `caddy/Caddyfile` | Caddy configuration (used by Caddy overlay) |
 | `traefik/traefik.yml` | Traefik static configuration |
 

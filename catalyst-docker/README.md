@@ -48,6 +48,10 @@ Rules of thumb:
 - [Security & Production Checklist](#security--production-checklist)
 - [Next Steps](#next-steps)
 
+> **Upgrading an existing install?** Run `bash update.sh` in this directory
+> first — it refreshes the stack files (compose, nginx, diagnostics) from the
+> upstream repo while keeping your `.env`. Then follow [Updating](#updating).
+
 ---
 
 ## What You Need
@@ -345,6 +349,22 @@ No protocol, no port — the bare hostname or IP only.
 ---
 
 ## Updating
+
+### Step 1: Update stack files
+
+Pull the latest compose/nginx/diagnostic files from the upstream repo while
+keeping your `.env` (and any `docker-compose.override.yml`) untouched:
+
+```bash
+bash update.sh            # or: bash update.sh --dry-run to preview
+```
+
+`update.sh` backs up your current files first (undo:
+`bash update.sh --restore <backup-dir>`), applies known file renames, and
+appends any new `.env` variables from `.env.example` with their defaults
+(your existing values are never modified).
+
+### Step 2: Update images
 
 Pull the latest pre-built images and restart:
 
