@@ -523,7 +523,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release edit "v${{ needs.version.outputs.new_version }}" --draft=false
+          # --repo is required: this job has no checkout, so gh can't discover
+          # the repository from git and fails with "not a git repository".
+          gh release edit "v${{ needs.version.outputs.new_version }}" --repo "$GITHUB_REPOSITORY" --draft=false
           echo "✅ Release v${{ needs.version.outputs.new_version }} published"
 
       - name: Notify Discord on Release
@@ -539,7 +541,7 @@ jobs:
 
           TAG="v${NEW_VERSION}"
           RELEASE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
-          NOTES=$(gh release view "$TAG" --json body --jq .body)
+          NOTES=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body)
 
           # Truncate notes to fit Discord embed description limit (1024 chars)
           if [ ${#NOTES} -gt 1000 ]; then
