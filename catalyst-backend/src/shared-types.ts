@@ -3,6 +3,17 @@
  * Client <-> Backend <-> Agent communication protocol
  */
 
+import {
+  AdminErrorCodes,
+  AuthErrorCodes,
+  CommonErrorCodes,
+  InfrastructureErrorCodes,
+  ServerErrorCodes,
+  type ErrorCode,
+} from "./lib/error-codes/index.js";
+
+export type { ErrorCode };
+
 // ============================================================================
 // ENUMS & CONSTANTS
 // ============================================================================
@@ -388,20 +399,9 @@ export class CatalystError extends Error {
 
 export const ErrorCodes = {
   // sphinx:ignore hardcoded-secret - error code enum, not a credential
-  AUTH_INVALID_TOKEN: "AUTH_INVALID_TOKEN",
-  AUTH_EXPIRED: "AUTH_EXPIRED",
-  NODE_NOT_FOUND: "NODE_NOT_FOUND",
-  NODE_OFFLINE: "NODE_OFFLINE",
-  SERVER_NOT_FOUND: "SERVER_NOT_FOUND",
-  SERVER_ALREADY_RUNNING: "SERVER_ALREADY_RUNNING",
-  INSUFFICIENT_RESOURCES: "INSUFFICIENT_RESOURCES",
-  CONTAINER_ERROR: "CONTAINER_ERROR",
-  NETWORK_ERROR: "NETWORK_ERROR",
-  FILE_ACCESS_DENIED: "FILE_ACCESS_DENIED",
-  PERMISSION_DENIED: "PERMISSION_DENIED",
-  VALIDATION_ERROR: "VALIDATION_ERROR",
-  CONFLICT: "CONFLICT",
-  NOT_FOUND: "NOT_FOUND",
-  RATE_LIMITED: "RATE_LIMITED",
-  INTERNAL_ERROR: "INTERNAL_ERROR",
+  ...CommonErrorCodes,
+  ...AuthErrorCodes,
+  ...ServerErrorCodes,
+  ...InfrastructureErrorCodes,
+  ...AdminErrorCodes,
 } as const;

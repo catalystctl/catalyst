@@ -1,6 +1,58 @@
 {
+  "actions": {
+    "apply": "Apply",
+    "back": "Back",
+    "browse": "Browse",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "copied": "Copied",
+    "copy": "Copy",
+    "create": "Create",
+    "delete": "Delete",
+    "disable": "Disable",
+    "disabled": "Disabled",
+    "download": "Download",
+    "edit": "Edit",
+    "enable": "Enable",
+    "enabled": "Enabled",
+    "loading": "Loading...",
+    "more": "More",
+    "next": "Next",
+    "no": "No",
+    "none": "None",
+    "refresh": "Refresh",
+    "remove": "Remove",
+    "reset": "Reset",
+    "retry": "Retry",
+    "save": "Save",
+    "search": "Search",
+    "unknown": "Unknown",
+    "upload": "Upload",
+    "yes": "Yes"
+  },
   "language": {
     "description": "Choose the language used for the panel interface.",
     "label": "Language"
+  },
+  "status": {
+    "archived": "Archived",
+    "cloning": "Cloning Files",
+    "crashed": "Crashed",
+    "creatingBackup": "Creating Backup",
+    "error": "Error",
+    "installing": "Installing",
+    "offline": "Offline",
+    "online": "Online",
+    "restoring": "Restoring",
+    "running": "Running",
+    "starting": "Starting",
+    "stopped": "Stopped",
+    "stopping": "Stopping",
+    "suspended": "Suspended",
+    "transferring": "Transferring"
+  },
+  "statusBadge": {
+    "title": "Server status: {{label}}"
   }
 }

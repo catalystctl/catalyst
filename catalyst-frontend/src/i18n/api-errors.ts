@@ -3,7 +3,7 @@ import { getErrorMessage } from '../utils/errors';
 
 interface ApiErrorShape {
   code?: unknown;
-  response?: { data?: { code?: unknown } };
+  response?: { data?: { code?: unknown; params?: unknown } };
 }
 
 /**
@@ -19,8 +19,22 @@ export function getApiErrorCode(error: unknown): string | undefined {
   return undefined;
 }
 
+/** Interpolation values the backend attaches to a coded error (min, max, …). */
+export function getApiErrorParams(error: unknown): Record<string, unknown> | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const params = (error as ApiErrorShape).response?.data?.params;
+  return params && typeof params === 'object' ? (params as Record<string, unknown>) : undefined;
+}
+
 export function hasErrorTranslation(code: string): boolean {
-  return i18n.exists(code, { ns: 'errors' });
+  return i18n.exists(code, { ns: 'errors' }) || i18n.exists(code, { ns: 'validation' });
+}
+
+function translateCode(code: string, params?: Record<string, unknown>): string | undefined {
+  for (const namespace of ['errors', 'validation'] as const) {
+    if (i18n.exists(code, { ns: namespace })) return i18n.t(code, { ns: namespace, ...params });
+  }
+  return undefined;
 }
 
 /**
@@ -32,6 +46,9 @@ export function hasErrorTranslation(code: string): boolean {
  */
 export function getLocalizedErrorMessage(error: unknown, fallbackKey = 'generic'): string {
   const code = getApiErrorCode(error);
-  if (code && hasErrorTranslation(code)) return i18n.t(code, { ns: 'errors' });
+  if (code) {
+    const translated = translateCode(code, getApiErrorParams(error));
+    if (translated !== undefined) return translated;
+  }
   return getErrorMessage(error, i18n.t(fallbackKey, { ns: 'errors' }));
 }

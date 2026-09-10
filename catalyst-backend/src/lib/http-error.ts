@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
+import type { FastifyReply } from "fastify";
 import { CatalystError } from "../shared-types";
+import type { ErrorCode } from "./error-codes/index.js";
 
 export type MappedHttpError = {
 	status: number;
@@ -7,6 +9,34 @@ export type MappedHttpError = {
 	code: string;
 	prismaCode?: string;
 };
+
+export interface ApiErrorExtras {
+	/** Values for the localized message (thresholds, names, …). */
+	params?: Record<string, unknown>;
+	/** Field-level validation details. */
+	details?: unknown;
+}
+
+/**
+ * Send an error response with a stable, translatable error code.
+ *
+ * `message` stays English and is the fallback for clients that do not know the
+ * code (or that speak a language the code has no translation for).
+ */
+export function apiError(
+	reply: FastifyReply,
+	status: number,
+	code: ErrorCode,
+	message: string,
+	extras?: ApiErrorExtras,
+): FastifyReply {
+	return reply.status(status).send({
+		error: message,
+		code,
+		...(extras?.params ? { params: extras.params } : {}),
+		...(extras?.details ? { details: extras.details } : {}),
+	});
+}
 
 const PRISMA_CODE_MAP: Record<
 	string,

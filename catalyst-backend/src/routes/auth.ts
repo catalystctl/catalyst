@@ -19,6 +19,9 @@ import {
   userRegistrationSchema,
   userLoginSchema,
 } from "../lib/validation";
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
+import { isSupportedLocale, SUPPORTED_LOCALES } from "../i18n/locales";
 
 function escapeHtml(str: string): string {
   return str
@@ -338,6 +341,7 @@ export async function authRoutes(app: FastifyInstance) {
         select: {
           id: true, email: true, username: true, name: true, firstName: true, lastName: true,
           image: true, createdAt: true,
+          preferences: true,
           roles: { select: { name: true, permissions: true } },
         },
       });
@@ -354,6 +358,7 @@ export async function authRoutes(app: FastifyInstance) {
           image: user.image,
           role: user.roles[0]?.name || 'user',
           permissions: user.roles.flatMap((role) => role.permissions),
+          preferences: user.preferences,
           createdAt: user.createdAt,
         },
       });
@@ -495,7 +500,12 @@ export async function authRoutes(app: FastifyInstance) {
       );
       const parsed = preferencesSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: parsed.error.issues[0]?.message || 'Invalid preferences' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, parsed.error.issues[0]?.message || 'Invalid preferences');
+      }
+      if (parsed.data.locale !== undefined && !isSupportedLocale(parsed.data.locale)) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Unsupported locale', {
+          params: { supported: SUPPORTED_LOCALES.join(', ') },
+        });
       }
       await prisma.user.update({
         where: { id: request.user.userId },

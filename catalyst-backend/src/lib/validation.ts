@@ -282,18 +282,33 @@ export const validateRequestParams = <T extends z.ZodSchema>(
   };
 };
 
+export interface ValidationIssueDetail {
+  field: string;
+  message: string;
+  /** Stable rule code the client can translate (VALIDATION_TOO_SMALL, …). */
+  code: string;
+  /** Values for the localized message (min/max/format). */
+  params?: Record<string, unknown>;
+}
+
 /**
- * Sanitize user input to prevent XSS
- * Removes HTML tags and special characters
+ * Format Zod v4 issues into a serializable array for API responses, with a
+ * stable code per issue so the frontend can translate validation errors.
  */
-/**
- * Format Zod v4 issues into a serializable array for API responses
- */
-function formatZodIssues(issues: ZodIssue[]) {
-  return issues.map(issue => ({
-    field: issue.path.join('.'),
-    message: issue.message,
-  }));
+export function formatZodIssues(issues: ZodIssue[]): ValidationIssueDetail[] {
+  return issues.map(issue => {
+    const raw = issue as unknown as { minimum?: unknown; maximum?: unknown; validation?: unknown };
+    const params: Record<string, unknown> = {};
+    if (typeof raw.minimum === 'number') params.min = raw.minimum;
+    if (typeof raw.maximum === 'number') params.max = raw.maximum;
+    if (typeof raw.validation === 'string') params.format = raw.validation;
+    return {
+      field: issue.path.join('.'),
+      message: issue.message,
+      code: `VALIDATION_${issue.code.toUpperCase()}`,
+      ...(Object.keys(params).length > 0 ? { params } : {}),
+    };
+  });
 }
 
 /**

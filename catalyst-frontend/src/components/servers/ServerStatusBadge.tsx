@@ -1,6 +1,7 @@
 import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban, Copy, HardDriveDownload, Archive, OctagonX } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { ServerStatus } from '../../types/server';
-import { SERVER_STATUS_LABELS } from '../../utils/constants';
+import { serverStatusLabel } from '../../utils/constants';
 
 const colorMap: Record<ServerStatus, string> = {
   stopped: 'bg-surface-3 text-muted-foreground',
@@ -51,12 +52,13 @@ type Props = {
 };
 
 function ServerStatusBadge({ status, operationStage, operationProgress }: Props) {
+  const { t } = useTranslation('servers');
   const showProgress =
     typeof operationProgress === 'number' &&
     operationProgress >= 0 &&
     TRANSITIONAL.includes(status);
 
-  const statusLabel = SERVER_STATUS_LABELS[status] ?? status;
+  const statusLabel = serverStatusLabel(t, status);
   const label = showProgress
     ? `${statusLabel} ${Math.round(operationProgress)}%`
     : statusLabel;
@@ -66,7 +68,7 @@ function ServerStatusBadge({ status, operationStage, operationProgress }: Props)
       ? [operationStage, showProgress ? `${Math.round(operationProgress!)}%` : null]
           .filter(Boolean)
           .join(' · ')
-      : `Server status: ${statusLabel}`;
+      : t('common:statusBadge.title', { label: statusLabel });
 
   return (
     <span

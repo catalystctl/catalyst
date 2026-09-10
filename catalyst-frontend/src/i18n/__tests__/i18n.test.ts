@@ -57,6 +57,20 @@ describe('api error translation', () => {
     const error = { response: { data: { code: 'SOME_NEW_CODE', error: 'Fresh server message' } } };
     expect(getLocalizedErrorMessage(error)).toBe('Fresh server message');
   });
+
+  it('interpolates params and checks the validation namespace', () => {
+    i18n.addResourceBundle(
+      'en',
+      'validation',
+      { VALIDATION_TOO_SMALL: 'Must be at least {{min}} characters' },
+      true,
+      true,
+    );
+    const error = {
+      response: { data: { code: 'VALIDATION_TOO_SMALL', error: 'Too short', params: { min: 12 } } },
+    };
+    expect(getLocalizedErrorMessage(error)).toBe('Must be at least 12 characters');
+  });
 });
 
 describe('catalog loading', () => {
