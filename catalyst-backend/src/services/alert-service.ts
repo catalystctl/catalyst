@@ -5,6 +5,7 @@ import dns from 'dns';
 import net from 'net';
 import { renderAlertEmail, sendEmail } from './mailer';
 import { captureSystemError } from '../services/error-logger';
+import { localeForEmail } from '../i18n/user-locale.js';
 import { getWsGateway } from '../websocket/gateway';
 import { withDistributedLock } from '../lib/distributed-lock';
 
@@ -687,6 +688,7 @@ export class AlertService {
         type: alert.type,
         createdAt: alert.createdAt,
         alertUrl,
+        locale: await localeForEmail(email, this.prisma),
       });
       await sendEmail({
         to: email,
@@ -817,6 +819,7 @@ export class AlertService {
         type: alert.type,
         createdAt: alert.createdAt,
         alertUrl,
+        locale: await localeForEmail(email, this.prisma),
       });
       await sendEmail({
         to: email,

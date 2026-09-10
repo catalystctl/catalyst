@@ -1,38 +1,41 @@
 {
-  "resetPassword": {
-    "subject": "重置您的 {{panelName}} 密码",
-    "greeting": "您好 {{name}}，",
-    "instruction": "请点击下方链接重置您的密码：",
-    "linkLabel": "重置密码"
-  },
-  "verifyEmail": {
-    "subject": "验证您的 {{panelName}} 邮箱",
-    "greeting": "您好 {{name}}，",
-    "instruction": "请点击下方链接验证您的邮箱地址：",
-    "linkLabel": "验证邮箱"
-  },
-  "welcome": {
-    "subject": "欢迎使用 {{panelName}}",
-    "greeting": "欢迎使用 {{panelName}}，{{username}}！",
-    "created": "您的账号已创建成功。",
-    "next": "现在您可以登录并开始管理您的服务器了。"
+  "alert": {
+    "footer": "该告警由 {{panelName}} 生成。您可以在告警页面调整告警规则。",
+    "severity": "级别：",
+    "subject": "{{panelName}} 告警：{{title}}",
+    "time": "时间：",
+    "type": "类型：",
+    "view": "查看告警"
   },
   "invite": {
-    "subject": "邀请您加入 {{panelName}} 上的 {{serverName}}",
-    "heading": "您收到一个新的服务器邀请",
-    "body": "您已被邀请访问 {{serverName}}。",
-    "action": "点击下方按钮接受邀请并开始管理该服务器。",
     "accept": "接受邀请",
+    "action": "点击下方按钮接受邀请并开始管理该服务器。",
+    "body": "您已被邀请访问 {{serverName}}。",
     "expires": "该邀请将于 {{date}} 过期。",
     "footer": "如果您并不期待这封邮件，可以忽略它。",
+    "heading": "您收到一个新的服务器邀请",
+    "subject": "邀请您加入 {{panelName}} 上的 {{serverName}}",
     "text": "{{panelName}} 邀请：您已被邀请访问 {{serverName}}。接受：{{url}}。过期时间：{{date}}"
   },
-  "alert": {
-    "subject": "{{panelName}} 告警：{{title}}",
-    "severity": "级别：",
-    "type": "类型：",
-    "time": "时间：",
-    "view": "查看告警",
-    "footer": "该告警由 {{panelName}} 生成。您可以在告警页面调整告警规则。"
+  "resetPassword": {
+    "greeting": "您好 {{name}}，",
+    "instruction": "请点击下方链接重置您的密码：",
+    "linkLabel": "重置密码",
+    "subject": "重置您的 {{panelName}} 密码",
+    "text": "重置您的 {{panelName}} 密码：{{url}}"
+  },
+  "verifyEmail": {
+    "greeting": "您好 {{name}}，",
+    "instruction": "请点击下方链接验证您的邮箱地址：",
+    "linkLabel": "验证邮箱",
+    "subject": "验证您的 {{panelName}} 邮箱",
+    "text": "验证您的 {{panelName}} 邮箱：{{url}}"
+  },
+  "welcome": {
+    "created": "您的账号已创建成功。",
+    "greeting": "欢迎使用 {{panelName}}，{{username}}！",
+    "next": "现在您可以登录并开始管理您的服务器了。",
+    "subject": "欢迎使用 {{panelName}}",
+    "text": "欢迎使用 {{panelName}}，{{username}}！您的账号已创建成功。"
   }
 }

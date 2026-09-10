@@ -3,6 +3,7 @@ import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, canManageSubusers, captureSystemError, getEffectiveServerPermissions, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
 import { isMailConfigured } from '../../services/mailer.js';
+import { localeForEmail } from '../../i18n/user-locale.js';
 import { publishCacheInvalidate } from '../../lib/event-bus.js';
 import { withRegistrationBypass } from '../../lib/registration-gate.js';
 import { apiError } from "../../lib/http-error";
@@ -167,6 +168,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
             serverName: server.name,
             inviteUrl,
             expiresAt,
+            locale: await localeForEmail(normalizedEmail),
           });
           await sendEmail({
             to: normalizedEmail,
@@ -275,6 +277,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
             serverName: server.name,
             inviteUrl,
             expiresAt,
+            locale: await localeForEmail(updated.email),
           });
           await sendEmail({
             to: updated.email,

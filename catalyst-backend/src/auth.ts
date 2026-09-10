@@ -142,16 +142,6 @@ function validateRpID(rpID?: string): string | undefined {
   return rpID;
 }
 
-/** Basic HTML escaping to prevent XSS in email templates. */
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 let _auth: ReturnType<typeof betterAuth> | null = null;
 
 /** Return the initialized auth instance, throwing if not yet created. */
@@ -245,27 +235,29 @@ export function initAuth() {
       },
       sendResetPassword: async ({ user, url }) => {
         const { sendEmail } = await import("./services/mailer");
+        const { renderResetPasswordEmail } = await import("./i18n/emails");
+        const { localeForEmail } = await import("./i18n/user-locale");
         const rawPanelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
-        const panelName = escapeHtml(rawPanelName);
-        const userName = escapeHtml(user.name || '');
-        const content = {
-          subject: `Reset your ${panelName} password`,
-          html: `<p>Hello ${userName},</p><p>Reset your password: <a href="${url}">${url}</a></p>`,
-          text: `Reset your password: ${url}`,
-        };
+        const content = renderResetPasswordEmail({
+          locale: await localeForEmail(user.email),
+          panelName: rawPanelName,
+          userName: user.name || '',
+          url,
+        });
         await sendEmail({ to: user.email, ...content });
       },
       sendVerificationEmail: async ({ user, url }) => {
         const { sendEmail } = await import("./services/mailer");
+        const { renderVerifyEmail } = await import("./i18n/emails");
+        const { localeForEmail } = await import("./i18n/user-locale");
         const rawPanelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
-        const panelName = escapeHtml(rawPanelName);
-        const userName = escapeHtml(user.name || '');
-        await sendEmail({
-          to: user.email,
-          subject: `Verify your ${panelName} email`,
-          html: `<p>Hello ${userName},</p><p>Please verify your email address by clicking the link below:</p><p><a href="${url}">${url}</a></p>`,
-          text: `Verify your email: ${url}`,
+        const content = renderVerifyEmail({
+          locale: await localeForEmail(user.email),
+          panelName: rawPanelName,
+          userName: user.name || '',
+          url,
         });
+        await sendEmail({ to: user.email, ...content });
       },
       // autoSignIn defaults to true.  The custom /register route pre-checks
       // for duplicate emails/usernames (returns 409) before calling signUpEmail,
@@ -473,14 +465,16 @@ export function initAuth() {
             const username = user.username || user.name || '';
             try {
               const { sendEmail } = await import('./services/mailer');
+              const { renderWelcomeEmail } = await import('./i18n/emails');
+              const { localeForEmail } = await import('./i18n/user-locale');
               const rawPanelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
-              const panelName = escapeHtml(rawPanelName);
-              const safeUsername = escapeHtml(username);
               await sendEmail({
                 to: email,
-                subject: `Welcome to ${panelName}`,
-                html: `<p>Welcome to ${panelName}, ${safeUsername}!</p><p>Your account has been created successfully.</p><p>You can now log in and start managing your servers.</p>`,
-                text: `Welcome to ${panelName}, ${username}! Your account has been created successfully.`,
+                ...renderWelcomeEmail({
+                  locale: await localeForEmail(email),
+                  panelName: rawPanelName,
+                  username,
+                }),
               });
             } catch (emailErr: any) {
               captureSystemError({

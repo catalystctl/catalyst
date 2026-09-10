@@ -24,15 +24,6 @@ import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 import { isSupportedLocale, SUPPORTED_LOCALES } from "../i18n/locales";
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 // Helper to forward response headers (set-auth-token, set-cookie) from better-auth to Fastify reply.
 // Must use getSetCookie() when available because Headers.get("set-cookie")
 // returns a comma-separated string which browsers cannot parse.
@@ -137,14 +128,16 @@ export async function authRoutes(app: FastifyInstance) {
         // Send welcome email (non-blocking)
         try {
           const { sendEmail } = await import('../services/mailer');
+          const { renderWelcomeEmail } = await import('../i18n/emails');
+          const { localeForEmail } = await import('../i18n/user-locale');
           const rawPanelName = (await import('../db').then(m => m.prisma.themeSettings.findUnique({ where: { id: 'default' } })))?.panelName || process.env.APP_NAME || 'Catalyst';
-          const panelName = escapeHtml(rawPanelName);
-          const safeUsername = escapeHtml(username);
           await sendEmail({
             to: email,
-            subject: `Welcome to ${panelName}`,
-            html: `<p>Welcome to ${panelName}, ${safeUsername}!</p><p>Your account has been created successfully.</p><p>You can now log in and start managing your servers.</p>`,
-            text: `Welcome to ${panelName}, ${username}! Your account has been created successfully.`,
+            ...renderWelcomeEmail({
+              locale: await localeForEmail(email),
+              panelName: rawPanelName,
+              username,
+            }),
           });
         } catch (emailErr: any) {
           // Log but don't fail registration
