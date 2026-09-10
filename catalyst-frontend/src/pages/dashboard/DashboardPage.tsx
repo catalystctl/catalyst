@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { formatNumber } from '@/i18n/format';
+import { formatRelativeTime } from '../../utils/formatters';
 import { useMemo } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useDashboardStats, useDashboardActivity, useResourceStats } from '../../hooks/useDashboard';
@@ -299,7 +300,7 @@ function DashboardPage() {
  <span className="shrink-0 text-muted-foreground">|</span>
  <span className="flex items-center gap-1 shrink-0">
  <Clock className="h-3 w-3" />
- {item.time}
+ {item.timestamp ? formatRelativeTime(item.timestamp) : item.time}
  </span>
  </div>
  </div>

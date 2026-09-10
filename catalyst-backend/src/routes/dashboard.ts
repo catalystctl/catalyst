@@ -133,7 +133,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
           detail: log.resourceId
             ? `${log.resource}: ${shortId(log.resourceId)}`
             : formatDetails(log.details) ?? 'System action',
+          // `time` stays for API compatibility; clients format `timestamp`
+          // themselves so it follows the active interface language.
           time: timeAgo,
+          timestamp: log.timestamp,
           type: getResourceType(log.resource),
         };
       });

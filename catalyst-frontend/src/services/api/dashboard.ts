@@ -14,6 +14,8 @@ export interface DashboardActivity {
   title: string;
   detail: string;
   time: string;
+  /** ISO timestamp; prefer this over the preformatted `time` so the client can localize it. */
+  timestamp?: string;
   type: 'server' | 'backup' | 'node' | 'alert' | 'user';
 }
 
