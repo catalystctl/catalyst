@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { getErrorMessage, describeError } from '../../utils/errors';
+import { describeError } from '../../utils/errors';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { BrandFooter } from '../../components/shared/BrandFooter';
@@ -13,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 function ForgotPasswordPage() {
+ const { t } = useTranslation('auth');
  const [email, setEmail] = useState('');
  const [isLoading, setIsLoading] = useState(false);
  const [isSubmitted, setIsSubmitted] = useState(false);
@@ -22,7 +24,7 @@ function ForgotPasswordPage() {
  e.preventDefault();
 
  if (!email.trim()) {
- notifyError('Please enter your email address');
+ notifyError(t('forgotPassword.emailRequired'));
  return;
  }
 
@@ -30,7 +32,7 @@ function ForgotPasswordPage() {
  try {
  await authApi.forgotPassword(email.trim());
  setIsSubmitted(true);
- notifySuccess('Password reset email sent');
+ notifySuccess(t('forgotPassword.sentToast'));
  } catch (error: unknown) {
  reportSystemError({
  level: 'error',
@@ -39,7 +41,7 @@ function ForgotPasswordPage() {
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'handleSubmit' },
  });
- notifyError(getErrorMessage(error, 'Failed to send reset email'));
+ notifyError(error);
  } finally {
  setIsLoading(false);
  }
@@ -53,11 +55,11 @@ function ForgotPasswordPage() {
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
  <CardContent className="px-3 py-4 sm:px-4">
  <div className="flex items-start gap-2.5">
- <img src={logoUrl} alt={`${panelName} logo`} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+ <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
  <div className="min-w-0">
- <h1 className="text-sm font-semibold tracking-tight text-foreground">Forgot password?</h1>
+ <h1 className="text-sm font-semibold tracking-tight text-foreground">{t('forgotPassword.title')}</h1>
  <p className="type-meta mt-0.5">
- Enter your email and we'll send a reset link.
+ {t('forgotPassword.subtitle')}
  </p>
  </div>
  </div>
@@ -66,30 +68,29 @@ function ForgotPasswordPage() {
  <div className="mt-6 space-y-4">
  <div className="rounded-lg border border-success/20 bg-success/5 px-4 py-4">
  <p className="text-sm text-success">
- If an account exists with that email address, we've sent a password reset link.
- Please check your inbox (and spam folder).
+ {t('forgotPassword.success')}
  </p>
  </div>
  <Button asChild className="w-full">
- <Link to="/login">Back to login</Link>
+ <Link to="/login">{t('forgotPassword.backToLogin')}</Link>
  </Button>
  </div>
  ) : (
  <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
  <div className="space-y-2">
- <Label htmlFor="email">Email address</Label>
+ <Label htmlFor="email">{t('fields.emailAddress')}</Label>
  <Input
  id="email"
  type="email"
  autoComplete="email"
- placeholder="you@example.com"
+ placeholder={t('fields.emailPlaceholder')}
  value={email}
  onChange={(e) => setEmail(e.target.value)}
  />
  </div>
 
  <Button type="submit" className="w-full" disabled={isLoading}>
- {isLoading ? 'Sending...' : 'Send reset link'}
+ {isLoading ? t('forgotPassword.submitting') : t('forgotPassword.submit')}
  </Button>
 
  <div className="text-center">
@@ -97,7 +98,7 @@ function ForgotPasswordPage() {
  to="/login"
  className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
  >
- Back to login
+ {t('forgotPassword.backToLogin')}
  </Link>
  </div>
  </form>

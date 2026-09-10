@@ -1,0 +1,80 @@
+{
+  "admin": {
+    "confirmPassword": "Confirm Password",
+    "description": "This will be your primary administrator account.",
+    "email": "Email",
+    "emailPlaceholder": "admin@example.com",
+    "password": "Password",
+    "passwordMismatch": "Passwords do not match",
+    "title": "Create Admin Account",
+    "username": "Username",
+    "usernamePlaceholder": "admin"
+  },
+  "appearance": {
+    "accentButton": "Accent Button",
+    "colorHarmony": "Color Harmony",
+    "dark": "Dark",
+    "darkSurfaces": "Dark Surfaces",
+    "defaultTheme": "Default Theme",
+    "description": "Pick one color and we'll generate a complete theme.",
+    "light": "Light",
+    "lightSurfaces": "Light Surfaces",
+    "livePreview": "Live Preview",
+    "primaryButton": "Primary Button",
+    "randomColor": "Random color",
+    "seedColor": "Seed Color",
+    "title": "Appearance"
+  },
+  "errors": {
+    "emailInvalid": "Invalid email address",
+    "emailRequired": "Email is required",
+    "logoTooLarge": "Logo must be smaller than 512KB",
+    "passwordRequired": "Password is required",
+    "passwordTooShort": "Password must be at least {{min}} characters",
+    "usernameRequired": "Username is required",
+    "usernameTooShort": "Username must be at least {{min}} characters"
+  },
+  "harmony": {
+    "analogous": "Analogous",
+    "auto": "Auto",
+    "complement": "Complement",
+    "diadic": "Diadic",
+    "mono": "Mono",
+    "neutral": "Neutral",
+    "splitComplement": "Split Comp.",
+    "tetradic": "Tetradic",
+    "triadic": "Triadic"
+  },
+  "palette": {
+    "accent": "Accent",
+    "danger": "Danger",
+    "info": "Info",
+    "primary": "Primary",
+    "secondary": "Secondary",
+    "success": "Success",
+    "warning": "Warning"
+  },
+  "steps": {
+    "adminAccount": "Admin Account",
+    "appearance": "Appearance",
+    "progress": "Step {{current}} of {{total}}",
+    "welcome": "Welcome"
+  },
+  "submit": {
+    "complete": "Complete Setup",
+    "completing": "Setting up..."
+  },
+  "welcome": {
+    "chooseFile": "Choose file",
+    "description": "Let's configure your panel. This only takes a minute.",
+    "logoAlt": "Logo",
+    "logoHint": "Recommended: square image, at least 128x128px. Max 512KB.",
+    "logoPreviewAlt": "Logo preview",
+    "panelLogo": "Panel Logo (optional)",
+    "panelName": "Panel Name",
+    "panelPreview": "{{panelName}} Panel",
+    "preview": "Preview",
+    "productTagline": "Game Server Management",
+    "title": "Welcome to Catalyst"
+  }
+}

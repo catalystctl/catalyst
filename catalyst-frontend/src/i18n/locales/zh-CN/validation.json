@@ -1,0 +1,13 @@
+{
+  "password": {
+    "lowercase": "",
+    "number": "",
+    "special": "",
+    "uppercase": ""
+  },
+  "VALIDATION_CUSTOM": "",
+  "VALIDATION_INVALID_FORMAT": "",
+  "VALIDATION_INVALID_TYPE": "",
+  "VALIDATION_TOO_BIG": "",
+  "VALIDATION_TOO_SMALL": ""
+}

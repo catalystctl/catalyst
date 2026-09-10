@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore, defaultThemeColors } from '../../stores/themeStore';
 import { useSetupStatus } from '../../hooks/useSetupStatus';
 import apiClient from '../../services/api/client';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 import { reportSystemError } from '../../services/api/systemErrors';
+import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { describeError } from '../../utils/errors';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
@@ -31,7 +33,6 @@ import {
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 
-const stepLabels = ['Welcome', 'Admin Account', 'Appearance'];
 const stepIcons = [Sparkles, User, Palette];
 
 // ── Swatch (tiny color preview chip) ──
@@ -55,6 +56,7 @@ function Swatch({ color, label }: { color: string; label?: string }) {
 // ── Main component ──
 
 function SetupPage() {
+ const { t } = useTranslation('setup');
  const navigate = useNavigate();
  const init = useAuthStore((s) => s.init);
  const previewColors = useThemeStore((s) => s.previewColors);
@@ -68,6 +70,8 @@ function SetupPage() {
  const [isSubmitting, setIsSubmitting] = useState(false);
  const [error, setError] = useState<string | null>(null);
  const [alreadySetup, setAlreadySetup] = useState(false);
+
+ const stepLabels = [t('steps.welcome'), t('steps.adminAccount'), t('steps.appearance')];
 
  // ── Step 1 state ──
  const [panelName, setPanelName] = useState('Catalyst');
@@ -133,36 +137,36 @@ function SetupPage() {
 
  const validateStep2 = useCallback((): boolean => {
  if (!email.trim()) {
- setError('Email is required');
+ setError(t('errors.emailRequired'));
  return false;
  }
  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
- setError('Invalid email address');
+ setError(t('errors.emailInvalid'));
  return false;
  }
  if (!username.trim()) {
- setError('Username is required');
+ setError(t('errors.usernameRequired'));
  return false;
  }
  if (username.trim().length < 3) {
- setError('Username must be at least 3 characters');
+ setError(t('errors.usernameTooShort', { min: 3 }));
  return false;
  }
  if (!password) {
- setError('Password is required');
+ setError(t('errors.passwordRequired'));
  return false;
  }
  if (password.length < 8) {
- setError('Password must be at least 8 characters');
+ setError(t('errors.passwordTooShort', { min: 8 }));
  return false;
  }
  if (password !== confirmPassword) {
- setError('Passwords do not match');
+ setError(t('admin.passwordMismatch'));
  return false;
  }
  setError(null);
  return true;
- }, [email, username, password, confirmPassword]);
+ }, [email, username, password, confirmPassword, t]);
 
  // ── Navigation ──
 
@@ -196,7 +200,7 @@ function SetupPage() {
  if (!file) return;
  if (!file.type.startsWith('image/')) return;
  if (file.size > 512 * 1024) {
- setError('Logo must be smaller than 512KB');
+ setError(t('errors.logoTooLarge'));
  return;
  }
  const reader = new FileReader();
@@ -284,12 +288,7 @@ function SetupPage() {
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'handleSubmit' },
  });
- const message =
- err.response?.data?.error ||
- err.response?.data?.message ||
- err.message ||
- 'Setup failed. Please try again.';
- setError(typeof message === 'string' ? message : 'Setup failed');
+ setError(getLocalizedErrorMessage(err));
  } finally {
  setIsSubmitting(false);
  }
@@ -369,15 +368,15 @@ function SetupPage() {
  <div key="step-1">
  <TabHeader
  icon={Sparkles}
- title="Welcome to Catalyst"
- description="Let's configure your panel. This only takes a minute."
+ title={t('welcome.title')}
+ description={t('welcome.description')}
  />
 
  <div className="mt-6 space-y-5">
  {/* Panel name */}
  <div className="space-y-2">
  <label className={labelClass} htmlFor="panelName">
- Panel Name
+ {t('welcome.panelName')}
  </label>
  <input
  id="panelName"
@@ -391,13 +390,13 @@ function SetupPage() {
 
  {/* Logo upload */}
  <div className="space-y-2">
- <label className={labelClass}>Panel Logo (optional)</label>
+ <label className={labelClass}>{t('welcome.panelLogo')}</label>
  <div className="flex items-start gap-3">
  {logoDataUri ? (
  <div className="relative">
  <img
  src={logoDataUri}
- alt="Logo preview"
+ alt={t('welcome.logoPreviewAlt')}
  className="h-16 w-16 rounded-lg border border-border object-contain p-1"
  />
  <button
@@ -411,7 +410,7 @@ function SetupPage() {
  ) : (
  <label className="flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-surface-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
  <Upload className="h-5 w-5 text-muted-foreground" />
- <span className="text-[9px] text-muted-foreground">Upload</span>
+ <span className="text-[9px] text-muted-foreground">{t('common:actions.upload')}</span>
  <input
  type="file"
  accept="image/*"
@@ -422,11 +421,11 @@ function SetupPage() {
  )}
  <div className="flex-1 pt-1">
  <p className="text-xs text-muted-foreground">
- Recommended: square image, at least 128x128px. Max 512KB.
+ {t('welcome.logoHint')}
  </p>
  {!logoDataUri && (
  <label className="mt-1.5 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-primary-600 transition-colors hover:text-primary">
- Choose file
+ {t('welcome.chooseFile')}
  <input
  type="file"
  accept="image/*"
@@ -441,13 +440,13 @@ function SetupPage() {
 
  {/* Preview card */}
  <div className="space-y-2">
- <label className={labelClass}>Preview</label>
+ <label className={labelClass}>{t('welcome.preview')}</label>
  <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/50 p-4">
  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
  {logoDataUri ? (
  <img
  src={logoDataUri}
- alt="Logo"
+ alt={t('welcome.logoAlt')}
  className="h-7 w-7 rounded object-contain"
  />
  ) : (
@@ -456,9 +455,9 @@ function SetupPage() {
  </div>
  <div>
  <p className="text-sm font-semibold text-foreground">
- {panelName || 'Catalyst'} Panel
+ {t('welcome.panelPreview', { panelName: panelName || 'Catalyst' })}
  </p>
- <p className="text-xs text-muted-foreground">Game Server Management</p>
+ <p className="text-xs text-muted-foreground">{t('welcome.productTagline')}</p>
  </div>
  </div>
  </div>
@@ -471,15 +470,15 @@ function SetupPage() {
  <div key="step-2">
  <TabHeader
  icon={User}
- title="Create Admin Account"
- description="This will be your primary administrator account."
+ title={t('admin.title')}
+ description={t('admin.description')}
  />
 
  <div className="mt-6 space-y-4">
  {/* Email */}
  <div className="space-y-2">
  <label className={labelClass} htmlFor="adminEmail">
- Email
+ {t('admin.email')}
  </label>
  <input
  id="adminEmail"
@@ -490,7 +489,7 @@ function SetupPage() {
  setEmail(e.target.value);
  setError(null);
  }}
- placeholder="admin@example.com"
+ placeholder={t('admin.emailPlaceholder')}
  autoComplete="email"
  />
  </div>
@@ -498,7 +497,7 @@ function SetupPage() {
  {/* Username */}
  <div className="space-y-2">
  <label className={labelClass} htmlFor="adminUsername">
- Username
+ {t('admin.username')}
  </label>
  <input
  id="adminUsername"
@@ -509,7 +508,7 @@ function SetupPage() {
  setUsername(e.target.value);
  setError(null);
  }}
- placeholder="admin"
+ placeholder={t('admin.usernamePlaceholder')}
  autoComplete="username"
  />
  </div>
@@ -517,7 +516,7 @@ function SetupPage() {
  {/* Password */}
  <div className="space-y-2">
  <label className={labelClass} htmlFor="adminPassword">
- Password
+ {t('admin.password')}
  </label>
  <div className="relative">
  <input
@@ -551,7 +550,7 @@ function SetupPage() {
  {/* Confirm password */}
  <div className="space-y-2">
  <label className={labelClass} htmlFor="adminConfirmPassword">
- Confirm Password
+ {t('admin.confirmPassword')}
  </label>
  <div className="relative">
  <input
@@ -576,7 +575,7 @@ function SetupPage() {
  </button>
  </div>
  {confirmPassword && password !== confirmPassword && (
- <p className="text-xs text-destructive">Passwords do not match</p>
+ <p className="text-xs text-destructive">{t('admin.passwordMismatch')}</p>
  )}
  </div>
  </div>
@@ -588,8 +587,8 @@ function SetupPage() {
  <div key="step-3">
  <TabHeader
  icon={Palette}
- title="Appearance"
- description="Pick one color and we'll generate a complete theme."
+ title={t('appearance.title')}
+ description={t('appearance.description')}
  />
 
  <div className="mt-6 space-y-6">
@@ -614,7 +613,7 @@ function SetupPage() {
  </div>
  <div className="flex-1 space-y-3">
  <div>
- <label className="mb-1 block text-xs font-medium text-foreground">Seed Color</label>
+ <label className="mb-1 block text-xs font-medium text-foreground">{t('appearance.seedColor')}</label>
  <div className="flex items-center gap-2">
  <input
  type="text"
@@ -638,7 +637,7 @@ function SetupPage() {
  )
  }
  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
- title="Random color"
+ title={t('appearance.randomColor')}
  >
  <Shuffle className="h-4 w-4" />
  </button>
@@ -656,20 +655,20 @@ function SetupPage() {
  {/* Harmony modes */}
  <div>
  <label className="mb-2 block text-xs font-medium text-foreground">
- Color Harmony
+ {t('appearance.colorHarmony')}
  </label>
  <div className="flex flex-wrap gap-1.5">
  {(
  [
- { id: 'auto' as const, label: 'Auto' },
- { id: 'monochromatic' as const, label: 'Mono' },
- { id: 'analogous' as const, label: 'Analogous' },
- { id: 'complementary' as const, label: 'Complement' },
- { id: 'split-complementary' as const, label: 'Split Comp.' },
- { id: 'triadic' as const, label: 'Triadic' },
- { id: 'tetradic' as const, label: 'Tetradic' },
- { id: 'diadic' as const, label: 'Diadic' },
- { id: 'neutral' as const, label: 'Neutral' },
+ { id: 'auto' as const, label: t('harmony.auto') },
+ { id: 'monochromatic' as const, label: t('harmony.mono') },
+ { id: 'analogous' as const, label: t('harmony.analogous') },
+ { id: 'complementary' as const, label: t('harmony.complement') },
+ { id: 'split-complementary' as const, label: t('harmony.splitComplement') },
+ { id: 'triadic' as const, label: t('harmony.triadic') },
+ { id: 'tetradic' as const, label: t('harmony.tetradic') },
+ { id: 'diadic' as const, label: t('harmony.diadic') },
+ { id: 'neutral' as const, label: t('harmony.neutral') },
  ] as const
  ).map((m) => (
  <button
@@ -700,9 +699,9 @@ function SetupPage() {
  </p>
  <div className="grid grid-cols-3 gap-3">
  {[
- { label: 'Primary', color: generatedPalette.primaryColor },
- { label: 'Secondary', color: generatedPalette.secondaryColor },
- { label: 'Accent', color: generatedPalette.accentColor },
+ { label: t('palette.primary'), color: generatedPalette.primaryColor },
+ { label: t('palette.secondary'), color: generatedPalette.secondaryColor },
+ { label: t('palette.accent'), color: generatedPalette.accentColor },
  ].map(({ label, color }) => (
  <div key={label}>
  <Swatch color={color} />
@@ -725,10 +724,10 @@ function SetupPage() {
  <div className="flex flex-wrap gap-2">
  {(
  [
- { label: 'Success', key: 'successColor' as const },
- { label: 'Warning', key: 'warningColor' as const },
- { label: 'Danger', key: 'dangerColor' as const },
- { label: 'Info', key: 'infoColor' as const },
+ { label: t('palette.success'), key: 'successColor' as const },
+ { label: t('palette.warning'), key: 'warningColor' as const },
+ { label: t('palette.danger'), key: 'dangerColor' as const },
+ { label: t('palette.info'), key: 'infoColor' as const },
  ] as const
  ).map(({ label, key }) => (
  <span
@@ -752,7 +751,7 @@ function SetupPage() {
  {/* Dark surfaces */}
  <div>
  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
- Dark Surfaces
+ {t('appearance.darkSurfaces')}
  </p>
  <div className="rounded-lg bg-surface-0 p-3">
  <div className="flex gap-1">
@@ -777,7 +776,7 @@ function SetupPage() {
  {/* Light surfaces */}
  <div>
  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
- Light Surfaces
+ {t('appearance.lightSurfaces')}
  </p>
  <div className="rounded-lg border border-border p-3">
  <div className="flex gap-1">
@@ -803,7 +802,7 @@ function SetupPage() {
 
  {/* Theme toggle */}
  <div className="space-y-2.5">
- <label className={labelClass}>Default Theme</label>
+ <label className={labelClass}>{t('appearance.defaultTheme')}</label>
  <div className="flex gap-3">
  <button
  type="button"
@@ -819,7 +818,7 @@ function SetupPage() {
  )}
  >
  <Moon className="h-4 w-4" />
- <span className="text-sm font-medium">Dark</span>
+ <span className="text-sm font-medium">{t('appearance.dark')}</span>
  </button>
  <button
  type="button"
@@ -835,14 +834,14 @@ function SetupPage() {
  )}
  >
  <Sun className="h-4 w-4" />
- <span className="text-sm font-medium">Light</span>
+ <span className="text-sm font-medium">{t('appearance.light')}</span>
  </button>
  </div>
  </div>
 
  {/* Live preview */}
  <div className="space-y-2">
- <label className={labelClass}>Live Preview</label>
+ <label className={labelClass}>{t('appearance.livePreview')}</label>
  <div className="overflow-hidden rounded-lg border border-border">
  {/* Mock header */}
  <div
@@ -878,13 +877,13 @@ function SetupPage() {
  className="h-7 flex-1 rounded-md text-center text-[10px] font-medium leading-7 text-primary-foreground"
  style={{ backgroundColor: primaryColor }}
  >
- Primary Button
+ {t('appearance.primaryButton')}
  </div>
  <div
  className="h-7 flex-1 rounded-md text-center text-[10px] font-medium leading-7 text-primary-foreground"
  style={{ backgroundColor: accentColor }}
  >
- Accent Button
+ {t('appearance.accentButton')}
  </div>
  </div>
  </div>
@@ -903,7 +902,7 @@ function SetupPage() {
  className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <ArrowLeft className="h-4 w-4" />
- Back
+ {t('common:actions.back')}
  </button>
  ) : (
  <div />
@@ -914,7 +913,7 @@ function SetupPage() {
  type="submit"
  className="flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90"
  >
- Next
+ {t('common:actions.next')}
  <ArrowRight className="h-4 w-4" />
  </button>
  ) : (
@@ -926,11 +925,11 @@ function SetupPage() {
  {isSubmitting ? (
  <>
  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
- Setting up...
+ {t('submit.completing')}
  </>
  ) : (
  <>
- Complete Setup
+ {t('submit.complete')}
  <Check className="h-4 w-4" />
  </>
  )}
@@ -941,7 +940,7 @@ function SetupPage() {
 
  {/* Step counter */}
  <p className="mt-4 text-center text-xs text-muted-foreground/60">
- Step {currentStep + 1} of 3
+ {t('steps.progress', { current: currentStep + 1, total: 3 })}
  </p>
  </ServerTabCard>
  </div>

@@ -1,16 +1,18 @@
-import { type BaseSyntheticEvent, useEffect, useRef, useState } from 'react';
+import { type BaseSyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 
 import { authApi } from '../../services/api/auth';
 import type { LoginSchema } from '../../validators/auth';
-import { loginSchema } from '../../validators/auth';
+import { createLoginSchema } from '../../validators/auth';
 import { authClient } from '../../services/authClient';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { notifyError } from '../../utils/notify';
-import { getErrorMessage, describeError } from '../../utils/errors';
+import { getLocalizedErrorMessage } from '../../i18n/api-errors';
+import { describeError } from '../../utils/errors';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { useSetupStatus } from '../../hooks/useSetupStatus';
@@ -32,6 +34,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 function LoginPage() {
+ const { t } = useTranslation(['auth', 'validation']);
  const navigate = useNavigate();
  const login = useAuthStore((s) => s.login);
  const verifyTwoFactor = useAuthStore((s) => s.verifyTwoFactor);
@@ -47,6 +50,7 @@ function LoginPage() {
  const [totpTrustDevice, setTotpTrustDevice] = useState(false);
  const [totpSubmitting, setTotpSubmitting] = useState(false);
  const [totpError, setTotpError] = useState<string | null>(null);
+ const loginSchema = useMemo(() => createLoginSchema(t), [t]);
  const {
  register,
  handleSubmit,
@@ -149,7 +153,7 @@ function LoginPage() {
  return;
  }
  if (error.code === 'EMAIL_VERIFICATION_REQUIRED') {
- notifyError('Please verify your email address before signing in. Check your inbox for a verification link.');
+ notifyError(t('login.emailVerificationRequired'));
  return;
  }
  }
@@ -165,14 +169,14 @@ function LoginPage() {
  return;
  // Handle account lockout/banned errors from the before hook
  if (context.error?.code === 'ACCOUNT_LOCKED') {
- notifyError('Account is temporarily locked due to too many failed login attempts');
+ notifyError(t('passkey.accountLocked'));
  return;
  }
  if (context.error?.code === 'ACCOUNT_BANNED') {
- notifyError('Account is banned');
+ notifyError(t('passkey.accountBanned'));
  return;
  }
- notifyError(context.error?.message || 'Passkey sign-in failed');
+ notifyError(context.error ?? t('passkey.failed'));
  },
  onSuccess(context) {
  const token = context.response?.headers?.get?.('set-auth-token') || null;
@@ -196,7 +200,7 @@ function LoginPage() {
  setAuthStep('passkey');
  return;
  }
- notifyError('Passkey sign-in failed');
+ notifyError(t('passkey.failed'));
  } finally {
  setPasskeySubmitting(false);
  }
@@ -224,7 +228,7 @@ function LoginPage() {
 
  const handleTotpSubmit = async () => {
  if (!totpCode) {
- setTotpError('Enter a verification code');
+ setTotpError(t('twoFactor.codeRequired'));
  return;
  }
  setTotpSubmitting(true);
@@ -243,7 +247,7 @@ function LoginPage() {
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'handleTotpSubmit' },
  });
- setTotpError(getErrorMessage(err, 'Two-factor verification failed'));
+ setTotpError(getLocalizedErrorMessage(err));
  } finally {
  setTotpSubmitting(false);
  }
@@ -259,15 +263,15 @@ function LoginPage() {
           <div className="flex items-start gap-2.5">
             <img
               src={logoUrl}
-              alt={`${panelName} logo`}
+              alt={t('logoAlt', { panelName })}
               className="h-8 w-8 rounded-md border border-border/70"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/logo.png';
               }}
             />
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold tracking-tight text-foreground">Welcome back</h1>
-              <p className="type-meta mt-0.5">Sign in to manage your servers on {panelName}.</p>
+              <h1 className="text-sm font-semibold tracking-tight text-foreground">{t('login.title')}</h1>
+              <p className="type-meta mt-0.5">{t('login.subtitle', { panelName })}</p>
             </div>
           </div>
 
@@ -280,19 +284,25 @@ function LoginPage() {
  {ssoError === 'login_required' && !authStep && (
  <Alert className="mt-4 border-info/40 bg-info/5 text-foreground">
  <AlertDescription>
- Please log in to your {ssoProvider === 'whmcs' ? 'WHMCS' : 'Paymenter'} account first, then click &quot;{ssoProvider === 'whmcs' ? 'Continue with WHMCS' : 'Continue with Paymenter'}&quot; again.
+ {t('sso.loginRequired', {
+ provider: ssoProvider === 'whmcs' ? 'WHMCS' : 'Paymenter',
+ action:
+ ssoProvider === 'whmcs'
+ ? t('sso.continueWithWhmcs')
+ : t('sso.continueWithPaymenter'),
+ })}
  </AlertDescription>
  </Alert>
  )}
 
  <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
  <div className="space-y-2">
- <Label htmlFor="email">Email</Label>
+ <Label htmlFor="email">{t('fields.email')}</Label>
  <Input
  id="email"
  type="email"
  autoComplete="username webauthn"
- placeholder="you@example.com"
+ placeholder={t('fields.emailPlaceholder')}
  {...register('email')}
  />
  {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
@@ -300,12 +310,12 @@ function LoginPage() {
 
  <div className="space-y-2">
  <div className="flex items-center justify-between">
- <Label htmlFor="password">Password</Label>
+ <Label htmlFor="password">{t('fields.password')}</Label>
  <Link
  to="/forgot-password"
  className="text-xs font-medium text-primary-600 transition-colors hover:text-primary"
  >
- Forgot password?
+ {t('login.forgotPassword')}
  </Link>
  </div>
  <Input
@@ -323,7 +333,7 @@ function LoginPage() {
  className="w-full"
  disabled={isLoading || authStep === 'passkey'}
  >
- {isLoading ? 'Signing in…' : 'Sign in'}
+ {isLoading ? t('login.submitting') : t('login.submit')}
  </Button>
 
  <div className="flex items-center gap-2">
@@ -339,7 +349,7 @@ function LoginPage() {
  )}
  />
  <Label htmlFor="rememberMe" className="text-sm font-normal">
- Remember me
+ {t('login.rememberMe')}
  </Label>
  </div>
  </form>
@@ -351,7 +361,7 @@ function LoginPage() {
  onClick={handlePasskeySignIn}
  disabled={passkeySubmitting}
  >
- {passkeySubmitting ? 'Waiting for passkey…' : 'Sign in with passkey'}
+ {passkeySubmitting ? t('passkey.waiting') : t('passkey.signIn')}
  </Button>
  </div>
 
@@ -359,7 +369,7 @@ function LoginPage() {
  <div className="mt-6 space-y-2">
  {showWhmcs && (
  <Button variant="outline" className="w-full" onClick={() => handleProvider('whmcs')}>
- Continue with WHMCS
+ {t('sso.continueWithWhmcs')}
  </Button>
  )}
  {showPaymenter && (
@@ -368,7 +378,7 @@ function LoginPage() {
  className="w-full"
  onClick={() => handleProvider('paymenter')}
  >
- Continue with Paymenter
+ {t('sso.continueWithPaymenter')}
  </Button>
  )}
  </div>
@@ -378,14 +388,14 @@ function LoginPage() {
  <Dialog open={authStep === 'passkey'} onOpenChange={() => setAuthStep(null)}>
  <DialogContent size="sm">
  <DialogHeader>
- <DialogTitle>Passkey required</DialogTitle>
+ <DialogTitle>{t('passkey.dialogTitle')}</DialogTitle>
  <DialogDescription>
- This account requires a passkey. Use your saved passkey to continue.
+ {t('passkey.dialogDescription')}
  </DialogDescription>
  </DialogHeader>
  <DialogBody className="space-y-3">
  <Button className="w-full" onClick={handlePasskeySignIn} disabled={passkeySubmitting}>
- {passkeySubmitting ? 'Waiting for passkey…' : 'Use passkey'}
+ {passkeySubmitting ? t('passkey.waiting') : t('passkey.use')}
  </Button>
  <Button
  variant="ghost"
@@ -398,7 +408,7 @@ function LoginPage() {
  }}
  disabled={passkeySubmitting}
  >
- Use another way
+ {t('passkey.useAnotherWay')}
  </Button>
  </DialogBody>
  </DialogContent>
@@ -406,9 +416,9 @@ function LoginPage() {
  <Dialog open={authStep === 'totp'} onOpenChange={() => setAuthStep(null)}>
  <DialogContent size="sm">
  <DialogHeader>
- <DialogTitle>Two-factor verification</DialogTitle>
+ <DialogTitle>{t('twoFactor.dialogTitle')}</DialogTitle>
  <DialogDescription>
- Enter the code from your authenticator app or backup code.
+ {t('twoFactor.dialogDescription')}
  </DialogDescription>
  </DialogHeader>
  <DialogBody className="space-y-3">
@@ -432,11 +442,11 @@ function LoginPage() {
  onCheckedChange={(checked) => setTotpTrustDevice(checked as boolean)}
  />
  <Label htmlFor="trustDevice" className="text-sm font-normal">
- Trust this device for 30 days
+ {t('twoFactor.trustDevice')}
  </Label>
  </div>
  <Button className="w-full" onClick={handleTotpSubmit} disabled={totpSubmitting}>
- {totpSubmitting ? 'Verifying…' : 'Verify'}
+ {totpSubmitting ? t('twoFactor.verifying') : t('twoFactor.verify')}
  </Button>
  </DialogBody>
  </DialogContent>

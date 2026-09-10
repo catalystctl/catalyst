@@ -1,0 +1,80 @@
+{
+  "admin": {
+    "confirmPassword": "",
+    "description": "",
+    "email": "",
+    "emailPlaceholder": "",
+    "password": "",
+    "passwordMismatch": "",
+    "title": "",
+    "username": "",
+    "usernamePlaceholder": ""
+  },
+  "appearance": {
+    "accentButton": "",
+    "colorHarmony": "",
+    "dark": "",
+    "darkSurfaces": "",
+    "defaultTheme": "",
+    "description": "",
+    "light": "",
+    "lightSurfaces": "",
+    "livePreview": "",
+    "primaryButton": "",
+    "randomColor": "",
+    "seedColor": "",
+    "title": ""
+  },
+  "errors": {
+    "emailInvalid": "",
+    "emailRequired": "",
+    "logoTooLarge": "",
+    "passwordRequired": "",
+    "passwordTooShort": "",
+    "usernameRequired": "",
+    "usernameTooShort": ""
+  },
+  "harmony": {
+    "analogous": "",
+    "auto": "",
+    "complement": "",
+    "diadic": "",
+    "mono": "",
+    "neutral": "",
+    "splitComplement": "",
+    "tetradic": "",
+    "triadic": ""
+  },
+  "palette": {
+    "accent": "",
+    "danger": "",
+    "info": "",
+    "primary": "",
+    "secondary": "",
+    "success": "",
+    "warning": ""
+  },
+  "steps": {
+    "adminAccount": "",
+    "appearance": "",
+    "progress": "",
+    "welcome": ""
+  },
+  "submit": {
+    "complete": "",
+    "completing": ""
+  },
+  "welcome": {
+    "chooseFile": "",
+    "description": "",
+    "logoAlt": "",
+    "logoHint": "",
+    "logoPreviewAlt": "",
+    "panelLogo": "",
+    "panelName": "",
+    "panelPreview": "",
+    "preview": "",
+    "productTagline": "",
+    "title": ""
+  }
+}

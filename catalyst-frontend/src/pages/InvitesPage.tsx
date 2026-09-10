@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { serversApi } from '../services/api/servers';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { useAuthStore } from '../stores/authStore';
@@ -12,6 +13,7 @@ import TabHeader from '../components/servers/tabs/TabHeader';
 import ServerTabCard from '../components/servers/tabs/ServerTabCard';
 
 function InvitesPage() {
+ const { t } = useTranslation('auth');
  const { token } = useParams();
  const navigate = useNavigate();
  const location = useLocation();
@@ -40,15 +42,14 @@ function InvitesPage() {
  mutationFn: () => serversApi.acceptInvite(token ?? ''),
  onSuccess: () => {
  setAccepted(true);
- notifySuccess('Invite accepted');
+ notifySuccess(t('invite.acceptedToast'));
  navigate('/servers');
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to accept invite';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -77,15 +78,14 @@ function InvitesPage() {
  },
  });
  }
- notifySuccess('Account created and invite accepted');
+ notifySuccess(t('invite.accountCreatedToast'));
  navigate('/servers');
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to accept invite';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -97,37 +97,37 @@ function InvitesPage() {
  if (!isAuthenticated) {
  return (
  <div className="mx-auto max-w-lg space-y-4">
- <TabHeader icon={Mail} title="Server Invite" description="Create your account to accept the invite. Your email is locked to the invite address." />
+ <TabHeader icon={Mail} title={t('invite.title')} description={t('invite.registerDescription')} />
  <ServerTabCard>
  {invitePreview ? (
  <div className="rounded-lg border border-border/30 bg-surface-2 px-4 py-3 text-xs text-muted-foreground">
- <div className="text-muted-foreground">Server</div>
+ <div className="text-muted-foreground">{t('invite.serverLabel')}</div>
  <div className="text-sm font-semibold text-foreground">{invitePreview.serverName}</div>
- <div className="mt-2 text-muted-foreground">Permissions</div>
+ <div className="mt-2 text-muted-foreground">{t('invite.permissions')}</div>
  <div className="text-xs text-foreground">{invitePreview.permissions.join(', ')}</div>
  </div>
  ) : null}
  <div className="mt-4 space-y-3 text-sm text-muted-foreground">
  <label className="block text-xs text-muted-foreground">
- Email
+ {t('fields.email')}
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
  value={invitePreview?.email ?? ''}
- placeholder="invitee@example.com"
+ placeholder={t('invite.emailPlaceholder')}
  disabled
  />
  </label>
  <label className="block text-xs text-muted-foreground">
- Username
+ {t('fields.username')}
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
  value={registerUsername}
  onChange={(event) => setRegisterUsername(event.target.value)}
- placeholder="yourname"
+ placeholder={t('fields.usernamePlaceholder')}
  />
  </label>
  <label className="block text-xs text-muted-foreground">
- Password
+ {t('fields.password')}
  <input
  type="password"
  autoComplete="new-password"
@@ -144,13 +144,13 @@ function InvitesPage() {
  onClick={() => registerMutation.mutate()}
  disabled={!token || !canRegister || registerMutation.isPending}
  >
- Create account & accept
+ {t('invite.createAccount')}
  </button>
  <button
  className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground"
  onClick={() => navigate('/login', { state: { from: location } })}
  >
- Sign in instead
+ {t('invite.signInInstead')}
  </button>
  </div>
  </ServerTabCard>
@@ -160,14 +160,14 @@ function InvitesPage() {
 
  return (
  <div className="mx-auto max-w-lg space-y-4">
- <TabHeader icon={Mail} title="Server Invite" description="Accept the invite to gain access to the server. You must be logged in with the invited email." />
+ <TabHeader icon={Mail} title={t('invite.title')} description={t('invite.signedInDescription')} />
  <ServerTabCard>
  <button
  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
  onClick={() => acceptMutation.mutate()}
  disabled={!token || acceptMutation.isPending || accepted}
  >
- Accept invite
+ {t('invite.accept')}
  </button>
  </ServerTabCard>
  </div>

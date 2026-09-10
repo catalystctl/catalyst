@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@/csync';
 import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { getErrorMessage, describeError } from '../../utils/errors';
+import { describeError } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { reportSystemError } from '../../services/api/systemErrors';
@@ -14,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 function ResetPasswordPage() {
+ const { t } = useTranslation('auth');
  const [searchParams] = useSearchParams();
  const token = searchParams.get('token') || '';
 
@@ -44,7 +46,7 @@ function ResetPasswordPage() {
  // Notify once when token is invalid
  useEffect(() => {
  if (tokenInvalid) {
- notifyError('Invalid or expired reset link');
+ notifyError(t('resetPassword.invalidLinkToast'));
  }
  }, [tokenInvalid]);
 
@@ -52,17 +54,17 @@ function ResetPasswordPage() {
  e.preventDefault();
 
  if (!password.trim()) {
- notifyError('Please enter a new password');
+ notifyError(t('resetPassword.passwordRequired'));
  return;
  }
 
  if (password.length < 8) {
- notifyError('Password must be at least 8 characters');
+ notifyError(t('resetPassword.passwordTooShort', { min: 8 }));
  return;
  }
 
  if (password !== confirmPassword) {
- notifyError('Passwords do not match');
+ notifyError(t('resetPassword.passwordMismatch'));
  return;
  }
 
@@ -70,7 +72,7 @@ function ResetPasswordPage() {
  try {
  await authApi.resetPassword(token, password);
  setIsReset(true);
- notifySuccess('Password reset successfully');
+ notifySuccess(t('resetPassword.successToast'));
  } catch (error: unknown) {
  reportSystemError({
  level: 'error',
@@ -79,7 +81,7 @@ function ResetPasswordPage() {
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'handleSubmit' },
  });
- notifyError(getErrorMessage(error, 'Failed to reset password'));
+ notifyError(error);
  } finally {
  setIsLoading(false);
  }
@@ -92,7 +94,7 @@ function ResetPasswordPage() {
         <CardContent className="px-3 py-4 sm:px-4">
           <div className="flex flex-col items-center text-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
-            <p className="type-meta mt-3">Validating reset link...</p>
+            <p className="type-meta mt-3">{t('resetPassword.validating')}</p>
           </div>
  </CardContent>
  </Card>
@@ -109,17 +111,17 @@ function ResetPasswordPage() {
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
         <CardContent className="px-3 py-4 sm:px-4">
           <div className="flex items-start gap-2.5">
-            <img src={logoUrl} alt={`${panelName} logo`} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+            <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold tracking-tight text-foreground">Invalid link</h1>
+              <h1 className="text-sm font-semibold tracking-tight text-foreground">{t('resetPassword.invalidTitle')}</h1>
               <p className="type-meta mt-0.5">
-                This reset link is invalid or expired. Request a new one.
+                {t('resetPassword.invalidDescription')}
               </p>
             </div>
           </div>
  <div className="mt-6">
  <Button asChild className="w-full">
- <Link to="/forgot-password">Request new reset link</Link>
+ <Link to="/forgot-password">{t('resetPassword.requestNew')}</Link>
  </Button>
  </div>
  </CardContent>
@@ -136,10 +138,10 @@ function ResetPasswordPage() {
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
         <CardContent className="px-3 py-4 sm:px-4">
           <div className="flex items-start gap-2.5">
-            <img src={logoUrl} alt={`${panelName} logo`} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+            <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold tracking-tight text-foreground">Reset your password</h1>
-              <p className="type-meta mt-0.5">Choose a new password for your account.</p>
+              <h1 className="text-sm font-semibold tracking-tight text-foreground">{t('resetPassword.title')}</h1>
+              <p className="type-meta mt-0.5">{t('resetPassword.subtitle')}</p>
             </div>
           </div>
 
@@ -147,17 +149,17 @@ function ResetPasswordPage() {
  <div className="mt-6 space-y-4">
  <div className="rounded-lg border border-success/20 bg-success/5 px-4 py-4">
  <p className="text-sm text-success">
- Your password has been reset successfully. You can now log in with your new password.
+ {t('resetPassword.success')}
  </p>
  </div>
  <Button asChild className="w-full">
- <Link to="/login">Continue to login</Link>
+ <Link to="/login">{t('resetPassword.continueToLogin')}</Link>
  </Button>
  </div>
  ) : (
  <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
  <div className="space-y-2">
- <Label htmlFor="password">New password</Label>
+ <Label htmlFor="password">{t('resetPassword.newPassword')}</Label>
  <Input
  id="password"
  type="password"
@@ -170,7 +172,7 @@ function ResetPasswordPage() {
  </div>
 
  <div className="space-y-2">
- <Label htmlFor="confirmPassword">Confirm new password</Label>
+ <Label htmlFor="confirmPassword">{t('resetPassword.confirmPassword')}</Label>
  <Input
  id="confirmPassword"
  type="password"
@@ -180,7 +182,7 @@ function ResetPasswordPage() {
  onChange={(e) => setConfirmPassword(e.target.value)}
  />
  {confirmPassword && password !== confirmPassword && (
- <p className="text-xs text-destructive">Passwords do not match</p>
+ <p className="text-xs text-destructive">{t('resetPassword.passwordMismatch')}</p>
  )}
  </div>
 
@@ -189,7 +191,7 @@ function ResetPasswordPage() {
  className="w-full"
  disabled={isLoading || (confirmPassword !== '' && password !== confirmPassword)}
  >
- {isLoading ? 'Resetting...' : 'Reset password'}
+ {isLoading ? t('resetPassword.submitting') : t('resetPassword.submit')}
  </Button>
 
  <div className="text-center">
@@ -197,7 +199,7 @@ function ResetPasswordPage() {
  to="/login"
  className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
  >
- Back to login
+ {t('resetPassword.backToLogin')}
  </Link>
  </div>
  </form>

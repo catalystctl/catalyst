@@ -1,0 +1,13 @@
+{
+  "password": {
+    "lowercase": "Password must contain at least one lowercase letter",
+    "number": "Password must contain at least one number",
+    "special": "Password must contain at least one special character",
+    "uppercase": "Password must contain at least one uppercase letter"
+  },
+  "VALIDATION_CUSTOM": "Invalid value",
+  "VALIDATION_INVALID_FORMAT": "Invalid {{format}}",
+  "VALIDATION_INVALID_TYPE": "Invalid value",
+  "VALIDATION_TOO_BIG": "Must be at most {{max}} characters",
+  "VALIDATION_TOO_SMALL": "Must be at least {{min}} characters"
+}
