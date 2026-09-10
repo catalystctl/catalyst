@@ -1,188 +1,188 @@
 {
   "actions": {
-    "apply": "",
-    "back": "",
-    "browse": "",
-    "cancel": "",
-    "close": "",
-    "confirm": "",
-    "copied": "",
-    "copy": "",
-    "create": "",
-    "delete": "",
-    "disable": "",
-    "disabled": "",
-    "download": "",
-    "edit": "",
-    "enable": "",
-    "enabled": "",
-    "loading": "",
-    "more": "",
-    "next": "",
-    "no": "",
-    "none": "",
-    "previous": "",
-    "refresh": "",
-    "remove": "",
-    "reset": "",
-    "retry": "",
-    "save": "",
-    "search": "",
-    "unknown": "",
-    "update": "",
-    "upload": "",
-    "working": "",
-    "yes": ""
+    "apply": "应用",
+    "back": "返回",
+    "browse": "浏览",
+    "cancel": "取消",
+    "close": "关闭",
+    "confirm": "确认",
+    "copied": "已复制",
+    "copy": "复制",
+    "create": "创建",
+    "delete": "删除",
+    "disable": "禁用",
+    "disabled": "已禁用",
+    "download": "下载",
+    "edit": "编辑",
+    "enable": "启用",
+    "enabled": "已启用",
+    "loading": "加载中…",
+    "more": "更多",
+    "next": "下一页",
+    "no": "否",
+    "none": "无",
+    "previous": "上一页",
+    "refresh": "刷新",
+    "remove": "移除",
+    "reset": "重置",
+    "retry": "重试",
+    "save": "保存",
+    "search": "搜索",
+    "unknown": "未知",
+    "update": "更新",
+    "upload": "上传",
+    "working": "处理中…",
+    "yes": "是"
   },
   "apiKeys": {
-    "created": "",
-    "revoked": "",
-    "updated": ""
+    "created": "API 密钥创建成功",
+    "revoked": "API 密钥撤销成功",
+    "updated": "API 密钥更新成功"
   },
   "backupStatus": {
-    "completed": "",
-    "failed": "",
-    "inProgress": "",
-    "restored": ""
+    "completed": "已完成",
+    "failed": "失败",
+    "inProgress": "进行中",
+    "restored": "已恢复"
   },
   "combobox": {
-    "noMatches": "",
-    "placeholder": ""
+    "noMatches": "未找到匹配项。",
+    "placeholder": "请选择…"
   },
   "configFormats": {
-    "jsonMustBeObject": ""
+    "jsonMustBeObject": "JSON 配置必须为对象"
   },
   "errorBoundary": {
-    "message": "",
-    "retry": "",
-    "title": ""
+    "message": "发生了意外错误。",
+    "retry": "重试",
+    "title": "出错了"
   },
   "language": {
     "description": "选择面板界面所使用的语言。",
     "label": "语言"
   },
   "metricsHistory": {
-    "oneHour": ""
+    "oneHour": "1 小时"
   },
   "nodeAgent": {
-    "updateFailed": ""
+    "updateFailed": "更新失败"
   },
   "operationStage": {
-    "cloning": "",
-    "installing": "",
-    "transferring": ""
+    "cloning": "正在克隆文件",
+    "installing": "正在安装服务器",
+    "transferring": "正在转移服务器"
   },
   "pagination": {
-    "pageOf": ""
+    "pageOf": "第 {{page}} 页，共 {{totalPages}} 页"
   },
   "passwordStrength": {
-    "fair": "",
-    "good": "",
-    "strong": "",
-    "title": "",
-    "veryStrong": "",
-    "weak": ""
+    "fair": "一般",
+    "good": "良好",
+    "strong": "强",
+    "title": "密码强度",
+    "veryStrong": "非常强",
+    "weak": "弱"
   },
   "relativeTime": {
-    "daysAgo": "",
-    "hoursAgo": "",
-    "justNow": "",
-    "minutesAgo": "",
-    "monthsAgo": "",
-    "yearsAgo": ""
+    "daysAgo": "{{value}} 天前",
+    "hoursAgo": "{{value}} 小时前",
+    "justNow": "刚刚",
+    "minutesAgo": "{{value}} 分钟前",
+    "monthsAgo": "{{value}} 个月前",
+    "yearsAgo": "{{value}} 年前"
   },
   "serverPermissions": {
-    "alertCreate": "",
-    "alertDelete": "",
-    "alertRead": "",
-    "alertUpdate": "",
-    "backupCreate": "",
-    "backupDelete": "",
-    "backupRead": "",
-    "backupRestore": "",
-    "consoleRead": "",
-    "consoleWrite": "",
-    "databaseCreate": "",
-    "databaseDelete": "",
-    "databaseRead": "",
-    "databaseRotate": "",
-    "delete": "",
-    "fileRead": "",
-    "fileWrite": "",
-    "install": "",
-    "read": "",
-    "rebuild": "",
-    "reinstall": "",
-    "schedule": "",
-    "start": "",
-    "stop": "",
-    "transfer": ""
+    "alertCreate": "创建告警",
+    "alertDelete": "删除告警",
+    "alertRead": "查看告警",
+    "alertUpdate": "更新告警",
+    "backupCreate": "创建备份",
+    "backupDelete": "删除备份",
+    "backupRead": "查看备份",
+    "backupRestore": "恢复备份",
+    "consoleRead": "查看控制台",
+    "consoleWrite": "发送控制台命令",
+    "databaseCreate": "创建数据库",
+    "databaseDelete": "删除数据库",
+    "databaseRead": "查看数据库",
+    "databaseRotate": "轮换数据库密码",
+    "delete": "删除服务器",
+    "fileRead": "浏览文件",
+    "fileWrite": "编辑并上传文件",
+    "install": "安装服务器",
+    "read": "查看服务器详情",
+    "rebuild": "重建服务器与变量",
+    "reinstall": "重新安装服务器",
+    "schedule": "管理计划任务",
+    "start": "启动服务器",
+    "stop": "停止 / 强制停止服务器",
+    "transfer": "转移服务器"
   },
   "setupStatus": {
-    "checkFailed": "",
-    "timedOut": ""
+    "checkFailed": "检查初始化状态失败",
+    "timedOut": "初始化状态检查超时（{{ms}}ms）"
   },
   "status": {
-    "archived": "",
-    "cloning": "",
-    "crashed": "",
-    "creatingBackup": "",
-    "error": "",
-    "installing": "",
-    "offline": "",
-    "online": "",
-    "restoring": "",
-    "running": "",
-    "starting": "",
-    "stopped": "",
-    "stopping": "",
-    "suspended": "",
-    "transferring": ""
+    "archived": "已归档",
+    "cloning": "正在克隆文件",
+    "crashed": "已崩溃",
+    "creatingBackup": "正在创建备份",
+    "error": "错误",
+    "installing": "正在安装",
+    "offline": "离线",
+    "online": "在线",
+    "restoring": "正在恢复",
+    "running": "运行中",
+    "starting": "启动中",
+    "stopped": "已停止",
+    "stopping": "停止中",
+    "suspended": "已暂停",
+    "transferring": "正在转移"
   },
   "statusBadge": {
-    "title": ""
+    "title": "服务器状态：{{label}}"
   },
   "storageResize": {
-    "failed": "",
-    "succeeded": ""
+    "failed": "存储容量调整失败",
+    "succeeded": "存储容量已调整"
   },
   "templateImport": {
-    "builtinIp": "",
-    "builtinMemory": "",
-    "builtinPort": "",
-    "builtinTimezone": "",
-    "importedEgg": "",
-    "importedFromPelican": "",
-    "importedFromPterodactyl": "",
-    "missingField": "",
-    "missingStopCommand": "",
-    "variableMissingDefault": "",
-    "variableMissingName": ""
+    "builtinIp": "服务器 IP 地址（0.0.0.0 表示所有网卡）",
+    "builtinMemory": "分配内存（MB）",
+    "builtinPort": "服务器主端口",
+    "builtinTimezone": "服务器时区",
+    "importedEgg": "已导入 Egg",
+    "importedFromPelican": "从 Pelican 导入",
+    "importedFromPterodactyl": "从 Pterodactyl 导入",
+    "missingField": "缺少必填字段：{{field}}",
+    "missingStopCommand": "缺少必填字段：stopCommand（基于信号停止时需提供 sendSignalTo）",
+    "variableMissingDefault": "变量 {{name}} 缺少默认值",
+    "variableMissingName": "索引 {{index}} 处的变量缺少名称"
   },
   "themeImport": {
-    "customCssTooLarge": "",
-    "invalidBorderRadius": "",
-    "invalidColor": "",
-    "invalidCustomCss": "",
-    "jsonMustBeObject": "",
-    "missingThemeColors": ""
+    "customCssTooLarge": "自定义 CSS 超过 100 KB。",
+    "invalidBorderRadius": "borderRadius 无效——应形如 “0.625rem”。",
+    "invalidColor": "{{field}} 无效——应为 #rrggbb 格式的十六进制颜色。",
+    "invalidCustomCss": "customCss 无效——应为字符串。",
+    "jsonMustBeObject": "主题 JSON 必须为对象。",
+    "missingThemeColors": "缺少 themeColors 对象。"
   },
   "updateNotification": {
-    "available": "",
-    "completeToast": "",
-    "currentVersion": "",
-    "dismissDescription": "",
-    "dismissForNow": "",
-    "dismissGlobalDescription": "",
-    "dismissGlobalTitle": "",
-    "dismissOptions": "",
-    "dismissSessionDescription": "",
-    "dismissSessionTitle": "",
-    "dismissTitle": "",
-    "dismissVersionDescription": "",
-    "dismissVersionTitle": "",
-    "openDismissOptions": "",
-    "starting": "",
-    "triggerFailed": ""
+    "available": "有可用更新：v{{version}}",
+    "completeToast": "面板更新完成——现已是最新版本。",
+    "currentVersion": "当前运行版本为 v{{version}}。",
+    "dismissDescription": "选择如何处理版本 {{version}} 的更新提示。",
+    "dismissForNow": "暂时忽略",
+    "dismissGlobalDescription": "永久隐藏所有更新通知。可通过清除站点数据 / localStorage 重新启用。",
+    "dismissGlobalTitle": "不再提醒",
+    "dismissOptions": "忽略选项",
+    "dismissSessionDescription": "暂时隐藏。页面重新加载或下次登录后会再次显示。",
+    "dismissSessionTitle": "忽略",
+    "dismissTitle": "忽略更新通知",
+    "dismissVersionDescription": "记住我对 {{version}} 的选择。下个版本发布时会再次通知您。",
+    "dismissVersionTitle": "忽略此更新",
+    "openDismissOptions": "打开忽略选项",
+    "starting": "正在启动…",
+    "triggerFailed": "触发更新失败"
   }
 }

@@ -1,328 +1,328 @@
 {
   "breadcrumbs": {
-    "activity": "",
-    "backups": "",
-    "console": "",
-    "files": "",
-    "invites": "",
-    "metrics": "",
-    "nav": "",
-    "network": "",
-    "plugin": "",
-    "settings": "",
-    "sftp": "",
-    "tasks": ""
+    "activity": "活动",
+    "backups": "备份",
+    "console": "控制台",
+    "files": "文件",
+    "invites": "邀请",
+    "metrics": "监控指标",
+    "nav": "面包屑导航",
+    "network": "网络",
+    "plugin": "插件",
+    "settings": "设置",
+    "sftp": "SFTP",
+    "tasks": "任务"
   },
   "nav": {
-    "admin": "",
-    "alerts": "",
-    "allServers": "",
-    "apiKeys": "",
-    "auditLogs": "",
-    "dashboard": "",
-    "databases": "",
-    "migration": "",
-    "nodes": "",
-    "overview": "",
-    "plugins": "",
-    "profile": "",
-    "roles": "",
-    "security": "",
-    "servers": "",
-    "system": "",
-    "systemErrors": "",
-    "templates": "",
-    "theme": "",
-    "tickets": "",
-    "users": ""
+    "admin": "管理",
+    "alerts": "告警",
+    "allServers": "所有服务器",
+    "apiKeys": "API 密钥",
+    "auditLogs": "审计日志",
+    "dashboard": "仪表盘",
+    "databases": "数据库",
+    "migration": "迁移",
+    "nodes": "节点",
+    "overview": "概览",
+    "plugins": "插件",
+    "profile": "个人资料",
+    "roles": "角色",
+    "security": "安全",
+    "servers": "服务器",
+    "system": "系统",
+    "systemErrors": "系统错误",
+    "templates": "模板",
+    "theme": "主题",
+    "tickets": "工单",
+    "users": "用户"
   },
   "search": {
-    "all": "",
+    "all": "全部",
     "categories": {
-      "account": "",
-      "actions": "",
-      "admin": "",
-      "nodes": "",
-      "pages": "",
-      "servers": "",
-      "serverTabs": "",
-      "settings": "",
-      "templates": ""
+      "account": "账号",
+      "actions": "快捷操作",
+      "admin": "管理",
+      "nodes": "节点",
+      "pages": "页面",
+      "servers": "服务器",
+      "serverTabs": "服务器标签页",
+      "settings": "设置与配置",
+      "templates": "模板"
     },
-    "close": "",
+    "close": "关闭搜索",
     "hints": {
-      "close": "",
-      "navigate": "",
-      "open": "",
-      "select": ""
+      "close": "关闭",
+      "navigate": "导航",
+      "open": "打开",
+      "select": "选择"
     },
-    "hostWithServers": "",
+    "hostWithServers": "{{host}} · {{servers}} 台服务器",
     "items": {
       "adminAlerts": {
-        "description": ""
+        "description": "配置告警规则并查看已触发的告警"
       },
       "adminApiKeys": {
-        "description": ""
+        "description": "管理平台 API 密钥和令牌"
       },
       "adminAuditLogs": {
-        "description": ""
+        "description": "所有操作的详细审计记录"
       },
       "adminDatabases": {
-        "description": "",
-        "label": ""
+        "description": "MySQL 和 PostgreSQL 主机管理",
+        "label": "数据库主机"
       },
       "adminMigration": {
-        "description": ""
+        "description": "从 Pterodactyl 导入服务器"
       },
       "adminNodes": {
-        "description": ""
+        "description": "管理计算节点和资源"
       },
       "adminOverview": {
-        "description": "",
-        "label": ""
+        "description": "全平台仪表盘与统计",
+        "label": "管理概览"
       },
       "adminPlugins": {
-        "description": ""
+        "description": "安装和管理面板扩展"
       },
       "adminRoles": {
-        "description": "",
-        "label": ""
+        "description": "配置角色和权限组",
+        "label": "角色与权限"
       },
       "adminSecurity": {
-        "description": ""
+        "description": "速率限制、锁定策略和文件隧道设置"
       },
       "adminServers": {
-        "description": ""
+        "description": "查看平台上的所有服务器"
       },
       "adminSystem": {
-        "description": ""
+        "description": "健康状态、SMTP 和模组管理器配置"
       },
       "adminSystemErrors": {
-        "description": ""
+        "description": "捕获的面板、Agent 和前端错误"
       },
       "adminTemplates": {
-        "description": ""
+        "description": "服务器模板和 Nest 配置"
       },
       "adminUsers": {
-        "description": ""
+        "description": "管理用户账号和访问权限"
       },
       "navDashboard": {
-        "description": ""
+        "description": "您的服务器和活动概览"
       },
       "navProfile": {
-        "description": ""
+        "description": "账号设置与安全"
       },
       "navServers": {
-        "description": ""
+        "description": "查看和管理您的游戏服务器"
       },
       "profile2fa": {
-        "description": "",
-        "label": ""
+        "description": "为账号启用 TOTP 验证器应用",
+        "label": "两步验证"
       },
       "profileApiKeys": {
-        "description": "",
-        "label": ""
+        "description": "管理您的个人 API 令牌",
+        "label": "个人 API 密钥"
       },
       "profileAuditLog": {
-        "description": "",
-        "label": ""
+        "description": "您最近的活动和操作",
+        "label": "个人审计日志"
       },
       "profilePasskeys": {
-        "description": "",
-        "label": ""
+        "description": "使用生物识别或安全密钥免密码登录",
+        "label": "通行密钥 / WebAuthn"
       },
       "profileSessions": {
-        "description": "",
-        "label": ""
+        "description": "查看并撤销活跃的登录会话",
+        "label": "活跃会话"
       },
       "profileSso": {
-        "description": "",
-        "label": ""
+        "description": "查看和管理通过 OAuth 关联的登录方式",
+        "label": "SSO 关联账号"
       },
       "settingsAuditRetention": {
-        "description": "",
-        "label": ""
+        "description": "审计日志的保留时长",
+        "label": "审计日志保留"
       },
       "settingsAuthLockouts": {
-        "description": "",
-        "label": ""
+        "description": "查看和管理被锁定的账号",
+        "label": "登录锁定"
       },
       "settingsBrandColors": {
-        "description": "",
-        "label": ""
+        "description": "主色、辅助色和强调色的配置",
+        "label": "品牌颜色"
       },
       "settingsBranding": {
-        "description": "",
-        "label": ""
+        "description": "面板名称、徽标和站点图标",
+        "label": "品牌与标识"
       },
       "settingsCustomCss": {
-        "description": "",
-        "label": ""
+        "description": "向每个页面注入自定义 CSS",
+        "label": "自定义 CSS"
       },
       "settingsDarkSurfaces": {
-        "description": "",
-        "label": ""
+        "description": "深色主题的背景、卡片、边框和层次",
+        "label": "深色模式表面"
       },
       "settingsFileTunnel": {
-        "description": "",
-        "label": ""
+        "description": "文件传输速率限制和上传大小",
+        "label": "文件隧道设置"
       },
       "settingsHealth": {
-        "description": "",
-        "label": ""
+        "description": "系统状态、节点健康和数据库状态",
+        "label": "平台健康状态"
       },
       "settingsLayout": {
-        "description": "",
-        "label": ""
+        "description": "全局调整圆角和间距",
+        "label": "布局与圆角"
       },
       "settingsLightSurfaces": {
-        "description": "",
-        "label": ""
+        "description": "浅色主题的背景、卡片、边框和层次",
+        "label": "浅色模式表面"
       },
       "settingsLockoutPolicy": {
-        "description": "",
-        "label": ""
+        "description": "登录失败后的锁定规则",
+        "label": "锁定策略"
       },
       "settingsModManager": {
-        "description": "",
-        "label": ""
+        "description": "用于模组下载的 CurseForge 和 Modrinth API 密钥",
+        "label": "模组管理器 API 密钥"
       },
       "settingsNodeAllocations": {
-        "description": "",
-        "label": ""
+        "description": "管理每个节点的 IP 地址、端口和 CIDR 池",
+        "label": "节点分配与 IP 池"
       },
       "settingsPaletteGenerator": {
-        "description": "",
-        "label": ""
+        "description": "从单个种子颜色自动生成整套主题",
+        "label": "调色板生成器"
       },
       "settingsRateLimits": {
-        "description": "",
-        "label": ""
+        "description": "认证、文件、控制台和 Agent 请求限制",
+        "label": "速率限制"
       },
       "settingsSemanticColors": {
-        "description": "",
-        "label": ""
+        "description": "成功、警告、危险和信息反馈颜色",
+        "label": "语义颜色"
       },
       "settingsSmtp": {
-        "description": "",
-        "label": ""
+        "description": "用于告警和邀请的外发邮件配置",
+        "label": "SMTP / 邮件"
       },
       "settingsSso": {
-        "description": "",
-        "label": ""
+        "description": "配置 WHMCS 和 Paymenter 的 OIDC 登录",
+        "label": "SSO / OAuth 提供商"
       },
       "settingsThemeMode": {
-        "description": "",
-        "label": ""
+        "description": "默认主题和可用模式（浅色/深色）",
+        "label": "主题模式"
       },
       "settingsThemeOverview": {
-        "description": "",
-        "label": ""
+        "description": "品牌、颜色、调色板和外观",
+        "label": "主题设置"
       }
     },
-    "nodeAllocations": "",
-    "nodeAllocationsDescription": "",
-    "noResults": "",
-    "noResultsHint": "",
-    "placeholder": "",
+    "nodeAllocations": "{{name}} — 分配",
+    "nodeAllocationsDescription": "IP 池、端口和 CIDR 管理",
+    "noResults": "未找到结果",
+    "noResultsHint": "请尝试其他关键词或清除筛选条件",
+    "placeholder": "搜索页面、设置、服务器、节点…",
     "quickActions": {
       "createServer": {
-        "description": "",
-        "label": ""
+        "description": "从模板部署新的游戏服务器",
+        "label": "创建新服务器"
       }
     },
-    "resultCount_other": "",
+    "resultCount_other": "{{count}} 个结果",
     "serverTabs": {
       "admin": {
-        "description": "",
-        "label": ""
+        "description": "所有者转移、暂停和管理操作",
+        "label": "服务器管理"
       },
       "alerts": {
-        "description": "",
-        "label": ""
+        "description": "服务器专属的告警规则与记录",
+        "label": "告警"
       },
       "backups": {
-        "description": "",
-        "label": ""
+        "description": "服务器备份管理与恢复",
+        "label": "备份"
       },
       "configuration": {
-        "description": "",
-        "label": ""
+        "description": "服务器启动参数和 JVM 设置",
+        "label": "配置"
       },
       "console": {
-        "description": "",
-        "label": ""
+        "description": "服务器实时终端输出",
+        "label": "控制台"
       },
       "databases": {
-        "description": "",
-        "label": ""
+        "description": "服务器数据库管理",
+        "label": "数据库"
       },
       "files": {
-        "description": "",
-        "label": ""
+        "description": "浏览和编辑服务器文件",
+        "label": "文件管理器"
       },
       "metrics": {
-        "description": "",
-        "label": ""
+        "description": "CPU、内存、磁盘和网络图表",
+        "label": "监控指标"
       },
       "modManager": {
-        "description": "",
-        "label": ""
+        "description": "浏览并安装来自 CurseForge/Modrinth 的模组",
+        "label": "模组管理器"
       },
       "pluginManager": {
-        "description": "",
-        "label": ""
+        "description": "安装和管理服务器插件",
+        "label": "插件管理器"
       },
       "settings": {
-        "description": "",
-        "label": ""
+        "description": "重命名、重新安装和服务器偏好设置",
+        "label": "服务器设置"
       },
       "sftp": {
-        "description": "",
-        "label": ""
+        "description": "SFTP 连接信息和凭据",
+        "label": "SFTP 访问"
       },
       "tasks": {
-        "description": "",
-        "label": ""
+        "description": "用于服务器操作的类 Cron 自动化",
+        "label": "计划任务"
       },
       "users": {
-        "description": "",
-        "label": ""
+        "description": "管理服务器访问权限",
+        "label": "子用户"
       }
     },
-    "serverTabTitle": "",
-    "serverTemplate": "",
-    "unknownNode": ""
+    "serverTabTitle": "{{server}} — {{tab}}",
+    "serverTemplate": "服务器模板",
+    "unknownNode": "未知节点"
   },
   "sections": {
-    "accessControl": "",
-    "administration": "",
-    "configuration": "",
-    "extensions": "",
-    "infrastructure": "",
-    "monitoring": "",
-    "plugins": ""
+    "accessControl": "访问控制",
+    "administration": "管理",
+    "configuration": "配置",
+    "extensions": "扩展",
+    "infrastructure": "基础设施",
+    "monitoring": "监控",
+    "plugins": "插件"
   },
   "shell": {
-    "closeMenu": "",
-    "openMenu": "",
-    "openSearch": "",
-    "searchButton": "",
-    "skipToContent": ""
+    "closeMenu": "关闭菜单",
+    "openMenu": "打开菜单",
+    "openSearch": "打开搜索（{{shortcut}}）",
+    "searchButton": "搜索…",
+    "skipToContent": "跳到主要内容"
   },
   "sidebar": {
-    "collapse": "",
-    "dark": "",
-    "darkMode": "",
-    "expand": "",
-    "fallbackRole": "",
-    "fallbackUser": "",
-    "light": "",
-    "lightMode": "",
-    "logoAlt": "",
-    "logout": "",
-    "outOfDate": "",
-    "updateTooltip": "",
-    "versionTooltip": ""
+    "collapse": "收起侧边栏",
+    "dark": "深色",
+    "darkMode": "深色模式",
+    "expand": "展开侧边栏",
+    "fallbackRole": "成员",
+    "fallbackUser": "用户",
+    "light": "浅色",
+    "lightMode": "浅色模式",
+    "logoAlt": "{{panelName}} 徽标",
+    "logout": "退出登录",
+    "outOfDate": "（有新版本）",
+    "updateTooltip": "v{{current}} - 有新版本（最新：v{{latest}}）",
+    "versionTooltip": "Catalyst 面板 v{{version}}"
   }
 }

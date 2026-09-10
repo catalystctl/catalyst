@@ -1,46 +1,46 @@
 {
-  "accountFallback": "",
+  "accountFallback": "您的账号",
   "activity": {
-    "emptyDescription": "",
-    "emptyTitle": "",
-    "errorDescription": "",
-    "errorTitle": "",
-    "title": "",
-    "viewAll": ""
+    "emptyDescription": "该时间范围内没有已记录的操作。",
+    "emptyTitle": "暂无最近活动",
+    "errorDescription": "无法加载最近活动。",
+    "errorTitle": "无法加载活动",
+    "title": "最近活动",
+    "viewAll": "查看全部"
   },
-  "description": "",
+  "description": "{{name}} 的基础设施概览。",
   "overview": {
-    "account": "",
-    "accountDescription": "",
-    "alertsUnacknowledged": "",
-    "allResolved": "",
-    "errorDescription": "",
-    "errorTitle": "",
-    "nodesConnected": "",
-    "serversRunning": "",
-    "title": ""
+    "account": "账号",
+    "accountDescription": "管理您的个人资料",
+    "alertsUnacknowledged": "{{alerts}} 条未确认",
+    "allResolved": "全部已解决",
+    "errorDescription": "无法加载仪表盘统计信息。",
+    "errorTitle": "无法加载概览",
+    "nodesConnected": "已连接 {{nodes}} 个",
+    "serversRunning": "{{servers}} 台运行中",
+    "title": "概览"
   },
-  "pendingAlerts_other": "",
+  "pendingAlerts_other": "{{count}} 条未确认告警",
   "quickActions": {
-    "createServer": "",
-    "createServerDescription": "",
-    "profileSettings": "",
-    "profileSettingsDescription": "",
-    "registerNode": "",
-    "registerNodeDescription": "",
-    "viewAlerts": "",
-    "viewAlertsAllClear": "",
-    "viewAlertsAttention": "",
-    "viewServers": "",
-    "viewServersDescription": ""
+    "createServer": "创建服务器",
+    "createServerDescription": "部署新的游戏服务器",
+    "profileSettings": "个人资料设置",
+    "profileSettingsDescription": "管理您的账号",
+    "registerNode": "注册节点",
+    "registerNodeDescription": "添加基础设施",
+    "viewAlerts": "查看告警",
+    "viewAlertsAllClear": "全部正常",
+    "viewAlertsAttention": "{{alerts}} 条需要处理",
+    "viewServers": "查看服务器",
+    "viewServersDescription": "管理您的服务器"
   },
   "resources": {
-    "cpu": "",
-    "description": "",
-    "errorDescription": "",
-    "errorTitle": "",
-    "memory": "",
-    "title": ""
+    "cpu": "CPU",
+    "description": "所有节点的最新指标",
+    "errorDescription": "资源利用率当前不可用。",
+    "errorTitle": "无法加载资源",
+    "memory": "内存",
+    "title": "资源利用率"
   },
-  "title": ""
+  "title": "仪表盘"
 }
