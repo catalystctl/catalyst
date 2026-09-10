@@ -7,6 +7,9 @@ import path from 'path';
 import { z } from 'zod';
 import { getWsGateway } from '../websocket/gateway';
 import { isValidPluginName } from '../plugins/validator';
+import { apiError } from '../lib/http-error';
+import { ErrorCodes } from '../shared-types';
+import { formatZodIssues } from '../lib/validation';
 import { PluginMarketplaceService, browseMarketplaces, annotateMarketplaceEntries, PackagingError, listMarketplaceSources, addMarketplaceSource, setMarketplaceSourceEnabled, removeMarketplaceSource } from '../plugins/marketplace/service';
 import {
   DISCLAIMER_VERSION,
@@ -47,6 +50,7 @@ const ensureAdmin = (
     reply.status(403).send({
       success: false,
       error: 'Admin access required',
+      code: ErrorCodes.PERMISSION_DENIED,
     });
     return false;
   }
@@ -285,16 +289,22 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       const isAdmin = ensureAdmin(request, reply, 'admin.write');
       if (!isAdmin) return;
       const userId: string | undefined = request.user?.userId;
-      const body = AddMarketplaceSourceSchema.parse(request.body);
+      const parsed = AddMarketplaceSourceSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid request body', {
+          details: formatZodIssues(parsed.error.issues),
+        });
+      }
+      const body = parsed.data;
       try {
         const created = await addMarketplaceSource(prisma, body.url, body.label ?? null, userId ?? null);
         await writeAudit(prisma, 'marketplace.source.added', 'marketplace', { url: created.url, label: created.label }, userId);
         return { success: true, data: created };
       } catch (error: any) {
         if (error?.message === 'That marketplace is already configured') {
-          return reply.status(409).send({ success: false, error: error.message });
+          return reply.status(409).send({ success: false, error: error.message, code: ErrorCodes.PLUGIN_MARKETPLACE_ALREADY_CONFIGURED });
         }
-        return reply.status(400).send({ success: false, error: error.message });
+        return reply.status(400).send({ success: false, error: error.message, code: ErrorCodes.PLUGIN_MARKETPLACE_SOURCE_INVALID });
       }
     },
   );
@@ -317,13 +327,19 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       if (!isAdmin) return;
       const userId: string | undefined = request.user?.userId;
       const { id } = request.params as { id: string };
-      const body = UpdateMarketplaceSourceSchema.parse(request.body);
+      const parsed = UpdateMarketplaceSourceSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid request body', {
+          details: formatZodIssues(parsed.error.issues),
+        });
+      }
+      const body = parsed.data;
       try {
         const updated = await setMarketplaceSourceEnabled(prisma, id, body.enabled);
         await writeAudit(prisma, 'marketplace.source.updated', 'marketplace', { url: updated.url, enabled: body.enabled }, userId);
         return { success: true, data: updated };
       } catch {
-        return reply.status(404).send({ success: false, error: 'Marketplace source not found' });
+        return reply.status(404).send({ success: false, error: 'Marketplace source not found', code: ErrorCodes.PLUGIN_MARKETPLACE_SOURCE_NOT_FOUND });
       }
     },
   );
@@ -343,14 +359,14 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       const userId: string | undefined = request.user?.userId;
       const { id } = request.params as { id: string };
       if (id === 'official' || id.startsWith('env:')) {
-        return reply.status(400).send({ success: false, error: 'That marketplace source is managed outside the panel' });
+        return reply.status(400).send({ success: false, error: 'That marketplace source is managed outside the panel', code: ErrorCodes.PLUGIN_MARKETPLACE_SOURCE_MANAGED });
       }
       try {
         const removed = await removeMarketplaceSource(prisma, id);
         await writeAudit(prisma, 'marketplace.source.removed', 'marketplace', { url: removed.url }, userId);
         return { success: true, data: { id } };
       } catch {
-        return reply.status(404).send({ success: false, error: 'Marketplace source not found' });
+        return reply.status(404).send({ success: false, error: 'Marketplace source not found', code: ErrorCodes.PLUGIN_MARKETPLACE_SOURCE_NOT_FOUND });
       }
     },
   );
@@ -375,7 +391,13 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       const isAdmin = ensureAdmin(request, reply, 'admin.write');
       if (!isAdmin) return;
       const userId: string | undefined = request.user?.userId;
-      const body = InstallPluginSchema.parse(request.body);
+      const parsed = InstallPluginSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid request body', {
+          details: formatZodIssues(parsed.error.issues),
+        });
+      }
+      const body = parsed.data;
 
       try {
         const result = await marketplaceService.installFromUrl(body.url, body.sha256);
@@ -404,7 +426,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         if (error instanceof PackagingError) {
           return reply.status(400).send({ success: false, code: error.code, error: error.message });
         }
-        return reply.status(400).send({ success: false, error: error.message });
+        return reply.status(400).send({ success: false, error: error.message, code: ErrorCodes.PLUGIN_INSTALL_FAILED });
       }
     },
   );
@@ -429,15 +451,21 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       const userId: string | undefined = request.user?.userId;
       const { name } = request.params as { name: string };
       if (!isValidPluginName(name)) {
-        return reply.status(400).send({ success: false, error: 'Invalid plugin name' });
+        return reply.status(400).send({ success: false, error: 'Invalid plugin name', code: ErrorCodes.PLUGIN_INVALID_NAME });
       }
       // Never allow uninstalling a directory outside pluginsDir canon
       const pluginsRoot = path.resolve(pluginLoader.getPluginsDir());
       const targetDir = path.join(pluginsRoot, name);
       if (path.dirname(targetDir) !== pluginsRoot || targetDir === pluginsRoot) {
-        return reply.status(400).send({ success: false, error: 'Invalid plugin name' });
+        return reply.status(400).send({ success: false, error: 'Invalid plugin name', code: ErrorCodes.PLUGIN_INVALID_NAME });
       }
-      const body = UninstallPluginSchema.parse(request.body ?? {});
+      const parsed = UninstallPluginSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid request body', {
+          details: formatZodIssues(parsed.error.issues),
+        });
+      }
+      const body = parsed.data;
 
       try {
         const loaded = pluginLoader.getRegistry().get(name);
@@ -469,9 +497,9 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return { success: true, message: `Plugin ${name} uninstalled` };
       } catch (error: any) {
         if (error instanceof PackagingError && error.code === 'NOT_FOUND') {
-          return reply.status(404).send({ success: false, error: error.message });
+          return reply.status(404).send({ success: false, error: error.message, code: ErrorCodes.PLUGIN_NOT_FOUND });
         }
-        return reply.status(400).send({ success: false, error: error.message });
+        return reply.status(400).send({ success: false, error: error.message, code: ErrorCodes.PLUGIN_UNINSTALL_FAILED });
       }
     },
   );
@@ -501,20 +529,20 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
     async (request, reply) => {
       const { name, filename } = request.params as { name: string; filename: string };
       if (!isValidPluginName(name)) {
-        return reply.status(404).send({ success: false });
+        return reply.status(404).send({ success: false, code: ErrorCodes.NOT_FOUND });
       }
       const ext = path.extname(filename).toLowerCase();
       if (
         !ASSET_EXTENSIONS.has(ext) ||
         !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(filename)
       ) {
-        return reply.status(404).send({ success: false });
+        return reply.status(404).send({ success: false, code: ErrorCodes.NOT_FOUND });
       }
 
       const pluginsRoot = path.resolve(pluginLoader.getPluginsDir());
       const candidate = path.join(pluginsRoot, name, 'frontend', filename);
       if (path.dirname(candidate) !== path.join(pluginsRoot, name, 'frontend')) {
-        return reply.status(404).send({ success: false });
+        return reply.status(404).send({ success: false, code: ErrorCodes.NOT_FOUND });
       }
 
       let stat;
@@ -522,7 +550,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         stat = await fsp.stat(candidate);
         if (!stat.isFile()) throw new Error('not a file');
       } catch {
-        return reply.status(404).send({ success: false });
+        return reply.status(404).send({ success: false, code: ErrorCodes.NOT_FOUND });
       }
 
       const stream = fs.createReadStream(candidate);
@@ -601,6 +629,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(404).send({
           success: false,
           error: 'Plugin not found',
+          code: ErrorCodes.PLUGIN_NOT_FOUND,
         });
       }
 
@@ -662,7 +691,13 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       if (!isAdmin) return;
       const userId: string | undefined = request.user?.userId;
       const { name } = request.params as { name: string };
-      const body = EnablePluginSchema.parse(request.body);
+      const parsed = EnablePluginSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid request body', {
+          details: formatZodIssues(parsed.error.issues),
+        });
+      }
+      const body = parsed.data;
 
       try {
         if (body.enabled) {
@@ -725,6 +760,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(400).send({
           success: false,
           error: error.message,
+          code: ErrorCodes.PLUGIN_ENABLE_FAILED,
         });
       }
     },
@@ -747,6 +783,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(400).send({
           success: false,
           error: 'Invalid plugin name',
+          code: ErrorCodes.PLUGIN_INVALID_NAME,
         });
       }
 
@@ -766,6 +803,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(400).send({
           success: false,
           error: error.message,
+          code: ErrorCodes.PLUGIN_RELOAD_FAILED,
         });
       }
     },
@@ -792,15 +830,23 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(400).send({
           success: false,
           error: 'Invalid plugin name',
+          code: ErrorCodes.PLUGIN_INVALID_NAME,
         });
       }
 
-      const body = UpdatePluginPermissionsSchema.parse(request.body);
+      const parsed = UpdatePluginPermissionsSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid request body', {
+          details: formatZodIssues(parsed.error.issues),
+        });
+      }
+      const body = parsed.data;
       const plugin = pluginLoader.getRegistry().get(name);
       if (!plugin || plugin.status === 'error') {
         return reply.status(404).send({
           success: false,
           error: 'Plugin not found or in error state',
+          code: ErrorCodes.PLUGIN_NOT_FOUND,
         });
       }
 
@@ -811,6 +857,8 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(400).send({
           success: false,
           error: `Grant list contains undeclared permissions: ${invalid.join(', ')}`,
+          code: ErrorCodes.PLUGIN_UNDECLARED_PERMISSIONS,
+          params: { permissions: invalid.join(', ') },
         });
       }
 
@@ -853,6 +901,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(400).send({
           success: false,
           error: error.message,
+          code: ErrorCodes.PLUGIN_PERMISSIONS_UPDATE_FAILED,
         });
       }
     },
@@ -871,7 +920,13 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       const isAdmin = ensureAdmin(request, reply, 'admin.write');
       if (!isAdmin) return;
       const { name } = request.params as { name: string };
-      const body = UpdatePluginConfigSchema.parse(request.body);
+      const parsed = UpdatePluginConfigSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid request body', {
+          details: formatZodIssues(parsed.error.issues),
+        });
+      }
+      const body = parsed.data;
 
       const registry = pluginLoader.getRegistry();
       const plugin = registry.get(name);
@@ -880,6 +935,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(404).send({
           success: false,
           error: 'Plugin not found',
+          code: ErrorCodes.PLUGIN_NOT_FOUND,
         });
       }
 
@@ -902,6 +958,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(400).send({
           success: false,
           error: error.message,
+          code: ErrorCodes.PLUGIN_CONFIG_UPDATE_FAILED,
         });
       }
     },
@@ -925,6 +982,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(404).send({
           success: false,
           error: 'Plugin not found',
+          code: ErrorCodes.PLUGIN_NOT_FOUND,
         });
       }
 
@@ -932,6 +990,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         return reply.status(404).send({
           success: false,
           error: 'Plugin has no frontend',
+          code: ErrorCodes.PLUGIN_NO_FRONTEND,
         });
       }
 

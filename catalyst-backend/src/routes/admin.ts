@@ -3,7 +3,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { fromNodeHeaders } from 'better-auth/node';
 import { auth } from '../auth';
-import { ServerState } from '../shared-types';
+import { ErrorCodes, ServerState } from '../shared-types';
+import { apiError } from '../lib/http-error';
 import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
 import { describeError } from '../utils/describe-error.js';
@@ -125,7 +126,7 @@ export async function adminRoutes(app: FastifyInstance) {
         'template.read', 'server.read', 'apikey.manage'
       ]);
       if (!hasAny) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       // Get system statistics
@@ -153,7 +154,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(canManageUsers(request, 'read'))) {
-        return reply.status(403).send({ error: 'User read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User read permission required');
       }
 
       const { page = 1, limit = 20, search } = request.query as {
@@ -267,7 +268,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(canManageUsers(request, 'create'))) {
-        return reply.status(403).send({ error: 'User create permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User create permission required');
       }
 
       const { email, username, password, roleIds, serverIds, serverPermissions } = request.body as {
@@ -280,11 +281,13 @@ export async function adminRoutes(app: FastifyInstance) {
       };
 
       if (!email || !username || !password) {
-        return reply.status(400).send({ error: 'email, username, and password are required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'email, username, and password are required');
       }
 
       if (password.length < 8) {
-        return reply.status(400).send({ error: 'Password must be at least 8 characters' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Password must be at least 8 characters', {
+          params: { min: 8 },
+        });
       }
 
       const existing = await prisma.user.findFirst({
@@ -292,7 +295,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       if (existing) {
-        return reply.status(409).send({ error: 'Email or username already in use' });
+        return apiError(reply, 409, ErrorCodes.ADMIN_USER_EXISTS, 'Email or username already in use');
       }
 
       const rolesToAssign = roleIds?.length
@@ -300,7 +303,7 @@ export async function adminRoutes(app: FastifyInstance) {
         : [];
 
       if (roleIds?.length && rolesToAssign.length !== roleIds.length) {
-        return reply.status(400).send({ error: 'One or more roles are invalid' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'One or more roles are invalid');
       }
 
       // Validate that the acting user can grant all permissions in the assigned roles
@@ -315,8 +318,8 @@ export async function adminRoutes(app: FastifyInstance) {
               (p) => !actingPerms.includes(p),
             );
             if (cantGrant.length > 0) {
-              return reply.status(403).send({
-                error: `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`,
+              return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`, {
+                params: { permissions: cantGrant.join(', ') },
               });
             }
           }
@@ -341,8 +344,8 @@ export async function adminRoutes(app: FastifyInstance) {
             (p) => !actingPerms.includes(p),
           );
           if (cantGrantScoped.length > 0) {
-            return reply.status(403).send({
-              error: `Cannot assign role with scoped permissions you don't have: ${cantGrantScoped.join(', ')}`,
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot assign role with scoped permissions you don't have: ${cantGrantScoped.join(', ')}`, {
+              params: { permissions: cantGrantScoped.join(', ') },
             });
           }
         }
@@ -358,7 +361,7 @@ export async function adminRoutes(app: FastifyInstance) {
         });
 
         if (existingServers.length !== uniqueServerIds.length) {
-          return reply.status(400).send({ error: 'One or more servers are invalid' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'One or more servers are invalid');
         }
 
         // Validate requesting user can grant access to these servers
@@ -368,8 +371,8 @@ export async function adminRoutes(app: FastifyInstance) {
             const canGrant = server.ownerId === user.userId ||
               await hasNodeAccess(prisma, user.userId, server.nodeId);
             if (!canGrant) {
-              return reply.status(403).send({
-                error: `Cannot grant access to server ${server.id}`,
+              return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant access to server ${server.id}`, {
+                params: { serverId: server.id },
               });
             }
           }
@@ -384,8 +387,8 @@ export async function adminRoutes(app: FastifyInstance) {
               (p) => !requesterPerms.includes(p),
             );
             if (cantGrant.length > 0) {
-              return reply.status(403).send({
-                error: `Cannot grant server permissions you don't have: ${cantGrant.join(', ')}`,
+              return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant server permissions you don't have: ${cantGrant.join(', ')}`, {
+                params: { permissions: cantGrant.join(', ') },
               });
             }
           }
@@ -430,7 +433,7 @@ export async function adminRoutes(app: FastifyInstance) {
           : (signUpResponse as any);
       const created = signUpData?.user;
       if (!created) {
-        return reply.status(400).send({ error: 'User creation failed' });
+        return apiError(reply, 400, ErrorCodes.ADMIN_USER_CREATE_FAILED, 'User creation failed');
       }
 
       const emailWarning: string | null = null;
@@ -527,16 +530,16 @@ export async function adminRoutes(app: FastifyInstance) {
       // Check if updating roles
       if (roleIds) {
         if (!(canManageUsers(request, 'set_roles'))) {
-          return reply.status(403).send({ error: 'User set_roles permission required' });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User set_roles permission required');
         }
 
         // Prevent self-modification: users cannot change their own roles
         if (userId === user.userId) {
-          return reply.status(403).send({ error: 'Cannot modify your own roles' });
+          return apiError(reply, 403, ErrorCodes.ADMIN_SELF_MODIFICATION, 'Cannot modify your own roles');
         }
       } else {
         if (!(canManageUsers(request, 'update'))) {
-          return reply.status(403).send({ error: 'User update permission required' });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User update permission required');
         }
       }
 
@@ -546,13 +549,13 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       if (!existingUser) {
-        return reply.status(404).send({ error: 'User not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       }
       const targetPerms = existingUser.roles.flatMap((role) => (role.permissions as string[]) ?? []);
       const targetIsAdminEquivalent =
         targetPerms.includes('*') || targetPerms.includes('admin.write');
       if (password && targetIsAdminEquivalent && !(user.permissions ?? []).includes('*')) {
-        return reply.status(403).send({ error: 'Insufficient permissions to reset this user password' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to reset this user password');
       }
 
       // Role-change guards for Administrator demotion: removing the
@@ -565,20 +568,22 @@ export async function adminRoutes(app: FastifyInstance) {
           const newRolesIncludeAdmin = roleIds.includes(adminRole.id);
           if (targetHasAdmin && !newRolesIncludeAdmin) {
             if (!(user.permissions ?? []).includes('*')) {
-              return reply.status(403).send({ error: 'Insufficient permissions to demote this administrator' });
+              return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to demote this administrator');
             }
             const adminCount = await prisma.user.count({
               where: { roles: { some: { name: 'Administrator' } } },
             });
             if (adminCount <= 1) {
-              return reply.status(409).send({ error: 'Cannot remove the last administrator' });
+              return apiError(reply, 409, ErrorCodes.ADMIN_LAST_ADMIN, 'Cannot remove the last administrator');
             }
           }
         }
       }
 
       if (password && password.length < 8) {
-        return reply.status(400).send({ error: 'Password must be at least 8 characters' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Password must be at least 8 characters', {
+          params: { min: 8 },
+        });
       }
 
       const rolesToAssign = roleIds?.length
@@ -586,7 +591,7 @@ export async function adminRoutes(app: FastifyInstance) {
         : [];
 
       if (roleIds?.length && rolesToAssign.length !== roleIds.length) {
-        return reply.status(400).send({ error: 'One or more roles are invalid' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'One or more roles are invalid');
       }
 
       // Validate that the acting user can grant all permissions in the assigned roles
@@ -601,8 +606,8 @@ export async function adminRoutes(app: FastifyInstance) {
               (p) => !actingPerms.includes(p),
             );
             if (cantGrant.length > 0) {
-              return reply.status(403).send({
-                error: `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`,
+              return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`, {
+                params: { permissions: cantGrant.join(', ') },
               });
             }
           }
@@ -619,7 +624,7 @@ export async function adminRoutes(app: FastifyInstance) {
           },
         });
         if (duplicate) {
-          return reply.status(409).send({ error: 'Email or username already in use' });
+          return apiError(reply, 409, ErrorCodes.ADMIN_USER_EXISTS, 'Email or username already in use');
         }
       }
 
@@ -637,9 +642,7 @@ export async function adminRoutes(app: FastifyInstance) {
           });
         } catch (err: any) {
           request.log.error({ err }, 'Failed to set user password');
-          return reply.status(400).send({
-            error: err?.message || 'Failed to update user password',
-          });
+          return apiError(reply, 400, ErrorCodes.ADMIN_PASSWORD_UPDATE_FAILED, err?.message || 'Failed to update user password');
         }
         // Invalidate the target user's existing sessions after a password change.
         await prisma.session.deleteMany({ where: { userId } }).catch(() => {});
@@ -688,7 +691,7 @@ export async function adminRoutes(app: FastifyInstance) {
         });
 
         if (existingServers.length !== uniqueServerIds.length) {
-          return reply.status(400).send({ error: 'One or more servers are invalid' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'One or more servers are invalid');
         }
 
         // Validate requesting user can grant access to these servers
@@ -698,8 +701,8 @@ export async function adminRoutes(app: FastifyInstance) {
             const canGrant = server.ownerId === user.userId ||
               await hasNodeAccess(prisma, user.userId, server.nodeId);
             if (!canGrant) {
-              return reply.status(403).send({
-                error: `Cannot grant access to server ${server.id}`,
+              return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant access to server ${server.id}`, {
+                params: { serverId: server.id },
               });
             }
           }
@@ -714,8 +717,8 @@ export async function adminRoutes(app: FastifyInstance) {
               (p) => !requesterPerms.includes(p),
             );
             if (cantGrant.length > 0) {
-              return reply.status(403).send({
-                error: `Cannot grant server permissions you don't have: ${cantGrant.join(', ')}`,
+              return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant server permissions you don't have: ${cantGrant.join(', ')}`, {
+                params: { permissions: cantGrant.join(', ') },
               });
             }
           }
@@ -819,13 +822,13 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(canManageUsers(request, 'read'))) {
-        return reply.status(403).send({ error: 'User read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User read permission required');
       }
 
       const { userId } = request.params as { userId: string };
       const existingUser = await prisma.user.findUnique({ where: { id: userId } });
       if (!existingUser) {
-        return reply.status(404).send({ error: 'User not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       }
 
       const accessEntries = await prisma.serverAccess.findMany({
@@ -845,7 +848,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'role.read'))) {
-        return reply.status(403).send({ error: 'Role read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Role read permission required');
       }
 
       const roles = await prisma.role.findMany({
@@ -870,13 +873,13 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(canManageUsers(request, 'delete'))) {
-        return reply.status(403).send({ error: 'User delete permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User delete permission required');
       }
 
       const { userId } = request.params as { userId: string };
 
       if (userId === user.userId) {
-        return reply.status(400).send({ error: 'Cannot delete the current user' });
+        return apiError(reply, 400, ErrorCodes.ADMIN_SELF_MODIFICATION, 'Cannot delete the current user');
       }
 
       const existingUser = await prisma.user.findUnique({
@@ -884,7 +887,7 @@ export async function adminRoutes(app: FastifyInstance) {
         include: { roles: true },
       });
       if (!existingUser) {
-        return reply.status(404).send({ error: 'User not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       }
 
       // Hierarchy guard: deleting an admin-equivalent user (Administrator role
@@ -895,7 +898,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const targetIsAdminEquivalent = existingUser.roles.some((role) => role.name === 'Administrator') ||
         targetEffectivePerms.includes('admin.write');
       if (targetIsAdminEquivalent && !(user.permissions ?? []).includes('*')) {
-        return reply.status(403).send({ error: 'Insufficient permissions to delete this user' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to delete this user');
       }
 
       // Last-admin guard: never allow deleting the final Administrator.
@@ -904,7 +907,7 @@ export async function adminRoutes(app: FastifyInstance) {
           where: { roles: { some: { name: 'Administrator' } } },
         });
         if (adminCount <= 1) {
-          return reply.status(409).send({ error: 'Cannot delete the last administrator' });
+          return apiError(reply, 409, ErrorCodes.ADMIN_LAST_ADMIN, 'Cannot delete the last administrator');
         }
       }
 
@@ -921,10 +924,10 @@ export async function adminRoutes(app: FastifyInstance) {
           // Validate target user exists
           const targetUser = await prisma.user.findUnique({ where: { id: transferToUserId } });
           if (!targetUser) {
-            return reply.status(400).send({ error: 'Transfer target user not found' });
+            return apiError(reply, 400, ErrorCodes.ADMIN_USER_NOT_FOUND, 'Transfer target user not found');
           }
           if (transferToUserId === userId) {
-            return reply.status(400).send({ error: 'Cannot transfer servers to the user being deleted' });
+            return apiError(reply, 400, ErrorCodes.ADMIN_TRANSFER_TARGET_INVALID, 'Cannot transfer servers to the user being deleted');
           }
 
           // Transfer ownership of all servers
@@ -957,9 +960,9 @@ export async function adminRoutes(app: FastifyInstance) {
           }
         } else {
           // Return helpful error with server list
-          return reply.status(409).send({
-            error: `User owns ${ownedServers.length} server(s). Transfer ownership first or use { force: true, transferToUserId: "..." } to auto-transfer.`,
-            ownedServers: ownedServers.map(s => ({ id: s.id, name: s.name })),
+          return apiError(reply, 409, ErrorCodes.ADMIN_USER_OWNS_SERVERS, `User owns ${ownedServers.length} server(s). Transfer ownership first or use { force: true, transferToUserId: "..." } to auto-transfer.`, {
+            params: { count: ownedServers.length },
+            details: { ownedServers: ownedServers.map(s => ({ id: s.id, name: s.name })) },
           });
         }
       }
@@ -1031,7 +1034,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!canManageUsers(request, 'ban')) {
-        return reply.status(403).send({ error: 'User ban permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User ban permission required');
       }
 
       const { userId } = request.params as { userId: string };
@@ -1039,20 +1042,20 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (userId === user.userId) {
-        return reply.status(400).send({ error: 'Cannot ban yourself' });
+        return apiError(reply, 400, ErrorCodes.ADMIN_SELF_MODIFICATION, 'Cannot ban yourself');
       }
 
       const existingUser = await prisma.user.findUnique({ where: { id: userId }, include: { roles: { select: { permissions: true } } } });
       if (!existingUser) {
-        return reply.status(404).send({ error: 'User not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       }
       const banTargetPerms = existingUser.roles.flatMap((role) => (role.permissions as string[]) ?? []);
       if ((banTargetPerms.includes('*') || banTargetPerms.includes('admin.write')) && !(user.permissions ?? []).includes('*')) {
-        return reply.status(403).send({ error: 'Insufficient permissions to ban this user' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to ban this user');
       }
 
       if (existingUser.banned) {
-        return reply.status(400).send({ error: 'User is already banned' });
+        return apiError(reply, 400, ErrorCodes.ADMIN_USER_BANNED, 'User is already banned');
       }
 
       // Delegate to Better Auth's admin plugin — sets banned/banReason/banExpires
@@ -1100,7 +1103,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!canManageUsers(request, 'unban')) {
-        return reply.status(403).send({ error: 'User unban permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User unban permission required');
       }
 
       const { userId } = request.params as { userId: string };
@@ -1108,11 +1111,11 @@ export async function adminRoutes(app: FastifyInstance) {
 
       const existingUser = await prisma.user.findUnique({ where: { id: userId } });
       if (!existingUser) {
-        return reply.status(404).send({ error: 'User not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       }
 
       if (!existingUser.banned) {
-        return reply.status(400).send({ error: 'User is not banned' });
+        return apiError(reply, 400, ErrorCodes.ADMIN_USER_NOT_BANNED, 'User is not banned');
       }
 
       // Delegate to Better Auth's admin plugin — clears banned/banReason/banExpires.
@@ -1149,14 +1152,14 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!(canManageUsers(request, 'update'))) {
-        return reply.status(403).send({ error: 'User update permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User update permission required');
       }
       const { userId } = request.params as { userId: string };
       const existingUser = await prisma.user.findUnique({ where: { id: userId }, include: { roles: { select: { permissions: true } } } });
-      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+      if (!existingUser) return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       const targetPerms = existingUser.roles.flatMap((role) => (role.permissions as string[]) ?? []);
       if ((targetPerms.includes('*') || targetPerms.includes('admin.write')) && !((request.user as any).permissions ?? []).includes('*')) {
-        return reply.status(403).send({ error: 'Insufficient permissions to modify this user' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to modify this user');
       }
 
       const result = await prisma.passkey.deleteMany({ where: { userId } });
@@ -1177,14 +1180,14 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!(canManageUsers(request, 'update'))) {
-        return reply.status(403).send({ error: 'User update permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User update permission required');
       }
       const { userId } = request.params as { userId: string };
       const existingUser = await prisma.user.findUnique({ where: { id: userId }, include: { roles: { select: { permissions: true } } } });
-      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+      if (!existingUser) return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       const targetPerms = existingUser.roles.flatMap((role) => (role.permissions as string[]) ?? []);
       if ((targetPerms.includes('*') || targetPerms.includes('admin.write')) && !((request.user as any).permissions ?? []).includes('*')) {
-        return reply.status(403).send({ error: 'Insufficient permissions to modify this user' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to modify this user');
       }
 
       await prisma.twoFactor.deleteMany({ where: { userId } });
@@ -1206,7 +1209,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!(canManageUsers(request, 'update'))) {
-        return reply.status(403).send({ error: 'User update permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User update permission required');
       }
       const { userId } = request.params as { userId: string };
       const { enforce } = request.body as { enforce?: boolean };
@@ -1214,10 +1217,10 @@ export async function adminRoutes(app: FastifyInstance) {
         where: { id: userId },
         include: { twoFactor: true },
       });
-      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+      if (!existingUser) return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
 
       if (enforce && !existingUser.twoFactor.length) {
-        return reply.status(400).send({ error: 'Cannot enforce 2FA: user has not set up 2FA yet. Set it up first, then enforce.' });
+        return apiError(reply, 400, ErrorCodes.ADMIN_TWO_FACTOR_NOT_SET_UP, 'Cannot enforce 2FA: user has not set up 2FA yet. Set it up first, then enforce.');
       }
 
       await prisma.user.update({
@@ -1241,23 +1244,23 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!(canManageUsers(request, 'update'))) {
-        return reply.status(403).send({ error: 'User update permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User update permission required');
       }
       const { userId, accountId } = request.params as { userId: string; accountId: string };
       const existingUser = await prisma.user.findUnique({
         where: { id: userId },
         include: { accounts: true },
       });
-      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+      if (!existingUser) return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
 
       const account = existingUser.accounts.find((a: any) => a.id === accountId);
-      if (!account) return reply.status(404).send({ error: 'Account not found' });
+      if (!account) return apiError(reply, 404, ErrorCodes.ADMIN_ACCOUNT_NOT_FOUND, 'Account not found');
 
       // Prevent unlinking if this is the only authentication method (no password and no other accounts)
       const hasPassword = existingUser.accounts.some((a: any) => a.providerId === 'credential');
       const otherAccounts = existingUser.accounts.filter((a: any) => a.id !== accountId);
       if (!hasPassword && otherAccounts.length === 0) {
-        return reply.status(400).send({ error: 'Cannot unlink: this is the only authentication method. Set a password first.' });
+        return apiError(reply, 400, ErrorCodes.ADMIN_LAST_AUTH_METHOD, 'Cannot unlink: this is the only authentication method. Set a password first.');
       }
 
       await prisma.account.delete({ where: { id: accountId } });
@@ -1279,14 +1282,14 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!(canManageUsers(request, 'update'))) {
-        return reply.status(403).send({ error: 'User update permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User update permission required');
       }
       const { userId } = request.params as { userId: string };
       const existingUser = await prisma.user.findUnique({ where: { id: userId } });
-      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+      if (!existingUser) return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
 
       if (existingUser.emailVerified) {
-        return reply.status(400).send({ error: 'Email is already verified' });
+        return apiError(reply, 400, ErrorCodes.ADMIN_EMAIL_ALREADY_VERIFIED, 'Email is already verified');
       }
 
       await prisma.user.update({
@@ -1328,7 +1331,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'node.read'))) {
-        return reply.status(403).send({ error: 'Node read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Node read permission required');
       }
 
       const { search } = request.query as {
@@ -1377,7 +1380,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'server.read'))) {
-        return reply.status(403).send({ error: 'Server read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Server read permission required');
       }
 
       const { page = 1, limit = 20, status, search, owner } = request.query as {
@@ -1494,7 +1497,7 @@ export async function adminRoutes(app: FastifyInstance) {
       };
 
       if (!serverIds || serverIds.length === 0) {
-        return reply.status(400).send({ error: 'serverIds is required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'serverIds is required');
       }
 
       // Map actions to required permissions
@@ -1510,21 +1513,23 @@ export async function adminRoutes(app: FastifyInstance) {
 
       const requiredPerm = action ? actionPermissions[action] || 'server.read' : 'server.read';
       if (!(checkPerm(request, requiredPerm))) {
-        return reply.status(403).send({ error: `Server ${action} permission required` });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Server ${action} permission required`, {
+          params: { action },
+        });
       }
 
       if (!Array.isArray(serverIds) || serverIds.length === 0) {
-        return reply.status(400).send({ error: 'serverIds are required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'serverIds are required');
       }
 
       const uniqueServerIds = Array.from(new Set(serverIds.filter((id) => typeof id === 'string')));
       if (uniqueServerIds.length === 0) {
-        return reply.status(400).send({ error: 'serverIds are required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'serverIds are required');
       }
 
       const allowedActions = new Set(['start', 'stop', 'kill', 'restart', 'suspend', 'unsuspend', 'delete']);
       if (!action || !allowedActions.has(action)) {
-        return reply.status(400).send({ error: 'Invalid action' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid action');
       }
 
       const servers = await prisma.server.findMany({
@@ -1553,8 +1558,8 @@ export async function adminRoutes(app: FastifyInstance) {
             requiredPermission: requiredPerm,
           });
           if (!decision.allowed) {
-            return reply.status(403).send({
-              error: `Cannot perform ${action} on server ${server.id}: access denied`,
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot perform ${action} on server ${server.id}: access denied`, {
+              params: { action, serverId: server.id },
             });
           }
         }
@@ -1563,7 +1568,9 @@ export async function adminRoutes(app: FastifyInstance) {
       const serverMap = new Map(servers.map((server) => [server.id, server]));
       const missing = uniqueServerIds.filter((id) => !serverMap.has(id));
       if (missing.length) {
-        return reply.status(404).send({ error: 'One or more servers were not found', missing });
+        return apiError(reply, 404, ErrorCodes.NOT_FOUND, 'One or more servers were not found', {
+          details: { missing },
+        });
       }
 
       const gateway = app.wsGateway;
@@ -2059,7 +2066,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const {
@@ -2090,10 +2097,10 @@ export async function adminRoutes(app: FastifyInstance) {
         const parsedFrom = from ? new Date(from) : undefined;
         const parsedTo = to ? new Date(to) : undefined;
         if (parsedFrom && Number.isNaN(parsedFrom.getTime())) {
-          return reply.status(400).send({ error: 'Invalid from timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid from timestamp');
         }
         if (parsedTo && Number.isNaN(parsedTo.getTime())) {
-          return reply.status(400).send({ error: 'Invalid to timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid to timestamp');
         }
         where.timestamp = {
           ...(parsedFrom ? { gte: parsedFrom } : {}),
@@ -2152,7 +2159,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const {
@@ -2179,10 +2186,10 @@ export async function adminRoutes(app: FastifyInstance) {
         const parsedFrom = from ? new Date(from) : undefined;
         const parsedTo = to ? new Date(to) : undefined;
         if (parsedFrom && Number.isNaN(parsedFrom.getTime())) {
-          return reply.status(400).send({ error: 'Invalid from timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid from timestamp');
         }
         if (parsedTo && Number.isNaN(parsedTo.getTime())) {
-          return reply.status(400).send({ error: 'Invalid to timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid to timestamp');
         }
         where.timestamp = {
           ...(parsedFrom ? { gte: parsedFrom } : {}),
@@ -2206,7 +2213,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       if (format !== 'csv' && format !== 'json') {
-        return reply.status(400).send({ error: 'Invalid export format' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid export format');
       }
 
       if (format === 'json') {
@@ -2243,7 +2250,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const {
@@ -2277,10 +2284,10 @@ export async function adminRoutes(app: FastifyInstance) {
         const parsedFrom = from ? new Date(from) : undefined;
         const parsedTo = to ? new Date(to) : undefined;
         if (parsedFrom && Number.isNaN(parsedFrom.getTime())) {
-          return reply.status(400).send({ error: 'Invalid from timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid from timestamp');
         }
         if (parsedTo && Number.isNaN(parsedTo.getTime())) {
-          return reply.status(400).send({ error: 'Invalid to timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid to timestamp');
         }
         where.createdAt = {
           ...(parsedFrom ? { gte: parsedFrom } : {}),
@@ -2318,7 +2325,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const {
@@ -2340,7 +2347,7 @@ export async function adminRoutes(app: FastifyInstance) {
       };
 
       if (format !== 'json' && format !== 'markdown') {
-        return reply.status(400).send({ error: 'Invalid export format' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid export format');
       }
 
       const where: any = {};
@@ -2352,10 +2359,10 @@ export async function adminRoutes(app: FastifyInstance) {
         const parsedFrom = from ? new Date(from) : undefined;
         const parsedTo = to ? new Date(to) : undefined;
         if (parsedFrom && Number.isNaN(parsedFrom.getTime())) {
-          return reply.status(400).send({ error: 'Invalid from timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid from timestamp');
         }
         if (parsedTo && Number.isNaN(parsedTo.getTime())) {
-          return reply.status(400).send({ error: 'Invalid to timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid to timestamp');
         }
         where.createdAt = {
           ...(parsedFrom ? { gte: parsedFrom } : {}),
@@ -2429,14 +2436,14 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const { id } = request.params as { id: string };
 
       const error = await prisma.systemError.findUnique({ where: { id } });
       if (!error) {
-        return reply.status(404).send({ error: 'System error not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_SYSTEM_ERROR_NOT_FOUND, 'System error not found');
       }
 
       const updated = await prisma.systemError.update({
@@ -2454,7 +2461,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const { level, component, nodeId, resolved, from, to } = (request.body ?? {}) as {
@@ -2479,10 +2486,10 @@ export async function adminRoutes(app: FastifyInstance) {
         const parsedFrom = from ? new Date(from) : undefined;
         const parsedTo = to ? new Date(to) : undefined;
         if (parsedFrom && Number.isNaN(parsedFrom.getTime())) {
-          return reply.status(400).send({ error: 'Invalid from timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid from timestamp');
         }
         if (parsedTo && Number.isNaN(parsedTo.getTime())) {
-          return reply.status(400).send({ error: 'Invalid to timestamp' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid to timestamp');
         }
         where.createdAt = {
           ...(parsedFrom ? { gte: parsedFrom } : {}),
@@ -2507,7 +2514,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const settings = await getSecuritySettings();
@@ -2522,7 +2529,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const {
@@ -2571,17 +2578,17 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelConcurrentMax,
       ];
       if (numericFields.some((value) => !Number.isFinite(value) || Number(value) <= 0)) {
-        return reply.status(400).send({ error: 'Security settings must be positive numbers' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Security settings must be positive numbers');
       }
       if (Number(fileTunnelMaxUploadMb) > MAX_UPLOAD_MB_CEILING) {
-        return reply.status(400).send({
-          error: `Max upload size cannot exceed ${MAX_UPLOAD_MB_CEILING}MB`,
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `Max upload size cannot exceed ${MAX_UPLOAD_MB_CEILING}MB`, {
+          params: { maxMb: MAX_UPLOAD_MB_CEILING },
         });
       }
 
       const windowFields = [authRateLimitWindowMs, fileRateLimitWindowMs, consoleRateLimitWindowMs, fileTunnelRateLimitWindowMs];
       if (windowFields.some((value) => !Number.isFinite(value) || !isValidTimeWindowMs(Number(value)))) {
-        return reply.status(400).send({ error: 'Time windows must be valid (1000, 60000, 3600000, 86400000, or 2592000000 ms)' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Time windows must be valid (1000, 60000, 3600000, 86400000, or 2592000000 ms)');
       }
 
       await upsertSecuritySettings({
@@ -2660,7 +2667,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
       // Check admin permissions
       if (!(checkAnyPerm(request, ['*', 'admin.read']))) {
-        return reply.status(403).send({ error: 'Admin access required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin access required');
       }
 
       // Check database connectivity
@@ -2762,7 +2769,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const pools = await prisma.ipPool.findMany({
@@ -2834,7 +2841,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const {
@@ -2856,12 +2863,12 @@ export async function adminRoutes(app: FastifyInstance) {
       };
 
       if (!nodeId || !networkName || !cidr) {
-        return reply.status(400).send({ error: 'nodeId, networkName, and cidr are required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'nodeId, networkName, and cidr are required');
       }
 
       const node = await prisma.node.findUnique({ where: { id: nodeId } });
       if (!node) {
-        return reply.status(404).send({ error: 'Node not found' });
+        return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, 'Node not found');
       }
 
       try {
@@ -2873,7 +2880,7 @@ export async function adminRoutes(app: FastifyInstance) {
           reserved: reserved || [],
         });
       } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, error.message);
       }
 
       const pool = await prisma.ipPool.create({
@@ -2945,7 +2952,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const { poolId } = request.params as { poolId: string };
@@ -2955,7 +2962,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       if (!pool) {
-        return reply.status(404).send({ error: 'IP pool not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_IP_POOL_NOT_FOUND, 'IP pool not found');
       }
 
       const {
@@ -2981,7 +2988,7 @@ export async function adminRoutes(app: FastifyInstance) {
           reserved: reserved ?? pool.reserved,
         });
       } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, error.message);
       }
 
       const updated = await prisma.ipPool.update({
@@ -3052,7 +3059,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const { poolId } = request.params as { poolId: string };
@@ -3062,9 +3069,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       if (activeAllocations > 0) {
-        return reply.status(409).send({
-          error: 'Pool has active allocations',
-        });
+        return apiError(reply, 409, ErrorCodes.ADMIN_IP_POOL_IN_USE, 'Pool has active allocations');
       }
 
       // Get pool info before deletion for agent notification
@@ -3128,7 +3133,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const hosts = await prisma.databaseHost.findMany({
@@ -3149,7 +3154,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const { name, host, port, username, password, engine, database } = request.body as {
@@ -3163,26 +3168,32 @@ export async function adminRoutes(app: FastifyInstance) {
       };
 
       if (!name || !host || !username || !password) {
-        return reply.status(400).send({ error: 'name, host, username, and password are required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'name, host, username, and password are required');
       }
 
       if (name.trim().length < 3) {
-        return reply.status(400).send({ error: 'name must be at least 3 characters' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'name must be at least 3 characters', {
+          params: { min: 3 },
+        });
       }
 
       if (port !== undefined && (port <= 0 || port > 65535)) {
-        return reply.status(400).send({ error: 'port must be between 1 and 65535' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'port must be between 1 and 65535', {
+          params: { min: 1, max: 65535 },
+        });
       }
 
       const validEngines = ['mysql', 'postgresql', 'postgres'];
       const resolvedEngine = engine?.toLowerCase();
       if (resolvedEngine && !validEngines.includes(resolvedEngine)) {
-        return reply.status(400).send({ error: `engine must be one of: ${validEngines.join(', ')}` });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `engine must be one of: ${validEngines.join(', ')}`, {
+          params: { engines: validEngines.join(', ') },
+        });
       }
 
       const trimmedHost = host.trim();
       if (!/^[a-z0-9.-]+$/i.test(trimmedHost)) {
-        return reply.status(400).send({ error: 'host must be a valid hostname or IP' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'host must be a valid hostname or IP');
       }
 
       try {
@@ -3221,7 +3232,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
         reply.status(201).send({ success: true, data: created });
       } catch (error: any) {
-        return reply.status(409).send({ error: 'Database host name already exists' });
+        return apiError(reply, 409, ErrorCodes.ADMIN_DATABASE_HOST_NAME_TAKEN, 'Database host name already exists');
       }
     }
   );
@@ -3234,7 +3245,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const { hostId } = request.params as { hostId: string };
@@ -3253,27 +3264,33 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       if (!existing) {
-        return reply.status(404).send({ error: 'Database host not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_DATABASE_HOST_NOT_FOUND, 'Database host not found');
       }
 
       if (name !== undefined && name.trim().length < 3) {
-        return reply.status(400).send({ error: 'name must be at least 3 characters' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'name must be at least 3 characters', {
+          params: { min: 3 },
+        });
       }
 
       if (port !== undefined && (port <= 0 || port > 65535)) {
-        return reply.status(400).send({ error: 'port must be between 1 and 65535' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'port must be between 1 and 65535', {
+          params: { min: 1, max: 65535 },
+        });
       }
 
       const validEngines = ['mysql', 'postgresql', 'postgres'];
       const resolvedEngine = engine?.toLowerCase();
       if (resolvedEngine && !validEngines.includes(resolvedEngine)) {
-        return reply.status(400).send({ error: `engine must be one of: ${validEngines.join(', ')}` });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `engine must be one of: ${validEngines.join(', ')}`, {
+          params: { engines: validEngines.join(', ') },
+        });
       }
 
       if (host !== undefined) {
         const trimmedHost = host.trim();
         if (!/^[a-z0-9.-]+$/i.test(trimmedHost)) {
-          return reply.status(400).send({ error: 'host must be a valid hostname or IP' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'host must be a valid hostname or IP');
         }
       }
 
@@ -3319,7 +3336,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
         reply.send(serialize({ success: true, data: updated }));
       } catch (error: any) {
-        return reply.status(409).send({ error: 'Database host name already exists' });
+        return apiError(reply, 409, ErrorCodes.ADMIN_DATABASE_HOST_NAME_TAKEN, 'Database host name already exists');
       }
     }
   );
@@ -3332,7 +3349,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const { hostId } = request.params as { hostId: string };
@@ -3342,7 +3359,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       if (databasesCount > 0) {
-        return reply.status(409).send({ error: 'Database host has active databases' });
+        return apiError(reply, 409, ErrorCodes.ADMIN_DATABASE_HOST_IN_USE, 'Database host has active databases');
       }
 
       const deleted = await prisma.databaseHost.delete({ where: { id: hostId } });
@@ -3376,13 +3393,13 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const { hostId } = request.params as { hostId: string };
       const host = await prisma.databaseHost.findUnique({ where: { id: hostId } });
       if (!host) {
-        return reply.status(404).send({ error: 'Database host not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_DATABASE_HOST_NOT_FOUND, 'Database host not found');
       }
 
       const engine = host.engine || 'mysql';
@@ -3483,7 +3500,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const start = Date.now();
@@ -3544,7 +3561,7 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
       const settings = await getSmtpSettings();
       // Never return the plaintext SMTP password — send a mask sentinel instead.
@@ -3564,7 +3581,7 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
       const {
         host,
@@ -3593,11 +3610,11 @@ export async function adminRoutes(app: FastifyInstance) {
       };
 
       if (host === '' || username === '' || from === '' || replyTo === '') {
-        return reply.status(400).send({ error: 'SMTP fields cannot be empty strings' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'SMTP fields cannot be empty strings');
       }
 
       if (port !== undefined && (!Number.isInteger(port) || port <= 0 || port > 65535)) {
-        return reply.status(400).send({ error: 'Invalid SMTP port' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid SMTP port');
       }
 
       // Password preservation: the client never sees the plaintext password
@@ -3657,7 +3674,7 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
       const settings = await getModManagerSettings();
       const mask = (v: string | null | undefined) =>
@@ -3672,7 +3689,7 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
       const { curseforgeApiKey, modrinthApiKey } = request.body as {
         curseforgeApiKey?: string | null;
@@ -3680,7 +3697,7 @@ export async function adminRoutes(app: FastifyInstance) {
       };
 
       if (curseforgeApiKey === '' || modrinthApiKey === '') {
-        return reply.status(400).send({ error: 'Mod manager keys cannot be empty strings' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Mod manager keys cannot be empty strings');
       }
 
       await upsertModManagerSettings({
@@ -3714,7 +3731,7 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       let settings = await prisma.themeSettings.findUnique({
@@ -3738,7 +3755,7 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const {
@@ -3767,36 +3784,38 @@ export async function adminRoutes(app: FastifyInstance) {
 
       // Validation
       if (panelName !== undefined && panelName.trim().length < 1) {
-        return reply.status(400).send({ error: 'Panel name cannot be empty' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Panel name cannot be empty');
       }
 
       if (defaultTheme !== undefined && !['light', 'dark', 'system'].includes(defaultTheme)) {
-        return reply.status(400).send({ error: 'Invalid default theme' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid default theme');
       }
 
       if (enabledThemes !== undefined) {
         if (!Array.isArray(enabledThemes) || enabledThemes.length === 0) {
-          return reply.status(400).send({ error: 'At least one theme must be enabled' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'At least one theme must be enabled');
         }
         const validThemes = ['light', 'dark'];
         if (!enabledThemes.every((t) => validThemes.includes(t))) {
-          return reply.status(400).send({ error: 'Invalid theme in enabledThemes' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid theme in enabledThemes');
         }
       }
 
       const colorRegex = /^#[0-9A-Fa-f]{6}$/;
       if (primaryColor !== undefined && !colorRegex.test(primaryColor)) {
-        return reply.status(400).send({ error: 'Invalid primary color format' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid primary color format');
       }
       if (secondaryColor !== undefined && !colorRegex.test(secondaryColor)) {
-        return reply.status(400).send({ error: 'Invalid secondary color format' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid secondary color format');
       }
       if (accentColor !== undefined && !colorRegex.test(accentColor)) {
-        return reply.status(400).send({ error: 'Invalid accent color format' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid accent color format');
       }
 
       if (customCss !== undefined && customCss !== null && customCss.length > 100000) {
-        return reply.status(400).send({ error: 'Custom CSS too large (max 100KB)' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Custom CSS too large (max 100KB)', {
+          params: { maxKb: 100 },
+        });
       }
 
       const updateData: any = {};
@@ -3844,7 +3863,7 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const {
@@ -3896,7 +3915,7 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest<{ Params: { lockoutId: string } }>, reply: FastifyReply) => {
       const user = request.user;
       if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const { lockoutId } = request.params;
@@ -3906,7 +3925,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       if (!lockout) {
-        return reply.status(404).send({ error: 'Lockout not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_LOCKOUT_NOT_FOUND, 'Lockout not found');
       }
 
       await prisma.authLockout.delete({
@@ -3936,7 +3955,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!checkPerm(request, 'admin.read')) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       const settings = await prisma.themeSettings.findUnique({ where: { id: 'default' } });
@@ -3973,7 +3992,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!checkPerm(request, 'admin.write')) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
       }
 
       const { whmcs, paymenter } = request.body as {
@@ -4015,7 +4034,9 @@ export async function adminRoutes(app: FastifyInstance) {
           } else {
             // Validate URL format
             if (!config.discoveryUrl.match(/^https?:\/\/[^\s]+$/)) {
-              return reply.status(400).send({ error: `Invalid discovery URL for ${provider}` });
+              return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `Invalid discovery URL for ${provider}`, {
+                params: { provider },
+              });
             }
             existing.discoveryUrl = config.discoveryUrl.trim();
           }

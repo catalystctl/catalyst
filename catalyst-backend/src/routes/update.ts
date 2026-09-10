@@ -5,6 +5,8 @@ import {
 	performUpdate,
 	checkForUpdate,
 } from '../services/auto-updater.js';
+import { apiError } from '../lib/http-error.js';
+import { ErrorCodes } from '../shared-types';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -27,7 +29,7 @@ export async function updateRoutes(app: FastifyInstance) {
 		{ preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'admin.write')) {
-				return reply.status(403).send({ error: 'Admin write permission required' });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
 			}
 
 			if (isCacheStale(getUpdateStatus())) {
@@ -53,7 +55,7 @@ export async function updateRoutes(app: FastifyInstance) {
 		{ preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'admin.write')) {
-				return reply.status(403).send({ error: 'Admin write permission required' });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
 			}
 
 			const result = await performUpdate(app.log);
@@ -66,6 +68,7 @@ export async function updateRoutes(app: FastifyInstance) {
 			return reply.status(400).send({
 				success: false,
 				message: result.message,
+				code: ErrorCodes.UPDATE_FAILED,
 			});
 		},
 	);
@@ -77,7 +80,7 @@ export async function updateRoutes(app: FastifyInstance) {
 		{ preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'admin.write')) {
-				return reply.status(403).send({ error: 'Admin write permission required' });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
 			}
 			return reply.send(getUpdateState());
 		},

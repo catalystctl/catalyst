@@ -1174,7 +1174,7 @@ export class WebSocketGateway {
       // Check overall client connection limit
       if (this.clients.size >= this.MAX_CLIENT_CONNECTIONS) {
         this.logger.warn('Client connection rejected: overall limit reached');
-        socket.send(JSON.stringify({ type: 'error', error: 'Connection limit reached' }));
+        socket.send(JSON.stringify({ type: 'error', error: 'Connection limit reached', code: ErrorCodes.RATE_LIMITED }));
         socket.close();
         return;
       }
@@ -1201,7 +1201,7 @@ export class WebSocketGateway {
           const userConnections = Array.from(this.clients.values()).filter(c => c.userId === session.user.id).length;
           if (userConnections >= this.MAX_CONNECTIONS_PER_USER) {
             this.logger.warn({ userId: session.user.id, current: userConnections }, 'User connection limit reached');
-            socket.send(JSON.stringify({ type: 'error', error: 'Too many connections for this user' }));
+            socket.send(JSON.stringify({ type: 'error', error: 'Too many connections for this user', code: ErrorCodes.RATE_LIMITED }));
             this.clients.delete(clientId);
             socket.close();
             return;
@@ -3302,6 +3302,7 @@ export class WebSocketGateway {
               JSON.stringify({
                 type: "error",
                 error: ErrorCodes.PERMISSION_DENIED,
+                code: ErrorCodes.PERMISSION_DENIED,
                 serverId: server.id,
               })
             );
@@ -3319,6 +3320,7 @@ export class WebSocketGateway {
               JSON.stringify({
                 type: "error",
                 error: ErrorCodes.PERMISSION_DENIED,
+                code: ErrorCodes.PERMISSION_DENIED,
                 serverId: server.id,
               })
             );
@@ -3369,6 +3371,7 @@ export class WebSocketGateway {
             JSON.stringify({
               type: "error",
               error: ErrorCodes.SERVER_NOT_FOUND,
+              code: ErrorCodes.SERVER_NOT_FOUND,
             })
           );
         }
@@ -3408,6 +3411,7 @@ export class WebSocketGateway {
             JSON.stringify({
               type: "error",
               error: ErrorCodes.PERMISSION_DENIED,
+              code: ErrorCodes.PERMISSION_DENIED,
               serverId: server.id,
             })
           );
@@ -3418,6 +3422,7 @@ export class WebSocketGateway {
             JSON.stringify({
                 type: "error",
                 error: "SERVER_SUSPENDED",
+                code: "SERVER_SUSPENDED",
                 serverId: server.id,
               })
             );
@@ -3432,6 +3437,7 @@ export class WebSocketGateway {
             JSON.stringify({
               type: "error",
               error: ErrorCodes.PERMISSION_DENIED,
+              code: ErrorCodes.PERMISSION_DENIED,
               serverId: server.id,
             })
           );
@@ -3491,6 +3497,7 @@ export class WebSocketGateway {
             JSON.stringify({
               type: "error",
               error: ErrorCodes.NODE_OFFLINE,
+              code: ErrorCodes.NODE_OFFLINE,
               serverId: server.id,
             })
           );
@@ -3511,6 +3518,7 @@ export class WebSocketGateway {
               JSON.stringify({
                 type: "error",
                 error: ErrorCodes.SERVER_NOT_FOUND,
+                code: ErrorCodes.SERVER_NOT_FOUND,
                 serverId: event.serverId,
               })
             );
@@ -3535,6 +3543,7 @@ export class WebSocketGateway {
               JSON.stringify({
                 type: "error",
                 error: ErrorCodes.PERMISSION_DENIED,
+                code: ErrorCodes.PERMISSION_DENIED,
                 serverId: server.id,
               })
             );
@@ -3553,6 +3562,7 @@ export class WebSocketGateway {
               JSON.stringify({
                 type: "error",
                 error: ErrorCodes.PERMISSION_DENIED,
+                code: ErrorCodes.PERMISSION_DENIED,
                 serverId: server.id,
               })
             );
@@ -3565,6 +3575,7 @@ export class WebSocketGateway {
               JSON.stringify({
                 type: "error",
                 error: "SERVER_SUSPENDED",
+                code: "SERVER_SUSPENDED",
                 serverId: server.id,
               })
             );
@@ -3619,6 +3630,7 @@ export class WebSocketGateway {
             JSON.stringify({
               type: "error",
               error: ErrorCodes.NODE_OFFLINE,
+              code: ErrorCodes.NODE_OFFLINE,
               serverId: server.id,
             })
           );
@@ -3979,6 +3991,7 @@ export class WebSocketGateway {
         eulaText: message.eulaText,
         eulaServerUuid: message.serverUuid,
         error: message.error,
+        code: message.code,
       };
     const eventData = JSON.stringify(payload);
 

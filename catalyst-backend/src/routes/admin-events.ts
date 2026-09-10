@@ -19,6 +19,8 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { resolveUserPermissions } from '../lib/permissions-catalog.js';
 import { prisma } from '../db.js';
 import { hasPermission } from '../lib/permissions.js';
+import { apiError } from '../lib/http-error';
+import { ErrorCodes } from '../shared-types';
 import { openSseStream } from '../utils/sse.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
@@ -93,19 +95,16 @@ export function adminEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGate
           headers: fromNodeHeaders(request.headers as ReqHeaders),
         });
         if (!session) {
-          reply.status(401).send({ error: 'Unauthorized' });
-          return;
+          return apiError(reply, 401, ErrorCodes.AUTH_EXPIRED, 'Unauthorized');
         }
         userId = session.user.id;
       } catch {
-        reply.status(401).send({ error: 'Unauthorized' });
-        return;
+        return apiError(reply, 401, ErrorCodes.AUTH_EXPIRED, 'Unauthorized');
       }
 
       // Authorize: require admin.read permission
       if (userId && !(await hasPermission(prisma, userId, 'admin.read'))) {
-        reply.status(403).send({ error: 'Admin read permission required' });
-        return;
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
       // Take ownership of the socket so Fastify does not end the response on return.

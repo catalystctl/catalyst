@@ -24,6 +24,8 @@ import {
   resolveUserPermissionsLive,
   ALL_SERVER_PERMISSIONS,
 } from '../lib/permissions-catalog';
+import { apiError } from '../lib/http-error';
+import { ErrorCodes } from '../shared-types';
 
 /** Role permission mutations affect admin + node-access caches too. */
 function flushAllPermissionCaches(): void {
@@ -158,7 +160,8 @@ async function applyRoleScope(
 function respondScopeError(reply: FastifyReply, err: unknown): boolean {
   const e = err as { statusCode?: number; message?: string };
   if (e?.statusCode) {
-    reply.status(e.statusCode).send({ error: e.message });
+    const code = e.statusCode === 403 ? ErrorCodes.PERMISSION_DENIED : ErrorCodes.VALIDATION_ERROR;
+    apiError(reply, e.statusCode, code, e.message as string);
     return true;
   }
   return false;
@@ -176,7 +179,7 @@ export async function roleRoutes(app: FastifyInstance) {
   ): Promise<boolean> => {
     const has = await hasPermission(prisma, userId, permission);
     if (!has) {
-      reply.status(403).send({ error: 'Insufficient permissions' });
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions');
       return false;
     }
     return true;
@@ -260,7 +263,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (!role) {
-        return reply.status(404).send({ error: 'Role not found' });
+        return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
       // Derive the wizard scope shape from the stored grants (single mode).
@@ -319,11 +322,11 @@ export async function roleRoutes(app: FastifyInstance) {
       };
 
       if (!name || name.trim().length === 0) {
-        return reply.status(400).send({ error: 'Role name is required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Role name is required');
       }
 
       if (!Array.isArray(permissions)) {
-        return reply.status(400).send({ error: 'Permissions must be an array' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Permissions must be an array');
       }
 
       // Validate user can grant these permissions (prevent privilege escalation)
@@ -335,8 +338,8 @@ export async function roleRoutes(app: FastifyInstance) {
           (p) => !userPerms.includes(p),
         );
         if (cantGrant.length > 0) {
-          return reply.status(403).send({
-            error: `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`,
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`, {
+            params: { permissions: cantGrant.join(', ') },
           });
         }
       }
@@ -347,7 +350,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (existing) {
-        return reply.status(409).send({ error: 'Role with this name already exists' });
+        return apiError(reply, 409, ErrorCodes.ROLE_NAME_TAKEN, 'Role with this name already exists');
       }
 
       const role = await prisma.role.create({
@@ -427,7 +430,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (!role) {
-        return reply.status(404).send({ error: 'Role not found' });
+        return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
       // Prevent self-modification: users cannot update a role they are assigned to
@@ -435,7 +438,7 @@ export async function roleRoutes(app: FastifyInstance) {
         where: { id: userId, roles: { some: { id: roleId } } },
       });
       if (selfAssigned) {
-        return reply.status(403).send({ error: 'Cannot modify a role you are assigned to' });
+        return apiError(reply, 403, ErrorCodes.ADMIN_SELF_MODIFICATION, 'Cannot modify a role you are assigned to');
       }
 
       // Check for duplicate name
@@ -448,7 +451,7 @@ export async function roleRoutes(app: FastifyInstance) {
         });
 
         if (existing) {
-          return reply.status(409).send({ error: 'Role with this name already exists' });
+          return apiError(reply, 409, ErrorCodes.ROLE_NAME_TAKEN, 'Role with this name already exists');
         }
       }
 
@@ -457,7 +460,7 @@ export async function roleRoutes(app: FastifyInstance) {
       if (description !== undefined) updateData.description = description?.trim() || null;
       if (permissions !== undefined) {
         if (!Array.isArray(permissions)) {
-          return reply.status(400).send({ error: 'Permissions must be an array' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Permissions must be an array');
         }
 
         // Validate user can grant these permissions (prevent privilege escalation)
@@ -469,8 +472,8 @@ export async function roleRoutes(app: FastifyInstance) {
             (p) => !userPerms.includes(p),
           );
           if (cantGrant.length > 0) {
-            return reply.status(403).send({
-              error: `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`,
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`, {
+              params: { permissions: cantGrant.join(', ') },
             });
           }
         }
@@ -551,13 +554,12 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (!role) {
-        return reply.status(404).send({ error: 'Role not found' });
+        return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
       if (role._count.users > 0) {
-        return reply.status(409).send({
-          error: 'Cannot delete role with assigned users',
-          userCount: role._count.users,
+        return apiError(reply, 409, ErrorCodes.ROLE_IN_USE, 'Cannot delete role with assigned users', {
+          params: { userCount: role._count.users },
         });
       }
 
@@ -603,7 +605,7 @@ export async function roleRoutes(app: FastifyInstance) {
       const { permission } = request.body as { permission: string };
 
       if (!permission || typeof permission !== 'string') {
-        return reply.status(400).send({ error: 'Permission is required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Permission is required');
       }
 
       // Validate user can grant this permission (prevent privilege escalation)
@@ -611,8 +613,8 @@ export async function roleRoutes(app: FastifyInstance) {
       const userPerms: string[] = await freshEditorPermissions(userId, request.user?.permissions ?? []);
       const hasWildcard = userPerms.includes('*');
       if (!hasWildcard && !userPerms.includes(permission)) {
-        return reply.status(403).send({
-          error: `Cannot grant permission you don't have: ${permission}`,
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant permission you don't have: ${permission}`, {
+          params: { permission },
         });
       }
 
@@ -621,7 +623,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (!role) {
-        return reply.status(404).send({ error: 'Role not found' });
+        return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
       // Prevent self-modification: users cannot add permissions to a role they are assigned to
@@ -629,11 +631,11 @@ export async function roleRoutes(app: FastifyInstance) {
         where: { id: userId, roles: { some: { id: roleId } } },
       });
       if (selfAssigned) {
-        return reply.status(403).send({ error: 'Cannot modify a role you are assigned to' });
+        return apiError(reply, 403, ErrorCodes.ADMIN_SELF_MODIFICATION, 'Cannot modify a role you are assigned to');
       }
 
       if (role.permissions.includes(permission)) {
-        return reply.status(409).send({ error: 'Role already has this permission' });
+        return apiError(reply, 409, ErrorCodes.ROLE_PERMISSION_EXISTS, 'Role already has this permission');
       }
 
       const updated = await prisma.role.update({
@@ -689,7 +691,7 @@ export async function roleRoutes(app: FastifyInstance) {
       const permission = (request.params as any)['*'];
 
       if (!permission) {
-        return reply.status(400).send({ error: 'Permission is required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Permission is required');
       }
 
       const role = await prisma.role.findUnique({
@@ -697,7 +699,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (!role) {
-        return reply.status(404).send({ error: 'Role not found' });
+        return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
       // Prevent self-modification: users cannot remove permissions from a role they are assigned to
@@ -705,11 +707,11 @@ export async function roleRoutes(app: FastifyInstance) {
         where: { id: userId, roles: { some: { id: roleId } } },
       });
       if (selfAssigned) {
-        return reply.status(403).send({ error: 'Cannot modify a role you are assigned to' });
+        return apiError(reply, 403, ErrorCodes.ADMIN_SELF_MODIFICATION, 'Cannot modify a role you are assigned to');
       }
 
       if (!role.permissions.includes(permission)) {
-        return reply.status(404).send({ error: 'Role does not have this permission' });
+        return apiError(reply, 404, ErrorCodes.ROLE_PERMISSION_NOT_FOUND, 'Role does not have this permission');
       }
 
       const updated = await prisma.role.update({
@@ -766,16 +768,16 @@ export async function roleRoutes(app: FastifyInstance) {
       ]);
 
       if (!role) {
-        return reply.status(404).send({ error: 'Role not found' });
+        return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
       if (!user) {
-        return reply.status(404).send({ error: 'User not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       }
 
       // Prevent self-assignment: users cannot assign roles to themselves
       if (userId === currentUserId) {
-        return reply.status(403).send({ error: 'Cannot assign roles to yourself' });
+        return apiError(reply, 403, ErrorCodes.ADMIN_SELF_MODIFICATION, 'Cannot assign roles to yourself');
       }
 
       // Validate current user has all permissions in the target role
@@ -788,8 +790,8 @@ export async function roleRoutes(app: FastifyInstance) {
           (p) => !currentUserPerms.includes(p),
         );
         if (cantGrant.length > 0) {
-          return reply.status(403).send({
-            error: `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`,
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`, {
+            params: { permissions: cantGrant.join(', ') },
           });
         }
       }
@@ -818,8 +820,8 @@ export async function roleRoutes(app: FastifyInstance) {
           (p) => !currentUserPerms.includes(p),
         );
         if (cantGrantScoped.length > 0) {
-          return reply.status(403).send({
-            error: `Cannot assign role with scoped permissions you don't have: ${cantGrantScoped.join(', ')}`,
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot assign role with scoped permissions you don't have: ${cantGrantScoped.join(', ')}`, {
+            params: { permissions: cantGrantScoped.join(', ') },
           });
         }
       }
@@ -833,7 +835,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (existingRole) {
-        return reply.status(409).send({ error: 'User already has this role' });
+        return apiError(reply, 409, ErrorCodes.ROLE_ALREADY_ASSIGNED, 'User already has this role');
       }
 
       await prisma.user.update({
@@ -886,7 +888,7 @@ export async function roleRoutes(app: FastifyInstance) {
       const role = await prisma.role.findUnique({ where: { id: roleId } });
 
       if (!role) {
-        return reply.status(404).send({ error: 'Role not found' });
+        return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
       // Check if user has this role
@@ -898,12 +900,12 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (!userWithRole) {
-        return reply.status(404).send({ error: 'User does not have this role' });
+        return apiError(reply, 404, ErrorCodes.ROLE_NOT_ASSIGNED, 'User does not have this role');
       }
 
       // Prevent self-removal: users cannot remove roles from themselves
       if (userId === currentUserId) {
-        return reply.status(403).send({ error: 'Cannot remove roles from yourself' });
+        return apiError(reply, 403, ErrorCodes.ADMIN_SELF_MODIFICATION, 'Cannot remove roles from yourself');
       }
 
       await prisma.user.update({
@@ -971,7 +973,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({ error: 'User not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       }
 
       // Also return aggregated permissions from all roles
@@ -1027,7 +1029,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (!role) {
-        return reply.status(404).send({ error: 'Role not found' });
+        return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
       // Check for wildcard assignment first
@@ -1137,7 +1139,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({ error: 'User not found' });
+        return apiError(reply, 404, ErrorCodes.ADMIN_USER_NOT_FOUND, 'User not found');
       }
 
       // Get user's roles
