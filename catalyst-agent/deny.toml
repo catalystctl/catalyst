@@ -1,0 +1,39 @@
+# cargo-deny configuration for the catalyst-agent workspace.
+# CI runs `cargo deny check` against this file (see .github/workflows/ci.yml).
+
+
+[advisories]
+version = 2
+# RUSTSEC-2023-0071 (rsa Marvin Attack): no patched release exists; rsa is a
+# transitive dep of russh (SFTP host-key exchange) and not used for panel
+# traffic. Tracked for removal when russh drops the rsa default feature.
+ignore = ["RUSTSEC-2023-0071"]
+yanked = "warn"
+
+[licenses]
+version = 2
+# OSI/FSF-approved permissive set used across the dependency tree.
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "0BSD",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "CC0-1.0",
+  "BSL-1.0",
+  "CDLA-Permissive-2.0",
+]
+# Some crates ship without a license field; resolve via clarifiers.
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
