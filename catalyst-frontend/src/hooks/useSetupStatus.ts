@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@/csync';
 import apiClient from '../services/api/client';
+import i18n from '@/i18n';
+import { getLocalizedErrorMessage } from '../i18n/api-errors';
 
 const SETUP_STATUS_TIMEOUT_MS = 15000;
 
@@ -90,11 +92,11 @@ export function useSetupStatus(): SetupStatus {
   const setupRequired = typeof data === 'boolean' ? data : true;
 
   const error = timedOut && !isFetched
-    ? `Setup check timed out after ${SETUP_STATUS_TIMEOUT_MS}ms`
+    ? i18n.t('setupStatus.timedOut', { ns: 'common', ms: SETUP_STATUS_TIMEOUT_MS })
     : queryError
       ? queryError instanceof Error
-        ? queryError.message
-        : 'Failed to check setup status'
+        ? getLocalizedErrorMessage(queryError)
+        : i18n.t('setupStatus.checkFailed', { ns: 'common' })
       : null;
 
   return { setupRequired, isLoading, error, recheck };

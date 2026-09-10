@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, X, ArrowUpCircle, BellOff, Clock, BellRing, Ban } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,6 +72,7 @@ type DismissScope = 'session' | 'version' | 'global' | null;
  * breadcrumb row so it never overlaps page content.
  */
 export default function UpdateNotification() {
+ const { t } = useTranslation('common');
  const { data: updateData } = useUpdateCheck();
  const user = useAuthStore((s) => s.user);
  const [sessionDismissed, setSessionDismissed] = useState(false);
@@ -89,9 +91,9 @@ export default function UpdateNotification() {
    if (reloadedRef.current || !hasAdminWrite) return;
    reloadedRef.current = true;
    if (consumePostUpdateReloadToast()) {
-     notifySuccess('Panel update complete — you are now on the latest version.');
+     notifySuccess(t('updateNotification.completeToast'));
    }
- }, [hasAdminWrite]);
+ }, [hasAdminWrite, t]);
 
  const handleQuickDismiss = useCallback(() => {
  // X button — just dismiss for this session (no modal, no localStorage)
@@ -119,14 +121,14 @@ export default function UpdateNotification() {
  try {
  const result = await adminApi.triggerUpdate();
  if (!result.success) {
- notifyError(result.message || 'Failed to trigger update');
+ notifyError(result.message || t('updateNotification.triggerFailed'));
  }
  } catch (err: any) {
- notifyError(err?.message || 'Failed to trigger update');
+ notifyError(err);
  } finally {
  setTriggering(false);
  }
- }, []);
+ }, [t]);
 
  // Permission gate: no admin.write, no banner at all. Update checks are
  // admin.write-gated server-side, so anyone else would just see a
@@ -159,10 +161,10 @@ export default function UpdateNotification() {
 
  <div className="flex min-w-0 flex-1 flex-col">
  <span className="text-sm font-medium leading-tight text-foreground">
- Update available: v{String(updateData.latestVersion).replace(/^v/i, '')}
+ {t('updateNotification.available', { version: String(updateData.latestVersion).replace(/^v/i, '') })}
  </span>
  <span className="mt-0.5 text-xs text-muted-foreground">
- You&apos;re running v{String(updateData.currentVersion).replace(/^v/i, '')}.
+ {t('updateNotification.currentVersion', { version: String(updateData.currentVersion).replace(/^v/i, '') })}
  </span>
  </div>
 
@@ -175,14 +177,14 @@ export default function UpdateNotification() {
  onClick={handleTriggerUpdate}
  >
  <RefreshCw className={`h-3.5 w-3.5 ${triggering ? 'animate-spin' : ''}`} />
- <span className="hidden sm:inline">{triggering ? 'Starting…' : 'Update'}</span>
+ <span className="hidden sm:inline">{triggering ? t('updateNotification.starting') : t('actions.update')}</span>
  </Button>
  <button
  type="button"
  onClick={handleQuickDismiss}
  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- title="Dismiss for now"
- aria-label="Dismiss update notification"
+ title={t('updateNotification.dismissForNow')}
+ aria-label={t('updateNotification.dismissTitle')}
  >
  <X className="h-4 w-4" />
  </button>
@@ -190,8 +192,8 @@ export default function UpdateNotification() {
  type="button"
  onClick={handleOpenModal}
  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- title="Dismiss options"
- aria-label="Open dismiss options"
+ title={t('updateNotification.dismissOptions')}
+ aria-label={t('updateNotification.openDismissOptions')}
  >
  <BellOff className="h-3.5 w-3.5" />
  </button>
@@ -206,10 +208,11 @@ export default function UpdateNotification() {
  <Dialog open={showDismissModal} onOpenChange={setShowDismissModal}>
  <DialogContent size="sm">
  <DialogHeader icon={<BellOff className="h-4 w-4" />}>
- <DialogTitle>Dismiss update notification</DialogTitle>
+ <DialogTitle>{t('updateNotification.dismissTitle')}</DialogTitle>
  <DialogDescription>
- Choose how to handle the update banner for version{' '}
- <span className="font-medium text-foreground">v{updateData?.latestVersion}</span>.
+ {t('updateNotification.dismissDescription', {
+ version: `v${updateData?.latestVersion}`,
+ })}
  </DialogDescription>
  </DialogHeader>
 
@@ -224,9 +227,9 @@ export default function UpdateNotification() {
  <Clock className="h-3.5 w-3.5" />
  </div>
  <div className="flex flex-col gap-0.5">
- <span className="text-sm font-medium text-foreground">Dismiss</span>
+ <span className="text-sm font-medium text-foreground">{t('updateNotification.dismissSessionTitle')}</span>
  <span className="text-xs text-muted-foreground">
- Hide for now. The banner will reappear on the next page reload or sign-in.
+ {t('updateNotification.dismissSessionDescription')}
  </span>
  </div>
  </button>
@@ -241,10 +244,11 @@ export default function UpdateNotification() {
  <BellRing className="h-3.5 w-3.5" />
  </div>
  <div className="flex flex-col gap-0.5">
- <span className="text-sm font-medium text-foreground">Dismiss this update</span>
+ <span className="text-sm font-medium text-foreground">{t('updateNotification.dismissVersionTitle')}</span>
  <span className="text-xs text-muted-foreground">
- Remember my choice for v{updateData?.latestVersion}. You&apos;ll be notified again
- when the next version is released.
+ {t('updateNotification.dismissVersionDescription', {
+ version: `v${updateData?.latestVersion}`,
+ })}
  </span>
  </div>
  </button>
@@ -259,9 +263,9 @@ export default function UpdateNotification() {
  <Ban className="h-3.5 w-3.5" />
  </div>
  <div className="flex flex-col gap-0.5">
- <span className="text-sm font-medium text-foreground">Don&apos;t remind me again</span>
+ <span className="text-sm font-medium text-foreground">{t('updateNotification.dismissGlobalTitle')}</span>
  <span className="text-xs text-muted-foreground">
- Permanently hide all update notifications. Re-enable by clearing site data / localStorage.
+ {t('updateNotification.dismissGlobalDescription')}
  </span>
  </div>
  </button>
@@ -269,7 +273,7 @@ export default function UpdateNotification() {
 
  <DialogFooter>
  <Button size="sm" variant="outline" onClick={() => setShowDismissModal(false)}>
- Cancel
+ {t('actions.cancel')}
  </Button>
  </DialogFooter>
  </DialogContent>

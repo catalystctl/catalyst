@@ -21,6 +21,7 @@
     "next": "Next",
     "no": "No",
     "none": "None",
+    "previous": "Previous",
     "refresh": "Refresh",
     "remove": "Remove",
     "reset": "Reset",
@@ -28,12 +29,98 @@
     "save": "Save",
     "search": "Search",
     "unknown": "Unknown",
+    "update": "Update",
     "upload": "Upload",
+    "working": "Working…",
     "yes": "Yes"
+  },
+  "apiKeys": {
+    "created": "API key created successfully",
+    "revoked": "API key revoked successfully",
+    "updated": "API key updated successfully"
+  },
+  "backupStatus": {
+    "completed": "Completed",
+    "failed": "Failed",
+    "inProgress": "In progress",
+    "restored": "Restored"
+  },
+  "combobox": {
+    "noMatches": "No matches found.",
+    "placeholder": "Select..."
+  },
+  "configFormats": {
+    "jsonMustBeObject": "JSON config must be an object"
+  },
+  "errorBoundary": {
+    "message": "Unexpected error encountered.",
+    "retry": "Try again",
+    "title": "Something went wrong"
   },
   "language": {
     "description": "Choose the language used for the panel interface.",
     "label": "Language"
+  },
+  "metricsHistory": {
+    "oneHour": "1 hour"
+  },
+  "nodeAgent": {
+    "updateFailed": "Update failed"
+  },
+  "operationStage": {
+    "cloning": "Cloning files",
+    "installing": "Installing server",
+    "transferring": "Transferring server"
+  },
+  "pagination": {
+    "pageOf": "Page {{page}} of {{totalPages}}"
+  },
+  "passwordStrength": {
+    "fair": "Fair",
+    "good": "Good",
+    "strong": "Strong",
+    "title": "Password strength",
+    "veryStrong": "Very Strong",
+    "weak": "Weak"
+  },
+  "relativeTime": {
+    "daysAgo": "{{value}}d ago",
+    "hoursAgo": "{{value}}h ago",
+    "justNow": "just now",
+    "minutesAgo": "{{value}}m ago",
+    "monthsAgo": "{{value}}mo ago",
+    "yearsAgo": "{{value}}y ago"
+  },
+  "serverPermissions": {
+    "alertCreate": "Create alerts",
+    "alertDelete": "Delete alerts",
+    "alertRead": "View alerts",
+    "alertUpdate": "Update alerts",
+    "backupCreate": "Create backups",
+    "backupDelete": "Delete backups",
+    "backupRead": "View backups",
+    "backupRestore": "Restore backups",
+    "consoleRead": "View console",
+    "consoleWrite": "Send console commands",
+    "databaseCreate": "Create databases",
+    "databaseDelete": "Delete databases",
+    "databaseRead": "View databases",
+    "databaseRotate": "Rotate database passwords",
+    "delete": "Delete server",
+    "fileRead": "Browse files",
+    "fileWrite": "Edit & upload files",
+    "install": "Install server",
+    "read": "View server details",
+    "rebuild": "Rebuild server & variables",
+    "reinstall": "Reinstall server",
+    "schedule": "Manage schedules & tasks",
+    "start": "Start server",
+    "stop": "Stop / kill server",
+    "transfer": "Transfer server"
+  },
+  "setupStatus": {
+    "checkFailed": "Failed to check setup status",
+    "timedOut": "Setup check timed out after {{ms}}ms"
   },
   "status": {
     "archived": "Archived",
@@ -54,5 +141,48 @@
   },
   "statusBadge": {
     "title": "Server status: {{label}}"
+  },
+  "storageResize": {
+    "failed": "Storage resize failed",
+    "succeeded": "Storage resized"
+  },
+  "templateImport": {
+    "builtinIp": "Server IP address (0.0.0.0 for all interfaces)",
+    "builtinMemory": "Allocated memory in MB",
+    "builtinPort": "Primary server port",
+    "builtinTimezone": "Server timezone",
+    "importedEgg": "Imported Egg",
+    "importedFromPelican": "Imported from Pelican",
+    "importedFromPterodactyl": "Imported from Pterodactyl",
+    "missingField": "Missing required field: {{field}}",
+    "missingStopCommand": "Missing required field: stopCommand (or sendSignalTo for signal-based stop)",
+    "variableMissingDefault": "Variable {{name}} missing default value",
+    "variableMissingName": "Variable at index {{index}} missing name"
+  },
+  "themeImport": {
+    "customCssTooLarge": "Custom CSS exceeds 100 KB.",
+    "invalidBorderRadius": "Invalid borderRadius — expected like \"0.625rem\".",
+    "invalidColor": "Invalid {{field}} — expected a #rrggbb hex color.",
+    "invalidCustomCss": "Invalid customCss — expected a string.",
+    "jsonMustBeObject": "Theme JSON must be an object.",
+    "missingThemeColors": "Missing themeColors object."
+  },
+  "updateNotification": {
+    "available": "Update available: v{{version}}",
+    "completeToast": "Panel update complete — you are now on the latest version.",
+    "currentVersion": "You're running v{{version}}.",
+    "dismissDescription": "Choose how to handle the update banner for version {{version}}.",
+    "dismissForNow": "Dismiss for now",
+    "dismissGlobalDescription": "Permanently hide all update notifications. Re-enable by clearing site data / localStorage.",
+    "dismissGlobalTitle": "Don't remind me again",
+    "dismissOptions": "Dismiss options",
+    "dismissSessionDescription": "Hide for now. The banner will reappear on the next page reload or sign-in.",
+    "dismissSessionTitle": "Dismiss",
+    "dismissTitle": "Dismiss update notification",
+    "dismissVersionDescription": "Remember my choice for {{version}}. You'll be notified again when the next version is released.",
+    "dismissVersionTitle": "Dismiss this update",
+    "openDismissOptions": "Open dismiss options",
+    "starting": "Starting…",
+    "triggerFailed": "Failed to trigger update"
   }
 }

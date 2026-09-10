@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import type { Backup, BackupStatus } from '../types/backup';
 
 export const getBackupStatus = (backup: Backup): BackupStatus => {
@@ -8,17 +9,21 @@ export const getBackupStatus = (backup: Backup): BackupStatus => {
   return 'unknown';
 };
 
+/**
+ * Localized backup status label. A switch keeps every key a literal in the
+ * source so extraction and translation stay exact.
+ */
 export const formatBackupStatus = (status: BackupStatus) => {
   switch (status) {
     case 'completed':
-      return 'Completed';
+      return i18n.t('backupStatus.completed', { ns: 'common' });
     case 'in_progress':
-      return 'In progress';
+      return i18n.t('backupStatus.inProgress', { ns: 'common' });
     case 'failed':
-      return 'Failed';
+      return i18n.t('backupStatus.failed', { ns: 'common' });
     case 'restored':
-      return 'Restored';
+      return i18n.t('backupStatus.restored', { ns: 'common' });
     default:
-      return 'Unknown';
+      return i18n.t('actions.unknown', { ns: 'common' });
   }
 };

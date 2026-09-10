@@ -54,8 +54,8 @@ export function useFileManager(serverId?: string, initialPath = '/') {
           content,
           originalContent: content,
         });
-      } catch {
-        notifyError('Failed to load file contents');
+      } catch (err) {
+        notifyError(err);
       } finally {
         setIsFileLoading(false);
       }

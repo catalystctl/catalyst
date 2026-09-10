@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { apiKeyService, CreateApiKeyRequest, UpdateApiKeyRequest, type ApiKey } from '../services/apiKeys';
 import { toast } from 'sonner';
+import i18n from '@/i18n';
+import { notifyError } from '../utils/notify';
 
 /**
  * Hook to fetch all API keys
@@ -75,10 +77,10 @@ export function useCreateApiKey() {
   return useMutation({
     mutationFn: (data: CreateApiKeyRequest) => apiKeyService.create(data),
     onSuccess: () => {
-      toast.success('API key created successfully');
+      toast.success(i18n.t('apiKeys.created', { ns: 'common' }));
     },
     onError: (error: any) => {
-      toast.error(error?.message || 'Failed to create API key');
+      notifyError(error);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
@@ -96,10 +98,10 @@ export function useUpdateApiKey() {
     mutationFn: ({ id, data }: { id: string; data: UpdateApiKeyRequest }) =>
       apiKeyService.update(id, data),
     onSuccess: () => {
-      toast.success('API key updated successfully');
+      toast.success(i18n.t('apiKeys.updated', { ns: 'common' }));
     },
     onError: (error: any) => {
-      toast.error(error?.message || 'Failed to update API key');
+      notifyError(error);
     },
     onSettled: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
@@ -127,13 +129,13 @@ export function useDeleteApiKey() {
       return { previous };
     },
     onSuccess: () => {
-      toast.success('API key revoked successfully');
+      toast.success(i18n.t('apiKeys.revoked', { ns: 'common' }));
     },
-    onError: (_error, _id, context) => {
+    onError: (error, _id, context) => {
       if (context?.previous) {
         queryClient.setQueryData(qk.apiKeys(), context.previous);
       }
-      toast.error('Failed to revoke API key');
+      notifyError(error);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.apiKeys() });

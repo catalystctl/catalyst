@@ -6,6 +6,8 @@
 
 import * as yaml from 'js-yaml';
 
+import i18n from '@/i18n';
+
 interface PtdlVariable {
   name: string;
   description?: string;
@@ -73,11 +75,27 @@ interface StopCommandResult {
 }
 
 /** Built-in Pterodactyl variables that need to be mapped */
-const PTDL_BUILTIN_VARIABLES = [
-  { name: 'SERVER_MEMORY', description: 'Allocated memory in MB', default: '1024' },
-  { name: 'SERVER_PORT', description: 'Primary server port', default: '25565' },
-  { name: 'SERVER_IP', description: 'Server IP address (0.0.0.0 for all interfaces)', default: '0.0.0.0' },
-  { name: 'TZ', description: 'Server timezone', default: 'UTC' },
+const ptdlBuiltinVariables = () => [
+  {
+    name: 'SERVER_MEMORY',
+    description: i18n.t('templateImport.builtinMemory', { ns: 'common' }),
+    default: '1024',
+  },
+  {
+    name: 'SERVER_PORT',
+    description: i18n.t('templateImport.builtinPort', { ns: 'common' }),
+    default: '25565',
+  },
+  {
+    name: 'SERVER_IP',
+    description: i18n.t('templateImport.builtinIp', { ns: 'common' }),
+    default: '0.0.0.0',
+  },
+  {
+    name: 'TZ',
+    description: i18n.t('templateImport.builtinTimezone', { ns: 'common' }),
+    default: 'UTC',
+  },
 ];
 
 /** Returns true if the JSON object looks like a Pterodactyl or Pelican egg. */
@@ -337,7 +355,7 @@ function addBuiltinVariables(
   const combinedContent = `${startup} ${installScript || ''}`;
   const result = [...variables];
 
-  for (const builtin of PTDL_BUILTIN_VARIABLES) {
+  for (const builtin of ptdlBuiltinVariables()) {
     // Check if this variable is referenced in startup or install script
     const varPatterns = [
       new RegExp(`\\$\\{${builtin.name}\\}`, 'g'),
@@ -557,9 +575,13 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
 
   return {
     id,
-    name: egg.name ?? 'Imported Egg',
+    name: egg.name ?? i18n.t('templateImport.importedEgg', { ns: 'common' }),
     description: egg.description ?? '',
-    author: egg.author ?? (isPelican ? 'Imported from Pelican' : 'Imported from Pterodactyl'),
+    author:
+      egg.author ??
+      (isPelican
+        ? i18n.t('templateImport.importedFromPelican', { ns: 'common' })
+        : i18n.t('templateImport.importedFromPterodactyl', { ns: 'common' })),
     version: '1.0.0',
     image: primaryImage,
     ...(images.length ? { images } : {}),
@@ -635,13 +657,13 @@ export function validateConvertedTemplate(template: Record<string, unknown>): st
 
   for (const field of requiredFields) {
     if (!(field in template) || template[field] === undefined || template[field] === '') {
-      errors.push(`Missing required field: ${field}`);
+      errors.push(i18n.t('templateImport.missingField', { ns: 'common', field }));
     }
   }
 
   // stopCommand can be empty if sendSignalTo is set (signal-based stop)
   if (!template.stopCommand && template.stopCommand !== '' && !template.sendSignalTo) {
-    errors.push('Missing required field: stopCommand (or sendSignalTo for signal-based stop)');
+    errors.push(i18n.t('templateImport.missingStopCommand', { ns: 'common' }));
   }
 
   // Validate variables array
@@ -649,10 +671,15 @@ export function validateConvertedTemplate(template: Record<string, unknown>): st
     for (let i = 0; i < template.variables.length; i++) {
       const v = template.variables[i] as Record<string, unknown>;
       if (!v.name) {
-        errors.push(`Variable at index ${i} missing name`);
+        errors.push(i18n.t('templateImport.variableMissingName', { ns: 'common', index: i }));
       }
       if (v.default === undefined) {
-        errors.push(`Variable ${v.name || i} missing default value`);
+        errors.push(
+          i18n.t('templateImport.variableMissingDefault', {
+            ns: 'common',
+            name: v.name || i,
+          }),
+        );
       }
     }
   }

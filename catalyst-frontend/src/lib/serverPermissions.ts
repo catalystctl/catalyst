@@ -13,6 +13,7 @@
  */
 import { useQuery } from '@/csync';
 import apiClient from '../services/api/client';
+import i18n from '@/i18n';
 
 type ApiResponse<T> = {
   success: boolean;
@@ -49,36 +50,66 @@ export const FALLBACK_SERVER_PERMISSIONS: string[] = [
   'alert.delete',
 ];
 
-export const SERVER_PERMISSION_LABELS: Record<string, string> = {
-  'server.read': 'View server details',
-  'server.start': 'Start server',
-  'server.stop': 'Stop / kill server',
-  'server.install': 'Install server',
-  'server.reinstall': 'Reinstall server',
-  'server.rebuild': 'Rebuild server & variables',
-  'server.transfer': 'Transfer server',
-  'server.delete': 'Delete server',
-  'server.schedule': 'Manage schedules & tasks',
-  'console.read': 'View console',
-  'console.write': 'Send console commands',
-  'file.read': 'Browse files',
-  'file.write': 'Edit & upload files',
-  'backup.read': 'View backups',
-  'backup.create': 'Create backups',
-  'backup.restore': 'Restore backups',
-  'backup.delete': 'Delete backups',
-  'database.read': 'View databases',
-  'database.create': 'Create databases',
-  'database.rotate': 'Rotate database passwords',
-  'database.delete': 'Delete databases',
-  'alert.read': 'View alerts',
-  'alert.create': 'Create alerts',
-  'alert.update': 'Update alerts',
-  'alert.delete': 'Delete alerts',
-};
-
+/**
+ * Localized label for a server permission. A switch keeps every translation
+ * key a literal in the source (see `serverStatusLabel` in utils/constants.ts),
+ * and unknown permissions (plugin-provided) render as their identifier.
+ */
 export function serverPermissionLabel(perm: string): string {
-  return SERVER_PERMISSION_LABELS[perm] ?? perm;
+  switch (perm) {
+    case 'server.read':
+      return i18n.t('serverPermissions.read', { ns: 'common' });
+    case 'server.start':
+      return i18n.t('serverPermissions.start', { ns: 'common' });
+    case 'server.stop':
+      return i18n.t('serverPermissions.stop', { ns: 'common' });
+    case 'server.install':
+      return i18n.t('serverPermissions.install', { ns: 'common' });
+    case 'server.reinstall':
+      return i18n.t('serverPermissions.reinstall', { ns: 'common' });
+    case 'server.rebuild':
+      return i18n.t('serverPermissions.rebuild', { ns: 'common' });
+    case 'server.transfer':
+      return i18n.t('serverPermissions.transfer', { ns: 'common' });
+    case 'server.delete':
+      return i18n.t('serverPermissions.delete', { ns: 'common' });
+    case 'server.schedule':
+      return i18n.t('serverPermissions.schedule', { ns: 'common' });
+    case 'console.read':
+      return i18n.t('serverPermissions.consoleRead', { ns: 'common' });
+    case 'console.write':
+      return i18n.t('serverPermissions.consoleWrite', { ns: 'common' });
+    case 'file.read':
+      return i18n.t('serverPermissions.fileRead', { ns: 'common' });
+    case 'file.write':
+      return i18n.t('serverPermissions.fileWrite', { ns: 'common' });
+    case 'backup.read':
+      return i18n.t('serverPermissions.backupRead', { ns: 'common' });
+    case 'backup.create':
+      return i18n.t('serverPermissions.backupCreate', { ns: 'common' });
+    case 'backup.restore':
+      return i18n.t('serverPermissions.backupRestore', { ns: 'common' });
+    case 'backup.delete':
+      return i18n.t('serverPermissions.backupDelete', { ns: 'common' });
+    case 'database.read':
+      return i18n.t('serverPermissions.databaseRead', { ns: 'common' });
+    case 'database.create':
+      return i18n.t('serverPermissions.databaseCreate', { ns: 'common' });
+    case 'database.rotate':
+      return i18n.t('serverPermissions.databaseRotate', { ns: 'common' });
+    case 'database.delete':
+      return i18n.t('serverPermissions.databaseDelete', { ns: 'common' });
+    case 'alert.read':
+      return i18n.t('serverPermissions.alertRead', { ns: 'common' });
+    case 'alert.create':
+      return i18n.t('serverPermissions.alertCreate', { ns: 'common' });
+    case 'alert.update':
+      return i18n.t('serverPermissions.alertUpdate', { ns: 'common' });
+    case 'alert.delete':
+      return i18n.t('serverPermissions.alertDelete', { ns: 'common' });
+    default:
+      return perm;
+  }
 }
 
 /**

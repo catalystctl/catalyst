@@ -16,6 +16,7 @@ import { createAdminEventsStream, type AdminEventType } from '../services/api/ad
 import { qk } from '../lib/queryKeys';
 import type { AdminUser, SystemError } from '../types/admin';
 import type { Template } from '../types/template';
+import i18n from '@/i18n';
 
 /** Coalesce admin SSE side-effects into one microtask/rAF window to avoid invalidate storms. */
 function createAdminWorkScheduler() {
@@ -628,7 +629,7 @@ export function useSseAdminEvents() {
                 return {
                   ...base,
                   status: 'failed',
-                  error: data.error ?? 'Update failed',
+                  error: data.error ?? i18n.t('nodeAgent.updateFailed', { ns: 'common' }),
                   progress: base.progress ?? 0,
                 };
               }

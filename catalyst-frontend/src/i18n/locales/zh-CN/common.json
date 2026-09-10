@@ -1,6 +1,188 @@
 {
+  "actions": {
+    "apply": "",
+    "back": "",
+    "browse": "",
+    "cancel": "",
+    "close": "",
+    "confirm": "",
+    "copied": "",
+    "copy": "",
+    "create": "",
+    "delete": "",
+    "disable": "",
+    "disabled": "",
+    "download": "",
+    "edit": "",
+    "enable": "",
+    "enabled": "",
+    "loading": "",
+    "more": "",
+    "next": "",
+    "no": "",
+    "none": "",
+    "previous": "",
+    "refresh": "",
+    "remove": "",
+    "reset": "",
+    "retry": "",
+    "save": "",
+    "search": "",
+    "unknown": "",
+    "update": "",
+    "upload": "",
+    "working": "",
+    "yes": ""
+  },
+  "apiKeys": {
+    "created": "",
+    "revoked": "",
+    "updated": ""
+  },
+  "backupStatus": {
+    "completed": "",
+    "failed": "",
+    "inProgress": "",
+    "restored": ""
+  },
+  "combobox": {
+    "noMatches": "",
+    "placeholder": ""
+  },
+  "configFormats": {
+    "jsonMustBeObject": ""
+  },
+  "errorBoundary": {
+    "message": "",
+    "retry": "",
+    "title": ""
+  },
   "language": {
     "description": "选择面板界面所使用的语言。",
     "label": "语言"
+  },
+  "metricsHistory": {
+    "oneHour": ""
+  },
+  "nodeAgent": {
+    "updateFailed": ""
+  },
+  "operationStage": {
+    "cloning": "",
+    "installing": "",
+    "transferring": ""
+  },
+  "pagination": {
+    "pageOf": ""
+  },
+  "passwordStrength": {
+    "fair": "",
+    "good": "",
+    "strong": "",
+    "title": "",
+    "veryStrong": "",
+    "weak": ""
+  },
+  "relativeTime": {
+    "daysAgo": "",
+    "hoursAgo": "",
+    "justNow": "",
+    "minutesAgo": "",
+    "monthsAgo": "",
+    "yearsAgo": ""
+  },
+  "serverPermissions": {
+    "alertCreate": "",
+    "alertDelete": "",
+    "alertRead": "",
+    "alertUpdate": "",
+    "backupCreate": "",
+    "backupDelete": "",
+    "backupRead": "",
+    "backupRestore": "",
+    "consoleRead": "",
+    "consoleWrite": "",
+    "databaseCreate": "",
+    "databaseDelete": "",
+    "databaseRead": "",
+    "databaseRotate": "",
+    "delete": "",
+    "fileRead": "",
+    "fileWrite": "",
+    "install": "",
+    "read": "",
+    "rebuild": "",
+    "reinstall": "",
+    "schedule": "",
+    "start": "",
+    "stop": "",
+    "transfer": ""
+  },
+  "setupStatus": {
+    "checkFailed": "",
+    "timedOut": ""
+  },
+  "status": {
+    "archived": "",
+    "cloning": "",
+    "crashed": "",
+    "creatingBackup": "",
+    "error": "",
+    "installing": "",
+    "offline": "",
+    "online": "",
+    "restoring": "",
+    "running": "",
+    "starting": "",
+    "stopped": "",
+    "stopping": "",
+    "suspended": "",
+    "transferring": ""
+  },
+  "statusBadge": {
+    "title": ""
+  },
+  "storageResize": {
+    "failed": "",
+    "succeeded": ""
+  },
+  "templateImport": {
+    "builtinIp": "",
+    "builtinMemory": "",
+    "builtinPort": "",
+    "builtinTimezone": "",
+    "importedEgg": "",
+    "importedFromPelican": "",
+    "importedFromPterodactyl": "",
+    "missingField": "",
+    "missingStopCommand": "",
+    "variableMissingDefault": "",
+    "variableMissingName": ""
+  },
+  "themeImport": {
+    "customCssTooLarge": "",
+    "invalidBorderRadius": "",
+    "invalidColor": "",
+    "invalidCustomCss": "",
+    "jsonMustBeObject": "",
+    "missingThemeColors": ""
+  },
+  "updateNotification": {
+    "available": "",
+    "completeToast": "",
+    "currentVersion": "",
+    "dismissDescription": "",
+    "dismissForNow": "",
+    "dismissGlobalDescription": "",
+    "dismissGlobalTitle": "",
+    "dismissOptions": "",
+    "dismissSessionDescription": "",
+    "dismissSessionTitle": "",
+    "dismissTitle": "",
+    "dismissVersionDescription": "",
+    "dismissVersionTitle": "",
+    "openDismissOptions": "",
+    "starting": "",
+    "triggerFailed": ""
   }
 }

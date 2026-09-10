@@ -1,12 +1,20 @@
+import i18n from '@/i18n';
+import { formatNumber } from '@/i18n/format';
+
 export const formatBytes = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   const value = bytes / 1024 ** index;
-  return `${value.toFixed(1)} ${units[index]}`;
+  return `${formatNumber(value, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+    useGrouping: false,
+  })} ${units[index]}`;
 };
 
-export const formatPercent = (value: number) => `${value.toFixed(0)}%`;
+export const formatPercent = (value: number) =>
+  `${formatNumber(value, { maximumFractionDigits: 0, useGrouping: false })}%`;
 
 export const formatFileMode = (mode?: number) => {
   if (!Number.isFinite(mode)) return '---';
@@ -33,14 +41,14 @@ export const formatRelativeTime = (
       : Date.parse(value);
   if (!Number.isFinite(ts)) return '';
   const diffMs = Date.now() - ts;
-  if (diffMs < 60_000) return 'just now';
+  if (diffMs < 60_000) return i18n.t('relativeTime.justNow', { ns: 'common' });
   const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return i18n.t('relativeTime.minutesAgo', { ns: 'common', value: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return i18n.t('relativeTime.hoursAgo', { ns: 'common', value: hours });
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return i18n.t('relativeTime.daysAgo', { ns: 'common', value: days });
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
+  if (months < 12) return i18n.t('relativeTime.monthsAgo', { ns: 'common', value: months });
+  return i18n.t('relativeTime.yearsAgo', { ns: 'common', value: Math.floor(months / 12) });
 };

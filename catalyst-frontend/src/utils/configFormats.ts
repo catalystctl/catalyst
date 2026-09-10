@@ -121,12 +121,13 @@ const normalizeJsonNode = (value: unknown): ConfigNode => {
 };
 
 import { reportSystemError } from '../services/api/systemErrors';
+import i18n from '@/i18n';
 
 export const parseJson = (content: string): ConfigMap => {
   const parsed = JSON.parse(content);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     reportSystemError({ level: 'error', component: 'configFormats', message: 'JSON config must be an object', metadata: { context: 'parseJson' } });
-    throw new Error('JSON config must be an object');
+    throw new Error(i18n.t('configFormats.jsonMustBeObject', { ns: 'common' }));
   }
   return normalizeJsonNode(parsed) as ConfigMap;
 };

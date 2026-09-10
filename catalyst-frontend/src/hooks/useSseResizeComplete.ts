@@ -9,6 +9,7 @@ import { useQueryClient } from '@/csync';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 import { qk } from '../lib/queryKeys';
 import { notifyError, notifySuccess } from '../utils/notify';
+import i18n from '@/i18n';
 
 type ResizeResult = { success: boolean; error?: string };
 
@@ -30,9 +31,9 @@ export function useSseResizeComplete(
         };
 
         if (result.success) {
-          notifySuccess('Storage resized');
+          notifySuccess(i18n.t('storageResize.succeeded', { ns: 'common' }));
         } else {
-          notifyError(result.error || 'Storage resize failed');
+          notifyError(result.error || i18n.t('storageResize.failed', { ns: 'common' }));
         }
 
         Promise.all([

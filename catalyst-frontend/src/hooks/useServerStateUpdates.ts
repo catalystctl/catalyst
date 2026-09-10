@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useQueryClient, type Query } from '@/csync';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 import { qk } from '../lib/queryKeys';
+import i18n from '@/i18n';
 
 const DEBOUNCE_MS = 16; // ~60fps
 
@@ -17,15 +18,15 @@ const TRANSITIONAL = new Set(['installing', 'starting', 'stopping', 'transferrin
 function transitionalStage(state: string): string | undefined {
   switch (state) {
     case 'installing':
-      return 'Installing server';
+      return i18n.t('operationStage.installing', { ns: 'common' });
     case 'transferring':
-      return 'Transferring server';
+      return i18n.t('operationStage.transferring', { ns: 'common' });
     case 'cloning':
-      return 'Cloning files';
+      return i18n.t('operationStage.cloning', { ns: 'common' });
     case 'starting':
-      return 'Starting';
+      return i18n.t('status.starting', { ns: 'common' });
     case 'stopping':
-      return 'Stopping';
+      return i18n.t('status.stopping', { ns: 'common' });
     default:
       return TRANSITIONAL.has(state) ? state : undefined;
   }

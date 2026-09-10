@@ -1,4 +1,5 @@
 import type { ThemeColors } from '../services/api/theme';
+import i18n from '@/i18n';
 
 export interface SharedTheme {
   version: 1;
@@ -71,35 +72,52 @@ export function buildSharedTheme(input: {
 }
 
 export function parseSharedTheme(raw: unknown): { ok: true; data: SharedTheme } | { ok: false; error: string } {
-  if (!raw || typeof raw !== 'object') return { ok: false, error: 'Theme JSON must be an object.' };
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, error: i18n.t('themeImport.jsonMustBeObject', { ns: 'common' }) };
+  }
   const obj = raw as Record<string, unknown>;
   for (const key of ['primaryColor', 'secondaryColor', 'accentColor'] as const) {
     if (typeof obj[key] !== 'string' || !HEX_RE.test(obj[key] as string)) {
-      return { ok: false, error: `Invalid ${key} — expected a #rrggbb hex color.` };
+      return {
+        ok: false,
+        error: i18n.t('themeImport.invalidColor', { ns: 'common', field: key }),
+      };
     }
   }
   const tc = obj.themeColors;
-  if (!tc || typeof tc !== 'object') return { ok: false, error: 'Missing themeColors object.' };
+  if (!tc || typeof tc !== 'object') {
+    return { ok: false, error: i18n.t('themeImport.missingThemeColors', { ns: 'common' }) };
+  }
   const themeColors: ThemeColors = {};
   for (const key of THEME_COLOR_KEYS) {
     const v = (tc as Record<string, unknown>)[key];
     if (v === undefined) continue;
     if (key === 'borderRadius') {
       if (typeof v !== 'string' || !/^\d+(\.\d+)?rem$/.test(v)) {
-        return { ok: false, error: 'Invalid borderRadius — expected like "0.625rem".' };
+        return { ok: false, error: i18n.t('themeImport.invalidBorderRadius', { ns: 'common' }) };
       }
       themeColors.borderRadius = v;
       continue;
     }
     if (typeof v !== 'string' || !HEX_RE.test(v)) {
-      return { ok: false, error: `Invalid themeColors.${key} — expected a #rrggbb hex color.` };
+      return {
+        ok: false,
+        error: i18n.t('themeImport.invalidColor', {
+          ns: 'common',
+          field: `themeColors.${key}`,
+        }),
+      };
     }
     (themeColors as Record<string, string>)[key] = v;
   }
   let customCss: string | null = null;
   if (obj.customCss !== undefined && obj.customCss !== null) {
-    if (typeof obj.customCss !== 'string') return { ok: false, error: 'Invalid customCss — expected a string.' };
-    if (obj.customCss.length > MAX_CSS) return { ok: false, error: 'Custom CSS exceeds 100 KB.' };
+    if (typeof obj.customCss !== 'string') {
+      return { ok: false, error: i18n.t('themeImport.invalidCustomCss', { ns: 'common' }) };
+    }
+    if (obj.customCss.length > MAX_CSS) {
+      return { ok: false, error: i18n.t('themeImport.customCssTooLarge', { ns: 'common' }) };
+    }
     customCss = obj.customCss.trim() ? obj.customCss.trim() : null;
   }
   return {

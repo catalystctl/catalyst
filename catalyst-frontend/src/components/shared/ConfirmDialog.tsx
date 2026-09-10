@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { AlertTriangle, Info } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -44,13 +45,14 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   onConfirm,
   onCancel,
   variant = 'default',
   loading = false,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation('common');
   const config = variantConfig[variant];
 
   return (
@@ -68,13 +70,13 @@ export function ConfirmDialog({
           )}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading}>{cancelText}</AlertDialogCancel>
+          <AlertDialogCancel disabled={loading}>{cancelText ?? t('actions.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             disabled={loading}
             className={config.buttonClass}
           >
-            {loading ? 'Working…' : confirmText}
+            {loading ? t('actions.working') : confirmText ?? t('actions.confirm')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

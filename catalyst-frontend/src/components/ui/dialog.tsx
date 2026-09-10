@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/utils';
 
@@ -69,29 +70,33 @@ export interface DialogContentProps
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, size = 'md', showClose = true, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(dialogContentVariants({ size }), className)}
-        {...props}
-      >
-        <div className="flex justify-center pb-0 pt-2 sm:hidden" aria-hidden="true">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
-        {children}
-        {showClose ? (
-          <DialogPrimitive.Close className="pressable absolute right-3.5 top-3.5 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none">
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        ) : null}
-      </DialogPrimitive.Content>
-    </div>
-  </DialogPortal>
-));
+>(({ className, children, size = 'md', showClose = true, ...props }, ref) => {
+  const { t } = useTranslation('common');
+
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
+        <DialogPrimitive.Content
+          ref={ref}
+          className={cn(dialogContentVariants({ size }), className)}
+          {...props}
+        >
+          <div className="flex justify-center pb-0 pt-2 sm:hidden" aria-hidden="true">
+            <div className="h-1 w-10 rounded-full bg-border" />
+          </div>
+          {children}
+          {showClose ? (
+            <DialogPrimitive.Close className="pressable absolute right-3.5 top-3.5 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none">
+              <X className="h-4 w-4" />
+              <span className="sr-only">{t('actions.close')}</span>
+            </DialogPrimitive.Close>
+          ) : null}
+        </DialogPrimitive.Content>
+      </div>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 export interface DialogHeaderProps extends React.HTMLAttributes<HTMLDivElement> {

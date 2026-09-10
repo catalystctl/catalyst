@@ -8,7 +8,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { serversApi } from '../services/api/servers';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 import { notifyError } from '../utils/notify';
-import { getErrorMessage } from '../utils/errors';
 
 type EulaPrompt = {
   serverId: string;
@@ -49,19 +48,12 @@ export function useEulaPrompt(serverId?: string) {
           try {
             await serversApi.start(eulaPrompt.serverId);
           } catch (startErr) {
-            notifyError(
-              getErrorMessage(startErr, 'EULA accepted, but failed to start the server'),
-            );
+            notifyError(startErr);
           }
         }
       } catch (err) {
         // Keep the modal open so the user can retry
-        notifyError(
-          getErrorMessage(
-            err,
-            accepted ? 'Failed to accept EULA' : 'Failed to decline EULA',
-          ),
-        );
+        notifyError(err);
       } finally {
         setIsLoading(false);
       }

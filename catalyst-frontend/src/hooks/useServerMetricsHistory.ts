@@ -2,6 +2,7 @@ import { useQuery } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { serversApi } from '../services/api/servers';
 import { reportSystemError } from '../services/api/systemErrors';
+import i18n from '@/i18n';
 
 export interface MetricsTimeRange {
   hours: number;
@@ -10,7 +11,11 @@ export interface MetricsTimeRange {
 }
 
 export function useServerMetricsHistory(serverId?: string, timeRange?: MetricsTimeRange) {
-  const range = timeRange || { hours: 1, limit: 60, label: '1 hour' };
+  const range = timeRange || {
+    hours: 1,
+    limit: 60,
+    label: i18n.t('metricsHistory.oneHour', { ns: 'common' }),
+  };
 
   return useQuery({
     queryKey: qk.serverMetrics(serverId!, { hours: range.hours, limit: range.limit }),

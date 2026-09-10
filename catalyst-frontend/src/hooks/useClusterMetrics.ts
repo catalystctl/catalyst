@@ -3,6 +3,7 @@ import { qk } from '../lib/queryKeys';
 import { nodesApi } from '../services/api/nodes';
 import { useAdminNodes } from './useAdmin';
 import { useRef } from 'react';
+import { formatDateTime } from '@/i18n/format';
 
 export interface NodeMetricData {
   nodeId: string;
@@ -258,7 +259,7 @@ export function useClusterHistoricalMetrics(range: TimeRange = '1h') {
           if (!timestampMap.has(bucketKey)) {
             timestampMap.set(bucketKey, {
               timestamp: bucketKey,
-              time: new Date(bucketMs).toLocaleTimeString('en-US', {
+              time: formatDateTime(bucketMs, {
                 hour: '2-digit',
                 minute: '2-digit',
                 ...(range === '1h' ? { second: '2-digit' } : {}),

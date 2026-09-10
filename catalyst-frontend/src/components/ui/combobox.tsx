@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode, KeyboardEvent } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 
@@ -27,13 +28,14 @@ function Combobox({
  value,
  onChange,
  options,
- placeholder = 'Select...',
+ placeholder,
  searchPlaceholder,
  className,
  searchValue,
  onSearchChange,
- emptyMessage = 'No matches found.',
+ emptyMessage,
 }: Props) {
+ const { t } = useTranslation('common');
  const [open, setOpen] = useState(false);
  const [internalSearch, setInternalSearch] = useState('');
  const [focusIdx, setFocusIdx] = useState(0);
@@ -113,7 +115,7 @@ function Combobox({
  )}
  >
  <span className={cn('truncate', !selected && 'text-muted-foreground')}>
- {selected?.label ?? placeholder}
+ {selected?.label ?? placeholder ?? t('combobox.placeholder')}
  </span>
  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
  </button>
@@ -141,7 +143,7 @@ function Combobox({
  <div ref={listRef} className="max-h-56 overflow-y-auto py-1">
  {filtered.length === 0 ? (
  <div className="py-6 text-center text-sm text-muted-foreground">
- {emptyMessage}
+ {emptyMessage ?? t('combobox.noMatches')}
  </div>
  ) : (
  filtered.map((option, idx) => (
