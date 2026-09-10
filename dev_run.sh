@@ -128,29 +128,6 @@ prefix_stream() {
   done
 }
 
-# --- detect container runtime / compose --------------------------------------
-detect_compose() {
-  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    echo "docker compose"
-    return 0
-  fi
-  if command -v podman >/dev/null 2>&1; then
-    if podman compose version >/dev/null 2>&1; then
-      echo "podman compose"
-      return 0
-    fi
-    if command -v podman-compose >/dev/null 2>&1; then
-      echo "podman-compose"
-      return 0
-    fi
-  fi
-  if command -v docker-compose >/dev/null 2>&1; then
-    echo "docker-compose"
-    return 0
-  fi
-  return 1
-}
-
 # --- preflight ----------------------------------------------------------------
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
@@ -175,55 +152,14 @@ if [[ ! -f catalyst-frontend/.env ]]; then
 fi
 
 if [[ ! -f catalyst-docker/.env ]]; then
-  if [[ -f catalyst-docker/.env.example ]]; then
-    # Prefer a local-dev friendly password that matches backend .env defaults.
-    cp catalyst-docker/.env.example catalyst-docker/.env
-    if grep -q 'POSTGRES_PASSWORD=CHANGE_ME' catalyst-docker/.env 2>/dev/null; then
-      # Align with catalyst-backend/.env DATABASE_URL default used in this repo.
-      sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=catalyst_dev/' catalyst-docker/.env
-    fi
-    if grep -q 'BETTER_AUTH_SECRET=CHANGE_ME' catalyst-docker/.env 2>/dev/null; then
-      sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -base64 32 2>/dev/null || echo 'dev-secret-change-me')|" catalyst-docker/.env
-    fi
-    warn "Created catalyst-docker/.env (POSTGRES_PASSWORD=catalyst_dev for local dev)."
-  else
-    die "Missing catalyst-docker/.env"
-  fi
+  warn "catalyst-docker/.env missing — scripts/dev-infra.sh will create it."
 fi
 
 # --- start infra --------------------------------------------------------------
+# Infra bootstrap lives in scripts/dev-infra.sh (also backs `pnpm run dev:infra`):
+# compose detection, .env repair, postgres+redis start, and health waits.
 start_infra() {
-  local COMPOSE
-  if ! COMPOSE="$(detect_compose)"; then
-    die "Neither docker compose nor podman-compose found. Install Docker or Podman."
-  fi
-  export COMPOSE
-
-  log "Using compose: ${C_BOLD}${COMPOSE}${C_RESET}"
-  log "Starting PostgreSQL + Redis..."
-
-  (
-    cd catalyst-docker
-    # --no-recreate keeps an already-healthy container; fall back to start/up.
-    # shellcheck disable=SC2086
-    if ! $COMPOSE up -d --no-recreate postgres redis 2>/dev/null; then
-      $COMPOSE up -d postgres redis
-    fi
-  )
-
-  # Wait for postgres health.
-  log "Waiting for postgres to become ready..."
-  local tries=0
-  local max=30
-  until podman exec catalyst-postgres pg_isready -U catalyst -d catalyst_db >/dev/null 2>&1 \
-     || docker exec catalyst-postgres pg_isready -U catalyst -d catalyst_db >/dev/null 2>&1; do
-    tries=$((tries + 1))
-    if [[ "$tries" -ge "$max" ]]; then
-      die "Postgres did not become ready within ${max}s. Check: ${COMPOSE} -f catalyst-docker/docker-compose.yml logs postgres"
-    fi
-    sleep 1
-  done
-  ok "Postgres is healthy."
+  "$ROOT_DIR/scripts/dev-infra.sh"
 }
 
 if [[ "$SKIP_INFRA" -eq 0 ]]; then
