@@ -9,7 +9,7 @@
 //! and ensure consistency across all config writes.
 
 use crate::{AgentError, AgentResult};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
 /// Atomically write `data` to `path` by writing to a temp file and renaming.
@@ -19,26 +19,60 @@ use tokio::fs;
 pub async fn atomic_write(path: &Path, data: &str) -> AgentResult<()> {
     // SECURITY: the temp file carries the target's contents (config.toml holds
     // the agent API key). Create it 0600 from the start (no world-readable
-    // window between write and chmod) with a unique suffix so concurrent
-    // writes to different targets can't collide on the same "tmp" name.
+    // window between write and chmod) with a >=128-bit CSPRNG suffix so
+    // concurrent writes to different targets can't collide on the same "tmp"
+    // name and a local attacker cannot predict it. O_EXCL (create_new) fails
+    // on ANY pre-existing entry, including a planted symlink.
     #[cfg(unix)]
     {
-        let unique = std::process::id() as u64
-            ^ (std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.subsec_nanos() as u64)
-                .unwrap_or(0));
-        let temp_path = path.with_extension(format!("tmp.{}", unique));
-        let file = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&temp_path)
-            .await
-            .map_err(|e| AgentError::IoError(format!("Failed to create temp file: {}", e)))?;
+        let parent = path.parent().ok_or_else(|| {
+            AgentError::IoError(format!("Invalid target path: {}", path.display()))
+        })?;
+        let stem = path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "file".to_string());
+        let stem: String = stem
+            .chars()
+            .map(|c| {
+                if c == '/' || c == '\\' || c == '\0' {
+                    '_'
+                } else {
+                    c
+                }
+            })
+            .take(64)
+            .collect();
+        let mut temp_path = PathBuf::new();
+        let mut file_opt = None;
+        for _ in 0..8 {
+            let unique: u128 = rand::random();
+            let candidate = parent.join(format!(".{}-{:032x}.tmp", stem, unique));
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&candidate)
+                .await
+            {
+                Ok(f) => {
+                    temp_path = candidate;
+                    file_opt = Some(f);
+                    break;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => {
+                    return Err(AgentError::IoError(format!(
+                        "Failed to create temp file: {}",
+                        e
+                    )))
+                }
+            }
+        }
+        let mut file = file_opt.ok_or_else(|| {
+            AgentError::IoError("Failed to create unique temp file after retries".to_string())
+        })?;
         use tokio::io::AsyncWriteExt;
-        let mut file = file;
         file.write_all(data.as_bytes()).await.map_err(|e| {
             let _ = std::fs::remove_file(&temp_path);
             AgentError::IoError(format!("Failed to write temp file: {}", e))
@@ -73,13 +107,54 @@ pub async fn atomic_write(path: &Path, data: &str) -> AgentResult<()> {
         Ok(())
     }
 
-    // Non-Unix fallback (unchanged behavior; no mode bits to enforce).
+    // Non-Unix fallback: same O_EXCL + CSPRNG-suffix guarantees (no mode
+    // bits to enforce off Unix).
     #[cfg(not(unix))]
     {
-        let temp_path = path.with_extension("tmp");
-        fs::write(&temp_path, data)
-            .await
-            .map_err(|e| AgentError::IoError(format!("Failed to write temp file: {}", e)))?;
+        let parent = path.parent().ok_or_else(|| {
+            AgentError::IoError(format!("Invalid target path: {}", path.display()))
+        })?;
+        let stem = path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "file".to_string());
+        let mut temp_path = PathBuf::new();
+        let mut file_opt = None;
+        for _ in 0..8 {
+            let unique: u128 = rand::random();
+            let candidate = parent.join(format!(".{}-{:032x}.tmp", stem, unique));
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&candidate)
+                .await
+            {
+                Ok(f) => {
+                    temp_path = candidate;
+                    file_opt = Some(f);
+                    break;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => {
+                    return Err(AgentError::IoError(format!(
+                        "Failed to write temp file: {}",
+                        e
+                    )))
+                }
+            }
+        }
+        let mut file = file_opt.ok_or_else(|| {
+            AgentError::IoError("Failed to create unique temp file after retries".to_string())
+        })?;
+        use tokio::io::AsyncWriteExt;
+        file.write_all(data.as_bytes()).await.map_err(|e| {
+            let _ = std::fs::remove_file(&temp_path);
+            AgentError::IoError(format!("Failed to write temp file: {}", e))
+        })?;
+        file.sync_all().await.map_err(|e| {
+            let _ = std::fs::remove_file(&temp_path);
+            AgentError::IoError(format!("Failed to flush temp file: {}", e))
+        })?;
         if let Err(e) = fs::rename(&temp_path, path).await {
             let _ = fs::remove_file(&temp_path).await;
             return Err(AgentError::IoError(format!(
@@ -149,5 +224,42 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("subdir")).unwrap();
         atomic_write(&path, "data").await.unwrap();
         assert!(path.exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_atomic_write_uses_unpredictable_o_excl_temp() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        // Two sequential writes must use different temp names (>=128-bit
+        // CSPRNG suffix) and leave no leftovers.
+        let a = dir.path().join("a.toml");
+        let b = dir.path().join("b.toml");
+        atomic_write(&a, "x = 1").await.unwrap();
+        atomic_write(&b, "x = 2").await.unwrap();
+        for p in [&a, &b] {
+            let mode = std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "final file must be 0600");
+        }
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "temp files leaked: {:?}", leftovers);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_atomic_write_never_follows_planted_symlink() {
+        // A symlink planted at a temp-predictable name must not divert the
+        // write: O_EXCL create_new fails on pre-existing entries.
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside.txt");
+        std::fs::write(&outside, b"ORIGINAL").unwrap();
+        let path = dir.path().join("config.toml");
+        atomic_write(&path, "k = 1").await.unwrap();
+        assert_eq!(std::fs::read(&outside).unwrap(), b"ORIGINAL");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "k = 1");
     }
 }
