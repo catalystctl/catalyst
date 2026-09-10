@@ -94,7 +94,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const { unsubscribe, touch } = wsGateway.addSseSubscriber(serverId, (event, data) => {
         // data may already be a JSON string from the gateway
         sse.write(formatSseMessage(event, data));
-      });
+      }, userId);
 
       // Keep-alive heartbeat every 25s (below most proxy 30s timeouts)
       const heartbeat = setInterval(() => {
