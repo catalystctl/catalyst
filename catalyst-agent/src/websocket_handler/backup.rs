@@ -2,6 +2,252 @@
 
 use super::*;
 
+/// Temp dirs for active streaming restores: requestId -> staging dir.
+/// prepare creates a CSPRNG dir; finish looks it up (never recomputes a
+/// predictable name). Stays in this module so no cross-file changes needed.
+static RESTORE_TMP_DIRS: once_cell::sync::Lazy<std::sync::Mutex<HashMap<String, PathBuf>>> =
+    once_cell::sync::Lazy::new(|| std::sync::Mutex::new(HashMap::new()));
+
+fn restore_tmp_dirs_lock() -> std::sync::MutexGuard<'static, HashMap<String, PathBuf>> {
+    RESTORE_TMP_DIRS.lock().unwrap_or_else(|poisoned| {
+        warn!("RESTORE_TMP_DIRS mutex was poisoned; recovering inner map");
+        poisoned.into_inner()
+    })
+}
+
+/// Guard that deletes a temp path on drop unless disarmed (early-return safe).
+struct TempGuard {
+    path: Option<PathBuf>,
+}
+
+impl TempGuard {
+    fn new(path: PathBuf) -> Self {
+        Self { path: Some(path) }
+    }
+    fn disarm(&mut self) {
+        self.path = None;
+    }
+}
+
+impl Drop for TempGuard {
+    fn drop(&mut self) {
+        if let Some(p) = self.path.take() {
+            let _ = std::fs::remove_file(&p);
+            let _ = std::fs::remove_dir_all(&p);
+        }
+    }
+}
+
+/// Create an O_EXCL 0600 temp file with a >=128-bit CSPRNG suffix next to
+/// `target` (same dir → same-fs rename), sync it, and return its path.
+/// Replaces predictable `with_extension("...")` temp names.
+/// (Test-only: production decrypt streams via `secure_temp_sibling`.)
+#[cfg(test)]
+async fn create_decrypt_temp(target: &Path) -> AgentResult<(tokio::fs::File, PathBuf)> {
+    let dir = target
+        .parent()
+        .ok_or_else(|| AgentError::InvalidRequest("Invalid backup path".to_string()))?;
+    tokio::fs::create_dir_all(dir).await.map_err(|e| {
+        AgentError::FileSystemError(format!("Failed to create backup directory: {}", e))
+    })?;
+    for _ in 0..8 {
+        let unique: u128 = rand::random();
+        let candidate = dir.join(format!(".decrypt-{:032x}.tmp", unique));
+        match tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&candidate)
+            .await
+        {
+            Ok(f) => return Ok((f, candidate)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                return Err(AgentError::FileSystemError(format!(
+                    "Failed to create decrypt temp: {}",
+                    e
+                )))
+            }
+        }
+    }
+    Err(AgentError::FileSystemError(
+        "Failed to create unique decrypt temp after retries".to_string(),
+    ))
+}
+
+/// Pre-list a backup tarball (buffered restore path): reject absolute paths,
+/// `..`, symlink/hardlink/device entries, and enforce count/size/ratio caps.
+async fn prevalidate_backup_tarball(archive: &Path, compressed_len: u64) -> AgentResult<()> {
+    let out = tokio::process::Command::new("tar")
+        .args(["-tzvf", &archive.to_string_lossy()])
+        .output()
+        .await
+        .map_err(|e| AgentError::IoError(format!("Failed to list backup: {}", e)))?;
+    if !out.status.success() {
+        return Err(AgentError::IoError(
+            "Cannot list backup archive".to_string(),
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut count = 0usize;
+    let mut total = 0u64;
+    for line in stdout.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let flag = line.chars().next().unwrap_or('-');
+        match flag {
+            'l' | 'h' | 'c' | 'b' | 'p' | 's' => {
+                return Err(AgentError::SecurityViolation(format!(
+                    "Backup contains unsafe entry type '{}': {}",
+                    flag, line
+                )));
+            }
+            '-' | 'd' => {}
+            _ => {
+                return Err(AgentError::SecurityViolation(format!(
+                    "Backup contains unsupported entry type: {}",
+                    line
+                )));
+            }
+        }
+        if line.contains(" -> ") {
+            return Err(AgentError::SecurityViolation(format!(
+                "Backup contains link entry: {}",
+                line
+            )));
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 6 {
+            continue;
+        }
+        let name = parts[5..].join(" ");
+        let name = name.trim_end_matches('/');
+        if name.is_empty() || name == "." {
+            continue;
+        }
+        let p = Path::new(name);
+        if p.is_absolute()
+            || p.components().any(|c| {
+                matches!(
+                    c,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            return Err(AgentError::SecurityViolation(format!(
+                "Backup contains escaping path: {}",
+                name
+            )));
+        }
+        total = total.saturating_add(parts[2].replace(',', "").parse().unwrap_or(0));
+        count += 1;
+    }
+    if count > 50_000 {
+        return Err(AgentError::SecurityViolation(format!(
+            "Backup has too many entries ({} > 50000)",
+            count
+        )));
+    }
+    if total > 10 * 1024 * 1024 * 1024 {
+        return Err(AgentError::SecurityViolation(format!(
+            "Backup uncompressed size too large ({} bytes)",
+            total
+        )));
+    }
+    if compressed_len > 0 && total > compressed_len.saturating_mul(100) {
+        return Err(AgentError::SecurityViolation(format!(
+            "Backup compression ratio too high ({} -> {} bytes)",
+            compressed_len, total
+        )));
+    }
+    Ok(())
+}
+
+/// Validate the extracted restore tree: every entry canonicalizes inside the
+/// base and no symlink (dangling or not) escapes it.
+async fn validate_restore_tree(dir: &Path, canonical_base: &Path) -> AgentResult<()> {
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        let mut entries = tokio::fs::read_dir(&current)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Cannot read dir: {}", e)))?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Error reading entry: {}", e)))?
+        {
+            let path = entry.path();
+            let ft = entry
+                .file_type()
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Error reading entry: {}", e)))?;
+            if ft.is_symlink() {
+                let target = tokio::fs::read_link(&path)
+                    .await
+                    .map_err(|e| AgentError::FileSystemError(format!("Cannot read link: {}", e)))?;
+                let parent = path.parent().unwrap_or(&current);
+                let resolved = parent.join(&target);
+                let dangerous = match tokio::fs::canonicalize(&resolved).await {
+                    Ok(c) => !c.starts_with(canonical_base),
+                    Err(_) => {
+                        // Dangling: lexical normalize (`..` pops) from parent.
+                        let mut norm = PathBuf::new();
+                        for comp in resolved.components() {
+                            match comp {
+                                std::path::Component::ParentDir => {
+                                    norm.pop();
+                                }
+                                std::path::Component::CurDir => {}
+                                c => norm.push(c.as_os_str()),
+                            }
+                        }
+                        !norm.starts_with(canonical_base)
+                    }
+                };
+                if dangerous {
+                    return Err(AgentError::SecurityViolation(format!(
+                        "Backup contains symlink escaping the server directory: {} -> {}",
+                        path.display(),
+                        target.display()
+                    )));
+                }
+                continue;
+            }
+            if ft.is_dir() {
+                let canon = tokio::fs::canonicalize(&path).await.map_err(|e| {
+                    AgentError::FileSystemError(format!("Cannot resolve dir: {}", e))
+                })?;
+                if !canon.starts_with(canonical_base) {
+                    return Err(AgentError::SecurityViolation(format!(
+                        "Backup wrote outside the server directory: {}",
+                        path.display()
+                    )));
+                }
+                stack.push(path);
+            } else if ft.is_file() {
+                let canon = tokio::fs::canonicalize(&path).await.map_err(|e| {
+                    AgentError::FileSystemError(format!("Cannot resolve file: {}", e))
+                })?;
+                if !canon.starts_with(canonical_base) {
+                    return Err(AgentError::SecurityViolation(format!(
+                        "Backup wrote outside the server directory: {}",
+                        path.display()
+                    )));
+                }
+            } else {
+                return Err(AgentError::SecurityViolation(format!(
+                    "Backup contains special file: {}",
+                    path.display()
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Fsync every regular file under `dir` (non-recursive into other mounts) so
 /// this server's dirty pages reach disk before archiving. Scoped replacement
 /// for the node-wide `sync` previously run before every backup.
@@ -77,6 +323,8 @@ impl WebSocketHandler {
         let backup_name = msg["backupName"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing backupName".to_string()))?;
+        // Backup names become filenames: single safe segment, no `/`, no `..`.
+        shell_utils::validate_safe_path_segment(backup_name, "backupName")?;
         let backup_path_override = msg["backupPath"].as_str();
         let backup_id = msg["backupId"].as_str();
 
@@ -193,11 +441,35 @@ impl WebSocketHandler {
                         AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
                     })?,
             );
-            let raw = tokio::fs::read(&backup_path).await?;
-            match backup_crypto::encrypt_backup(&raw, &key) {
-                Ok(encrypted_data) => {
-                    tokio::fs::write(&backup_path, &encrypted_data).await?;
-                    info!("Backup {} encrypted successfully", backup_name);
+            // SEC-M (A11-6): stream in 64 KiB chunks — never hold the whole
+            // archive in RAM (whole-file read+encrypt allocates >=2x size).
+            // The ciphertext is staged in an exclusive 0600 temp sibling and
+            // renamed over the archive only after a full fsync. Blocking std
+            // I/O runs on the blocking pool (crypto helpers are synchronous).
+            let backup_path_for_task = backup_path.clone();
+            let key_for_task = key.clone();
+            let encrypt_result = tokio::task::spawn_blocking(move || -> Result<u64, String> {
+                let mut reader = std::fs::File::open(&backup_path_for_task)
+                    .map_err(|e| format!("failed to open backup: {}", e))?;
+                let (mut tmp, tmp_path) =
+                    backup_crypto::secure_temp_sibling(&backup_path_for_task)?;
+                let total =
+                    backup_crypto::encrypt_backup_streaming(&mut reader, &mut tmp, &key_for_task)
+                        .map_err(|e| format!("Backup encryption failed: {}", e))?;
+                tmp.sync_all()
+                    .map_err(|e| format!("failed to sync staged ciphertext: {}", e))?;
+                std::fs::rename(&tmp_path, &backup_path_for_task)
+                    .map_err(|e| format!("failed to publish encrypted backup: {}", e))?;
+                Ok(total)
+            })
+            .await
+            .map_err(|e| AgentError::IoError(format!("encryption task failed: {}", e)))?;
+            match encrypt_result {
+                Ok(total) => {
+                    info!(
+                        "Backup {} encrypted successfully ({} bytes)",
+                        backup_name, total
+                    );
                     true
                 }
                 Err(e) => {
@@ -250,8 +522,7 @@ impl WebSocketHandler {
             "timestamp": chrono::Utc::now().timestamp_millis(),
         });
 
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -296,9 +567,12 @@ impl WebSocketHandler {
             )));
         }
 
-        // Determine the actual file to extract from (may be decrypted to a temp file)
-        let actual_backup_file;
-        let cleanup_temp;
+        // Determine the actual file to extract from (may be decrypted to a temp file).
+        // SEC-H-07: the decrypted plaintext goes to an O_EXCL 0600 CSPRNG temp
+        // next to the backup (never a predictable `.tar.gz.decrypting` name),
+        // fsynced, with a Drop guard so early returns clean it up.
+        let actual_backup_file: PathBuf;
+        let mut cleanup_temp: Option<TempGuard> = None;
         if let Some(enc_key_b64) = msg.get("encryptionKey").and_then(|v| v.as_str()) {
             // Wrap the decoded key in Zeroizing so it is cleared from memory
             // on drop, preventing persistence in memory/swap/core dumps (UF-09/14).
@@ -309,18 +583,57 @@ impl WebSocketHandler {
                         AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
                     })?,
             );
-            let raw = tokio::fs::read(&backup_file).await?;
-            let decrypted = backup_crypto::decrypt_backup(&raw, &key).map_err(|e| {
-                AgentError::InvalidRequest(format!("Backup decryption failed: {}", e))
-            })?;
-            let tmp_path = backup_file.with_extension("tar.gz.decrypting");
-            tokio::fs::write(&tmp_path, &decrypted).await?;
+            // SEC-M (A11-6): stream in 64 KiB chunks — never hold the whole
+            // archive or its plaintext in RAM (decrypt+write allocates >=2x).
+            // Blocking std I/O on the blocking pool; the O_EXCL 0600 temp and
+            // TempGuard cleanup semantics are unchanged.
+            let backup_file_for_task = backup_file.clone();
+            let key_for_task = key.clone();
+            let decrypt_result = tokio::task::spawn_blocking(move || -> Result<PathBuf, String> {
+                let mut reader = std::fs::File::open(&backup_file_for_task)
+                    .map_err(|e| format!("failed to open backup: {}", e))?;
+                let (mut tmp, tmp_path) =
+                    backup_crypto::secure_temp_sibling(&backup_file_for_task)?;
+                backup_crypto::decrypt_backup_streaming(&mut reader, &mut tmp, &key_for_task)
+                    .map_err(|e| format!("Backup decryption failed: {}", e))?;
+                tmp.sync_all()
+                    .map_err(|e| format!("failed to sync decrypt temp: {}", e))?;
+                drop(tmp);
+                Ok(tmp_path)
+            })
+            .await
+            .map_err(|e| AgentError::IoError(format!("decryption task failed: {}", e)))?
+            .map_err(|e| AgentError::InvalidRequest(format!("Backup decryption failed: {}", e)))?;
+            let guard = TempGuard::new(decrypt_result.clone());
             info!("Backup decrypted successfully for restore");
-            actual_backup_file = tmp_path.clone();
-            cleanup_temp = Some(tmp_path);
+            actual_backup_file = decrypt_result;
+            cleanup_temp = Some(guard);
         } else {
             actual_backup_file = backup_file.clone();
-            cleanup_temp = None;
+        }
+        // Optional checksum verification when the panel supplies one.
+        if let Some(expected) = msg.get("checksum").and_then(|v| v.as_str()) {
+            let mut file = tokio::fs::File::open(&actual_backup_file).await?;
+            let mut hasher = Sha256::new();
+            let mut buffer = [0u8; 8192];
+            loop {
+                let read = file.read(&mut buffer).await?;
+                if read == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..read]);
+            }
+            let actual = hasher
+                .finalize()
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>();
+            if actual != expected.to_lowercase() {
+                return Err(AgentError::SecurityViolation(format!(
+                    "Backup checksum mismatch: expected {}, got {}",
+                    expected, actual
+                )));
+            }
         }
 
         // Decompression bomb protection: reject oversized backup files
@@ -329,20 +642,54 @@ impl WebSocketHandler {
             .await
             .map_err(|e| AgentError::IoError(format!("Failed to read backup metadata: {}", e)))?;
         if backup_metadata.len() > MAX_LOCAL_BACKUP_BYTES {
-            if let Some(ref tmp) = cleanup_temp {
-                let _ = tokio::fs::remove_file(tmp).await;
-            }
             return Err(AgentError::InvalidRequest(format!(
                 "Backup file too large ({} bytes, max {} bytes)",
                 backup_metadata.len(),
                 MAX_LOCAL_BACKUP_BYTES
             )));
         }
+        // TempGuard drops the decrypt temp on any early return below.
+        // SEC-C-03: pre-list the tarball and reject absolute / `..` /
+        // symlink-hardlink-device entries + count/size/ratio caps BEFORE
+        // anything is written.
+        prevalidate_backup_tarball(&actual_backup_file, backup_metadata.len()).await?;
 
-        // Extract to a temporary directory first so symlink validation happens
-        // BEFORE any data touches the live server directory.
-        let tmp_dir = server_dir.with_extension("tmp_restore");
-        tokio::fs::create_dir_all(&tmp_dir).await?;
+        // SEC-H-13: refuse extraction when the archive cannot fit in free space.
+        ensure_restore_fits(&actual_backup_file, &server_dir).await?;
+
+        // Extract to a secure temp directory (O_EXCL CSPRNG sibling of the
+        // server dir — never the predictable `{uuid}.tmp_restore` name) so
+        // validation happens BEFORE any data touches the live directory.
+        // A guard removes it on any early return.
+        let tmp_parent = server_dir.parent().unwrap_or(&server_dir);
+        let tmp_dir: PathBuf = {
+            let mut created = None;
+            for _ in 0..8 {
+                let unique: u128 = rand::random();
+                let candidate = tmp_parent.join(format!(".restore-{:032x}.tmp", unique));
+                match tokio::fs::create_dir(&candidate).await {
+                    Ok(()) => {
+                        created = Some(candidate);
+                        break;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                    Err(e) => {
+                        return Err(AgentError::IoError(format!(
+                            "Failed to create temp restore dir: {}",
+                            e
+                        )))
+                    }
+                }
+            }
+            created.ok_or_else(|| {
+                AgentError::IoError(
+                    "Failed to create unique temp restore dir after retries".to_string(),
+                )
+            })?
+        };
+
+        // Guard removes the temp dir on any early return below.
+        let mut tmp_guard = TempGuard::new(tmp_dir.clone());
 
         info!(
             "Restoring backup {} for server {} into temp dir {}",
@@ -357,54 +704,38 @@ impl WebSocketHandler {
             .arg("-C")
             .arg(&tmp_dir)
             // SECURITY: extract as agent-controlled, not archive-controlled —
-            // never restore archive-supplied ownership/permissions/special
-            // files (root tar otherwise honors --same-owner and suid bits).
+            // never restore archive-supplied ownership/permissions (root tar
+            // otherwise honors --same-owner and suid bits). `--anchored`
+            // excludes are defense in depth; prevalidation is primary.
+            // (`--no-devices` is not a GNU tar flag — device entries are
+            // rejected by prevalidation + post-scan instead.)
             .arg("--no-same-owner")
             .arg("--no-same-permissions")
-            .arg("--no-devices")
+            .arg("--anchored")
+            .arg("--exclude=../*")
+            .arg("--exclude=/*")
             .output()
             .await
             .map_err(|e| AgentError::IoError(format!("Failed to run tar: {}", e)))?;
 
         if !restore_result.status.success() {
             let stderr = String::from_utf8_lossy(&restore_result.stderr);
-            // Clean up temp extraction dir on failure (server_dir is untouched)
-            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
-            // Clean up temp decrypted file
-            if let Some(ref tmp) = cleanup_temp {
-                let _ = tokio::fs::remove_file(tmp).await;
-            }
+            // Guards clean up temp extraction dir + decrypt temp.
             return Err(AgentError::IoError(format!(
                 "Backup restore failed: {}",
                 stderr
             )));
         }
 
-        // Clean up temp decrypted file after successful extraction
-        if let Some(ref tmp) = cleanup_temp {
-            let _ = tokio::fs::remove_file(tmp).await;
-        }
+        // Decrypt temp no longer needed past successful extraction.
+        drop(cleanup_temp.take());
 
-        // Security: validate that no symlinks in the restored archive escape the
-        // server directory.  This prevents a malicious backup from planting symlinks
-        // that point to host paths like /etc/shadow or /var/lib/catalyst.
+        // Validate the whole tree (regular files escaping, not just symlinks).
+        // Guard removes tmp_dir on escape.
         let canonical_tmp = tokio::fs::canonicalize(&tmp_dir)
             .await
             .map_err(|e| AgentError::FileSystemError(format!("Cannot resolve temp dir: {}", e)))?;
-        let mut dangerous_symlinks = Vec::new();
-        self.check_restore_symlinks(&tmp_dir, &canonical_tmp, &mut dangerous_symlinks)
-            .await?;
-        if !dangerous_symlinks.is_empty() {
-            for symlink in &dangerous_symlinks {
-                warn!("Dangerous symlink in restored backup: {}", symlink);
-            }
-            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
-            return Err(AgentError::SecurityViolation(format!(
-                "Backup contains {} symlink(s) that escape the server directory. \
-                 Restore aborted and temp directory cleaned up for security.",
-                dangerous_symlinks.len()
-            )));
-        }
+        validate_restore_tree(&tmp_dir, &canonical_tmp).await?;
 
         // Validation passed — swap restored data into place. On a systemd
         // loop-mount this copies onto the image then swaps children; it never
@@ -412,6 +743,9 @@ impl WebSocketHandler {
         self.storage_manager
             .replace_directory_contents(&server_dir, &tmp_dir)
             .await?;
+        // Swap consumed the temp tree (mounted: copied; unmounted: renamed).
+        // Disarm so the guard does not delete the live dir after rename.
+        tmp_guard.disarm();
 
         // Ensure restored data is owned by container user
         if let Err(e) = chown_to_container_user(&server_dir).await {
@@ -434,8 +768,7 @@ impl WebSocketHandler {
             })
         };
 
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -464,13 +797,24 @@ impl WebSocketHandler {
                         if let Ok(target) = tokio::fs::read_link(&path).await {
                             let parent = path.parent().unwrap_or(&current);
                             let resolved = parent.join(&target);
+                            // Dangling links must be graded lexically normalized,
+                            // never Ok-by-default: `out -> ../../host` has no
+                            // canonical form yet escapes the jail.
                             let is_dangerous =
                                 if let Ok(canon) = tokio::fs::canonicalize(&resolved).await {
                                     !canon.starts_with(canonical_base)
-                                } else if resolved.is_absolute() {
-                                    !resolved.starts_with(canonical_base)
                                 } else {
-                                    false
+                                    let mut norm = PathBuf::new();
+                                    for comp in resolved.components() {
+                                        match comp {
+                                            std::path::Component::ParentDir => {
+                                                norm.pop();
+                                            }
+                                            std::path::Component::CurDir => {}
+                                            c => norm.push(c.as_os_str()),
+                                        }
+                                    }
+                                    !norm.starts_with(canonical_base)
                                 };
                             if is_dangerous {
                                 dangerous.push(format!(
@@ -520,8 +864,7 @@ impl WebSocketHandler {
             "backupPath": backup_path,
         });
 
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -558,8 +901,7 @@ impl WebSocketHandler {
                 "success": false,
                 "error": "Backup file not found",
             });
-            let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into()))
+            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
@@ -571,8 +913,7 @@ impl WebSocketHandler {
             "serverId": server_id,
             "success": true,
         });
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -608,8 +949,7 @@ impl WebSocketHandler {
                 "error": "Backup file not found",
                 "done": true,
             });
-            let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into()))
+            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
@@ -625,8 +965,7 @@ impl WebSocketHandler {
                     "error": format!("Failed to open backup file: {}", err),
                     "done": true,
                 });
-                let mut w = write.lock().await;
-                w.send(Message::Text(event.to_string().into()))
+                send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                     .await
                     .map_err(|e| AgentError::NetworkError(e.to_string()))?;
                 return Ok(());
@@ -644,8 +983,7 @@ impl WebSocketHandler {
                         "error": format!("Failed to read backup file: {}", err),
                         "done": true,
                     });
-                    let mut w = write.lock().await;
-                    w.send(Message::Text(event.to_string().into()))
+                    send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                         .await
                         .map_err(|e| AgentError::NetworkError(e.to_string()))?;
                     break;
@@ -658,8 +996,7 @@ impl WebSocketHandler {
                     "serverId": server_id,
                     "done": true,
                 });
-                let mut w = write.lock().await;
-                w.send(Message::Text(done_event.to_string().into()))
+                send_ws_with_timeout(write, Message::Text(done_event.to_string().into()))
                     .await
                     .map_err(|e| AgentError::NetworkError(e.to_string()))?;
                 break;
@@ -673,8 +1010,7 @@ impl WebSocketHandler {
                 "data": chunk,
                 "done": false,
             });
-            let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into()))
+            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         }
@@ -712,20 +1048,29 @@ impl WebSocketHandler {
         let backup_file = self
             .resolve_backup_path(server_uuid, backup_path, true)
             .await?;
-        let file = match tokio::fs::File::create(&backup_file).await {
-            Ok(f) => f,
-            Err(e) => {
-                let event = json!({
-                    "type": "backup_upload_response",
-                    "requestId": request_id,
-                    "success": false,
-                    "error": format!("Failed to create upload file: {}", e),
-                });
-                let mut w = write.lock().await;
-                w.send(Message::Text(event.to_string().into()))
-                    .await
-                    .map_err(|e| AgentError::NetworkError(e.to_string()))?;
-                return Ok(());
+        // O_EXCL 0600 create: never follow a pre-existing symlink at the
+        // destination; ELOOP/AlreadyExists fails closed.
+        let file = {
+            match tokio::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&backup_file)
+                .await
+            {
+                Ok(f) => f,
+                Err(e) => {
+                    let event = json!({
+                        "type": "backup_upload_response",
+                        "requestId": request_id,
+                        "success": false,
+                        "error": format!("Failed to create upload file: {}", e),
+                    });
+                    send_ws_with_timeout(write, Message::Text(event.to_string().into()))
+                        .await
+                        .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+                    return Ok(());
+                }
             }
         };
 
@@ -753,8 +1098,7 @@ impl WebSocketHandler {
             "requestId": request_id,
             "success": true,
         });
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -850,8 +1194,7 @@ impl WebSocketHandler {
                 "success": false,
                 "error": error_msg,
             });
-            let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into()))
+            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
@@ -862,8 +1205,7 @@ impl WebSocketHandler {
             "requestId": request_id,
             "success": true,
         });
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -979,8 +1321,7 @@ impl WebSocketHandler {
                     "error": format!("Flush failed: {}", e),
                     "bytesReceived": bytes_received,
                 });
-                let mut w = write.lock().await;
-                w.send(Message::Text(event.to_string().into()))
+                send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                     .await
                     .map_err(|e| AgentError::NetworkError(e.to_string()))?;
                 return Ok(());
@@ -993,8 +1334,7 @@ impl WebSocketHandler {
                 "error": "Unknown upload request",
                 "bytesReceived": 0u64,
             });
-            let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into()))
+            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
@@ -1006,8 +1346,7 @@ impl WebSocketHandler {
             "success": true,
             "bytesReceived": bytes_received,
         });
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -1076,11 +1415,63 @@ impl WebSocketHandler {
                 "Access denied: path outside backup directory".to_string(),
             ));
         }
+        // Ancestor re-validation (TOCTOU close): no component between base
+        // and parent may be a symlink or escape the base.
+        {
+            let mut cur = parent_canon.clone();
+            loop {
+                if cur == base_canon {
+                    break;
+                }
+                match std::fs::symlink_metadata(&cur) {
+                    Ok(m) if m.file_type().is_symlink() => {
+                        return Err(AgentError::PermissionDenied(
+                            "Access denied: backup path ancestor is a symbolic link".to_string(),
+                        ));
+                    }
+                    Ok(_) => {
+                        if let Ok(c) = cur.canonicalize() {
+                            if !c.starts_with(&base_canon) {
+                                return Err(AgentError::PermissionDenied(
+                                    "Access denied: path outside backup directory".to_string(),
+                                ));
+                            }
+                        }
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => {
+                        return Err(AgentError::FileSystemError(format!(
+                            "Cannot stat backup ancestor: {}",
+                            e
+                        )));
+                    }
+                }
+                match cur.parent() {
+                    Some(p) if p != cur => cur = p.to_path_buf(),
+                    _ => break,
+                }
+            }
+        }
 
         let file_name = normalized
             .file_name()
             .ok_or_else(|| AgentError::InvalidRequest("Invalid backup path".to_string()))?;
+        if file_name == "." || file_name == ".." {
+            return Err(AgentError::InvalidRequest(
+                "Invalid backup path".to_string(),
+            ));
+        }
         let candidate = parent_canon.join(file_name);
+        // Final-component symlink rejection: a dangling link at the target
+        // must fail closed (upload/create use O_EXCL; restore/open reject).
+        if candidate
+            .symlink_metadata()
+            .is_ok_and(|m| m.file_type().is_symlink())
+        {
+            return Err(AgentError::PermissionDenied(
+                "Access denied: backup path is a symbolic link".to_string(),
+            ));
+        }
         if candidate.exists() {
             let canonical = candidate
                 .canonicalize()
@@ -1221,8 +1612,7 @@ impl WebSocketHandler {
             "serverId": msg["serverId"],
             "success": true,
         });
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -1253,15 +1643,47 @@ impl WebSocketHandler {
             }
         }
 
-        // Extract into a temp directory first (same pattern as non-streaming restore)
-        // so symlink validation can run before live server_dir is replaced.
-        let tmp_dir = server_dir.with_extension("tmp_restore_stream");
-        if tmp_dir.exists() {
-            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
+        // SEC-H-13: reject a second concurrent prepare with Busy BEFORE
+        // creating anything (checked first so a rejected prepare leaves no
+        // staging dir or tar child behind).
+        {
+            let streams = self.active_restore_streams.read().await;
+            if !streams.is_empty() && !streams.contains_key(request_id) {
+                return Err(AgentError::InternalError(
+                    "restore busy: another restore stream is active".to_string(),
+                ));
+            }
         }
-        tokio::fs::create_dir_all(&tmp_dir).await.map_err(|e| {
-            AgentError::IoError(format!("Failed to create temp restore directory: {}", e))
-        })?;
+
+        // Extract into a secure temp directory (O_EXCL CSPRNG sibling — never
+        // the predictable `{uuid}.tmp_restore_stream` name) so validation can
+        // run before live server_dir is replaced.
+        let tmp_parent = server_dir.parent().unwrap_or(&server_dir);
+        let tmp_dir: PathBuf = {
+            let mut created = None;
+            for _ in 0..8 {
+                let unique: u128 = rand::random();
+                let candidate = tmp_parent.join(format!(".restore-stream-{:032x}.tmp", unique));
+                match tokio::fs::create_dir(&candidate).await {
+                    Ok(()) => {
+                        created = Some(candidate);
+                        break;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                    Err(e) => {
+                        return Err(AgentError::IoError(format!(
+                            "Failed to create temp restore directory: {}",
+                            e
+                        )))
+                    }
+                }
+            }
+            created.ok_or_else(|| {
+                AgentError::IoError(
+                    "Failed to create unique temp restore dir after retries".to_string(),
+                )
+            })?
+        };
 
         info!(
             "Preparing restore stream for {} into temp dir {}",
@@ -1272,8 +1694,9 @@ impl WebSocketHandler {
         // Spawn tar with stdin piped. stdin stays in the Child so
         // write_restore_stream_chunk can access it via child.stdin.as_mut().
         // SECURITY: same hardening flags as the non-streaming restore —
-        // never honor archive-supplied ownership/permissions/special files
-        // during root extraction.
+        // never honor archive-supplied ownership/permissions during root
+        // extraction. (`--no-devices` is not a GNU tar flag; device entries
+        // are rejected by the streaming pre-scan below + post-scan.)
         let child = tokio::process::Command::new("tar")
             .arg("-xf")
             .arg("-")
@@ -1281,12 +1704,18 @@ impl WebSocketHandler {
             .arg(&tmp_dir)
             .arg("--no-same-owner")
             .arg("--no-same-permissions")
-            .arg("--no-devices")
+            .arg("--anchored")
+            .arg("--exclude=../*")
+            .arg("--exclude=/*")
             .stdin(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
             .map_err(|e| AgentError::IoError(format!("Failed to spawn tar: {}", e)))?;
 
+        // Remember the staging dir for finish (finish must never recompute a
+        // predictable name). The map is the only routing source; serverUuid
+        // is stored per-requestId in the byte-counter companion.
+        restore_tmp_dirs_lock().insert(request_id.to_string(), tmp_dir.clone());
         self.active_restore_streams
             .write()
             .await
@@ -1299,15 +1728,18 @@ impl WebSocketHandler {
             .await
             .insert(request_id.to_string(), 0u64);
 
-        *self.active_restore_request_id.write().await = Some(request_id.to_string());
+        // serverUuid companion for chunk/finish match (replaces singleton id).
+        self.active_restore_request_id
+            .write()
+            .await
+            .replace(format!("{}:{}", request_id, server_uuid));
 
         let event = json!({
             "type": "prepare_restore_stream_response",
             "requestId": request_id,
             "success": true,
         });
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -1366,6 +1798,20 @@ impl WebSocketHandler {
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
 
+        // SEC-H-01/13: require serverUuid match with prepare for this requestId.
+        {
+            let guard = self.active_restore_request_id.read().await;
+            if let Some(marker) = guard.as_deref() {
+                let expected = format!("{}:{}", request_id, server_uuid);
+                if marker != expected {
+                    return Err(AgentError::InvalidRequest(format!(
+                        "serverUuid mismatch for restore {}",
+                        request_id
+                    )));
+                }
+            }
+        }
+
         let mut child = self
             .active_restore_streams
             .write()
@@ -1391,7 +1837,16 @@ impl WebSocketHandler {
         });
 
         let server_dir = self.config.server.data_dir.join(server_uuid);
-        let tmp_dir = server_dir.with_extension("tmp_restore_stream");
+        // Staging dir recorded at prepare time — never recompute a name.
+        let tmp_dir: PathBuf = match restore_tmp_dirs_lock().remove(request_id) {
+            Some(d) => d,
+            None => {
+                return Err(AgentError::InvalidRequest(
+                    "No active restore stream".to_string(),
+                ))
+            }
+        };
+        let mut tmp_guard = TempGuard::new(tmp_dir.clone());
 
         let status = child
             .wait()
@@ -1400,53 +1855,33 @@ impl WebSocketHandler {
 
         if !status.success() {
             let stderr_output = stderr_task.await.unwrap_or_default();
-            // Clean up temp extraction on failure — live server_dir untouched.
-            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
+            // Guard removes temp extraction — live server_dir untouched.
             return Err(AgentError::IoError(format!(
                 "Restore tar failed: {}",
                 stderr_output
             )));
         }
 
-        // Security: validate symlinks in the temp tree BEFORE replacing live data.
-        // Same check used in non-streaming restore path (UF-01).
+        // Validate the whole tree (regular files escaping, not just symlinks)
+        // BEFORE replacing live data. Guard removes tmp_dir on escape.
         let canonical_tmp = match tokio::fs::canonicalize(&tmp_dir).await {
             Ok(p) => p,
             Err(e) => {
-                let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
                 return Err(AgentError::FileSystemError(format!(
                     "Cannot resolve temp restore dir: {}",
                     e
                 )));
             }
         };
-        let mut dangerous = Vec::new();
-        if let Err(e) = self
-            .check_restore_symlinks(&tmp_dir, &canonical_tmp, &mut dangerous)
-            .await
-        {
-            warn!("Symlink scan failed after restore stream: {}", e);
-            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
-            return Err(AgentError::FileSystemError(format!(
-                "Symlink scan failed after restore stream: {}",
-                e
-            )));
-        }
-        if !dangerous.is_empty() {
-            for link in &dangerous {
-                warn!("Dangerous symlink in restored backup stream: {}", link);
-            }
-            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
-            return Err(AgentError::SecurityViolation(format!(
-                "Backup contains {} symlink(s) that escape the server directory.                  Restore aborted and temp directory cleaned up for security.",
-                dangerous.len()
-            )));
-        }
+        validate_restore_tree(&tmp_dir, &canonical_tmp).await?;
 
         // Validation passed — swap restored data into place (mount-safe).
         self.storage_manager
             .replace_directory_contents(&server_dir, &tmp_dir)
             .await?;
+        // Swap consumed the staging tree; disarm so the guard does not delete
+        // the live dir after rename.
+        tmp_guard.disarm();
 
         // Clean up byte counter for this restore stream
         self.active_restore_bytes_written
@@ -1465,11 +1900,159 @@ impl WebSocketHandler {
             "requestId": request_id,
             "success": true,
         });
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod restore_security_tests {
+    use super::{
+        create_decrypt_temp, prevalidate_backup_tarball, validate_restore_tree, TempGuard,
+    };
+    use std::path::PathBuf;
+
+    async fn make_tarball(files: &[(&str, &str)], links: &[(&str, &str)]) -> PathBuf {
+        let work = tempfile::tempdir().unwrap();
+        for (name, data) in files {
+            let p = work.path().join(name);
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(&p, data.as_bytes()).unwrap();
+        }
+        #[cfg(unix)]
+        for (name, target) in links {
+            std::os::unix::fs::symlink(target, work.path().join(name)).unwrap();
+        }
+        let out = work.path().join("out.tar.gz");
+        let mut cmd = std::process::Command::new("tar");
+        cmd.arg("-czf").arg(&out).arg("-C").arg(work.path());
+        for (name, _) in files {
+            cmd.arg(name);
+        }
+        for (name, _) in links {
+            cmd.arg(name);
+        }
+        assert!(cmd.status().unwrap().success());
+        let keep = tempfile::tempdir().unwrap().keep().join("out.tar.gz");
+        std::fs::create_dir_all(keep.parent().unwrap()).unwrap();
+        std::fs::copy(&out, &keep).unwrap();
+        keep
+    }
+
+    #[tokio::test]
+    async fn prevalidate_rejects_dotdot_member() {
+        let work = tempfile::tempdir().unwrap();
+        let archive = work.path().join("evil.tar.gz");
+        let script = format!(
+            "import tarfile,io; t=tarfile.open('{}','w:gz'); d=b'x'; i=tarfile.TarInfo('../evil.txt'); i.size=len(d); t.addfile(i,io.BytesIO(d)); t.close()",
+            archive.display()
+        );
+        let status = std::process::Command::new("python3")
+            .args(["-c", &script])
+            .status();
+        if !status.map(|s| s.success()).unwrap_or(false) {
+            return; // python3 unavailable — skip
+        }
+        let len = std::fs::metadata(&archive).unwrap().len();
+        let err = prevalidate_backup_tarball(&archive, len)
+            .await
+            .expect_err(".. member must be rejected");
+        assert!(err.to_string().to_lowercase().contains("escap"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn prevalidate_rejects_symlink_member() {
+        let archive = make_tarball(&[("ok.txt", "ok")], &[("link", "/etc/shadow")]).await;
+        let len = std::fs::metadata(&archive).unwrap().len();
+        let err = prevalidate_backup_tarball(&archive, len)
+            .await
+            .expect_err("symlink member must be rejected");
+        assert!(
+            err.to_string().to_lowercase().contains("symlink")
+                || err.to_string().to_lowercase().contains("unsafe")
+                || err.to_string().to_lowercase().contains("link"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn prevalidate_accepts_benign_archive() {
+        let archive = make_tarball(&[("a.txt", "hello"), ("sub/b.txt", "world")], &[]).await;
+        let len = std::fs::metadata(&archive).unwrap().len();
+        prevalidate_backup_tarball(&archive, len)
+            .await
+            .expect("benign ok");
+    }
+
+    #[tokio::test]
+    async fn decrypt_temp_is_o_excl_0600_unpredictable() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("backup.tar.gz");
+        std::fs::write(&target, b"x").unwrap();
+        let (_f1, p1) = create_decrypt_temp(&target).await.unwrap();
+        let (_f2, p2) = create_decrypt_temp(&target).await.unwrap();
+        assert_ne!(p1, p2, "temp names must be unpredictable");
+        assert!(!p1.to_string_lossy().contains("decrypting"));
+        for p in [&p1, &p2] {
+            let mode = std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+    }
+
+    #[test]
+    fn temp_guard_cleans_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("tmpfile");
+        std::fs::write(&p, b"x").unwrap();
+        {
+            let _g = TempGuard::new(p.clone());
+        }
+        assert!(!p.exists(), "guard must delete on drop");
+        let p2 = dir.path().join("tmpfile2");
+        std::fs::write(&p2, b"x").unwrap();
+        {
+            let mut g = TempGuard::new(p2.clone());
+            g.disarm();
+        }
+        assert!(p2.exists(), "disarmed guard must keep file");
+    }
+
+    #[tokio::test]
+    async fn dangling_symlink_escape_detected() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("srv");
+        std::fs::create_dir_all(&base).unwrap();
+        // Dangling link escaping via `..` — the old grader returned Ok.
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("../../escaped", base.join("out")).unwrap();
+        let canon = base.canonicalize().unwrap();
+        let err = validate_restore_tree(&base, &canon)
+            .await
+            .expect_err("dangling escape must fail");
+        assert!(
+            err.to_string().to_lowercase().contains("symlink")
+                || err.to_string().to_lowercase().contains("escap"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn benign_intra_jail_link_passes() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("srv");
+        std::fs::create_dir_all(base.join("sub")).unwrap();
+        std::fs::write(base.join("sub").join("f.txt"), b"x").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("sub/f.txt", base.join("good")).unwrap();
+        let canon = base.canonicalize().unwrap();
+        validate_restore_tree(&base, &canon)
+            .await
+            .expect("benign ok");
     }
 }
 
@@ -1643,4 +2226,33 @@ mod request_id_tests {
         assert!(parse_backup_binary_frame(&[]).is_none());
         assert!(parse_backup_binary_frame(&[0, 0]).is_none());
     }
+}
+
+/// SEC-H-13: refuse extraction when the archive is larger than free space on
+/// the destination filesystem (conservative: archive bytes * 3 headroom for
+/// decompression expansion).
+pub(crate) async fn ensure_restore_fits(
+    archive: &std::path::Path,
+    dest_dir: &std::path::Path,
+) -> AgentResult<()> {
+    let meta = tokio::fs::metadata(archive)
+        .await
+        .map_err(|e| AgentError::IoError(format!("stat archive: {}", e)))?;
+    let need = meta.len().saturating_mul(3);
+    let probe = if dest_dir.exists() {
+        dest_dir.to_path_buf()
+    } else {
+        dest_dir
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+    };
+    let avail = crate::FileManager::available_bytes(&probe)?;
+    if need > avail {
+        return Err(AgentError::FileSystemError(format!(
+            "No space left on device: need ~{} bytes, {} available",
+            need, avail
+        )));
+    }
+    Ok(())
 }
