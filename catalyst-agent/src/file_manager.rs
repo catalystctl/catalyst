@@ -7,6 +7,11 @@ use tracing::{debug, info, warn};
 
 use crate::{AgentError, AgentResult};
 
+/// Archive hardening caps (SEC-C-03).
+pub(crate) const MAX_ARCHIVE_MEMBERS: usize = 50_000;
+pub(crate) const MAX_ARCHIVE_TOTAL_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10 GiB uncompressed
+pub(crate) const MAX_ARCHIVE_RATIO: u64 = 100; // uncompressed may not exceed 100x compressed
+
 /// An exclusively-created temp file plus its path (std handles carry no path).
 /// Written via `as_file()`/`AsyncWriteExt` on the std handle, removed/renamed
 /// through `path()`.
@@ -41,6 +46,289 @@ impl Drop for TempFile {
     }
 }
 
+/// Open a file without following a trailing symlink (O_NOFOLLOW).
+/// `write=true` opens write-only (existing file, no create/truncate);
+/// `write=false` opens read-only. Symlink targets fail with ELOOP.
+pub(crate) fn open_no_follow(path: &Path, write: bool) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut opts = std::fs::OpenOptions::new();
+    if write {
+        opts.write(true);
+    } else {
+        opts.read(true);
+    }
+    opts.custom_flags(libc::O_NOFOLLOW);
+    opts.open(path)
+}
+
+/// Canonical base for a server jail (trust anchor for ancestor checks).
+fn jail_base_sync(data_dir: &Path, server_id: &str) -> Result<PathBuf, AgentError> {
+    let server_base = data_dir.join(server_id);
+    if let Ok(p) = server_base.canonicalize() {
+        return Ok(p);
+    }
+    let data_canon = data_dir.canonicalize().map_err(|_| {
+        AgentError::FileSystemError(format!("Data directory does not exist: {:?}", data_dir))
+    })?;
+    let resolved = data_canon.join(server_id);
+    if !resolved.starts_with(&data_canon) {
+        return Err(AgentError::PermissionDenied(
+            "Server ID escapes data directory".to_string(),
+        ));
+    }
+    Ok(resolved)
+}
+
+/// Re-validate every ancestor of `dir` up to `canonical_base`: none may be
+/// a symlink and each must canonicalize inside the base. Closes the
+/// create_dir_all → use window where the container swaps a parent for a link.
+fn revalidate_ancestors(canonical_base: &Path, dir: &Path) -> AgentResult<()> {
+    let mut cur = dir.to_path_buf();
+    loop {
+        if !cur.starts_with(canonical_base) && cur != *canonical_base {
+            return Err(AgentError::PermissionDenied(
+                "Access denied: path outside data directory".to_string(),
+            ));
+        }
+        match std::fs::symlink_metadata(&cur) {
+            Ok(m) if m.file_type().is_symlink() => {
+                return Err(AgentError::PermissionDenied(
+                    "Access denied: ancestor is a symbolic link".to_string(),
+                ));
+            }
+            Ok(_) => {
+                if let Ok(c) = cur.canonicalize() {
+                    if !c.starts_with(canonical_base) {
+                        return Err(AgentError::PermissionDenied(
+                            "Access denied: path outside data directory".to_string(),
+                        ));
+                    }
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(AgentError::FileSystemError(format!(
+                    "Cannot stat ancestor: {}",
+                    e
+                )));
+            }
+        }
+        if cur == *canonical_base {
+            break;
+        }
+        match cur.parent() {
+            Some(p) if p != cur => cur = p.to_path_buf(),
+            _ => break,
+        }
+        if !dir.starts_with(canonical_base) && cur == *canonical_base {
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// Reject one archive member name before extraction (SEC-C-03).
+fn reject_archive_member_name(name: &str) -> AgentResult<()> {
+    if name.is_empty() || name.contains('\0') {
+        return Err(AgentError::SecurityViolation(
+            "Archive contains invalid entry name".to_string(),
+        ));
+    }
+    let p = Path::new(name);
+    if p.is_absolute() {
+        return Err(AgentError::SecurityViolation(format!(
+            "Archive contains absolute path: {}",
+            name
+        )));
+    }
+    for c in p.components() {
+        match c {
+            std::path::Component::ParentDir => {
+                return Err(AgentError::SecurityViolation(format!(
+                    "Archive contains '..' path: {}",
+                    name
+                )));
+            }
+            std::path::Component::Prefix(_) | std::path::Component::RootDir => {
+                return Err(AgentError::SecurityViolation(format!(
+                    "Archive contains absolute path: {}",
+                    name
+                )));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Enforce member-count / total-size / compression-ratio caps.
+fn enforce_archive_caps(
+    member_count: usize,
+    total_uncompressed: u64,
+    compressed_len: u64,
+) -> AgentResult<()> {
+    if member_count > MAX_ARCHIVE_MEMBERS {
+        return Err(AgentError::SecurityViolation(format!(
+            "Archive has too many entries ({} > {})",
+            member_count, MAX_ARCHIVE_MEMBERS
+        )));
+    }
+    if total_uncompressed > MAX_ARCHIVE_TOTAL_BYTES {
+        return Err(AgentError::SecurityViolation(format!(
+            "Archive uncompressed size too large ({} bytes)",
+            total_uncompressed
+        )));
+    }
+    if compressed_len > 0 && total_uncompressed > compressed_len.saturating_mul(MAX_ARCHIVE_RATIO) {
+        return Err(AgentError::SecurityViolation(format!(
+            "Archive compression ratio too high ({} -> {} bytes)",
+            compressed_len, total_uncompressed
+        )));
+    }
+    Ok(())
+}
+
+/// Pre-list a zip archive and reject dangerous members before extraction.
+/// Uses `unzip -Z -v` (verbose listing includes type flags) plus a fallback
+/// parse; any symlink / absolute / `..` / device-looking entry is rejected.
+async fn prevalidate_zip_archive(archive: &Path, compressed_len: u64) -> AgentResult<()> {
+    let out = tokio::process::Command::new("unzip")
+        .args(["-Z", "-v", &archive.to_string_lossy()])
+        .output()
+        .await
+        .map_err(|e| AgentError::FileSystemError(format!("unzip -Z failed: {}", e)))?;
+    if !out.status.success() {
+        return Err(AgentError::FileSystemError(
+            "Cannot list zip archive".to_string(),
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut count = 0usize;
+    let mut total = 0u64;
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty()
+            || trimmed.starts_with("Archive:")
+            || trimmed.starts_with("Zip file size:")
+            || trimmed.contains("file(s),")
+            || trimmed.starts_with("Length")
+            || trimmed.starts_with("----")
+        {
+            continue;
+        }
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() < 8 {
+            continue;
+        }
+        // `unzip -Z -v` columns: Length Method Size Ratio Date Time CRC Name...
+        // Name is the last field; type char is embedded in the long form.
+        let name = parts[parts.len() - 1];
+        if name.is_empty() || name == "." {
+            continue;
+        }
+        reject_archive_member_name(name)?;
+        // Symlink entries show as `... Symbolic link ... -> target` or carry
+        // a trailing `-> target` marker in verbose output.
+        if line.contains("symbolic link") || line.contains(" -> ") {
+            return Err(AgentError::SecurityViolation(format!(
+                "Archive contains symlink entry: {}",
+                name
+            )));
+        }
+        let len: u64 = parts[0].replace(',', "").parse().unwrap_or(0);
+        total = total.saturating_add(len);
+        count += 1;
+    }
+    // Fallback: short listing when verbose parse yields nothing (empty names).
+    if count == 0 {
+        let out = tokio::process::Command::new("unzip")
+            .args(["-Z", "-1", &archive.to_string_lossy()])
+            .output()
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("unzip -Z failed: {}", e)))?;
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            for line in stdout.lines() {
+                let name = line.trim().trim_end_matches('/');
+                if name.is_empty() || name == "." {
+                    continue;
+                }
+                reject_archive_member_name(name)?;
+                count += 1;
+            }
+        }
+    }
+    enforce_archive_caps(count, total, compressed_len)
+}
+
+/// Pre-list a tar.gz archive and reject dangerous members before extraction.
+/// Rejects absolute paths, `..`, symlinks/hardlinks, char/block/fifo/device
+/// entries; enforces count / size / ratio caps.
+async fn prevalidate_tar_archive(archive: &Path, compressed_len: u64) -> AgentResult<()> {
+    let out = tokio::process::Command::new("tar")
+        .args(["-tzvf", &archive.to_string_lossy()])
+        .output()
+        .await
+        .map_err(|e| AgentError::FileSystemError(format!("tar -t failed: {}", e)))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(AgentError::FileSystemError(format!(
+            "Cannot list tar archive: {}",
+            stderr
+        )));
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut count = 0usize;
+    let mut total = 0u64;
+    for line in stdout.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        // GNU tar -tvf: `TYPE... owner/group SIZE DATE TIME NAME [-> target]`
+        let flag = line.chars().next().unwrap_or('-');
+        match flag {
+            // Reject symlink, hardlink, char, block, fifo entries outright.
+            'l' | 'h' | 'c' | 'b' | 'p' => {
+                return Err(AgentError::SecurityViolation(format!(
+                    "Archive contains unsafe entry type '{}': {}",
+                    flag, line
+                )));
+            }
+            '-' | 'd' => {}
+            _ => {
+                // Unknown type flag (socket `s`, etc.) — reject closed.
+                return Err(AgentError::SecurityViolation(format!(
+                    "Archive contains unsupported entry type: {}",
+                    line
+                )));
+            }
+        }
+        // `-> target` markers must never appear for regular entries.
+        if line.contains(" -> ") {
+            return Err(AgentError::SecurityViolation(format!(
+                "Archive contains link entry: {}",
+                line
+            )));
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 6 {
+            continue;
+        }
+        // NOTE: do NOT use parse_tar_list_line here — it silently skips
+        // `..` names (fine for listing, fatal for validation).
+        let size: u64 = parts[2].replace(',', "").parse().unwrap_or(0);
+        let name = parts[5..].join(" ");
+        let name = name.trim_end_matches('/');
+        if name.is_empty() || name == "." {
+            continue;
+        }
+        reject_archive_member_name(name)?;
+        total = total.saturating_add(size);
+        count += 1;
+    }
+    enforce_archive_caps(count, total, compressed_len)
+}
+
 /// Default matches the panel `fileTunnelMaxUploadMb` default (500MB).
 /// Overridden at runtime from the panel via handshake / file_upload_limit.
 pub const DEFAULT_MAX_FILE_SIZE: u64 = 500 * 1024 * 1024;
@@ -63,7 +351,8 @@ impl FileManager {
     /// (`.create_new(true)`) fails on ANY pre-existing directory entry,
     /// including a dangling symlink planted by the container, so a root write
     /// can never traverse a container-controlled name. Mode is 0600 until the
-    /// rename + ownership handoff completes.
+    /// rename + ownership handoff completes. The suffix is 128 bits from a
+    /// CSPRNG (unpredictable to the container user) plus retries on collision.
     pub async fn create_secure_temp_sibling(target: &Path) -> AgentResult<TempFile> {
         let dir = target
             .parent()
@@ -72,14 +361,24 @@ impl FileManager {
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "file".to_string());
-        // Retry a few times on the (astronomically unlikely) name collision.
+        // Sanitize the stem so a malicious target name cannot inject path
+        // separators into the temp name (defense in depth; target is already
+        // jail-resolved, but temp names must never contain `/`).
+        let stem: String = stem
+            .chars()
+            .map(|c| {
+                if c == '/' || c == '\\' || c == '\0' {
+                    '_'
+                } else {
+                    c
+                }
+            })
+            .take(64)
+            .collect();
+        // Retry on the (astronomically unlikely) name collision.
         for _ in 0..8 {
-            let unique = std::process::id() as u128
-                ^ (std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_nanos())
-                    .unwrap_or(0));
-            let name = format!(".catalyst-tmp-{}-{}", stem, unique);
+            let unique: u128 = rand::random();
+            let name = format!(".catalyst-tmp-{}-{:032x}", stem, unique);
             let candidate = dir.join(name);
             match fs::OpenOptions::new()
                 .write(true)
@@ -134,11 +433,11 @@ impl FileManager {
         target: &str,
         mut response: reqwest::Response,
     ) -> AgentResult<TempFile> {
+        Self::validate_server_id(server_id)?;
+        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let full_path = self.resolve_path(server_id, target)?;
         if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
         }
         let mut temp = Self::create_secure_temp_sibling(&full_path).await?;
         let mut total: u64 = 0;
@@ -393,12 +692,28 @@ impl FileManager {
         path: &str,
     ) -> AgentResult<std::path::PathBuf> {
         let full_path = self.resolve_path(server_id, path)?;
+        Self::validate_server_id(server_id)?;
+        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
+            // Confirm the target still resolves inside the jail after mkdir.
+            let re = self.resolve_path(server_id, path)?;
+            if re != full_path {
+                return Err(AgentError::PermissionDenied(
+                    "Access denied: path changed during directory creation".to_string(),
+                ));
+            }
         }
         Ok(full_path)
+    }
+
+    /// mkdir -p then re-validate every ancestor (TOCTOU close): each must not
+    /// be a symlink and must stay under `canonical_base`.
+    async fn ensure_parent_dir_secure(canonical_base: &Path, dir: &Path) -> AgentResult<()> {
+        fs::create_dir_all(dir)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+        revalidate_ancestors(canonical_base, dir)
     }
 
     pub async fn read_file(&self, server_id: &str, path: &str) -> AgentResult<Vec<u8>> {
@@ -447,15 +762,15 @@ impl FileManager {
     }
 
     pub async fn write_file(&self, server_id: &str, path: &str, data: &str) -> AgentResult<()> {
+        Self::validate_server_id(server_id)?;
+        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let full_path = self.resolve_path(server_id, path)?;
 
         debug!("Writing file: {:?}", full_path);
 
-        // Create parent directories if needed
+        // Create parent directories if needed, then re-validate ancestors.
         if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
         }
 
         // Check size limit before writing
@@ -529,15 +844,15 @@ impl FileManager {
     }
 
     pub async fn rename_file(&self, server_id: &str, from: &str, to: &str) -> AgentResult<()> {
+        Self::validate_server_id(server_id)?;
+        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let from_path = self.resolve_path(server_id, from)?;
         let to_path = self.resolve_path(server_id, to)?;
 
         debug!("Renaming {:?} -> {:?}", from_path, to_path);
 
         if let Some(parent) = to_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
         }
 
         fs::rename(&from_path, &to_path)
@@ -653,24 +968,49 @@ impl FileManager {
         is_directory: bool,
         content: &str,
     ) -> AgentResult<()> {
+        Self::validate_server_id(server_id)?;
+        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let full_path = self.resolve_path(server_id, path)?;
         debug!("Creating entry: {:?} (dir={})", full_path, is_directory);
 
         if is_directory {
-            fs::create_dir_all(&full_path)
-                .await
-                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+            Self::ensure_parent_dir_secure(&canonical_base, &full_path).await?;
         } else {
             if let Some(parent) = full_path.parent() {
-                fs::create_dir_all(parent).await.map_err(|e| {
-                    AgentError::FileSystemError(format!("Failed to create parent dir: {}", e))
-                })?;
+                Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
             }
-            fs::write(&full_path, content.as_bytes())
-                .await
-                .map_err(|e| {
+            // Same O_EXCL temp+rename path as write_file: never fs::write
+            // through a container-plantable name.
+            let max = self.max_file_size();
+            if content.len() as u64 > max {
+                return Err(AgentError::FileSystemError(format!(
+                    "File too large: {} > {}MB",
+                    content.len(),
+                    max / 1024 / 1024
+                )));
+            }
+            let mut temp = Self::create_secure_temp_sibling(&full_path).await?;
+            let write_result = async {
+                temp.write_all(content.as_bytes()).await.map_err(|e| {
                     AgentError::FileSystemError(format!("Failed to create file: {}", e))
                 })?;
+                temp.sync_all().await.map_err(|e| {
+                    AgentError::FileSystemError(format!("Failed to sync file: {}", e))
+                })?;
+                Ok(())
+            }
+            .await;
+            if let Err(e) = write_result {
+                let _ = fs::remove_file(temp.path()).await;
+                return Err(e);
+            }
+            if let Err(e) = fs::rename(temp.path(), &full_path).await {
+                let _ = fs::remove_file(temp.path()).await;
+                return Err(AgentError::FileSystemError(format!(
+                    "Failed to rename temp file: {}",
+                    e
+                )));
+            }
         }
 
         // Hand the new entry (and created parents) to the container user (#237).
@@ -687,6 +1027,8 @@ impl FileManager {
         path: &str,
         data: &[u8],
     ) -> AgentResult<()> {
+        Self::validate_server_id(server_id)?;
+        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let full_path = self.resolve_path(server_id, path)?;
         debug!(
             "Writing bytes to file: {:?} ({} bytes)",
@@ -704,9 +1046,7 @@ impl FileManager {
         }
 
         if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
         }
 
         // SECURITY: see write_file — O_EXCL unpredictable temp name, never a
@@ -749,13 +1089,13 @@ impl FileManager {
         path: &str,
         mut response: reqwest::Response,
     ) -> AgentResult<()> {
+        Self::validate_server_id(server_id)?;
+        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let full_path = self.resolve_path(server_id, path)?;
         debug!("Streaming to file: {:?}", full_path);
 
         if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
         }
 
         let mut file = match Self::create_exclusive_file(&full_path).await {
@@ -825,10 +1165,10 @@ impl FileManager {
     /// Create a directory within a server's data directory.
     /// Unlike other operations, this creates the server base dir if it doesn't exist.
     pub async fn mkdir(&self, server_id: &str, path: &str) -> AgentResult<()> {
+        Self::validate_server_id(server_id)?;
+        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let resolved = self.resolve_path(server_id, path)?;
-        fs::create_dir_all(&resolved).await.map_err(|e| {
-            AgentError::FileSystemError(format!("Failed to create directory: {}", e))
-        })?;
+        Self::ensure_parent_dir_secure(&canonical_base, &resolved).await?;
         // Hand the new directory (and created parents) to the container user (#237).
         crate::ownership::ensure_container_owned(&self.data_dir, &resolved).await;
         info!("Directory created: {:?}", resolved);
@@ -912,58 +1252,95 @@ impl FileManager {
     }
 
     /// Decompress an archive to a target directory.
+    /// SEC-C-03: pre-list members and reject absolute / `..` / symlink /
+    /// hardlink / device entries plus count/size/ratio caps BEFORE extraction,
+    /// then post-scan for regular files escaping the jail (not just symlinks).
     pub async fn decompress_to(
         &self,
         server_id: &str,
         archive_path: &str,
         target_path: &str,
     ) -> AgentResult<()> {
+        Self::validate_server_id(server_id)?;
+        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let archive_full = self.resolve_path(server_id, archive_path)?;
         let target_full = self.resolve_path(server_id, target_path)?;
 
         debug!("Decompressing {:?} to {:?}", archive_full, target_full);
 
-        fs::create_dir_all(&target_full).await.map_err(|e| {
-            AgentError::FileSystemError(format!("Failed to create target dir: {}", e))
+        // Open the archive O_NOFOLLOW so a planted symlink is rejected.
+        open_no_follow(&archive_full, false).map_err(|e| {
+            if e.raw_os_error() == Some(libc::ELOOP) {
+                AgentError::PermissionDenied(
+                    "Access denied: archive is a symbolic link".to_string(),
+                )
+            } else {
+                AgentError::FileSystemError(format!("Cannot open archive: {}", e))
+            }
         })?;
+        let compressed_len = std::fs::metadata(&archive_full)
+            .map(|m| m.len())
+            .unwrap_or(0);
 
+        // Pre-list and reject dangerous members before anything is written.
         let archive_lower = archive_path.to_lowercase();
-        if archive_lower.ends_with(".zip") {
+        let is_zip = archive_lower.ends_with(".zip");
+        if is_zip {
+            prevalidate_zip_archive(&archive_full, compressed_len).await?;
+        } else {
+            prevalidate_tar_archive(&archive_full, compressed_len).await?;
+        }
+
+        Self::ensure_parent_dir_secure(&canonical_base, &target_full).await?;
+
+        if is_zip {
+            // unzip has no type-exclusion flags: pass `--` anchored excludes
+            // for absolute/`..` names as defense in depth (prevalidation is
+            // the primary control).
             let output = tokio::process::Command::new("unzip")
-                .args([
-                    "-o",
-                    &archive_full.to_string_lossy(),
-                    "-d",
-                    &target_full.to_string_lossy(),
-                ])
+                .arg("-o")
+                .arg("-K")
+                .arg(&archive_full)
+                .arg("-x")
+                .arg("--")
+                .arg("/*")
+                .arg("../*")
+                .arg("-d")
+                .arg(&target_full)
                 .output()
                 .await
                 .map_err(|e| AgentError::FileSystemError(format!("unzip failed: {}", e)))?;
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(AgentError::FileSystemError(format!(
-                    "unzip error: {}",
+                // unzip exits 11 when every entry is skipped by -x excludes;
+                // that means the archive was all-escape payload — fail closed.
+                let _ = fs::remove_dir_all(&target_full).await;
+                return Err(AgentError::SecurityViolation(format!(
+                    "Archive rejected during extraction: {}",
                     stderr
                 )));
             }
         } else {
             let output = tokio::process::Command::new("tar")
-                .args([
-                    "-xzf",
-                    &archive_full.to_string_lossy(),
-                    "-C",
-                    &target_full.to_string_lossy(),
-                    // SECURITY: never honor archive-supplied ownership,
-                    // permission bits, or special files (root extraction).
-                    "--no-same-owner",
-                    "--no-same-permissions",
-                    "--no-devices",
-                ])
+                .arg("-xzf")
+                .arg(&archive_full)
+                .arg("-C")
+                .arg(&target_full)
+                // SECURITY: never honor archive-supplied ownership or
+                // permission bits during root extraction.
+                .arg("--no-same-owner")
+                .arg("--no-same-permissions")
+                // Anchored excludes are defense in depth; prevalidation
+                // above is the primary control.
+                .arg("--anchored")
+                .arg("--exclude=/*")
+                .arg("--exclude=../*")
                 .output()
                 .await
                 .map_err(|e| AgentError::FileSystemError(format!("tar extract failed: {}", e)))?;
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
+                let _ = fs::remove_dir_all(&target_full).await;
                 return Err(AgentError::FileSystemError(format!(
                     "tar error: {}",
                     stderr
@@ -971,11 +1348,15 @@ impl FileManager {
             }
         }
 
-        // Security: Validate that no symlinks were extracted that escape the target directory.
-        // This prevents archive symlink attacks where a malicious archive contains symlinks
-        // pointing outside the server directory (e.g., to /etc/cron.d).
-        self.validate_extracted_symlinks(&target_full, server_id)
-            .await?;
+        // Post-scan: reject ANY extracted entry (regular file, dir, or link)
+        // escaping the jail — not just symlinks — and delete on escape.
+        if let Err(e) = self
+            .validate_extracted_tree(&target_full, &canonical_base)
+            .await
+        {
+            let _ = fs::remove_dir_all(&target_full).await;
+            return Err(e);
+        }
 
         // Extraction runs as root: hand the whole tree to the container user (#237).
         if let Err(e) = crate::ownership::chown_tree(&target_full).await {
@@ -992,43 +1373,80 @@ impl FileManager {
         Ok(())
     }
 
-    /// Validate that no symlinks in the extracted directory point outside the server base.
-    /// This is a security measure to prevent archive symlink attacks.
-    async fn validate_extracted_symlinks(
+    /// Validate that no extracted entries escape the jail: every regular
+    /// file/dir must canonicalize inside `canonical_base`, and every symlink
+    /// (dangling or not) must lexically normalize inside it.
+    async fn validate_extracted_tree(
         &self,
         extract_dir: &std::path::Path,
-        server_id: &str,
+        canonical_base: &std::path::Path,
     ) -> AgentResult<()> {
-        let server_base = self.data_dir.join(server_id);
-        let canonical_base = server_base.canonicalize().map_err(|e| {
-            AgentError::FileSystemError(format!("Cannot resolve server dir: {}", e))
-        })?;
-
-        // Walk the extracted directory looking for symlinks
-        let mut dangerous_symlinks = Vec::new();
-        self.check_symlinks_recursive(extract_dir, &canonical_base, &mut dangerous_symlinks)
+        let mut dangerous = Vec::new();
+        self.check_symlinks_recursive(extract_dir, canonical_base, &mut dangerous)
             .await?;
-
-        if !dangerous_symlinks.is_empty() {
-            // Log the dangerous symlinks found
-            for (path, target) in &dangerous_symlinks {
+        if !dangerous.is_empty() {
+            for (path, target) in &dangerous {
                 warn!(
                     "Dangerous symlink detected in extracted archive: {} -> {}",
                     path.display(),
                     target.display()
                 );
             }
-
-            // Clean up the extracted content to prevent exploitation
-            let _ = fs::remove_dir_all(extract_dir).await;
-
             return Err(AgentError::SecurityViolation(format!(
                 "Archive contains {} symlink(s) that escape the server directory. \
                  Extraction aborted and target directory cleaned up for security.",
-                dangerous_symlinks.len()
+                dangerous.len()
             )));
         }
-
+        // Regular files / dirs escaping via `..` members that tar/unzip may
+        // have written outside the jail.
+        let mut stack = vec![extract_dir.to_path_buf()];
+        while let Some(current) = stack.pop() {
+            let canon = current.canonicalize().map_err(|e| {
+                AgentError::FileSystemError(format!("Cannot resolve extracted path: {}", e))
+            })?;
+            if !canon.starts_with(canonical_base) {
+                return Err(AgentError::SecurityViolation(format!(
+                    "Archive wrote outside the server directory: {}",
+                    current.display()
+                )));
+            }
+            let mut entries = match fs::read_dir(&current).await {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Error reading dir: {}", e)))?
+            {
+                let ft = entry.file_type().await.map_err(|e| {
+                    AgentError::FileSystemError(format!("Error reading entry: {}", e))
+                })?;
+                if ft.is_symlink() {
+                    continue; // checked above
+                }
+                if ft.is_dir() {
+                    stack.push(entry.path());
+                } else if ft.is_file() {
+                    let canon = entry.path().canonicalize().map_err(|e| {
+                        AgentError::FileSystemError(format!("Cannot resolve extracted file: {}", e))
+                    })?;
+                    if !canon.starts_with(canonical_base) {
+                        return Err(AgentError::SecurityViolation(format!(
+                            "Archive wrote outside the server directory: {}",
+                            entry.path().display()
+                        )));
+                    }
+                } else {
+                    // Sockets, devices, fifos must never survive extraction.
+                    return Err(AgentError::SecurityViolation(format!(
+                        "Archive contains special file: {}",
+                        entry.path().display()
+                    )));
+                }
+            }
+        }
         Ok(())
     }
 
@@ -1061,26 +1479,22 @@ impl FileManager {
                         if let Ok(target) = std::fs::read_link(&path) {
                             let parent = path.parent().unwrap_or(&current);
                             let resolved = parent.join(&target);
+                            // Dangling links are graded lexically normalized
+                            // (`..` pops), never Ok-by-default.
                             let is_dangerous = if let Ok(canon_target) = resolved.canonicalize() {
                                 !canon_target.starts_with(canonical_base)
-                            } else if resolved.is_absolute() {
-                                !resolved.starts_with(canonical_base)
                             } else {
-                                // Relative + dangling: resolve from the link's
-                                // PARENT (matching filesystem semantics), not
-                                // the scan root — anchoring at the root both
-                                // false-positives on benign intra-jail links
-                                // ("../newdir") and mis-grades danger.
-                                let full_resolved = parent.join(&target);
-                                if let Ok(canon) = full_resolved.canonicalize() {
-                                    !canon.starts_with(canonical_base)
-                                } else {
-                                    // Dangling relative target that stays
-                                    // within the jail by construction: the
-                                    // textual resolution is still checked.
-                                    let textual = parent.join(&target);
-                                    !textual.starts_with(canonical_base)
+                                let mut norm = PathBuf::new();
+                                for comp in resolved.components() {
+                                    match comp {
+                                        std::path::Component::ParentDir => {
+                                            norm.pop();
+                                        }
+                                        std::path::Component::CurDir => {}
+                                        c => norm.push(c.as_os_str()),
+                                    }
                                 }
+                                !norm.starts_with(canonical_base)
                             };
                             if is_dangerous {
                                 dangerous_symlinks.push((path, target));
@@ -1105,6 +1519,16 @@ impl FileManager {
     ) -> AgentResult<Vec<ArchiveEntry>> {
         let archive_full = self.resolve_path(server_id, archive_path)?;
         debug!("Listing archive contents: {:?}", archive_full);
+        // O_NOFOLLOW: a planted symlink must not be followed for listing.
+        open_no_follow(&archive_full, false).map_err(|e| {
+            if e.raw_os_error() == Some(libc::ELOOP) {
+                AgentError::PermissionDenied(
+                    "Access denied: archive is a symbolic link".to_string(),
+                )
+            } else {
+                AgentError::FileSystemError(format!("Cannot open archive: {}", e))
+            }
+        })?;
 
         let archive_lower = archive_path.to_lowercase();
         let mut entries = Vec::new();
@@ -1245,6 +1669,140 @@ mod tests {
             }
             Err(_) => { /* acceptable: some impls reject absolutes */ }
         }
+    }
+
+    #[test]
+    fn archive_member_names_rejected() {
+        assert!(reject_archive_member_name("../evil.sh").is_err());
+        assert!(reject_archive_member_name("/abs/path").is_err());
+        assert!(reject_archive_member_name("a/../../b").is_err());
+        assert!(reject_archive_member_name("ok/sub/file.txt").is_ok());
+        assert!(reject_archive_member_name("plain.txt").is_ok());
+    }
+
+    #[test]
+    fn archive_caps_enforced() {
+        assert!(enforce_archive_caps(MAX_ARCHIVE_MEMBERS + 1, 10, 100).is_err());
+        assert!(enforce_archive_caps(10, MAX_ARCHIVE_TOTAL_BYTES + 1, 100).is_err());
+        // 100x ratio: 101 bytes out of 1 byte compressed is over.
+        assert!(enforce_archive_caps(10, 101, 1).is_err());
+        assert!(enforce_archive_caps(10, 100, 1).is_ok());
+    }
+
+    #[test]
+    fn open_no_follow_rejects_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("real.txt");
+        std::fs::write(&target, b"x").unwrap();
+        let link = dir.path().join("link.txt");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let err = open_no_follow(&link, false).expect_err("symlink must fail");
+        assert_eq!(err.raw_os_error(), Some(libc::ELOOP));
+        assert!(open_no_follow(&target, false).is_ok());
+    }
+
+    #[test]
+    fn ancestor_revalidation_rejects_swapped_parent() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("base");
+        let sub = base.join("sub");
+        std::fs::create_dir_all(&sub).unwrap();
+        let canon = base.canonicalize().unwrap();
+        assert!(revalidate_ancestors(&canon, &sub).is_ok());
+        // Swap `sub` for a symlink to outside: revalidation must fail.
+        std::fs::remove_dir(&sub).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/etc", &sub).unwrap();
+        assert!(revalidate_ancestors(&canon, &sub).is_err());
+    }
+
+    #[tokio::test]
+    async fn tar_slip_members_rejected_before_extract() {
+        // GNU tar strips `../` at creation (with a warning), so craft the
+        // malicious tarball via python tarfile (no sanitization).
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        let archive = srv.join("evil.tar.gz");
+        let script = format!(
+            "import tarfile,io; t=tarfile.open('{}','w:gz'); d=b'evil'; i=tarfile.TarInfo('../evil.txt'); i.size=len(d); t.addfile(i,io.BytesIO(d)); t.close()",
+            archive.display()
+        );
+        let status = std::process::Command::new("python3")
+            .args(["-c", &script])
+            .status();
+        if !status.map(|s| s.success()).unwrap_or(false) {
+            return; // python3 unavailable — skip
+        }
+        let err = fm
+            .decompress_to("srv1", "evil.tar.gz", "out")
+            .await
+            .expect_err("tar-slip must be rejected");
+        assert!(
+            err.to_string().contains("..")
+                || err.to_string().to_lowercase().contains("escap")
+                || err.to_string().to_lowercase().contains("violation"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn zip_absolute_member_rejected_before_extract() {
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        // Craft a zip with an absolute name via python (zip CLI strips them).
+        let archive = srv.join("evil.zip");
+        let script = format!(
+            "import zipfile; zipfile.ZipFile('{}','w').writestr('/abs.txt', b'x')",
+            archive.display()
+        );
+        let status = std::process::Command::new("python3")
+            .args(["-c", &script])
+            .status();
+        if !status.map(|s| s.success()).unwrap_or(false) {
+            return; // python3 unavailable — skip
+        }
+        let err = fm
+            .decompress_to("srv1", "evil.zip", "out")
+            .await
+            .expect_err("absolute zip member must be rejected");
+        assert!(
+            err.to_string().to_lowercase().contains("absolute")
+                || err.to_string().to_lowercase().contains("violation"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn tar_symlink_member_rejected_before_extract() {
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        let work = tempfile::tempdir().unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/etc/shadow", work.path().join("link")).unwrap();
+        let archive = srv.join("link.tar.gz");
+        let status = std::process::Command::new("tar")
+            .arg("-czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(work.path())
+            .arg("link")
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let err = fm
+            .decompress_to("srv1", "link.tar.gz", "out")
+            .await
+            .expect_err("symlink member must be rejected");
+        assert!(
+            err.to_string().to_lowercase().contains("symlink")
+                || err.to_string().to_lowercase().contains("link")
+                || err.to_string().to_lowercase().contains("violation"),
+            "{err}"
+        );
     }
 
     #[tokio::test]
