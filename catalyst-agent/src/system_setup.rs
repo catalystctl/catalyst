@@ -117,17 +117,16 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
 
 /// Return the cached sudo password, calling `ensure_sudo_password` first if
 /// needed.  Returns `None` when running as root (no sudo required).
-/// Note: the returned String is a clone that is NOT wrapped in Zeroizing;
-/// the clone passed to `run_command` will persist in memory until GC. This
-/// is a known limitation documented as defense-in-depth — the original copy
-/// held by the global mutex IS zeroized on drop.
-fn get_sudo_password() -> Result<Option<String>, AgentError> {
+/// SEC-7: returns Zeroizing so clones are wiped on drop.
+fn get_sudo_password() -> Result<Option<zeroize::Zeroizing<String>>, AgentError> {
     if is_root() {
         return Ok(None);
     }
     ensure_sudo_password()?;
     let guard = lock_sudo_password();
-    Ok(guard.as_ref().map(|z| (**z).clone()))
+    Ok(guard
+        .as_ref()
+        .map(|z| zeroize::Zeroizing::new((**z).clone())))
 }
 
 pub struct SystemSetup;
@@ -1029,7 +1028,9 @@ impl SystemSetup {
         // Feed the sudo password via stdin before waiting.
         if let Some(ref pw) = sudo_pw {
             if let Some(mut handle) = child.stdin.take() {
-                let _ = handle.write_all(format!("{}\n", pw).as_bytes()).await;
+                let _ = handle
+                    .write_all(format!("{}\n", pw.as_str()).as_bytes())
+                    .await;
             }
         }
 
@@ -1074,7 +1075,9 @@ impl SystemSetup {
 
         if let Some(ref pw) = sudo_pw {
             if let Some(mut handle) = child.stdin.take() {
-                let _ = handle.write_all(format!("{}\n", pw).as_bytes()).await;
+                let _ = handle
+                    .write_all(format!("{}\n", pw.as_str()).as_bytes())
+                    .await;
             }
         }
 
