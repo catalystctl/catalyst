@@ -8,6 +8,8 @@
   "VALIDATION_CUSTOM": "值无效",
   "VALIDATION_INVALID_FORMAT": "{{format}} 格式无效",
   "VALIDATION_INVALID_TYPE": "值无效",
-  "VALIDATION_TOO_BIG": "最多 {{max}} 个字符",
-  "VALIDATION_TOO_SMALL": "至少 {{min}} 个字符"
+  "VALIDATION_TOO_BIG": "不能大于 {{max}}",
+  "VALIDATION_TOO_LONG": "最多允许 {{max}} 个字符",
+  "VALIDATION_TOO_SHORT": "至少需要 {{min}} 个字符",
+  "VALIDATION_TOO_SMALL": "不能小于 {{min}}"
 }

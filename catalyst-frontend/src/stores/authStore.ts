@@ -4,7 +4,7 @@ import type { StateCreator } from 'zustand/vanilla';
 import { authApi } from '../services/api/auth';
 import { reportSystemError } from '../services/api/systemErrors';
 import { describeError } from '../utils/errors';
-import { getLocalizedErrorMessage } from '../i18n/api-errors';
+import { getLocalizedErrorMessage, getLocalizedFieldErrors } from '../i18n/api-errors';
 import type { User } from '../types/user';
 import type { LoginSchema, RegisterSchema } from '../validators/auth';
 
@@ -137,9 +137,12 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         // Cookie-based authentication - tokens stored in HttpOnly cookies
         (set as AuthSet)({ user: { ...user, image: sanitizeImageUrl(user.image) }, token: null, isAuthenticated: true, isLoading: false, isReady: true, error: null });
       } catch (err: unknown) {
-        // Translated through the backend error code so the banner follows the
-        // panel language; the server message stays the fallback.
-        const message = getLocalizedErrorMessage(err);
+        // Field-level failures carry a rule code each, so they can be shown in
+        // the panel language; otherwise the error's own code drives the banner.
+        const fieldErrors = getLocalizedFieldErrors(err);
+        const message = fieldErrors.length
+          ? fieldErrors.map((detail) => (detail.field ? `${detail.field}: ${detail.message}` : detail.message)).join(', ')
+          : getLocalizedErrorMessage(err);
         (set as AuthSet)({ isLoading: false, error: message });
         loginGuard.exit();
         reportSystemError({

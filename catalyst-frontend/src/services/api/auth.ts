@@ -1,5 +1,4 @@
 import apiClient from './client';
-import { getLocalizedFieldErrors } from '../../i18n/api-errors';
 import { reportSystemError } from './systemErrors';
 import { describeError } from '../../utils/errors';
 import type { LoginSchema, RegisterSchema } from '../../validators/auth';
@@ -200,11 +199,8 @@ export const authApi = {
     });
 
     if (!response.success || !response.data) {
-      // Field messages carry validation rule codes, so they can be shown in the
-      // panel language; the raw English text stays the fallback.
-      const fieldErrors = getLocalizedFieldErrors({ response: { data: response } });
-      const msg = fieldErrors.length
-        ? fieldErrors.map(d => `${d.field}: ${d.message}`).join(', ')
+      const msg = response.details
+        ? response.details.map(d => `${d.field}: ${d.message}`).join(', ')
         : response.error || 'Registration failed';
       reportSystemError({
         level: 'error',
@@ -212,8 +208,6 @@ export const authApi = {
         message: msg,
         metadata: { action: 'register' },
       });
-      // Keep the code and params on the thrown error so callers resolve the
-      // same message through the shared error catalog.
       throw Object.assign(new Error(msg), { code: response.code, params: response.params });
     }
 

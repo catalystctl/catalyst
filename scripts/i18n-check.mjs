@@ -155,11 +155,10 @@ if (untranslatedCodes.length > 0) {
   else warnings.push(message);
 }
 
-// Backend codes whose catalog text interpolates values, but where no call site
-// sends `params`: the client would render the literal "{{...}}" placeholder.
+// Backend codes whose catalog text interpolates values, but where a call site
+// does not send them: the client would render the literal "{{...}}" placeholder.
 // Codes emitted outside `apiError` (WebSocket payloads, Prisma mapping) are
 // checked too, since they travel through the same resolver.
-const PARAMETERIZED = /^\s*([A-Z][A-Z0-9_]*)\s*:\s*"(?:[^"\\]|\\.)*\{\{[a-zA-Z_]/gm;
 const backendSrcDir = path.join(repoRoot, 'catalyst-backend/src');
 
 function backendSources(dir, out = []) {
@@ -174,29 +173,104 @@ function backendSources(dir, out = []) {
   return out;
 }
 
+/**
+ * Replace comments with spaces, keeping every newline so line numbers and
+ * offsets stay aligned with the original file. Prose that happens to name a
+ * code must not read as a call site.
+ */
+function stripComments(source) {
+  let out = '';
+  let i = 0;
+  let state = 'code';
+  while (i < source.length) {
+    const char = source[i];
+    const next = source[i + 1];
+    if (state === 'code') {
+      if (char === '/' && next === '/') { state = 'line'; i += 2; continue; }
+      if (char === '/' && next === '*') { state = 'block'; i += 2; continue; }
+      if (char === '"' || char === "'" || char === '`') { state = char; out += char; i += 1; continue; }
+      out += char; i += 1; continue;
+    }
+    if (state === 'line') {
+      if (char === '\n') { state = 'code'; out += char; }
+      i += 1; continue;
+    }
+    if (state === 'block') {
+      if (char === '*' && next === '/') { state = 'code'; i += 2; continue; }
+      if (char === '\n') out += '\n';
+      i += 1; continue;
+    }
+    // Inside a string literal: copy verbatim, honouring escapes.
+    if (char === '\\') { out += char + (next ?? ''); i += 2; continue; }
+    out += char;
+    if (char === state) state = 'code';
+    i += 1;
+  }
+  return out;
+}
+
+/**
+ * The expression the code reference belongs to: scan forward until the
+ * parentheses/braces/brackets opened before the reference all close.
+ */
+function enclosingExpression(source, start) {
+  let depth = 0;
+  for (let i = start; i < source.length && i - start < 4000; i += 1) {
+    const char = source[i];
+    if (char === '(' || char === '{' || char === '[') depth += 1;
+    else if (char === ')' || char === '}' || char === ']') {
+      depth -= 1;
+      if (depth < 0) return source.slice(start, i + 1);
+    } else if (char === ';' && depth === 0) return source.slice(start, i + 1);
+  }
+  return source.slice(start, Math.min(start + 4000, source.length));
+}
+
+/** The `params: {...}` object literal inside an expression, if any. */
+function paramsObject(expression) {
+  const match = /\bparams\s*:\s*/.exec(expression);
+  if (!match) return undefined;
+  const rest = expression.slice(match.index + match[0].length);
+  if (/^undefined\b/.test(rest)) return undefined;
+  if (rest[0] !== '{') return rest; // an identifier or call — cannot inspect it
+  let depth = 0;
+  for (let i = 0; i < rest.length; i += 1) {
+    if (rest[i] === '{') depth += 1;
+    else if (rest[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return rest.slice(0, i + 1);
+    }
+  }
+  return rest;
+}
+
 const missingParams = [];
 try {
   for (const [code, value] of errorsCatalog) {
     if (typeof value !== 'string') continue;
-    if (!/\{\{[a-zA-Z_]/.test(value)) continue;
-    // Every statement that emits the code must supply the interpolated values,
-    // otherwise the client renders the literal "{{...}}" placeholder.
+    const placeholders = [...value.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]);
+    if (placeholders.length === 0) continue;
     const occurrence = new RegExp(`(ErrorCodes\\.${code}\\b|["']${code}["'])`, 'g');
     const offenders = [];
     for (const file of backendSources(backendSrcDir)) {
-      const source = readFileSync(file, 'utf8');
+      const source = stripComments(readFileSync(file, 'utf8'));
       for (const match of source.matchAll(occurrence)) {
-        const lineStart = source.lastIndexOf('\n', match.index) + 1;
-        const line = source.slice(lineStart, source.indexOf('\n', match.index));
-        if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue; // comment, not a call site
-        const statement = source.slice(match.index, source.indexOf(';', match.index) + 1 || undefined);
-        if (!/\bparams\s*:/.test(statement)) {
-          const lineNumber = source.slice(0, match.index).split('\n').length;
-          offenders.push(`${path.relative(repoRoot, file)}:${lineNumber}`);
+        const expression = enclosingExpression(source, match.index);
+        const params = paramsObject(expression);
+        const lineNumber = source.slice(0, match.index).split('\n').length;
+        const where = `${path.relative(repoRoot, file)}:${lineNumber}`;
+        if (params === undefined) {
+          offenders.push(`${where} (no params)`);
+        } else if (params.startsWith('{') && !params.includes('...')) {
+          // `{ name: value }` and the shorthand `{ name }` both supply the value.
+          const missing = placeholders.filter(
+            (name) => !new RegExp(`\\b${name}\\b\\s*(?=[:,}])`).test(params),
+          );
+          if (missing.length > 0) offenders.push(`${where} (missing ${missing.join(', ')})`);
         }
       }
     }
-    if (offenders.length > 0) missingParams.push(`${code} (${offenders.join(', ')})`);
+    if (offenders.length > 0) missingParams.push(`${code} — ${offenders.join(', ')}`);
   }
 } catch (error) {
   warnings.push(`could not scan backend sources for error params: ${error.message}`);
@@ -204,7 +278,7 @@ try {
 
 if (missingParams.length > 0) {
   problems.push(
-    `backend error messages interpolate values but these call sites send no "params": ${missingParams.join('; ')}`,
+    `backend error messages interpolate values these call sites do not send: ${missingParams.join('; ')}`,
   );
 }
 

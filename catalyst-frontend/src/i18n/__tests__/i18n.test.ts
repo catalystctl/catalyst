@@ -67,6 +67,26 @@ describe('api error translation', () => {
     expect(getLocalizedErrorMessage(error)).toBe('找不到请求的服务器。');
   });
 
+  it('prefers the catalog text when the server message looks internal', () => {
+    const error = {
+      response: {
+        data: {
+          code: 'SERVER_CREATE_FAILED',
+          error: 'PrismaClientKnownRequestError\nInvalid `prisma.server.create()` invocation',
+        },
+      },
+    };
+    expect(getLocalizedErrorMessage(error)).toBe('Failed to create the server.');
+  });
+
+  it('maps fetch failures to the network error text', async () => {
+    expect(getLocalizedErrorMessage(new TypeError('Failed to fetch'))).toBe(
+      'A network error occurred. Check your connection and try again.',
+    );
+    await i18n.changeLanguage('zh-CN');
+    expect(getLocalizedErrorMessage(new TypeError('Failed to fetch'))).toBe('网络错误，请检查网络连接后重试。');
+  });
+
   it('falls back to the catalog text when the server sent no message', () => {
     const error = { response: { data: { code: 'SERVER_NOT_FOUND' } } };
     expect(getLocalizedErrorMessage(error)).toBe('The requested server could not be found.');
@@ -97,7 +117,8 @@ describe('api error translation', () => {
           code: 'VALIDATION_ERROR',
           error: 'Invalid request parameters',
           details: [
-            { field: 'password', message: 'Too short', code: 'VALIDATION_TOO_SMALL', params: { min: 12 } },
+            { field: 'password', message: 'Too short', code: 'VALIDATION_TOO_SHORT', params: { min: 12 } },
+            { field: 'memoryMb', message: 'Too small', code: 'VALIDATION_TOO_SMALL', params: { min: 512 } },
             { field: 'engine', message: 'engine must be one of: java, bedrock' },
           ],
         },
@@ -105,10 +126,15 @@ describe('api error translation', () => {
     };
     expect(getLocalizedFieldErrors(error)).toEqual([
       { field: 'password', message: 'Must be at least 12 characters' },
+      { field: 'memoryMb', message: 'Must be at least 512' },
       { field: 'engine', message: 'engine must be one of: java, bedrock' },
     ]);
     await i18n.changeLanguage('zh-CN');
-    expect(getLocalizedFieldErrors(error)[0].message).toBe('至少 12 个字符');
+    const zh = getLocalizedFieldErrors(error);
+    expect(zh[0].message).toBe('至少需要 12 个字符');
+    // Numeric bounds must not claim to be about characters.
+    expect(zh[1].message).toBe('不能小于 512');
+    expect(zh[2].message).toBe('engine must be one of: java, bedrock');
   });
 });
 

@@ -470,7 +470,7 @@ export const renderInviteEmail = async (args: {
               <div style="margin:0 auto 12px;width:72px;height:72px;border-radius:16px;background:#1e293b;display:flex;align-items:center;justify-content:center;">
                 <img src="${logoUrl}" alt="${panelName} logo" width="56" height="56" style="display:block;border-radius:12px;" />
               </div>
-              <div style="font-size:14px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;">${panelName}</div>
+              <div style="font-size:14px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;">${escapeHtml(panelName)}</div>
               <h1 style="margin:12px 0 0;font-size:24px;color:#f8fafc;">${t('invite.heading')}</h1>
             </td>
           </tr>
@@ -479,7 +479,7 @@ export const renderInviteEmail = async (args: {
               <p style="margin:0 0 16px;">${escapeHtml(t('invite.body', { serverName: args.serverName }))}</p>
               <p style="margin:0 0 20px;">${t('invite.action')}</p>
               <div style="text-align:center;margin:24px 0;">
-                <a href="${args.inviteUrl}" style="background:#38bdf8;color:#0f172a;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;display:inline-block;">${t('invite.accept')}</a>
+                <a href="${escapeHtml(args.inviteUrl)}" style="background:#38bdf8;color:#0f172a;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;display:inline-block;">${t('invite.accept')}</a>
               </div>
               <div style="background:#111827;border-radius:12px;padding:16px 18px;color:#94a3b8;font-size:13px;">
                 ${escapeHtml(t('invite.expires', { date: expires }))}
@@ -517,14 +517,14 @@ export const renderAlertEmail = async (args: {
     html: `
       <div style="background:#0f172a;padding:24px;font-family:Arial,sans-serif;color:#e2e8f0">
         <div style="max-width:640px;margin:0 auto;background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;">
-          <h2 style="color:#f8fafc;margin:0 0 8px;">${args.title}</h2>
-          <p style="margin:0 0 16px;color:#94a3b8;font-size:14px;">${args.message}</p>
+          <h2 style="color:#f8fafc;margin:0 0 8px;">${escapeHtml(args.title)}</h2>
+          <p style="margin:0 0 16px;color:#94a3b8;font-size:14px;">${escapeHtml(args.message).replace(/\n/g, '<br />')}</p>
           <div style="display:flex;gap:12px;margin-bottom:16px;font-size:13px;color:#cbd5f5;">
             <div><strong>${t('alert.severity')}</strong> ${severity}</div>
-            <div><strong>${t('alert.type')}</strong> ${args.type}</div>
+            <div><strong>${t('alert.type')}</strong> ${escapeHtml(args.type)}</div>
             <div><strong>${t('alert.time')}</strong> ${createdAt}</div>
           </div>
-          <a href="${args.alertUrl}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:14px;">${t('alert.view')}</a>
+          <a href="${escapeHtml(args.alertUrl)}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:14px;">${t('alert.view')}</a>
           <p style="margin-top:16px;font-size:12px;color:#64748b;">${t('alert.footer', { panelName })}</p>
         </div>
       </div>

@@ -39,6 +39,10 @@ export class ApiError extends Error {
       code?: string;
       message?: string;
       error?: string;
+      /** Values for the localized message (thresholds, names, …). */
+      params?: Record<string, unknown>;
+      /** Field-level validation failures, each with a stable rule code. */
+      details?: Array<{ field?: string; message?: string; code?: string; params?: Record<string, unknown> }>;
     };
     headers?: Record<string, string>;
   };

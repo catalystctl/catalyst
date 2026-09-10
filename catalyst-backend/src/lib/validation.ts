@@ -297,15 +297,30 @@ export interface ValidationIssueDetail {
  */
 export function formatZodIssues(issues: ZodIssue[]): ValidationIssueDetail[] {
   return issues.map(issue => {
-    const raw = issue as unknown as { minimum?: unknown; maximum?: unknown; validation?: unknown };
+    const raw = issue as unknown as {
+      minimum?: unknown;
+      maximum?: unknown;
+      validation?: unknown;
+      origin?: unknown;
+    };
     const params: Record<string, unknown> = {};
     if (typeof raw.minimum === 'number') params.min = raw.minimum;
     if (typeof raw.maximum === 'number') params.max = raw.maximum;
     if (typeof raw.validation === 'string') params.format = raw.validation;
+    // String length and numeric bounds share the zod code `too_small`/`too_big`
+    // but read differently ("8 characters" vs "512"), so they get their own
+    // catalog entries.
+    const isLength = raw.origin === 'string';
+    const code =
+      issue.code === 'too_small' && isLength
+        ? 'VALIDATION_TOO_SHORT'
+        : issue.code === 'too_big' && isLength
+          ? 'VALIDATION_TOO_LONG'
+          : `VALIDATION_${issue.code.toUpperCase()}`;
     return {
       field: issue.path.join('.'),
       message: issue.message,
-      code: `VALIDATION_${issue.code.toUpperCase()}`,
+      code,
       ...(Object.keys(params).length > 0 ? { params } : {}),
     };
   });

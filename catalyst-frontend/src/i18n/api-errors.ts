@@ -36,20 +36,47 @@ function translateCode(code: string, params?: Record<string, unknown>): string |
 }
 
 /**
+ * Whether a server message looks like something written for the user, rather
+ * than an internal detail. The backend sanitizes its own messages in
+ * `mapHttpError`, but routes that pass a caught `error.message` straight into
+ * `apiError` can leak driver or runtime text.
+ */
+function looksUserFacing(message: string): boolean {
+  if (!message || message.length > 200) return false;
+  if (message.includes('\n')) return false;
+  return !/prisma|Unique constraint|Foreign key|PrismaClient|at Object\.|undefined is not/i.test(message);
+}
+
+/** Connection-level failures that never reach the API. */
+function isNetworkFailure(error: unknown): boolean {
+  if (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') {
+    return false;
+  }
+  const message = error instanceof Error ? error.message : '';
+  return /failed to fetch|network ?error|load failed|fetch failed/i.test(message);
+}
+
+/**
  * Resolve any thrown API error to a localized message.
  *
- * Order: translated backend code -> server-provided message -> localized
- * generic fallback. The server message is written in English and is often more
- * specific than the catalog text (one code such as VALIDATION_ERROR covers many
- * distinct messages), so English readers keep it; other locales get the
- * translation of the code. Untranslated codes keep working exactly as before
- * localization, so the backend can add codes incrementally.
+ * Order: translated backend code (non-English locales) -> server-provided
+ * message (English, when it looks user-facing) -> catalog text -> localized
+ * generic fallback. The server message is often more specific than the catalog
+ * text — one code such as VALIDATION_ERROR covers many distinct messages — so
+ * English readers keep it; other locales get the translation of the code.
+ * Untranslated codes keep working exactly as before localization, so the
+ * backend can add codes incrementally.
  */
 export function getLocalizedErrorMessage(error: unknown, fallbackKey = 'generic'): string {
   const code = getApiErrorCode(error);
   const translated = code ? translateCode(code, getApiErrorParams(error)) : undefined;
   if (translated !== undefined && activeLocale() !== 'en') return translated;
-  return getErrorMessage(error, translated ?? i18n.t(fallbackKey, { ns: 'errors' }));
+  if (translated === undefined && isNetworkFailure(error)) {
+    return i18n.t('NETWORK_ERROR', { ns: 'errors' });
+  }
+  const serverMessage = getErrorMessage(error, '');
+  if (translated !== undefined && !looksUserFacing(serverMessage)) return translated;
+  return serverMessage || translated || i18n.t(fallbackKey, { ns: 'errors' });
 }
 
 /** A field-level validation failure: which input, and what to tell the user. */

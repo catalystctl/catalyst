@@ -3,8 +3,10 @@ import { initReactI18next } from 'react-i18next';
 
 import commonEn from './locales/en/common.json';
 import errorsEn from './locales/en/errors.json';
+import validationEn from './locales/en/validation.json';
 import commonZhCn from './locales/zh-CN/common.json';
 import errorsZhCn from './locales/zh-CN/errors.json';
+import validationZhCn from './locales/zh-CN/validation.json';
 import {
   DEFAULT_LOCALE,
   detectDeviceLocale,
@@ -17,8 +19,12 @@ import {
  * Namespaces bundled into the initial payload. Everything else is loaded on
  * demand (see `lazyBackend`), which keeps the entry bundle flat as the catalog
  * grows.
+ *
+ * `validation` is bundled because the error resolver looks field codes up
+ * synchronously (`i18n.exists`); on a page that never loaded the namespace the
+ * lookup would silently miss and fall back to the server's English text.
  */
-export const INITIAL_NAMESPACES = ['common', 'errors'] as const;
+export const INITIAL_NAMESPACES = ['common', 'errors', 'validation'] as const;
 
 type Catalog = Record<string, unknown>;
 interface CatalogModule {
@@ -68,8 +74,8 @@ void i18n
     ns: [...INITIAL_NAMESPACES],
     defaultNS: 'common',
     resources: {
-      en: { common: commonEn, errors: errorsEn },
-      'zh-CN': { common: commonZhCn, errors: errorsZhCn },
+      en: { common: commonEn, errors: errorsEn, validation: validationEn },
+      'zh-CN': { common: commonZhCn, errors: errorsZhCn, validation: validationZhCn },
     },
     // Bundled namespaces initialize synchronously; the rest load lazily.
     partialBundledLanguages: true,

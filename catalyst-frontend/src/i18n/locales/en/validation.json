@@ -8,6 +8,8 @@
   "VALIDATION_CUSTOM": "Invalid value",
   "VALIDATION_INVALID_FORMAT": "Invalid {{format}}",
   "VALIDATION_INVALID_TYPE": "Invalid value",
-  "VALIDATION_TOO_BIG": "Must be at most {{max}} characters",
-  "VALIDATION_TOO_SMALL": "Must be at least {{min}} characters"
+  "VALIDATION_TOO_BIG": "Must be at most {{max}}",
+  "VALIDATION_TOO_LONG": "Must be at most {{max}} characters",
+  "VALIDATION_TOO_SHORT": "Must be at least {{min}} characters",
+  "VALIDATION_TOO_SMALL": "Must be at least {{min}}"
 }
