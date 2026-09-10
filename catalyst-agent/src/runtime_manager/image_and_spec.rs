@@ -247,6 +247,13 @@ pub fn default_seccomp_profile() -> serde_json::Value {
     })
 }
 
+/// Bounds for panel-driven resource allocations. The OCI spec stores CPU
+/// quota and memory limits as i64, so unclamped u64 panel values would
+/// overflow the cast. Floor 1 keeps quota/limit nonzero (0 is runc's
+/// "unset", i.e. unlimited).
+pub const MAX_CPU_CORES: u64 = 128;
+pub const MAX_MEMORY_MB: u64 = 262_144; // 256 GiB
+
 /// OCI `linux.resources.cpu` for CFS bandwidth control.
 ///
 /// Quota is enforced per 100ms period. Burst banks unused time as credit,
@@ -269,7 +276,10 @@ pub(crate) fn linux_cpu_resources(cpu_cores: u64) -> serde_json::Value {
 /// like `linux_cpu_resources`, with the kernel-burst support passed in so
 /// both branches are testable without root.
 pub(crate) fn linux_cpu_resources_with(cpu_cores: u64, burst_supported: bool) -> serde_json::Value {
-    let cpu_cores = cpu_cores.max(1);
+    // Clamp panel-driven core counts: floor 1 (quota 0 is runc's "unset",
+    // i.e. unlimited) and ceiling 128 so the u64->i64 cast and the
+    // quota multiplication below cannot overflow.
+    let cpu_cores = cpu_cores.clamp(1, MAX_CPU_CORES);
     let quota = (cpu_cores as i64) * 100_000;
     let burst = cpu_cores.saturating_mul(100_000);
     let shares = cpu_cores.saturating_mul(1024);
@@ -307,6 +317,11 @@ pub(crate) fn linux_memory_resources(
     serde_json::Map<String, serde_json::Value>,
     serde_json::Value,
 ) {
+    // Clamp panel-driven sizes so the u64->i64 casts and MB->bytes
+    // multiplications below cannot overflow (floor 1: limit 0 is
+    // runc's "unset", i.e. unlimited).
+    let memory_mb = memory_mb.clamp(1, MAX_MEMORY_MB);
+    let swap_mb = swap_mb.min(MAX_MEMORY_MB);
     let mem_limit = (memory_mb as i64) * 1024 * 1024;
     // memory.high is the kernel's throttle-threshold: allocation stalls in
     // synchronous reclaim once memory.current passes it. A 90% watermark
@@ -338,6 +353,39 @@ pub(crate) fn linux_memory_resources(
         "memory.high": mem_high.to_string()
     });
     (memory, unified)
+}
+
+/// OCI `blockIO.weight` (cgroup v1 blkio, 10..=1000) for panel-driven
+/// ioWeight values. Out-of-range values degrade to the nearest bound
+/// instead of failing spec-parse in runc.
+pub fn clamp_io_weight(io_weight: u64) -> u64 {
+    io_weight.clamp(10, 1000)
+}
+
+/// Namespaces for installer containers. Installers run untrusted egg scripts
+/// but historically shared the host network namespace (full visibility into
+/// host sockets) and saw the host's real cgroup hierarchy. Private
+/// `network` + `cgroup` namespaces match the runtime-container posture;
+/// the installer gets connectivity via CNI after task start.
+pub fn installer_namespaces() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!({"type":"pid"}),
+        serde_json::json!({"type":"ipc"}),
+        serde_json::json!({"type":"uts"}),
+        serde_json::json!({"type":"mount"}),
+        serde_json::json!({"type":"cgroup"}),
+        serde_json::json!({"type":"network"}),
+    ]
+}
+
+/// Capabilities for installer containers. Installers stay uid 0 because egg
+/// scripts call chown/chmod/useradd and the wrapper's exit trap does a final
+/// `chown -R 1000:1000 /data`; noNewPrivileges + seccomp still apply.
+/// CAP_SETUID/CAP_SETGID/CAP_DAC_OVERRIDE are dropped: with noNewPrivileges
+/// setuid binaries cannot escalate, and install scripts operate on files
+/// they own under /data.
+pub fn installer_capabilities() -> Vec<&'static str> {
+    vec!["CAP_CHOWN", "CAP_FOWNER", "CAP_NET_BIND_SERVICE"]
 }
 
 use super::ContainerdRuntime;
@@ -755,6 +803,9 @@ impl ContainerdRuntime {
         }
 
         let devices = DeviceProfile::standard().devices;
+        // Panel-driven ioWeight clamped to the blkio 10..=1000 range so an
+        // absurd value cannot fail spec-parse in runc.
+        let io_weight = clamp_io_weight(config.io_weight);
 
         Ok(serde_json::json!({
             "ociVersion":"1.1.0",
@@ -764,7 +815,7 @@ impl ContainerdRuntime {
             "root":{"path":"rootfs","readonly":false},"hostname":config.container_id,"mounts":mounts,
             "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":memory,
                 "cpu":cpu,
-                "blockIO":{"weight":config.io_weight},
+                "blockIO":{"weight":io_weight},
                 "pids":{"limit":2048},
                 "devices":devices,"unified":unified},
                 "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths(),
@@ -997,5 +1048,163 @@ mod tests {
         let cpu = linux_cpu_resources(8);
         assert_eq!(cpu.get("shares"), Some(&serde_json::json!(8192i64)));
         assert_eq!(unified_cpu_weight(8), "800");
+    }
+
+    #[test]
+    fn cpu_resources_clamp_huge_and_zero() {
+        // u64::MAX cores must saturate at 128 (12.8M quota), never overflow
+        // the i64 cast or wrap to a negative/unlimited quota.
+        let cpu = linux_cpu_resources_with(u64::MAX, true);
+        assert_eq!(cpu.get("quota"), Some(&serde_json::json!(12_800_000i64)));
+        // 0 cores floors to 1.
+        let cpu = linux_cpu_resources_with(0, false);
+        assert_eq!(cpu.get("quota"), Some(&serde_json::json!(100_000i64)));
+    }
+
+    #[test]
+    fn memory_resources_clamp_huge_and_zero() {
+        // u64::MAX MB must saturate at 256 GiB in bytes, never overflow i64.
+        let (memory, _) = linux_memory_resources(u64::MAX, u64::MAX, 0);
+        assert_eq!(
+            memory.get("limit"),
+            Some(&serde_json::json!(274_877_906_944i64))
+        );
+        // 0 MB floors to 1 MB (limit 0 is runc's "unset" = unlimited).
+        let (memory, _) = linux_memory_resources(0, 0, 0);
+        assert_eq!(memory.get("limit"), Some(&serde_json::json!(1_048_576i64)));
+    }
+
+    #[test]
+    fn io_weight_clamps_to_blkio_range() {
+        assert_eq!(clamp_io_weight(500), 500);
+        assert_eq!(clamp_io_weight(0), 10);
+        assert_eq!(clamp_io_weight(1), 10);
+        assert_eq!(clamp_io_weight(1000), 1000);
+        assert_eq!(clamp_io_weight(99_999), 1000);
+        assert_eq!(clamp_io_weight(u64::MAX), 1000);
+    }
+
+    #[test]
+    fn installer_namespaces_include_network_and_cgroup() {
+        let ns = installer_namespaces();
+        let types: Vec<&str> = ns
+            .iter()
+            .filter_map(|v| v.get("type").and_then(|t| t.as_str()))
+            .collect();
+        for required in ["pid", "ipc", "uts", "mount", "cgroup", "network"] {
+            assert!(types.contains(&required), "missing namespace {}", required);
+        }
+    }
+
+    #[test]
+    fn installer_capabilities_drop_privilege_escalation() {
+        let caps = installer_capabilities();
+        assert!(caps.contains(&"CAP_CHOWN"));
+        assert!(caps.contains(&"CAP_FOWNER"));
+        assert!(!caps.contains(&"CAP_SETUID"), "SETUID must be dropped");
+        assert!(!caps.contains(&"CAP_SETGID"), "SETGID must be dropped");
+        assert!(
+            !caps.contains(&"CAP_DAC_OVERRIDE"),
+            "DAC_OVERRIDE must be dropped"
+        );
+    }
+
+    fn test_runtime() -> ContainerdRuntime {
+        ContainerdRuntime {
+            namespace: "catalyst".to_string(),
+            channel: tonic::transport::Channel::from_static("http://[::1]:1").connect_lazy(),
+            container_io: Arc::new(Mutex::new(HashMap::new())),
+            dns_servers: vec!["1.1.1.1".to_string()],
+            cpu_tracker: Arc::new(CpuTracker::new()),
+            cgroup_paths: Arc::new(RwLock::new(HashMap::new())),
+            container_list_cache: Arc::new(RwLock::new((Vec::new(), Instant::now()))),
+            console_log_dir: PathBuf::from("/tmp"),
+            cni_results_dir: PathBuf::from("/tmp"),
+            cni_data_dir: PathBuf::from("/tmp"),
+            cni_dir: PathBuf::from("/tmp"),
+            cni_bin_dir: PathBuf::from("/tmp"),
+            cni_bridge_name: "catalyst0".to_string(),
+            cni_bridge_subnet: "10.42.0.0/16".to_string(),
+            allow_host_network: false,
+            error_sink: Arc::new(std::sync::RwLock::new(None)),
+        }
+    }
+
+    fn test_container_config<'a>(
+        env: &'a HashMap<String, String>,
+        bindings: &'a HashMap<u16, u16>,
+    ) -> ContainerConfig<'a> {
+        ContainerConfig {
+            container_id: "srv-test",
+            server_id: "srv-test",
+            image: "alpine:3.19",
+            startup_command: "sleep infinity",
+            env,
+            memory_mb: 1024,
+            memory_reservation_mb: 0,
+            swap_mb: 0,
+            cpu_cores: 2,
+            io_weight: 500,
+            data_dir: "/tmp",
+            port: 25565,
+            port_bindings: bindings,
+            network_mode: None,
+            network_ip: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn oci_spec_always_emits_pids_limit_and_runs_as_1000() {
+        let runtime = test_runtime();
+        let dir = tempfile::tempdir().unwrap();
+        let env = HashMap::new();
+        let bindings = HashMap::new();
+        let spec = runtime
+            .build_oci_spec(
+                &test_container_config(&env, &bindings),
+                dir.path(),
+                false,
+                &[],
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(
+            spec.pointer("/linux/resources/pids/limit"),
+            Some(&serde_json::json!(2048))
+        );
+        assert_eq!(
+            spec.pointer("/process/user/uid"),
+            Some(&serde_json::json!(1000))
+        );
+        assert_eq!(
+            spec.pointer("/process/user/gid"),
+            Some(&serde_json::json!(1000))
+        );
+        let ns: Vec<&str> = spec["linux"]["namespaces"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.get("type").and_then(|t| t.as_str()))
+            .collect();
+        assert!(ns.contains(&"network"));
+        assert!(ns.contains(&"cgroup"));
+    }
+
+    #[tokio::test]
+    async fn oci_spec_clamps_io_weight_from_panel() {
+        let runtime = test_runtime();
+        let dir = tempfile::tempdir().unwrap();
+        let env = HashMap::new();
+        let bindings = HashMap::new();
+        let mut cfg = test_container_config(&env, &bindings);
+        cfg.io_weight = 99_999;
+        let spec = runtime
+            .build_oci_spec(&cfg, dir.path(), false, &[], None, None)
+            .unwrap();
+        assert_eq!(
+            spec.pointer("/linux/resources/blockIO/weight"),
+            Some(&serde_json::json!(1000u64))
+        );
     }
 }
