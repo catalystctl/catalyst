@@ -178,7 +178,12 @@ jobs:
       - name: Cargo audit (blocking)
         run: |
           cargo install --locked cargo-audit 2>/dev/null || cargo install cargo-audit
-          cargo audit --manifest-path catalyst-agent/Cargo.toml
+          # RUSTSEC-2023-0071 (rsa Marvin Attack) has no patched release; rsa is
+          # a transitive dep of russh (SFTP key exchange), not panel traffic.
+          # Revisit when russh drops the rsa default feature.
+          mkdir -p /tmp/audit-home
+          printf '[advisories]\nignore = ["RUSTSEC-2023-0071"]\n' > /tmp/audit-home/audit.toml
+          CARGO_HOME=/tmp/audit-home cargo audit --manifest-path catalyst-agent/Cargo.toml
 
       - name: Cargo deny (blocking)
         run: |
