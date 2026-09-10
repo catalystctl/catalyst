@@ -348,6 +348,7 @@
     "unknownError": "未知错误"
   },
   "nodes": {
+    "agentVersionShort": "代理 v{{version}}",
     "allLocations": "全部",
     "clearAll": "全部清除",
     "clearFilters": "清除筛选条件",

@@ -547,7 +547,7 @@ export default function ServerConfigurationTab({
  onChange={(event) =>
  onStartupCommandChange(event.target.value)
  }
- placeholder="e.g. java -Xms128M -Xmx{{MEMORY}}M -jar server.jar --port {{PORT}}"
+ placeholder={t('tabs.configuration.startupCommandPlaceholder')}
  disabled={isSuspended}
  />
  <button

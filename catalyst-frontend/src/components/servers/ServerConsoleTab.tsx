@@ -7,6 +7,7 @@ import XtermConsole, { type XtermConsoleHandle } from '../../components/console/
 import { storage } from '../../services/storage/localStorage';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { consoleStreamLabel } from '../../utils/constants';
 
 
 interface Props {
@@ -234,7 +235,7 @@ export default function ServerConsoleTab({
                 className={cn('flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium transition-colors', isActive ? styles.active : styles.inactive)}
               >
                 <span className={cn('h-1.5 w-1.5 rounded-full', isActive ? styles.dot : 'bg-muted-foreground')} />
-                {stream}
+                {consoleStreamLabel(t, stream)}
               </button>
             );
           })}

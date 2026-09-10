@@ -367,7 +367,7 @@ function NodeCreateModal(_props: Props) {
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={description}
  onChange={(event) => setDescription(event.target.value)}
- placeholder="Primary node"
+ placeholder={t('form.descriptionPlaceholder')}
  />
  </label>
  <label className="block space-y-1">

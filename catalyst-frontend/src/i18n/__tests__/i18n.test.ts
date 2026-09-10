@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import i18n from '../index';
 import { matchLocaleTag, isSupportedLocale, LOCALE_STORAGE_KEY, detectDeviceLocale } from '../config';
 import { getLocalizedErrorMessage, getApiErrorCode } from '../api-errors';
-import { formatRelativeTime } from '../format';
+import { formatDate, formatTime, formatRelativeTime } from '../format';
 
 describe('locale matching', () => {
   it('accepts exact and regional tags', () => {
@@ -107,5 +107,24 @@ describe('catalog loading', () => {
 
     i18n.addResourceBundle('en', 'fallback-test', { onlyEnglish: 'Only English' }, true, true);
     expect(i18n.t('onlyEnglish', { ns: 'fallback-test' })).toBe('Only English');
+  });
+});
+
+describe('date and time formatting', () => {
+  const value = new Date('2026-01-02T03:04:05Z');
+
+  it('accepts explicit component options without conflicting with the style defaults', () => {
+    // Intl rejects mixing dateStyle/timeStyle with component options.
+    expect(() => formatDate(value, { month: 'short', day: 'numeric', timeZone: 'UTC' })).not.toThrow();
+    expect(() => formatTime(value, { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })).not.toThrow();
+  });
+
+  it('applies the style defaults when only non-component options are given', () => {
+    expect(formatDate(value, { timeZone: 'UTC' })).toBe(
+      new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(value),
+    );
+    expect(formatTime(value, { timeZone: 'UTC' })).toBe(
+      new Intl.DateTimeFormat('en', { timeStyle: 'short', timeZone: 'UTC' }).format(value),
+    );
   });
 });

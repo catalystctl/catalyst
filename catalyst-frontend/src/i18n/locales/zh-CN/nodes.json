@@ -212,6 +212,7 @@
     "cpuOverallocate": "CPU 超配（%）",
     "createLocation": "创建位置",
     "description": "描述",
+    "descriptionPlaceholder": "主节点",
     "enabled": "已启用",
     "hostname": "主机名",
     "location": "位置",

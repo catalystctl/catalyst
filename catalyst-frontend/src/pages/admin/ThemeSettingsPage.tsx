@@ -80,6 +80,38 @@ function tabLabel(t: TFunction<'admin-system'>, id: TabId): string {
  }
 }
 
+/** Preset display name, keyed by preset id. */
+function presetName(t: TFunction<'admin-system'>, id: string): string {
+ switch (id) {
+ case 'catalyst-teal': return t('theme.presetName.catalystTeal');
+ case 'ocean': return t('theme.presetName.ocean');
+ case 'sunset': return t('theme.presetName.sunset');
+ case 'forest': return t('theme.presetName.forest');
+ case 'royal': return t('theme.presetName.royal');
+ case 'crimson': return t('theme.presetName.crimson');
+ case 'slate-mono': return t('theme.presetName.slateMono');
+ case 'neon-nights': return t('theme.presetName.neonNights');
+ case 'brutalist': return t('theme.presetName.brutalist');
+ default: return id;
+ }
+}
+
+/** Preset description, keyed by preset id. */
+function presetDescription(t: TFunction<'admin-system'>, id: string): string {
+ switch (id) {
+ case 'catalyst-teal': return t('theme.presetDescription.catalystTeal');
+ case 'ocean': return t('theme.presetDescription.ocean');
+ case 'sunset': return t('theme.presetDescription.sunset');
+ case 'forest': return t('theme.presetDescription.forest');
+ case 'royal': return t('theme.presetDescription.royal');
+ case 'crimson': return t('theme.presetDescription.crimson');
+ case 'slate-mono': return t('theme.presetDescription.slateMono');
+ case 'neon-nights': return t('theme.presetDescription.neonNights');
+ case 'brutalist': return t('theme.presetDescription.brutalist');
+ default: return id;
+ }
+}
+
 // ─── Color Picker ───
 
 function ColorPicker({
@@ -531,7 +563,7 @@ function ThemeSettingsPage() {
  accentColor: preset.accentColor,
  themeColors: merged,
  });
- toast.success(t('theme.toastPresetApplied', { name: preset.name }));
+ toast.success(t('theme.toastPresetApplied', { name: presetName(t, preset.id) }));
  };
 
  const handleExportCopy = async () => {
@@ -1196,12 +1228,12 @@ function ThemeSettingsPage() {
  {THEME_PRESETS.map((preset) => (
  <div key={preset.id} className="flex flex-col rounded-xl border border-border/30 bg-card p-4">
  <div className="mb-1 flex items-center justify-between">
- <p className="text-sm font-semibold text-foreground">{preset.name}</p>
+ <p className="text-sm font-semibold text-foreground">{presetName(t, preset.id)}</p>
  {preset.customCss ? (
  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t('theme.plusCss')}</span>
  ) : null}
  </div>
- <p className="mb-3 min-h-8 text-[11px] leading-relaxed text-muted-foreground">{preset.description}</p>
+ <p className="mb-3 min-h-8 text-[11px] leading-relaxed text-muted-foreground">{presetDescription(t, preset.id)}</p>
  <div className="mb-3 flex gap-1.5">
  {[preset.primaryColor, preset.secondaryColor, preset.accentColor].map((c, i) => (
  <div key={i} className="h-8 flex-1 rounded-md ring-1 ring-black/10" style={{ backgroundColor: c }} />
@@ -1218,7 +1250,7 @@ function ThemeSettingsPage() {
  className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-border/30 bg-surface-1 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-surface-2"
  >
  <Wand2 className="h-3.5 w-3.5" />
- {t('theme.applyPreset', { name: preset.name })}
+ {t('theme.applyPreset', { name: presetName(t, preset.id) })}
  </button>
  </div>
  ))}

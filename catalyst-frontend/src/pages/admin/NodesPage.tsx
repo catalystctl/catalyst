@@ -223,7 +223,7 @@ function NodeRow({
  ) : (
  <CheckCircle className="h-2.5 w-2.5" />
  )}
- Agent v{node.agentVersion}
+ {t('nodes.agentVersionShort', { version: node.agentVersion })}
  </Badge>
  )}
  </div>

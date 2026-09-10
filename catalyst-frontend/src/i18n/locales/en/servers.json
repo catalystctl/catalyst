@@ -43,6 +43,12 @@
     "placeholderTypeCommand": "Type a command…",
     "placeholderTypeCommandHistory": "Type a command… (↑↓ for history)",
     "send": "Send",
+    "streams": {
+      "stderr": "stderr",
+      "stdin": "stdin",
+      "stdout": "stdout",
+      "system": "system"
+    },
     "suspendedNotice": "Server suspended — console input disabled.",
     "tab": {
       "bufferSize": "Buffer size",

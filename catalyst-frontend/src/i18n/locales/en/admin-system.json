@@ -373,6 +373,28 @@
     "plusCss": "+ CSS",
     "popover": "Popover",
     "popoverDescription": "Menus & popovers",
+    "presetDescription": {
+      "brutalist": "Sharp corners, hard shadows, stark yellow",
+      "catalystTeal": "The default panel look — balanced teal",
+      "crimson": "Strong red with bold contrast",
+      "forest": "Natural greens that breathe",
+      "neonNights": "Hot pink on deep void with cyan accents",
+      "ocean": "Deep blue with calm flow",
+      "royal": "Bold purple with crisp depth",
+      "slateMono": "Quiet neutral, almost monochrome",
+      "sunset": "Warm orange with rich contrast"
+    },
+    "presetName": {
+      "brutalist": "Brutalist",
+      "catalystTeal": "Catalyst Teal",
+      "crimson": "Crimson",
+      "forest": "Forest",
+      "neonNights": "Neon Nights",
+      "ocean": "Ocean",
+      "royal": "Royal",
+      "slateMono": "Slate Mono",
+      "sunset": "Sunset Ember"
+    },
     "presets": "Presets",
     "presetsDescription": "One-click starting points. Applying fills every color — review and save when ready.",
     "presetsTitle": "Preset Gallery",

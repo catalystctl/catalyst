@@ -629,11 +629,11 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <label className="block space-y-1">
  <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.ruleName')}</span>
- <Input value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder="High CPU usage" />
+ <Input value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder={t('ruleModal.namePlaceholder')} />
  </label>
  <label className="block space-y-1">
  <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.descriptionLabel')}</span>
- <Input value={ruleDescription} onChange={(e) => setRuleDescription(e.target.value)} placeholder="Notify when CPU stays high" />
+ <Input value={ruleDescription} onChange={(e) => setRuleDescription(e.target.value)} placeholder={t('ruleModal.descriptionPlaceholder')} />
  </label>
  </div>
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

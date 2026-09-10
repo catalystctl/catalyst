@@ -403,6 +403,7 @@
         "crashes": "崩溃次数",
         "databaseAllocation": "数据库分配",
         "disk": "磁盘",
+        "exitCode": "退出代码",
         "image": "镜像",
         "lastCrash": "上次崩溃",
         "memory": "内存",
@@ -525,6 +526,7 @@
       "saveFailed": "保存配置失败",
       "searchPlaceholder": "搜索键…",
       "startupCommand": "启动命令",
+      "startupCommandPlaceholder": "例如：java -Xms128M -Xmx{{MEMORY}}M -jar server.jar --port {{PORT}}",
       "templateDefault": "模板默认值：",
       "title": "配置",
       "unnamedKey": "键",
@@ -556,7 +558,7 @@
       "disk": "磁盘 {{used}}/{{total}} MB",
       "liveUsage": "实时资源使用情况。",
       "ram": "内存 {{used}} MB",
-      "rx": "RX {{value}}",
+      "rx": "接收 {{value}}",
       "title": "监控指标"
     },
     "mods": {

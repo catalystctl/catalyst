@@ -364,6 +364,28 @@
     "plusCss": "+ CSS",
     "popover": "弹出层",
     "popoverDescription": "菜单与弹出层",
+    "presetDescription": {
+      "brutalist": "锐利直角、硬阴影与醒目黄色",
+      "catalystTeal": "默认面板外观 —— 均衡的青绿色",
+      "crimson": "强烈醒目的红色",
+      "forest": "自然呼吸的绿色",
+      "neonNights": "深空之上的霓虹粉与青色点缀",
+      "ocean": "宁静流动的深蓝",
+      "royal": "深邃利落的紫色",
+      "slateMono": "安静近乎单色的中性色",
+      "sunset": "高对比度的暖橙色"
+    },
+    "presetName": {
+      "brutalist": "粗野主义",
+      "catalystTeal": "Catalyst 青绿",
+      "crimson": "绯红",
+      "forest": "森林绿",
+      "neonNights": "霓虹之夜",
+      "ocean": "海洋蓝",
+      "royal": "皇家紫",
+      "slateMono": "石板单色",
+      "sunset": "日落余烬"
+    },
     "presets": "预设",
     "presetsDescription": "一键式起始方案。应用后会填充所有颜色——请检查并适时保存。",
     "presetsTitle": "预设库",

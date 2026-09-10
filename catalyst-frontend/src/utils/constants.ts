@@ -39,3 +39,22 @@ export function serverStatusLabel(t: TFunction, status: string): string {
       return status;
   }
 }
+
+/**
+ * Localized label for a console stream filter. Stream ids come from the agent
+ * (`stdout`, `stderr`, `system`, `stdin`); unknown streams render as-is.
+ */
+export function consoleStreamLabel(t: TFunction, stream: string): string {
+  switch (stream) {
+    case 'stdout':
+      return t('servers:console.streams.stdout');
+    case 'stderr':
+      return t('servers:console.streams.stderr');
+    case 'system':
+      return t('servers:console.streams.system');
+    case 'stdin':
+      return t('servers:console.streams.stdin');
+    default:
+      return stream;
+  }
+}

@@ -352,6 +352,7 @@
     "unknownError": "Unknown error"
   },
   "nodes": {
+    "agentVersionShort": "Agent v{{version}}",
     "allLocations": "All",
     "clearAll": "Clear all",
     "clearFilters": "Clear filters",

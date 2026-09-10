@@ -213,6 +213,7 @@
     "cpuOverallocate": "CPU Over-allocation (%)",
     "createLocation": "Create a location",
     "description": "Description",
+    "descriptionPlaceholder": "Primary node",
     "enabled": "Enabled",
     "hostname": "Hostname",
     "location": "Location",

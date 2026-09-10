@@ -12,6 +12,35 @@ function toDate(value: Date | number | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
+/** Component options that cannot be combined with dateStyle/timeStyle in Intl. */
+const COMPONENT_OPTIONS = [
+  'weekday',
+  'era',
+  'year',
+  'month',
+  'day',
+  'dayPeriod',
+  'hour',
+  'minute',
+  'second',
+  'fractionalSecondDigits',
+  'timeZoneName',
+] as const;
+
+/**
+ * Intl forbids mixing `dateStyle`/`timeStyle` with explicit component options,
+ * so the style defaults only apply when the caller passes none of the latter.
+ */
+function withStyleDefaults(
+  options: Intl.DateTimeFormatOptions | undefined,
+  defaults: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormatOptions {
+  if (!options) return defaults;
+  const probe = options as Record<string, unknown>;
+  const hasComponent = COMPONENT_OPTIONS.some((key) => probe[key] !== undefined);
+  return hasComponent ? options : { ...defaults, ...options };
+}
+
 export function formatDateTime(
   value: Date | number | string,
   options?: Intl.DateTimeFormatOptions,
@@ -23,14 +52,14 @@ export function formatDate(
   value: Date | number | string,
   options?: Intl.DateTimeFormatOptions,
 ): string {
-  return formatDateTime(value, { dateStyle: 'medium', ...options });
+  return formatDateTime(value, withStyleDefaults(options, { dateStyle: 'medium' }));
 }
 
 export function formatTime(
   value: Date | number | string,
   options?: Intl.DateTimeFormatOptions,
 ): string {
-  return formatDateTime(value, { timeStyle: 'short', ...options });
+  return formatDateTime(value, withStyleDefaults(options, { timeStyle: 'short' }));
 }
 
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {

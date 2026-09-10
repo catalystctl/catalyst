@@ -9,6 +9,7 @@ import { useConsole } from '../../hooks/useConsole';
 import { useServer } from '../../hooks/useServer';
 import { useEulaPrompt } from '../../hooks/useEulaPrompt';
 import EulaModal from '../../components/servers/EulaModal';
+import { consoleStreamLabel } from '../../utils/constants';
 
 const ALL_STREAMS = ['stdout', 'stderr', 'system', 'stdin'] as const;
 const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: string }> = {
@@ -208,7 +209,7 @@ function ServerConsolePage() {
  }`}
  >
  <span className={`h-1.5 w-1.5 rounded-full ${isActive ? colors.dot : 'bg-muted-foreground'}`} />
- {stream}
+ {consoleStreamLabel(t, stream)}
  </button>
  );
  })}

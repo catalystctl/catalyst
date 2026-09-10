@@ -119,7 +119,7 @@
   "MOD_TARGET_NOT_ENABLED": "该目标未对所选提供方启用。",
   "MOD_UNINSTALL_FAILED": "卸载模组或插件失败。",
   "NEST_NAME_TAKEN": "已存在同名巢。",
-  "NEST_NOT_FOUND": "找不到该巢。",
+  "NEST_NOT_FOUND": "找不到该 Nest。",
   "NETWORK_ERROR": "网络错误，请检查网络连接后重试。",
   "NODE_AGENT_UNREACHABLE": "无法连接到节点代理。",
   "NODE_API_KEY_EXISTS": "该节点已存在 API 密钥。",

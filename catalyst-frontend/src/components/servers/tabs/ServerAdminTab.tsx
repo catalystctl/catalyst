@@ -955,7 +955,7 @@ export default function ServerAdminTab({
         <DataField label={t('tabs.admin.fields.crashes')} value={`${crashCount} / ${maxCrashCountValue}`} />
         <DataField label={t('tabs.admin.fields.policy')} value={restartPolicyLabel} />
         <DataField label={t('tabs.admin.fields.lastCrash')} value={lastCrashAt ? formatDateTime(lastCrashAt) : t('tabs.admin.never')} />
-        <DataField label="Exit code" value={lastExitCode !== null && lastExitCode !== undefined ? String(lastExitCode) : '—'} />
+        <DataField label={t('tabs.admin.fields.exitCode')} value={lastExitCode !== null && lastExitCode !== undefined ? String(lastExitCode) : '—'} />
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <div className="min-w-[160px] flex-1">
             <label className="type-overline">{t('tabs.admin.restartPolicyLabel')}</label>

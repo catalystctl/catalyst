@@ -107,7 +107,7 @@
       "loading": "正在加载权限…",
       "name": "名称 *",
       "nameHint": "用于标识此 API 密钥的描述性名称。",
-      "namePlaceholder": "e.g., Billing System Integration",
+      "namePlaceholder": "例如：账单系统集成",
       "noneAvailable": "没有可用的权限",
       "perMinute": "次请求 / 分钟",
       "permissions": "权限",

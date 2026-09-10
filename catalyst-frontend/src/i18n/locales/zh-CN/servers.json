@@ -42,6 +42,12 @@
     "placeholderTypeCommand": "输入命令…",
     "placeholderTypeCommandHistory": "输入命令…（↑↓ 查看历史）",
     "send": "发送",
+    "streams": {
+      "stderr": "标准错误",
+      "stdin": "标准输入",
+      "stdout": "标准输出",
+      "system": "系统"
+    },
     "suspendedNotice": "服务器已暂停——控制台输入已禁用。",
     "tab": {
       "bufferSize": "缓冲区大小",
