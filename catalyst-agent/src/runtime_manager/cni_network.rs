@@ -124,6 +124,20 @@ impl ContainerdRuntime {
         if network == "host" {
             return Ok(());
         }
+        // Panel-influenced network names flow into CNI config file paths and
+        // plugin JSON; validate with the same label rules as NetworkManager.
+        if network != "bridge" && network != "default" {
+            crate::net_utils::validate_cni_network_name(network)?;
+        }
+        // A static IP is interpolated into CNI JSON; it must be a real IP.
+        if let Some(ip) = network_ip {
+            if ip.parse::<std::net::IpAddr>().is_err() {
+                return Err(AgentError::InvalidRequest(format!(
+                    "Invalid static container IP '{}'",
+                    ip
+                )));
+            }
+        }
         let netns = self.resolve_task_netns(container_id, pid).await?;
 
         // Build DNS configuration from configured DNS servers
@@ -454,7 +468,10 @@ impl ContainerdRuntime {
     ) -> AgentResult<serde_json::Value> {
         let ptype = config["type"].as_str().unwrap_or("bridge");
         let cni_bin_dir = discover_cni_bin_dir(&self.cni_bin_dir);
-        let ppath = format!("{}/{}", cni_bin_dir.display(), ptype);
+        // Allowlist the plugin type to a strict basename and canonicalize
+        // under the plugin dir: `type` comes from panel-influenced CNI JSON.
+        let ppath_buf = resolve_cni_plugin_path(&cni_bin_dir, ptype)?;
+        let ppath = ppath_buf.to_string_lossy().to_string();
         if !Path::new(&ppath).exists() {
             return Err(AgentError::ContainerError(format!(
                 "CNI plugin not found: {} (searched directories: {:?})",
