@@ -695,7 +695,7 @@ function SetupPage() {
  {/* Brand colors */}
  <div>
  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
- Brand
+ {t('palette.brand')}
  </p>
  <div className="grid grid-cols-3 gap-3">
  {[
@@ -719,7 +719,7 @@ function SetupPage() {
  {/* Semantic */}
  <div>
  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
- Semantic
+ {t('palette.semantic')}
  </p>
  <div className="flex flex-wrap gap-2">
  {(

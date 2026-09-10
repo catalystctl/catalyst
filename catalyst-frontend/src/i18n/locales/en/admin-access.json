@@ -19,6 +19,7 @@
     "emptyDescription": "Audit events will appear once user actions are recorded.",
     "emptyFilteredDescription": "Try adjusting your filters.",
     "emptyTitle": "No audit logs",
+    "emptyValue": "empty",
     "eventCount_one": "{{count}} events",
     "eventCount_other": "{{count}} events",
     "exportCsv": "Export CSV",

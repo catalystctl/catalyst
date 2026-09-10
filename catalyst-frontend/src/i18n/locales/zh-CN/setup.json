@@ -47,10 +47,12 @@
   },
   "palette": {
     "accent": "强调色",
+    "brand": "品牌色",
     "danger": "危险",
     "info": "信息",
     "primary": "主色",
     "secondary": "辅助色",
+    "semantic": "语义色",
     "success": "成功",
     "warning": "警告"
   },

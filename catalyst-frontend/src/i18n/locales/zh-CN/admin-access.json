@@ -18,6 +18,7 @@
     "emptyDescription": "记录用户操作后，审计事件将显示在这里。",
     "emptyFilteredDescription": "请尝试调整筛选条件。",
     "emptyTitle": "暂无审计日志",
+    "emptyValue": "空",
     "eventCount_other": "{{count}} 个事件",
     "exportCsv": "导出 CSV",
     "live": "实时",

@@ -47,10 +47,12 @@
   },
   "palette": {
     "accent": "Accent",
+    "brand": "Brand",
     "danger": "Danger",
     "info": "Info",
     "primary": "Primary",
     "secondary": "Secondary",
+    "semantic": "Semantic",
     "success": "Success",
     "warning": "Warning"
   },

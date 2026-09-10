@@ -190,7 +190,7 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  return <span className="text-foreground">{value}</span>;
  }
  if (Array.isArray(value)) {
- if (value.length === 0) return <span className="text-muted-foreground/50 italic">empty</span>;
+ if (value.length === 0) return <span className="text-muted-foreground/50 italic">{t('audit.emptyValue')}</span>;
  return (
  <div className="space-y-1">
  {value.map((item, i) => (
@@ -204,7 +204,7 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  }
  if (typeof value === 'object') {
  const entries = Object.entries(value as Record<string, unknown>);
- if (entries.length === 0) return <span className="text-muted-foreground/50 italic">empty</span>;
+ if (entries.length === 0) return <span className="text-muted-foreground/50 italic">{t('audit.emptyValue')}</span>;
  if (depth >= 2) return <code className="text-[11px] text-muted-foreground">{JSON.stringify(value)}</code>;
  return (
  <div className={`rounded-lg border border-border/50 bg-muted/20 p-2 space-y-1.5 ${depth > 0 ? 'ml-2' : ''}`}>
