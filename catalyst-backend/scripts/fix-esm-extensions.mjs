@@ -101,3 +101,26 @@ if (fs.existsSync(assetsDir)) {
 	}
 	console.log(`fix-esm-extensions: copied ${copied.length} mod-manager config(s) to dist/mod-manager/`);
 }
+
+// Email/alert translation catalogs are imported with `with { type: "json" }`;
+// tsc emits the import but never copies the JSON, so production would fail to
+// load them without this pass.
+const localesDir = path.join(srcRoot, "i18n", "locales");
+const localesOutDir = path.join(distRoot, "i18n", "locales");
+if (fs.existsSync(localesDir)) {
+	let copied = 0;
+	const copyJsonTree = (from, to) => {
+		fs.mkdirSync(to, { recursive: true });
+		for (const ent of fs.readdirSync(from, { withFileTypes: true })) {
+			const src = path.join(from, ent.name);
+			const dest = path.join(to, ent.name);
+			if (ent.isDirectory()) copyJsonTree(src, dest);
+			else if (ent.name.endsWith(".json")) {
+				fs.copyFileSync(src, dest);
+				copied += 1;
+			}
+		}
+	};
+	copyJsonTree(localesDir, localesOutDir);
+	console.log(`fix-esm-extensions: copied ${copied} translation catalog(s) to dist/i18n/locales/`);
+}
