@@ -1,487 +1,487 @@
 {
   "allocations": {
-    "assigned": "",
-    "assignedIps": "",
-    "available": "",
-    "createAllocations": "",
+    "assigned": "已分配",
+    "assignedIps": "已分配 IP（{{value}}）",
+    "available": "可用",
+    "createAllocations": "创建分配",
     "createPool": {
-      "autofill": "",
-      "cidr": "",
-      "cidrPlaceholder": "",
-      "creating": "",
-      "description": "",
-      "endIp": "",
-      "gateway": "",
-      "intro": "",
-      "networkName": "",
-      "quickSetupIp": "",
-      "reservedIps": "",
-      "startIp": "",
-      "submit": "",
-      "title": ""
+      "autofill": "自动填充 /24",
+      "cidr": "CIDR",
+      "cidrPlaceholder": "192.168.50.0/24 或 2001:db8::/64",
+      "creating": "正在创建…",
+      "description": "配置带有自动 IPAM 的 MACVLAN 网络。",
+      "endIp": "结束 IP（可选）",
+      "gateway": "网关",
+      "intro": "IP 池让服务器可以通过 MACVLAN 获得网络上的专用 IP 地址。每台服务器会自动从池中分配一个 IP。",
+      "networkName": "网络名称",
+      "quickSetupIp": "快速设置 IP",
+      "reservedIps": "保留 IP（可选，以逗号分隔）",
+      "startIp": "起始 IP（可选）",
+      "submit": "创建池",
+      "title": "创建 IP 池"
     },
-    "createPoolButton": "",
+    "createPoolButton": "创建 IP 池",
     "createPort": {
-      "aliasLabel": "",
-      "aliasPlaceholder": "",
-      "creating": "",
-      "description": "",
-      "ipFormat": "",
-      "ipLabel": "",
-      "ipPlaceholder": "",
-      "portFormat": "",
-      "portsLabel": "",
-      "portsPlaceholder": "",
-      "quickFill": "",
-      "submit": "",
-      "title": ""
+      "aliasLabel": "别名（可选）",
+      "aliasPlaceholder": "例如：主网络",
+      "creating": "正在创建…",
+      "description": "为此节点批量创建 IP:Port 分配。",
+      "ipFormat": "<strong>IP 格式：</strong>单个 IP (192.168.1.100)、多个 IP (192.168.1.100, 192.168.1.101)，或 CIDR (192.168.1.0/24)",
+      "ipLabel": "IP 地址",
+      "ipPlaceholder": "192.168.1.100, 2001:db8::1 或 192.168.1.0/24",
+      "portFormat": "<strong>端口格式：</strong>单个端口 (25565)、端口范围 (25565-25664) 或多个端口 (25565, 25566, 25567)",
+      "portsLabel": "端口",
+      "portsPlaceholder": "25565-25664 或 25565, 25566",
+      "quickFill": "快速填充：使用节点 IP + 端口 25565-25664",
+      "submit": "创建分配",
+      "title": "创建端口分配"
     },
-    "description": "",
+    "description": "管理 {{node}} 的端口绑定和 IP 池",
     "empty": {
-      "createFirst": "",
-      "createFirstPool": "",
-      "noMatches": "",
-      "noPools": "",
-      "noPoolsDescription": "",
-      "noPorts": "",
-      "noPortsDescription": ""
+      "createFirst": "创建您的第一组分配",
+      "createFirstPool": "创建您的第一个 IP 池",
+      "noMatches": "没有匹配搜索条件的端口分配",
+      "noPools": "此节点没有 IP 池",
+      "noPoolsDescription": "创建 IP 池以启用带自动 IPAM 的 MACVLAN 网络。",
+      "noPorts": "暂无端口分配",
+      "noPortsDescription": "创建分配以为服务器指定 IP:Port 组合。"
     },
     "field": {
-      "ip": "",
-      "port": ""
+      "ip": "IP",
+      "port": "端口"
     },
     "info": {
-      "ipPools": "",
-      "portAllocations": "",
-      "title": ""
+      "ipPools": "<strong>IP 池</strong>——为每台服务器提供专用 IP 的自动 MACVLAN 网络（高级）",
+      "portAllocations": "<strong>端口分配</strong>——跟踪用于代理/NAT 场景的 IP:Port 组合（类似 Pterodactyl）",
+      "title": "两种分配类型："
     },
-    "poolCount": "",
-    "poolTotals": "",
-    "portCount": "",
-    "searchPlaceholder": "",
+    "poolCount": "{{value}} 个池",
+    "poolTotals": "总计：{{total}} · 网关：{{gateway}}",
+    "portCount": "{{value}} 个端口",
+    "searchPlaceholder": "按 IP、端口、别名搜索…",
     "stats": {
-      "assigned": "",
-      "available": "",
-      "reserved": "",
-      "totalIps": "",
-      "totalPorts": "",
-      "uniqueIps": "",
-      "used": ""
+      "assigned": "已分配",
+      "available": "可用",
+      "reserved": "保留",
+      "totalIps": "IP 总数",
+      "totalPorts": "端口总数",
+      "uniqueIps": "唯一 IP",
+      "used": "已使用"
     },
     "tabs": {
-      "ips": "",
-      "ports": ""
+      "ips": "IP 池",
+      "ports": "端口分配"
     },
-    "thisNode": "",
-    "title": "",
+    "thisNode": "此节点",
+    "title": "网络分配",
     "toast": {
-      "poolCreated": "",
-      "poolDeleted": "",
-      "portDeleted": "",
-      "portsCreated_other": ""
+      "poolCreated": "IP 池已创建",
+      "poolDeleted": "IP 池已删除",
+      "portDeleted": "端口分配已删除",
+      "portsCreated_other": "已创建 {{count}} 个端口分配"
     }
   },
   "database": {
-    "addHost": "",
-    "catalystDatabase": "",
+    "addHost": "添加主机",
+    "catalystDatabase": "Catalyst 数据库",
     "createDialog": {
-      "submit": "",
-      "subtitle": "",
-      "title": ""
+      "submit": "创建主机",
+      "subtitle": "注册用于为服务器开通数据库的 MySQL 主机。",
+      "title": "添加数据库主机"
     },
-    "creating": "",
+    "creating": "正在创建…",
     "deleteDialog": {
-      "message": "",
-      "title": ""
+      "message": "确定要移除“{{name}}”吗？使用此主机开通数据库的服务器可能会受到影响。",
+      "title": "删除数据库主机？"
     },
-    "description": "",
+    "description": "监控数据库健康状态并管理用于服务器开通的主机。",
     "editDialog": {
-      "submit": "",
-      "subtitle": "",
-      "title": ""
+      "submit": "保存更改",
+      "subtitle": "更新此数据库主机的连接信息。",
+      "title": "编辑数据库主机"
     },
     "empty": {
-      "description": "",
-      "title": ""
+      "description": "创建主机以便为服务器开通数据库。",
+      "title": "暂无数据库主机"
     },
     "form": {
-      "database": "",
-      "databaseHint": "",
-      "engine": "",
-      "host": "",
-      "name": "",
-      "password": "",
-      "passwordEditHint": "",
-      "port": "",
-      "username": ""
+      "database": "数据库",
+      "databaseHint": "用于健康检查和开通的数据库。",
+      "engine": "引擎",
+      "host": "主机",
+      "name": "名称",
+      "password": "密码",
+      "passwordEditHint": "（留空则保持不变）",
+      "port": "端口",
+      "username": "用户名"
     },
     "host": {
-      "checking": "",
-      "connected": "",
-      "databaseCount_other": "",
-      "disconnected": "",
-      "pingCounts": "",
-      "port": "",
-      "testConnection": ""
+      "checking": "检查中",
+      "connected": "已连接",
+      "databaseCount_other": "{{count}} 个数据库",
+      "disconnected": "未连接",
+      "pingCounts": "{{databases}} 个数据库，{{tables}} 张表",
+      "port": "端口 {{port}}",
+      "testConnection": "测试连接"
     },
-    "hostCount": "",
-    "recordsValue": "",
-    "saving": "",
+    "hostCount": "{{value}} 个主机",
+    "recordsValue": "{{users}} 个用户，{{servers}} 台服务器",
+    "saving": "正在保存…",
     "stats": {
-      "connections": "",
-      "records": "",
-      "size": "",
-      "tables": ""
+      "connections": "连接数",
+      "records": "记录",
+      "size": "大小",
+      "tables": "表"
     },
-    "title": "",
+    "title": "数据库",
     "toast": {
-      "created": "",
-      "removed": "",
-      "updated": ""
+      "created": "数据库主机已创建",
+      "removed": "数据库主机已移除",
+      "updated": "数据库主机已更新"
     }
   },
   "migration": {
     "actions": {
-      "pause": "",
-      "resume": ""
+      "pause": "暂停",
+      "resume": "继续"
     },
     "alwaysImported": {
-      "configFileEditor": "",
-      "dockerImageOverride": "",
-      "portAllocations": "",
-      "serverConfig": "",
-      "startupCommand": "",
-      "swapIoWeight": ""
+      "configFileEditor": "配置文件编辑器",
+      "dockerImageOverride": "Docker 镜像覆盖",
+      "portAllocations": "端口分配",
+      "serverConfig": "服务器配置与环境变量",
+      "startupCommand": "启动命令",
+      "swapIoWeight": "Swap 与 IO 权重"
     },
-    "assigned": "",
+    "assigned": "已分配",
     "backupWarnings": {
-      "noSlots_other": "",
-      "noSlotsDescription": "",
-      "slotsFull_other": "",
-      "slotsFullDescription": ""
+      "noSlots_other": "{{count}} 台服务器的备份槽位为 0",
+      "noSlotsDescription": "迁移会自动将这些服务器的备份上限设为 1，以创建迁移备份。",
+      "slotsFull_other": "{{count}} 台服务器的备份槽位已全部占用",
+      "slotsFullDescription": "迁移会自动将备份上限加 1，为迁移备份腾出空间。"
     },
     "connect": {
-      "apiKey": "",
-      "clientApiKey": "",
-      "clientApiKeyHint": "",
-      "clientApiKeyNote": "",
-      "description": "",
-      "panelUrl": "",
-      "title": ""
+      "apiKey": "应用 API 密钥",
+      "clientApiKey": "客户端 API 密钥",
+      "clientApiKeyHint": "（用于文件迁移）",
+      "clientApiKeyNote": "创建备份和迁移文件所必需。请在 Pterodactyl → API Credentials → Client API 中创建。",
+      "description": "面板 URL 和应用 API 密钥。将映射到现有的在线 Catalyst 节点。",
+      "panelUrl": "面板 URL",
+      "title": "连接"
     },
-    "description": "",
+    "description": "将服务器从 Pterodactyl 迁移到 Catalyst",
     "empty": {
-      "noActive": "",
-      "noActiveDescription": "",
-      "noJobs": "",
-      "noJobsDescription": ""
+      "noActive": "没有进行中的迁移",
+      "noActiveDescription": "开始新的迁移后，进度将显示在这里。",
+      "noJobs": "暂无迁移任务",
+      "noJobsDescription": "开始新的迁移后，会显示在这里。"
     },
-    "free": "",
+    "free": "空闲",
     "history": {
-      "jobSteps": "",
-      "title": ""
+      "jobSteps": "{{completed}}/{{total}} 个步骤",
+      "title": "迁移历史"
     },
     "imports": {
-      "databases": "",
-      "noBackupSlots": "",
-      "schedules": "",
-      "serverFiles": "",
-      "subusers": ""
+      "databases": "数据库",
+      "noBackupSlots": "无备份槽位",
+      "schedules": "计划任务",
+      "serverFiles": "服务器文件",
+      "subusers": "子用户"
     },
-    "moreCount": "",
-    "noAllocations": "",
-    "noBackups": "",
+    "moreCount": "还有 {{value}} 个",
+    "noAllocations": "Pterodactyl 未返回分配详情",
+    "noBackups": "无备份",
     "nodeConfig": {
-      "allocations": "",
-      "behindProxy": "",
-      "dataDirectory": "",
-      "direct": "",
-      "disk": "",
-      "diskValue": "",
-      "endpoint": "",
-      "location": "",
-      "maintenance": "",
-      "memory": "",
-      "memoryValue": "",
-      "proxy": "",
-      "sftpPort": "",
-      "uploadLimit": "",
-      "uploadLimitValue": ""
+      "allocations": "节点分配（{{value}}）",
+      "behindProxy": "位于代理之后",
+      "dataDirectory": "数据目录：",
+      "direct": "直连",
+      "disk": "磁盘：",
+      "diskValue": "{{disk}} MB（超配 {{overallocation}}%）",
+      "endpoint": "端点：",
+      "location": "位置：",
+      "maintenance": "维护模式：",
+      "memory": "内存：",
+      "memoryValue": "{{memory}} MB（超配 {{overallocation}}%）",
+      "proxy": "代理：",
+      "sftpPort": "SFTP 端口：",
+      "uploadLimit": "上传限制：",
+      "uploadLimitValue": "{{value}} MB"
     },
     "nodeMapping": {
-      "configuration": "",
-      "helpFull": "",
-      "helpSelect": "",
-      "noServers": "",
-      "serversOnNode": "",
-      "title": ""
+      "configuration": "节点配置",
+      "helpFull": "必须映射所有 Pterodactyl 节点。点击节点可查看将导入的内容。",
+      "helpSelect": "选择要映射的 Pterodactyl 节点。点击可查看服务器导入详情。",
+      "noServers": "此节点上没有服务器。",
+      "serversOnNode": "此节点上的服务器（{{value}}）",
+      "title": "将 Pterodactyl 节点映射到 Catalyst 节点"
     },
-    "nodeServerCount": "",
-    "noOnlineNodes": "",
+    "nodeServerCount": "{{value}} 台服务器",
+    "noOnlineNodes": "未检测到在线的 Catalyst 节点。迁移需要至少一个 Catalyst 节点在线。请先在各节点上启动 Agent。",
     "phases": {
-      "backups": "",
-      "current": "",
-      "databases": "",
-      "files": "",
-      "locations": "",
-      "moreErrors": "",
-      "schedules": "",
-      "servers": "",
-      "steps": "",
-      "templates": "",
-      "title": "",
-      "users": "",
-      "validate": "",
-      "waiting": ""
+      "backups": "备份",
+      "current": "当前",
+      "databases": "数据库",
+      "files": "服务器文件",
+      "locations": "位置",
+      "moreErrors": "还有 {{value}} 个错误",
+      "schedules": "计划任务",
+      "servers": "服务器",
+      "steps": "{{value}} 个步骤",
+      "templates": "模板（Nest 和 Egg）",
+      "title": "迁移阶段",
+      "users": "用户",
+      "validate": "验证",
+      "waiting": "等待中…"
     },
-    "primary": "",
+    "primary": "主",
     "progress": {
-      "completed": "",
-      "duration": "",
-      "elapsed": "",
-      "failed": "",
-      "phase": "",
-      "skipped": "",
-      "started": "",
-      "title": ""
+      "completed": "已完成 {{value}} 项",
+      "duration": "耗时：{{duration}}",
+      "elapsed": "已用时间：{{duration}}",
+      "failed": "失败 {{value}} 项",
+      "phase": "阶段：",
+      "skipped": "已跳过 {{value}} 项",
+      "started": "开始时间：{{date}}",
+      "title": "迁移进度"
     },
     "scope": {
-      "full": "",
-      "fullDescription": "",
-      "node": "",
-      "nodeDescription": "",
-      "server": "",
-      "serverDescription": "",
-      "title": ""
+      "full": "完整迁移",
+      "fullDescription": "将所有 Ptero 节点映射到 Catalyst 节点",
+      "node": "按节点",
+      "nodeDescription": "选择要迁移的 Ptero 节点",
+      "server": "按服务器",
+      "serverDescription": "将各个服务器映射到 Catalyst 节点",
+      "title": "迁移范围"
     },
     "sections": {
-      "allocations": "",
-      "imports": ""
+      "allocations": "分配",
+      "imports": "导入"
     },
-    "selectTargetNode": "",
+    "selectTargetNode": "选择目标节点",
     "serverMapping": {
-      "help": "",
-      "title": ""
+      "help": "点击服务器可查看自动导入的内容。",
+      "title": "将 Pterodactyl 服务器映射到 Catalyst 节点"
     },
     "serverResources": {
-      "cpu": "",
-      "disk": "",
-      "memory": ""
+      "cpu": "CPU",
+      "disk": "磁盘",
+      "memory": "内存"
     },
     "skipReasons": {
-      "alreadyExists": "",
-      "noBackupSlots": "",
-      "noClientApiKey": "",
-      "noSchedules": "",
-      "notApplicable": "",
-      "notAvailable": "",
-      "skipped": ""
+      "alreadyExists": "已存在",
+      "noBackupSlots": "无备份槽位",
+      "noClientApiKey": "无客户端 API 密钥",
+      "noSchedules": "无计划任务",
+      "notApplicable": "不适用",
+      "notAvailable": "不可用",
+      "skipped": "已跳过"
     },
-    "slotsFull": "",
-    "startMigration": "",
+    "slotsFull": "槽位已满",
+    "startMigration": "开始迁移",
     "status": {
-      "cancelled": "",
-      "completed": "",
-      "failed": "",
-      "paused": "",
-      "pending": "",
-      "running": "",
-      "validating": ""
+      "cancelled": "已取消",
+      "completed": "已完成",
+      "failed": "失败",
+      "paused": "已暂停",
+      "pending": "等待中",
+      "running": "运行中",
+      "validating": "验证中"
     },
     "steps": {
-      "downloadFiles": "",
-      "importBackup": "",
-      "importDatabase": "",
-      "importDatabaseHost": "",
-      "importLocation": "",
-      "importNest": "",
-      "importSchedule": "",
-      "importServer": "",
-      "importTemplate": "",
-      "importUser": "",
-      "more": "",
-      "showLess": "",
-      "toggleErrorDetails": "",
-      "validateConnection": ""
+      "downloadFiles": "下载文件",
+      "importBackup": "导入备份",
+      "importDatabase": "导入数据库",
+      "importDatabaseHost": "导入数据库主机",
+      "importLocation": "导入位置",
+      "importNest": "导入 Nest",
+      "importSchedule": "导入计划任务",
+      "importServer": "导入服务器",
+      "importTemplate": "导入模板",
+      "importUser": "导入用户",
+      "more": "还有 {{value}} 项…",
+      "showLess": "收起",
+      "toggleErrorDetails": "展开/收起错误详情",
+      "validateConnection": "测试连接"
     },
     "stepStatus": {
-      "completed": "",
-      "failed": "",
-      "pending": "",
-      "running": "",
-      "skipped": ""
+      "completed": "已完成",
+      "failed": "失败",
+      "pending": "等待中",
+      "running": "运行中",
+      "skipped": "已跳过"
     },
     "summary": {
-      "nodesMapped": "",
-      "selected": "",
-      "serversMapped": ""
+      "nodesMapped": "已映射 {{mapped}}/{{total}} 个节点",
+      "selected": "已选",
+      "serversMapped": "已映射 {{mapped}}/{{total}} 台服务器"
     },
-    "suspendedParen": "",
+    "suspendedParen": "（已暂停）",
     "tabs": {
-      "active": "",
-      "history": "",
-      "new": ""
+      "active": "当前迁移",
+      "history": "历史",
+      "new": "新建迁移"
     },
     "test": {
-      "connected": "",
-      "failed": "",
-      "locations": "",
-      "nests": "",
-      "nodes": "",
-      "servers": "",
-      "users": ""
+      "connected": "已连接（v{{version}}）",
+      "failed": "连接失败",
+      "locations": "位置",
+      "nests": "Nest",
+      "nodes": "节点",
+      "servers": "服务器",
+      "users": "用户"
     },
-    "testConnection": "",
-    "title": "",
+    "testConnection": "测试连接",
+    "title": "迁移",
     "toast": {
-      "cancelled": "",
-      "completed": "",
-      "connected": "",
-      "connectionFailed": "",
-      "connectionTestFailed": "",
-      "failed": "",
-      "paused": "",
-      "resumed": "",
-      "started": "",
-      "stepQueued": ""
+      "cancelled": "迁移已取消",
+      "completed": "迁移已成功完成！",
+      "connected": "已连接到 Pterodactyl 面板",
+      "connectionFailed": "连接失败",
+      "connectionTestFailed": "连接测试失败",
+      "failed": "迁移失败：{{error}}",
+      "paused": "迁移已暂停",
+      "resumed": "迁移已继续",
+      "started": "迁移已开始",
+      "stepQueued": "步骤已排队重试"
     },
-    "unknownError": ""
+    "unknownError": "未知错误"
   },
   "nodes": {
-    "allLocations": "",
-    "clearAll": "",
-    "clearFilters": "",
-    "clearSelection": "",
+    "allLocations": "全部",
+    "clearAll": "全部清除",
+    "clearFilters": "清除筛选条件",
+    "clearSelection": "清除",
     "deleteDialog": {
-      "message": "",
-      "title": "",
-      "warning": ""
+      "message": "您即将删除 <1>{{label}}</1>。",
+      "title": "删除节点",
+      "warning": "仍有服务器运行的节点无法删除。删除节点前请先停止该节点上的所有服务器。此操作无法撤销。"
     },
-    "description": "",
+    "description": "管理基础设施节点并监控可用性",
     "empty": {
-      "adjustFilters": "",
-      "installAgent": "",
-      "none": "",
-      "notFound": ""
+      "adjustFilters": "请尝试调整搜索或筛选条件。",
+      "installAgent": "安装 Catalyst Agent 并注册节点即可开始。",
+      "none": "未检测到节点",
+      "notFound": "未找到节点"
     },
     "filter": {
-      "allLocations": "",
-      "allStatuses": "",
-      "location": "",
-      "offlineCount": "",
-      "onlineCount": "",
-      "status": "",
-      "unassignedCount": ""
+      "allLocations": "所有位置",
+      "allStatuses": "所有状态",
+      "location": "位置",
+      "offlineCount": "离线（{{value}}）",
+      "onlineCount": "在线（{{value}}）",
+      "status": "状态",
+      "unassignedCount": "未分配（{{value}}）"
     },
-    "filters": "",
-    "hostnameUnavailable": "",
-    "lastSeen": "",
-    "locationNodeCount_other": "",
-    "locations": "",
-    "manage": "",
-    "resultCount": "",
-    "searchPlaceholder": "",
-    "selectAll": "",
-    "selectAllInSection": "",
-    "selectedCount": "",
-    "selectedLabel": "",
+    "filters": "筛选条件",
+    "hostnameUnavailable": "主机名 n/a",
+    "lastSeen": "最后在线 {{time}}",
+    "locationNodeCount_other": "{{count}} 个节点",
+    "locations": "位置",
+    "manage": "管理",
+    "resultCount": "{{shown}}/{{total}}",
+    "searchPlaceholder": "按名称或主机名搜索节点…",
+    "selectAll": "全选",
+    "selectAllInSection": "全选此分组",
+    "selectedCount": "已选择 {{value}} 项",
+    "selectedLabel": "{{value}} 个节点",
     "sort": {
-      "cpuCores": "",
-      "memory": "",
-      "mostServers": "",
-      "nameAsc": "",
-      "nameDesc": "",
-      "status": ""
+      "cpuCores": "CPU 核心数",
+      "memory": "内存",
+      "mostServers": "服务器最多",
+      "nameAsc": "名称 A→Z",
+      "nameDesc": "名称 Z→A",
+      "status": "状态"
     },
     "stat": {
-      "cores": "",
-      "memory": "",
-      "servers": ""
+      "cores": "核心",
+      "memory": "内存",
+      "servers": "服务器"
     },
     "stats": {
-      "cpuCores": "",
-      "memory": "",
-      "nodes": "",
-      "offline": "",
-      "online": "",
-      "totalServers": ""
+      "cpuCores": "CPU 核心",
+      "memory": "内存",
+      "nodes": "节点",
+      "offline": "离线",
+      "online": "在线",
+      "totalServers": "服务器总数"
     },
-    "title": "",
+    "title": "节点",
     "toast": {
-      "deleted_other": ""
+      "deleted_other": "已删除 {{count}} 个节点"
     },
-    "unassigned": ""
+    "unassigned": "未分配"
   },
   "servers": {
     "actions": {
-      "console": "",
-      "restart": "",
-      "start": "",
-      "stop": "",
-      "suspend": "",
-      "unsuspend": "",
-      "update": ""
+      "console": "控制台",
+      "restart": "重启",
+      "start": "启动",
+      "stop": "停止",
+      "suspend": "暂停",
+      "unsuspend": "解除暂停",
+      "update": "更新"
     },
     "actionVerb": {
-      "delete": "",
-      "restart": "",
-      "start": "",
-      "stop": "",
-      "suspend": "",
-      "unsuspend": ""
+      "delete": "删除",
+      "restart": "重启",
+      "start": "启动",
+      "stop": "停止",
+      "suspend": "暂停",
+      "unsuspend": "解除暂停"
     },
-    "clearAll": "",
-    "clearFilters": "",
-    "clearSelection": "",
+    "clearAll": "全部清除",
+    "clearFilters": "清除筛选条件",
+    "clearSelection": "清除",
     "deleteDialog": {
-      "message": "",
-      "title": "",
-      "warning": ""
+      "message": "您即将删除 <1>{{label}}</1>。",
+      "title": "删除服务器",
+      "warning": "删除前必须先停止服务器。此操作无法撤销。"
     },
-    "description": "",
+    "description": "监控并管理所有节点上的每一台服务器",
     "empty": {
-      "adjustFilters": "",
-      "createServer": "",
-      "none": "",
-      "notFound": ""
+      "adjustFilters": "请尝试调整搜索或筛选条件。",
+      "createServer": "创建服务器后即可在此列表中管理。",
+      "none": "暂无服务器",
+      "notFound": "未找到服务器"
     },
     "filter": {
-      "allNodes": "",
-      "allStatuses": "",
-      "allTemplates": "",
-      "node": "",
-      "owner": "",
-      "ownerPlaceholder": "",
-      "status": "",
-      "template": ""
+      "allNodes": "所有节点",
+      "allStatuses": "所有状态",
+      "allTemplates": "所有模板",
+      "node": "节点",
+      "owner": "所有者",
+      "ownerPlaceholder": "搜索所有者…",
+      "status": "状态",
+      "template": "模板"
     },
-    "filters": "",
-    "resultCount": "",
-    "runningCount": "",
-    "searchPlaceholder": "",
-    "selectAll": "",
-    "selectedCount": "",
-    "selectedLabel": "",
+    "filters": "筛选条件",
+    "resultCount": "{{shown}}/{{total}}",
+    "runningCount": "{{value}} 台运行中",
+    "searchPlaceholder": "按名称或 ID 搜索服务器…",
+    "selectAll": "全选",
+    "selectedCount": "已选择 {{value}} 项",
+    "selectedLabel": "{{value}} 台服务器",
     "sort": {
-      "nameAsc": "",
-      "nameDesc": "",
-      "node": "",
-      "status": "",
-      "template": ""
+      "nameAsc": "名称 A→Z",
+      "nameDesc": "名称 Z→A",
+      "node": "节点",
+      "status": "状态",
+      "template": "模板"
     },
-    "stoppedCount": "",
+    "stoppedCount": "{{value}} 台已停止",
     "suspendDialog": {
-      "message": "",
-      "reasonLabel": "",
-      "reasonPlaceholder": "",
-      "title": ""
+      "message": "您即将暂停 <1>{{label}}</1>。",
+      "reasonLabel": "原因（可选）",
+      "reasonPlaceholder": "例如：账单问题",
+      "title": "暂停服务器"
     },
-    "suspendedCount": "",
-    "title": "",
+    "suspendedCount": "{{value}} 台已暂停",
+    "title": "所有服务器",
     "toast": {
-      "failed_other": "",
-      "queued_other": ""
+      "failed_other": "{{count}} 台服务器{{action}}失败。",
+      "queued_other": "已为 {{count}} 台服务器排队{{action}}。"
     },
-    "totalCount": ""
+    "totalCount": "共 {{value}} 台"
   }
 }

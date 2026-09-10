@@ -1,133 +1,133 @@
 {
   "chart": {
-    "avg": "",
-    "dataPoints": "",
+    "avg": "平均：{{value}}%",
+    "dataPoints": "{{value}} 个数据点 · 每 60 秒刷新一次",
     "empty": {
-      "historical": "",
-      "live": ""
+      "historical": "该时间范围内没有历史数据",
+      "live": "正在采集指标…"
     },
     "metric": {
-      "cpu": "",
-      "memory": "",
-      "network": ""
+      "cpu": "CPU",
+      "memory": "内存",
+      "network": "网络"
     },
     "metricLabel": {
-      "cpu": "",
-      "memory": "",
-      "network": ""
+      "cpu": "CPU 使用率 (%)",
+      "memory": "内存使用率 (%)",
+      "network": "网络 I/O (MB/s)"
     },
     "mode": {
-      "historical": "",
-      "live": ""
+      "historical": "历史",
+      "live": "实时"
     },
-    "networkThroughput": "",
-    "nodesOnline": "",
+    "networkThroughput": "接收：{{rx}} MB/s | 发送：{{tx}} MB/s",
+    "nodesOnline": "{{online}}/{{total}} 个节点在线",
     "subtitle": {
-      "historical": "",
-      "live": ""
+      "historical": "{{range}} 历史指标",
+      "live": "实时指标"
     },
-    "title": "",
-    "updatesEvery": ""
+    "title": "集群资源",
+    "updatesEvery": "每 5 秒更新一次"
   },
   "dashboard": {
-    "description": "",
+    "description": "{{servers}} 台服务器 · {{nodes}} 个节点 · {{users}} 位用户",
     "health": {
-      "checking": "",
-      "clusterNodes": "",
-      "database": "",
-      "down": "",
-      "lastChecked": "",
-      "ok": "",
-      "title": ""
+      "checking": "检查中…",
+      "clusterNodes": "集群节点",
+      "database": "数据库",
+      "down": "异常",
+      "lastChecked": "上次检查",
+      "ok": "正常",
+      "title": "系统健康状态"
     },
     "nav": {
-      "nodes": "",
-      "settings": ""
+      "nodes": "节点",
+      "settings": "设置"
     },
     "nodes": {
-      "addNode": "",
-      "emptyDescription": "",
-      "emptyTitle": "",
-      "manage": "",
-      "serverCount": "",
-      "title": ""
+      "addNode": "添加节点",
+      "emptyDescription": "添加节点以部署服务器。",
+      "emptyTitle": "暂无节点",
+      "manage": "管理",
+      "serverCount": "{{value}} 台服务器",
+      "title": "节点"
     },
-    "title": ""
+    "title": "管理"
   },
   "nodeAssignments": {
-    "allNodes": "",
-    "allNodesDescription": "",
-    "defaultLabel": "",
+    "allNodes": "所有节点 (*)",
+    "allNodesDescription": "可访问当前及未来的所有节点",
+    "defaultLabel": "节点访问权限",
     "dialog": {
-      "description": "",
-      "expiresAt": "",
-      "title": ""
+      "description": "选择对 {{name}} 的访问权限何时过期。",
+      "expiresAt": "过期时间",
+      "title": "设置过期时间"
     },
-    "expires": "",
-    "header": "",
-    "inheritedFromRoles": "",
-    "loading": "",
-    "noExpiration": "",
-    "noNodesFound": "",
-    "searchPlaceholder": "",
-    "selectIndividualNodes": "",
-    "setExpiration": "",
+    "expires": "过期时间：{{date}}",
+    "header": "{{label}} ({{value}})",
+    "inheritedFromRoles": "继承自角色",
+    "loading": "正在加载节点…",
+    "noExpiration": "永不过期",
+    "noNodesFound": "未找到节点",
+    "searchPlaceholder": "搜索节点…",
+    "selectIndividualNodes": "选择单个节点",
+    "setExpiration": "设置过期时间",
     "toast": {
-      "expirationUpdated": "",
-      "nodeAssigned": "",
-      "nodeUnassigned": "",
-      "wildcardAssigned": "",
-      "wildcardRemoved": ""
+      "expirationUpdated": "过期时间已更新",
+      "nodeAssigned": "已分配节点",
+      "nodeUnassigned": "已取消分配节点",
+      "wildcardAssigned": "已分配所有节点（通配符）",
+      "wildcardRemoved": "已移除通配符分配"
     },
-    "viaRole": "",
-    "wildcardDisablesIndividualSelection": ""
+    "viaRole": "通过 {{role}}",
+    "wildcardDisablesIndividualSelection": "启用通配符时无法单独选择节点"
   },
   "update": {
-    "actionRequired": "",
-    "available": "",
-    "container": "",
-    "currentVersion": "",
-    "environment": "",
-    "lastChecked": "",
-    "latest": "",
-    "latestVersion": "",
+    "actionRequired": "需要处理",
+    "available": "有可用更新",
+    "container": "容器",
+    "currentVersion": "当前版本",
+    "environment": "环境",
+    "lastChecked": "上次检查",
+    "latest": "最新",
+    "latestVersion": "最新版本",
     "logs": {
-      "live": "",
-      "title": "",
-      "waiting": ""
+      "live": "实时",
+      "title": "更新日志",
+      "waiting": "正在等待输出——拉取日志将显示在此处…"
     },
-    "never": "",
-    "new": "",
-    "ok": "",
+    "never": "从未",
+    "new": "新版本",
+    "ok": "正常",
     "progress": {
-      "complete": "",
-      "completeDescription": "",
-      "description": "",
-      "done": "",
-      "failed": "",
-      "failedDescription": "",
-      "inProgress": "",
+      "complete": "更新完成",
+      "completeDescription": "面板已重新上线。正在重新加载新版本…",
+      "description": "面板更新的实时进度——拉取输出和重启状态显示在下方。",
+      "done": "已完成",
+      "failed": "更新失败",
+      "failedDescription": "更新未能完成。请查看系统错误页面了解详情。",
+      "inProgress": "正在更新…",
       "pulling": {
-        "description": "",
-        "label": ""
+        "description": "正在从镜像仓库拉取最新镜像。视网络情况，这可能需要几分钟。",
+        "label": "正在下载更新"
       },
       "restarting": {
-        "description": "",
-        "label": ""
+        "description": "镜像已下载。正在重建容器——面板会短暂中断并自动恢复。",
+        "label": "正在重启服务"
       },
-      "restartingNotice": "",
-      "started": "",
-      "starting": "",
-      "title": ""
+      "restartingNotice": "容器正在重启。面板恢复后本页会自动重新加载（每隔几秒检查一次）。",
+      "started": "开始于 {{time}}",
+      "starting": "正在启动更新——打开日志流…",
+      "title": "面板更新"
     },
-    "standalone": "",
-    "standaloneNotice": "",
+    "standalone": "独立运行",
+    "standaloneNotice": "自动更新仅在 Docker 中运行时可用。请手动更新 Catalyst。",
     "toast": {
-      "failed": ""
+      "failed": "更新失败"
     },
-    "trigger": "",
-    "triggering": "",
-    "updateStatus": "",
-    "upToDate": ""
+    "trigger": "触发更新",
+    "triggering": "正在触发…",
+    "updateStatus": "更新状态",
+    "upToDate": "已是最新版本"
   }
 }
