@@ -46,7 +46,7 @@ function PersonalColorField({
 }
 
 export default function AppearanceSettings() {
-  const { t } = useTranslation();
+  const { t } = useTranslation('profile');
   const themePreference = useThemeStore((s) => s.themePreference);
   const setThemePreference = useThemeStore((s) => s.setThemePreference);
   const personalColors = useThemeStore((s) => s.personalColors);
@@ -65,18 +65,18 @@ export default function AppearanceSettings() {
   const hasCustom = Boolean(personalColors);
 
   const modes: { id: ThemePreference; label: string; icon: typeof Sun; hint: string }[] = [
-    { id: 'panel', label: 'Panel default', icon: LayoutTemplate, hint: `Follows admin (${panelDefault})` },
-    { id: 'light', label: 'Light', icon: Sun, hint: 'Always light' },
-    { id: 'dark', label: 'Dark', icon: Moon, hint: 'Always dark' },
-    { id: 'system', label: 'System', icon: Monitor, hint: 'Follows OS' },
+    { id: 'panel', label: t('appearance.panelDefault'), icon: LayoutTemplate, hint: t('appearance.panelDefaultHint', { panelDefault }) },
+    { id: 'light', label: t('appearance.light'), icon: Sun, hint: t('appearance.lightHint') },
+    { id: 'dark', label: t('appearance.dark'), icon: Moon, hint: t('appearance.darkHint') },
+    { id: 'system', label: t('appearance.system'), icon: Monitor, hint: t('appearance.systemHint') },
   ];
 
   return (
     <ServerTabCard>
-      <SectionHeader icon={Palette} title="Appearance" description="Your personal theme for this browser — never affects other users" />
+      <SectionHeader icon={Palette} title={t('appearance.title')} description={t('appearance.description')} />
       <div className="space-y-5">
         <div>
-          <p className="mb-2 text-xs font-medium text-foreground">Theme mode</p>
+          <p className="mb-2 text-xs font-medium text-foreground">{t('appearance.themeMode')}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {modes.map(({ id, label, icon: Icon, hint }) => {
               const active = (themePreference || 'panel') === id;
@@ -103,7 +103,7 @@ export default function AppearanceSettings() {
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium text-foreground">Accent colors</p>
+            <p className="text-xs font-medium text-foreground">{t('appearance.accentColors')}</p>
             {hasCustom && (
               <button
                 type="button"
@@ -111,25 +111,25 @@ export default function AppearanceSettings() {
                 className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
               >
                 <RotateCcw className="h-3 w-3" />
-                Panel defaults
+                {t('appearance.panelDefaults')}
               </button>
             )}
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <PersonalColorField
-              label="Primary"
+              label={t('appearance.primary')}
               value={primary}
               fallback={panelPrimary}
               onChange={(v) => setPersonalColors({ ...personalColors, primaryColor: v })}
             />
             <PersonalColorField
-              label="Secondary"
+              label={t('appearance.secondary')}
               value={secondary}
               fallback={panelSecondary}
               onChange={(v) => setPersonalColors({ ...personalColors, secondaryColor: v })}
             />
             <PersonalColorField
-              label="Accent"
+              label={t('appearance.accent')}
               value={accent}
               fallback={panelAccent}
               onChange={(v) => setPersonalColors({ ...personalColors, accentColor: v })}
@@ -141,16 +141,16 @@ export default function AppearanceSettings() {
             ))}
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            {hasCustom ? 'Using your colors in this browser.' : 'Currently using the panel defaults.'} Changes apply instantly.
+            {hasCustom ? t('appearance.usingCustom') : t('appearance.usingDefaults')} {t('appearance.changesApplyInstantly')}
           </p>
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-medium text-foreground">{t('language.label')}</p>
+          <p className="mb-2 text-xs font-medium text-foreground">{t('common:language.label')}</p>
           <div className="max-w-xs">
             <LanguageSwitcher />
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">{t('language.description')}</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">{t('common:language.description')}</p>
         </div>
       </div>
     </ServerTabCard>

@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Settings, Server, Loader2 } from 'lucide-react';
 import { useUpdateApiKey } from '../../hooks/useApiKeys';
 import { type ApiKey } from '../../services/apiKeys';
 import { describeError } from '../../utils/errors';
+import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -16,6 +18,7 @@ import {
  DialogTitle,
 } from '@/components/ui/dialog';
 import { reportSystemError } from '../../services/api/systemErrors';
+import { formatDateTime } from '@/i18n/format';
 
 interface EditApiKeyDialogProps {
  apiKey: ApiKey;
@@ -24,6 +27,7 @@ interface EditApiKeyDialogProps {
 }
 
 export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProps) {
+ const { t } = useTranslation('profile');
  const updateApiKey = useUpdateApiKey();
 
  const [name, setName] = useState(apiKey.name || '');
@@ -56,17 +60,17 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  setError(null);
 
  if (!name.trim()) {
- setError('Please enter a name for the API key.');
+ setError(t('apiKeys.editDialog.nameRequired'));
  return;
  }
 
  if (rateLimitMax < 1) {
- setError('Rate limit must be at least 1 request.');
+ setError(t('apiKeys.editDialog.rateLimitRequired'));
  return;
  }
 
  if (rateLimitTimeWindow < 1) {
- setError('Time window must be at least 1 second.');
+ setError(t('apiKeys.editDialog.timeWindowRequired'));
  return;
  }
 
@@ -89,7 +93,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'update API key' },
  });
- setError(err?.message || 'Failed to update API key.');
+ setError(getLocalizedErrorMessage(err));
  }
  };
 
@@ -97,8 +101,8 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
  <DialogContent size="lg">
  <DialogHeader icon={<Settings className="h-4 w-4" />}>
- <DialogTitle>Edit API key</DialogTitle>
- <DialogDescription>Update settings for &quot;{apiKey.name || 'Unnamed Key'}&quot;.</DialogDescription>
+ <DialogTitle>{t('apiKeys.editDialog.title')}</DialogTitle>
+ <DialogDescription>{t('apiKeys.editDialog.description', { name: apiKey.name || t('unnamedKey') })}</DialogDescription>
  </DialogHeader>
  <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
  <DialogBody className="space-y-5">
@@ -106,7 +110,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <div className="flex items-center gap-1.5 rounded-md border border-warning/30/40 bg-warning/5 px-3 py-1.5 dark:border-warning/20 dark:bg-warning/15">
  <Server className="h-3.5 w-3.5 shrink-0 text-warning dark:text-warning" />
  <span className="text-xs text-warning dark:text-warning">
- Agent key — editing name and status is safe; rate limits affect agent behavior.
+ {t('apiKeys.editDialog.agentNotice')}
  </span>
  </div>
  )}
@@ -118,22 +122,22 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  )}
 
  <div className="space-y-1.5">
- <label className="text-xs font-medium text-foreground dark:text-foreground">Name *</label>
+ <label className="text-xs font-medium text-foreground dark:text-foreground">{t('apiKeys.form.name')}</label>
  <Input
  type="text"
- placeholder="e.g., Billing System Integration"
+ placeholder={t('apiKeys.form.namePlaceholder')}
  value={name}
  onChange={(e) => setName(e.target.value)}
  required
  />
- <p className="text-[11px] text-muted-foreground">A descriptive name to identify this API key.</p>
+ <p className="text-[11px] text-muted-foreground">{t('apiKeys.form.nameHint')}</p>
  </div>
 
  <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2/50 px-4 py-3 dark:bg-surface-2/30">
  <div>
- <span className="text-sm font-medium text-foreground dark:text-foreground">Enabled</span>
+ <span className="text-sm font-medium text-foreground dark:text-foreground">{t('common:actions.enabled')}</span>
  <p className="text-[11px] text-muted-foreground">
- Disabled keys will be rejected by the API.
+ {t('apiKeys.editDialog.disabledHint')}
  </p>
  </div>
  <Switch
@@ -143,7 +147,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  </div>
 
  <div className="space-y-1.5">
- <label className="text-xs font-medium text-foreground dark:text-foreground">Rate Limit</label>
+ <label className="text-xs font-medium text-foreground dark:text-foreground">{t('apiKeys.form.rateLimit')}</label>
  <div className="flex items-center gap-2">
  <Input
  type="number"
@@ -153,7 +157,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  onChange={(e) => setRateLimitMax(Number(e.target.value))}
  className="w-32"
  />
- <span className="text-sm text-muted-foreground">requests per</span>
+ <span className="text-sm text-muted-foreground">{t('apiKeys.editDialog.requestsPer')}</span>
  <Input
  type="number"
  min={1}
@@ -162,45 +166,45 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  onChange={(e) => setRateLimitTimeWindow(Number(e.target.value))}
  className="w-24"
  />
- <span className="text-sm text-muted-foreground">seconds</span>
+ <span className="text-sm text-muted-foreground">{t('apiKeys.editDialog.seconds')}</span>
  </div>
- <p className="text-[11px] text-muted-foreground">Maximum requests allowed in the given time window.</p>
+ <p className="text-[11px] text-muted-foreground">{t('apiKeys.editDialog.rateLimitHint')}</p>
  </div>
 
  <div className="rounded-lg border border-border/50 bg-surface-2/40 px-4 py-3 dark:bg-surface-2/20">
  <div className="flex items-center justify-between gap-2">
- <span className="text-xs font-medium text-foreground">Permissions</span>
- <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Read-only</span>
+ <span className="text-xs font-medium text-foreground">{t('apiKeys.form.permissions')}</span>
+ <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('apiKeys.editDialog.readOnly')}</span>
  </div>
  <p className="mt-1 text-[11px] text-muted-foreground">
- Permissions and expiry are fixed at creation. Revoke this key and create a new one to change them.
+ {t('apiKeys.editDialog.permissionsFixed')}
  </p>
  <div className="mt-2 flex flex-wrap gap-1.5">
  {apiKey.allPermissions ? (
- <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">All permissions</span>
+ <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{t('allPermissions')}</span>
  ) : apiKey.permissions?.length ? (
  apiKey.permissions.map((p) => (
  <span key={p} className="rounded-md border border-border/50 bg-card px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{p}</span>
  ))
  ) : (
- <span className="text-[11px] text-muted-foreground">No specific permissions listed</span>
+ <span className="text-[11px] text-muted-foreground">{t('apiKeys.editDialog.noPermissions')}</span>
  )}
  </div>
  {apiKey.expiresAt && (
- <p className="mt-2 text-[11px] text-muted-foreground">Expires: {new Date(apiKey.expiresAt).toLocaleString()}</p>
+ <p className="mt-2 text-[11px] text-muted-foreground">{t('apiKeys.editDialog.expires', { date: formatDateTime(apiKey.expiresAt) })}</p>
  )}
  </div>
  </DialogBody>
  <DialogFooter>
- <Button variant="outline" size="sm" type="button" onClick={onClose}>Cancel</Button>
+ <Button variant="outline" size="sm" type="button" onClick={onClose}>{t('common:actions.cancel')}</Button>
  <Button size="sm" type="submit" disabled={updateApiKey.isPending}>
  {updateApiKey.isPending ? (
  <>
  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
- Saving…
+ {t('apiKeys.editDialog.saving')}
  </>
  ) : (
- 'Save changes'
+ t('apiKeys.editDialog.save')
  )}
  </Button>
  </DialogFooter>

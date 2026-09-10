@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Copy, CheckCircle2, AlertTriangle, Key, Shield, ShieldCheck, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useCreateApiKey, usePermissionsCatalog, useMyPermissions } from '../../hooks/useApiKeys';
 import { CreateApiKeyRequest, PermissionCategory } from '../../services/apiKeys';
@@ -22,19 +23,19 @@ interface CreateApiKeyDialogProps {
  onOpenChange: (open: boolean) => void;
 }
 
-const expirationOptions = [
- { label: 'Never expires', value: 0 },
- { label: '7 days', value: 604800 },
- { label: '30 days', value: 2592000 },
- { label: '90 days (recommended)', value: 7776000 },
- { label: '180 days', value: 15552000 },
- { label: '1 year', value: 31536000 },
-];
-
 export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogProps) {
+ const { t } = useTranslation('profile');
  const createApiKey = useCreateApiKey();
  const { data: catalog, isLoading: catalogLoading } = usePermissionsCatalog();
  const { data: myPermissions = [] } = useMyPermissions();
+ const expirationOptions = [
+ { label: t('apiKeys.expiration.never'), value: 0 },
+ { label: t('apiKeys.expiration.days7'), value: 604800 },
+ { label: t('apiKeys.expiration.days30'), value: 2592000 },
+ { label: t('apiKeys.expiration.days90'), value: 7776000 },
+ { label: t('apiKeys.expiration.days180'), value: 15552000 },
+ { label: t('apiKeys.expiration.year1'), value: 31536000 },
+ ];
 
  const [formData, setFormData] = useState<CreateApiKeyRequest & { permissions: string[] }>({
  name: '',
@@ -105,11 +106,11 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
  if (!formData.name.trim()) {
- toast.error('Please enter a name for the API key');
+ toast.error(t('apiKeys.createDialog.nameRequired'));
  return;
  }
  if (!formData.allPermissions && formData.permissions.length === 0) {
- toast.error('Select at least one permission or enable "All my permissions"');
+ toast.error(t('apiKeys.createDialog.permissionRequired'));
  return;
  }
  try {
@@ -126,7 +127,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  if (createdKey) {
  navigator.clipboard.writeText(createdKey);
  setCopied(true);
- toast.success('API key copied to clipboard');
+ toast.success(t('apiKeys.createDialog.copied'));
  setTimeout(() => setCopied(false), 2000);
  }
  };
@@ -154,37 +155,37 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
  <DialogContent size="lg">
  <DialogHeader icon={<Key className="h-4 w-4" />}>
- <DialogTitle>{createdKey ? 'API key created' : 'Create API key'}</DialogTitle>
+ <DialogTitle>{createdKey ? t('apiKeys.createDialog.createdTitle') : t('apiKeys.createDialog.title')}</DialogTitle>
  <DialogDescription>
  {createdKey
- ? 'Copy your API key now — it won\'t be shown again.'
- : 'Generate a new key for automated access to Catalyst.'}
+ ? t('apiKeys.createDialog.createdDescription')
+ : t('apiKeys.createDialog.description')}
  </DialogDescription>
  </DialogHeader>
  {!createdKey ? (
  <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
  <DialogBody className="space-y-5">
  <div className="space-y-1.5">
- <label className="text-xs font-medium text-foreground dark:text-foreground">Name *</label>
+ <label className="text-xs font-medium text-foreground dark:text-foreground">{t('apiKeys.form.name')}</label>
  <Input
  type="text"
- placeholder="e.g., Billing System Integration"
+ placeholder={t('apiKeys.form.namePlaceholder')}
  value={formData.name}
  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
  required
  />
- <p className="text-[11px] text-muted-foreground">A descriptive name to identify this API key.</p>
+ <p className="text-[11px] text-muted-foreground">{t('apiKeys.form.nameHint')}</p>
  </div>
 
  <div className="space-y-2">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2">
  <Shield className="h-4 w-4 text-primary-600 dark:text-primary-400" />
- <label className="text-xs font-medium text-foreground dark:text-foreground">Permissions</label>
+ <label className="text-xs font-medium text-foreground dark:text-foreground">{t('apiKeys.form.permissions')}</label>
  </div>
  {selectedCount >= 0 && (
  <Badge variant="outline" className="text-[10px]">
- {selectedCount} permission{selectedCount !== 1 ? 's' : ''} selected
+ {t('apiKeys.form.selectedCount', { count: selectedCount })}
  </Badge>
  )}
  </div>
@@ -194,10 +195,14 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  <ShieldCheck className="h-4 w-4 text-success dark:text-success" />
  <div>
  <span className="text-sm font-medium text-foreground dark:text-foreground">
- All my permissions
+ {t('apiKeys.form.allMine')}
  </span>
  <p className="text-[11px] text-muted-foreground">
- Key inherits all your current permissions ({userHasWildcard ? 'super admin' : `${myPermissions.length} permissions`})
+ {t('apiKeys.form.inherits', {
+ summary: userHasWildcard
+ ? t('apiKeys.form.inheritSuperAdmin')
+ : t('apiKeys.form.inheritCount', { count: myPermissions.length }),
+ })}
  </p>
  </div>
  </div>
@@ -213,11 +218,11 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  {catalogLoading ? (
  <div className="flex items-center justify-center py-8">
  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
- <span className="ml-2 text-sm text-muted-foreground">Loading permissions…</span>
+ <span className="ml-2 text-sm text-muted-foreground">{t('apiKeys.form.loading')}</span>
  </div>
  ) : availablePermissions.length === 0 ? (
  <div className="px-4 py-6 text-center text-sm text-muted-foreground">
- No permissions available
+ {t('apiKeys.form.noneAvailable')}
  </div>
  ) : (
  availablePermissions.map((cat) => {
@@ -283,13 +288,13 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
 
  {!formData.allPermissions && selectedCount === 0 && (
  <p className="text-[11px] text-warning dark:text-warning">
- ⚠ Select at least one permission above
+ ⚠ {t('apiKeys.form.selectAtLeastOne')}
  </p>
  )}
  </div>
 
  <div className="space-y-1.5">
- <label className="text-xs font-medium text-foreground dark:text-foreground">Expiration</label>
+ <label className="text-xs font-medium text-foreground dark:text-foreground">{t('apiKeys.form.expiration')}</label>
  <select
  value={formData.expiresIn}
  onChange={(e) => setFormData({ ...formData, expiresIn: Number(e.target.value) })}
@@ -302,7 +307,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </div>
 
  <div className="space-y-1.5">
- <label className="text-xs font-medium text-foreground dark:text-foreground">Rate Limit</label>
+ <label className="text-xs font-medium text-foreground dark:text-foreground">{t('apiKeys.form.rateLimit')}</label>
  <div className="flex items-center gap-2">
  <Input
  type="number"
@@ -312,15 +317,15 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  onChange={(e) => setFormData({ ...formData, rateLimitMax: Number(e.target.value) })}
  className="w-32"
  />
- <span className="text-sm text-muted-foreground">requests per minute</span>
+ <span className="text-sm text-muted-foreground">{t('apiKeys.form.perMinute')}</span>
  </div>
- <p className="text-[11px] text-muted-foreground">Maximum requests allowed per minute.</p>
+ <p className="text-[11px] text-muted-foreground">{t('apiKeys.form.rateLimitHint')}</p>
  </div>
  </DialogBody>
  <DialogFooter>
- <Button variant="outline" size="sm" type="button" onClick={handleClose}>Cancel</Button>
+ <Button variant="outline" size="sm" type="button" onClick={handleClose}>{t('common:actions.cancel')}</Button>
  <Button size="sm" type="submit" disabled={createApiKey.isPending || (!formData.allPermissions && formData.permissions.length === 0)}>
- {createApiKey.isPending ? 'Creating…' : 'Create API key'}
+ {createApiKey.isPending ? t('apiKeys.createDialog.creating') : t('apiKeys.createDialog.submit')}
  </Button>
  </DialogFooter>
  </form>
@@ -330,12 +335,12 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  <div className="flex items-start gap-2.5 rounded-lg border border-warning/30/40 bg-warning/5 p-3 dark:border-warning/20 dark:bg-warning/15">
  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning dark:text-warning" />
  <p className="text-sm text-warning dark:text-warning">
- Make sure to copy your API key now. You won&apos;t be able to see it again!
+ {t('apiKeys.createDialog.keepCopyWarning')}
  </p>
  </div>
 
  <div className="space-y-1.5">
- <label className="text-xs font-medium text-foreground dark:text-foreground">Your API Key</label>
+ <label className="text-xs font-medium text-foreground dark:text-foreground">{t('apiKeys.createDialog.yourKey')}</label>
  <div className="flex min-w-0 gap-2">
  <input
  readOnly
@@ -357,7 +362,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </div>
 
  <div className="min-w-0 rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
- <h4 className="mb-2 text-xs font-semibold text-foreground dark:text-foreground">Usage Example</h4>
+ <h4 className="mb-2 text-xs font-semibold text-foreground dark:text-foreground">{t('apiKeys.createDialog.usageExample')}</h4>
  <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all text-xs text-foreground dark:text-foreground">
  <code>{`curl -H "Authorization: Bearer ${createdKey}" \\
  ${window.location.origin}/api/servers`}</code>
@@ -365,7 +370,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </div>
  </DialogBody>
  <DialogFooter>
- <Button size="sm" onClick={handleClose}>Done</Button>
+ <Button size="sm" onClick={handleClose}>{t('done')}</Button>
  </DialogFooter>
  </>
  )}
