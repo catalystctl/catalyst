@@ -25,6 +25,8 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { hasNodeAccess, getUserAccessibleNodes } from '../lib/permissions.js';
 import { decideServerAccess, isFullAdminRole } from '../lib/server-access.js';
 import { openSseStream } from '../utils/sse.js';
+import { apiError } from '../lib/http-error';
+import { ErrorCodes } from '../shared-types';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const CLEANUP_INTERVAL_MS = 60_000;
@@ -108,12 +110,12 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
           headers: fromNodeHeaders(request.headers as ReqHeaders),
         });
         if (!session) {
-          reply.status(401).send({ error: 'Unauthorized' });
+          apiError(reply, 401, ErrorCodes.UNAUTHORIZED, 'Unauthorized');
           return;
         }
         userId = session.user.id;
       } catch {
-        reply.status(401).send({ error: 'Unauthorized' });
+        apiError(reply, 401, ErrorCodes.UNAUTHORIZED, 'Unauthorized');
         return;
       }
 
@@ -132,12 +134,12 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         });
 
         if (!server) {
-          reply.status(404).send({ error: 'Server not found' });
+          apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
           return;
         }
 
         if (!userId) {
-          reply.status(401).send({ error: 'Unauthorized' });
+          apiError(reply, 401, ErrorCodes.UNAUTHORIZED, 'Unauthorized');
           return;
         }
 
@@ -153,7 +155,7 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         });
 
         if (!decision.allowed) {
-          reply.status(403).send({ error: 'Access denied' });
+          apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Access denied');
           return;
         }
         serverNodeId = server.nodeId;
@@ -164,7 +166,7 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         // Do NOT fan out all servers on accessible nodes without node.update.
         // admin.read alone is NOT full-admin for cross-tenant event fanout.
         if (!userId) {
-          reply.status(401).send({ error: 'Unauthorized' });
+          apiError(reply, 401, ErrorCodes.UNAUTHORIZED, 'Unauthorized');
           return;
         }
 
@@ -210,7 +212,12 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       // Enforce SSE subscriber caps BEFORE opening the stream (JSON error path).
       const MAX_SSE_EVENTS_PER_SERVER = 100;
       if (!isGlobal && wsGateway.getSseEventSubscriberCount(serverId) >= MAX_SSE_EVENTS_PER_SERVER) {
-        reply.status(503).send({ error: 'Too many event subscribers. Please try again later.' });
+        apiError(
+          reply,
+          503,
+          ErrorCodes.SSE_SUBSCRIBER_LIMIT_REACHED,
+          'Too many event subscribers. Please try again later.',
+        );
         return;
       }
 

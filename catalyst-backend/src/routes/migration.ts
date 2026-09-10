@@ -8,6 +8,8 @@ import { prisma } from "../db.js";
 import { MigrationService } from "../services/migration/index.js";
 
 import { serialize } from "../utils/serialize.js";
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 import { captureSystemError } from "../services/error-logger.js";
 import { describeError } from "../utils/describe-error.js";
 import { SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../utils/java-memory.js";
@@ -34,7 +36,7 @@ export async function migrationRoutes(app: FastifyInstance) {
   const requireAdmin = (request: FastifyRequest, reply: FastifyReply) => {
     const perms: string[] = (request as any).user?.permissions ?? [];
     if (!perms.includes('*') && !perms.includes('admin.write')) {
-      reply.status(403).send({ error: "Admin permission required" });
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin permission required");
       return false;
     }
     return true;
@@ -88,7 +90,7 @@ export async function migrationRoutes(app: FastifyInstance) {
 
       reply.send(serialize(nodesWithUsage));
     } catch (err: any) {
-      reply.status(500).send({ error: err.message });
+      apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, err.message);
     }
   });
 
@@ -103,7 +105,7 @@ export async function migrationRoutes(app: FastifyInstance) {
     const { url, key, clientApiKey } = body;
 
     if (!url || !key) {
-      reply.status(400).send({ error: "Panel URL and API key are required" });
+      apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Panel URL and API key are required");
       return;
     }
 
@@ -120,7 +122,7 @@ export async function migrationRoutes(app: FastifyInstance) {
         metadata: { context: 'migration_test' },
       }).catch(() => {});
       logger.error({ err }, "Migration test failed");
-      reply.status(500).send({ error: err.message || "Connection test failed" });
+      apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, err.message || "Connection test failed");
     }
   });
 
@@ -144,13 +146,13 @@ export async function migrationRoutes(app: FastifyInstance) {
     const { url, key, clientApiKey, scope, nodeMappings, serverMappings } = body;
 
     if (!url || !key) {
-      reply.status(400).send({ error: "Panel URL and API key are required" });
+      apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Panel URL and API key are required");
       return;
     }
 
     const migrationScope = scope || "full";
     if (!["full", "node", "server"].includes(migrationScope)) {
-      reply.status(400).send({ error: "scope must be full, node, or server" });
+      apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "scope must be full, node, or server");
       return;
     }
 
@@ -160,13 +162,13 @@ export async function migrationRoutes(app: FastifyInstance) {
     // Validate mappings based on scope
     if (migrationScope === "full" || migrationScope === "node") {
       if (Object.keys(mappings).length === 0) {
-        reply.status(400).send({ error: "nodeMappings is required — map each Pterodactyl node to a Catalyst node" });
+        apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "nodeMappings is required — map each Pterodactyl node to a Catalyst node");
         return;
       }
     }
     if (migrationScope === "server") {
       if (Object.keys(srvMappings).length === 0) {
-        reply.status(400).send({ error: "serverMappings is required — map each Pterodactyl server to a Catalyst node" });
+        apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "serverMappings is required — map each Pterodactyl server to a Catalyst node");
         return;
       }
     }
@@ -185,6 +187,7 @@ export async function migrationRoutes(app: FastifyInstance) {
     if (offlineTargets.length > 0) {
       reply.status(400).send({
         error: "Target Catalyst nodes must be online before migration",
+        code: ErrorCodes.MIGRATION_TARGET_NODES_OFFLINE,
         offlineNodes: offlineTargets.map((n) => ({ id: n.id, name: n.name })),
       });
       return;
@@ -192,7 +195,7 @@ export async function migrationRoutes(app: FastifyInstance) {
 
     const missingIds = [...allTargetNodeIds].filter((id) => !targetNodes.some((n) => n.id === id));
     if (missingIds.length > 0) {
-      reply.status(400).send({ error: "One or more target Catalyst nodes do not exist" });
+      apiError(reply, 400, ErrorCodes.MIGRATION_TARGET_NODES_NOT_FOUND, "One or more target Catalyst nodes do not exist");
       return;
     }
 
@@ -204,6 +207,7 @@ export async function migrationRoutes(app: FastifyInstance) {
       if (activeJob) {
         reply.status(409).send({
           error: "A migration is already in progress",
+          code: ErrorCodes.MIGRATION_IN_PROGRESS,
           jobId: activeJob.id,
         });
         return;
@@ -217,6 +221,7 @@ export async function migrationRoutes(app: FastifyInstance) {
       if (recheck) {
         reply.status(409).send({
           error: "A migration is already in progress",
+          code: ErrorCodes.MIGRATION_IN_PROGRESS,
           jobId: recheck.id,
         });
         return;
@@ -265,6 +270,7 @@ export async function migrationRoutes(app: FastifyInstance) {
         await prisma.migrationJob.delete({ where: { id: job.id } }).catch(() => {});
         reply.status(409).send({
           error: "A migration is already in progress",
+          code: ErrorCodes.MIGRATION_IN_PROGRESS,
           jobId: rivals[0].id,
         });
         return;
@@ -333,7 +339,7 @@ export async function migrationRoutes(app: FastifyInstance) {
         stack: err.stack,
         metadata: { route: '/api/admin/migration' },
       }).catch(() => {});
-      reply.status(500).send({ error: err.message || "Failed to start migration" });
+      apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, err.message || "Failed to start migration");
     }
   });
 
@@ -349,7 +355,7 @@ export async function migrationRoutes(app: FastifyInstance) {
       const jobs = await service.listMigrations();
       reply.send(serialize(jobs));
     } catch (err: any) {
-      reply.status(500).send({ error: err.message });
+      apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, err.message);
     }
   });
 
@@ -366,12 +372,12 @@ export async function migrationRoutes(app: FastifyInstance) {
       const service = getMigrationService(logger);
       const job = await service.getMigrationStatus(jobId);
       if (!job) {
-        reply.status(404).send({ error: "Migration job not found" });
+        apiError(reply, 404, ErrorCodes.MIGRATION_NOT_FOUND, "Migration job not found");
         return;
       }
       reply.send(serialize(job));
     } catch (err: any) {
-      reply.status(500).send({ error: err.message });
+      apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, err.message);
     }
   });
 
@@ -388,7 +394,7 @@ export async function migrationRoutes(app: FastifyInstance) {
       await service.pauseMigration(jobId);
       reply.send({ success: true });
     } catch (err: any) {
-      reply.status(500).send({ error: err.message });
+      apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, err.message);
     }
   });
 
@@ -405,7 +411,7 @@ export async function migrationRoutes(app: FastifyInstance) {
       await service.resumeMigration(jobId);
       reply.send({ success: true });
     } catch (err: any) {
-      reply.status(400).send({ error: err.message });
+      apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, err.message);
     }
   });
 
@@ -422,7 +428,7 @@ export async function migrationRoutes(app: FastifyInstance) {
       await service.cancelMigration(jobId);
       reply.send({ success: true });
     } catch (err: any) {
-      reply.status(500).send({ error: err.message });
+      apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, err.message);
     }
   });
 
@@ -461,7 +467,7 @@ export async function migrationRoutes(app: FastifyInstance) {
         totalPages: Math.ceil(total / limit),
       }));
     } catch (err: any) {
-      reply.status(500).send({ error: err.message });
+      apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, err.message);
     }
   });
 
@@ -480,12 +486,12 @@ export async function migrationRoutes(app: FastifyInstance) {
       });
 
       if (!step || step.jobId !== jobId) {
-        reply.status(404).send({ error: "Step not found" });
+        apiError(reply, 404, ErrorCodes.MIGRATION_STEP_NOT_FOUND, "Step not found");
         return;
       }
 
       if (step.status !== "failed") {
-        reply.status(400).send({ error: "Only failed steps can be retried" });
+        apiError(reply, 400, ErrorCodes.MIGRATION_STEP_NOT_RETRYABLE, "Only failed steps can be retried");
         return;
       }
 
@@ -493,7 +499,7 @@ export async function migrationRoutes(app: FastifyInstance) {
       await service.retryStep(jobId, stepId);
       reply.send({ success: true });
     } catch (err: any) {
-      reply.status(500).send({ error: err.message });
+      apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, err.message);
     }
   });
 }

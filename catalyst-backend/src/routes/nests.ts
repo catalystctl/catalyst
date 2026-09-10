@@ -2,6 +2,8 @@ import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { hasPermission } from "../lib/permissions";
 import { serialize } from '../utils/serialize';
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 const ensurePermission = async (
   userId: string,
@@ -10,7 +12,7 @@ const ensurePermission = async (
 ) => {
   const has = await hasPermission(prisma, userId, requiredPermission);
   if (!has) {
-    reply.status(403).send({ error: "Insufficient permissions" });
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
     return false;
   }
   return true;
@@ -28,7 +30,7 @@ const ensureAdmin = async (userId: string, reply: FastifyReply) => {
     permissions.includes("*") ||
     permissions.includes("admin.write");
   if (!isAdmin) {
-    reply.status(403).send({ error: "Admin access required" });
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access required");
     return false;
   }
   return true;
@@ -81,7 +83,7 @@ export async function nestRoutes(app: FastifyInstance) {
       });
 
       if (!nest) {
-        return reply.status(404).send({ error: "Nest not found" });
+        return apiError(reply, 404, ErrorCodes.NEST_NOT_FOUND, "Nest not found");
       }
 
       reply.send(serialize({ success: true, data: nest }));
@@ -103,7 +105,7 @@ export async function nestRoutes(app: FastifyInstance) {
       };
 
       if (!name || !name.trim()) {
-        return reply.status(400).send({ error: "Nest name is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Nest name is required");
       }
 
       const existing = await prisma.nest.findUnique({
@@ -111,7 +113,7 @@ export async function nestRoutes(app: FastifyInstance) {
       });
 
       if (existing) {
-        return reply.status(409).send({ error: "A nest with this name already exists" });
+        return apiError(reply, 409, ErrorCodes.NEST_NAME_TAKEN, "A nest with this name already exists");
       }
 
       const nest = await prisma.nest.create({
@@ -159,7 +161,7 @@ export async function nestRoutes(app: FastifyInstance) {
       });
 
       if (!nest) {
-        return reply.status(404).send({ error: "Nest not found" });
+        return apiError(reply, 404, ErrorCodes.NEST_NOT_FOUND, "Nest not found");
       }
 
       if (name !== undefined && name.trim()) {
@@ -167,7 +169,7 @@ export async function nestRoutes(app: FastifyInstance) {
           where: { name: name.trim(), id: { not: nestId } },
         });
         if (existing) {
-          return reply.status(409).send({ error: "A nest with this name already exists" });
+          return apiError(reply, 409, ErrorCodes.NEST_NAME_TAKEN, "A nest with this name already exists");
         }
       }
 
@@ -214,7 +216,7 @@ export async function nestRoutes(app: FastifyInstance) {
       });
 
       if (!nest) {
-        return reply.status(404).send({ error: "Nest not found" });
+        return apiError(reply, 404, ErrorCodes.NEST_NOT_FOUND, "Nest not found");
       }
 
       // Disconnect templates before deleting (sets nestId to null)

@@ -2,6 +2,8 @@ import { prisma } from "../db.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { hasPermission } from "../lib/permissions";
 import { serialize } from "../utils/serialize";
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 const ensurePermission = async (
 	userId: string,
@@ -10,7 +12,7 @@ const ensurePermission = async (
 ) => {
 	const has = await hasPermission(prisma, userId, requiredPermission);
 	if (!has) {
-		reply.status(403).send({ error: "Insufficient permissions" });
+		apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 		return false;
 	}
 	return true;
@@ -28,7 +30,7 @@ const ensureAdmin = async (userId: string, reply: FastifyReply) => {
 		permissions.includes("*") ||
 		permissions.includes("admin.write");
 	if (!isAdmin) {
-		reply.status(403).send({ error: "Admin access required" });
+		apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access required");
 		return false;
 	}
 	return true;
@@ -89,7 +91,7 @@ export async function locationRoutes(app: FastifyInstance) {
 			});
 
 			if (!location) {
-				return reply.status(404).send({ error: "Location not found" });
+				return apiError(reply, 404, ErrorCodes.LOCATION_NOT_FOUND, "Location not found");
 			}
 
 			reply.send(serialize({ success: true, data: location }));
@@ -109,7 +111,7 @@ export async function locationRoutes(app: FastifyInstance) {
 			};
 
 			if (!name || !name.trim()) {
-				return reply.status(400).send({ error: "Location name is required" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Location name is required");
 			}
 
 			const existing = await prisma.location.findUnique({
@@ -117,9 +119,7 @@ export async function locationRoutes(app: FastifyInstance) {
 			});
 
 			if (existing) {
-				return reply
-					.status(409)
-					.send({ error: "A location with this name already exists" });
+				return apiError(reply, 409, ErrorCodes.LOCATION_NAME_TAKEN, "A location with this name already exists");
 			}
 
 			const location = await prisma.location.create({
@@ -163,7 +163,7 @@ export async function locationRoutes(app: FastifyInstance) {
 			});
 
 			if (!location) {
-				return reply.status(404).send({ error: "Location not found" });
+				return apiError(reply, 404, ErrorCodes.LOCATION_NOT_FOUND, "Location not found");
 			}
 
 			if (name !== undefined && name.trim()) {
@@ -171,9 +171,7 @@ export async function locationRoutes(app: FastifyInstance) {
 					where: { name: name.trim(), id: { not: locationId } },
 				});
 				if (existing) {
-					return reply
-						.status(409)
-						.send({ error: "A location with this name already exists" });
+					return apiError(reply, 409, ErrorCodes.LOCATION_NAME_TAKEN, "A location with this name already exists");
 				}
 			}
 
@@ -219,14 +217,16 @@ export async function locationRoutes(app: FastifyInstance) {
 			});
 
 			if (!location) {
-				return reply.status(404).send({ error: "Location not found" });
+				return apiError(reply, 404, ErrorCodes.LOCATION_NOT_FOUND, "Location not found");
 			}
 
 			if (location._count.nodes > 0) {
-				return reply.status(409).send({
-					error:
-						"Cannot delete location with existing nodes. Reassign or delete all nodes in this location first.",
-				});
+				return apiError(
+					reply,
+					409,
+					ErrorCodes.LOCATION_IN_USE,
+					"Cannot delete location with existing nodes. Reassign or delete all nodes in this location first.",
+				);
 			}
 
 			await prisma.location.delete({

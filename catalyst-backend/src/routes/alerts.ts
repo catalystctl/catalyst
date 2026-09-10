@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
+import { apiError } from '../lib/http-error';
+import { ErrorCodes } from '../shared-types';
 
 export async function alertRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -33,7 +35,7 @@ export async function alertRoutes(app: FastifyInstance) {
       select: { id: true, ownerId: true, nodeId: true },
     });
     if (!server) {
-      reply.status(404).send({ error: 'Server not found' });
+      apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
       return null;
     }
     if (isAdmin || server.ownerId === userId) {
@@ -60,7 +62,7 @@ export async function alertRoutes(app: FastifyInstance) {
     if (hasNodeAccessToServer) {
       return server;
     }
-    reply.status(403).send({ error: 'Forbidden' });
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Forbidden');
     return null;
   };
 
@@ -84,39 +86,53 @@ export async function alertRoutes(app: FastifyInstance) {
 
       // Validation
       if (!name || !type || !target || !conditions || !actions) {
-        return reply.status(400).send({
-          error: 'Missing required fields: name, type, target, conditions, actions',
-        });
+        return apiError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'Missing required fields: name, type, target, conditions, actions',
+          { params: { fields: 'name, type, target, conditions, actions' } },
+        );
       }
 
       // Validate type
       const validTypes = ['resource_threshold', 'node_offline', 'server_crashed'];
       if (!validTypes.includes(type)) {
-        return reply.status(400).send({
-          error: `Invalid type. Must be one of: ${validTypes.join(', ')}`,
-        });
+        return apiError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          `Invalid type. Must be one of: ${validTypes.join(', ')}`,
+          { params: { types: validTypes.join(', ') } },
+        );
       }
 
       // Validate target
       const validTargets = ['server', 'node', 'global'];
       if (!validTargets.includes(target)) {
-        return reply.status(400).send({
-          error: `Invalid target. Must be one of: ${validTargets.join(', ')}`,
-        });
+        return apiError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          `Invalid target. Must be one of: ${validTargets.join(', ')}`,
+          { params: { targets: validTargets.join(', ') } },
+        );
       }
 
       // resource_threshold rules with target=global are not implemented (no fleet aggregation).
       // Reject at create time so operators don't configure silent no-ops.
       if (type === 'resource_threshold' && target === 'global') {
-        return reply.status(400).send({
-          error:
-            'resource_threshold rules with target "global" are not supported; use target "server" or "node"',
-        });
+        return apiError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'resource_threshold rules with target "global" are not supported; use target "server" or "node"',
+        );
       }
 
       // Validate targetId
       if ((target === 'server' || target === 'node') && !targetId) {
-        return reply.status(400).send({ error: 'targetId is required for server or node rules' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'targetId is required for server or node rules');
       }
 
       if (target === 'server' && targetId) {
@@ -135,13 +151,13 @@ export async function alertRoutes(app: FastifyInstance) {
       if (target === 'node' && targetId) {
         const node = await prisma.node.findUnique({ where: { id: targetId }, select: { id: true } });
         if (!node) {
-          return reply.status(404).send({ error: 'Node not found' });
+          return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, 'Node not found');
         }
       }
 
       // Check admin permissions for global rules
       if ((target === 'global' || target === 'node') && !isAdmin) {
-        return reply.status(403).send({ error: 'Admin access required for this alert rule target' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin access required for this alert rule target');
       }
 
       // Create alert rule
@@ -215,10 +231,10 @@ export async function alertRoutes(app: FastifyInstance) {
       });
 
       if (!rule) {
-        return reply.status(404).send({ error: 'Alert rule not found' });
+        return apiError(reply, 404, ErrorCodes.ALERT_RULE_NOT_FOUND, 'Alert rule not found');
       }
       if (!isAdmin && rule.userId !== user.userId) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Forbidden');
       }
 
       reply.send(serialize({ rule }));
@@ -243,13 +259,13 @@ export async function alertRoutes(app: FastifyInstance) {
 
       const existing = await prisma.alertRule.findUnique({ where: { id: ruleId } });
       if (!existing) {
-        return reply.status(404).send({ error: 'Alert rule not found' });
+        return apiError(reply, 404, ErrorCodes.ALERT_RULE_NOT_FOUND, 'Alert rule not found');
       }
       if (!isAdmin && existing.userId !== user.userId) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Forbidden');
       }
       if ((existing.target === 'global' || existing.target === 'node') && !isAdmin) {
-        return reply.status(403).send({ error: 'Admin access required for this alert rule target' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin access required for this alert rule target');
       }
       if (existing.target === 'server' && existing.targetId) {
         const server = await ensureServerAccess({
@@ -301,13 +317,13 @@ export async function alertRoutes(app: FastifyInstance) {
 
       const existing = await prisma.alertRule.findUnique({ where: { id: ruleId } });
       if (!existing) {
-        return reply.status(404).send({ error: 'Alert rule not found' });
+        return apiError(reply, 404, ErrorCodes.ALERT_RULE_NOT_FOUND, 'Alert rule not found');
       }
       if (!isAdmin && existing.userId !== user.userId) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Forbidden');
       }
       if ((existing.target === 'global' || existing.target === 'node') && !isAdmin) {
-        return reply.status(403).send({ error: 'Admin access required for this alert rule target' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin access required for this alert rule target');
       }
       if (existing.target === 'server' && existing.targetId) {
         const server = await ensureServerAccess({
@@ -342,10 +358,10 @@ export async function alertRoutes(app: FastifyInstance) {
       const { alertId } = request.params as { alertId: string };
       const alert = await prisma.alert.findUnique({ where: { id: alertId }, select: { id: true, userId: true, serverId: true } });
       if (!alert) {
-        return reply.status(404).send({ error: 'Alert not found' });
+        return apiError(reply, 404, ErrorCodes.ALERT_NOT_FOUND, 'Alert not found');
       }
       if (!isAdmin && alert.userId !== user.userId) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Forbidden');
       }
       if (alert.serverId && !isAdmin) {
         const server = await ensureServerAccess({
@@ -479,10 +495,10 @@ export async function alertRoutes(app: FastifyInstance) {
       });
 
       if (!alert) {
-        return reply.status(404).send({ error: 'Alert not found' });
+        return apiError(reply, 404, ErrorCodes.ALERT_NOT_FOUND, 'Alert not found');
       }
       if (!isAdmin && alert.userId !== user.userId) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Forbidden');
       }
       if (alert.server?.id && !isAdmin) {
         const server = await ensureServerAccess({
@@ -514,10 +530,10 @@ export async function alertRoutes(app: FastifyInstance) {
         select: { id: true, userId: true, serverId: true },
       });
       if (!alert) {
-        return reply.status(404).send({ error: 'Alert not found' });
+        return apiError(reply, 404, ErrorCodes.ALERT_NOT_FOUND, 'Alert not found');
       }
       if (!isAdmin && alert.userId !== user.userId) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Forbidden');
       }
       if (alert.serverId && !isAdmin) {
         const server = await ensureServerAccess({
@@ -560,7 +576,7 @@ export async function alertRoutes(app: FastifyInstance) {
       const { alertIds } = request.body as { alertIds: string[] };
 
       if (!alertIds || !Array.isArray(alertIds)) {
-        return reply.status(400).send({ error: 'alertIds must be an array' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'alertIds must be an array');
       }
 
       if (!isAdmin) {
@@ -570,7 +586,7 @@ export async function alertRoutes(app: FastifyInstance) {
         });
         const invalid = alerts.some((alert) => alert.userId !== user.userId);
         if (invalid) {
-          return reply.status(403).send({ error: 'Forbidden' });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Forbidden');
         }
         const serverIds = Array.from(
           new Set(alerts.map((alert) => alert.serverId).filter((serverId): serverId is string => Boolean(serverId))),

@@ -8,6 +8,8 @@ import type { ImportError, ImportSafeResult, BatchImportResult, ImportedEggResul
 import { SimpleCache } from "../lib/cache.js";
 import { registerCacheStats } from "../lib/cache.js";
 import { publishCacheInvalidate, subscribeCacheInvalidations } from "../lib/event-bus.js";
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 // Hot-path cache for GET /api/templates — 261 templates with large JSON blobs.
 // 10s TTL gives ~90% hit rate under benchmark hammering; coalesces burst.
@@ -68,7 +70,7 @@ const ensurePermission = async (
 ) => {
 	const has = await hasPermission(prisma, userId, requiredPermission);
 	if (!has) {
-		reply.status(403).send({ error: "Insufficient permissions" });
+		apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 		return false;
 	}
 	return true;
@@ -241,7 +243,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			});
 
 			if (!template) {
-				return reply.status(404).send({ error: "Template not found" });
+				return apiError(reply, 404, ErrorCodes.TEMPLATE_NOT_FOUND, "Template not found");
 			}
 
 			reply.send(serialize({ success: true, data: template }));
@@ -308,9 +310,13 @@ export async function templateRoutes(app: FastifyInstance) {
 				where: { name },
 			});
 			if (existing) {
-				return reply.status(409).send({
-					error: `A template named "${name}" already exists`,
-				});
+				return apiError(
+					reply,
+					409,
+					ErrorCodes.TEMPLATE_NAME_TAKEN,
+					`A template named "${name}" already exists`,
+					{ params: { name } },
+				);
 			}
 
 			const template = await prisma.serverTemplate.create({
@@ -387,7 +393,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			});
 
 			if (!template) {
-				return reply.status(404).send({ error: "Template not found" });
+				return apiError(reply, 404, ErrorCodes.TEMPLATE_NOT_FOUND, "Template not found");
 			}
 
 			const {
@@ -518,9 +524,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			});
 
 			if (inUse) {
-				return reply.status(409).send({
-					error: "Cannot delete template that is in use",
-				});
+				return apiError(reply, 409, ErrorCodes.TEMPLATE_IN_USE, "Cannot delete template that is in use");
 			}
 
 			await prisma.serverTemplate.delete({ where: { id: templateId } });
@@ -559,7 +563,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			if (nestId) {
 				const nest = await prisma.nest.findUnique({ where: { id: nestId } });
 				if (!nest) {
-					return reply.status(400).send({ error: "Nest not found" });
+					return apiError(reply, 400, ErrorCodes.NEST_NOT_FOUND, "Nest not found");
 				}
 			}
 
@@ -571,6 +575,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			if (blockingErrors.length > 0) {
 				return reply.status(422).send({
 					error: "Egg validation failed",
+					code: ErrorCodes.IMPORT_INVALID_FORMAT,
 					errors: safeResult.errors,
 				});
 			}
@@ -580,6 +585,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				// Shouldn't happen if no blocking errors, but guard against it
 				return reply.status(422).send({
 					error: "Egg conversion produced no result",
+					code: ErrorCodes.IMPORT_CONVERSION_FAILED,
 					errors: safeResult.errors,
 				});
 			}
@@ -591,7 +597,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				where: { name: converted.name },
 			});
 			if (existing) {
-				return reply.status(409).send({ error: `A template with the name '${converted.name}' already exists` });
+				return apiError(reply, 409, ErrorCodes.TEMPLATE_NAME_TAKEN, `A template with the name '${converted.name}' already exists`, { params: { name: converted.name } });
 			}
 
 			// Determine nest — auto-create from egg category if no nestId provided
@@ -676,7 +682,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			if (nestId) {
 				const nest = await prisma.nest.findUnique({ where: { id: nestId } });
 				if (!nest) {
-					return reply.status(400).send({ error: "Nest not found" });
+					return apiError(reply, 400, ErrorCodes.NEST_NOT_FOUND, "Nest not found");
 				}
 			}
 
@@ -684,9 +690,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			try {
 				GITHUB_REPO = parseGithubOwnerRepo(repoUrl);
 			} catch {
-				return reply.status(400).send({
-					error: "Invalid GitHub repository. Expected owner/repo (e.g. pterodactyl/game-eggs).",
-				});
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid GitHub repository. Expected owner/repo (e.g. pterodactyl/game-eggs).");
 			}
 			const BRANCH = "main";
 
@@ -712,7 +716,7 @@ export async function templateRoutes(app: FastifyInstance) {
 					.filter((t: any) => t.type === "blob" && t.path.endsWith(".json") && /egg[._-]/i.test(t.path));
 			} catch (err: any) {
 				request.log.error({ err }, "Failed to fetch Pterodactyl eggs repo tree");
-				return reply.status(502).send({ error: `Failed to fetch egg list from GitHub: ${err.message}` });
+				return apiError(reply, 502, ErrorCodes.IMPORT_FETCH_FAILED, `Failed to fetch egg list from GitHub: ${err.message}`, { params: { message: err.message } });
 			}
 
 			request.log.info({ count: treeEntries.length }, "Found eggs in repo");
@@ -721,7 +725,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			// inline and burns the unauthenticated GitHub budget; a concurrent
 			// trigger would double both.
 			if (batchImportInFlight) {
-				return reply.status(409).send({ error: "A batch import is already in progress. Wait for it to finish." });
+				return apiError(reply, 409, ErrorCodes.IMPORT_IN_PROGRESS, "A batch import is already in progress. Wait for it to finish.");
 			}
 			batchImportInFlight = true;
 
@@ -893,7 +897,11 @@ export async function templateRoutes(app: FastifyInstance) {
 			// Return 207 Multi-Status on partial failure, 200 on full success
 			if (imported.length > 0) clearTemplateCache();
 			if (failed.length > 0) {
-				return reply.status(207).send({ success: false, data: result });
+				return reply.status(207).send({
+					success: false,
+					code: ErrorCodes.IMPORT_PARTIAL_FAILURE,
+					data: result,
+				});
 			}
 			reply.send({ success: true, data: result });
 		} finally {

@@ -13,6 +13,8 @@ import { getCurrentVersion } from "../lib/panel-version";
 import { createAuditLog } from "../middleware/audit.js";
 import { openSseStream } from "../utils/sse.js";
 import { SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../utils/java-memory.js";
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 // ID format validation — accepts UUID, Cuid2, and other safe identifier formats.
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -54,7 +56,7 @@ const ensurePermission = (
 ): boolean => {
 	const perms: string[] = request.user?.permissions ?? [];
 	if (perms.includes("*") || perms.includes(requiredPermission)) return true;
-	reply.status(403).send({ error: "Insufficient permissions" });
+	apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 	return false;
 };
 
@@ -215,20 +217,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 				!maxMemoryMb ||
 				!maxCpuCores
 			) {
-				return reply.status(400).send({ error: "Missing required fields" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing required fields");
 			}
 
 			// Validate positive values
 			if (maxMemoryMb <= 0) {
-				return reply
-					.status(400)
-					.send({ error: "maxMemoryMb must be positive" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "maxMemoryMb must be positive");
 			}
 
 			if (maxCpuCores <= 0) {
-				return reply
-					.status(400)
-					.send({ error: "maxCpuCores must be positive" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "maxCpuCores must be positive");
 			}
 
 			let validatedMemoryOverallocatePercent = 0;
@@ -237,14 +235,14 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (memoryOverallocatePercent !== undefined) {
 				const validated = validateOverallocatePercent(memoryOverallocatePercent);
 				if (validated === null) {
-					return reply.status(400).send({ error: "memoryOverallocatePercent must be an integer >= -1" });
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "memoryOverallocatePercent must be an integer >= -1");
 				}
 				validatedMemoryOverallocatePercent = validated;
 			}
 			if (cpuOverallocatePercent !== undefined) {
 				const validated = validateOverallocatePercent(cpuOverallocatePercent);
 				if (validated === null) {
-					return reply.status(400).send({ error: "cpuOverallocatePercent must be an integer >= -1" });
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "cpuOverallocatePercent must be an integer >= -1");
 				}
 				validatedCpuOverallocatePercent = validated;
 			}
@@ -255,7 +253,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (existingNode) {
-				return reply.status(400).send({ error: "Node name already exists" });
+				return apiError(reply, 400, ErrorCodes.NODE_NAME_TAKEN, "Node name already exists");
 			}
 
 			const location = await prisma.location.findUnique({
@@ -263,7 +261,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!location) {
-				return reply.status(404).send({ error: "Location not found" });
+				return apiError(reply, 404, ErrorCodes.LOCATION_NOT_FOUND, "Location not found");
 			}
 
 			const secret = randomBytes(32).toString("hex");
@@ -428,9 +426,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Check if user has access to this specific node
 			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
 			if (!hasAccess) {
-				return reply
-					.status(403)
-					.send({ error: "You don't have access to this node" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
 			const node = await prisma.node.findUnique({
@@ -449,7 +445,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			reply.send(serialize({ success: true, data: node }));
@@ -480,7 +476,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				(await hasNodeAccess(prisma, request.user.userId, nodeId)) &&
 				(rolePerms.includes("node.update") || rolePerms.includes("*"));
 			if (!nodeManageAllowed) {
-				return reply.status(403).send({ error: "Node management access required" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Node management access required");
 			}
 
 			const node = await prisma.node.findUnique({
@@ -488,7 +484,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			const token = randomBytes(32).toString("hex");
@@ -528,9 +524,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 						message: 'Failed to create agent API key for deployment',
 						metadata: { nodeId },
 					}).catch(() => {});
-					return reply
-						.status(500)
-						.send({ error: "Failed to create agent API key" });
+					return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to create agent API key");
 				}
 			} catch (error) {
 				request.log.error(
@@ -544,9 +538,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 					stack: (error as Error)?.stack,
 					metadata: { nodeId },
 				}).catch(() => {});
-				return reply
-					.status(500)
-					.send({ error: "Failed to create agent API key" });
+				return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to create agent API key");
 			}
 
 			reply.send({
@@ -574,7 +566,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				apiKeyPerms.includes("admin.write") ||
 				apiKeyPerms.includes("admin.read");
 			if (!isApiKeyAdmin && !(await hasNodeAccess(prisma, (request as any).user.userId, nodeId))) {
-				return reply.status(403).send({ error: "Insufficient permissions" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 			}
 
 			const node = await prisma.node.findUnique({
@@ -582,7 +574,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			// Find existing API key for this node via JSON path query
@@ -654,7 +646,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				(await hasNodeAccess(prisma, request.user.userId, nodeId)) &&
 				(rolePerms.includes("node.update") || rolePerms.includes("*"));
 			if (!nodeManageAllowed) {
-				return reply.status(403).send({ error: "Node management access required" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Node management access required");
 			}
 
 			const node = await prisma.node.findUnique({
@@ -662,7 +654,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			// Check for existing API key
@@ -679,6 +671,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (existingKey && !regenerate) {
 				return reply.status(409).send({
 					error: "API key already exists for this node",
+					code: ErrorCodes.NODE_API_KEY_EXISTS,
 					existingKeyId: existingKey.id,
 					existingKeyPreview: existingKey.start
 						? `${existingKey.start}${"*".repeat(40)}`
@@ -706,9 +699,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 						{ error, keyId: existingKey.id },
 						"Failed to delete old API key",
 					);
-					return reply
-						.status(500)
-						.send({ error: "Failed to delete old API key" });
+					return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to delete old API key");
 				}
 			}
 
@@ -725,7 +716,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				request.log.info({ nodeId }, "API key created");
 				const apiKey = apiKeyResponse.key;
 				if (!apiKey) {
-					return reply.status(500).send({ error: "Failed to create API key" });
+					return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to create API key");
 				}
 
 				reply.send({
@@ -745,7 +736,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 					stack: (error as Error)?.stack,
 					metadata: { nodeId },
 				}).catch(() => {});
-				return reply.status(500).send({ error: "Failed to create API key" });
+				return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to create API key");
 			}
 		},
 	);
@@ -760,7 +751,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			const perms: string[] = (request as any).user?.permissions ?? [];
 			const isNodeAdmin = perms.includes("*") || perms.includes("admin.write");
 			if (!isNodeAdmin && !(await hasNodeAccess(prisma, (request as any).user.userId, nodeId))) {
-				return reply.status(403).send({ error: "Insufficient permissions" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 			}
 			const {
 				name,
@@ -813,32 +804,28 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			// Validate inputs
 			if (maxMemoryMb !== undefined && maxMemoryMb <= 0) {
-				return reply
-					.status(400)
-					.send({ error: "maxMemoryMb must be positive" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "maxMemoryMb must be positive");
 			}
 
 			if (maxCpuCores !== undefined && maxCpuCores <= 0) {
-				return reply
-					.status(400)
-					.send({ error: "maxCpuCores must be positive" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "maxCpuCores must be positive");
 			}
 
 			if (memoryOverallocatePercent !== undefined) {
 				const validated = validateOverallocatePercent(memoryOverallocatePercent);
 				if (validated === null) {
-					return reply.status(400).send({ error: "memoryOverallocatePercent must be an integer >= -1" });
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "memoryOverallocatePercent must be an integer >= -1");
 				}
 			}
 			if (cpuOverallocatePercent !== undefined) {
 				const validated = validateOverallocatePercent(cpuOverallocatePercent);
 				if (validated === null) {
-					return reply.status(400).send({ error: "cpuOverallocatePercent must be an integer >= -1" });
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "cpuOverallocatePercent must be an integer >= -1");
 				}
 			}
 
@@ -848,7 +835,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 					where: { name, id: { not: nodeId } },
 				});
 				if (existing) {
-					return reply.status(400).send({ error: "Node name already exists" });
+					return apiError(reply, 400, ErrorCodes.NODE_NAME_TAKEN, "Node name already exists");
 				}
 			}
 
@@ -910,9 +897,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Check if user has access to this specific node
 			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
 			if (!hasAccess) {
-				return reply
-					.status(403)
-					.send({ error: "You don't have access to this node" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
 			const node = await prisma.node.findUnique({
@@ -930,7 +915,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			// Calculate resource usage
@@ -1064,12 +1049,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 			const apiKey = headerApiKey || bearerApiKey;
 
 			if (!apiKey) {
-				return reply.status(401).send({ error: "Unauthorized" });
+				return apiError(reply, 401, ErrorCodes.UNAUTHORIZED, "Unauthorized");
 			}
 
 			const apiKeyValid = await verifyAgentApiKey(prisma, nodeId, apiKey);
 			if (!apiKeyValid) {
-				return reply.status(401).send({ error: "Unauthorized" });
+				return apiError(reply, 401, ErrorCodes.UNAUTHORIZED, "Unauthorized");
 			}
 
 			const node = await prisma.node.findUnique({
@@ -1077,7 +1062,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(401).send({ error: "Unauthorized" });
+				return apiError(reply, 401, ErrorCodes.UNAUTHORIZED, "Unauthorized");
 			}
 
 			const cpuPercent = Number(health?.cpuPercent);
@@ -1101,7 +1086,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				!Number.isFinite(diskTotalMb) ||
 				!Number.isFinite(containerCount)
 			) {
-				return reply.status(400).send({ error: "Invalid health payload" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid health payload");
 			}
 
 			await prisma.node.update({
@@ -1140,7 +1125,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			const perms: string[] = (request as any).user?.permissions ?? [];
 			const isNodeAdmin = perms.includes("*") || perms.includes("admin.write");
 			if (!isNodeAdmin && !(await hasNodeAccess(prisma, (request as any).user.userId, nodeId))) {
-				return reply.status(403).send({ error: "Insufficient permissions" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 			}
 
 			const node = await prisma.node.findUnique({
@@ -1148,7 +1133,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			// Check if node has running servers
@@ -1159,6 +1144,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (runningServers.length > 0) {
 				return reply.status(409).send({
 					error: "Cannot delete node with running servers",
+					code: ErrorCodes.NODE_HAS_SERVERS,
 				});
 			}
 
@@ -1226,14 +1212,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Check if user has access to this specific node
 			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
 			if (!hasAccess) {
-				return reply
-					.status(403)
-					.send({ error: "You don't have access to this node" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			const pools = await prisma.ipPool.findMany({
@@ -1274,9 +1258,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Check if user has access to this specific node
 			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
 			if (!hasAccess) {
-				return reply
-					.status(403)
-					.send({ error: "You don't have access to this node" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
 			const { networkName, limit = "200" } = request.query as {
@@ -1285,12 +1267,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 			};
 			const resolvedNetwork = (networkName || "").trim();
 			if (!resolvedNetwork) {
-				return reply.status(400).send({ error: "networkName is required" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "networkName is required");
 			}
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			const parsedLimit = Math.max(1, Math.min(1000, Number(limit) || 200));
@@ -1301,9 +1283,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!available) {
-				return reply
-					.status(404)
-					.send({ error: "No IP pool configured for this network" });
+				return apiError(reply, 404, ErrorCodes.NODE_IP_POOL_NOT_FOUND, "No IP pool configured for this network");
 			}
 
 			reply.send(serialize({ success: true, data: available }));
@@ -1322,9 +1302,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Check if user has access to this specific node
 			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
 			if (!hasAccess) {
-				return reply
-					.status(403)
-					.send({ error: "You don't have access to this node" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
 			const { serverId, search } = request.query as {
@@ -1334,7 +1312,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			const searchQuery = typeof search === "string" ? search.trim() : "";
@@ -1400,9 +1378,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Check if user has access to this specific node
 			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
 			if (!hasAccess) {
-				return reply
-					.status(403)
-					.send({ error: "You don't have access to this node" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
 			const { ip, ports, alias, notes } = request.body as {
@@ -1413,12 +1389,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 			};
 
 			if (!ip || !ports) {
-				return reply.status(400).send({ error: "ip and ports are required" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "ip and ports are required");
 			}
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			let ips: string[] = [];
@@ -1427,13 +1403,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 				ips = await parseAllocationIps(ip);
 				portList = parsePortRanges(ports);
 			} catch (error: any) {
-				return reply.status(400).send({ error: error.message });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, error.message);
 			}
 
 			if (ips.length * portList.length > 5000) {
-				return reply
-					.status(400)
-					.send({ error: "Allocation request too large" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Allocation request too large");
 			}
 
 			const created = await prisma.$transaction(async (tx) => {
@@ -1472,9 +1446,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Check if user has access to this specific node
 			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
 			if (!hasAccess) {
-				return reply
-					.status(403)
-					.send({ error: "You don't have access to this node" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
 			const { alias, notes } = request.body as {
@@ -1486,7 +1458,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				where: { id: allocationId },
 			});
 			if (!allocation || allocation.nodeId !== nodeId) {
-				return reply.status(404).send({ error: "Allocation not found" });
+				return apiError(reply, 404, ErrorCodes.ALLOCATION_NOT_FOUND, "Allocation not found");
 			}
 
 			const updated = await prisma.nodeAllocation.update({
@@ -1515,21 +1487,17 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Check if user has access to this specific node
 			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
 			if (!hasAccess) {
-				return reply
-					.status(403)
-					.send({ error: "You don't have access to this node" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
 			const allocation = await prisma.nodeAllocation.findUnique({
 				where: { id: allocationId },
 			});
 			if (!allocation || allocation.nodeId !== nodeId) {
-				return reply.status(404).send({ error: "Allocation not found" });
+				return apiError(reply, 404, ErrorCodes.ALLOCATION_NOT_FOUND, "Allocation not found");
 			}
 			if (allocation.serverId) {
-				return reply
-					.status(409)
-					.send({ error: "Allocation is assigned to a server" });
+				return apiError(reply, 409, ErrorCodes.ALLOCATION_IN_USE, "Allocation is assigned to a server");
 			}
 
 			await prisma.nodeAllocation.delete({ where: { id: allocationId } });
@@ -1556,7 +1524,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			const assignments = await getNodeAssignments(prisma, nodeId);
@@ -1584,7 +1552,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			// Check if the user assigning the node has access to that node
@@ -1595,22 +1563,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 				nodeId,
 			);
 			if (!assignerHasAccess) {
-				return reply
-					.status(403)
-					.send({ error: "You don't have access to this node" });
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
 			// Validate targetType
 			if (targetType !== "user" && targetType !== "role") {
-				return reply
-					.status(400)
-					.send({ error: "targetType must be 'user' or 'role'" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "targetType must be 'user' or 'role'");
 			}
 
 			if (!targetId) {
-				return reply
-					.status(400)
-					.send({ error: "targetId is required" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "targetId is required");
 			}
 
 			// Verify target exists
@@ -1619,14 +1581,14 @@ export async function nodeRoutes(app: FastifyInstance) {
 					where: { id: targetId },
 				});
 				if (!user) {
-					return reply.status(404).send({ error: "User not found" });
+					return apiError(reply, 404, ErrorCodes.USER_NOT_FOUND, "User not found");
 				}
 			} else {
 				const role = await prisma.role.findUnique({
 					where: { id: targetId },
 				});
 				if (!role) {
-					return reply.status(404).send({ error: "Role not found" });
+					return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, "Role not found");
 				}
 			}
 
@@ -1635,12 +1597,10 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (expiresAt) {
 				expirationDate = new Date(expiresAt);
 				if (isNaN(expirationDate.getTime())) {
-					return reply.status(400).send({ error: "Invalid expiresAt date" });
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid expiresAt date");
 				}
 				if (expirationDate <= new Date()) {
-					return reply
-						.status(400)
-						.send({ error: "expiresAt must be in the future" });
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "expiresAt must be in the future");
 				}
 			}
 
@@ -1657,6 +1617,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (existingAssignment) {
 				return reply.status(409).send({
 					error: "Assignment already exists",
+					code: ErrorCodes.NODE_ASSIGNMENT_EXISTS,
 					existingAssignmentId: existingAssignment.id,
 				});
 			}
@@ -1722,13 +1683,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!assignment) {
-				return reply.status(404).send({ error: "Assignment not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_ASSIGNMENT_NOT_FOUND, "Assignment not found");
 			}
 
 			if (assignment.nodeId !== nodeId) {
-				return reply
-					.status(404)
-					.send({ error: "Assignment not found for this node" });
+				return apiError(reply, 404, ErrorCodes.NODE_ASSIGNMENT_NOT_FOUND, "Assignment not found for this node");
 			}
 
 			// Delete the assignment
@@ -1828,7 +1787,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				select: { id: true, locationId: true },
 			});
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			// Get registered server IDs for this node
@@ -1876,14 +1835,14 @@ export async function nodeRoutes(app: FastifyInstance) {
 				select: { id: true },
 			});
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			const wsGateway = (app as any).wsGateway;
 			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
 			const container = discovered.find((c: any) => c.containerId === containerId);
 			if (!container) {
-				return reply.status(404).send({ error: "Container not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_CONTAINER_NOT_FOUND, "Container not found");
 			}
 
 			// Fetch all templates to match against
@@ -2026,7 +1985,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			// Validate required fields
 			if (!containerId || !name || !templateId || !ownerId) {
-				return reply.status(400).send({ error: "containerId, name, templateId, and ownerId are required" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "containerId, name, templateId, and ownerId are required");
 			}
 
 			// Validate node
@@ -2035,7 +1994,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				select: { id: true, locationId: true },
 			});
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			// Verify container was discovered on this node
@@ -2043,7 +2002,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
 			const container = discovered.find((c: any) => c.containerId === containerId);
 			if (!container) {
-				return reply.status(400).send({ error: "Container not found on node. Agent reconciliation may be needed." });
+				return apiError(reply, 400, ErrorCodes.NODE_CONTAINER_NOT_FOUND, "Container not found on node. Agent reconciliation may be needed.");
 			}
 
 			// Verify no existing server with this container ID
@@ -2051,7 +2010,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				where: { id: containerId },
 			});
 			if (existing) {
-				return reply.status(409).send({ error: "A server with this container ID already exists" });
+				return apiError(reply, 409, ErrorCodes.CONFLICT, "A server with this container ID already exists");
 			}
 
 			// Validate template
@@ -2059,7 +2018,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				where: { id: templateId },
 			});
 			if (!template) {
-				return reply.status(404).send({ error: "Template not found" });
+				return apiError(reply, 404, ErrorCodes.TEMPLATE_NOT_FOUND, "Template not found");
 			}
 
 			// Validate owner
@@ -2067,7 +2026,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				where: { id: ownerId },
 			});
 			if (!owner) {
-				return reply.status(404).send({ error: "Owner not found" });
+				return apiError(reply, 404, ErrorCodes.USER_NOT_FOUND, "Owner not found");
 			}
 
 			// Resolve environment with template defaults
@@ -2183,15 +2142,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			// Validate targetType
 			if (targetType !== "user" && targetType !== "role") {
-				return reply
-					.status(400)
-					.send({ error: "targetType must be 'user' or 'role'" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "targetType must be 'user' or 'role'");
 			}
 
 			if (!targetId) {
-				return reply
-					.status(400)
-					.send({ error: "targetId is required" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "targetId is required");
 			}
 
 			// Verify target exists
@@ -2200,14 +2155,14 @@ export async function nodeRoutes(app: FastifyInstance) {
 					where: { id: targetId },
 				});
 				if (!user) {
-					return reply.status(404).send({ error: "User not found" });
+					return apiError(reply, 404, ErrorCodes.USER_NOT_FOUND, "User not found");
 				}
 			} else {
 				const role = await prisma.role.findUnique({
 					where: { id: targetId },
 				});
 				if (!role) {
-					return reply.status(404).send({ error: "Role not found" });
+					return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, "Role not found");
 				}
 			}
 
@@ -2216,12 +2171,10 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (expiresAt) {
 				expirationDate = new Date(expiresAt);
 				if (isNaN(expirationDate.getTime())) {
-					return reply.status(400).send({ error: "Invalid expiresAt date" });
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid expiresAt date");
 				}
 				if (expirationDate <= new Date()) {
-					return reply
-						.status(400)
-						.send({ error: "expiresAt must be in the future" });
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "expiresAt must be in the future");
 				}
 			}
 
@@ -2238,6 +2191,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (existingWildcard) {
 				return reply.status(409).send({
 					error: "Wildcard assignment already exists",
+					code: ErrorCodes.NODE_ASSIGNMENT_EXISTS,
 					existingAssignmentId: existingWildcard.id,
 				});
 			}
@@ -2298,9 +2252,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			// Validate targetType
 			if (targetType !== "user" && targetType !== "role") {
-				return reply
-					.status(400)
-					.send({ error: "targetType must be 'user' or 'role'" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "targetType must be 'user' or 'role'");
 			}
 
 			// Find the wildcard assignment
@@ -2314,9 +2266,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!wildcardAssignment) {
-				return reply
-					.status(404)
-					.send({ error: "Wildcard assignment not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_ASSIGNMENT_NOT_FOUND, "Wildcard assignment not found");
 			}
 
 			// Delete the wildcard assignment
@@ -2380,7 +2330,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			const currentPanel = getCurrentVersion();
@@ -2457,7 +2407,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			if (!node.isOnline) {
@@ -2466,7 +2416,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const gateway = (app as any).wsGateway;
 			if (!gateway) {
-				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+				return apiError(reply, 503, ErrorCodes.WEBSOCKET_GATEWAY_UNAVAILABLE, "WebSocket gateway unavailable");
 			}
 
 			try {
@@ -2480,7 +2430,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				}
 				return reply.send({ success: true, data: [] });
 			} catch {
-				return reply.status(503).send({ error: "Failed to request logs from agent" });
+				return apiError(reply, 503, ErrorCodes.NODE_AGENT_UNREACHABLE, "Failed to request logs from agent");
 			}
 		},
 	);
@@ -2499,12 +2449,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			const gateway = (app as any).wsGateway;
 			if (!gateway) {
-				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+				return apiError(reply, 503, ErrorCodes.WEBSOCKET_GATEWAY_UNAVAILABLE, "WebSocket gateway unavailable");
 			}
 
 			const sse = openSseStream(request, reply);
@@ -2579,16 +2529,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			if (!node.isOnline) {
-				return reply.status(409).send({ error: "Agent is offline" });
+				return apiError(reply, 409, ErrorCodes.NODE_OFFLINE, "Agent is offline");
 			}
 
 			const gateway = (app as any).wsGateway;
 			if (!gateway) {
-				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+				return apiError(reply, 503, ErrorCodes.WEBSOCKET_GATEWAY_UNAVAILABLE, "WebSocket gateway unavailable");
 			}
 
 			const sent = await gateway.sendToAgent(nodeId, {
@@ -2596,7 +2546,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!sent) {
-				return reply.status(503).send({ error: "Failed to send restart command to agent" });
+				return apiError(reply, 503, ErrorCodes.NODE_AGENT_UNREACHABLE, "Failed to send restart command to agent");
 			}
 
 			await createAuditLog(request.user.userId, {
@@ -2627,16 +2577,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			if (!node.isOnline) {
-				return reply.status(409).send({ error: "Agent is offline" });
+				return apiError(reply, 409, ErrorCodes.NODE_OFFLINE, "Agent is offline");
 			}
 
 			const gateway = (app as any).wsGateway;
 			if (!gateway) {
-				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+				return apiError(reply, 503, ErrorCodes.WEBSOCKET_GATEWAY_UNAVAILABLE, "WebSocket gateway unavailable");
 			}
 
 			const currentPanel = getCurrentVersion();
@@ -2649,7 +2599,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			if (!sent) {
-				return reply.status(503).send({ error: "Failed to send update command to agent" });
+				return apiError(reply, 503, ErrorCodes.NODE_AGENT_UNREACHABLE, "Failed to send update command to agent");
 			}
 
 			// Optimistic admin SSE so the control panel flips to "updating" immediately.
@@ -2692,7 +2642,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			const gateway = (app as any).wsGateway;
@@ -2746,16 +2696,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			if (!node.isOnline) {
-				return reply.status(409).send({ error: "Agent is offline" });
+				return apiError(reply, 409, ErrorCodes.NODE_OFFLINE, "Agent is offline");
 			}
 
 			const gateway = (app as any).wsGateway;
 			if (!gateway) {
-				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+				return apiError(reply, 503, ErrorCodes.WEBSOCKET_GATEWAY_UNAVAILABLE, "WebSocket gateway unavailable");
 			}
 
 			const start = Date.now();
@@ -2772,7 +2722,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				// fall through
 			}
 
-			reply.status(504).send({ error: "Agent did not respond to ping" });
+			apiError(reply, 504, ErrorCodes.NODE_AGENT_UNREACHABLE, "Agent did not respond to ping");
 		},
 	);
 
@@ -2786,16 +2736,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			if (!node.isOnline) {
-				return reply.status(409).send({ error: "Agent is offline" });
+				return apiError(reply, 409, ErrorCodes.NODE_OFFLINE, "Agent is offline");
 			}
 
 			const gateway = (app as any).wsGateway;
 			if (!gateway) {
-				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+				return apiError(reply, 503, ErrorCodes.WEBSOCKET_GATEWAY_UNAVAILABLE, "WebSocket gateway unavailable");
 			}
 
 			try {
@@ -2810,7 +2760,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				// Agent might not support this yet
 			}
 
-			reply.status(503).send({ error: "Failed to retrieve agent config" });
+			apiError(reply, 503, ErrorCodes.NODE_AGENT_UNREACHABLE, "Failed to retrieve agent config");
 		},
 	);
 
@@ -2824,21 +2774,21 @@ export async function nodeRoutes(app: FastifyInstance) {
 			const { content } = request.body as { content: string };
 
 			if (!content || typeof content !== 'string') {
-				return reply.status(400).send({ error: "Config content is required" });
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Config content is required");
 			}
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
-				return reply.status(404).send({ error: "Node not found" });
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
 			if (!node.isOnline) {
-				return reply.status(409).send({ error: "Agent is offline" });
+				return apiError(reply, 409, ErrorCodes.NODE_OFFLINE, "Agent is offline");
 			}
 
 			const gateway = (app as any).wsGateway;
 			if (!gateway) {
-				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+				return apiError(reply, 503, ErrorCodes.WEBSOCKET_GATEWAY_UNAVAILABLE, "WebSocket gateway unavailable");
 			}
 
 			try {
@@ -2866,7 +2816,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				// fall through
 			}
 
-			reply.status(503).send({ error: "Failed to update agent config" });
+			apiError(reply, 503, ErrorCodes.NODE_AGENT_UNREACHABLE, "Failed to update agent config");
 		},
 	);
 }
