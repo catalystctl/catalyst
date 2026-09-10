@@ -58,14 +58,14 @@ interface SftpTokenEntry {
   lockedUntil?: string | Date | null;
 }
 
-/** Default TTL if none specified: 5 minutes */
-const DEFAULT_TTL_MS = 5 * 60 * 1000;
+/** Default TTL if none specified: 15 minutes (short-lived by default). */
+const DEFAULT_TTL_MS = 15 * 60 * 1000;
 
 /** Minimum TTL: 1 minute */
 const MIN_TTL_MS = 60 * 1000;
 
-/** Maximum TTL: 1 year */
-const MAX_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+/** Maximum TTL: 24 hours (long-lived tokens widen the revocation window). */
+const MAX_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Allowed TTL options presented to the user (label, milliseconds) */
 export const SFTP_TTL_OPTIONS = [
@@ -75,10 +75,6 @@ export const SFTP_TTL_OPTIONS = [
   { label: "1 hour", value: 60 * 60 * 1000 },
   { label: "6 hours", value: 6 * 60 * 60 * 1000 },
   { label: "24 hours", value: 24 * 60 * 60 * 1000 },
-  { label: "7 days", value: 7 * 24 * 60 * 60 * 1000 },
-  { label: "30 days", value: 30 * 24 * 60 * 60 * 1000 },
-  { label: "90 days", value: 90 * 24 * 60 * 60 * 1000 },
-  { label: "1 year", value: 365 * 24 * 60 * 60 * 1000 },
 ] as const;
 
 /**
@@ -154,6 +150,9 @@ export function generateSftpToken(
 /** How often a token's ban/lock snapshot is re-verified against the DB. */
 const USER_STATUS_RECHECK_INTERVAL_MS = 30 * 1000;
 
+/** Heartbeat revalidation window: live SFTP sessions must re-check faster. */
+export const SFTP_HEARTBEAT_REVALIDATE_MS = 60 * 1000;
+
 /** userId -> last DB recheck timestamp (throttles live status refreshes). */
 const lastUserStatusCheck = new Map<string, number>();
 
@@ -177,6 +176,59 @@ async function refreshUserStatusSnapshots(userId: string): Promise<void> {
       sftpTokenCache.delete(`${entry.userId}:${entry.serverId}`);
     }
   }
+}
+
+/**
+ * Heartbeat revalidation for live SFTP sessions: returns false when the
+ * holder was banned/locked or the server grant vanished since mint.
+ * Agents call this on session heartbeat; a false return must kill the session.
+ */
+export async function revalidateSftpSession(
+  userId: string,
+  serverId: string,
+): Promise<boolean> {
+  try {
+    const account = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { banned: true, lockedUntil: true },
+    });
+    if (!account) return false;
+    if (account.banned) {
+      revokeSftpTokensForUser(userId, serverId);
+      return false;
+    }
+    if (account.lockedUntil && new Date(account.lockedUntil).getTime() > Date.now()) {
+      return false;
+    }
+    const server = await prisma.server.findUnique({
+      where: { id: serverId },
+      select: { id: true, ownerId: true, suspendedAt: true },
+    });
+    if (!server) {
+      revokeSftpTokensForUser(userId, serverId);
+      return false;
+    }
+    if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) return false;
+    if (server.ownerId === userId) return true;
+    const grant = await prisma.serverAccess.findFirst({
+      where: { serverId, userId },
+      select: { userId: true },
+    });
+    if (!grant) {
+      revokeSftpTokensForUser(userId, serverId);
+      return false;
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+/** Kill every live SFTP session for a node (revoke/suspend path). */
+export function revokeSftpTokensForNodeServers(serverIds: string[]): number {
+  let count = 0;
+  for (const serverId of serverIds) count += revokeAllSftpTokensForServer(serverId);
+  return count;
 }
 
 /**
