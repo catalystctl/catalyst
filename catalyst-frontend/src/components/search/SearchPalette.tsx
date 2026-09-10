@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -84,17 +86,17 @@ type SearchCategory =
  | 'Actions'
  | 'Server Tabs';
 
-const CATEGORY_META: Record<SearchCategory, { label: string; icon: LucideIcon; color: string }> = {
- Navigation: { label: 'Pages', icon: LayoutDashboard, color: 'text-muted-foreground' },
- Admin: { label: 'Admin', icon: Shield, color: 'text-muted-foreground' },
- Settings: { label: 'Settings & Config', icon: Settings, color: 'text-muted-foreground' },
- Servers: { label: 'Servers', icon: Server, color: 'text-muted-foreground' },
- Nodes: { label: 'Nodes', icon: MonitorDot, color: 'text-muted-foreground' },
- Templates: { label: 'Templates', icon: FileText, color: 'text-muted-foreground' },
- Profile: { label: 'Account', icon: Users, color: 'text-muted-foreground' },
- Actions: { label: 'Quick Actions', icon: Zap, color: 'text-muted-foreground' },
- 'Server Tabs': { label: 'Server Tabs', icon: Terminal, color: 'text-muted-foreground' },
-};
+const buildCategoryMeta = (t: TFunction): Record<SearchCategory, { label: string; icon: LucideIcon; color: string }> => ({
+ Navigation: { label: t('layout:search.categories.pages'), icon: LayoutDashboard, color: 'text-muted-foreground' },
+ Admin: { label: t('layout:search.categories.admin'), icon: Shield, color: 'text-muted-foreground' },
+ Settings: { label: t('layout:search.categories.settings'), icon: Settings, color: 'text-muted-foreground' },
+ Servers: { label: t('layout:search.categories.servers'), icon: Server, color: 'text-muted-foreground' },
+ Nodes: { label: t('layout:search.categories.nodes'), icon: MonitorDot, color: 'text-muted-foreground' },
+ Templates: { label: t('layout:search.categories.templates'), icon: FileText, color: 'text-muted-foreground' },
+ Profile: { label: t('layout:search.categories.account'), icon: Users, color: 'text-muted-foreground' },
+ Actions: { label: t('layout:search.categories.actions'), icon: Zap, color: 'text-muted-foreground' },
+ 'Server Tabs': { label: t('layout:search.categories.serverTabs'), icon: Terminal, color: 'text-muted-foreground' },
+});
 
 const CATEGORY_ORDER: SearchCategory[] = [
  'Navigation',
@@ -127,12 +129,12 @@ interface StaticItemDef {
  path?: string;
 }
 
-const STATIC_ITEMS: StaticItemDef[] = [
+const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  // ── User Navigation ──────────────────────────────────────
  {
  id: 'nav-dashboard',
- label: 'Dashboard',
- description: 'Overview of your servers and activity',
+ label: t('layout:nav.dashboard'),
+ description: t('layout:search.items.navDashboard.description'),
  icon: LayoutDashboard,
  to: '/dashboard',
  category: 'Navigation',
@@ -141,8 +143,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'nav-servers',
- label: 'Servers',
- description: 'View and manage your game servers',
+ label: t('layout:nav.servers'),
+ description: t('layout:search.items.navServers.description'),
  icon: Server,
  to: '/servers',
  category: 'Navigation',
@@ -151,8 +153,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'nav-profile',
- label: 'Profile',
- description: 'Account settings and security',
+ label: t('layout:nav.profile'),
+ description: t('layout:search.items.navProfile.description'),
  icon: Users,
  to: '/profile',
  category: 'Navigation',
@@ -163,190 +165,190 @@ const STATIC_ITEMS: StaticItemDef[] = [
  // ── Admin Pages ──────────────────────────────────────────
  {
  id: 'admin-overview',
- label: 'Admin Overview',
- description: 'Platform-wide dashboard and statistics',
+ label: t('layout:search.items.adminOverview.label'),
+ description: t('layout:search.items.adminOverview.description'),
  icon: LayoutDashboard,
  to: '/admin',
  category: 'Admin',
  keywords: ['admin', 'dashboard', 'overview', 'stats', 'platform'],
  permissions: ['admin.read', 'admin.write'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin',
  },
  {
  id: 'admin-users',
- label: 'Users',
- description: 'Manage user accounts and access',
+ label: t('layout:nav.users'),
+ description: t('layout:search.items.adminUsers.description'),
  icon: Users,
  to: '/admin/users',
  category: 'Admin',
  keywords: ['user', 'account', 'people', 'member'],
  permissions: ['user.read', 'admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/users',
  },
  {
  id: 'admin-roles',
- label: 'Roles & Permissions',
- description: 'Configure roles and permission groups',
+ label: t('layout:search.items.adminRoles.label'),
+ description: t('layout:search.items.adminRoles.description'),
  icon: Shield,
  to: '/admin/roles',
  category: 'Admin',
  keywords: ['role', 'permission', 'rbac', 'access', 'group', 'policy'],
  permissions: ['role.read', 'admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/roles',
  },
  {
  id: 'admin-nodes',
- label: 'Nodes',
- description: 'Manage compute nodes and resources',
+ label: t('layout:nav.nodes'),
+ description: t('layout:search.items.adminNodes.description'),
  icon: Network,
  to: '/admin/nodes',
  category: 'Admin',
  keywords: ['node', 'machine', 'host', 'compute', 'infrastructure'],
  permissions: ['node.read', 'admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/nodes',
  },
  {
  id: 'admin-servers',
- label: 'All Servers',
- description: 'View every server on the platform',
+ label: t('layout:nav.allServers'),
+ description: t('layout:search.items.adminServers.description'),
  icon: Server,
  to: '/admin/servers',
  category: 'Admin',
  keywords: ['all servers', 'server list', 'manage servers'],
  permissions: ['admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/servers',
  },
  {
  id: 'admin-templates',
- label: 'Templates',
- description: 'Server templates and nest configurations',
+ label: t('layout:nav.templates'),
+ description: t('layout:search.items.adminTemplates.description'),
  icon: FileText,
  to: '/admin/templates',
  category: 'Admin',
  keywords: ['template', 'egg', 'nest', 'server template', 'setup'],
  permissions: ['template.read', 'admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/templates',
  },
  {
  id: 'admin-alerts',
- label: 'Alerts',
- description: 'Configure alert rules and view triggered alerts',
+ label: t('layout:nav.alerts'),
+ description: t('layout:search.items.adminAlerts.description'),
  icon: Bell,
  to: '/admin/alerts',
  category: 'Admin',
  keywords: ['alert', 'notification', 'rule', 'cpu', 'memory', 'disk', 'threshold', 'monitoring'],
  permissions: ['alert.read', 'admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/alerts',
  },
  {
  id: 'admin-databases',
- label: 'Database Hosts',
- description: 'MySQL and PostgreSQL host management',
+ label: t('layout:search.items.adminDatabases.label'),
+ description: t('layout:search.items.adminDatabases.description'),
  icon: DbIcon,
  to: '/admin/database',
  category: 'Admin',
  keywords: ['database', 'mysql', 'postgres', 'postgresql', 'db host', 'sql'],
  permissions: ['admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/database',
  },
  {
  id: 'admin-system',
- label: 'System',
- description: 'Health, SMTP, and mod manager configuration',
+ label: t('layout:nav.system'),
+ description: t('layout:search.items.adminSystem.description'),
  icon: Settings,
  to: '/admin/system',
  category: 'Admin',
  keywords: ['system', 'health', 'status', 'uptime', 'configuration'],
  permissions: ['admin.write'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/system',
  },
  {
  id: 'admin-security',
- label: 'Security',
- description: 'Rate limits, lockout policy, and file tunnel settings',
+ label: t('layout:nav.security'),
+ description: t('layout:search.items.adminSecurity.description'),
  icon: Shield,
  to: '/admin/security',
  category: 'Admin',
  keywords: ['security', 'rate limit', 'lockout', 'brute force', 'throttle', 'firewall'],
  permissions: ['admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/security',
  },
  {
  id: 'admin-audit-logs',
- label: 'Audit Logs',
- description: 'Detailed audit trail of all actions',
+ label: t('layout:nav.auditLogs'),
+ description: t('layout:search.items.adminAuditLogs.description'),
  icon: History,
  to: '/admin/audit-logs',
  category: 'Admin',
  keywords: ['audit', 'log', 'history', 'trail', 'compliance'],
  permissions: ['admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/audit-logs',
  },
  {
  id: 'admin-system-errors',
- label: 'System Errors',
- description: 'Captured panel, agent, and frontend errors',
+ label: t('layout:nav.systemErrors'),
+ description: t('layout:search.items.adminSystemErrors.description'),
  icon: AlertTriangle,
  to: '/admin/system-errors',
  category: 'Admin',
  keywords: ['system errors', 'error log', 'exceptions', 'stack trace', 'crash', 'failures', 'sentry'],
  permissions: ['admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/system-errors',
  },
  {
  id: 'admin-api-keys',
- label: 'API Keys',
- description: 'Manage platform API keys and tokens',
+ label: t('layout:nav.apiKeys'),
+ description: t('layout:search.items.adminApiKeys.description'),
  icon: Key,
  to: '/admin/api-keys',
  category: 'Admin',
  keywords: ['api key', 'token', 'api', 'authentication', 'key management'],
  permissions: ['apikey.manage', 'admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/api-keys',
  },
  {
  id: 'admin-plugins',
- label: 'Plugins',
- description: 'Install and manage panel extensions',
+ label: t('layout:nav.plugins'),
+ description: t('layout:search.items.adminPlugins.description'),
  icon: Plug,
  to: '/admin/plugins',
  category: 'Admin',
  keywords: ['plugin', 'extension', 'addon', 'module', 'integration'],
  permissions: ['admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/plugins',
  },
  {
  id: 'admin-migration',
- label: 'Migration',
- description: 'Import servers from Pterodactyl',
+ label: t('layout:nav.migration'),
+ description: t('layout:search.items.adminMigration.description'),
  icon: ArrowRightLeft,
  to: '/admin/migration',
  category: 'Admin',
  keywords: ['migration', 'pterodactyl', 'import', 'transfer', 'migrate'],
  permissions: ['admin.read'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: '/admin/migration',
  },
 
  // ── Theme Settings Deep Links ───────────────────────────
  {
  id: 'settings-theme-overview',
- label: 'Theme Settings',
- description: 'Branding, colors, palette, and appearance',
+ label: t('layout:search.items.settingsThemeOverview.label'),
+ description: t('layout:search.items.settingsThemeOverview.description'),
  icon: Palette,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -356,8 +358,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-branding',
- label: 'Branding & Identity',
- description: 'Panel name, logo, and favicon',
+ label: t('layout:search.items.settingsBranding.label'),
+ description: t('layout:search.items.settingsBranding.description'),
  icon: Layers,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -370,8 +372,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-palette-generator',
- label: 'Color Palette Generator',
- description: 'Auto-generate a full theme from one seed color',
+ label: t('layout:search.items.settingsPaletteGenerator.label'),
+ description: t('layout:search.items.settingsPaletteGenerator.description'),
  icon: Wand2,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -385,8 +387,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-brand-colors',
- label: 'Brand Colors',
- description: 'Primary, secondary, and accent color configuration',
+ label: t('layout:search.items.settingsBrandColors.label'),
+ description: t('layout:search.items.settingsBrandColors.description'),
  icon: SwatchBook,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -399,8 +401,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-semantic-colors',
- label: 'Semantic Colors',
- description: 'Success, warning, danger, and info feedback colors',
+ label: t('layout:search.items.settingsSemanticColors.label'),
+ description: t('layout:search.items.settingsSemanticColors.description'),
  icon: Palette,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -413,8 +415,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-dark-surfaces',
- label: 'Dark Mode Surfaces',
- description: 'Background, card, border, and elevation for dark theme',
+ label: t('layout:search.items.settingsDarkSurfaces.label'),
+ description: t('layout:search.items.settingsDarkSurfaces.description'),
  icon: Moon,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -427,8 +429,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-light-surfaces',
- label: 'Light Mode Surfaces',
- description: 'Background, card, border, and elevation for light theme',
+ label: t('layout:search.items.settingsLightSurfaces.label'),
+ description: t('layout:search.items.settingsLightSurfaces.description'),
  icon: Sun,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -441,8 +443,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-theme-mode',
- label: 'Theme Mode',
- description: 'Default theme and available modes (light/dark)',
+ label: t('layout:search.items.settingsThemeMode.label'),
+ description: t('layout:search.items.settingsThemeMode.description'),
  icon: Layers,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -455,8 +457,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-layout',
- label: 'Layout & Border Radius',
- description: 'Adjust border radius and spacing globally',
+ label: t('layout:search.items.settingsLayout.label'),
+ description: t('layout:search.items.settingsLayout.description'),
  icon: Layout,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -469,8 +471,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-custom-css',
- label: 'Custom CSS',
- description: 'Inject custom CSS into every page',
+ label: t('layout:search.items.settingsCustomCss.label'),
+ description: t('layout:search.items.settingsCustomCss.description'),
  icon: Globe,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -483,8 +485,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-sso',
- label: 'SSO / OAuth Providers',
- description: 'Configure WHMCS and Paymenter OIDC login',
+ label: t('layout:search.items.settingsSso.label'),
+ description: t('layout:search.items.settingsSso.description'),
  icon: ShieldCheck,
  to: '/admin/theme-settings',
  category: 'Settings',
@@ -500,8 +502,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  // ── Security Settings Deep Links ────────────────────────
  {
  id: 'settings-rate-limits',
- label: 'Rate Limits',
- description: 'Auth, file, console, and agent request limits',
+ label: t('layout:search.items.settingsRateLimits.label'),
+ description: t('layout:search.items.settingsRateLimits.description'),
  icon: Zap,
  to: '/admin/security',
  category: 'Settings',
@@ -515,8 +517,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-lockout-policy',
- label: 'Lockout Policy',
- description: 'Failed login attempt lockout rules',
+ label: t('layout:search.items.settingsLockoutPolicy.label'),
+ description: t('layout:search.items.settingsLockoutPolicy.description'),
  icon: Lock,
  to: '/admin/security',
  category: 'Settings',
@@ -529,8 +531,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-auth-lockouts',
- label: 'Auth Lockouts',
- description: 'View and manage locked accounts',
+ label: t('layout:search.items.settingsAuthLockouts.label'),
+ description: t('layout:search.items.settingsAuthLockouts.description'),
  icon: Lock,
  to: '/admin/security',
  category: 'Settings',
@@ -543,8 +545,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-file-tunnel',
- label: 'File Tunnel Settings',
- description: 'File transfer rate limits and upload sizes',
+ label: t('layout:search.items.settingsFileTunnel.label'),
+ description: t('layout:search.items.settingsFileTunnel.description'),
  icon: FolderSync,
  to: '/admin/security',
  category: 'Settings',
@@ -557,8 +559,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-audit-retention',
- label: 'Audit Retention',
- description: 'How long audit logs are kept',
+ label: t('layout:search.items.settingsAuditRetention.label'),
+ description: t('layout:search.items.settingsAuditRetention.description'),
  icon: History,
  to: '/admin/security',
  category: 'Settings',
@@ -573,8 +575,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  // ── System Settings Deep Links ──────────────────────────
  {
  id: 'settings-smtp',
- label: 'SMTP / Email',
- description: 'Outbound email configuration for alerts and invites',
+ label: t('layout:search.items.settingsSmtp.label'),
+ description: t('layout:search.items.settingsSmtp.description'),
  icon: Mail,
  to: '/admin/system',
  category: 'Settings',
@@ -588,8 +590,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-mod-manager',
- label: 'Mod Manager API Keys',
- description: 'CurseForge and Modrinth API keys for mod downloads',
+ label: t('layout:search.items.settingsModManager.label'),
+ description: t('layout:search.items.settingsModManager.description'),
  icon: Key,
  to: '/admin/system',
  category: 'Settings',
@@ -602,8 +604,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'settings-health',
- label: 'Platform Health',
- description: 'System status, node health, and database status',
+ label: t('layout:search.items.settingsHealth.label'),
+ description: t('layout:search.items.settingsHealth.description'),
  icon: MonitorDot,
  to: '/admin/system',
  category: 'Settings',
@@ -618,8 +620,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  // ── Node Settings Deep Links ────────────────────────────
  {
  id: 'settings-node-allocations',
- label: 'Node Allocations & IP Pools',
- description: 'Manage IP addresses, ports, and CIDR pools per node',
+ label: t('layout:search.items.settingsNodeAllocations.label'),
+ description: t('layout:search.items.settingsNodeAllocations.description'),
  icon: Network,
  to: '/admin/nodes',
  category: 'Settings',
@@ -635,8 +637,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  // ── Profile / Account Features ──────────────────────────
  {
  id: 'profile-2fa',
- label: 'Two-Factor Authentication',
- description: 'Enable TOTP authenticator app for your account',
+ label: t('layout:search.items.profile2fa.label'),
+ description: t('layout:search.items.profile2fa.description'),
  icon: Smartphone,
  to: '/profile',
  category: 'Profile',
@@ -648,8 +650,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'profile-passkeys',
- label: 'Passkeys / WebAuthn',
- description: 'Passwordless login with biometrics or security keys',
+ label: t('layout:search.items.profilePasskeys.label'),
+ description: t('layout:search.items.profilePasskeys.description'),
  icon: Fingerprint,
  to: '/profile',
  category: 'Profile',
@@ -661,8 +663,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'profile-sso',
- label: 'SSO Linked Accounts',
- description: 'View and manage OAuth-linked login providers',
+ label: t('layout:search.items.profileSso.label'),
+ description: t('layout:search.items.profileSso.description'),
  icon: Globe,
  to: '/profile',
  category: 'Profile',
@@ -674,8 +676,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'profile-sessions',
- label: 'Active Sessions',
- description: 'View and revoke active login sessions',
+ label: t('layout:search.items.profileSessions.label'),
+ description: t('layout:search.items.profileSessions.description'),
  icon: MonitorDot,
  to: '/profile',
  category: 'Profile',
@@ -687,8 +689,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'profile-api-keys',
- label: 'Personal API Keys',
- description: 'Manage your personal API tokens',
+ label: t('layout:search.items.profileApiKeys.label'),
+ description: t('layout:search.items.profileApiKeys.description'),
  icon: Key,
  to: '/profile',
  category: 'Profile',
@@ -700,8 +702,8 @@ const STATIC_ITEMS: StaticItemDef[] = [
  },
  {
  id: 'profile-audit-log',
- label: 'Personal Audit Log',
- description: 'Your recent activity and actions',
+ label: t('layout:search.items.profileAuditLog.label'),
+ description: t('layout:search.items.profileAuditLog.description'),
  icon: History,
  to: '/profile',
  category: 'Profile',
@@ -715,36 +717,30 @@ const STATIC_ITEMS: StaticItemDef[] = [
 
 // ── Server Tab Definitions ────────────────────────────────
 
-const SERVER_TABS: {
- key: string;
- label: string;
- description: string;
- icon: LucideIcon;
- keywords: string[];
-}[] = [
- { key: 'console', label: 'Console', description: 'Live server terminal output', icon: Terminal, keywords: ['terminal', 'command', 'output', 'logs', 'stdin', 'stdout'] },
- { key: 'files', label: 'File Manager', description: 'Browse and edit server files', icon: FolderOpen, keywords: ['file', 'files', 'browse', 'edit', 'upload', 'download', 'directory'] },
- { key: 'sftp', label: 'SFTP Access', description: 'SFTP connection details and credentials', icon: FolderSync, keywords: ['sftp', 'ftp', 'file transfer', 'sftp credentials', 'sftp info'] },
- { key: 'backups', label: 'Backups', description: 'Server backup management and restore', icon: HardDrive, keywords: ['backup', 'restore', 'snapshot', 'archive'] },
- { key: 'tasks', label: 'Scheduled Tasks', description: 'Cron-like automation for server operations', icon: Clock, keywords: ['task', 'schedule', 'cron', 'automate', 'recurring', 'backup schedule'] },
- { key: 'databases', label: 'Databases', description: 'Server database management', icon: DbIcon, keywords: ['database', 'mysql', 'postgres', 'db'] },
- { key: 'metrics', label: 'Metrics', description: 'CPU, memory, disk, and network graphs', icon: BarChart3, keywords: ['metrics', 'cpu', 'memory', 'ram', 'disk', 'network', 'usage', 'performance', 'graphs', 'charts'] },
- { key: 'alerts', label: 'Alerts', description: 'Server-specific alert rules and history', icon: Bell, keywords: ['alert', 'notification', 'threshold', 'cpu alert', 'memory alert'] },
- { key: 'modManager', label: 'Mod Manager', description: 'Browse and install mods from CurseForge/Modrinth', icon: Package, keywords: ['mod', 'mods', 'curseforge', 'modrinth', 'plugin', 'modpack'] },
- { key: 'pluginManager', label: 'Plugin Manager', description: 'Install and manage server plugins', icon: Plug, keywords: ['plugin', 'plugins', 'extension', 'bukkit', 'spigot', 'paper'] },
- { key: 'configuration', label: 'Configuration', description: 'Server startup flags and JVM settings', icon: Wrench, keywords: ['config', 'configuration', 'startup', 'jvm', 'flags', 'arguments', 'java options'] },
- { key: 'users', label: 'Subusers', description: 'Manage server access and permissions', icon: Users, keywords: ['subuser', 'user', 'permission', 'access', 'share server', 'collaborator'] },
- { key: 'settings', label: 'Server Settings', description: 'Rename, reinstall, and server preferences', icon: Settings, keywords: ['settings', 'rename', 'reinstall', 'preferences', 'server settings'] },
- { key: 'admin', label: 'Server Admin', description: 'Owner transfer, suspension, and admin actions', icon: Shield, keywords: ['admin', 'owner', 'transfer', 'suspend', 'unsuspend', 'delete', 'reinstall'] },
+const buildServerTabs = (t: TFunction): { key: string; label: string; description: string; icon: LucideIcon; keywords: string[] }[] => [
+ { key: 'console', label: t('layout:search.serverTabs.console.label'), description: t('layout:search.serverTabs.console.description'), icon: Terminal, keywords: ['terminal', 'command', 'output', 'logs', 'stdin', 'stdout'] },
+ { key: 'files', label: t('layout:search.serverTabs.files.label'), description: t('layout:search.serverTabs.files.description'), icon: FolderOpen, keywords: ['file', 'files', 'browse', 'edit', 'upload', 'download', 'directory'] },
+ { key: 'sftp', label: t('layout:search.serverTabs.sftp.label'), description: t('layout:search.serverTabs.sftp.description'), icon: FolderSync, keywords: ['sftp', 'ftp', 'file transfer', 'sftp credentials', 'sftp info'] },
+ { key: 'backups', label: t('layout:search.serverTabs.backups.label'), description: t('layout:search.serverTabs.backups.description'), icon: HardDrive, keywords: ['backup', 'restore', 'snapshot', 'archive'] },
+ { key: 'tasks', label: t('layout:search.serverTabs.tasks.label'), description: t('layout:search.serverTabs.tasks.description'), icon: Clock, keywords: ['task', 'schedule', 'cron', 'automate', 'recurring', 'backup schedule'] },
+ { key: 'databases', label: t('layout:search.serverTabs.databases.label'), description: t('layout:search.serverTabs.databases.description'), icon: DbIcon, keywords: ['database', 'mysql', 'postgres', 'db'] },
+ { key: 'metrics', label: t('layout:search.serverTabs.metrics.label'), description: t('layout:search.serverTabs.metrics.description'), icon: BarChart3, keywords: ['metrics', 'cpu', 'memory', 'ram', 'disk', 'network', 'usage', 'performance', 'graphs', 'charts'] },
+ { key: 'alerts', label: t('layout:search.serverTabs.alerts.label'), description: t('layout:search.serverTabs.alerts.description'), icon: Bell, keywords: ['alert', 'notification', 'threshold', 'cpu alert', 'memory alert'] },
+ { key: 'modManager', label: t('layout:search.serverTabs.modManager.label'), description: t('layout:search.serverTabs.modManager.description'), icon: Package, keywords: ['mod', 'mods', 'curseforge', 'modrinth', 'plugin', 'modpack'] },
+ { key: 'pluginManager', label: t('layout:search.serverTabs.pluginManager.label'), description: t('layout:search.serverTabs.pluginManager.description'), icon: Plug, keywords: ['plugin', 'plugins', 'extension', 'bukkit', 'spigot', 'paper'] },
+ { key: 'configuration', label: t('layout:search.serverTabs.configuration.label'), description: t('layout:search.serverTabs.configuration.description'), icon: Wrench, keywords: ['config', 'configuration', 'startup', 'jvm', 'flags', 'arguments', 'java options'] },
+ { key: 'users', label: t('layout:search.serverTabs.users.label'), description: t('layout:search.serverTabs.users.description'), icon: Users, keywords: ['subuser', 'user', 'permission', 'access', 'share server', 'collaborator'] },
+ { key: 'settings', label: t('layout:search.serverTabs.settings.label'), description: t('layout:search.serverTabs.settings.description'), icon: Settings, keywords: ['settings', 'rename', 'reinstall', 'preferences', 'server settings'] },
+ { key: 'admin', label: t('layout:search.serverTabs.admin.label'), description: t('layout:search.serverTabs.admin.description'), icon: Shield, keywords: ['admin', 'owner', 'transfer', 'suspend', 'unsuspend', 'delete', 'reinstall'] },
 ];
 
 // ── Quick Actions ─────────────────────────────────────────
 
-const QUICK_ACTIONS: Omit<SearchItem, 'category'>[] = [
+const buildQuickActions = (t: TFunction): Omit<SearchItem, 'category'>[] => [
  {
  id: 'action-create-server',
- label: 'Create New Server',
- description: 'Deploy a new game server from a template',
+ label: t('layout:search.quickActions.createServer.label'),
+ description: t('layout:search.quickActions.createServer.description'),
  icon: Plus,
  to: '/servers?action=create',
  keywords: ['create', 'new', 'deploy', 'provision', 'add server'],
@@ -763,6 +759,7 @@ interface SearchPaletteProps {
 
 function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) {
  const navigate = useNavigate();
+ const { t } = useTranslation('layout');
  const user = useAuthStore((s) => s.user);
  const { data: servers, isLoading: serversLoading } = useServers();
  const { data: nodes, isLoading: nodesLoading } = useNodes();
@@ -780,11 +777,11 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
  const staticItems = useMemo((): SearchItem[] => {
  const userPermissions = user?.permissions || [];
- return STATIC_ITEMS.filter((item) => {
+ return buildStaticItems(t).filter((item) => {
  if (item.permissions) return hasAnyPermission(userPermissions, item.permissions);
  return true;
  });
- }, [user]);
+ }, [t, user]);
 
  // ── Dynamic items (servers, nodes, templates, server tabs, actions) ──
 
@@ -797,7 +794,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  items.push({
  id: `server-${server.id}`,
  label: server.name,
- description: server.node?.name || 'Unknown node',
+ description: server.node?.name || t('search.unknownNode'),
  icon: Server,
  to: `/servers/${server.id}`,
  category: 'Servers',
@@ -805,7 +802,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  path: `/servers/${server.id}`,
  });
 
- for (const tab of SERVER_TABS) {
+ for (const tab of buildServerTabs(t)) {
  if (
  tab.key === 'databases' &&
  !canShowServerDatabasesTab({
@@ -822,7 +819,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  }
  items.push({
  id: `server-${server.id}-tab-${tab.key}`,
- label: `${server.name} — ${tab.label}`,
+ label: t('search.serverTabTitle', { server: server.name, tab: tab.label }),
  description: tab.description,
  icon: tab.icon,
  to: `/servers/${server.id}/${tab.key}`,
@@ -844,7 +841,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  items.push({
  id: `node-${node.id}`,
  label: node.name,
- description: `${node.hostname || node.publicAddress || ''} · ${node._count?.servers ?? 0} servers`,
+ description: t('search.hostWithServers', { host: node.hostname || node.publicAddress || '', servers: node._count?.servers ?? 0 }),
  icon: MonitorDot,
  to: `/admin/nodes/${node.id}`,
  category: 'Nodes',
@@ -854,8 +851,8 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  });
  items.push({
  id: `node-${node.id}-allocations`,
- label: `${node.name} — Allocations`,
- description: 'IP pools, ports, and CIDR management',
+ label: t('search.nodeAllocations', { name: node.name }),
+ description: t('search.nodeAllocationsDescription'),
  icon: Network,
  to: `/admin/nodes/${node.id}/allocations`,
  category: 'Nodes',
@@ -877,7 +874,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  items.push({
  id: `template-${tmpl.id}`,
  label: tmpl.name,
- description: tmpl.description || tmpl.nest?.name || 'Server template',
+ description: tmpl.description || tmpl.nest?.name || t('search.serverTemplate'),
  icon: FileText,
  to: `/admin/templates/${tmpl.id}`,
  category: 'Templates',
@@ -889,12 +886,12 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  }
 
  // Quick actions
- for (const action of QUICK_ACTIONS) {
+ for (const action of buildQuickActions(t)) {
  items.push({ ...action, category: 'Actions' as SearchCategory });
  }
 
  return items;
- }, [servers, nodes, templates, databaseHosts.length, user?.permissions]);
+ }, [servers, nodes, templates, databaseHosts.length, user?.permissions, t]);
 
  // ── Combined ──
 
@@ -905,6 +902,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
  // ── Available categories ──
 
+ const categoryMeta = useMemo(() => buildCategoryMeta(t), [t]);
  const availableCategories = useMemo(() => {
  const cats = new Set<SearchCategory>();
  combinedItems.forEach((item) => cats.add(item.category));
@@ -1066,7 +1064,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  animate={{ opacity: 1 }}
  exit={{ opacity: 0 }}
  transition={{ duration: 0.15 }}
- className="fixed inset-0 z-[100] overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label="Search"
+ className="fixed inset-0 z-[100] overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label={t('common:actions.search')}
  >
  {/* Backdrop */}
  <div
@@ -1093,7 +1091,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  value={query}
  onChange={(e) => setQuery(e.target.value)}
  onKeyDown={handleKeyDown}
- placeholder="Search pages, settings, servers, nodes…"
+ placeholder={t('search.placeholder')}
  className="flex-1 border-none bg-transparent px-3 py-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
  />
  {isLoading && (
@@ -1102,7 +1100,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  <button
  type="button"
  onClick={onClose}
- aria-label="Close search"
+ aria-label={t('search.close')}
  className="ml-2 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <X className="h-4 w-4" />
@@ -1122,10 +1120,10 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
  )}
  >
- All
+ {t('search.all')}
  </button>
  {availableCategories.map((cat) => {
- const meta = CATEGORY_META[cat];
+ const meta = categoryMeta[cat];
  const CatIcon = meta.icon;
  return (
  <button
@@ -1152,15 +1150,15 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  {flatItems.length === 0 ? (
  <div className="py-12 text-center">
  <Search className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
- <p className="text-sm font-medium text-muted-foreground">No results found</p>
+ <p className="text-sm font-medium text-muted-foreground">{t('search.noResults')}</p>
  <p className="mt-1 text-xs text-muted-foreground/60">
- Try different keywords or clear the filter
+ {t('search.noResultsHint')}
  </p>
  </div>
  ) : (
  <div className="space-y-1">
  {groupedItems.map(({ category, items }) => {
- const meta = CATEGORY_META[category];
+ const meta = categoryMeta[category];
  const CatIcon = meta.icon;
 
  return (
@@ -1247,23 +1245,23 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">
  {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘K' : 'Ctrl+K'}
  </kbd>
- open
+ {t('search.hints.open')}
  </span>
  <span className="flex items-center gap-1">
  <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">↑↓</kbd>
- navigate
+ {t('search.hints.navigate')}
  </span>
  <span className="flex items-center gap-1">
  <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">↵</kbd>
- select
+ {t('search.hints.select')}
  </span>
  <span className="flex items-center gap-1">
  <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">esc</kbd>
- close
+ {t('search.hints.close')}
  </span>
  </div>
  <div className="text-[11px] text-muted-foreground/40">
- {flatItems.length} result{flatItems.length !== 1 ? 's' : ''}
+ {t('search.resultCount', { count: flatItems.length })}
  </div>
  </div>
  </div>

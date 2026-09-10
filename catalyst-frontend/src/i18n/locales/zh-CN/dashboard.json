@@ -1,0 +1,46 @@
+{
+  "accountFallback": "",
+  "activity": {
+    "emptyDescription": "",
+    "emptyTitle": "",
+    "errorDescription": "",
+    "errorTitle": "",
+    "title": "",
+    "viewAll": ""
+  },
+  "description": "",
+  "overview": {
+    "account": "",
+    "accountDescription": "",
+    "alertsUnacknowledged": "",
+    "allResolved": "",
+    "errorDescription": "",
+    "errorTitle": "",
+    "nodesConnected": "",
+    "serversRunning": "",
+    "title": ""
+  },
+  "pendingAlerts_other": "",
+  "quickActions": {
+    "createServer": "",
+    "createServerDescription": "",
+    "profileSettings": "",
+    "profileSettingsDescription": "",
+    "registerNode": "",
+    "registerNodeDescription": "",
+    "viewAlerts": "",
+    "viewAlertsAllClear": "",
+    "viewAlertsAttention": "",
+    "viewServers": "",
+    "viewServersDescription": ""
+  },
+  "resources": {
+    "cpu": "",
+    "description": "",
+    "errorDescription": "",
+    "errorTitle": "",
+    "memory": "",
+    "title": ""
+  },
+  "title": ""
+}

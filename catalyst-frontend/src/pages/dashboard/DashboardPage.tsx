@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { formatNumber } from '@/i18n/format';
 import { useMemo } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useDashboardStats, useDashboardActivity, useResourceStats } from '../../hooks/useDashboard';
@@ -27,6 +29,7 @@ import { PluginSlot } from '../../plugins/PluginSlot';
 
 function DashboardPage() {
  const user = useAuthStore((s) => s.user);
+ const { t } = useTranslation('dashboard');
  const canCreateServer =
  user?.permissions?.includes('*') ||
  user?.permissions?.includes('admin.write') ||
@@ -51,91 +54,93 @@ function DashboardPage() {
  const resourceMetrics = useMemo(
  () => [
  {
- label: 'CPU',
+ label: t('resources.cpu'),
  value: resources?.cpuUtilization ?? 0,
  icon: Cpu,
  color: 'text-primary',
  bg: 'bg-primary',
  },
  {
- label: 'Memory',
+ label: t('resources.memory'),
  value: resources?.memoryUtilization ?? 0,
  icon: MemoryStick,
  color: 'text-success',
  bg: 'bg-success',
  },
  ],
- [resources?.cpuUtilization, resources?.memoryUtilization],
+ [resources?.cpuUtilization, resources?.memoryUtilization, t],
  );
 
  const quickActions = useMemo(
  () =>
  [
  {
- title: 'Create Server',
- description: 'Deploy a new game server',
+ title: t('quickActions.createServer'),
+ description: t('quickActions.createServerDescription'),
  icon: Plus,
  href: '/servers',
  iconClass: 'bg-primary/10 text-primary',
  show: canCreateServer,
  },
  {
- title: 'View Servers',
- description: 'Manage your servers',
+ title: t('quickActions.viewServers'),
+ description: t('quickActions.viewServersDescription'),
  icon: Server,
  href: '/servers',
  iconClass: 'bg-primary/10 text-primary',
  show: !canCreateServer,
  },
  {
- title: 'Register Node',
- description: 'Add infrastructure',
+ title: t('quickActions.registerNode'),
+ description: t('quickActions.registerNodeDescription'),
  icon: HardDrive,
  href: '/admin/nodes',
  iconClass: 'bg-primary/10 text-primary',
  show: isAdmin,
  },
  {
- title: 'View Alerts',
- description: alertsUnacked > 0 ? `${alertsUnacked} need attention` : 'All clear',
+ title: t('quickActions.viewAlerts'),
+ description: alertsUnacked > 0
+ ? t('quickActions.viewAlertsAttention', { alerts: alertsUnacked })
+ : t('quickActions.viewAlertsAllClear'),
  icon: Shield,
  href: isAdmin ? '/admin/alerts' : '/profile',
  iconClass: alertsUnacked > 0 ? 'bg-warning/10 text-warning' : 'bg-surface-2 text-muted-foreground',
  show: isAdmin,
  },
  {
- title: 'Profile Settings',
- description: 'Manage your account',
+ title: t('quickActions.profileSettings'),
+ description: t('quickActions.profileSettingsDescription'),
  icon: Activity,
  href: '/profile',
  iconClass: 'bg-surface-2 text-muted-foreground',
  show: !isAdmin,
  },
  ].filter((action) => action.show),
- [canCreateServer, isAdmin, alertsUnacked],
+ [canCreateServer, isAdmin, alertsUnacked, t],
  );
 
  return (
  <div className="space-y-4">
  <TabHeader
  icon={LayoutDashboard}
- title="Dashboard"
- description={`Infrastructure overview for ${user?.firstName || user?.lastName
+ title={t('title')}
+ description={t('description', { name: user?.firstName || user?.lastName
  ? [user.firstName, user.lastName].filter(Boolean).join(' ')
- : user?.username || 'your account'}.`}
+ : user?.username || t('accountFallback') })}
  actions={alertsUnacked > 0 ? (
  <div className="rounded-full border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs font-medium text-warning">
- {alertsUnacked} unacknowledged alert{alertsUnacked === 1 ? '' : 's'}
+ {t('pendingAlerts', { count: alertsUnacked })}
  </div>
  ) : undefined}
  />
 
  <ServerTabCard>
- <SectionHeader icon={BarChart3} title="Overview" />
+ <SectionHeader icon={BarChart3} title={t('overview.title')} />
  {statsLoading ? (
  <TabLoadingState rows={3} />
  ) : statsError ? (
- <TabErrorState title="Unable to load overview" description="Dashboard counts could not be loaded." />
+ <TabErrorState title={t('overview.errorTitle')} description={t('overview.errorDescription')} />
  ) : (
  <div className={`grid grid-cols-1 gap-3 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                 <Link
@@ -146,8 +151,8 @@ function DashboardPage() {
                     <Server className="h-4 w-4" />
                   </div>
                   <div className="flex-1">
-                    <div className="type-numeric text-sm font-semibold text-foreground">{serversTotal}</div>
-                    <div className="type-meta">{serversOnline} running</div>
+                    <div className="type-numeric text-sm font-semibold text-foreground">{formatNumber(serversTotal)}</div>
+                    <div className="type-meta">{t('overview.serversRunning', { servers: serversOnline })}</div>
                   </div>
                   <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
                 </Link>
@@ -161,8 +166,8 @@ function DashboardPage() {
                       <HardDrive className="h-4 w-4" />
                     </div>
                     <div className="flex-1">
-                      <div className="type-numeric text-sm font-semibold text-foreground">{nodesTotal}</div>
-                      <div className="type-meta">{nodesOnline} connected</div>
+                      <div className="type-numeric text-sm font-semibold text-foreground">{formatNumber(nodesTotal)}</div>
+                      <div className="type-meta">{t('overview.nodesConnected', { nodes: nodesOnline })}</div>
                     </div>
                     <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
                   </Link>
@@ -177,9 +182,9 @@ function DashboardPage() {
                       <AlertTriangle className="h-4 w-4" />
                     </div>
                     <div className="flex-1">
-                      <div className="type-numeric text-sm font-semibold text-foreground">{stats?.alerts ?? 0}</div>
+                      <div className="type-numeric text-sm font-semibold text-foreground">{formatNumber(stats?.alerts ?? 0)}</div>
                       <div className="type-meta">
-                        {alertsUnacked > 0 ? `${alertsUnacked} unacknowledged` : 'All resolved'}
+                        {alertsUnacked > 0 ? t('overview.alertsUnacknowledged', { alerts: alertsUnacked }) : t('overview.allResolved')}
                       </div>
                     </div>
                     <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
@@ -195,8 +200,8 @@ function DashboardPage() {
                       <Activity className="h-4 w-4" />
                     </div>
                     <div className="flex-1">
-                      <div className="text-sm font-semibold tracking-tight text-foreground">Account</div>
-                      <div className="type-meta">Manage your profile</div>
+                      <div className="text-sm font-semibold tracking-tight text-foreground">{t('overview.account')}</div>
+                      <div className="type-meta">{t('overview.accountDescription')}</div>
                     </div>
                     <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
                   </Link>
@@ -228,12 +233,12 @@ function DashboardPage() {
  {/* Metrics + Activity */}
  <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
  <ServerTabCard className="lg:col-span-3">
- <SectionHeader icon={Activity} title="Resource Utilization" description="Latest metrics across all nodes" />
+ <SectionHeader icon={Activity} title={t('resources.title')} description={t('resources.description')} />
 
  {resourcesLoading ? (
  <TabLoadingState rows={2} />
  ) : resourcesError ? (
- <TabErrorState title="Unable to load resources" description="Resource utilization is currently unavailable." />
+ <TabErrorState title={t('resources.errorTitle')} description={t('resources.errorDescription')} />
  ) : (
  <div className="mt-6 space-y-5">
  {resourceMetrics.map((metric) => (
@@ -245,7 +250,7 @@ function DashboardPage() {
  </div>
  <span className="text-sm font-medium text-foreground">{metric.label}</span>
  </div>
- <span className="type-numeric text-sm font-semibold text-foreground">{metric.value}%</span>
+ <span className="type-numeric text-sm font-semibold text-foreground">{formatNumber(metric.value)}%</span>
  </div>
  <div className="h-2 overflow-hidden rounded-full bg-surface-2">
  <div
@@ -261,13 +266,13 @@ function DashboardPage() {
 
  <ServerTabCard className="lg:col-span-2">
  <div className="flex items-center justify-between">
- <SectionHeader icon={Clock} title="Recent Activity" />
+ <SectionHeader icon={Clock} title={t('activity.title')} />
  {isAdmin && (
  <Link
  to="/admin/audit-logs"
  className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
  >
- View all
+ {t('activity.viewAll')}
  <ArrowRight className="h-3 w-3" />
  </Link>
  )}
@@ -276,7 +281,7 @@ function DashboardPage() {
  {activitiesLoading ? (
  <TabLoadingState rows={3} />
  ) : activitiesError ? (
- <TabErrorState title="Unable to load activity" description="Recent activity could not be loaded." />
+ <TabErrorState title={t('activity.errorTitle')} description={t('activity.errorDescription')} />
  ) : activities && activities.length > 0 ? (
  <div className="mt-4 space-y-1">
  {activities.map((item) => (
@@ -303,7 +308,7 @@ function DashboardPage() {
  </div>
  ) : (
  <div className="mt-4">
- <TabEmptyState title="No recent activity" description="No recorded actions in this window." />
+ <TabEmptyState title={t('activity.emptyTitle')} description={t('activity.emptyDescription')} />
  </div>
  )}
  </ServerTabCard>

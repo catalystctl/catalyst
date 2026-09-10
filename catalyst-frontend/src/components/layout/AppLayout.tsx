@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Sidebar from './Sidebar';
 import Breadcrumbs from './Breadcrumbs';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
@@ -18,6 +19,7 @@ function AppLayout() {
   useServerStateUpdates();
   useSseAdminEvents();
   useProfileSync();
+  const { t } = useTranslation('layout');
   const { panelName } = usePanelBranding();
   const { pathname } = useLocation();
   const isServerWorkspace = /^\/servers\/[^/]+/.test(pathname);
@@ -33,7 +35,7 @@ function AppLayout() {
 
   return (
     <div className="app-shell flex h-[100dvh] font-sans">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:m-2 focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-foreground">Skip to content</a>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:m-2 focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-foreground">{t('shell.skipToContent')}</a>
       <UpdateNotification />
       {/* Mobile overlay */}
       {isMobileSidebarOpen && (
@@ -50,7 +52,7 @@ function AppLayout() {
           type="button"
           onClick={() => setIsMobileSidebarOpen(true)}
           className="pressable flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-          aria-label="Open menu"
+          aria-label={t('shell.openMenu')}
           aria-expanded={isMobileSidebarOpen}
           aria-controls="mobile-sidebar"
         >
@@ -63,7 +65,7 @@ function AppLayout() {
           type="button"
           onClick={() => setIsSearchOpen(true)}
           className="pressable flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-          aria-label="Search"
+          aria-label={t('common:actions.search')}
         >
           <Search className="h-4 w-4" />
         </button>
@@ -81,7 +83,7 @@ function AppLayout() {
           type="button"
           onClick={() => setIsMobileSidebarOpen(false)}
           className="pressable absolute right-2 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground lg:hidden"
-          aria-label="Close menu"
+          aria-label={t('shell.closeMenu')}
         >
           <X className="h-4 w-4" />
         </button>
@@ -107,10 +109,10 @@ function AppLayout() {
               type="button"
               onClick={() => setIsSearchOpen(true)}
               className="pressable hidden min-w-[200px] items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-panel hover:border-primary/25 hover:text-foreground lg:flex"
-              aria-label={`Open search (${shortcut})`}
+              aria-label={t('shell.openSearch', { shortcut })}
             >
               <Search className="h-3.5 w-3.5" />
-              <span className="flex-1 text-left">Search…</span>
+              <span className="flex-1 text-left">{t('shell.searchButton')}</span>
               <kbd className="hidden rounded-md border border-border bg-surface-2/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block">
                 {shortcut}
               </kbd>

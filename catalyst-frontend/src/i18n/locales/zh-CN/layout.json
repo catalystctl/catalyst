@@ -1,0 +1,328 @@
+{
+  "breadcrumbs": {
+    "activity": "",
+    "backups": "",
+    "console": "",
+    "files": "",
+    "invites": "",
+    "metrics": "",
+    "nav": "",
+    "network": "",
+    "plugin": "",
+    "settings": "",
+    "sftp": "",
+    "tasks": ""
+  },
+  "nav": {
+    "admin": "",
+    "alerts": "",
+    "allServers": "",
+    "apiKeys": "",
+    "auditLogs": "",
+    "dashboard": "",
+    "databases": "",
+    "migration": "",
+    "nodes": "",
+    "overview": "",
+    "plugins": "",
+    "profile": "",
+    "roles": "",
+    "security": "",
+    "servers": "",
+    "system": "",
+    "systemErrors": "",
+    "templates": "",
+    "theme": "",
+    "tickets": "",
+    "users": ""
+  },
+  "search": {
+    "all": "",
+    "categories": {
+      "account": "",
+      "actions": "",
+      "admin": "",
+      "nodes": "",
+      "pages": "",
+      "servers": "",
+      "serverTabs": "",
+      "settings": "",
+      "templates": ""
+    },
+    "close": "",
+    "hints": {
+      "close": "",
+      "navigate": "",
+      "open": "",
+      "select": ""
+    },
+    "hostWithServers": "",
+    "items": {
+      "adminAlerts": {
+        "description": ""
+      },
+      "adminApiKeys": {
+        "description": ""
+      },
+      "adminAuditLogs": {
+        "description": ""
+      },
+      "adminDatabases": {
+        "description": "",
+        "label": ""
+      },
+      "adminMigration": {
+        "description": ""
+      },
+      "adminNodes": {
+        "description": ""
+      },
+      "adminOverview": {
+        "description": "",
+        "label": ""
+      },
+      "adminPlugins": {
+        "description": ""
+      },
+      "adminRoles": {
+        "description": "",
+        "label": ""
+      },
+      "adminSecurity": {
+        "description": ""
+      },
+      "adminServers": {
+        "description": ""
+      },
+      "adminSystem": {
+        "description": ""
+      },
+      "adminSystemErrors": {
+        "description": ""
+      },
+      "adminTemplates": {
+        "description": ""
+      },
+      "adminUsers": {
+        "description": ""
+      },
+      "navDashboard": {
+        "description": ""
+      },
+      "navProfile": {
+        "description": ""
+      },
+      "navServers": {
+        "description": ""
+      },
+      "profile2fa": {
+        "description": "",
+        "label": ""
+      },
+      "profileApiKeys": {
+        "description": "",
+        "label": ""
+      },
+      "profileAuditLog": {
+        "description": "",
+        "label": ""
+      },
+      "profilePasskeys": {
+        "description": "",
+        "label": ""
+      },
+      "profileSessions": {
+        "description": "",
+        "label": ""
+      },
+      "profileSso": {
+        "description": "",
+        "label": ""
+      },
+      "settingsAuditRetention": {
+        "description": "",
+        "label": ""
+      },
+      "settingsAuthLockouts": {
+        "description": "",
+        "label": ""
+      },
+      "settingsBrandColors": {
+        "description": "",
+        "label": ""
+      },
+      "settingsBranding": {
+        "description": "",
+        "label": ""
+      },
+      "settingsCustomCss": {
+        "description": "",
+        "label": ""
+      },
+      "settingsDarkSurfaces": {
+        "description": "",
+        "label": ""
+      },
+      "settingsFileTunnel": {
+        "description": "",
+        "label": ""
+      },
+      "settingsHealth": {
+        "description": "",
+        "label": ""
+      },
+      "settingsLayout": {
+        "description": "",
+        "label": ""
+      },
+      "settingsLightSurfaces": {
+        "description": "",
+        "label": ""
+      },
+      "settingsLockoutPolicy": {
+        "description": "",
+        "label": ""
+      },
+      "settingsModManager": {
+        "description": "",
+        "label": ""
+      },
+      "settingsNodeAllocations": {
+        "description": "",
+        "label": ""
+      },
+      "settingsPaletteGenerator": {
+        "description": "",
+        "label": ""
+      },
+      "settingsRateLimits": {
+        "description": "",
+        "label": ""
+      },
+      "settingsSemanticColors": {
+        "description": "",
+        "label": ""
+      },
+      "settingsSmtp": {
+        "description": "",
+        "label": ""
+      },
+      "settingsSso": {
+        "description": "",
+        "label": ""
+      },
+      "settingsThemeMode": {
+        "description": "",
+        "label": ""
+      },
+      "settingsThemeOverview": {
+        "description": "",
+        "label": ""
+      }
+    },
+    "nodeAllocations": "",
+    "nodeAllocationsDescription": "",
+    "noResults": "",
+    "noResultsHint": "",
+    "placeholder": "",
+    "quickActions": {
+      "createServer": {
+        "description": "",
+        "label": ""
+      }
+    },
+    "resultCount_other": "",
+    "serverTabs": {
+      "admin": {
+        "description": "",
+        "label": ""
+      },
+      "alerts": {
+        "description": "",
+        "label": ""
+      },
+      "backups": {
+        "description": "",
+        "label": ""
+      },
+      "configuration": {
+        "description": "",
+        "label": ""
+      },
+      "console": {
+        "description": "",
+        "label": ""
+      },
+      "databases": {
+        "description": "",
+        "label": ""
+      },
+      "files": {
+        "description": "",
+        "label": ""
+      },
+      "metrics": {
+        "description": "",
+        "label": ""
+      },
+      "modManager": {
+        "description": "",
+        "label": ""
+      },
+      "pluginManager": {
+        "description": "",
+        "label": ""
+      },
+      "settings": {
+        "description": "",
+        "label": ""
+      },
+      "sftp": {
+        "description": "",
+        "label": ""
+      },
+      "tasks": {
+        "description": "",
+        "label": ""
+      },
+      "users": {
+        "description": "",
+        "label": ""
+      }
+    },
+    "serverTabTitle": "",
+    "serverTemplate": "",
+    "unknownNode": ""
+  },
+  "sections": {
+    "accessControl": "",
+    "administration": "",
+    "configuration": "",
+    "extensions": "",
+    "infrastructure": "",
+    "monitoring": "",
+    "plugins": ""
+  },
+  "shell": {
+    "closeMenu": "",
+    "openMenu": "",
+    "openSearch": "",
+    "searchButton": "",
+    "skipToContent": ""
+  },
+  "sidebar": {
+    "collapse": "",
+    "dark": "",
+    "darkMode": "",
+    "expand": "",
+    "fallbackRole": "",
+    "fallbackUser": "",
+    "light": "",
+    "lightMode": "",
+    "logoAlt": "",
+    "logout": "",
+    "outOfDate": "",
+    "updateTooltip": "",
+    "versionTooltip": ""
+  }
+}

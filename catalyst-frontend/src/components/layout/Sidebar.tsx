@@ -30,6 +30,8 @@ import {
   Ticket,
 } from 'lucide-react';
 import { useState, MouseEvent, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { usePluginTabs, usePluginRoutes } from '../../plugins/hooks';
@@ -37,30 +39,38 @@ import { PluginSlot } from '../../plugins/PluginSlot';
 import { PANEL_VERSION } from '../../utils/version';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 
-const mainLinks = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/servers', label: 'Servers', icon: Server },
-  { to: '/tickets', label: 'Tickets', icon: Ticket },
+const buildMainLinks = (t: TFunction): MenuItemProps[] => [
+  { to: '/dashboard', label: t('layout:nav.dashboard'), icon: LayoutDashboard },
+  { to: '/servers', label: t('layout:nav.servers'), icon: Server },
+  { to: '/tickets', label: t('layout:nav.tickets'), icon: Ticket },
 ];
 
-const adminSections = [
+interface AdminSection {
+  id: string;
+  title: string;
+  links: MenuItemProps[];
+}
+
+const buildAdminSections = (t: TFunction): AdminSection[] => [
   {
-    title: 'Administration',
+    id: 'administration',
+    title: t('layout:sections.administration'),
     links: [
       {
         to: '/admin',
-        label: 'Overview',
+        label: t('layout:nav.overview'),
         icon: BarChart3,
         permissions: ['admin.read', 'admin.write'],
       },
     ],
   },
   {
-    title: 'Infrastructure',
+    id: 'infrastructure',
+    title: t('layout:sections.infrastructure'),
     links: [
       {
         to: '/admin/nodes',
-        label: 'Nodes',
+        label: t('layout:nav.nodes'),
         icon: Network,
         permissions: [
           'node.read',
@@ -73,13 +83,13 @@ const adminSections = [
       },
       {
         to: '/admin/servers',
-        label: 'All Servers',
+        label: t('layout:nav.allServers'),
         icon: Server,
         permissions: ['admin.read', 'admin.write'],
       },
       {
         to: '/admin/templates',
-        label: 'Templates',
+        label: t('layout:nav.templates'),
         icon: FileText,
         permissions: [
           'template.read',
@@ -93,11 +103,12 @@ const adminSections = [
     ],
   },
   {
-    title: 'Access Control',
+    id: 'access-control',
+    title: t('layout:sections.accessControl'),
     links: [
       {
         to: '/admin/users',
-        label: 'Users',
+        label: t('layout:nav.users'),
         icon: Users,
         permissions: [
           'user.read',
@@ -111,7 +122,7 @@ const adminSections = [
       },
       {
         to: '/admin/roles',
-        label: 'Roles',
+        label: t('layout:nav.roles'),
         icon: Shield,
         permissions: [
           'role.read',
@@ -124,42 +135,44 @@ const adminSections = [
       },
       {
         to: '/admin/api-keys',
-        label: 'API Keys',
+        label: t('layout:nav.apiKeys'),
         icon: Key,
         permissions: ['apikey.manage', 'admin.read', 'admin.write'],
       },
     ],
   },
   {
-    title: 'Configuration',
+    id: 'configuration',
+    title: t('layout:sections.configuration'),
     links: [
       {
         to: '/admin/database',
-        label: 'Databases',
+        label: t('layout:nav.databases'),
         icon: Database,
         permissions: ['admin.read', 'admin.write'],
       },
-      { to: '/admin/system', label: 'System', icon: Settings, permissions: ['admin.write'] },
+      { to: '/admin/system', label: t('layout:nav.system'), icon: Settings, permissions: ['admin.write'] },
       {
         to: '/admin/security',
-        label: 'Security',
+        label: t('layout:nav.security'),
         icon: Lock,
         permissions: ['admin.read', 'admin.write'],
       },
       {
         to: '/admin/migration',
-        label: 'Migration',
+        label: t('layout:nav.migration'),
         icon: ArrowRightLeft,
         permissions: ['admin.read', 'admin.write'],
       },
     ],
   },
   {
-    title: 'Monitoring',
+    id: 'monitoring',
+    title: t('layout:sections.monitoring'),
     links: [
       {
         to: '/admin/alerts',
-        label: 'Alerts',
+        label: t('layout:nav.alerts'),
         icon: Bell,
         permissions: [
           'alert.read',
@@ -172,28 +185,29 @@ const adminSections = [
       },
       {
         to: '/admin/audit-logs',
-        label: 'Audit Logs',
+        label: t('layout:nav.auditLogs'),
         icon: Activity,
         permissions: ['admin.read', 'admin.write'],
       },
       {
         to: '/admin/system-errors',
-        label: 'System Errors',
+        label: t('layout:nav.systemErrors'),
         icon: Bug,
         permissions: ['admin.read', 'admin.write'],
       },
     ],
   },
   {
-    title: 'Extensions',
+    id: 'extensions',
+    title: t('layout:sections.extensions'),
     links: [
       {
         to: '/admin/plugins',
-        label: 'Plugins',
+        label: t('layout:nav.plugins'),
         icon: Plug,
         permissions: ['admin.read', 'admin.write'],
       },
-      { to: '/admin/theme-settings', label: 'Theme', icon: Palette, permissions: ['admin.write'] },
+      { to: '/admin/theme-settings', label: t('layout:nav.theme'), icon: Palette, permissions: ['admin.write'] },
     ],
   },
 ];
@@ -318,6 +332,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
 
 function Sidebar() {
   const { data: updateData } = useUpdateCheck();
+  const { t } = useTranslation('layout');
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
   const user = useAuthStore((s) => s.user);
@@ -336,7 +351,7 @@ function Sidebar() {
 
   const filteredSections = useMemo(() => {
     const userPermissions = user?.permissions || [];
-    const sections = adminSections
+    const sections = buildAdminSections(t)
       .map((section) => ({
         ...section,
         links: section.links.filter((link) => hasAnyPermission(userPermissions, link.permissions)),
@@ -346,7 +361,8 @@ function Sidebar() {
     // Inject enabled plugin admin tabs (e.g. Ticketing)
     if (pluginTabs.length > 0 && hasAnyPermission(userPermissions, ['admin.read', 'admin.write'])) {
       sections.push({
-        title: 'Plugins',
+        id: 'plugins',
+        title: t('sections.plugins'),
         links: pluginTabs.map((tab) => ({
           to: `/admin/plugin/${tab.id}`,
           label: tab.label,
@@ -359,11 +375,11 @@ function Sidebar() {
     }
 
     return sections;
-  }, [user, pluginTabs]);
+  }, [user, pluginTabs, t]);
 
   const displayName = user?.firstName || user?.lastName
     ? [user.firstName, user.lastName].filter(Boolean).join(' ')
-    : user?.username || 'User';
+    : user?.username || t('sidebar.fallbackUser');
   const initials =
     displayName.slice(0, 2).toUpperCase() ||
     user?.email?.slice(0, 2).toUpperCase() ||
@@ -396,7 +412,7 @@ function Sidebar() {
         >
           <img
             src={logoUrl}
-            alt={`${panelName} logo`}
+            alt={t('sidebar.logoAlt', { panelName })}
             className="h-8 w-8 rounded-md border border-border/70"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
@@ -413,7 +429,7 @@ function Sidebar() {
       {/* Navigation */}
       <div className={cn('flex-1 overflow-y-auto', collapsed ? 'px-2 py-3' : 'px-3 py-3')}>
         <div className="space-y-0.5">
-          {mainLinks
+          {buildMainLinks(t)
             .filter((link) => link.to !== '/tickets' || hasUserTicketPage)
             .map((link) => (
               <MenuItem key={link.to} {...link} collapsed={collapsed} />
@@ -424,7 +440,12 @@ function Sidebar() {
           <div className={cn('border-t border-border/70 pt-3', collapsed ? 'mt-3' : 'mt-4')}>
             <div className={cn(collapsed ? 'space-y-2' : 'space-y-2.5')}>
               {filteredSections.map((section) => (
-                <Section key={section.title} {...section} collapsed={collapsed} />
+                <Section
+                  key={section.id}
+                  title={section.title}
+                  links={section.links}
+                  collapsed={collapsed}
+                />
               ))}
             </div>
           </div>
@@ -449,7 +470,7 @@ function Sidebar() {
           {!collapsed && (
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-foreground">{displayName}</div>
-              <div className="truncate text-[11px] text-muted-foreground">{user?.role || 'Member'}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{user?.role || t('sidebar.fallbackRole')}</div>
             </div>
           )}
         </NavLink>
@@ -462,18 +483,18 @@ function Sidebar() {
               'pressable flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground',
               collapsed ? 'w-8' : 'flex-1 px-2 text-[11px] font-medium',
             )}
-            aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            aria-label={theme === 'dark' ? t('sidebar.lightMode') : t('sidebar.darkMode')}
+            title={theme === 'dark' ? t('sidebar.lightMode') : t('sidebar.darkMode')}
           >
             {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            {!collapsed && (theme === 'dark' ? 'Light' : 'Dark')}
+            {!collapsed && (theme === 'dark' ? t('sidebar.light') : t('sidebar.dark'))}
           </button>
           <button
             type="button"
             onClick={toggleSidebar}
             className="pressable flex h-8 w-8 items-center justify-center rounded-lg border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+            title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
           >
             {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
           </button>
@@ -484,8 +505,8 @@ function Sidebar() {
               'pressable flex h-8 items-center justify-center rounded-lg border border-border/80 text-danger transition-colors hover:bg-danger/10',
               collapsed ? 'w-8' : 'w-8',
             )}
-            aria-label="Logout"
-            title="Logout"
+            aria-label={t('sidebar.logout')}
+            title={t('sidebar.logout')}
           >
             <LogOut className="h-3.5 w-3.5" />
           </button>
@@ -513,12 +534,12 @@ function Sidebar() {
           )}
           title={
             updateData?.updateAvailable
-              ? `v${updateData.currentVersion} - out of date (latest: v${updateData.latestVersion})`
-              : `Catalyst Panel v${PANEL_VERSION}`
+              ? t('sidebar.updateTooltip', { current: updateData.currentVersion, latest: updateData.latestVersion })
+              : t('sidebar.versionTooltip', { version: PANEL_VERSION })
           }
         >
           <span>v{PANEL_VERSION}</span>
-          {!collapsed && updateData?.updateAvailable && <span className="text-warning">(out of date)</span>}
+          {!collapsed && updateData?.updateAvailable && <span className="text-warning">{t('sidebar.outOfDate')}</span>}
           {collapsed && updateData?.updateAvailable && <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />}
         </Link>
       </div>}

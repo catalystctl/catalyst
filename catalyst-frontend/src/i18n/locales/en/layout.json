@@ -1,0 +1,329 @@
+{
+  "breadcrumbs": {
+    "activity": "Activity",
+    "backups": "Backups",
+    "console": "Console",
+    "files": "Files",
+    "invites": "Invites",
+    "metrics": "Metrics",
+    "nav": "Breadcrumb",
+    "network": "Network",
+    "plugin": "Plugin",
+    "settings": "Settings",
+    "sftp": "SFTP",
+    "tasks": "Tasks"
+  },
+  "nav": {
+    "admin": "Admin",
+    "alerts": "Alerts",
+    "allServers": "All Servers",
+    "apiKeys": "API Keys",
+    "auditLogs": "Audit Logs",
+    "dashboard": "Dashboard",
+    "databases": "Databases",
+    "migration": "Migration",
+    "nodes": "Nodes",
+    "overview": "Overview",
+    "plugins": "Plugins",
+    "profile": "Profile",
+    "roles": "Roles",
+    "security": "Security",
+    "servers": "Servers",
+    "system": "System",
+    "systemErrors": "System Errors",
+    "templates": "Templates",
+    "theme": "Theme",
+    "tickets": "Tickets",
+    "users": "Users"
+  },
+  "search": {
+    "all": "All",
+    "categories": {
+      "account": "Account",
+      "actions": "Quick Actions",
+      "admin": "Admin",
+      "nodes": "Nodes",
+      "pages": "Pages",
+      "servers": "Servers",
+      "serverTabs": "Server Tabs",
+      "settings": "Settings & Config",
+      "templates": "Templates"
+    },
+    "close": "Close search",
+    "hints": {
+      "close": "close",
+      "navigate": "navigate",
+      "open": "open",
+      "select": "select"
+    },
+    "hostWithServers": "{{host}} · {{servers}} servers",
+    "items": {
+      "adminAlerts": {
+        "description": "Configure alert rules and view triggered alerts"
+      },
+      "adminApiKeys": {
+        "description": "Manage platform API keys and tokens"
+      },
+      "adminAuditLogs": {
+        "description": "Detailed audit trail of all actions"
+      },
+      "adminDatabases": {
+        "description": "MySQL and PostgreSQL host management",
+        "label": "Database Hosts"
+      },
+      "adminMigration": {
+        "description": "Import servers from Pterodactyl"
+      },
+      "adminNodes": {
+        "description": "Manage compute nodes and resources"
+      },
+      "adminOverview": {
+        "description": "Platform-wide dashboard and statistics",
+        "label": "Admin Overview"
+      },
+      "adminPlugins": {
+        "description": "Install and manage panel extensions"
+      },
+      "adminRoles": {
+        "description": "Configure roles and permission groups",
+        "label": "Roles & Permissions"
+      },
+      "adminSecurity": {
+        "description": "Rate limits, lockout policy, and file tunnel settings"
+      },
+      "adminServers": {
+        "description": "View every server on the platform"
+      },
+      "adminSystem": {
+        "description": "Health, SMTP, and mod manager configuration"
+      },
+      "adminSystemErrors": {
+        "description": "Captured panel, agent, and frontend errors"
+      },
+      "adminTemplates": {
+        "description": "Server templates and nest configurations"
+      },
+      "adminUsers": {
+        "description": "Manage user accounts and access"
+      },
+      "navDashboard": {
+        "description": "Overview of your servers and activity"
+      },
+      "navProfile": {
+        "description": "Account settings and security"
+      },
+      "navServers": {
+        "description": "View and manage your game servers"
+      },
+      "profile2fa": {
+        "description": "Enable TOTP authenticator app for your account",
+        "label": "Two-Factor Authentication"
+      },
+      "profileApiKeys": {
+        "description": "Manage your personal API tokens",
+        "label": "Personal API Keys"
+      },
+      "profileAuditLog": {
+        "description": "Your recent activity and actions",
+        "label": "Personal Audit Log"
+      },
+      "profilePasskeys": {
+        "description": "Passwordless login with biometrics or security keys",
+        "label": "Passkeys / WebAuthn"
+      },
+      "profileSessions": {
+        "description": "View and revoke active login sessions",
+        "label": "Active Sessions"
+      },
+      "profileSso": {
+        "description": "View and manage OAuth-linked login providers",
+        "label": "SSO Linked Accounts"
+      },
+      "settingsAuditRetention": {
+        "description": "How long audit logs are kept",
+        "label": "Audit Retention"
+      },
+      "settingsAuthLockouts": {
+        "description": "View and manage locked accounts",
+        "label": "Auth Lockouts"
+      },
+      "settingsBrandColors": {
+        "description": "Primary, secondary, and accent color configuration",
+        "label": "Brand Colors"
+      },
+      "settingsBranding": {
+        "description": "Panel name, logo, and favicon",
+        "label": "Branding & Identity"
+      },
+      "settingsCustomCss": {
+        "description": "Inject custom CSS into every page",
+        "label": "Custom CSS"
+      },
+      "settingsDarkSurfaces": {
+        "description": "Background, card, border, and elevation for dark theme",
+        "label": "Dark Mode Surfaces"
+      },
+      "settingsFileTunnel": {
+        "description": "File transfer rate limits and upload sizes",
+        "label": "File Tunnel Settings"
+      },
+      "settingsHealth": {
+        "description": "System status, node health, and database status",
+        "label": "Platform Health"
+      },
+      "settingsLayout": {
+        "description": "Adjust border radius and spacing globally",
+        "label": "Layout & Border Radius"
+      },
+      "settingsLightSurfaces": {
+        "description": "Background, card, border, and elevation for light theme",
+        "label": "Light Mode Surfaces"
+      },
+      "settingsLockoutPolicy": {
+        "description": "Failed login attempt lockout rules",
+        "label": "Lockout Policy"
+      },
+      "settingsModManager": {
+        "description": "CurseForge and Modrinth API keys for mod downloads",
+        "label": "Mod Manager API Keys"
+      },
+      "settingsNodeAllocations": {
+        "description": "Manage IP addresses, ports, and CIDR pools per node",
+        "label": "Node Allocations & IP Pools"
+      },
+      "settingsPaletteGenerator": {
+        "description": "Auto-generate a full theme from one seed color",
+        "label": "Color Palette Generator"
+      },
+      "settingsRateLimits": {
+        "description": "Auth, file, console, and agent request limits",
+        "label": "Rate Limits"
+      },
+      "settingsSemanticColors": {
+        "description": "Success, warning, danger, and info feedback colors",
+        "label": "Semantic Colors"
+      },
+      "settingsSmtp": {
+        "description": "Outbound email configuration for alerts and invites",
+        "label": "SMTP / Email"
+      },
+      "settingsSso": {
+        "description": "Configure WHMCS and Paymenter OIDC login",
+        "label": "SSO / OAuth Providers"
+      },
+      "settingsThemeMode": {
+        "description": "Default theme and available modes (light/dark)",
+        "label": "Theme Mode"
+      },
+      "settingsThemeOverview": {
+        "description": "Branding, colors, palette, and appearance",
+        "label": "Theme Settings"
+      }
+    },
+    "nodeAllocations": "{{name}} — Allocations",
+    "nodeAllocationsDescription": "IP pools, ports, and CIDR management",
+    "noResults": "No results found",
+    "noResultsHint": "Try different keywords or clear the filter",
+    "placeholder": "Search pages, settings, servers, nodes…",
+    "quickActions": {
+      "createServer": {
+        "description": "Deploy a new game server from a template",
+        "label": "Create New Server"
+      }
+    },
+    "resultCount_one": "{{count}} result",
+    "resultCount_other": "{{count}} results",
+    "serverTabs": {
+      "admin": {
+        "description": "Owner transfer, suspension, and admin actions",
+        "label": "Server Admin"
+      },
+      "alerts": {
+        "description": "Server-specific alert rules and history",
+        "label": "Alerts"
+      },
+      "backups": {
+        "description": "Server backup management and restore",
+        "label": "Backups"
+      },
+      "configuration": {
+        "description": "Server startup flags and JVM settings",
+        "label": "Configuration"
+      },
+      "console": {
+        "description": "Live server terminal output",
+        "label": "Console"
+      },
+      "databases": {
+        "description": "Server database management",
+        "label": "Databases"
+      },
+      "files": {
+        "description": "Browse and edit server files",
+        "label": "File Manager"
+      },
+      "metrics": {
+        "description": "CPU, memory, disk, and network graphs",
+        "label": "Metrics"
+      },
+      "modManager": {
+        "description": "Browse and install mods from CurseForge/Modrinth",
+        "label": "Mod Manager"
+      },
+      "pluginManager": {
+        "description": "Install and manage server plugins",
+        "label": "Plugin Manager"
+      },
+      "settings": {
+        "description": "Rename, reinstall, and server preferences",
+        "label": "Server Settings"
+      },
+      "sftp": {
+        "description": "SFTP connection details and credentials",
+        "label": "SFTP Access"
+      },
+      "tasks": {
+        "description": "Cron-like automation for server operations",
+        "label": "Scheduled Tasks"
+      },
+      "users": {
+        "description": "Manage server access and permissions",
+        "label": "Subusers"
+      }
+    },
+    "serverTabTitle": "{{server}} — {{tab}}",
+    "serverTemplate": "Server template",
+    "unknownNode": "Unknown node"
+  },
+  "sections": {
+    "accessControl": "Access Control",
+    "administration": "Administration",
+    "configuration": "Configuration",
+    "extensions": "Extensions",
+    "infrastructure": "Infrastructure",
+    "monitoring": "Monitoring",
+    "plugins": "Plugins"
+  },
+  "shell": {
+    "closeMenu": "Close menu",
+    "openMenu": "Open menu",
+    "openSearch": "Open search ({{shortcut}})",
+    "searchButton": "Search…",
+    "skipToContent": "Skip to content"
+  },
+  "sidebar": {
+    "collapse": "Collapse sidebar",
+    "dark": "Dark",
+    "darkMode": "Dark mode",
+    "expand": "Expand sidebar",
+    "fallbackRole": "Member",
+    "fallbackUser": "User",
+    "light": "Light",
+    "lightMode": "Light mode",
+    "logoAlt": "{{panelName}} logo",
+    "logout": "Logout",
+    "outOfDate": "(out of date)",
+    "updateTooltip": "v{{current}} - out of date (latest: v{{latest}})",
+    "versionTooltip": "Catalyst Panel v{{version}}"
+  }
+}

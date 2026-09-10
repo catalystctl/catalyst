@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import SetupPage from './pages/setup/SetupPage';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -56,11 +57,12 @@ const MigrationPage = lazy(() => import('./pages/admin/MigrationPage'));
 
 /** Minimal page-level loading skeleton */
 function PageFallback() {
+ const { t } = useTranslation();
  return (
  <div className="flex h-full items-center justify-center p-8">
  <div className="flex flex-col items-center gap-3">
  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
- <p className="text-sm text-muted-foreground">Loading...</p>
+ <p className="text-sm text-muted-foreground">{t('actions.loading')}</p>
  </div>
  </div>
  );

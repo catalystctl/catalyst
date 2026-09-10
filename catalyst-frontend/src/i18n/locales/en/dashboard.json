@@ -1,0 +1,47 @@
+{
+  "accountFallback": "your account",
+  "activity": {
+    "emptyDescription": "No recorded actions in this window.",
+    "emptyTitle": "No recent activity",
+    "errorDescription": "Recent activity could not be loaded.",
+    "errorTitle": "Unable to load activity",
+    "title": "Recent Activity",
+    "viewAll": "View all"
+  },
+  "description": "Infrastructure overview for {{name}}.",
+  "overview": {
+    "account": "Account",
+    "accountDescription": "Manage your profile",
+    "alertsUnacknowledged": "{{alerts}} unacknowledged",
+    "allResolved": "All resolved",
+    "errorDescription": "Dashboard counts could not be loaded.",
+    "errorTitle": "Unable to load overview",
+    "nodesConnected": "{{nodes}} connected",
+    "serversRunning": "{{servers}} running",
+    "title": "Overview"
+  },
+  "pendingAlerts_one": "{{count}} unacknowledged alert",
+  "pendingAlerts_other": "{{count}} unacknowledged alerts",
+  "quickActions": {
+    "createServer": "Create Server",
+    "createServerDescription": "Deploy a new game server",
+    "profileSettings": "Profile Settings",
+    "profileSettingsDescription": "Manage your account",
+    "registerNode": "Register Node",
+    "registerNodeDescription": "Add infrastructure",
+    "viewAlerts": "View Alerts",
+    "viewAlertsAllClear": "All clear",
+    "viewAlertsAttention": "{{alerts}} need attention",
+    "viewServers": "View Servers",
+    "viewServersDescription": "Manage your servers"
+  },
+  "resources": {
+    "cpu": "CPU",
+    "description": "Latest metrics across all nodes",
+    "errorDescription": "Resource utilization is currently unavailable.",
+    "errorTitle": "Unable to load resources",
+    "memory": "Memory",
+    "title": "Resource Utilization"
+  },
+  "title": "Dashboard"
+}
