@@ -1,0 +1,495 @@
+{
+  "allocations": {
+    "assigned": "Assigned",
+    "assignedIps": "Assigned IPs ({{value}})",
+    "available": "Available",
+    "createAllocations": "Create Allocations",
+    "createPool": {
+      "autofill": "Autofill /24",
+      "cidr": "CIDR",
+      "cidrPlaceholder": "192.168.50.0/24 or 2001:db8::/64",
+      "creating": "Creating…",
+      "description": "Configure MACVLAN network with automatic IPAM.",
+      "endIp": "End IP (optional)",
+      "gateway": "Gateway",
+      "intro": "IP pools enable servers to get dedicated IP addresses on the network via MACVLAN. Each server automatically receives one IP from the pool.",
+      "networkName": "Network Name",
+      "quickSetupIp": "Quick Setup IP",
+      "reservedIps": "Reserved IPs (optional, comma-separated)",
+      "startIp": "Start IP (optional)",
+      "submit": "Create pool",
+      "title": "Create IP pool"
+    },
+    "createPoolButton": "Create IP Pool",
+    "createPort": {
+      "aliasLabel": "Alias (optional)",
+      "aliasPlaceholder": "e.g., Main network",
+      "creating": "Creating…",
+      "description": "Bulk create IP:Port allocations for this node.",
+      "ipFormat": "<strong>IP format:</strong> Single IP (192.168.1.100), multiple IPs (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24)",
+      "ipLabel": "IP Address(es)",
+      "ipPlaceholder": "192.168.1.100, 2001:db8::1, or 192.168.1.0/24",
+      "portFormat": "<strong>Port format:</strong> Single port (25565), range (25565-25664), or multiple (25565, 25566, 25567)",
+      "portsLabel": "Port(s)",
+      "portsPlaceholder": "25565-25664 or 25565, 25566",
+      "quickFill": "Quick fill: Use node IP + ports 25565-25664",
+      "submit": "Create allocations",
+      "title": "Create port allocations"
+    },
+    "description": "Manage port bindings and IP pools for {{node}}",
+    "empty": {
+      "createFirst": "Create your first allocations",
+      "createFirstPool": "Create your first IP pool",
+      "noMatches": "No port allocations match your search",
+      "noPools": "No IP pools for this node",
+      "noPoolsDescription": "Create an IP pool to enable MACVLAN networking with automatic IPAM.",
+      "noPorts": "No port allocations yet",
+      "noPortsDescription": "Create allocations to assign IP:Port combinations to servers."
+    },
+    "field": {
+      "ip": "IP",
+      "port": "Port"
+    },
+    "info": {
+      "ipPools": "<strong>IP Pools</strong> — Automatic MACVLAN networking with dedicated IPs per server (advanced)",
+      "portAllocations": "<strong>Port Allocations</strong> — Track IP:Port combinations for proxy/NAT setups (like Pterodactyl)",
+      "title": "Two allocation types:"
+    },
+    "poolCount": "{{value}} pools",
+    "poolTotals": "Total: {{total}} · Gateway: {{gateway}}",
+    "portCount": "{{value}} ports",
+    "searchPlaceholder": "Search by IP, port, alias...",
+    "stats": {
+      "assigned": "Assigned",
+      "available": "Available",
+      "reserved": "Reserved",
+      "totalIps": "Total IPs",
+      "totalPorts": "Total Ports",
+      "uniqueIps": "Unique IPs",
+      "used": "Used"
+    },
+    "tabs": {
+      "ips": "IP Pools",
+      "ports": "Port Allocations"
+    },
+    "thisNode": "this node",
+    "title": "Network Allocations",
+    "toast": {
+      "poolCreated": "IP pool created",
+      "poolDeleted": "IP pool deleted",
+      "portDeleted": "Port allocation deleted",
+      "portsCreated_one": "Created {{count}} port allocation",
+      "portsCreated_other": "Created {{count}} port allocations"
+    }
+  },
+  "database": {
+    "addHost": "Add host",
+    "catalystDatabase": "Catalyst Database",
+    "createDialog": {
+      "submit": "Create host",
+      "subtitle": "Register a MySQL host used to provision per-server databases.",
+      "title": "Add database host"
+    },
+    "creating": "Creating…",
+    "deleteDialog": {
+      "message": "Are you sure you want to remove \"{{name}}\"? Servers using this host for database provisioning may be affected.",
+      "title": "Delete database host?"
+    },
+    "description": "Monitor database health and manage hosts for server provisioning.",
+    "editDialog": {
+      "submit": "Save changes",
+      "subtitle": "Update connection details for this database host.",
+      "title": "Edit database host"
+    },
+    "empty": {
+      "description": "Create a host to provision databases for servers.",
+      "title": "No database hosts yet"
+    },
+    "form": {
+      "database": "Database",
+      "databaseHint": "The database to connect to for health checks and provisioning.",
+      "engine": "Engine",
+      "host": "Host",
+      "name": "Name",
+      "password": "Password",
+      "passwordEditHint": " (leave blank to keep)",
+      "port": "Port",
+      "username": "Username"
+    },
+    "host": {
+      "checking": "Checking",
+      "connected": "Connected",
+      "databaseCount_one": "{{count}} DB",
+      "databaseCount_other": "{{count}} DBs",
+      "disconnected": "Disconnected",
+      "pingCounts": "{{databases}} DBs, {{tables}} tables",
+      "port": "Port {{port}}",
+      "testConnection": "Test connection"
+    },
+    "hostCount": "{{value}} hosts",
+    "recordsValue": "{{users}} users, {{servers}} servers",
+    "saving": "Saving…",
+    "stats": {
+      "connections": "Connections",
+      "records": "Records",
+      "size": "Size",
+      "tables": "Tables"
+    },
+    "title": "Database",
+    "toast": {
+      "created": "Database host created",
+      "removed": "Database host removed",
+      "updated": "Database host updated"
+    }
+  },
+  "migration": {
+    "actions": {
+      "pause": "Pause",
+      "resume": "Resume"
+    },
+    "alwaysImported": {
+      "configFileEditor": "Config file editor",
+      "dockerImageOverride": "Docker image override",
+      "portAllocations": "Port allocations",
+      "serverConfig": "Server config & env vars",
+      "startupCommand": "Startup command",
+      "swapIoWeight": "Swap & IO weight"
+    },
+    "assigned": "assigned",
+    "backupWarnings": {
+      "noSlots_one": "{{count}} server has 0 backup slots",
+      "noSlots_other": "{{count}} servers have 0 backup slots",
+      "noSlotsDescription": "The migration will automatically set the backup limit to 1 on these servers to create a migration backup.",
+      "slotsFull_one": "{{count}} server has all backup slots in use",
+      "slotsFull_other": "{{count}} servers have all backup slots in use",
+      "slotsFullDescription": "The migration will automatically increase the backup limit by 1 to make room for a migration backup."
+    },
+    "connect": {
+      "apiKey": "Application API Key",
+      "clientApiKey": "Client API Key",
+      "clientApiKeyHint": "(for file migration)",
+      "clientApiKeyNote": "Required for backup creation and file migration. Create in Pterodactyl → API Credentials → Client API.",
+      "description": "Panel URL and application API key. Map onto existing online Catalyst nodes.",
+      "panelUrl": "Panel URL",
+      "title": "Connect"
+    },
+    "description": "Migrate servers from Pterodactyl to Catalyst",
+    "empty": {
+      "noActive": "No active migration",
+      "noActiveDescription": "Start a new migration to see progress here.",
+      "noJobs": "No migration jobs yet",
+      "noJobsDescription": "Start a new migration to see it here."
+    },
+    "free": "free",
+    "history": {
+      "jobSteps": "{{completed}}/{{total}} steps",
+      "title": "Migration History"
+    },
+    "imports": {
+      "databases": "Databases",
+      "noBackupSlots": "No backup slots",
+      "schedules": "Schedules",
+      "serverFiles": "Server Files",
+      "subusers": "Subusers"
+    },
+    "moreCount": "+{{value}} more",
+    "noAllocations": "No allocation details returned by Pterodactyl",
+    "noBackups": "no backups",
+    "nodeConfig": {
+      "allocations": "Node allocations ({{value}})",
+      "behindProxy": "Behind proxy",
+      "dataDirectory": "Data directory:",
+      "direct": "Direct",
+      "disk": "Disk:",
+      "diskValue": "{{disk}} MB ({{overallocation}}% overallocation)",
+      "endpoint": "Endpoint:",
+      "location": "Location:",
+      "maintenance": "Maintenance:",
+      "memory": "Memory:",
+      "memoryValue": "{{memory}} MB ({{overallocation}}% overallocation)",
+      "proxy": "Proxy:",
+      "sftpPort": "SFTP port:",
+      "uploadLimit": "Upload limit:",
+      "uploadLimitValue": "{{value}} MB"
+    },
+    "nodeMapping": {
+      "configuration": "Node configuration",
+      "helpFull": "All Pterodactyl nodes must be mapped. Click a node to see what gets imported.",
+      "helpSelect": "Select which Pterodactyl nodes to map. Click to see server import details.",
+      "noServers": "No servers on this node.",
+      "serversOnNode": "Servers on this node ({{value}})",
+      "title": "Map Pterodactyl Nodes to Catalyst Nodes"
+    },
+    "nodeServerCount": "{{value}} servers",
+    "noOnlineNodes": "No online Catalyst nodes detected. Migration requires at least one Catalyst node to be online. Start the agent on your nodes first.",
+    "phases": {
+      "backups": "Backups",
+      "current": "CURRENT",
+      "databases": "Databases",
+      "files": "Server Files",
+      "locations": "Locations",
+      "moreErrors": "+{{value}} more errors",
+      "schedules": "Schedules",
+      "servers": "Servers",
+      "steps": "{{value}} steps",
+      "templates": "Templates (Nests & Eggs)",
+      "title": "Migration Phases",
+      "users": "Users",
+      "validate": "Validation",
+      "waiting": "Waiting..."
+    },
+    "primary": "primary",
+    "progress": {
+      "completed": "{{value}} completed",
+      "duration": "Duration: {{duration}}",
+      "elapsed": "Elapsed: {{duration}}",
+      "failed": "{{value}} failed",
+      "phase": "Phase:",
+      "skipped": "{{value}} skipped",
+      "started": "Started: {{date}}",
+      "title": "Migration Progress"
+    },
+    "scope": {
+      "full": "Full Migration",
+      "fullDescription": "Map all Ptero nodes to Catalyst nodes",
+      "node": "Node by Node",
+      "nodeDescription": "Select which Ptero nodes to migrate",
+      "server": "Server by Server",
+      "serverDescription": "Map individual servers to Catalyst nodes",
+      "title": "Migration Scope"
+    },
+    "sections": {
+      "allocations": "Allocations",
+      "imports": "Imports"
+    },
+    "selectTargetNode": "Select target node",
+    "serverMapping": {
+      "help": "Click a server to see what gets imported automatically.",
+      "title": "Map Pterodactyl Servers to Catalyst Nodes"
+    },
+    "serverResources": {
+      "cpu": "CPU",
+      "disk": "Disk",
+      "memory": "Memory"
+    },
+    "skipReasons": {
+      "alreadyExists": "Already existing",
+      "noBackupSlots": "No backup slots",
+      "noClientApiKey": "No client API key",
+      "noSchedules": "No schedules",
+      "notApplicable": "Not applicable",
+      "notAvailable": "Not available",
+      "skipped": "Skipped"
+    },
+    "slotsFull": "slots full",
+    "startMigration": "Start Migration",
+    "status": {
+      "cancelled": "Cancelled",
+      "completed": "Completed",
+      "failed": "Failed",
+      "paused": "Paused",
+      "pending": "Pending",
+      "running": "Running",
+      "validating": "Validating"
+    },
+    "steps": {
+      "downloadFiles": "Download files",
+      "importBackup": "Import backup",
+      "importDatabase": "Import database",
+      "importDatabaseHost": "Import database host",
+      "importLocation": "Import location",
+      "importNest": "Import nest",
+      "importSchedule": "Import schedule",
+      "importServer": "Import server",
+      "importTemplate": "Import template",
+      "importUser": "Import user",
+      "more": "{{value}} more...",
+      "showLess": "Show less",
+      "toggleErrorDetails": "Toggle error details",
+      "validateConnection": "Test connection"
+    },
+    "stepStatus": {
+      "completed": "Done",
+      "failed": "Failed",
+      "pending": "Pending",
+      "running": "Running",
+      "skipped": "Skipped"
+    },
+    "summary": {
+      "nodesMapped": "{{mapped}} of {{total}} nodes mapped",
+      "selected": "selected",
+      "serversMapped": "{{mapped}} of {{total}} servers mapped"
+    },
+    "suspendedParen": "(suspended)",
+    "tabs": {
+      "active": "Active Migration",
+      "history": "History",
+      "new": "New Migration"
+    },
+    "test": {
+      "connected": "Connected (v{{version}})",
+      "failed": "Connection Failed",
+      "locations": "Locations",
+      "nests": "Nests",
+      "nodes": "Nodes",
+      "servers": "Servers",
+      "users": "Users"
+    },
+    "testConnection": "Test Connection",
+    "title": "Migration",
+    "toast": {
+      "cancelled": "Migration cancelled",
+      "completed": "Migration completed successfully!",
+      "connected": "Connected to Pterodactyl panel",
+      "connectionFailed": "Connection failed",
+      "connectionTestFailed": "Connection test failed",
+      "failed": "Migration failed: {{error}}",
+      "paused": "Migration paused",
+      "resumed": "Migration resumed",
+      "started": "Migration started",
+      "stepQueued": "Step queued for retry"
+    },
+    "unknownError": "Unknown error"
+  },
+  "nodes": {
+    "allLocations": "All",
+    "clearAll": "Clear all",
+    "clearFilters": "Clear filters",
+    "clearSelection": "Clear",
+    "deleteDialog": {
+      "message": "You are about to delete <1>{{label}}</1>.",
+      "title": "Delete Nodes",
+      "warning": "Nodes with running servers cannot be deleted. Stop all servers on a node before deleting it. This cannot be undone."
+    },
+    "description": "Manage infrastructure nodes and monitor availability",
+    "empty": {
+      "adjustFilters": "Try adjusting your search or filters.",
+      "installAgent": "Install the Catalyst agent and register nodes to begin.",
+      "none": "No nodes detected",
+      "notFound": "No nodes found"
+    },
+    "filter": {
+      "allLocations": "All locations",
+      "allStatuses": "All statuses",
+      "location": "Location",
+      "offlineCount": "Offline ({{value}})",
+      "onlineCount": "Online ({{value}})",
+      "status": "Status",
+      "unassignedCount": "Unassigned ({{value}})"
+    },
+    "filters": "Filters",
+    "hostnameUnavailable": "hostname n/a",
+    "lastSeen": "Last seen {{time}}",
+    "locationNodeCount_one": "{{count}} node",
+    "locationNodeCount_other": "{{count}} nodes",
+    "locations": "Locations",
+    "manage": "Manage",
+    "resultCount": "{{shown}} of {{total}}",
+    "searchPlaceholder": "Search nodes by name or hostname…",
+    "selectAll": "Select all",
+    "selectAllInSection": "Select all in section",
+    "selectedCount": "{{value}} selected",
+    "selectedLabel": "{{value}} nodes",
+    "sort": {
+      "cpuCores": "CPU cores",
+      "memory": "Memory",
+      "mostServers": "Most servers",
+      "nameAsc": "Name A→Z",
+      "nameDesc": "Name Z→A",
+      "status": "Status"
+    },
+    "stat": {
+      "cores": "cores",
+      "memory": "memory",
+      "servers": "servers"
+    },
+    "stats": {
+      "cpuCores": "CPU Cores",
+      "memory": "Memory",
+      "nodes": "Nodes",
+      "offline": "Offline",
+      "online": "Online",
+      "totalServers": "Total Servers"
+    },
+    "title": "Nodes",
+    "toast": {
+      "deleted_one": "{{count}} node deleted",
+      "deleted_other": "{{count}} nodes deleted"
+    },
+    "unassigned": "Unassigned"
+  },
+  "servers": {
+    "actions": {
+      "console": "Console",
+      "restart": "Restart",
+      "start": "Start",
+      "stop": "Stop",
+      "suspend": "Suspend",
+      "unsuspend": "Unsuspend",
+      "update": "Update"
+    },
+    "actionVerb": {
+      "delete": "delete",
+      "restart": "restart",
+      "start": "start",
+      "stop": "stop",
+      "suspend": "suspend",
+      "unsuspend": "unsuspend"
+    },
+    "clearAll": "Clear all",
+    "clearFilters": "Clear filters",
+    "clearSelection": "Clear",
+    "deleteDialog": {
+      "message": "You are about to delete <1>{{label}}</1>.",
+      "title": "Delete Servers",
+      "warning": "Servers must be stopped before deletion. This cannot be undone."
+    },
+    "description": "Monitor and manage every server across all nodes",
+    "empty": {
+      "adjustFilters": "Try adjusting your search or filters.",
+      "createServer": "Create a server to start managing it from this list.",
+      "none": "No servers yet",
+      "notFound": "No servers found"
+    },
+    "filter": {
+      "allNodes": "All nodes",
+      "allStatuses": "All statuses",
+      "allTemplates": "All templates",
+      "node": "Node",
+      "owner": "Owner",
+      "ownerPlaceholder": "Search owners…",
+      "status": "Status",
+      "template": "Template"
+    },
+    "filters": "Filters",
+    "resultCount": "{{shown}} of {{total}}",
+    "runningCount": "{{value}} running",
+    "searchPlaceholder": "Search servers by name or ID…",
+    "selectAll": "Select all",
+    "selectedCount": "{{value}} selected",
+    "selectedLabel": "{{value}} servers",
+    "sort": {
+      "nameAsc": "Name A→Z",
+      "nameDesc": "Name Z→A",
+      "node": "Node",
+      "status": "Status",
+      "template": "Template"
+    },
+    "stoppedCount": "{{value}} stopped",
+    "suspendDialog": {
+      "message": "You are about to suspend <1>{{label}}</1>.",
+      "reasonLabel": "Reason (optional)",
+      "reasonPlaceholder": "e.g., Billing issue",
+      "title": "Suspend Servers"
+    },
+    "suspendedCount": "{{value}} suspended",
+    "title": "All Servers",
+    "toast": {
+      "failed_one": "{{count}} server failed to {{action}}.",
+      "failed_other": "{{count}} servers failed to {{action}}.",
+      "queued_one": "Queued {{action}} for {{count}} server.",
+      "queued_other": "Queued {{action}} for {{count}} servers."
+    },
+    "totalCount": "{{value}} total"
+  }
+}

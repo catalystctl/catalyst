@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -48,6 +50,7 @@ import { useTemplates } from '../../hooks/useTemplates';
 import type { AdminServer, AdminServerAction } from '../../types/admin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { serverStatusLabel } from '../../utils/constants';
 
 const pageSize = 20;
 
@@ -58,50 +61,44 @@ function getStatusConfig(serverStatus: string) {
  return {
  variant: 'success' as const,
  dot: 'bg-success/50',
- label: 'Running',
  };
  case 'stopped':
  return {
  variant: 'secondary' as const,
  dot: 'bg-surface-3',
- label: 'Stopped',
  };
  case 'suspended':
  return {
  variant: 'destructive' as const,
  dot: 'bg-destructive/50',
- label: 'Suspended',
  };
  case 'starting':
  case 'stopping':
  return {
  variant: 'warning' as const,
  dot: 'bg-warning/50',
- label: serverStatus === 'starting' ? 'Starting' : 'Stopping',
  };
  case 'restoring':
  return {
  variant: 'warning' as const,
  dot: 'bg-warning/50',
- label: 'Restoring',
  };
  case 'creating_backup':
  return {
  variant: 'warning' as const,
  dot: 'bg-warning/50',
- label: 'Creating Backup',
  };
  default:
  return {
  variant: 'secondary' as const,
  dot: 'bg-surface-3',
- label: serverStatus,
  };
  }
 }
 
 // ── Status Dot Badge ──
 function StatusBadge({ status }: { status: string }) {
+ const { t } = useTranslation('admin-infra');
  const config = getStatusConfig(status);
  return (
  <Badge variant={config.variant} className="gap-1.5 font-medium">
@@ -111,13 +108,34 @@ function StatusBadge({ status }: { status: string }) {
  )}
  <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${config.dot}`} />
  </span>
- {config.label}
+ {serverStatusLabel(t, status)}
  </Badge>
  );
 }
 
+// ── Server Action Label ──
+function serverActionVerb(t: TFunction, action: AdminServerAction): string {
+ switch (action) {
+ case 'start':
+ return t('servers.actionVerb.start');
+ case 'stop':
+ return t('servers.actionVerb.stop');
+ case 'restart':
+ return t('servers.actionVerb.restart');
+ case 'suspend':
+ return t('servers.actionVerb.suspend');
+ case 'unsuspend':
+ return t('servers.actionVerb.unsuspend');
+ case 'delete':
+ return t('servers.actionVerb.delete');
+ default:
+ return action;
+ }
+}
+
 // ── Main Component ──
 function AdminServersPage() {
+ const { t } = useTranslation('admin-infra');
  const [page, setPage] = useState(1);
  const [status, setStatus] = useState('');
  const [search, setSearch] = useState('');
@@ -224,11 +242,17 @@ function AdminServersPage() {
  response?.results?.filter((result) => result.status === 'failed').length ??
  0;
  notifySuccess(
- `Queued ${variables.action} for ${successCount} server${successCount === 1 ? '' : 's'}.`,
+ t('servers.toast.queued', {
+ action: serverActionVerb(t, variables.action),
+ count: successCount,
+ }),
  );
  if (failedCount) {
  notifyError(
- `${failedCount} server${failedCount === 1 ? '' : 's'} failed to ${variables.action}.`,
+ t('servers.toast.failed', {
+ action: serverActionVerb(t, variables.action),
+ count: failedCount,
+ }),
  );
  }
  setSelectedIds([]);
@@ -241,8 +265,7 @@ function AdminServersPage() {
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to run server action';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -273,8 +296,8 @@ function AdminServersPage() {
  <div className="space-y-5">
  <TabHeader
  icon={Server}
- title="All Servers"
- description="Monitor and manage every server across all nodes"
+ title={t('servers.title')}
+ description={t('servers.description')}
  actions={
  <div className="flex flex-wrap gap-2">
  <CreateServerModal />
@@ -287,24 +310,24 @@ function AdminServersPage() {
  <>
  <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
  <span className="h-2 w-2 rounded-full bg-surface-3" />
- {data?.pagination?.total ?? 0} total
+ {t('servers.totalCount', { value: data?.pagination?.total ?? 0 })}
  </Badge>
  {statusCounts['running'] ? (
  <Badge variant="success" className="h-8 gap-1.5 px-3 text-xs">
  <span className="h-2 w-2 rounded-full bg-success" />
- {statusCounts['running']} running
+ {t('servers.runningCount', { value: statusCounts['running'] })}
  </Badge>
  ) : null}
  {statusCounts['stopped'] ? (
  <Badge variant="secondary" className="h-8 gap-1.5 px-3 text-xs">
  <span className="h-2 w-2 rounded-full bg-surface-3" />
- {statusCounts['stopped']} stopped
+ {t('servers.stoppedCount', { value: statusCounts['stopped'] })}
  </Badge>
  ) : null}
  {statusCounts['suspended'] ? (
  <Badge variant="destructive" className="h-8 gap-1.5 px-3 text-xs">
  <span className="h-2 w-2 rounded-full bg-destructive/60" />
- {statusCounts['suspended']} suspended
+ {t('servers.suspendedCount', { value: statusCounts['suspended'] })}
  </Badge>
  ) : null}
  </>
@@ -325,7 +348,7 @@ function AdminServersPage() {
  setSearch(event.target.value);
  setPage(1);
  }}
- placeholder="Search servers by name or ID…"
+ placeholder={t('servers.searchPlaceholder')}
  className="border-border/40 pl-9"
  />
  </div>
@@ -338,7 +361,7 @@ function AdminServersPage() {
  className="gap-2"
  >
  <Filter className="h-3.5 w-3.5" />
- Filters
+ {t('servers.filters')}
  {hasActiveFilters && (
  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
  {[status, nodeId, templateId, ownerSearch.trim()].filter(Boolean).length}
@@ -353,17 +376,20 @@ function AdminServersPage() {
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="name-asc">Name A→Z</SelectItem>
- <SelectItem value="name-desc">Name Z→A</SelectItem>
- <SelectItem value="status">Status</SelectItem>
- <SelectItem value="node">Node</SelectItem>
- <SelectItem value="template">Template</SelectItem>
+ <SelectItem value="name-asc">{t('servers.sort.nameAsc')}</SelectItem>
+ <SelectItem value="name-desc">{t('servers.sort.nameDesc')}</SelectItem>
+ <SelectItem value="status">{t('servers.sort.status')}</SelectItem>
+ <SelectItem value="node">{t('servers.sort.node')}</SelectItem>
+ <SelectItem value="template">{t('servers.sort.template')}</SelectItem>
  </SelectContent>
  </Select>
 
  {/* Results count */}
  <span className="text-xs text-muted-foreground">
- {filteredServers.length} of {data?.pagination?.total ?? servers.length}
+ {t('servers.resultCount', {
+ shown: filteredServers.length,
+ total: data?.pagination?.total ?? servers.length,
+ })}
  </span>
  </div>
 
@@ -373,7 +399,7 @@ function AdminServersPage() {
  <div className="rounded-xl border border-border/30 bg-card/80 p-4">
  <div className="flex flex-wrap items-end gap-4">
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">Status</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('servers.filter.status')}</span>
  <Select
  value={status || 'all'}
  onValueChange={(value) => {
@@ -382,20 +408,20 @@ function AdminServersPage() {
  }}
  >
  <SelectTrigger className="w-44 border-border/40">
- <SelectValue placeholder="All statuses" />
+ <SelectValue placeholder={t('servers.filter.allStatuses')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All statuses</SelectItem>
+ <SelectItem value="all">{t('servers.filter.allStatuses')}</SelectItem>
  {statuses.map((entry) => (
  <SelectItem key={entry} value={entry}>
- {entry}
+ {serverStatusLabel(t, entry)}
  </SelectItem>
  ))}
  </SelectContent>
  </Select>
  </label>
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">Node</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('servers.filter.node')}</span>
  <Select
  value={nodeId || 'all'}
  onValueChange={(value) => {
@@ -404,10 +430,10 @@ function AdminServersPage() {
  }}
  >
  <SelectTrigger className="w-44 border-border/40">
- <SelectValue placeholder="All nodes" />
+ <SelectValue placeholder={t('servers.filter.allNodes')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All nodes</SelectItem>
+ <SelectItem value="all">{t('servers.filter.allNodes')}</SelectItem>
  {sortedNodes.map((node) => (
  <SelectItem key={node.id} value={node.id}>
  {node.name}
@@ -417,7 +443,7 @@ function AdminServersPage() {
  </Select>
  </label>
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">Template</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('servers.filter.template')}</span>
  <Select
  value={templateId || 'all'}
  onValueChange={(value) => {
@@ -426,10 +452,10 @@ function AdminServersPage() {
  }}
  >
  <SelectTrigger className="w-44 border-border/40">
- <SelectValue placeholder="All templates" />
+ <SelectValue placeholder={t('servers.filter.allTemplates')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All templates</SelectItem>
+ <SelectItem value="all">{t('servers.filter.allTemplates')}</SelectItem>
  {sortedTemplates.map((template) => (
  <SelectItem key={template.id} value={template.id}>
  {template.name}
@@ -439,21 +465,21 @@ function AdminServersPage() {
  </Select>
  </label>
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">Owner</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('servers.filter.owner')}</span>
  <Input
  value={ownerSearch}
  onChange={(event) => {
  setOwnerSearch(event.target.value);
  setPage(1);
  }}
- placeholder="Search owners…"
+ placeholder={t('servers.filter.ownerPlaceholder')}
  className="w-44 border-border/40"
  />
  </label>
  {hasActiveFilters && (
  <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 text-xs">
  <X className="h-3 w-3" />
- Clear all
+ {t('servers.clearAll')}
  </Button>
  )}
  </div>
@@ -467,77 +493,77 @@ function AdminServersPage() {
  <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
  <div className="flex items-center gap-3">
  <span className="text-sm font-medium text-foreground">
- {selectedIds.length} selected
+ {t('servers.selectedCount', { value: selectedIds.length })}
  </span>
  <button
  onClick={() => setSelectedIds([])}
  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
  >
- Clear
+ {t('servers.clearSelection')}
  </button>
  </div>
  <div className="flex items-center gap-1.5">
  <Button
  variant="outline"
  size="sm"
- onClick={() => handleBulkAction('start', selectedIds, `${selectedIds.length} servers`)}
+ onClick={() => handleBulkAction('start', selectedIds, t('servers.selectedLabel', { value: selectedIds.length }))}
  disabled={bulkActionMutation.isPending}
  className="gap-1.5 text-xs text-success hover:border-success/20 hover:bg-success/5 hover:text-success"
  >
  <Play className="h-3 w-3" />
- Start
+ {t('servers.actions.start')}
  </Button>
  <Button
  variant="outline"
  size="sm"
- onClick={() => handleBulkAction('stop', selectedIds, `${selectedIds.length} servers`)}
+ onClick={() => handleBulkAction('stop', selectedIds, t('servers.selectedLabel', { value: selectedIds.length }))}
  disabled={bulkActionMutation.isPending}
  className="gap-1.5 text-xs text-warning hover:border-warning/20 hover:bg-warning/5 hover:text-warning"
  >
  <Square className="h-3 w-3" />
- Stop
+ {t('servers.actions.stop')}
  </Button>
  <Button
  variant="outline"
  size="sm"
- onClick={() => handleBulkAction('restart', selectedIds, `${selectedIds.length} servers`)}
+ onClick={() => handleBulkAction('restart', selectedIds, t('servers.selectedLabel', { value: selectedIds.length }))}
  disabled={bulkActionMutation.isPending}
  className="gap-1.5 text-xs"
  >
  <RotateCw className="h-3 w-3" />
- Restart
+ {t('servers.actions.restart')}
  </Button>
  <div className="mx-1 h-4 w-px bg-border" />
  <Button
  variant="outline"
  size="sm"
- onClick={() => handleBulkAction('suspend', selectedIds, `${selectedIds.length} servers`)}
+ onClick={() => handleBulkAction('suspend', selectedIds, t('servers.selectedLabel', { value: selectedIds.length }))}
  disabled={bulkActionMutation.isPending}
  className="gap-1.5 text-xs text-destructive hover:border-destructive/20 hover:bg-destructive/5 hover:text-destructive"
  >
  <Ban className="h-3 w-3" />
- Suspend
+ {t('servers.actions.suspend')}
  </Button>
  <Button
  variant="outline"
  size="sm"
- onClick={() => handleBulkAction('unsuspend', selectedIds, `${selectedIds.length} servers`)}
+ onClick={() => handleBulkAction('unsuspend', selectedIds, t('servers.selectedLabel', { value: selectedIds.length }))}
  disabled={bulkActionMutation.isPending}
  className="gap-1.5 text-xs text-success hover:border-success/20 hover:bg-success/5 hover:text-success"
  >
  <CheckCircle className="h-3 w-3" />
- Unsuspend
+ {t('servers.actions.unsuspend')}
  </Button>
  <div className="mx-1 h-4 w-px bg-border" />
  <Button
  variant="destructive"
  size="sm"
- onClick={() => handleBulkAction('delete', selectedIds, `${selectedIds.length} servers`)}
+ onClick={() => handleBulkAction('delete', selectedIds, t('servers.selectedLabel', { value: selectedIds.length }))}
  disabled={bulkActionMutation.isPending}
  className="gap-1.5 text-xs"
  >
  <Trash2 className="h-3 w-3" />
- Delete
+ {t('common:actions.delete')}
  </Button>
  </div>
  </div>
@@ -569,7 +595,7 @@ function AdminServersPage() {
  className="h-4 w-4 rounded border-border/40 bg-card text-primary"
  />
  <span className="text-xs font-medium text-muted-foreground">
- Select all
+ {t('servers.selectAll')}
  </span>
  </label>
  </div>
@@ -638,7 +664,7 @@ function AdminServersPage() {
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30"
  onClick={() => handleBulkAction('start', [server.id], server.name)}
  disabled={bulkActionMutation.isPending || isRunning || isBusy}
- title="Start"
+ title={t('servers.actions.start')}
  >
  <Play className="h-3.5 w-3.5" />
  </button>
@@ -648,7 +674,7 @@ function AdminServersPage() {
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-warning/5 hover:text-warning disabled:pointer-events-none disabled:opacity-30"
  onClick={() => handleBulkAction('stop', [server.id], server.name)}
  disabled={bulkActionMutation.isPending || isStopped || isBusy}
- title="Stop"
+ title={t('servers.actions.stop')}
  >
  <Square className="h-3.5 w-3.5" />
  </button>
@@ -658,7 +684,7 @@ function AdminServersPage() {
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30"
  onClick={() => handleBulkAction('unsuspend', [server.id], server.name)}
  disabled={bulkActionMutation.isPending}
- title="Unsuspend"
+ title={t('servers.actions.unsuspend')}
  >
  <CheckCircle className="h-3.5 w-3.5" />
  </button>
@@ -667,7 +693,7 @@ function AdminServersPage() {
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={() => handleBulkAction('suspend', [server.id], server.name)}
  disabled={bulkActionMutation.isPending}
- title="Suspend"
+ title={t('servers.actions.suspend')}
  >
  <Ban className="h-3.5 w-3.5" />
  </button>
@@ -677,7 +703,7 @@ function AdminServersPage() {
  <DropdownMenuTrigger asChild>
  <button
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- title="More"
+ title={t('common:actions.more')}
  >
  <MoreHorizontal className="h-3.5 w-3.5" />
  </button>
@@ -685,7 +711,7 @@ function AdminServersPage() {
  <DropdownMenuContent align="end">
  <DropdownMenuItem asChild>
  <Link to={`/servers/${server.id}/console`} className="gap-2 text-xs">
- Console
+ {t('servers.actions.console')}
  </Link>
  </DropdownMenuItem>
  <DropdownMenuSeparator />
@@ -695,7 +721,7 @@ function AdminServersPage() {
  className="gap-2 text-xs"
  >
  <RotateCw className="h-3.5 w-3.5" />
- Restart
+ {t('servers.actions.restart')}
  </DropdownMenuItem>
  {isSuspended ? (
  <DropdownMenuItem
@@ -704,7 +730,7 @@ function AdminServersPage() {
  className="gap-2 text-xs text-success"
  >
  <CheckCircle className="h-3.5 w-3.5" />
- Unsuspend
+ {t('servers.actions.unsuspend')}
  </DropdownMenuItem>
  ) : (
  <DropdownMenuItem
@@ -713,7 +739,7 @@ function AdminServersPage() {
  className="gap-2 text-xs text-destructive"
  >
  <Ban className="h-3.5 w-3.5" />
- Suspend
+ {t('servers.actions.suspend')}
  </DropdownMenuItem>
  )}
  <DropdownMenuSeparator />
@@ -723,7 +749,7 @@ function AdminServersPage() {
  className="gap-2 text-xs"
  >
  <Settings className="h-3.5 w-3.5" />
- Update
+ {t('servers.actions.update')}
  </DropdownMenuItem>
  <DropdownMenuSeparator />
  <DropdownMenuItem
@@ -732,7 +758,7 @@ function AdminServersPage() {
  className="gap-2 text-xs text-destructive"
  >
  <Trash2 className="h-3.5 w-3.5" />
- Delete
+ {t('common:actions.delete')}
  </DropdownMenuItem>
  </DropdownMenuContent>
  </DropdownMenu>
@@ -756,17 +782,17 @@ function AdminServersPage() {
  ) : (
  <div className="p-6">
  <TabEmptyState
- title={search.trim() || hasActiveFilters ? 'No servers found' : 'No servers yet'}
+ title={search.trim() || hasActiveFilters ? t('servers.empty.notFound') : t('servers.empty.none')}
  description={
  search.trim() || hasActiveFilters
- ? 'Try adjusting your search or filters.'
- : 'Create a server to start managing it from this list.'
+ ? t('servers.empty.adjustFilters')
+ : t('servers.empty.createServer')
  }
  action={
  hasActiveFilters ? (
  <Button variant="outline" size="sm" onClick={clearFilters}>
  <X className="mr-1.5 h-3.5 w-3.5" />
- Clear filters
+ {t('servers.clearFilters')}
  </Button>
  ) : (
  <CreateServerModal />
@@ -777,65 +803,74 @@ function AdminServersPage() {
  )}
  </div>
 
- {/* ── Suspend Confirmation Dialog ── */}
- <ConfirmDialog
- open={!!suspendTargets}
- title="Suspend Servers"
- message={
- <div className="space-y-3">
- <p>
- You are about to suspend{' '}
- <span className="font-semibold">{suspendTargets?.label}</span>.
- </p>
- <label className="block space-y-1">
- <span className="text-sm text-muted-foreground">
- Reason (optional)
- </span>
- <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
- value={suspendReason}
- onChange={(event) => setSuspendReason(event.target.value)}
- placeholder="e.g., Billing issue"
- onClick={(e) => e.stopPropagation()}
- />
- </label>
- </div>
- }
- confirmText="Suspend"
- cancelText="Cancel"
- onConfirm={() =>
- suspendTargets &&
- bulkActionMutation.mutate({
- serverIds: suspendTargets.serverIds,
- action: 'suspend',
- reason: suspendReason.trim() || undefined,
- })
- }
- onCancel={() => {
- setSuspendTargets(null);
- setSuspendReason('');
- }}
- variant="warning"
- loading={bulkActionMutation.isPending}
- />
+  <ConfirmDialog
+    open={!!suspendTargets}
+    title={t('servers.suspendDialog.title')}
+    message={
+      <div className="space-y-3">
+        <p>
+          <Trans
+            i18nKey="servers.suspendDialog.message"
+            ns="admin-infra"
+            values={{ label: suspendTargets?.label }}
+          >
+            You are about to suspend <span className="font-semibold">{'{{label}}'}</span>.
+          </Trans>
+        </p>
+        <label className="block space-y-1">
+          <span className="text-sm text-muted-foreground">
+            {t('servers.suspendDialog.reasonLabel')}
+          </span>
+          <input
+            className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+            value={suspendReason}
+            onChange={(event) => setSuspendReason(event.target.value)}
+            placeholder={t('servers.suspendDialog.reasonPlaceholder')}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </label>
+      </div>
+    }
+    confirmText={t('servers.actions.suspend')}
+    cancelText={t('common:actions.cancel')}
+    onConfirm={() =>
+      suspendTargets &&
+      bulkActionMutation.mutate({
+        serverIds: suspendTargets.serverIds,
+        action: 'suspend',
+        reason: suspendReason.trim() || undefined,
+      })
+    }
+    onCancel={() => {
+      setSuspendTargets(null);
+      setSuspendReason('');
+    }}
+    variant="warning"
+    loading={bulkActionMutation.isPending}
+  />
 
- {/* ── Delete Confirmation Dialog ── */}
- <ConfirmDialog
- open={!!deleteTargets}
- title="Delete Servers"
- message={
- <div className="space-y-2">
- <p>
- You are about to delete{' '}
- <span className="font-semibold">{deleteTargets?.label}</span>.
- </p>
- <p className="text-xs text-muted-foreground">
- Servers must be stopped before deletion. This cannot be undone.
- </p>
- </div>
- }
- confirmText="Delete"
- cancelText="Cancel"
+  {/* ── Delete Confirmation Dialog ── */}
+  <ConfirmDialog
+    open={!!deleteTargets}
+    title={t('servers.deleteDialog.title')}
+    message={
+      <div className="space-y-2">
+        <p>
+          <Trans
+            i18nKey="servers.deleteDialog.message"
+            ns="admin-infra"
+            values={{ label: deleteTargets?.label }}
+          >
+            You are about to delete <span className="font-semibold">{'{{label}}'}</span>.
+          </Trans>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {t('servers.deleteDialog.warning')}
+        </p>
+      </div>
+    }
+    confirmText={t('common:actions.delete')}
+    cancelText={t('common:actions.cancel')}
  onConfirm={() =>
  deleteTargets &&
  bulkActionMutation.mutate({

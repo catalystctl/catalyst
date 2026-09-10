@@ -19,7 +19,9 @@ import type {
  TimeRange,
 } from '@/hooks/useClusterMetrics';
 import { useClusterHistoricalMetrics } from '@/hooks/useClusterMetrics';
+import { formatTime } from '@/i18n/format';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type MetricType = 'cpu' | 'memory' | 'network';
 type DataMode = 'live' | 'historical';
@@ -54,7 +56,7 @@ interface LivePoint {
 }
 
 function createLivePoint(data: ClusterMetrics, metric: MetricType): LivePoint {
- const timeLabel = new Date().toLocaleTimeString('en-US', {
+ const timeLabel = formatTime(Date.now(), {
  hour: '2-digit',
  minute: '2-digit',
  second: '2-digit',
@@ -116,6 +118,7 @@ function useLiveHistory(data: ClusterMetrics | undefined, metric: MetricType) {
 // ── Main component ──
 
 export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChartProps) {
+ const { t } = useTranslation('admin');
  const [metric, setMetric] = useState<MetricType>('cpu');
  const [dataMode, setDataMode] = useState<DataMode>('live');
  const [timeRange, setTimeRange] = useState<TimeRange>('1h');
@@ -135,11 +138,11 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  const getMetricLabel = () => {
  switch (metric) {
  case 'cpu':
- return 'CPU Usage (%)';
+ return t('chart.metricLabel.cpu');
  case 'memory':
- return 'Memory Usage (%)';
+ return t('chart.metricLabel.memory');
  case 'network':
- return 'Network I/O (MB/s)';
+ return t('chart.metricLabel.network');
  }
  };
 
@@ -178,9 +181,9 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-primary-200/50 dark:ring-primary-800/50" />
  </div>
  <div>
- <span>Cluster Resources</span>
+ <span>{t('chart.title')}</span>
  <p className="text-sm font-normal text-muted-foreground">
- {isLive ? 'Real-time metrics' : `${timeRange} historical metrics`}
+ {isLive ? t('chart.subtitle.live') : t('chart.subtitle.historical', { range: timeRange })}
  </p>
  </div>
  </CardTitle>
@@ -194,7 +197,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-400 opacity-75" />
  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary-500" />
  </span>
- <span className="ml-1.5 font-semibold">Live</span>
+ <span className="ml-1.5 font-semibold">{t('chart.mode.live')}</span>
  </Badge>
  ) : (
  <Badge
@@ -207,9 +210,12 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  )}
  <span className="mt-1 block text-xs text-muted-foreground">
  {data
- ? `${data.onlineCount} of ${data.nodes.length} nodes online`
+ ? t('chart.nodesOnline', { online: data.onlineCount, total: data.nodes.length })
  : historical
- ? `${historical.nodes.filter((n) => n.isOnline).length} of ${historical.nodes.length} nodes online`
+ ? t('chart.nodesOnline', {
+ online: historical.nodes.filter((n) => n.isOnline).length,
+ total: historical.nodes.length,
+ })
  : '—'}
  </span>
  </CardDescription>
@@ -229,14 +235,14 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
  >
  <Radio className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Live</span>
+ <span className="hidden sm:inline">{t('chart.mode.live')}</span>
  </ToggleGroupItem>
  <ToggleGroupItem
  value="historical"
  className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
  >
  <History className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Historical</span>
+ <span className="hidden sm:inline">{t('chart.mode.historical')}</span>
  </ToggleGroupItem>
  </ToggleGroup>
 
@@ -272,21 +278,21 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
  >
  <Cpu className="h-4 w-4" />
- <span className="hidden sm:inline">CPU</span>
+ <span className="hidden sm:inline">{t('chart.metric.cpu')}</span>
  </ToggleGroupItem>
  <ToggleGroupItem
  value="memory"
  className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
  >
  <MemoryStick className="h-4 w-4" />
- <span className="hidden sm:inline">Memory</span>
+ <span className="hidden sm:inline">{t('chart.metric.memory')}</span>
  </ToggleGroupItem>
  <ToggleGroupItem
  value="network"
  className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
  >
  <Network className="h-4 w-4" />
- <span className="hidden sm:inline">Network</span>
+ <span className="hidden sm:inline">{t('chart.metric.network')}</span>
  </ToggleGroupItem>
  </ToggleGroup>
  </div>
@@ -396,7 +402,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  </div>
  </div>
  <p className="mt-3 text-sm font-medium text-muted-foreground">
- {isLive ? 'Collecting metrics...' : 'No historical data for this range'}
+ {isLive ? t('chart.empty.live') : t('chart.empty.historical')}
  </p>
  </div>
  </div>
@@ -414,17 +420,20 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  <>
  {metric === 'cpu' && (
  <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground">
- Avg: {data.totalCpu}%
+ {t('chart.avg', { value: data.totalCpu })}
  </span>
  )}
  {metric === 'memory' && (
  <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground">
- Avg: {data.totalMemory}%
+ {t('chart.avg', { value: data.totalMemory })}
  </span>
  )}
  {metric === 'network' && (
  <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground">
- RX: {data.avgNetworkRx.toFixed(1)} MB/s | TX: {data.avgNetworkTx.toFixed(1)} MB/s
+ {t('chart.networkThroughput', {
+ rx: data.avgNetworkRx.toFixed(1),
+ tx: data.avgNetworkTx.toFixed(1),
+ })}
  </span>
  )}
  </>
@@ -437,11 +446,11 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
  </span>
- <span className="font-medium">Updates every 5s</span>
+ <span className="font-medium">{t('chart.updatesEvery')}</span>
  </>
  ) : (
  <span className="font-medium">
- {chartData.length} data points · refreshes every 60s
+ {t('chart.dataPoints', { value: chartData.length })}
  </span>
  )}
  </div>

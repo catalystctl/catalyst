@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useQuery, useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -46,6 +48,7 @@ import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import { migrationApi } from '../../services/api/migration';
 import { notifySuccess, notifyError, notifyInfo } from '../../utils/notify';
+import { formatDate, formatDateTime } from '@/i18n/format';
 import type {
  MigrationJob,
  MigrationStep,
@@ -62,72 +65,151 @@ import { MIGRATION_PHASES } from '../../types/migration';
 const EMPTY_MIGRATION_JOBS: MigrationJob[] = [];
 
 // ── Status helpers ──
-const statusConfig: Record<string, { label: string; variant: 'default' | 'success' | 'destructive' | 'secondary' | 'outline'; icon: any }> = {
- pending: { label: 'Pending', variant: 'secondary', icon: Clock },
- validating: { label: 'Validating', variant: 'outline', icon: Loader2 },
- running: { label: 'Running', variant: 'default', icon: Loader2 },
- paused: { label: 'Paused', variant: 'outline', icon: Pause },
- completed: { label: 'Completed', variant: 'success', icon: CheckCircle2 },
- failed: { label: 'Failed', variant: 'destructive', icon: XCircle },
- cancelled: { label: 'Cancelled', variant: 'secondary', icon: X },
+const statusConfig: Record<string, { variant: 'default' | 'success' | 'destructive' | 'secondary' | 'outline'; icon: any }> = {
+  pending: { variant: 'secondary', icon: Clock },
+  validating: { variant: 'outline', icon: Loader2 },
+  running: { variant: 'default', icon: Loader2 },
+  paused: { variant: 'outline', icon: Pause },
+  completed: { variant: 'success', icon: CheckCircle2 },
+  failed: { variant: 'destructive', icon: XCircle },
+  cancelled: { variant: 'secondary', icon: X },
 };
 
 function StatusBadge({ status }: { status: string }) {
- const config = statusConfig[status] || statusConfig.pending;
- const Icon = config.icon;
- return (
- <Badge variant={config.variant} className="gap-1.5">
- {status === 'running' || status === 'validating' ? (
- <Icon className="h-3 w-3 animate-spin" />
- ) : (
- <Icon className="h-3 w-3" />
- )}
- {config.label}
- </Badge>
- );
+  const { t } = useTranslation('admin-infra');
+  const config = statusConfig[status] || statusConfig.pending;
+  const Icon = config.icon;
+  return (
+    <Badge variant={config.variant} className="gap-1.5">
+      {status === 'running' || status === 'validating' ? (
+        <Icon className="h-3 w-3 animate-spin" />
+      ) : (
+        <Icon className="h-3 w-3" />
+      )}
+      {statusLabel(t, status)}
+    </Badge>
+  );
 }
 
-const stepStatusConfig: Record<string, { label: string; color: string; icon: any; bg: string }> = {
- pending: { label: 'Pending', color: 'text-muted-foreground', icon: Clock, bg: '' },
- running: { label: 'Running', color: 'text-primary', icon: Loader2, bg: 'bg-primary/10' },
- completed: { label: 'Done', color: 'text-success', icon: CheckCircle2, bg: '' },
- failed: { label: 'Failed', color: 'text-destructive', icon: XCircle, bg: 'bg-destructive/10' },
- skipped: { label: 'Skipped', color: 'text-muted-foreground', icon: Clock, bg: '' },
+function statusLabel(t: TFunction, status: string): string {
+  switch (status) {
+    case 'pending':
+      return t('migration.status.pending');
+    case 'validating':
+      return t('migration.status.validating');
+    case 'running':
+      return t('migration.status.running');
+    case 'paused':
+      return t('migration.status.paused');
+    case 'completed':
+      return t('migration.status.completed');
+    case 'failed':
+      return t('migration.status.failed');
+    case 'cancelled':
+      return t('migration.status.cancelled');
+    default:
+      return status;
+  }
+}
+
+const stepStatusConfig: Record<string, { color: string; icon: any; bg: string }> = {
+  pending: { color: 'text-muted-foreground', icon: Clock, bg: '' },
+  running: { color: 'text-primary', icon: Loader2, bg: 'bg-primary/10' },
+  completed: { color: 'text-success', icon: CheckCircle2, bg: '' },
+  failed: { color: 'text-destructive', icon: XCircle, bg: 'bg-destructive/10' },
+  skipped: { color: 'text-muted-foreground', icon: Clock, bg: '' },
 };
 
+function stepStatusLabel(t: TFunction, status: string): string {
+  switch (status) {
+    case 'pending':
+      return t('migration.stepStatus.pending');
+    case 'running':
+      return t('migration.stepStatus.running');
+    case 'completed':
+      return t('migration.stepStatus.completed');
+    case 'failed':
+      return t('migration.stepStatus.failed');
+    case 'skipped':
+      return t('migration.stepStatus.skipped');
+    default:
+      return status;
+  }
+}
+
+/** Localized label for a migration phase id (see MIGRATION_PHASES). */
+function phaseLabel(t: TFunction, phaseId: string): string {
+  switch (phaseId) {
+    case 'validate':
+      return t('migration.phases.validate');
+    case 'locations':
+      return t('migration.phases.locations');
+    case 'templates':
+      return t('migration.phases.templates');
+    case 'users':
+      return t('migration.phases.users');
+    case 'servers':
+      return t('migration.phases.servers');
+    case 'databases':
+      return t('migration.phases.databases');
+    case 'schedules':
+      return t('migration.phases.schedules');
+    case 'backups':
+      return t('migration.phases.backups');
+    case 'files':
+      return t('migration.phases.files');
+    default:
+      return phaseId;
+  }
+}
+
 // Human-readable step labels
-function stepLabel(action: string, metadata?: Record<string, unknown>): string {
- const labels: Record<string, string> = {
- validate_connection: 'Test connection',
- import_location: 'Import location',
- import_nest: 'Import nest',
- import_template: 'Import template',
- import_user: 'Import user',
- import_server: 'Import server',
- import_database_host: 'Import database host',
- import_database: 'Import database',
- import_schedule: 'Import schedule',
- import_backup: 'Import backup',
- download_files: 'Download files',
- };
- const base = labels[action] || action.replace(/_/g, ' ');
- if (metadata?.name) return `${base}: ${metadata.name as string}`;
- return base;
+function stepLabel(t: TFunction, action: string, metadata?: Record<string, unknown>): string {
+  const base = (() => {
+    switch (action) {
+      case 'validate_connection':
+        return t('migration.steps.validateConnection');
+      case 'import_location':
+        return t('migration.steps.importLocation');
+      case 'import_nest':
+        return t('migration.steps.importNest');
+      case 'import_template':
+        return t('migration.steps.importTemplate');
+      case 'import_user':
+        return t('migration.steps.importUser');
+      case 'import_server':
+        return t('migration.steps.importServer');
+      case 'import_database_host':
+        return t('migration.steps.importDatabaseHost');
+      case 'import_database':
+        return t('migration.steps.importDatabase');
+      case 'import_schedule':
+        return t('migration.steps.importSchedule');
+      case 'import_backup':
+        return t('migration.steps.importBackup');
+      case 'download_files':
+        return t('migration.steps.downloadFiles');
+      default:
+        return action.replace(/_/g, ' ');
+    }
+  })();
+  if (metadata?.name) return `${base}: ${metadata.name as string}`;
+  return base;
 }
 
 // Derive a human-readable skip reason from step metadata
-function skipReason(status: string, metadata?: Record<string, unknown> | null): string | null {
- if (status !== 'skipped' && status !== 'completed') return null;
- if (!metadata?.skipped && !metadata?.reason) return null;
- const reason = (metadata.reason as string) || '';
- if (reason.includes('already exists') || reason.includes('already done')) return 'Already existing';
- if (reason.includes('not migrated') || reason.includes('User not migrated')) return 'Not applicable';
- if (reason.includes('server owner') || reason.includes('is server owner')) return 'Not applicable';
- if (reason.includes('No client API key')) return 'No client API key';
- if (reason.includes('backup limit') || reason.includes('backup slot')) return 'No backup slots';
- if (reason.includes('No schedules') || reason.includes('no schedules')) return 'No schedules';
- if (reason.includes('not accessible') || reason.includes('404')) return 'Not available';
- return reason || 'Skipped';
+function skipReason(t: TFunction, status: string, metadata?: Record<string, unknown> | null): string | null {
+  if (status !== 'skipped' && status !== 'completed') return null;
+  if (!metadata?.skipped && !metadata?.reason) return null;
+  const reason = (metadata.reason as string) || '';
+  if (reason.includes('already exists') || reason.includes('already done')) return t('migration.skipReasons.alreadyExists');
+  if (reason.includes('not migrated') || reason.includes('User not migrated')) return t('migration.skipReasons.notApplicable');
+  if (reason.includes('server owner') || reason.includes('is server owner')) return t('migration.skipReasons.notApplicable');
+  if (reason.includes('No client API key')) return t('migration.skipReasons.noClientApiKey');
+  if (reason.includes('backup limit') || reason.includes('backup slot')) return t('migration.skipReasons.noBackupSlots');
+  if (reason.includes('No schedules') || reason.includes('no schedules')) return t('migration.skipReasons.noSchedules');
+  if (reason.includes('not accessible') || reason.includes('404')) return t('migration.skipReasons.notAvailable');
+  return reason || t('migration.skipReasons.skipped');
 }
 
 // ── Phase icon mapping ──
@@ -158,6 +240,7 @@ function formatDuration(ms?: number | null) {
 
 // ── Progress Bar ──
 function ProgressBar({ progress }: { progress: { total: number; completed: number; failed: number; skipped: number } }) {
+ const { t } = useTranslation('admin-infra');
  const pct = progress.total > 0 ? Math.round(((progress.completed + progress.failed + progress.skipped) / progress.total) * 100) : 0;
  const completedPct = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
  const failedPct = progress.total > 0 ? (progress.failed / progress.total) * 100 : 0;
@@ -165,8 +248,8 @@ function ProgressBar({ progress }: { progress: { total: number; completed: numbe
  return (
  <div className="space-y-1">
  <div className="flex justify-between text-xs text-muted-foreground">
- <span>{progress.completed} completed</span>
- <span>{progress.failed} failed</span>
+ <span>{t('migration.progress.completed', { value: progress.completed })}</span>
+ <span>{t('migration.progress.failed', { value: progress.failed })}</span>
  <span>{pct}%</span>
  </div>
  <div className="h-2 w-full rounded-full bg-surface-2 overflow-hidden">
@@ -187,7 +270,8 @@ function ProgressBar({ progress }: { progress: { total: number; completed: numbe
 
 // ── Phase Step List ──
 function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (stepId: string) => void }) {
- const [expanded, setExpanded] = useState(false);
+  const { t } = useTranslation('admin-infra');
+  const [expanded, setExpanded] = useState(false);
  const [errorStepId, setErrorStepId] = useState<string | null>(null);
 
  if (steps.length === 0) return null;
@@ -210,13 +294,13 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  <div className="flex items-center gap-2">
  <StepIcon className={`h-3 w-3 flex-shrink-0 ${sc.color} ${step.status === 'running' ? 'animate-spin' : ''}`} />
  <span className="text-xs text-foreground flex-1 truncate">
- {stepLabel(step.action, step.metadata as Record<string, unknown>)}
+ {stepLabel(t, step.action, step.metadata as Record<string, unknown>)}
  {step.sourceId && (
  <span className="text-muted-foreground"> #{step.sourceId}</span>
  )}
- {skipReason(step.status, step.metadata as Record<string, unknown>) && (
+ {skipReason(t, step.status, step.metadata as Record<string, unknown>) && (
  <span className="text-muted-foreground ml-1.5">
- — {skipReason(step.status, step.metadata as Record<string, unknown>)}
+ — {skipReason(t, step.status, step.metadata as Record<string, unknown>)}
  </span>
  )}
  </span>
@@ -226,14 +310,14 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  <button
  onClick={() => setErrorStepId(showError ? null : step.id)}
  className="text-xs text-muted-foreground hover:text-foreground"
- title="Toggle error details"
+ title={t('migration.steps.toggleErrorDetails')}
  >
  {showError ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
  </button>
  <button
  onClick={() => onRetry(step.id)}
  className="text-xs text-primary hover:text-primary/80"
- title="Retry"
+ title={t('common:actions.retry')}
  >
  <RefreshCw className="h-3 w-3" />
  </button>
@@ -259,7 +343,7 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-0.5"
  >
  {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
- {expanded ? 'Show less' : `${steps.length - 5} more...`}
+ {expanded ? t('migration.steps.showLess') : t('migration.steps.more', { value: steps.length - 5 })}
  </button>
  )}
  </div>
@@ -269,17 +353,18 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
 
 // ── Server Import Summary ──
 function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
+ const { t } = useTranslation('admin-infra');
  const items: Array<{ label: string; value: number | string | boolean; icon: any }> = [
- { label: 'Memory', value: `${server.memory} MB`, icon: HardDrive },
- { label: 'Disk', value: `${server.disk} MB`, icon: HardDrive },
- { label: 'CPU', value: `${server.cpu}%`, icon: Server },
+ { label: t('migration.serverResources.memory'), value: `${server.memory} MB`, icon: HardDrive },
+ { label: t('migration.serverResources.disk'), value: `${server.disk} MB`, icon: HardDrive },
+ { label: t('migration.serverResources.cpu'), value: `${server.cpu}%`, icon: Server },
  ];
 
  const imports: Array<{ label: string; count: number; icon: any; zeroLabel?: string }> = [
- { label: 'Schedules', count: server.schedules, icon: Clock },
- { label: 'Subusers', count: server.subusers, icon: Users },
- { label: 'Databases', count: server.databases, icon: Database },
- { label: 'Server Files', count: server.backupSlots > 0 ? 1 : 0, icon: HardDrive, zeroLabel: 'No backup slots' },
+ { label: t('migration.imports.schedules'), count: server.schedules, icon: Clock },
+ { label: t('migration.imports.subusers'), count: server.subusers, icon: Users },
+ { label: t('migration.imports.databases'), count: server.databases, icon: Database },
+ { label: t('migration.imports.serverFiles'), count: server.backupSlots > 0 ? 1 : 0, icon: HardDrive, zeroLabel: t('migration.imports.noBackupSlots') },
  ];
 
  return (
@@ -296,13 +381,13 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  {server.suspended && (
  <span className="flex items-center gap-1.5 text-xs text-warning">
  <Pause className="h-3 w-3" />
- Suspended
+ {t('common:status.suspended')}
  </span>
  )}
  </div>
 
  {/* What gets imported */}
- <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Allocations</div>
+ <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">{t('migration.sections.allocations')}</div>
  {server.allocations && server.allocations.length > 0 ? (
  <div className="flex flex-wrap gap-1.5">
  {server.allocations.map(allocation => (
@@ -312,7 +397,7 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  >
  <span className="truncate">{allocation.alias || allocation.ip}:{allocation.port}</span>
  {allocation.primary && (
- <span className="font-sans text-[10px] text-muted-foreground">primary</span>
+ <span className="font-sans text-[10px] text-muted-foreground">{t('migration.primary')}</span>
  )}
  </span>
  ))}
@@ -320,36 +405,36 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  ) : (
  <div className="flex items-center gap-1.5 text-xs text-warning">
  <AlertTriangle className="h-3 w-3" />
- No allocation details returned by Pterodactyl
+ {t('migration.noAllocations')}
  </div>
  )}
 
- <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Imports</div>
+ <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">{t('migration.sections.imports')}</div>
  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
  {/* Always imported */}
  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
- Server config &amp; env vars
+ {t('migration.alwaysImported.serverConfig')}
  </span>
  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
- Port allocations
+ {t('migration.alwaysImported.portAllocations')}
  </span>
  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
- Startup command
+ {t('migration.alwaysImported.startupCommand')}
  </span>
  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
- Docker image override
+ {t('migration.alwaysImported.dockerImageOverride')}
  </span>
  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
- Config file editor
+ {t('migration.alwaysImported.configFileEditor')}
  </span>
  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
- Swap &amp; IO weight
+ {t('migration.alwaysImported.swapIoWeight')}
  </span>
  {/* Conditional imports */}
  {imports.map(item => (
@@ -398,6 +483,7 @@ function NodeMappingSection({
  onlineNodes: CatalystNodeOption[];
  scope: MigrationScope;
 }) {
+ const { t } = useTranslation('admin-infra');
  const [expandedNodeId, setExpandedNodeId] = useState<number | null>(null);
 
  const serversByNode = useMemo(() => {
@@ -413,12 +499,12 @@ function NodeMappingSection({
  return (
  <div className="space-y-2">
  <label className="text-sm font-medium text-foreground">
- Map Pterodactyl Nodes to Catalyst Nodes
+ {t('migration.nodeMapping.title')}
  </label>
  <p className="text-xs text-muted-foreground">
  {scope === 'full'
- ? 'All Pterodactyl nodes must be mapped. Click a node to see what gets imported.'
- : 'Select which Pterodactyl nodes to map. Click to see server import details.'}
+ ? t('migration.nodeMapping.helpFull')
+ : t('migration.nodeMapping.helpSelect')}
  </p>
  <div className="max-h-80 overflow-y-auto rounded-lg border border-border bg-surface-1 divide-y divide-border">
  {nodes.map(node => {
@@ -434,7 +520,7 @@ function NodeMappingSection({
  <div className="text-sm text-foreground truncate flex items-center gap-2">
  {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
  {node.name}
- <span className="text-xs text-muted-foreground font-normal">{node.serverCount} servers</span>
+ <span className="text-xs text-muted-foreground font-normal">{t('migration.nodeServerCount', { value: node.serverCount })}</span>
  </div>
  <div className="text-xs text-muted-foreground">{node.fqdn} · {node.memory} MB</div>
  </div>
@@ -447,7 +533,7 @@ function NodeMappingSection({
  }
  >
  <SelectTrigger className="w-48 bg-card border-border/40 text-foreground text-xs h-8">
- <SelectValue placeholder="Select target node" />
+ <SelectValue placeholder={t('migration.selectTargetNode')} />
  </SelectTrigger>
  <SelectContent>
  {onlineNodes.map(cn => (
@@ -468,23 +554,23 @@ function NodeMappingSection({
  <div className="px-4 py-2 space-y-3">
  <div>
  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
- Node configuration
+ {t('migration.nodeMapping.configuration')}
  </div>
  <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
- <div><dt className="inline text-muted-foreground">Endpoint: </dt><dd className="inline text-foreground">{node.scheme || 'https'}://{node.fqdn}:{node.daemonListen ?? 'unknown'}</dd></div>
- <div><dt className="inline text-muted-foreground">Location: </dt><dd className="inline text-foreground">{node.locationName || 'Unknown'}</dd></div>
- <div><dt className="inline text-muted-foreground">SFTP port: </dt><dd className="inline text-foreground">{node.daemonSftp ?? 'unknown'}</dd></div>
- <div><dt className="inline text-muted-foreground">Data directory: </dt><dd className="inline break-all text-foreground">{node.daemonBase || 'unknown'}</dd></div>
- <div><dt className="inline text-muted-foreground">Memory: </dt><dd className="inline text-foreground">{node.memory} MB ({node.memoryOverallocate ?? 0}% overallocation)</dd></div>
- <div><dt className="inline text-muted-foreground">Disk: </dt><dd className="inline text-foreground">{node.disk ?? 0} MB ({node.diskOverallocate ?? 0}% overallocation)</dd></div>
- <div><dt className="inline text-muted-foreground">Upload limit: </dt><dd className="inline text-foreground">{node.uploadSize ?? 0} MB</dd></div>
- <div><dt className="inline text-muted-foreground">Proxy: </dt><dd className="inline text-foreground">{node.behindProxy ? 'Behind proxy' : 'Direct'}</dd></div>
- <div><dt className="inline text-muted-foreground">Maintenance: </dt><dd className="inline text-foreground">{node.maintenanceMode ? 'Enabled' : 'Disabled'}</dd></div>
+ <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.endpoint')}{' '}</dt><dd className="inline text-foreground">{node.scheme || 'https'}://{node.fqdn}:{node.daemonListen ?? 'unknown'}</dd></div>
+ <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.location')}{' '}</dt><dd className="inline text-foreground">{node.locationName || t('common:actions.unknown')}</dd></div>
+ <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.sftpPort')}{' '}</dt><dd className="inline text-foreground">{node.daemonSftp ?? 'unknown'}</dd></div>
+ <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.dataDirectory')}{' '}</dt><dd className="inline break-all text-foreground">{node.daemonBase || 'unknown'}</dd></div>
+ <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.memory')}{' '}</dt><dd className="inline text-foreground">{t('migration.nodeConfig.memoryValue', { memory: node.memory, overallocation: node.memoryOverallocate ?? 0 })}</dd></div>
+ <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.disk')}{' '}</dt><dd className="inline text-foreground">{t('migration.nodeConfig.diskValue', { disk: node.disk ?? 0, overallocation: node.diskOverallocate ?? 0 })}</dd></div>
+ <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.uploadLimit')}{' '}</dt><dd className="inline text-foreground">{t('migration.nodeConfig.uploadLimitValue', { value: node.uploadSize ?? 0 })}</dd></div>
+ <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.proxy')}{' '}</dt><dd className="inline text-foreground">{node.behindProxy ? t('migration.nodeConfig.behindProxy') : t('migration.nodeConfig.direct')}</dd></div>
+ <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.maintenance')}{' '}</dt><dd className="inline text-foreground">{node.maintenanceMode ? t('common:actions.enabled') : t('common:actions.disabled')}</dd></div>
  </dl>
  {node.allocations && node.allocations.length > 0 && (
  <div className="mt-3">
  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
- Node allocations ({node.allocations.length})
+ {t('migration.nodeConfig.allocations', { value: node.allocations.length })}
  </div>
  <div className="flex flex-wrap gap-1.5">
  {node.allocations.map(allocation => (
@@ -493,7 +579,7 @@ function NodeMappingSection({
  className="inline-flex max-w-full items-center gap-1 rounded border border-border/50 bg-surface-2 px-2 py-1 font-mono text-[11px] text-foreground"
  >
  <span className="truncate">{allocation.alias || allocation.ip}:{allocation.port}</span>
- <span className="font-sans text-[10px] text-muted-foreground">{allocation.assigned ? 'assigned' : 'free'}</span>
+ <span className="font-sans text-[10px] text-muted-foreground">{allocation.assigned ? t('migration.assigned') : t('migration.free')}</span>
  </span>
  ))}
  </div>
@@ -502,7 +588,7 @@ function NodeMappingSection({
  </div>
  <div>
  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
- Servers on this node ({nodeServers.length})
+ {t('migration.nodeMapping.serversOnNode', { value: nodeServers.length })}
  </div>
  {nodeServers.length > 0 ? (
  <div className="space-y-3">
@@ -512,7 +598,7 @@ function NodeMappingSection({
  <div className="text-[11px] text-muted-foreground">
  {s.nestName}/{s.eggName}
  {s.suspended && (
- <span className="text-warning ml-2">(suspended)</span>
+ <span className="text-warning ml-2">{t('migration.suspendedParen')}</span>
  )}
  </div>
  <ServerImportSummary server={s} />
@@ -520,7 +606,7 @@ function NodeMappingSection({
  ))}
  </div>
  ) : (
- <p className="text-xs text-muted-foreground">No servers on this node.</p>
+ <p className="text-xs text-muted-foreground">{t('migration.nodeMapping.noServers')}</p>
  )}
  </div>
  </div>
@@ -546,15 +632,16 @@ function ServerMappingList({
  setServerMappings: React.Dispatch<React.SetStateAction<Record<string, string>>>;
  onlineNodes: CatalystNodeOption[];
 }) {
+ const { t } = useTranslation('admin-infra');
  const [expandedId, setExpandedId] = useState<number | null>(null);
 
  return (
  <div className="space-y-2">
  <label className="text-sm font-medium text-foreground">
- Map Pterodactyl Servers to Catalyst Nodes
+ {t('migration.serverMapping.title')}
  </label>
  <p className="text-xs text-muted-foreground">
- Click a server to see what gets imported automatically.
+ {t('migration.serverMapping.help')}
  </p>
  <div className="max-h-96 overflow-y-auto rounded-lg border border-border bg-surface-1 divide-y divide-border">
  {servers.map(server => {
@@ -572,18 +659,18 @@ function ServerMappingList({
  {server.backupSlots === 0 && (
  <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/50 border border-warning/30 rounded px-1.5 py-0">
  <AlertTriangle className="h-2.5 w-2.5" />
- no backups
+ {t('migration.noBackups')}
  </span>
  )}
  {server.backupSlots > 0 && server.currentBackups >= server.backupSlots && (
  <span className="inline-flex items-center gap-1 text-[10px] text-warning/80 bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
  <AlertTriangle className="h-2.5 w-2.5" />
- slots full
+ {t('migration.slotsFull')}
  </span>
  )}
  {server.suspended && (
  <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
- Suspended
+ {t('common:status.suspended')}
  </span>
  )}
  </div>
@@ -603,7 +690,7 @@ function ServerMappingList({
  }
  >
  <SelectTrigger className="w-48 bg-card border-border/40 text-foreground text-xs h-8">
- <SelectValue placeholder="Select target node" />
+ <SelectValue placeholder={t('migration.selectTargetNode')} />
  </SelectTrigger>
  <SelectContent>
  {onlineNodes.map(cn => (
@@ -634,6 +721,7 @@ function ServerMappingList({
 
 // ── Backup Slot Warnings ──
 function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number; name: string; backupSlots: number; currentBackups: number }> }) {
+ const { t } = useTranslation('admin-infra');
  if (!serversList) return null;
  const noSlotServers = serversList.filter(s => s.backupSlots === 0);
  const fullSlotServers = serversList.filter(s => s.backupSlots > 0 && s.currentBackups >= s.backupSlots);
@@ -645,17 +733,17 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
  <div className="rounded-lg border border-warning/50 bg-warning/30 p-3">
  <div className="flex items-center gap-2 text-warning">
  <AlertTriangle className="h-4 w-4" />
- <span className="text-sm font-medium">{noSlotServers.length} server{noSlotServers.length > 1 ? 's have' : ' has'} 0 backup slots</span>
+ <span className="text-sm font-medium">{t('migration.backupWarnings.noSlots', { count: noSlotServers.length })}</span>
  </div>
  <p className="text-sm text-warning/80 mt-1">
- The migration will automatically set the backup limit to 1 on these servers to create a migration backup.
+ {t('migration.backupWarnings.noSlotsDescription')}
  </p>
  <ul className="text-xs text-warning/70 mt-1 space-y-0.5 ml-4 list-disc">
  {noSlotServers.slice(0, 5).map(s => (
  <li key={s.id}>{s.name}</li>
  ))}
  {noSlotServers.length > 5 && (
- <li className="text-muted-foreground">+{noSlotServers.length - 5} more</li>
+ <li className="text-muted-foreground">{t('migration.moreCount', { value: noSlotServers.length - 5 })}</li>
  )}
  </ul>
  </div>
@@ -664,10 +752,10 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
  <div className="rounded-lg border border-warning/50 bg-warning/20 p-3">
  <div className="flex items-center gap-2 text-warning/80">
  <AlertTriangle className="h-4 w-4" />
- <span className="text-sm font-medium">{fullSlotServers.length} server{fullSlotServers.length > 1 ? 's have' : ' has'} all backup slots in use</span>
+ <span className="text-sm font-medium">{t('migration.backupWarnings.slotsFull', { count: fullSlotServers.length })}</span>
  </div>
  <p className="text-xs text-warning/60 mt-1">
- The migration will automatically increase the backup limit by 1 to make room for a migration backup.
+ {t('migration.backupWarnings.slotsFullDescription')}
  </p>
  </div>
  )}
@@ -677,6 +765,7 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
 
 // ── Main Component ──
 export default function MigrationPage() {
+ const { t } = useTranslation('admin-infra');
 
  // State
  const [activeTab, setActiveTab] = useState<'new' | 'progress' | 'history'>('new');
@@ -754,13 +843,13 @@ export default function MigrationPage() {
  if (!jobStatus) return;
  const prev = prevJobStatusRef.current;
  if (prev && prev === 'running' && jobStatus === 'completed') {
- notifySuccess('Migration completed successfully!');
+ notifySuccess(t('migration.toast.completed'));
  }
  if (prev && prev === 'running' && jobStatus === 'failed') {
- notifyError(`Migration failed: ${jobError || 'Unknown error'}`);
+ notifyError(t('migration.toast.failed', { error: jobError || t('migration.unknownError') }));
  }
  prevJobStatusRef.current = jobStatus;
- }, [jobStatus, jobError]);
+ }, [jobStatus, jobError, t]);
 
  // Auto-detect active job via state sync during render
  const [prevSafeJobs, setPrevSafeJobs] = useState(safeJobs);
@@ -783,14 +872,14 @@ export default function MigrationPage() {
  onSuccess: (data) => {
  setTestResult(data);
  if (data.success) {
- notifySuccess('Connected to Pterodactyl panel');
+ notifySuccess(t('migration.toast.connected'));
  } else {
- notifyError(data.error || 'Connection failed');
+ notifyError(data.error || t('migration.toast.connectionFailed'));
  }
  },
  onError: (err: any) => {
  setTestResult({ success: false, error: err.response?.data?.error || err.message });
- notifyError('Connection test failed');
+ notifyError(t('migration.toast.connectionTestFailed'));
  },
  });
 
@@ -806,62 +895,62 @@ export default function MigrationPage() {
  onSuccess: (data) => {
  setActiveJobId(data.jobId);
  setActiveTab('progress');
- notifySuccess('Migration started');
+ notifySuccess(t('migration.toast.started'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
  },
  onError: (err: any) => {
- notifyError(err.response?.data?.error || 'Failed to start migration');
+ notifyError(err);
  },
  });
 
  const pauseMutation = useMutation({
  mutationFn: () => migrationApi.pause(activeJobId!),
  onSuccess: () => {
- notifyInfo('Migration paused');
+ notifyInfo(t('migration.toast.paused'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
  queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
  },
- onError: (err: any) => notifyError(err.response?.data?.error || 'Failed to pause'),
+ onError: (err: any) => notifyError(err),
  });
 
  const resumeMutation = useMutation({
  mutationFn: () => migrationApi.resume(activeJobId!),
  onSuccess: () => {
- notifySuccess('Migration resumed');
+ notifySuccess(t('migration.toast.resumed'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
  queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
  },
- onError: (err: any) => notifyError(err.response?.data?.error || 'Failed to resume'),
+ onError: (err: any) => notifyError(err),
  });
 
  const cancelMutation = useMutation({
  mutationFn: () => migrationApi.cancel(activeJobId!),
  onSuccess: () => {
- notifyInfo('Migration cancelled');
+ notifyInfo(t('migration.toast.cancelled'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
  queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
  },
- onError: (err: any) => notifyError(err.response?.data?.error || 'Failed to cancel'),
+ onError: (err: any) => notifyError(err),
  });
 
  const retryMutation = useMutation({
  mutationFn: (stepId: string) => migrationApi.retryStep(activeJobId!, stepId),
  onSuccess: () => {
- notifySuccess('Step queued for retry');
+ notifySuccess(t('migration.toast.stepQueued'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
  queryClient.invalidateQueries({ queryKey: qk.migrationSteps(activeJobId!) });
  },
- onError: (err: any) => notifyError(err.response?.data?.error || 'Retry failed'),
+ onError: (err: any) => notifyError(err),
  });
 
  const handleRetryStep = useCallback((stepId: string) => {
@@ -930,18 +1019,18 @@ export default function MigrationPage() {
  }, [shouldRun, startedAt]);
 
  const tabs = [
- { id: 'new' as const, label: 'New Migration' },
- { id: 'progress' as const, label: 'Active Migration', show: !!activeJobId },
- { id: 'history' as const, label: 'History' },
- ].filter(t => t.show !== false);
+ { id: 'new' as const, label: t('migration.tabs.new') },
+ { id: 'progress' as const, label: t('migration.tabs.active'), show: !!activeJobId },
+ { id: 'history' as const, label: t('migration.tabs.history') },
+ ].filter((tab) => tab.show !== false);
 
  return (
  <div className="space-y-5">
  {/* Page Header */}
  <TabHeader
  icon={ArrowRightLeft}
- title="Migration"
- description="Migrate servers from Pterodactyl to Catalyst"
+ title={t('migration.title')}
+ description={t('migration.description')}
  />
 
  {/* Tab Bar */}
@@ -966,16 +1055,16 @@ export default function MigrationPage() {
  {activeTab === 'new' && (
       <div>
       <ServerTabCard>
-        <h2 className="font-display text-sm font-semibold text-foreground">Connect</h2>
+        <h2 className="font-display text-sm font-semibold text-foreground">{t('migration.connect.title')}</h2>
         <p className="type-meta mb-4 mt-1">
-          Panel URL and application API key. Map onto existing online Catalyst nodes.
+          {t('migration.connect.description')}
         </p>
 
 
  <div className="space-y-4">
  {/* Panel URL */}
  <div className="space-y-1.5">
- <label className="text-sm font-medium text-foreground">Panel URL</label>
+ <label className="text-sm font-medium text-foreground">{t('migration.connect.panelUrl')}</label>
  <Input
  value={panelUrl}
  onChange={(e) => setPanelUrl(e.target.value)}
@@ -986,7 +1075,7 @@ export default function MigrationPage() {
 
  {/* API Key */}
  <div className="space-y-1.5">
- <label className="text-sm font-medium text-foreground">Application API Key</label>
+ <label className="text-sm font-medium text-foreground">{t('migration.connect.apiKey')}</label>
  <div className="relative">
  <Input
  value={apiKey}
@@ -1007,8 +1096,8 @@ export default function MigrationPage() {
  {/* Client API Key */}
  <div className="space-y-1.5">
  <label className="text-sm font-medium text-foreground">
- Client API Key{" "}
- <span className="text-muted-foreground font-normal">(for file migration)</span>
+ {t('migration.connect.clientApiKey')}{" "}
+ <span className="text-muted-foreground font-normal">{t('migration.connect.clientApiKeyHint')}</span>
  </label>
  <div className="relative">
  <Input
@@ -1026,7 +1115,7 @@ export default function MigrationPage() {
  </button>
  </div>
  <p className="text-xs text-muted-foreground">
- Required for backup creation and file migration. Create in Pterodactyl → API Credentials → Client API.
+ {t('migration.connect.clientApiKeyNote')}
  </p>
  </div>
 
@@ -1044,7 +1133,7 @@ export default function MigrationPage() {
  <XCircle className="h-4 w-4 text-destructive" />
  )}
  <span className={`text-sm font-medium ${testResult.success ? 'text-success' : 'text-destructive'}`}>
- {testResult.success ? `Connected (v${testResult.version || '1.x'})` : 'Connection Failed'}
+ {testResult.success ? t('migration.test.connected', { version: testResult.version || '1.x' }) : t('migration.test.failed')}
  </span>
  </div>
  {!testResult.success ? (
@@ -1052,11 +1141,11 @@ export default function MigrationPage() {
  ) : testResult.stats ? (
  <StatGrid
  items={[
- { label: 'Locations', value: testResult.stats.locations },
- { label: 'Nodes', value: testResult.stats.nodes },
- { label: 'Nests', value: testResult.stats.nests },
- { label: 'Users', value: testResult.stats.users },
- { label: 'Servers', value: testResult.stats.servers },
+ { label: t('migration.test.locations'), value: testResult.stats.locations },
+ { label: t('migration.test.nodes'), value: testResult.stats.nodes },
+ { label: t('migration.test.nests'), value: testResult.stats.nests },
+ { label: t('migration.test.users'), value: testResult.stats.users },
+ { label: t('migration.test.servers'), value: testResult.stats.servers },
  ]}
  columns={3}
  className="mt-2"
@@ -1071,12 +1160,12 @@ export default function MigrationPage() {
  {/* Migration Scope (only shown after successful test) */}
  {testResult?.success && (
  <div className="space-y-3">
- <label className="text-sm font-medium text-foreground">Migration Scope</label>
+ <label className="text-sm font-medium text-foreground">{t('migration.scope.title')}</label>
  <div className="grid grid-cols-3 gap-2">
  {([
- { value: 'full' as const, label: 'Full Migration', desc: 'Map all Ptero nodes to Catalyst nodes' },
- { value: 'node' as const, label: 'Node by Node', desc: 'Select which Ptero nodes to migrate' },
- { value: 'server' as const, label: 'Server by Server', desc: 'Map individual servers to Catalyst nodes' },
+ { value: 'full' as const, label: t('migration.scope.full'), desc: t('migration.scope.fullDescription') },
+ { value: 'node' as const, label: t('migration.scope.node'), desc: t('migration.scope.nodeDescription') },
+ { value: 'server' as const, label: t('migration.scope.server'), desc: t('migration.scope.serverDescription') },
  ]).map(opt => (
  <button
  key={opt.value}
@@ -1104,7 +1193,7 @@ export default function MigrationPage() {
  {/* Online nodes warning */}
  {testResult?.success && onlineNodes.length === 0 && (
  <TabErrorState
- message="No online Catalyst nodes detected. Migration requires at least one Catalyst node to be online. Start the agent on your nodes first."
+ message={t('migration.noOnlineNodes')}
  />
  )}
 
@@ -1136,12 +1225,13 @@ export default function MigrationPage() {
  {testResult?.success && onlineNodes.length > 0 && (
  <div className="text-xs text-muted-foreground space-y-1">
  {migrationScope === 'server' && (
- <p>{Object.keys(serverMappings).length} of {testResult.serversList?.length || 0} servers mapped</p>
+ <p>{t('migration.summary.serversMapped', { mapped: Object.keys(serverMappings).length, total: testResult.serversList?.length || 0 })}</p>
  )}
  {(migrationScope === 'full' || migrationScope === 'node') && (
- <p>{Object.keys(nodeMappings).length} of {
- migrationScope === 'full' ? testResult.nodesList?.length || 0 : 'selected'
- } nodes mapped</p>
+ <p>{t('migration.summary.nodesMapped', {
+ mapped: Object.keys(nodeMappings).length,
+ total: migrationScope === 'full' ? testResult.nodesList?.length || 0 : t('migration.summary.selected'),
+ })}</p>
  )}
  </div>
  )}
@@ -1159,7 +1249,7 @@ export default function MigrationPage() {
  ) : (
  <ExternalLink className="h-4 w-4" />
  )}
- Test Connection
+ {t('migration.testConnection')}
  </Button>
  <Button
  onClick={() => startMutation.mutate()}
@@ -1178,7 +1268,7 @@ export default function MigrationPage() {
  ) : (
  <Play className="h-4 w-4" />
  )}
- Start Migration
+ {t('migration.startMigration')}
  </Button>
  </div>
  </div>
@@ -1195,12 +1285,12 @@ export default function MigrationPage() {
  <div className="flex items-center gap-3">
  <StatusBadge status={activeJob.status} />
  <div>
- <h2 className="text-lg font-semibold text-foreground">Migration Progress</h2>
+ <h2 className="text-lg font-semibold text-foreground">{t('migration.progress.title')}</h2>
  <p className="text-sm text-muted-foreground">
  {activeJob.sourceUrl}
  {activeJob.currentPhase && (
  <span className="text-muted-foreground">
- {' '}— Phase: <span className="text-foreground">{activeJob.currentPhase}</span>
+ {' '}— {t('migration.progress.phase')} <span className="text-foreground">{phaseLabel(t, activeJob.currentPhase)}</span>
  </span>
  )}
  </p>
@@ -1216,7 +1306,7 @@ export default function MigrationPage() {
  className="gap-1.5"
  >
  <Pause className="h-3.5 w-3.5" />
- Pause
+ {t('migration.actions.pause')}
  </Button>
  )}
  {activeJob.status === 'paused' && (
@@ -1227,7 +1317,7 @@ export default function MigrationPage() {
  className="gap-1.5"
  >
  <Play className="h-3.5 w-3.5" />
- Resume
+ {t('migration.actions.resume')}
  </Button>
  )}
  {(activeJob.status === 'running' || activeJob.status === 'paused') && (
@@ -1239,7 +1329,7 @@ export default function MigrationPage() {
  className="gap-1.5"
  >
  <X className="h-3.5 w-3.5" />
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  )}
  </div>
@@ -1257,7 +1347,7 @@ export default function MigrationPage() {
  <div className="mt-3 flex items-center gap-2 text-xs text-primary">
  <Loader2 className="h-3 w-3 animate-spin" />
  <span>
- {stepLabel(runningStep.action, runningStep.metadata as Record<string, unknown>)}
+ {stepLabel(t, runningStep.action, runningStep.metadata as Record<string, unknown>)}
  {runningStep.sourceId && <span className="text-primary/60"> #{runningStep.sourceId}</span>}
  </span>
  </div>
@@ -1267,7 +1357,7 @@ export default function MigrationPage() {
  <div className="mt-4 rounded-lg border border-danger/25 bg-danger/5 p-3">
  <div className="flex items-center gap-2 text-destructive">
  <AlertTriangle className="h-4 w-4" />
- <span className="text-sm font-medium">Error</span>
+ <span className="text-sm font-medium">{t('common:status.error')}</span>
  </div>
  <p className="text-sm text-destructive/80 mt-1">{activeJob.error}</p>
  </div>
@@ -1275,13 +1365,13 @@ export default function MigrationPage() {
 
  {/* Timing & Stats */}
  <div className="flex gap-6 mt-4 text-xs text-muted-foreground">
- <span>Started: {activeJob.startedAt ? new Date(activeJob.startedAt).toLocaleString() : '—'}</span>
+ <span>{t('migration.progress.started', { date: activeJob.startedAt ? formatDateTime(activeJob.startedAt) : '—' })}</span>
  {['running', 'validating'].includes(activeJob.status) && elapsed > 0 && (
- <span className="text-muted-foreground font-medium">Elapsed: {formatDuration(elapsed)}</span>
+ <span className="text-muted-foreground font-medium">{t('migration.progress.elapsed', { duration: formatDuration(elapsed) })}</span>
  )}
  {activeJob.completedAt && activeJob.startedAt && (
  <span className="text-muted-foreground">
- Duration: {formatDuration(new Date(activeJob.completedAt).getTime() - new Date(activeJob.startedAt).getTime())}
+ {t('migration.progress.duration', { duration: formatDuration(new Date(activeJob.completedAt).getTime() - new Date(activeJob.startedAt).getTime()) })}
  </span>
  )}
  </div>
@@ -1290,7 +1380,7 @@ export default function MigrationPage() {
  {/* Phase List */}
  <ServerTabCard className="overflow-hidden">
  <div className="pb-3">
- <h3 className="text-sm font-semibold text-foreground">Migration Phases</h3>
+ <h3 className="text-sm font-semibold text-foreground">{t('migration.phases.title')}</h3>
  </div>
  <div>
  {MIGRATION_PHASES.map((phase) => {
@@ -1320,23 +1410,23 @@ export default function MigrationPage() {
  </div>
  <div className="flex-1 min-w-0">
  <div className="flex items-center gap-2">
- <span className="text-sm font-medium text-foreground">{phase.label}</span>
+ <span className="text-sm font-medium text-foreground">{phaseLabel(t, phase.id)}</span>
  {isCurrentPhase && (
- <Badge variant="default" className="text-[10px] px-1.5 py-0">CURRENT</Badge>
+ <Badge variant="default" className="text-[10px] px-1.5 py-0">{t('migration.phases.current')}</Badge>
  )}
  </div>
  <div className="text-xs text-muted-foreground mt-0.5">
  {(() => {
  if (steps.length === 0) {
- return 'Waiting...';
+ return t('migration.phases.waiting');
  }
- const skippedInPhase = steps.filter(s => s.status === 'skipped' || (s.status === 'completed' && skipReason(s.status, s.metadata as Record<string, unknown>)));
- const realCompleted = steps.filter(s => s.status === 'completed' && !skipReason(s.status, s.metadata as Record<string, unknown>));
+ const skippedInPhase = steps.filter(s => s.status === 'skipped' || (s.status === 'completed' && skipReason(t, s.status, s.metadata as Record<string, unknown>)));
+ const realCompleted = steps.filter(s => s.status === 'completed' && !skipReason(t, s.status, s.metadata as Record<string, unknown>));
  const parts: string[] = [];
- if (realCompleted.length > 0) parts.push(`${realCompleted.length} completed`);
- if (skippedInPhase.length > 0) parts.push(`${skippedInPhase.length} skipped`);
- if (failedInPhase > 0) parts.push(`${failedInPhase} failed`);
- return parts.join(' · ') || `${steps.length} steps`;
+ if (realCompleted.length > 0) parts.push(t('migration.progress.completed', { value: realCompleted.length }));
+ if (skippedInPhase.length > 0) parts.push(t('migration.progress.skipped', { value: skippedInPhase.length }));
+ if (failedInPhase > 0) parts.push(t('migration.progress.failed', { value: failedInPhase }));
+ return parts.join(' · ') || t('migration.phases.steps', { value: steps.length });
  })()}
  </div>
  {/* Inline error preview for phase with failures */}
@@ -1344,19 +1434,19 @@ export default function MigrationPage() {
  <div className="mt-1.5">
  {steps.filter(s => s.status === 'failed').slice(0, 2).map(s => (
  <div key={s.id} className="text-[11px] text-destructive/80 truncate max-w-md">
- {stepLabel(s.action, s.metadata as Record<string, unknown>)}: {s.error}
+ {stepLabel(t, s.action, s.metadata as Record<string, unknown>)}: {s.error}
  </div>
  ))}
  {failedInPhase > 2 && (
  <div className="text-[11px] text-muted-foreground">
- +{failedInPhase - 2} more errors
+ {t('migration.phases.moreErrors', { value: failedInPhase - 2 })}
  </div>
  )}
  </div>
  )}
  </div>
  <span className={`text-xs font-medium ${sc.color}`}>
- {sc.label}
+ {stepStatusLabel(t, status)}
  </span>
  </div>
  {steps.length > 0 && (
@@ -1373,8 +1463,8 @@ export default function MigrationPage() {
  {/* TAB: Active Migration - No Job */}
  {activeTab === 'progress' && !activeJob && (
  <TabEmptyState
- title="No active migration"
- description="Start a new migration to see progress here."
+ title={t('migration.empty.noActive')}
+ description={t('migration.empty.noActiveDescription')}
  />
  )}
 
@@ -1382,7 +1472,7 @@ export default function MigrationPage() {
  {activeTab === 'history' && (
  <ServerTabCard className="overflow-hidden">
  <div className="flex items-center justify-between pb-3">
- <h3 className="text-sm font-semibold text-foreground">Migration History</h3>
+ <h3 className="text-sm font-semibold text-foreground">{t('migration.history.title')}</h3>
  <button
  onClick={() => queryClient.invalidateQueries({ queryKey: qk.migrationJobs() })}
  className="text-muted-foreground hover:text-foreground"
@@ -1394,8 +1484,8 @@ export default function MigrationPage() {
  <TabLoadingState rows={4} />
  ) : safeJobs.length === 0 ? (
  <TabEmptyState
- title="No migration jobs yet"
- description="Start a new migration to see it here."
+ title={t('migration.empty.noJobs')}
+ description={t('migration.empty.noJobsDescription')}
  />
  ) : (
  <div className="divide-y divide-border/50">
@@ -1412,9 +1502,9 @@ export default function MigrationPage() {
  <div className="flex-1 min-w-0">
  <div className="text-sm text-foreground truncate">{job.sourceUrl}</div>
  <div className="text-xs text-muted-foreground">
- {job.progress?.completed || 0}/{job.progress?.total || 0} steps
+ {t('migration.history.jobSteps', { completed: job.progress?.completed || 0, total: job.progress?.total || 0 })}
  {' · '}
- {new Date(job.createdAt).toLocaleDateString()}
+ {formatDate(job.createdAt)}
  </div>
  </div>
  {job.error && (

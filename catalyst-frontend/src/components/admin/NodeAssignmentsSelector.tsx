@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
+import { formatDate } from '@/i18n/format';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { getErrorMessage } from '../../utils/errors';
 import { describeError } from '../../utils/errors';
 import { reportSystemError } from '../../services/api/systemErrors';
 import {
@@ -44,8 +45,9 @@ export function NodeAssignmentsSelector({
  selectedNodes,
  onSelectionChange,
  disabled = false,
- label = 'Node Access',
+ label,
 }: Props) {
+ const { t } = useTranslation('admin');
  const [search, setSearch] = useState('');
  const [expirationNodeId, setExpirationNodeId] = useState<string | null>(null);
  const [expirationDate, setExpirationDate] = useState('');
@@ -106,14 +108,14 @@ export function NodeAssignmentsSelector({
  const [prevWildcardFromApi, setPrevWildcardFromApi] = useState<boolean | null>(null);
  if (hasWildcardFromApi && !hasWildcard && prevWildcardFromApi !== hasWildcardFromApi) {
  setPrevWildcardFromApi(hasWildcardFromApi);
- const wildcardNode: NodeAssignmentWithExpiration = {
- nodeId: null,
- nodeName: 'All Nodes (*)',
- isWildcard: true,
- source: userId ? 'user' : undefined,
- };
- onSelectionChange([wildcardNode]);
- } else if (!hasWildcardFromApi && hasWildcard && prevWildcardFromApi !== hasWildcardFromApi) {
+        const wildcardNode: NodeAssignmentWithExpiration = {
+          nodeId: null,
+          nodeName: t('nodeAssignments.allNodes'),
+          isWildcard: true,
+          source: userId ? 'user' : undefined,
+        };
+        onSelectionChange([wildcardNode]);
+      } else if (!hasWildcardFromApi && hasWildcard && prevWildcardFromApi !== hasWildcardFromApi) {
  setPrevWildcardFromApi(hasWildcardFromApi);
  onSelectionChange(selectedNodes.filter(n => !n.isWildcard && n.nodeId !== null));
  } else if (prevWildcardFromApi !== hasWildcardFromApi) {
@@ -133,13 +135,13 @@ export function NodeAssignmentsSelector({
  const newSelection = selectedNodes.filter(n => !n.isWildcard && n.nodeId !== null);
  onSelectionChange(newSelection);
  } else {
- // Clear all specific nodes and add wildcard immediately
- const wildcardNode: NodeAssignmentWithExpiration = {
- nodeId: null,
- nodeName: 'All Nodes (*)',
- isWildcard: true,
- source: userId ? 'user' : undefined,
- };
+      // Clear all specific nodes and add wildcard immediately
+      const wildcardNode: NodeAssignmentWithExpiration = {
+        nodeId: null,
+        nodeName: t('nodeAssignments.allNodes'),
+        isWildcard: true,
+        source: userId ? 'user' : undefined,
+      };
  onSelectionChange([wildcardNode]);
  }
 
@@ -152,14 +154,14 @@ export function NodeAssignmentsSelector({
  if (hasWildcard) {
  // Remove wildcard assignment
  await nodesApi.removeWildcard(targetType, targetId!);
- notifySuccess('Wildcard assignment removed');
+ notifySuccess(t('nodeAssignments.toast.wildcardRemoved'));
  } else {
  // Add wildcard assignment - this will remove all specific node assignments
  await nodesApi.assignWildcard({
  targetType,
  targetId: targetId!,
  });
- notifySuccess('All nodes assigned (wildcard)');
+ notifySuccess(t('nodeAssignments.toast.wildcardAssigned'));
  }
  // Invalidate queries after successful API call
  Promise.all([
@@ -176,13 +178,13 @@ export function NodeAssignmentsSelector({
  metadata: { context: 'update wildcard assignment' },
  });
  // Revert on error
- notifyError(getErrorMessage(error, 'Failed to update wildcard assignment'));
+ notifyError(error);
  // Revert the optimistic update
  if (hasWildcard) {
  // We tried to remove but failed - add it back
  const wildcardNode: NodeAssignmentWithExpiration = {
  nodeId: null,
- nodeName: 'All Nodes (*)',
+ nodeName: t('nodeAssignments.allNodes'),
  isWildcard: true,
  source: userId ? 'user' : undefined,
  };
@@ -246,7 +248,7 @@ export function NodeAssignmentsSelector({
  targetId: targetId!,
  });
 
- notifySuccess('Node assigned');
+ notifySuccess(t('nodeAssignments.toast.nodeAssigned'));
  Promise.all([
  queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId!) }),
  queryClient.invalidateQueries({ queryKey: qk.userNodes(userId!) }),
@@ -261,7 +263,7 @@ export function NodeAssignmentsSelector({
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'assign node' },
  });
- notifyError(getErrorMessage(error, 'Failed to assign node'));
+ notifyError(error);
  return false;
  }
  };
@@ -280,7 +282,7 @@ export function NodeAssignmentsSelector({
 
  if (assignment) {
  await nodesApi.removeAssignment(nodeId, assignment.id);
- notifySuccess('Node unassigned');
+ notifySuccess(t('nodeAssignments.toast.nodeUnassigned'));
  Promise.all([
  queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId!) }),
  queryClient.invalidateQueries({ queryKey: qk.userNodes(userId!) }),
@@ -297,7 +299,7 @@ export function NodeAssignmentsSelector({
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'unassign node' },
  });
- notifyError(getErrorMessage(error, 'Failed to unassign node'));
+ notifyError(error);
  return false;
  }
  };
@@ -336,7 +338,7 @@ export function NodeAssignmentsSelector({
 
  setExpirationNodeId(null);
  setExpirationDate('');
- notifySuccess('Expiration updated');
+ notifySuccess(t('nodeAssignments.toast.expirationUpdated'));
  Promise.all([
  queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId!) }),
  queryClient.invalidateQueries({ queryKey: qk.userNodes(userId!) }),
@@ -350,7 +352,7 @@ export function NodeAssignmentsSelector({
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'update expiration' },
  });
- notifyError(getErrorMessage(error, 'Failed to update expiration'));
+ notifyError(error);
  }
  };
 
@@ -376,78 +378,83 @@ export function NodeAssignmentsSelector({
 
  return (
  <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
- <div className="flex items-center justify-between mb-3">
- <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
- {label} ({selectedNodes.length})
- </div>
- <input
- type="text"
- value={search}
- onChange={(e) => setSearch(e.target.value)}
- placeholder="Search nodes..."
- className="w-48 rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground"
- />
- </div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
+            {t('nodeAssignments.header', {
+              label: label ?? t('nodeAssignments.defaultLabel'),
+              value: selectedNodes.length,
+            })}
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('nodeAssignments.searchPlaceholder')}
+            className="w-48 rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground"
+          />
+        </div>
 
- {isLoading ? (
- <div className="py-4 text-center text-sm text-muted-foreground dark:text-muted-foreground">
- Loading nodes...
- </div>
- ) : (
- <>
- {/* Selected nodes */}
- {selectedNodes.length > 0 && (
- <div className="mb-3 space-y-2">
- {inheritedAssignments.length > 0 && (
- <div className="text-xs text-muted-foreground dark:text-muted-foreground mb-1">
- Inherited from roles
- </div>
- )}
- {inheritedAssignments.map(node => (
- <div
- key={node.nodeId || 'wildcard'}
- className="flex items-center justify-between rounded-md border border-primary/20 bg-primary-muted px-2 py-1.5"
- >
- <div className="flex items-center gap-2">
- <svg className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
- <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
- </svg>
- <span className="text-xs font-medium text-foreground">{node.nodeName}</span>
- {node.roleName && (
- <span className="text-[10px] text-primary">
- via {node.roleName}
- </span>
- )}
- </div>
- <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">
- {node.expiresAt ? `Expires: ${new Date(node.expiresAt).toLocaleDateString()}` : 'No expiration'}
- </span>
- </div>
- ))}
- {directAssignments.filter(n => !n.isWildcard).map(node => (
- <div
- key={node.nodeId}
- className="flex items-center justify-between rounded-md border border-border bg-card px-2 py-1.5 dark:border-border dark:bg-surface-0"
- >
- <div className="flex items-center gap-2">
- <span className="text-xs font-medium text-foreground">{node.nodeName}</span>
- {node.expiresAt && (
- <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">
- Expires: {new Date(node.expiresAt).toLocaleDateString()}
- </span>
- )}
- </div>
- {!disabled && (
- <div className="flex items-center gap-1">
- <button
- onClick={() => {
- setExpirationNodeId(node.nodeId!);
- setExpirationDate(node.expiresAt || '');
- }}
- className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
- >
- Set Expiration
- </button>
+        {isLoading ? (
+          <div className="py-4 text-center text-sm text-muted-foreground dark:text-muted-foreground">
+            {t('nodeAssignments.loading')}
+          </div>
+        ) : (
+          <>
+            {/* Selected nodes */}
+            {selectedNodes.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {inheritedAssignments.length > 0 && (
+                  <div className="text-xs text-muted-foreground dark:text-muted-foreground mb-1">
+                    {t('nodeAssignments.inheritedFromRoles')}
+                  </div>
+                )}
+                {inheritedAssignments.map(node => (
+                  <div
+                    key={node.nodeId || 'wildcard'}
+                    className="flex items-center justify-between rounded-md border border-primary/20 bg-primary-muted px-2 py-1.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-xs font-medium text-foreground">{node.nodeName}</span>
+                      {node.roleName && (
+                        <span className="text-[10px] text-primary">
+                          {t('nodeAssignments.viaRole', { role: node.roleName })}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">
+                      {node.expiresAt
+                        ? t('nodeAssignments.expires', { date: formatDate(node.expiresAt) })
+                        : t('nodeAssignments.noExpiration')}
+                    </span>
+                  </div>
+                ))}
+                {directAssignments.filter(n => !n.isWildcard).map(node => (
+                  <div
+                    key={node.nodeId}
+                    className="flex items-center justify-between rounded-md border border-border bg-card px-2 py-1.5 dark:border-border dark:bg-surface-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-foreground">{node.nodeName}</span>
+                      {node.expiresAt && (
+                        <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">
+                          {t('nodeAssignments.expires', { date: formatDate(node.expiresAt) })}
+                        </span>
+                      )}
+                    </div>
+                    {!disabled && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            setExpirationNodeId(node.nodeId!);
+                            setExpirationDate(node.expiresAt || '');
+                          }}
+                          className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
+                        >
+                          {t('nodeAssignments.setExpiration')}
+                        </button>
  <button
  onClick={() => toggleNode(node.nodeId!, node.nodeName)}
  className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive"
@@ -468,8 +475,8 @@ export function NodeAssignmentsSelector({
  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
  </svg>
  <div className="flex flex-col">
- <span className="text-xs font-semibold text-warning dark:text-warning">All Nodes (*)</span>
- <span className="text-[10px] text-warning dark:text-warning">Access to all current and future nodes</span>
+ <span className="text-xs font-semibold text-warning dark:text-warning">{t('nodeAssignments.allNodes')}</span>
+ <span className="text-[10px] text-warning dark:text-warning">{t('nodeAssignments.allNodesDescription')}</span>
  </div>
  </div>
  {!disabled && (
@@ -477,7 +484,7 @@ export function NodeAssignmentsSelector({
  onClick={() => toggleWildcard()}
  className="rounded px-2 py-1 text-[10px] text-warning transition-colors hover:bg-warning/10 hover:text-warning dark:text-warning dark:hover:bg-warning/20"
  >
- Remove
+ {t('common:actions.remove')}
  </button>
  )}
  </div>
@@ -502,13 +509,13 @@ export function NodeAssignmentsSelector({
  className="h-4 w-4 rounded border-border bg-card text-warning focus:ring-2 focus:ring-warning dark:border-border dark:bg-surface-1 dark:text-warning disabled:opacity-50"
  />
  <div className="flex flex-col">
- <span className="font-semibold text-foreground">All Nodes (*)</span>
- <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">Access to all current and future nodes</span>
+ <span className="font-semibold text-foreground">{t('nodeAssignments.allNodes')}</span>
+ <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">{t('nodeAssignments.allNodesDescription')}</span>
  </div>
  </label>
  {hasWildcard && (
  <div className="mt-1 text-[10px] text-warning dark:text-warning px-2">
- Individual node selection is disabled when wildcard is active
+ {t('nodeAssignments.wildcardDisablesIndividualSelection')}
  </div>
  )}
  </div>
@@ -516,7 +523,7 @@ export function NodeAssignmentsSelector({
  {/* Available nodes header */}
  {!hasWildcard && (
  <div className="text-xs text-muted-foreground dark:text-muted-foreground mb-1 px-1">
- Select individual nodes
+ {t('nodeAssignments.selectIndividualNodes')}
  </div>
  )}
 
@@ -524,7 +531,7 @@ export function NodeAssignmentsSelector({
  <div className={`max-h-36 overflow-y-auto pr-1 ${hasWildcard ? 'opacity-50 pointer-events-none' : ''}`}>
  {filteredNodes.length === 0 ? (
  <div className="py-2 text-center text-xs text-muted-foreground dark:text-muted-foreground">
- No nodes found
+ {t('nodeAssignments.noNodesFound')}
  </div>
  ) : (
  filteredNodes.map((node) => {
@@ -574,14 +581,16 @@ export function NodeAssignmentsSelector({
         >
           <DialogContent size="sm">
             <DialogHeader>
-              <DialogTitle>Set expiration</DialogTitle>
+              <DialogTitle>{t('nodeAssignments.dialog.title')}</DialogTitle>
               <DialogDescription>
-                Choose when access to {nodes.find((n) => n.id === expirationNodeId)?.name} expires.
+                {t('nodeAssignments.dialog.description', {
+                  name: nodes.find((n) => n.id === expirationNodeId)?.name,
+                })}
               </DialogDescription>
             </DialogHeader>
             <DialogBody>
               <div className="space-y-2">
-                <Label htmlFor="node-assignment-expiration">Expires at</Label>
+                <Label htmlFor="node-assignment-expiration">{t('nodeAssignments.dialog.expiresAt')}</Label>
                 <Input
                   id="node-assignment-expiration"
                   type="datetime-local"
@@ -599,14 +608,14 @@ export function NodeAssignmentsSelector({
                   setExpirationDate('');
                 }}
               >
-                Cancel
+                {t('common:actions.cancel')}
               </Button>
               <Button
                 onClick={() => {
                   if (expirationNodeId) updateExpiration(expirationNodeId, expirationDate);
                 }}
               >
-                Save
+                {t('common:actions.save')}
               </Button>
             </DialogFooter>
           </DialogContent>

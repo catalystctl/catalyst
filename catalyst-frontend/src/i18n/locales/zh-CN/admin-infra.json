@@ -1,0 +1,487 @@
+{
+  "allocations": {
+    "assigned": "",
+    "assignedIps": "",
+    "available": "",
+    "createAllocations": "",
+    "createPool": {
+      "autofill": "",
+      "cidr": "",
+      "cidrPlaceholder": "",
+      "creating": "",
+      "description": "",
+      "endIp": "",
+      "gateway": "",
+      "intro": "",
+      "networkName": "",
+      "quickSetupIp": "",
+      "reservedIps": "",
+      "startIp": "",
+      "submit": "",
+      "title": ""
+    },
+    "createPoolButton": "",
+    "createPort": {
+      "aliasLabel": "",
+      "aliasPlaceholder": "",
+      "creating": "",
+      "description": "",
+      "ipFormat": "",
+      "ipLabel": "",
+      "ipPlaceholder": "",
+      "portFormat": "",
+      "portsLabel": "",
+      "portsPlaceholder": "",
+      "quickFill": "",
+      "submit": "",
+      "title": ""
+    },
+    "description": "",
+    "empty": {
+      "createFirst": "",
+      "createFirstPool": "",
+      "noMatches": "",
+      "noPools": "",
+      "noPoolsDescription": "",
+      "noPorts": "",
+      "noPortsDescription": ""
+    },
+    "field": {
+      "ip": "",
+      "port": ""
+    },
+    "info": {
+      "ipPools": "",
+      "portAllocations": "",
+      "title": ""
+    },
+    "poolCount": "",
+    "poolTotals": "",
+    "portCount": "",
+    "searchPlaceholder": "",
+    "stats": {
+      "assigned": "",
+      "available": "",
+      "reserved": "",
+      "totalIps": "",
+      "totalPorts": "",
+      "uniqueIps": "",
+      "used": ""
+    },
+    "tabs": {
+      "ips": "",
+      "ports": ""
+    },
+    "thisNode": "",
+    "title": "",
+    "toast": {
+      "poolCreated": "",
+      "poolDeleted": "",
+      "portDeleted": "",
+      "portsCreated_other": ""
+    }
+  },
+  "database": {
+    "addHost": "",
+    "catalystDatabase": "",
+    "createDialog": {
+      "submit": "",
+      "subtitle": "",
+      "title": ""
+    },
+    "creating": "",
+    "deleteDialog": {
+      "message": "",
+      "title": ""
+    },
+    "description": "",
+    "editDialog": {
+      "submit": "",
+      "subtitle": "",
+      "title": ""
+    },
+    "empty": {
+      "description": "",
+      "title": ""
+    },
+    "form": {
+      "database": "",
+      "databaseHint": "",
+      "engine": "",
+      "host": "",
+      "name": "",
+      "password": "",
+      "passwordEditHint": "",
+      "port": "",
+      "username": ""
+    },
+    "host": {
+      "checking": "",
+      "connected": "",
+      "databaseCount_other": "",
+      "disconnected": "",
+      "pingCounts": "",
+      "port": "",
+      "testConnection": ""
+    },
+    "hostCount": "",
+    "recordsValue": "",
+    "saving": "",
+    "stats": {
+      "connections": "",
+      "records": "",
+      "size": "",
+      "tables": ""
+    },
+    "title": "",
+    "toast": {
+      "created": "",
+      "removed": "",
+      "updated": ""
+    }
+  },
+  "migration": {
+    "actions": {
+      "pause": "",
+      "resume": ""
+    },
+    "alwaysImported": {
+      "configFileEditor": "",
+      "dockerImageOverride": "",
+      "portAllocations": "",
+      "serverConfig": "",
+      "startupCommand": "",
+      "swapIoWeight": ""
+    },
+    "assigned": "",
+    "backupWarnings": {
+      "noSlots_other": "",
+      "noSlotsDescription": "",
+      "slotsFull_other": "",
+      "slotsFullDescription": ""
+    },
+    "connect": {
+      "apiKey": "",
+      "clientApiKey": "",
+      "clientApiKeyHint": "",
+      "clientApiKeyNote": "",
+      "description": "",
+      "panelUrl": "",
+      "title": ""
+    },
+    "description": "",
+    "empty": {
+      "noActive": "",
+      "noActiveDescription": "",
+      "noJobs": "",
+      "noJobsDescription": ""
+    },
+    "free": "",
+    "history": {
+      "jobSteps": "",
+      "title": ""
+    },
+    "imports": {
+      "databases": "",
+      "noBackupSlots": "",
+      "schedules": "",
+      "serverFiles": "",
+      "subusers": ""
+    },
+    "moreCount": "",
+    "noAllocations": "",
+    "noBackups": "",
+    "nodeConfig": {
+      "allocations": "",
+      "behindProxy": "",
+      "dataDirectory": "",
+      "direct": "",
+      "disk": "",
+      "diskValue": "",
+      "endpoint": "",
+      "location": "",
+      "maintenance": "",
+      "memory": "",
+      "memoryValue": "",
+      "proxy": "",
+      "sftpPort": "",
+      "uploadLimit": "",
+      "uploadLimitValue": ""
+    },
+    "nodeMapping": {
+      "configuration": "",
+      "helpFull": "",
+      "helpSelect": "",
+      "noServers": "",
+      "serversOnNode": "",
+      "title": ""
+    },
+    "nodeServerCount": "",
+    "noOnlineNodes": "",
+    "phases": {
+      "backups": "",
+      "current": "",
+      "databases": "",
+      "files": "",
+      "locations": "",
+      "moreErrors": "",
+      "schedules": "",
+      "servers": "",
+      "steps": "",
+      "templates": "",
+      "title": "",
+      "users": "",
+      "validate": "",
+      "waiting": ""
+    },
+    "primary": "",
+    "progress": {
+      "completed": "",
+      "duration": "",
+      "elapsed": "",
+      "failed": "",
+      "phase": "",
+      "skipped": "",
+      "started": "",
+      "title": ""
+    },
+    "scope": {
+      "full": "",
+      "fullDescription": "",
+      "node": "",
+      "nodeDescription": "",
+      "server": "",
+      "serverDescription": "",
+      "title": ""
+    },
+    "sections": {
+      "allocations": "",
+      "imports": ""
+    },
+    "selectTargetNode": "",
+    "serverMapping": {
+      "help": "",
+      "title": ""
+    },
+    "serverResources": {
+      "cpu": "",
+      "disk": "",
+      "memory": ""
+    },
+    "skipReasons": {
+      "alreadyExists": "",
+      "noBackupSlots": "",
+      "noClientApiKey": "",
+      "noSchedules": "",
+      "notApplicable": "",
+      "notAvailable": "",
+      "skipped": ""
+    },
+    "slotsFull": "",
+    "startMigration": "",
+    "status": {
+      "cancelled": "",
+      "completed": "",
+      "failed": "",
+      "paused": "",
+      "pending": "",
+      "running": "",
+      "validating": ""
+    },
+    "steps": {
+      "downloadFiles": "",
+      "importBackup": "",
+      "importDatabase": "",
+      "importDatabaseHost": "",
+      "importLocation": "",
+      "importNest": "",
+      "importSchedule": "",
+      "importServer": "",
+      "importTemplate": "",
+      "importUser": "",
+      "more": "",
+      "showLess": "",
+      "toggleErrorDetails": "",
+      "validateConnection": ""
+    },
+    "stepStatus": {
+      "completed": "",
+      "failed": "",
+      "pending": "",
+      "running": "",
+      "skipped": ""
+    },
+    "summary": {
+      "nodesMapped": "",
+      "selected": "",
+      "serversMapped": ""
+    },
+    "suspendedParen": "",
+    "tabs": {
+      "active": "",
+      "history": "",
+      "new": ""
+    },
+    "test": {
+      "connected": "",
+      "failed": "",
+      "locations": "",
+      "nests": "",
+      "nodes": "",
+      "servers": "",
+      "users": ""
+    },
+    "testConnection": "",
+    "title": "",
+    "toast": {
+      "cancelled": "",
+      "completed": "",
+      "connected": "",
+      "connectionFailed": "",
+      "connectionTestFailed": "",
+      "failed": "",
+      "paused": "",
+      "resumed": "",
+      "started": "",
+      "stepQueued": ""
+    },
+    "unknownError": ""
+  },
+  "nodes": {
+    "allLocations": "",
+    "clearAll": "",
+    "clearFilters": "",
+    "clearSelection": "",
+    "deleteDialog": {
+      "message": "",
+      "title": "",
+      "warning": ""
+    },
+    "description": "",
+    "empty": {
+      "adjustFilters": "",
+      "installAgent": "",
+      "none": "",
+      "notFound": ""
+    },
+    "filter": {
+      "allLocations": "",
+      "allStatuses": "",
+      "location": "",
+      "offlineCount": "",
+      "onlineCount": "",
+      "status": "",
+      "unassignedCount": ""
+    },
+    "filters": "",
+    "hostnameUnavailable": "",
+    "lastSeen": "",
+    "locationNodeCount_other": "",
+    "locations": "",
+    "manage": "",
+    "resultCount": "",
+    "searchPlaceholder": "",
+    "selectAll": "",
+    "selectAllInSection": "",
+    "selectedCount": "",
+    "selectedLabel": "",
+    "sort": {
+      "cpuCores": "",
+      "memory": "",
+      "mostServers": "",
+      "nameAsc": "",
+      "nameDesc": "",
+      "status": ""
+    },
+    "stat": {
+      "cores": "",
+      "memory": "",
+      "servers": ""
+    },
+    "stats": {
+      "cpuCores": "",
+      "memory": "",
+      "nodes": "",
+      "offline": "",
+      "online": "",
+      "totalServers": ""
+    },
+    "title": "",
+    "toast": {
+      "deleted_other": ""
+    },
+    "unassigned": ""
+  },
+  "servers": {
+    "actions": {
+      "console": "",
+      "restart": "",
+      "start": "",
+      "stop": "",
+      "suspend": "",
+      "unsuspend": "",
+      "update": ""
+    },
+    "actionVerb": {
+      "delete": "",
+      "restart": "",
+      "start": "",
+      "stop": "",
+      "suspend": "",
+      "unsuspend": ""
+    },
+    "clearAll": "",
+    "clearFilters": "",
+    "clearSelection": "",
+    "deleteDialog": {
+      "message": "",
+      "title": "",
+      "warning": ""
+    },
+    "description": "",
+    "empty": {
+      "adjustFilters": "",
+      "createServer": "",
+      "none": "",
+      "notFound": ""
+    },
+    "filter": {
+      "allNodes": "",
+      "allStatuses": "",
+      "allTemplates": "",
+      "node": "",
+      "owner": "",
+      "ownerPlaceholder": "",
+      "status": "",
+      "template": ""
+    },
+    "filters": "",
+    "resultCount": "",
+    "runningCount": "",
+    "searchPlaceholder": "",
+    "selectAll": "",
+    "selectedCount": "",
+    "selectedLabel": "",
+    "sort": {
+      "nameAsc": "",
+      "nameDesc": "",
+      "node": "",
+      "status": "",
+      "template": ""
+    },
+    "stoppedCount": "",
+    "suspendDialog": {
+      "message": "",
+      "reasonLabel": "",
+      "reasonPlaceholder": "",
+      "title": ""
+    },
+    "suspendedCount": "",
+    "title": "",
+    "toast": {
+      "failed_other": "",
+      "queued_other": ""
+    },
+    "totalCount": ""
+  }
+}

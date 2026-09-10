@@ -1,0 +1,133 @@
+{
+  "chart": {
+    "avg": "",
+    "dataPoints": "",
+    "empty": {
+      "historical": "",
+      "live": ""
+    },
+    "metric": {
+      "cpu": "",
+      "memory": "",
+      "network": ""
+    },
+    "metricLabel": {
+      "cpu": "",
+      "memory": "",
+      "network": ""
+    },
+    "mode": {
+      "historical": "",
+      "live": ""
+    },
+    "networkThroughput": "",
+    "nodesOnline": "",
+    "subtitle": {
+      "historical": "",
+      "live": ""
+    },
+    "title": "",
+    "updatesEvery": ""
+  },
+  "dashboard": {
+    "description": "",
+    "health": {
+      "checking": "",
+      "clusterNodes": "",
+      "database": "",
+      "down": "",
+      "lastChecked": "",
+      "ok": "",
+      "title": ""
+    },
+    "nav": {
+      "nodes": "",
+      "settings": ""
+    },
+    "nodes": {
+      "addNode": "",
+      "emptyDescription": "",
+      "emptyTitle": "",
+      "manage": "",
+      "serverCount": "",
+      "title": ""
+    },
+    "title": ""
+  },
+  "nodeAssignments": {
+    "allNodes": "",
+    "allNodesDescription": "",
+    "defaultLabel": "",
+    "dialog": {
+      "description": "",
+      "expiresAt": "",
+      "title": ""
+    },
+    "expires": "",
+    "header": "",
+    "inheritedFromRoles": "",
+    "loading": "",
+    "noExpiration": "",
+    "noNodesFound": "",
+    "searchPlaceholder": "",
+    "selectIndividualNodes": "",
+    "setExpiration": "",
+    "toast": {
+      "expirationUpdated": "",
+      "nodeAssigned": "",
+      "nodeUnassigned": "",
+      "wildcardAssigned": "",
+      "wildcardRemoved": ""
+    },
+    "viaRole": "",
+    "wildcardDisablesIndividualSelection": ""
+  },
+  "update": {
+    "actionRequired": "",
+    "available": "",
+    "container": "",
+    "currentVersion": "",
+    "environment": "",
+    "lastChecked": "",
+    "latest": "",
+    "latestVersion": "",
+    "logs": {
+      "live": "",
+      "title": "",
+      "waiting": ""
+    },
+    "never": "",
+    "new": "",
+    "ok": "",
+    "progress": {
+      "complete": "",
+      "completeDescription": "",
+      "description": "",
+      "done": "",
+      "failed": "",
+      "failedDescription": "",
+      "inProgress": "",
+      "pulling": {
+        "description": "",
+        "label": ""
+      },
+      "restarting": {
+        "description": "",
+        "label": ""
+      },
+      "restartingNotice": "",
+      "started": "",
+      "starting": "",
+      "title": ""
+    },
+    "standalone": "",
+    "standaloneNotice": "",
+    "toast": {
+      "failed": ""
+    },
+    "trigger": "",
+    "triggering": "",
+    "updateStatus": "",
+    "upToDate": ""
+  }
+}

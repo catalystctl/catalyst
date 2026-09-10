@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation, Trans } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -45,6 +46,7 @@ import { nodesApi } from '../../services/api/nodes';
 import { locationsApi } from '../../services/api/locations';
 import type { Location } from '../../services/api/locations';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { formatDateTime } from '@/i18n/format';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import StatGrid from '../../components/servers/tabs/StatGrid';
@@ -82,6 +84,7 @@ function TableSkeleton() {
 
 // ── Location Section Header ──
 function LocationSectionHeader({ location, count }: { location: Location | null; count: number }) {
+ const { t } = useTranslation('admin-infra');
  if (location) {
  return (
  <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
@@ -91,7 +94,7 @@ function LocationSectionHeader({ location, count }: { location: Location | null;
  {location.name}
  </h3>
  <Badge variant="secondary" className="text-[10px]">
- {count} node{count !== 1 ? 's' : ''}
+ {t('nodes.locationNodeCount', { count })}
  </Badge>
  {location.description && (
  <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -107,9 +110,9 @@ function LocationSectionHeader({ location, count }: { location: Location | null;
  <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
  <div className="flex items-center gap-2">
  <MapPin className="h-4 w-4 text-muted-foreground" />
- <h3 className="text-sm font-semibold text-foreground">Unassigned</h3>
+ <h3 className="text-sm font-semibold text-foreground">{t('nodes.unassigned')}</h3>
  <Badge variant="secondary" className="text-[10px]">
- {count} node{count !== 1 ? 's' : ''}
+ {t('nodes.locationNodeCount', { count })}
  </Badge>
  </div>
  </div>
@@ -134,9 +137,10 @@ function NodeRow({
  deleteMutation: { isPending: boolean };
  latestAgentVersion?: string | null;
 }) {
+ const { t } = useTranslation('admin-infra');
  const serverCount = node._count?.servers ?? node.servers?.length ?? 0;
  const memoryGB = node.maxMemoryMb ? (node.maxMemoryMb / 1024).toFixed(1) : '0';
- const lastSeen = node.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : 'n/a';
+ const lastSeen = node.lastSeenAt ? formatDateTime(node.lastSeenAt) : 'n/a';
 
  return (
  <div
@@ -202,7 +206,7 @@ function NodeRow({
  }`}
  />
  </span>
- {node.isOnline ? 'Online' : 'Offline'}
+ {node.isOnline ? t('common:status.online') : t('common:status.offline')}
  </Badge>
  {/* Agent version badge */}
  {node.agentVersion && (
@@ -225,10 +229,10 @@ function NodeRow({
  </div>
  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
  <span className="font-mono text-[11px] opacity-70">
- {node.hostname ?? 'hostname n/a'}
+ {node.hostname ?? t('nodes.hostnameUnavailable')}
  </span>
  {node.location && <span>{node.location.name}</span>}
- <span className="hidden sm:inline">Last seen {lastSeen}</span>
+ <span className="hidden sm:inline">{t('nodes.lastSeen', { time: lastSeen })}</span>
  </div>
  </div>
 
@@ -238,19 +242,19 @@ function NodeRow({
  <div className="text-xs font-medium text-foreground">
  {serverCount}
  </div>
- <div className="text-[11px] text-muted-foreground">servers</div>
+ <div className="text-[11px] text-muted-foreground">{t('nodes.stat.servers')}</div>
  </div>
  <div className="text-right">
  <div className="text-xs font-medium text-foreground">
  {node.maxCpuCores ?? 0}
  </div>
- <div className="text-[11px] text-muted-foreground">cores</div>
+ <div className="text-[11px] text-muted-foreground">{t('nodes.stat.cores')}</div>
  </div>
  <div className="text-right">
  <div className="text-xs font-medium text-foreground">
  {memoryGB} GB
  </div>
- <div className="text-[11px] text-muted-foreground">memory</div>
+ <div className="text-[11px] text-muted-foreground">{t('nodes.stat.memory')}</div>
  </div>
  </div>
 
@@ -261,7 +265,7 @@ function NodeRow({
  className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
  >
  <ExternalLink className="h-3 w-3" />
- <span className="hidden sm:inline">Manage</span>
+ <span className="hidden sm:inline">{t('nodes.manage')}</span>
  </Link>
 
  {canDelete && (
@@ -269,7 +273,7 @@ function NodeRow({
  <DropdownMenuTrigger asChild>
  <button
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- title="More"
+ title={t('common:actions.more')}
  >
  <MoreHorizontal className="h-3.5 w-3.5" />
  </button>
@@ -278,7 +282,7 @@ function NodeRow({
  <DropdownMenuItem asChild>
  <Link to={`/admin/nodes/${node.id}`} className="gap-2 text-xs">
  <ExternalLink className="h-3.5 w-3.5" />
- Manage
+ {t('nodes.manage')}
  </Link>
  </DropdownMenuItem>
  <DropdownMenuSeparator />
@@ -288,7 +292,7 @@ function NodeRow({
  className="gap-2 text-xs text-destructive"
  >
  <Trash2 className="h-3.5 w-3.5" />
- Delete
+ {t('common:actions.delete')}
  </DropdownMenuItem>
  </DropdownMenuContent>
  </DropdownMenu>
@@ -300,6 +304,7 @@ function NodeRow({
 
 // ── Main Component ──
 function AdminNodesPage() {
+ const { t } = useTranslation('admin-infra');
  const [search, setSearch] = useState('');
  const [statusFilter, setStatusFilter] = useState('');
  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
@@ -447,7 +452,7 @@ function AdminNodesPage() {
  return Promise.all(nodeIds.map((nodeId) => nodesApi.remove(nodeId)));
  },
  onSuccess: (_data, nodeIds) => {
- notifySuccess(`${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'} deleted`);
+ notifySuccess(t('nodes.toast.deleted', { count: nodeIds.length }));
  setSelectedIds([]);
  setDeleteTargets(null);
  },
@@ -455,8 +460,7 @@ function AdminNodesPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to delete node(s)';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -488,7 +492,7 @@ function AdminNodesPage() {
  }
  className="h-4 w-4 rounded border-border bg-card text-primary"
  />
- <span className="text-xs font-medium text-muted-foreground">Select all in section</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('nodes.selectAllInSection')}</span>
  </label>
  </div>
  )}
@@ -510,12 +514,12 @@ function AdminNodesPage() {
  );
 
  const summaryStats = [
- { label: 'Nodes', value: nodes.length },
- { label: 'Online', value: onlineNodes.length },
- { label: 'Offline', value: offlineNodes.length },
- { label: 'Total Servers', value: totalServers },
- { label: 'CPU Cores', value: totalCpu },
- { label: 'Memory', value: formatMemory(totalMemory) },
+ { label: t('nodes.stats.nodes'), value: nodes.length },
+ { label: t('nodes.stats.online'), value: onlineNodes.length },
+ { label: t('nodes.stats.offline'), value: offlineNodes.length },
+ { label: t('nodes.stats.totalServers'), value: totalServers },
+ { label: t('nodes.stats.cpuCores'), value: totalCpu },
+ { label: t('nodes.stats.memory'), value: formatMemory(totalMemory) },
  ];
 
  return (
@@ -523,8 +527,8 @@ function AdminNodesPage() {
  {/* ── Header ── */}
  <TabHeader
  icon={Server}
- title="Nodes"
- description="Manage infrastructure nodes and monitor availability"
+ title={t('nodes.title')}
+ description={t('nodes.description')}
  actions={
  <div className="flex items-center gap-2">
  {canWrite && <NodeCreateModal />}
@@ -534,7 +538,7 @@ function AdminNodesPage() {
  onClick={() => setLocationsModalOpen(true)}
  >
  <MapPin className="h-3.5 w-3.5" />
- Locations
+ {t('nodes.locations')}
  </button>
  )}
  </div>
@@ -556,7 +560,7 @@ function AdminNodesPage() {
  <Input
  value={search}
  onChange={(e) => setSearch(e.target.value)}
- placeholder="Search nodes by name or hostname…"
+ placeholder={t('nodes.searchPlaceholder')}
  className="pl-9"
  />
  </div>
@@ -569,7 +573,7 @@ function AdminNodesPage() {
  className="gap-2"
  >
  <Filter className="h-3.5 w-3.5" />
- Filters
+ {t('nodes.filters')}
  {hasActiveFilters && (
  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
  {[statusFilter, selectedLocationId].filter(Boolean).length}
@@ -584,18 +588,18 @@ function AdminNodesPage() {
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="name-asc">Name A→Z</SelectItem>
- <SelectItem value="name-desc">Name Z→A</SelectItem>
- <SelectItem value="status">Status</SelectItem>
- <SelectItem value="servers">Most servers</SelectItem>
- <SelectItem value="cpu">CPU cores</SelectItem>
- <SelectItem value="memory">Memory</SelectItem>
+ <SelectItem value="name-asc">{t('nodes.sort.nameAsc')}</SelectItem>
+ <SelectItem value="name-desc">{t('nodes.sort.nameDesc')}</SelectItem>
+ <SelectItem value="status">{t('nodes.sort.status')}</SelectItem>
+ <SelectItem value="servers">{t('nodes.sort.mostServers')}</SelectItem>
+ <SelectItem value="cpu">{t('nodes.sort.cpuCores')}</SelectItem>
+ <SelectItem value="memory">{t('nodes.sort.memory')}</SelectItem>
  </SelectContent>
  </Select>
 
  {/* Results count */}
  <span className="text-xs text-muted-foreground">
- {filteredNodes.length} of {nodes.length}
+ {t('nodes.resultCount', { shown: filteredNodes.length, total: nodes.length })}
  </span>
  </div>
 
@@ -610,7 +614,7 @@ function AdminNodesPage() {
  }`}
  onClick={() => setSelectedLocationId(null)}
  >
- All
+ {t('nodes.allLocations')}
  <span
  className={`text-[10px] ${selectedLocationId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
  >
@@ -650,7 +654,7 @@ function AdminNodesPage() {
  onClick={() => setSelectedLocationId('__unassigned__')}
  >
  <MapPin className="h-3.5 w-3.5" />
- Unassigned
+ {t('nodes.unassigned')}
  <span
  className={`text-[10px] ${selectedLocationId === '__unassigned__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
  >
@@ -667,7 +671,7 @@ function AdminNodesPage() {
  <ServerTabCard>
  <div className="flex flex-wrap items-end gap-4">
  <label className="space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Status</span>
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('nodes.filter.status')}</span>
  <Select
  value={statusFilter || 'all'}
  onValueChange={(value) => {
@@ -675,18 +679,18 @@ function AdminNodesPage() {
  }}
  >
  <SelectTrigger className="w-44">
- <SelectValue placeholder="All statuses" />
+ <SelectValue placeholder={t('nodes.filter.allStatuses')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All statuses</SelectItem>
- <SelectItem value="online">Online ({onlineNodes.length})</SelectItem>
- <SelectItem value="offline">Offline ({offlineNodes.length})</SelectItem>
+ <SelectItem value="all">{t('nodes.filter.allStatuses')}</SelectItem>
+ <SelectItem value="online">{t('nodes.filter.onlineCount', { value: onlineNodes.length })}</SelectItem>
+ <SelectItem value="offline">{t('nodes.filter.offlineCount', { value: offlineNodes.length })}</SelectItem>
  </SelectContent>
  </Select>
  </label>
  {locations.length > 0 && (
  <label className="space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Location</span>
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('nodes.filter.location')}</span>
  <Select
  value={selectedLocationId || 'all'}
  onValueChange={(value) => {
@@ -694,10 +698,10 @@ function AdminNodesPage() {
  }}
  >
  <SelectTrigger className="w-44">
- <SelectValue placeholder="All locations" />
+ <SelectValue placeholder={t('nodes.filter.allLocations')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All locations</SelectItem>
+ <SelectItem value="all">{t('nodes.filter.allLocations')}</SelectItem>
  {locations.map((loc) => (
  <SelectItem key={loc.id} value={loc.id}>
  <span className="flex items-center gap-2">
@@ -710,7 +714,7 @@ function AdminNodesPage() {
  ))}
  {locationCounts.unassignedCount > 0 && (
  <SelectItem value="__unassigned__">
- Unassigned ({locationCounts.unassignedCount})
+ {t('nodes.filter.unassignedCount', { value: locationCounts.unassignedCount })}
  </SelectItem>
  )}
  </SelectContent>
@@ -725,7 +729,7 @@ function AdminNodesPage() {
  className="gap-1.5 text-xs"
  >
  <X className="h-3 w-3" />
- Clear all
+ {t('nodes.clearAll')}
  </Button>
  )}
  </div>
@@ -738,25 +742,25 @@ function AdminNodesPage() {
  <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
  <div className="flex items-center gap-3">
  <span className="text-sm font-medium text-foreground">
- {selectedIds.length} selected
+ {t('nodes.selectedCount', { value: selectedIds.length })}
  </span>
  <button
  onClick={() => setSelectedIds([])}
  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
  >
- Clear
+ {t('nodes.clearSelection')}
  </button>
  </div>
  <div className="flex items-center gap-1.5">
  <Button
  variant="destructive"
  size="sm"
- onClick={() => handleBulkDelete(selectedIds, `${selectedIds.length} nodes`)}
+ onClick={() => handleBulkDelete(selectedIds, t('nodes.selectedLabel', { value: selectedIds.length }))}
  disabled={deleteMutation.isPending}
  className="gap-1.5 text-xs"
  >
  <Trash2 className="h-3 w-3" />
- Delete
+ {t('common:actions.delete')}
  </Button>
  </div>
  </div>
@@ -786,17 +790,17 @@ function AdminNodesPage() {
  ) : (
  <ServerTabCard>
  <EmptyState
- title={search.trim() || statusFilter ? 'No nodes found' : 'No nodes detected'}
+ title={search.trim() || statusFilter ? t('nodes.empty.notFound') : t('nodes.empty.none')}
  description={
  search.trim() || statusFilter
- ? 'Try adjusting your search or filters.'
- : 'Install the Catalyst agent and register nodes to begin.'
+ ? t('nodes.empty.adjustFilters')
+ : t('nodes.empty.installAgent')
  }
  action={
  hasActiveFilters ? (
  <Button variant="outline" size="sm" onClick={clearFilters}>
  <X className="mr-1.5 h-3.5 w-3.5" />
- Clear filters
+ {t('nodes.clearFilters')}
  </Button>
  ) : canWrite && !search.trim() ? (
  <NodeCreateModal />
@@ -833,7 +837,7 @@ function AdminNodesPage() {
  className="h-4 w-4 rounded border-border bg-card text-primary"
  />
  <span className="text-xs font-medium text-muted-foreground">
- Select all
+ {t('nodes.selectAll')}
  </span>
  </label>
  </div>
@@ -859,18 +863,18 @@ function AdminNodesPage() {
  <div className="p-6">
  <EmptyState
  title={
- search.trim() || hasActiveFilters ? 'No nodes found' : 'No nodes detected'
+ search.trim() || hasActiveFilters ? t('nodes.empty.notFound') : t('nodes.empty.none')
  }
  description={
  search.trim() || hasActiveFilters
- ? 'Try adjusting your search or filters.'
- : 'Install the Catalyst agent and register nodes to begin.'
+ ? t('nodes.empty.adjustFilters')
+ : t('nodes.empty.installAgent')
  }
  action={
  hasActiveFilters ? (
  <Button variant="outline" size="sm" onClick={clearFilters}>
  <X className="mr-1.5 h-3.5 w-3.5" />
- Clear filters
+ {t('nodes.clearFilters')}
  </Button>
  ) : canWrite ? (
  <NodeCreateModal />
@@ -886,20 +890,25 @@ function AdminNodesPage() {
  <LocationsManagerModal open={locationsModalOpen} onOpenChange={setLocationsModalOpen} />
  <ConfirmDialog
  open={!!deleteTargets}
- title="Delete Nodes"
+ title={t('nodes.deleteDialog.title')}
  message={
  <div className="space-y-2">
  <p>
- You are about to delete <span className="font-semibold">{deleteTargets?.label}</span>.
+ <Trans
+ i18nKey="nodes.deleteDialog.message"
+ ns="admin-infra"
+ values={{ label: deleteTargets?.label }}
+ >
+ You are about to delete <span className="font-semibold">{'{{label}}'}</span>.
+ </Trans>
  </p>
  <p className="text-xs text-muted-foreground">
- Nodes with running servers cannot be deleted. Stop all servers on a node before
- deleting it. This cannot be undone.
+ {t('nodes.deleteDialog.warning')}
  </p>
  </div>
  }
- confirmText="Delete"
- cancelText="Cancel"
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  onConfirm={() => deleteTargets && deleteMutation.mutate(deleteTargets.nodeIds)}
  onCancel={() => setDeleteTargets(null)}
  variant="danger"

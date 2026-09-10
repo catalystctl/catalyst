@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAdminStats, useAdminHealth } from '../../hooks/useAdmin';
 import { useAdminNodes } from '../../hooks/useAdmin';
 
@@ -10,9 +11,11 @@ import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { formatTime } from '@/i18n/format';
 import { Server, HardDrive, Activity, ArrowUpRight, Database } from 'lucide-react';
 
 function AdminDashboardPage() {
+  const { t } = useTranslation('admin');
   const { data: stats } = useAdminStats();
   const { data: health, isLoading: healthLoading } = useAdminHealth();
   const { data: nodesData } = useAdminNodes();
@@ -29,15 +32,19 @@ function AdminDashboardPage() {
  {/* ── Header ── */}
     <TabHeader
       icon={Activity}
-      title="Admin"
-      description={`${stats?.servers ?? 0} servers · ${stats?.nodes ?? 0} nodes · ${stats?.users ?? 0} users`}
+      title={t('dashboard.title')}
+      description={t('dashboard.description', {
+        servers: stats?.servers ?? 0,
+        nodes: stats?.nodes ?? 0,
+        users: stats?.users ?? 0,
+      })}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link to="/admin/nodes">Nodes</Link>
+            <Link to="/admin/nodes">{t('dashboard.nav.nodes')}</Link>
           </Button>
           <Button variant="outline" size="sm" asChild>
-            <Link to="/admin/system">Settings</Link>
+            <Link to="/admin/system">{t('dashboard.nav.settings')}</Link>
           </Button>
         </div>
       }
@@ -51,16 +58,16 @@ function AdminDashboardPage() {
  </div>
 
  <ServerTabCard className="lg:col-span-1">
- <SectionHeader icon={Activity} title="System Health" />
+ <SectionHeader icon={Activity} title={t('dashboard.health.title')} />
  <div className="mt-3 space-y-2">
  <HealthRow
- label="Database"
+ label={t('dashboard.health.database')}
  status={health?.database === 'connected'}
  loading={healthLoading}
  icon={Database}
  />
  <HealthRow
- label="Cluster Nodes"
+ label={t('dashboard.health.clusterNodes')}
  status={onlineNodes > 0 && offlineNodes === 0}
  loading={healthLoading}
  detail={`${onlineNodes}/${nodes.length}`}
@@ -68,8 +75,8 @@ function AdminDashboardPage() {
  />
  {!healthLoading && (
  <div className="flex items-center justify-between rounded-lg border border-border/30 bg-surface-2/20 px-3 py-2 text-xs text-muted-foreground">
- <span>Last checked</span>
- <span className="tabular-nums">{new Date().toLocaleTimeString()}</span>
+ <span>{t('dashboard.health.lastChecked')}</span>
+ <span className="tabular-nums">{formatTime(Date.now())}</span>
  </div>
  )}
  </div>
@@ -78,21 +85,21 @@ function AdminDashboardPage() {
 
       <ServerTabCard>
         <div className="flex items-center justify-between pb-3">
-          <SectionHeader icon={HardDrive} title="Nodes" />
+          <SectionHeader icon={HardDrive} title={t('dashboard.nodes.title')} />
           <Button variant="ghost" size="sm" asChild className="gap-1 text-xs">
             <Link to="/admin/nodes">
-              Manage <ArrowUpRight className="h-3 w-3" />
+              {t('dashboard.nodes.manage')} <ArrowUpRight className="h-3 w-3" />
             </Link>
           </Button>
         </div>
         <div className="space-y-1.5">
           {nodes.length === 0 ? (
             <TabEmptyState
-              title="No nodes"
-              description="Add a node to deploy servers."
+              title={t('dashboard.nodes.emptyTitle')}
+              description={t('dashboard.nodes.emptyDescription')}
               action={
                 <Button variant="outline" size="sm" asChild>
-                  <Link to="/admin/nodes">Add node</Link>
+                  <Link to="/admin/nodes">{t('dashboard.nodes.addNode')}</Link>
                 </Button>
               }
             />
@@ -107,7 +114,7 @@ function AdminDashboardPage() {
                   <span className={cn('h-2 w-2 shrink-0 rounded-full', node.isOnline ? 'bg-success' : 'bg-danger')} />
                   <span className="truncate text-sm font-medium text-foreground">{node.name}</span>
                 </div>
-                <span className="type-meta">{node._count?.servers ?? 0} servers</span>
+                <span className="type-meta">{t('dashboard.nodes.serverCount', { value: node._count?.servers ?? 0 })}</span>
               </Link>
             ))
           )}
@@ -132,6 +139,7 @@ function HealthRow({
   detail?: string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
+  const { t } = useTranslation('admin');
   return (
     <div className="flex items-center justify-between gap-3 py-2">
       <div className="flex items-center gap-2.5">
@@ -139,10 +147,10 @@ function HealthRow({
         <span className="text-sm text-foreground">{label}</span>
       </div>
       {loading ? (
-        <span className="type-meta">Checking…</span>
+        <span className="type-meta">{t('dashboard.health.checking')}</span>
       ) : (
         <span className={`text-xs ${status ? 'text-success' : 'text-danger'}`}>
-          {detail ?? (status ? 'OK' : 'Down')}
+          {detail ?? (status ? t('dashboard.health.ok') : t('dashboard.health.down'))}
         </span>
       )}
     </div>

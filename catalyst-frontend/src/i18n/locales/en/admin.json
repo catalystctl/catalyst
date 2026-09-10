@@ -1,0 +1,133 @@
+{
+  "chart": {
+    "avg": "Avg: {{value}}%",
+    "dataPoints": "{{value}} data points · refreshes every 60s",
+    "empty": {
+      "historical": "No historical data for this range",
+      "live": "Collecting metrics..."
+    },
+    "metric": {
+      "cpu": "CPU",
+      "memory": "Memory",
+      "network": "Network"
+    },
+    "metricLabel": {
+      "cpu": "CPU Usage (%)",
+      "memory": "Memory Usage (%)",
+      "network": "Network I/O (MB/s)"
+    },
+    "mode": {
+      "historical": "Historical",
+      "live": "Live"
+    },
+    "networkThroughput": "RX: {{rx}} MB/s | TX: {{tx}} MB/s",
+    "nodesOnline": "{{online}} of {{total}} nodes online",
+    "subtitle": {
+      "historical": "{{range}} historical metrics",
+      "live": "Real-time metrics"
+    },
+    "title": "Cluster Resources",
+    "updatesEvery": "Updates every 5s"
+  },
+  "dashboard": {
+    "description": "{{servers}} servers · {{nodes}} nodes · {{users}} users",
+    "health": {
+      "checking": "Checking…",
+      "clusterNodes": "Cluster Nodes",
+      "database": "Database",
+      "down": "Down",
+      "lastChecked": "Last checked",
+      "ok": "OK",
+      "title": "System Health"
+    },
+    "nav": {
+      "nodes": "Nodes",
+      "settings": "Settings"
+    },
+    "nodes": {
+      "addNode": "Add node",
+      "emptyDescription": "Add a node to deploy servers.",
+      "emptyTitle": "No nodes",
+      "manage": "Manage",
+      "serverCount": "{{value}} servers",
+      "title": "Nodes"
+    },
+    "title": "Admin"
+  },
+  "nodeAssignments": {
+    "allNodes": "All Nodes (*)",
+    "allNodesDescription": "Access to all current and future nodes",
+    "defaultLabel": "Node Access",
+    "dialog": {
+      "description": "Choose when access to {{name}} expires.",
+      "expiresAt": "Expires at",
+      "title": "Set expiration"
+    },
+    "expires": "Expires: {{date}}",
+    "header": "{{label}} ({{value}})",
+    "inheritedFromRoles": "Inherited from roles",
+    "loading": "Loading nodes...",
+    "noExpiration": "No expiration",
+    "noNodesFound": "No nodes found",
+    "searchPlaceholder": "Search nodes...",
+    "selectIndividualNodes": "Select individual nodes",
+    "setExpiration": "Set Expiration",
+    "toast": {
+      "expirationUpdated": "Expiration updated",
+      "nodeAssigned": "Node assigned",
+      "nodeUnassigned": "Node unassigned",
+      "wildcardAssigned": "All nodes assigned (wildcard)",
+      "wildcardRemoved": "Wildcard assignment removed"
+    },
+    "viaRole": "via {{role}}",
+    "wildcardDisablesIndividualSelection": "Individual node selection is disabled when wildcard is active"
+  },
+  "update": {
+    "actionRequired": "Action required",
+    "available": "Update available",
+    "container": "Container",
+    "currentVersion": "Current version",
+    "environment": "Environment",
+    "lastChecked": "Last checked",
+    "latest": "Latest",
+    "latestVersion": "Latest version",
+    "logs": {
+      "live": "live",
+      "title": "Update logs",
+      "waiting": "Waiting for output — pull logs will appear here…"
+    },
+    "never": "Never",
+    "new": "New",
+    "ok": "OK",
+    "progress": {
+      "complete": "Update complete",
+      "completeDescription": "The panel is back online. Reloading into the new version…",
+      "description": "Live progress of the panel update — pull output and restart status appear below.",
+      "done": "Done",
+      "failed": "Update failed",
+      "failedDescription": "The update could not be completed. Check the System Errors page for details.",
+      "inProgress": "Update in progress…",
+      "pulling": {
+        "description": "Pulling the latest images from the registry. Depending on your connection this can take several minutes.",
+        "label": "Downloading update"
+      },
+      "restarting": {
+        "description": "Images downloaded. Containers are being recreated — the panel will go down briefly and come back automatically.",
+        "label": "Restarting services"
+      },
+      "restartingNotice": "Containers are restarting. This page will reload automatically as soon as the panel is back (checking every few seconds).",
+      "started": "Started {{time}}",
+      "starting": "Starting update — opening log stream…",
+      "title": "Panel update"
+    },
+    "standalone": "Standalone",
+    "standaloneNotice": "Auto-update is only available when running in Docker. Please update Catalyst manually.",
+    "toast": {
+      "failed": "Update failed"
+    },
+    "trigger": "Trigger Update",
+    "triggering": "Triggering…",
+    "updateStatus": "Update status",
+    "upToDate": "Up to date"
+  }
+}

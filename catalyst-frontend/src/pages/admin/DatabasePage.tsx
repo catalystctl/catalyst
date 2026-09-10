@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import {
@@ -80,13 +81,14 @@ function HostDialog({
 
 // ── Catalyst DB Status Card ──
 function CatalystDbCard({ status }: { status?: DbStatusResult }) {
+ const { t } = useTranslation('admin-infra');
  const connected = status?.connected ?? false;
  const statItems = connected && status
  ? [
- { label: 'Tables', value: status.tableCount },
- { label: 'Size', value: formatBytes(status.sizeBytes) },
- { label: 'Connections', value: status.activeConnections },
- { label: 'Records', value: `${status.rowCounts.users} users, ${status.rowCounts.servers} servers` },
+ { label: t('database.stats.tables'), value: status.tableCount },
+ { label: t('database.stats.size'), value: formatBytes(status.sizeBytes) },
+ { label: t('database.stats.connections'), value: status.activeConnections },
+ { label: t('database.stats.records'), value: t('database.recordsValue', { users: status.rowCounts.users, servers: status.rowCounts.servers }) },
  ]
  : [];
 
@@ -99,17 +101,17 @@ function CatalystDbCard({ status }: { status?: DbStatusResult }) {
  </div>
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
- <span className="font-semibold text-foreground">Catalyst Database</span>
+ <span className="font-semibold text-foreground">{t('database.catalystDatabase')}</span>
  <Badge variant="outline" className="text-[10px] px-1.5 py-0">PostgreSQL</Badge>
  </div>
  <div className="mt-1 flex items-center gap-2">
  {connected ? (
  <Badge variant="success" className="gap-1 text-[10px] px-1.5 py-0">
- <CheckCircle2 className="h-2.5 w-2.5" /> Connected
+ <CheckCircle2 className="h-2.5 w-2.5" /> {t('database.host.connected')}
  </Badge>
  ) : (
  <Badge variant="destructive" className="gap-1 text-[10px] px-1.5 py-0">
- <XCircle className="h-2.5 w-2.5" /> Disconnected
+ <XCircle className="h-2.5 w-2.5" /> {t('database.host.disconnected')}
  </Badge>
  )}
  {status?.latency != null && (
@@ -145,6 +147,7 @@ function HostCard({
  onDelete: () => void;
  isDeleting: boolean;
 }) {
+ const { t } = useTranslation('admin-infra');
  const dbCount = host._count?.databases ?? 0;
 
  const { data: pingResult, isLoading: pingLoading, refetch: refetchPing, isFetching: pingFetching } = useDatabaseHostPing(host.id);
@@ -176,17 +179,17 @@ function HostCard({
  <span className="font-semibold text-foreground">{host.name}</span>
  {connected === true && (
  <Badge variant="success" className="gap-1 text-[10px] px-1.5 py-0">
- <CheckCircle2 className="h-2.5 w-2.5" /> Online
+ <CheckCircle2 className="h-2.5 w-2.5" /> {t('common:status.online')}
  </Badge>
  )}
  {connected === false && (
  <Badge variant="destructive" className="gap-1 text-[10px] px-1.5 py-0">
- <XCircle className="h-2.5 w-2.5" /> Offline
+ <XCircle className="h-2.5 w-2.5" /> {t('common:status.offline')}
  </Badge>
  )}
  {pingLoading && (
  <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0">
- <Loader2 className="h-2.5 w-2.5 animate-spin" /> Checking
+ <Loader2 className="h-2.5 w-2.5 animate-spin" /> {t('database.host.checking')}
  </Badge>
  )}
  </div>
@@ -201,12 +204,12 @@ function HostCard({
  </span>
  <span className="flex items-center gap-1">
  <Hash className="h-3 w-3" />
- Port {host.port}
+ {t('database.host.port', { port: host.port })}
  </span>
  {dbCount > 0 && (
  <span className="flex items-center gap-1">
  <Database className="h-3 w-3" />
- {dbCount} DB{dbCount !== 1 ? 's' : ''}
+ {t('database.host.databaseCount', { count: dbCount })}
  </span>
  )}
  {pingLatency != null && connected === true && (
@@ -223,7 +226,7 @@ function HostCard({
  </span>
  )}
  {pingResult.databaseCount != null && (
- <span>{pingResult.databaseCount} DBs, {pingResult.tableCount} tables</span>
+ <span>{t('database.host.pingCounts', { databases: pingResult.databaseCount, tables: pingResult.tableCount })}</span>
  )}
  </div>
  )}
@@ -240,14 +243,14 @@ function HostCard({
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
  onClick={() => refetchPing()}
  disabled={pingFetching}
- title="Test connection"
+ title={t('database.host.testConnection')}
  >
  <RefreshCw className={`h-3.5 w-3.5 ${pingFetching ? 'animate-spin' : ''}`} />
  </button>
  <button
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
  onClick={onEdit}
- title="Edit"
+ title={t('common:actions.edit')}
  >
  <Settings className="h-3.5 w-3.5" />
  </button>
@@ -255,7 +258,7 @@ function HostCard({
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={onDelete}
  disabled={isDeleting}
- title="Delete"
+ title={t('common:actions.delete')}
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
@@ -267,6 +270,7 @@ function HostCard({
 
 // ── Main Page ──
 function DatabasePage() {
+ const { t } = useTranslation('admin-infra');
  const { data: databaseHosts = [], isLoading } = useDatabaseHosts();
  const { data: dbStatus } = useDbStatus();
  const queryClient = useQueryClient();
@@ -312,14 +316,14 @@ function DatabasePage() {
  database: dbDatabase || undefined,
  }),
  onSuccess: () => {
- notifySuccess('Database host created');
+ notifySuccess(t('database.toast.created'));
  resetForm();
  setIsCreateOpen(false);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to create database host'),
+ onError: (error: any) => notifyError(error),
  });
 
  const updateMutation = useMutation({
@@ -335,27 +339,27 @@ function DatabasePage() {
  database: dbDatabase || undefined,
  }),
  onSuccess: () => {
- notifySuccess('Database host updated');
+ notifySuccess(t('database.toast.updated'));
  setEditingHost(null);
  resetForm();
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update database host'),
+ onError: (error: any) => notifyError(error),
  });
 
  const deleteMutation = useMutation({
  mutationKey: qk.mutation.adminDatabaseHostDelete(),
  mutationFn: (hostId: string) => adminApi.deleteDatabaseHost(hostId),
  onSuccess: () => {
- notifySuccess('Database host removed');
+ notifySuccess(t('database.toast.removed'));
  setDeletingHost(null);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete database host'),
+ onError: (error: any) => notifyError(error),
  });
 
  const startEdit = (host: any) => {
@@ -375,7 +379,7 @@ function DatabasePage() {
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <label className="block space-y-1">
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
- <Database className="h-3 w-3" /> Name
+ <Database className="h-3 w-3" /> {t('database.form.name')}
  </span>
  <Input
  value={dbName}
@@ -386,7 +390,7 @@ function DatabasePage() {
  </label>
  <label className="block space-y-1">
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
- <Globe className="h-3 w-3" /> Host
+ <Globe className="h-3 w-3" /> {t('database.form.host')}
  </span>
  <Input
  value={dbHost}
@@ -397,7 +401,7 @@ function DatabasePage() {
  </label>
  <label className="block space-y-1">
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
- <Hash className="h-3 w-3" /> Port
+ <Hash className="h-3 w-3" /> {t('database.form.port')}
  </span>
  <Input
  value={dbPort}
@@ -408,7 +412,7 @@ function DatabasePage() {
  </label>
  <label className="block space-y-1">
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
- <User className="h-3 w-3" /> Username
+ <User className="h-3 w-3" /> {t('database.form.username')}
  </span>
  <Input
  value={dbUsername}
@@ -420,7 +424,7 @@ function DatabasePage() {
  </div>
  <label className="block space-y-1">
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
- <Database className="h-3 w-3" /> Engine
+ <Database className="h-3 w-3" /> {t('database.form.engine')}
  </span>
  <div className="flex gap-2">
  <button
@@ -450,7 +454,7 @@ function DatabasePage() {
  {dbEngine === 'postgresql' && (
  <label className="block space-y-1">
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
- <Database className="h-3 w-3" /> Database
+ <Database className="h-3 w-3" /> {t('database.form.database')}
  </span>
  <Input
  value={dbDatabase}
@@ -458,12 +462,12 @@ function DatabasePage() {
  placeholder="postgres"
  className="border-border/40 bg-card"
  />
- <span className="text-[10px] text-muted-foreground">The database to connect to for health checks and provisioning.</span>
+ <span className="text-[10px] text-muted-foreground">{t('database.form.databaseHint')}</span>
  </label>
  )}
  <label className="block space-y-1">
  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
- <Shield className="h-3 w-3" /> Password{editingHost ? ' (leave blank to keep)' : ''}
+ <Shield className="h-3 w-3" /> {t('database.form.password')}{editingHost ? t('database.form.passwordEditHint') : ''}
  </span>
  <Input
  type="password"
@@ -480,27 +484,27 @@ function DatabasePage() {
  return (
  <div className="space-y-5">
  {/* ── Header ── */}
- <TabHeader
- icon={Database}
- title="Database"
- variant="success"
- description="Monitor database health and manage hosts for server provisioning."
- actions={
- <div className="flex items-center gap-2">
- <Badge variant="outline" className="text-xs">
- {databaseHosts.length} hosts
- </Badge>
- <Button
- size="sm"
- onClick={() => { resetForm(); setIsCreateOpen(true); }}
- className="gap-1.5"
- >
- <Plus className="h-3.5 w-3.5" />
- Add host
- </Button>
- </div>
- }
- />
+  <TabHeader
+    icon={Database}
+    title={t('database.title')}
+    variant="success"
+    description={t('database.description')}
+    actions={
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className="text-xs">
+          {t('database.hostCount', { value: databaseHosts.length })}
+        </Badge>
+        <Button
+          size="sm"
+          onClick={() => { resetForm(); setIsCreateOpen(true); }}
+          className="gap-1.5"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {t('database.addHost')}
+        </Button>
+      </div>
+    }
+  />
 
  {/* ── Catalyst DB Status ── */}
  <CatalystDbCard status={dbStatus} />
@@ -516,8 +520,8 @@ function DatabasePage() {
  </div>
  ) : databaseHosts.length === 0 ? (
  <TabEmptyState
- title="No database hosts yet"
- description="Create a host to provision databases for servers."
+ title={t('database.empty.title')}
+ description={t('database.empty.description')}
  action={
  <Button
  size="sm"
@@ -525,7 +529,7 @@ function DatabasePage() {
  className="gap-1.5"
  >
  <Plus className="h-3.5 w-3.5" />
- Add host
+ {t('database.addHost')}
  </Button>
  }
  />
@@ -552,22 +556,22 @@ function DatabasePage() {
  setIsCreateOpen(false);
  }
  }}
- title="Add database host"
- subtitle="Register a MySQL host used to provision per-server databases."
- footer={
- <>
- <Button variant="outline" size="sm" onClick={() => { resetForm(); setIsCreateOpen(false); }}>
- Cancel
- </Button>
- <Button
- size="sm"
- disabled={!canSubmit || createMutation.isPending}
- onClick={() => createMutation.mutate()}
- >
- {createMutation.isPending ? 'Creating…' : 'Create host'}
- </Button>
- </>
- }
+    title={t('database.createDialog.title')}
+    subtitle={t('database.createDialog.subtitle')}
+    footer={
+      <>
+        <Button variant="outline" size="sm" onClick={() => { resetForm(); setIsCreateOpen(false); }}>
+          {t('common:actions.cancel')}
+        </Button>
+        <Button
+          size="sm"
+          disabled={!canSubmit || createMutation.isPending}
+          onClick={() => createMutation.mutate()}
+        >
+          {createMutation.isPending ? t('database.creating') : t('database.createDialog.submit')}
+        </Button>
+      </>
+    }
  >
  {formFields}
  </HostDialog>
@@ -581,22 +585,22 @@ function DatabasePage() {
  resetForm();
  }
  }}
- title="Edit database host"
- subtitle="Update connection details for this database host."
- footer={
- <>
- <Button variant="outline" size="sm" onClick={() => { setEditingHost(null); resetForm(); }}>
- Cancel
- </Button>
- <Button
- size="sm"
- disabled={updateMutation.isPending}
- onClick={() => editingHost && updateMutation.mutate({ hostId: editingHost.id })}
- >
- {updateMutation.isPending ? 'Saving…' : 'Save changes'}
- </Button>
- </>
- }
+    title={t('database.editDialog.title')}
+    subtitle={t('database.editDialog.subtitle')}
+    footer={
+      <>
+        <Button variant="outline" size="sm" onClick={() => { setEditingHost(null); resetForm(); }}>
+          {t('common:actions.cancel')}
+        </Button>
+        <Button
+          size="sm"
+          disabled={updateMutation.isPending}
+          onClick={() => editingHost && updateMutation.mutate({ hostId: editingHost.id })}
+        >
+          {updateMutation.isPending ? t('database.saving') : t('database.editDialog.submit')}
+        </Button>
+      </>
+    }
  >
  {formFields}
  </HostDialog>
@@ -604,10 +608,10 @@ function DatabasePage() {
  {/* ── Delete Confirmation ── */}
  <ConfirmDialog
  open={!!deletingHost}
- title="Delete database host?"
- message={`Are you sure you want to remove "${deletingHost?.name}"? Servers using this host for database provisioning may be affected.`}
- confirmText="Delete"
- cancelText="Cancel"
+ title={t('database.deleteDialog.title')}
+ message={t('database.deleteDialog.message', { name: deletingHost?.name })}
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={deleteMutation.isPending}
  onConfirm={() => {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@/csync';
 import { motion } from 'framer-motion';
 import {
@@ -23,10 +24,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { qk } from '@/lib/queryKeys';
+import { formatRelativeTime } from '@/i18n/format';
 import { adminApi } from '../../services/api/admin';
-import { formatRelativeTime } from '../../utils/formatters';
-
-type Phase = 'pulling' | 'restarting' | 'failed';
 
 /** localStorage flag: show a completion toast after the post-update reload. */
 const LS_UPDATE_RELOADED = 'catalyst-update-completed-toast';
@@ -86,19 +85,6 @@ function usePanelRestartWatch(active: boolean) {
   return panelBack;
 }
 
-const PHASE_STEPS: Array<{ phase: Phase; label: string; description: string }> = [
-  {
-    phase: 'pulling',
-    label: 'Downloading update',
-    description: 'Pulling the latest images from the registry. Depending on your connection this can take several minutes.',
-  },
-  {
-    phase: 'restarting',
-    label: 'Restarting services',
-    description: 'Images downloaded. Containers are being recreated — the panel will go down briefly and come back automatically.',
-  },
-];
-
 function PhaseStep({
   label,
   description,
@@ -108,6 +94,7 @@ function PhaseStep({
   description: string;
   status: 'done' | 'active' | 'pending' | 'failed';
 }) {
+  const { t } = useTranslation('admin');
   const icon =
     status === 'done' ? (
       <CheckCircle2 className="h-4 w-4 text-success" />
@@ -129,7 +116,7 @@ function PhaseStep({
           }`}
         >
           {label}
-          {status === 'done' && <span className="ml-2 text-xs font-normal text-success">Done</span>}
+          {status === 'done' && <span className="ml-2 text-xs font-normal text-success">{t('update.progress.done')}</span>}
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
       </div>
@@ -144,6 +131,7 @@ function PhaseStep({
  * also mounted on the admin System page.
  */
 function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
+  const { t } = useTranslation('admin');
   const scrollRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -167,11 +155,11 @@ function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
       <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
         <div className="flex items-center gap-1.5 text-[11px] text-white/60">
           <Terminal className="h-3.5 w-3.5" />
-          <span>Update logs</span>
+          <span>{t('update.logs.title')}</span>
           {live && (
             <span className="ml-1 inline-flex items-center gap-1 text-white/50">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              live
+              {t('update.logs.live')}
             </span>
           )}
         </div>
@@ -182,7 +170,7 @@ function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
             className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            {copied ? 'Copied' : 'Copy'}
+            {copied ? t('common:actions.copied') : t('common:actions.copy')}
           </button>
         )}
       </div>
@@ -193,7 +181,7 @@ function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
         {logs.length === 0 ? (
           <div className="flex items-center gap-2 text-white/40">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Waiting for output — pull logs will appear here…
+            {t('update.logs.waiting')}
           </div>
         ) : (
           logs.map((line, i) => (
@@ -214,6 +202,7 @@ export default function UpdateProgressModal({
   open: boolean;
   onClose: () => void;
 }) {
+  const { t } = useTranslation('admin');
   const queryClient = useQueryClient();
 
   const { data: state } = useQuery({
@@ -257,8 +246,8 @@ export default function UpdateProgressModal({
     } catch {
       // ignore
     }
-    const t = window.setTimeout(() => window.location.reload(), SUCCESS_LINGER_MS);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => window.location.reload(), SUCCESS_LINGER_MS);
+    return () => window.clearTimeout(timer);
   }, [panelBack]);
 
   useEffect(() => {
@@ -291,9 +280,9 @@ export default function UpdateProgressModal({
     <Dialog open={open} onOpenChange={(next) => { if (!next && closeBlocked) return; onClose(); }}>
       <DialogContent size="lg">
         <DialogHeader icon={<ArrowUpCircle className="h-4 w-4 text-primary" />}>
-          <DialogTitle>Panel update</DialogTitle>
+          <DialogTitle>{t('update.progress.title')}</DialogTitle>
           <DialogDescription>
-            Live progress of the panel update — pull output and restart status appear below.
+            {t('update.progress.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -303,10 +292,10 @@ export default function UpdateProgressModal({
               <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
               <div>
                 <div className="text-sm font-medium text-foreground">
-                  Update complete
+                  {t('update.progress.complete')}
                 </div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  The panel is back online. Reloading into the new version…
+                  {t('update.progress.completeDescription')}
                 </div>
               </div>
             </div>
@@ -316,19 +305,19 @@ export default function UpdateProgressModal({
               {starting ? (
                 <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-xs text-muted-foreground">
                   <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                  Starting update — opening log stream…
+                  {t('update.progress.starting')}
                 </div>
               ) : (
                 <div className="space-y-4">
                   <PhaseStep
-                    label={PHASE_STEPS[0].label}
-                    description={PHASE_STEPS[0].description}
+                    label={t('update.progress.pulling.label')}
+                    description={t('update.progress.pulling.description')}
                     status={pullingStatus}
                   />
                   {phase !== 'failed' && (
                     <PhaseStep
-                      label={PHASE_STEPS[1].label}
-                      description={PHASE_STEPS[1].description}
+                      label={t('update.progress.restarting.label')}
+                      description={t('update.progress.restarting.description')}
                       status={restartingStatus}
                     />
                   )}
@@ -339,9 +328,9 @@ export default function UpdateProgressModal({
                 <div className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger-muted/40 px-3 py-2.5 text-xs text-danger">
                   <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <div>
-                    <div className="font-medium">Update failed</div>
+                    <div className="font-medium">{t('update.progress.failed')}</div>
                     <div className="mt-0.5 break-words">
-                      {state?.message || 'The update could not be completed. Check the System Errors page for details.'}
+                      {state?.message || t('update.progress.failedDescription')}
                     </div>
                   </div>
                 </div>
@@ -351,16 +340,14 @@ export default function UpdateProgressModal({
                 <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2.5 text-xs text-warning">
                   <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>
-                    Containers are restarting. This page will reload
-                    automatically as soon as the panel is back (checking every
-                    few seconds).
+                    {t('update.progress.restartingNotice')}
                   </span>
                 </div>
               )}
 
               {state?.startedAt && (
                 <div className="text-[11px] text-muted-foreground">
-                  Started {formatRelativeTime(state.startedAt)}
+                  {t('update.progress.started', { time: formatRelativeTime(state.startedAt) })}
                   {state.message && phase === 'pulling' ? ` — ${state.message}` : ''}
                 </div>
               )}
@@ -376,7 +363,7 @@ export default function UpdateProgressModal({
             disabled={closeBlocked}
             onClick={onClose}
           >
-            {closeBlocked ? 'Update in progress…' : 'Close'}
+            {closeBlocked ? t('update.progress.inProgress') : t('common:actions.close')}
           </Button>
         </DialogFooter>
       </DialogContent>

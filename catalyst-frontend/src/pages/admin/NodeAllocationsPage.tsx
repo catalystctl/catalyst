@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -79,6 +80,7 @@ const parseReserved = (value: string) =>
  .filter(Boolean);
 
 function NodeAllocationsPage() {
+ const { t } = useTranslation('admin-infra');
  const { nodeId } = useParams<{ nodeId: string }>();
 
  // Tab state
@@ -135,7 +137,7 @@ function NodeAllocationsPage() {
  },
  onSuccess: (response) => {
  const created = response.data?.created || 0;
- notifySuccess(`Created ${created} port allocation${created !== 1 ? 's' : ''}`);
+ notifySuccess(t('allocations.toast.portsCreated', { count: created }));
  setShowCreatePortModal(false);
  setIpInput('');
  setPortsInput('');
@@ -145,8 +147,7 @@ function NodeAllocationsPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId!) });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to create port allocations';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -155,14 +156,13 @@ function NodeAllocationsPage() {
  return apiClient.delete(`/api/nodes/${nodeId}/allocations/${allocationId}`);
  },
  onSuccess: () => {
- notifySuccess('Port allocation deleted');
+ notifySuccess(t('allocations.toast.portDeleted'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId!) });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to delete port allocation';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -179,7 +179,7 @@ function NodeAllocationsPage() {
  reserved: reserved ? parseReserved(reserved) : undefined,
  }),
  onSuccess: () => {
- notifySuccess('IP pool created');
+ notifySuccess(t('allocations.toast.poolCreated'));
  setShowCreatePoolModal(false);
  setCidr('');
  setGateway('');
@@ -191,22 +191,20 @@ function NodeAllocationsPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId!) });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to create IP pool';
- notifyError(message);
+ notifyError(error);
  },
  });
 
  const deletePoolMutation = useMutation({
  mutationFn: (poolId: string) => adminApi.deleteIpPool(poolId),
  onSuccess: () => {
- notifySuccess('IP pool deleted');
+ notifySuccess(t('allocations.toast.poolDeleted'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId!) });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to delete IP pool';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -265,17 +263,17 @@ function NodeAllocationsPage() {
  };
 
  const allPortStatItems = [
- { label: 'Total Ports', value: portStats.total },
- { label: 'Available', value: portStats.available },
- { label: 'Assigned', value: portStats.assigned },
- { label: 'Unique IPs', value: portStats.uniqueIps },
+ { label: t('allocations.stats.totalPorts'), value: portStats.total },
+ { label: t('allocations.stats.available'), value: portStats.available },
+ { label: t('allocations.stats.assigned'), value: portStats.assigned },
+ { label: t('allocations.stats.uniqueIps'), value: portStats.uniqueIps },
  ];
 
  const allIpStatItems = [
- { label: 'Total IPs', value: ipPoolStats.total },
- { label: 'Available', value: ipPoolStats.available },
- { label: 'Used', value: ipPoolStats.used },
- { label: 'Reserved', value: ipPoolStats.reserved },
+ { label: t('allocations.stats.totalIps'), value: ipPoolStats.total },
+ { label: t('allocations.stats.available'), value: ipPoolStats.available },
+ { label: t('allocations.stats.used'), value: ipPoolStats.used },
+ { label: t('allocations.stats.reserved'), value: ipPoolStats.reserved },
  ];
 
  return (
@@ -284,28 +282,28 @@ function NodeAllocationsPage() {
  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
  <Link to="/admin/nodes" className="flex items-center gap-1 hover:text-foreground transition-colors">
  <ArrowLeft className="h-3 w-3" />
- Nodes
+ {t('nodes.title')}
  </Link>
  <span className="text-muted-foreground/30">/</span>
- <span className="text-foreground font-medium">{node?.name || 'Loading...'}</span>
+ <span className="text-foreground font-medium">{node?.name || t('common:actions.loading')}</span>
  <span className="text-muted-foreground/30">/</span>
- <span className="text-foreground">Network Allocations</span>
+ <span className="text-foreground">{t('allocations.title')}</span>
  </div>
 
  {/* Header */}
  <TabHeader
  icon={Network}
- title="Network Allocations"
- description={`Manage port bindings and IP pools for ${node?.name || 'this node'}`}
+ title={t('allocations.title')}
+ description={t('allocations.description', { node: node?.name || t('allocations.thisNode') })}
  actions={
  <div className="flex items-center gap-2">
  <div className="hidden sm:flex items-center gap-1.5 rounded-md border border-border/30 bg-surface-2/30 px-2.5 py-1 text-[11px] text-muted-foreground">
  <Plug className="h-3 w-3" />
- {portStats.total} ports
+ {t('allocations.portCount', { value: portStats.total })}
  </div>
  <div className="hidden sm:flex items-center gap-1.5 rounded-md border border-border/30 bg-surface-2/30 px-2.5 py-1 text-[11px] text-muted-foreground">
  <Globe className="h-3 w-3" />
- {ipPoolStats.pools} pools
+ {t('allocations.poolCount', { value: ipPoolStats.pools })}
  </div>
  </div>
  }
@@ -316,10 +314,18 @@ function NodeAllocationsPage() {
  <div className="flex items-start gap-2.5">
  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
  <div className="space-y-1">
- <p className="text-[11px] font-medium text-foreground">Two allocation types:</p>
+ <p className="text-[11px] font-medium text-foreground">{t('allocations.info.title')}</p>
  <ul className="ml-3 list-disc space-y-0.5 text-[11px] text-muted-foreground">
- <li><strong>Port Allocations</strong> — Track IP:Port combinations for proxy/NAT setups (like Pterodactyl)</li>
- <li><strong>IP Pools</strong> — Automatic MACVLAN networking with dedicated IPs per server (advanced)</li>
+ <li>
+ <Trans i18nKey="allocations.info.portAllocations" ns="admin-infra">
+ <strong>Port Allocations</strong> — Track IP:Port combinations for proxy/NAT setups (like Pterodactyl)
+ </Trans>
+ </li>
+ <li>
+ <Trans i18nKey="allocations.info.ipPools" ns="admin-infra">
+ <strong>IP Pools</strong> — Automatic MACVLAN networking with dedicated IPs per server (advanced)
+ </Trans>
+ </li>
  </ul>
  </div>
  </div>
@@ -336,7 +342,7 @@ function NodeAllocationsPage() {
  }`}
  >
  <Plug className="h-3.5 w-3.5" />
- Port Allocations
+ {t('allocations.tabs.ports')}
  <span className={`text-[10px] tabular-nums ${activeTab === 'ports' ? 'text-primary-foreground/70' : 'text-muted-foreground/50'}`}>
  {portStats.total}
  </span>
@@ -350,7 +356,7 @@ function NodeAllocationsPage() {
  }`}
  >
  <Globe className="h-3.5 w-3.5" />
- IP Pools
+ {t('allocations.tabs.ips')}
  <span className={`text-[10px] tabular-nums ${activeTab === 'ips' ? 'text-primary-foreground/70' : 'text-muted-foreground/50'}`}>
  {ipPoolStats.pools}
  </span>
@@ -370,7 +376,7 @@ function NodeAllocationsPage() {
  type="text"
  value={search}
  onChange={(e) => setSearch(e.target.value)}
- placeholder="Search by IP, port, alias..."
+ placeholder={t('allocations.searchPlaceholder')}
  className="h-8 w-full rounded-lg border border-border/40 bg-card px-8 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
  />
  </div>
@@ -379,7 +385,7 @@ function NodeAllocationsPage() {
  className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
  >
  <Plus className="h-3.5 w-3.5" />
- Create Allocations
+ {t('allocations.createAllocations')}
  </button>
  </div>
 
@@ -388,15 +394,15 @@ function NodeAllocationsPage() {
  <TabLoadingState rows={5} />
  ) : filteredAllocations.length === 0 ? (
  <TabEmptyState
- title={search.trim() ? 'No port allocations match your search' : 'No port allocations yet'}
- description={search.trim() ? undefined : 'Create allocations to assign IP:Port combinations to servers.'}
+ title={search.trim() ? t('allocations.empty.noMatches') : t('allocations.empty.noPorts')}
+ description={search.trim() ? undefined : t('allocations.empty.noPortsDescription')}
  action={
  !search.trim() ? (
  <button
  onClick={() => setShowCreatePortModal(true)}
  className="rounded-md border border-border/40 bg-card px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:border-primary/20"
  >
- Create your first allocations
+ {t('allocations.empty.createFirst')}
  </button>
  ) : undefined
  }
@@ -412,12 +418,12 @@ function NodeAllocationsPage() {
  <div className="flex items-center justify-between gap-3">
  <div className="flex items-center gap-4 min-w-0 flex-1">
  <DataField
- label="IP"
+ label={t('allocations.field.ip')}
  value={allocation.ip}
  copyable
  />
  <DataField
- label="Port"
+ label={t('allocations.field.port')}
  value={String(allocation.port)}
  copyable
  />
@@ -430,11 +436,11 @@ function NodeAllocationsPage() {
  <div className="flex items-center gap-2 shrink-0">
  {allocation.serverId ? (
  <span className="inline-flex items-center rounded-full border border-border/30 bg-surface-2/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
- Assigned
+ {t('allocations.assigned')}
  </span>
  ) : (
  <span className="inline-flex items-center rounded-full border border-success/20 bg-success/5 px-2 py-0.5 text-[10px] font-medium text-success">
- Available
+ {t('allocations.available')}
  </span>
  )}
  {!allocation.serverId && (
@@ -442,7 +448,7 @@ function NodeAllocationsPage() {
  onClick={() => deletePortMutation.mutate(allocation.id)}
  disabled={deletePortMutation.isPending}
  className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-destructive hover:bg-destructive/5"
- title="Delete"
+ title={t('common:actions.delete')}
  >
  <Trash2 className="h-3 w-3" />
  </button>
@@ -468,7 +474,7 @@ function NodeAllocationsPage() {
  className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
  >
  <Plus className="h-3.5 w-3.5" />
- Create IP Pool
+ {t('allocations.createPoolButton')}
  </button>
  </div>
 
@@ -477,14 +483,14 @@ function NodeAllocationsPage() {
  <TabLoadingState rows={4} />
  ) : nodePools.length === 0 ? (
  <TabEmptyState
- title="No IP pools for this node"
- description="Create an IP pool to enable MACVLAN networking with automatic IPAM."
+ title={t('allocations.empty.noPools')}
+ description={t('allocations.empty.noPoolsDescription')}
  action={
  <button
  onClick={() => setShowCreatePoolModal(true)}
  className="rounded-md border border-border/40 bg-card px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:border-primary/20"
  >
- Create your first IP pool
+ {t('allocations.empty.createFirstPool')}
  </button>
  }
  />
@@ -509,7 +515,7 @@ function NodeAllocationsPage() {
  onClick={() => deletePoolMutation.mutate(pool.id)}
  disabled={deletePoolMutation.isPending}
  className="rounded p-1.5 text-muted-foreground/40 transition-colors hover:text-destructive hover:bg-destructive/5"
- title="Delete"
+ title={t('common:actions.delete')}
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
@@ -517,27 +523,27 @@ function NodeAllocationsPage() {
 
  <div className="mt-3 grid grid-cols-3 gap-2">
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Available</div>
+ <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.stats.available')}</div>
  <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.availableCount}</div>
  </div>
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Used</div>
+ <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.stats.used')}</div>
  <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.usedCount}</div>
  </div>
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Reserved</div>
+ <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.stats.reserved')}</div>
  <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.reservedCount}</div>
  </div>
  </div>
 
  <div className="mt-2 text-[11px] text-muted-foreground">
- Total: {pool.total} · Gateway: {pool.gateway ?? 'n/a'}
+ {t('allocations.poolTotals', { total: pool.total, gateway: pool.gateway ?? 'n/a' })}
  </div>
 
  {pool.allocations && pool.allocations.length > 0 && (
  <div className="mt-3 border-t border-border/30 pt-3">
  <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50 mb-2">
- Assigned IPs ({pool.allocations.length})
+ {t('allocations.assignedIps', { value: pool.allocations.length })}
  </div>
  <div className="max-h-32 space-y-1 overflow-y-auto">
  {pool.allocations.map((alloc: any) => (
@@ -560,67 +566,71 @@ function NodeAllocationsPage() {
  {/* Create Port Allocations Modal */}
 <Dialog open={showCreatePortModal} onOpenChange={setShowCreatePortModal}>
  <DialogContent size="lg">
- <DialogHeader icon={<Plug className="h-4 w-4" />}>
- <DialogTitle>Create port allocations</DialogTitle>
- <DialogDescription>Bulk create IP:Port allocations for this node.</DialogDescription>
- </DialogHeader>
+      <DialogHeader icon={<Plug className="h-4 w-4" />}>
+        <DialogTitle>{t('allocations.createPort.title')}</DialogTitle>
+        <DialogDescription>{t('allocations.createPort.description')}</DialogDescription>
+      </DialogHeader>
 
- <DialogBody className="space-y-4">
- <ServerTabCard className="!bg-surface-2/20 !border-border/20">
- <p className="text-[11px] text-muted-foreground leading-relaxed">
- <strong>IP format:</strong> Single IP (192.168.1.100), multiple IPs (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24)
- </p>
- <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
- <strong>Port format:</strong> Single port (25565), range (25565-25664), or multiple (25565, 25566, 25567)
- </p>
- </ServerTabCard>
+      <DialogBody className="space-y-4">
+        <ServerTabCard className="!bg-surface-2/20 !border-border/20">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <Trans i18nKey="allocations.createPort.ipFormat" ns="admin-infra">
+              <strong>IP format:</strong> Single IP (192.168.1.100), multiple IPs (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24)
+            </Trans>
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+            <Trans i18nKey="allocations.createPort.portFormat" ns="admin-infra">
+              <strong>Port format:</strong> Single port (25565), range (25565-25664), or multiple (25565, 25566, 25567)
+            </Trans>
+          </p>
+        </ServerTabCard>
 
- <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">IP Address(es)</span>
- <Input
- type="text"
- value={ipInput}
- onChange={(e) => setIpInput(e.target.value)}
- placeholder="192.168.1.100, 2001:db8::1, or 192.168.1.0/24"
- />
- </label>
+        <label className="block space-y-1.5">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPort.ipLabel')}</span>
+          <Input
+            type="text"
+            value={ipInput}
+            onChange={(e) => setIpInput(e.target.value)}
+            placeholder={t('allocations.createPort.ipPlaceholder')}
+          />
+        </label>
 
- <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Port(s)</span>
- <Input
- type="text"
- value={portsInput}
- onChange={(e) => setPortsInput(e.target.value)}
- placeholder="25565-25664 or 25565, 25566"
- />
- </label>
+        <label className="block space-y-1.5">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPort.portsLabel')}</span>
+          <Input
+            type="text"
+            value={portsInput}
+            onChange={(e) => setPortsInput(e.target.value)}
+            placeholder={t('allocations.createPort.portsPlaceholder')}
+          />
+        </label>
 
- <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Alias (optional)</span>
- <Input
- type="text"
- value={aliasInput}
- onChange={(e) => setAliasInput(e.target.value)}
- placeholder="e.g., Main network"
- />
- </label>
+        <label className="block space-y-1.5">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPort.aliasLabel')}</span>
+          <Input
+            type="text"
+            value={aliasInput}
+            onChange={(e) => setAliasInput(e.target.value)}
+            placeholder={t('allocations.createPort.aliasPlaceholder')}
+          />
+        </label>
 
- <Button variant="link" className="h-auto p-0 text-[11px]" onClick={handleQuickFillPorts}>
- Quick fill: Use node IP + ports 25565-25664
- </Button>
- </DialogBody>
+        <Button variant="link" className="h-auto p-0 text-[11px]" onClick={handleQuickFillPorts}>
+          {t('allocations.createPort.quickFill')}
+        </Button>
+      </DialogBody>
 
- <DialogFooter>
- <Button variant="outline" onClick={() => setShowCreatePortModal(false)}>
- Cancel
- </Button>
- <Button
- onClick={() => createPortMutation.mutate()}
- disabled={!ipInput.trim() || !portsInput.trim() || createPortMutation.isPending}
- >
- {createPortMutation.isPending ? 'Creating…' : 'Create allocations'}
- </Button>
- </DialogFooter>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setShowCreatePortModal(false)}>
+          {t('common:actions.cancel')}
+        </Button>
+        <Button
+          onClick={() => createPortMutation.mutate()}
+          disabled={!ipInput.trim() || !portsInput.trim() || createPortMutation.isPending}
+        >
+          {createPortMutation.isPending ? t('allocations.createPort.creating') : t('allocations.createPort.submit')}
+        </Button>
+      </DialogFooter>
  </DialogContent>
  </Dialog>
 
@@ -628,19 +638,19 @@ function NodeAllocationsPage() {
  <Dialog open={showCreatePoolModal} onOpenChange={setShowCreatePoolModal}>
  <DialogContent size="xl">
  <DialogHeader icon={<Globe className="h-4 w-4" />}>
- <DialogTitle>Create IP pool</DialogTitle>
- <DialogDescription>Configure MACVLAN network with automatic IPAM.</DialogDescription>
+ <DialogTitle>{t('allocations.createPool.title')}</DialogTitle>
+ <DialogDescription>{t('allocations.createPool.description')}</DialogDescription>
  </DialogHeader>
 
  <DialogBody className="space-y-4">
  <ServerTabCard className="!bg-surface-2/20 !border-border/20">
  <p className="text-[11px] text-muted-foreground leading-relaxed">
- IP pools enable servers to get dedicated IP addresses on the network via MACVLAN. Each server automatically receives one IP from the pool.
+ {t('allocations.createPool.intro')}
  </p>
  </ServerTabCard>
 
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Network Name</span>
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.networkName')}</span>
  <Input
  type="text"
  value={networkName}
@@ -650,18 +660,18 @@ function NodeAllocationsPage() {
  </label>
 
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">CIDR</span>
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.cidr')}</span>
  <Input
  type="text"
  value={cidr}
  onChange={(e) => setCidr(e.target.value)}
- placeholder="192.168.50.0/24 or 2001:db8::/64"
+ placeholder={t('allocations.createPool.cidrPlaceholder')}
  />
  </label>
 
  <div className="grid grid-cols-2 gap-4">
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Gateway</span>
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.gateway')}</span>
  <Input
  type="text"
  value={gateway}
@@ -670,7 +680,7 @@ function NodeAllocationsPage() {
  />
  </label>
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Start IP (optional)</span>
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.startIp')}</span>
  <Input
  type="text"
  value={startIp}
@@ -679,7 +689,7 @@ function NodeAllocationsPage() {
  />
  </label>
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">End IP (optional)</span>
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.endIp')}</span>
  <Input
  type="text"
  value={endIp}
@@ -694,13 +704,13 @@ function NodeAllocationsPage() {
  disabled={!autoFillIp.trim()}
  className="h-8 w-full"
  >
- Autofill /24
+ {t('allocations.createPool.autofill')}
  </Button>
  </div>
  </div>
 
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Quick Setup IP</span>
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.quickSetupIp')}</span>
  <Input
  type="text"
  value={autoFillIp}
@@ -710,7 +720,7 @@ function NodeAllocationsPage() {
  </label>
 
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Reserved IPs (optional, comma-separated)</span>
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.reservedIps')}</span>
  <Textarea
  value={reserved}
  onChange={(e) => setReserved(e.target.value)}
@@ -723,13 +733,13 @@ function NodeAllocationsPage() {
 
  <DialogFooter>
  <Button variant="outline" onClick={() => setShowCreatePoolModal(false)}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  <Button
  onClick={() => createPoolMutation.mutate()}
  disabled={!networkName || !cidr || createPoolMutation.isPending}
  >
- {createPoolMutation.isPending ? 'Creating…' : 'Create pool'}
+ {createPoolMutation.isPending ? t('allocations.createPool.creating') : t('allocations.createPool.submit')}
  </Button>
  </DialogFooter>
  </DialogContent>
