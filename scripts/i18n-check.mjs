@@ -20,7 +20,6 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const localesDir = path.join(repoRoot, 'catalyst-frontend/src/i18n/locales');
 const primaryLocale = 'en';
-const backendTypesPath = path.join(repoRoot, 'catalyst-backend/src/shared-types.ts');
 
 const strict = process.argv.includes('--strict');
 const problems = [];
@@ -108,16 +107,17 @@ for (const locale of locales) {
 
 // Backend error codes with no frontend translation.
 const errorCodes = new Set();
+const errorCodesDir = path.join(repoRoot, 'catalyst-backend/src/lib/error-codes');
 try {
-  const typesSource = readFileSync(backendTypesPath, 'utf8');
-  const block = typesSource.match(/export const ErrorCodes = \{([\s\S]*?)\} as const;/);
-  if (block) {
-    for (const match of block[1].matchAll(/^\s*([A-Z][A-Z0-9_]*)\s*:\s*[^,]+,\s*$/gm)) {
+  for (const file of readdirSync(errorCodesDir)) {
+    if (!file.endsWith('.ts') || file === 'index.ts') continue;
+    const source = readFileSync(path.join(errorCodesDir, file), 'utf8');
+    for (const match of source.matchAll(/^\s*([A-Z][A-Z0-9_]*)\s*:\s*"/gm)) {
       errorCodes.add(match[1]);
     }
   }
 } catch (error) {
-  warnings.push(`could not read backend error codes from ${backendTypesPath}: ${error.message}`);
+  warnings.push(`could not read backend error codes from ${errorCodesDir}: ${error.message}`);
 }
 
 const errorsCatalog = primary.get('errors') ?? new Map();
