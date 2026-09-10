@@ -90,3 +90,13 @@ SESSION_BRIDGE_CATCODE_OPENCODE.md
 catalyst-docker-backup-*/
 dump.rdb
 important-announcement.md
+
+# Local security audit reports (working documents, not for the repo)
+security-audit/
+
+# Supply-chain test fixtures are generated at runtime by
+# tests/28-supply-chain.test.sh (mktemp) — never commit binaries here
+tests/fixtures/
+
+# Review/handoff scratch notes (untracked working documents)
+BRANCH-STACK.md
