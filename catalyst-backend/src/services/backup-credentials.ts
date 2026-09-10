@@ -45,25 +45,31 @@ const decryptValue = (value: string) => {
 /**
  * Encrypt a single secret string with the backup-credentials AES key.
  *
- * SECURITY: historically this failed OPEN — when BACKUP_CREDENTIALS_ENCRYPTION_KEY
- * was unset (the shipped default) S3 secret keys and SFTP private keys were
- * stored as plaintext in the panel database. In production a missing or
- * invalid key is now a hard error so the caller's request fails instead of
- * persisting credentials in cleartext; tests still fall open so existing
- * unit tests can exercise the redaction paths without provisioning a key.
+ * Fail-closed in every environment: a missing or invalid key is a hard error
+ * so credentials are never persisted as cleartext. Tests must provision a
+ * 32-byte base64 BACKUP_CREDENTIALS_ENCRYPTION_KEY; the only escape hatch is
+ * the explicit ALLOW_PLAINTEXT_CREDS=1 opt-in (local debugging only, refused
+ * in production).
  */
 export const encryptSecretValue = (value: string | null | undefined): string | null | undefined => {
   if (value === null || value === undefined || value === '') return value;
-  try {
-    return encryptValue(value);
-  } catch (err) {
+  if (process.env.ALLOW_PLAINTEXT_CREDS === '1') {
     if (process.env.NODE_ENV === 'production') {
       throw new Error(
-        `Refusing to store backup credentials unencrypted: ${(err as Error)?.message ?? 'encryption key unavailable'} ` +
-          `(set BACKUP_CREDENTIALS_ENCRYPTION_KEY to a 32-byte base64 value)`,
+        'Refusing to store backup credentials unencrypted: ALLOW_PLAINTEXT_CREDS=1 is not honored in production',
       );
     }
     return value;
+  }
+  // Fail closed: no silent plaintext fallback. Keep the legacy message shape
+  // (mentions "unencrypted") so existing fail-closed assertions keep passing.
+  try {
+    return encryptValue(value);
+  } catch (err) {
+    throw new Error(
+      `Refusing to store backup credentials unencrypted: ${(err as Error)?.message ?? 'encryption key unavailable'} ` +
+        `(set BACKUP_CREDENTIALS_ENCRYPTION_KEY to a 32-byte base64 value)`,
+    );
   }
 };
 
