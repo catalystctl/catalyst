@@ -1,5 +1,25 @@
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { BackupStatus } from '../../types/backup';
-import { formatBackupStatus } from '../../utils/backupStatus';
+
+/**
+ * Localized label for a backup status. A switch (not a status->key map) keeps
+ * every translation key a literal in the source so extraction stays exact.
+ */
+function backupStatusLabel(t: TFunction, status: BackupStatus): string {
+  switch (status) {
+    case 'completed':
+      return t('backups.status.completed', { ns: 'server-tabs' });
+    case 'in_progress':
+      return t('backups.status.inProgress', { ns: 'server-tabs' });
+    case 'failed':
+      return t('backups.status.failed', { ns: 'server-tabs' });
+    case 'restored':
+      return t('backups.status.restored', { ns: 'server-tabs' });
+    default:
+      return t('backups.status.unknown', { ns: 'server-tabs' });
+  }
+}
 
 const colorMap: Record<BackupStatus, string> = {
  completed: 'bg-success/10 text-success border-success/20',
@@ -10,15 +30,16 @@ const colorMap: Record<BackupStatus, string> = {
 };
 
 function BackupStatusBadge({ status }: { status: BackupStatus }) {
- return (
- <span
- className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${
- colorMap[status]
- }`}
- >
- {formatBackupStatus(status)}
- </span>
- );
+  const { t } = useTranslation('server-tabs');
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${
+        colorMap[status]
+      }`}
+    >
+      {backupStatusLabel(t, status)}
+    </span>
+  );
 }
 
 export default BackupStatusBadge;

@@ -1,4 +1,6 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import type { TFunction } from 'i18next';
 import { useQuery, useMutation, useQueryClient } from '@/csync';
 import {
  ArrowLeftRight,
@@ -19,12 +21,14 @@ import {
  Star,
  Trash2,
  TrendingUp,
+ type LucideIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
  formatBytes,
  formatRelativeTime,
 } from '../../../utils/formatters';
+import { formatDate, formatNumber } from '@/i18n/format';
 import { pluginManagerApi } from '../../../services/api/pluginManager';
 import {
  providerKeysApi,
@@ -76,15 +80,17 @@ const itemVariants: Variants = {
 const RESULTS_PER_PAGE = 12;
 
 // ── Sort presets (mapped server-side to each provider's native params) ──
-const PLUGIN_SORT_OPTIONS = [
- { id: 'trending', label: 'Trending', icon: Flame },
- { id: 'popular', label: 'Popular', icon: TrendingUp },
- { id: 'rating', label: 'Top rated', icon: Star },
- { id: 'updated', label: 'Recently updated', icon: History },
- { id: 'newest', label: 'Newest', icon: Sparkles },
-] as const;
+type PluginSortId = 'trending' | 'popular' | 'rating' | 'updated' | 'newest';
 
-type PluginSortId = (typeof PLUGIN_SORT_OPTIONS)[number]['id'];
+const pluginSortOptions = (
+ t: TFunction,
+): Array<{ id: PluginSortId; label: string; icon: LucideIcon }> => [
+ { id: 'trending', label: t('tabs.plugins.sortOptions.trending', { ns: 'server-tabs' }), icon: Flame },
+ { id: 'popular', label: t('tabs.plugins.sortOptions.popular', { ns: 'server-tabs' }), icon: TrendingUp },
+ { id: 'rating', label: t('tabs.plugins.sortOptions.rating', { ns: 'server-tabs' }), icon: Star },
+ { id: 'updated', label: t('tabs.plugins.sortOptions.updated', { ns: 'server-tabs' }), icon: History },
+ { id: 'newest', label: t('tabs.plugins.sortOptions.newest', { ns: 'server-tabs' }), icon: Sparkles },
+];
 
 // ── Types ──
 interface Props {
@@ -140,11 +146,16 @@ function VersionSelector({
  exactMatch: boolean;
  rawCount: number;
 }) {
+ const { t } = useTranslation('server-tabs');
  const filterNote = (() => {
   if (!gameVersionLabel) return '';
-  if (exactMatch) return `${versionOptions.length} for ${gameVersionLabel}`;
+  if (exactMatch)
+   return t('tabs.plugins.versionCountFor', {
+    formatted: formatNumber(versionOptions.length),
+    version: gameVersionLabel,
+   });
   if (versionOptions.length > 0)
-   return `nothing tagged for ${gameVersionLabel} — showing all`;
+   return t('tabs.plugins.versionFilterNote', { version: gameVersionLabel });
   return '';
  })();
 
@@ -163,7 +174,7 @@ function VersionSelector({
     <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
      <div className="flex items-center justify-between gap-2">
       <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-       Version
+       {t('tabs.plugins.versionLabel')}
       </label>
       {filterNote && (
        <span className="truncate text-[10px] text-muted-foreground">
@@ -172,7 +183,7 @@ function VersionSelector({
       )}
      </div>
      {isError ? (
-      <p className="text-xs text-danger">Failed to load versions.</p>
+      <p className="text-xs text-danger">{t('tabs.plugins.versionsFailed')}</p>
      ) : (
       <div className="flex items-end gap-2">
        <div className="relative flex-1">
@@ -183,7 +194,7 @@ function VersionSelector({
          disabled={isLoading}
         >
          <option value="">
-          {isLoading ? 'Loading…' : 'Select version'}
+          {isLoading ? t('common:actions.loading') : t('tabs.plugins.selectVersion')}
          </option>
          {versionOptions.map((version: any) => {
           const vid = normalizeVersionId(version);
@@ -193,7 +204,7 @@ function VersionSelector({
           if (!vid) return null;
           const stabilitySuffix = isStableRelease(version)
            ? ''
-           : ' (pre-release)';
+           : t('tabs.plugins.preRelease');
           return (
            <option key={vid} value={String(vid)}>
             {vlabel}
@@ -215,13 +226,13 @@ function VersionSelector({
         ) : (
          <Download className="h-3.5 w-3.5" />
         )}
-        {isInstalling ? 'Installing…' : 'Install'}
+        {isInstalling ? t('tabs.plugins.installing') : t('tabs.plugins.install')}
        </Button>
       </div>
      )}
      {!isError && !isLoading && versionOptions.length === 0 && rawCount === 0 && (
       <p className="text-xs text-muted-foreground">
-       No published versions found for this plugin.
+       {t('tabs.plugins.noVersions')}
       </p>
      )}
     </div>
@@ -240,6 +251,7 @@ export default function ServerPluginManagerTab({
  serverGameVersion,
  pluginManagerConfig,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  const queryClient = useQueryClient();
  // ── Provider key availability ──
  // Providers whose required API key isn't configured (Modrinth) are hidden
@@ -443,13 +455,13 @@ export default function ServerPluginManagerTab({
  const uninstallPluginMutation = useMutation({
  mutationFn: (filename: string) =>
  pluginManagerApi.uninstall(serverId!, filename),
- onSuccess: () => notifySuccess('Plugin removed'),
+ onSuccess: () => notifySuccess(t('tabs.plugins.removed')),
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId ?? '') });
  },
  onError: (error: any) => {
  notifyError(
- error?.response?.data?.error || 'Failed to remove plugin',
+ error?.response?.data?.error || t('tabs.plugins.removeFailed'),
  );
  },
  });
@@ -458,7 +470,7 @@ export default function ServerPluginManagerTab({
  mutationFn: () => {
  if (!serverId || !selectedPlugin || !selectedPluginVersion) {
  reportSystemError({ level: 'error', component: 'ServerPluginManagerTab', message: 'Missing plugin selection', metadata: { context: 'install plugin mutation' } });
- throw new Error('Missing plugin selection');
+ throw new Error(t('tabs.plugins.missingSelection'));
  }
  return pluginManagerApi.install(serverId, {
  provider: pluginProvider,
@@ -467,13 +479,13 @@ export default function ServerPluginManagerTab({
  projectName: selectedPluginName || undefined,
  });
  },
- onSuccess: () => notifySuccess('Plugin installed successfully'),
+ onSuccess: () => notifySuccess(t('tabs.plugins.installedSuccess')),
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId ?? '') });
  },
  onError: (error: any) => {
  notifyError(
- error?.response?.data?.error || 'Failed to install plugin',
+ error?.response?.data?.error || t('tabs.plugins.installFailed'),
  );
  },
  });
@@ -616,16 +628,16 @@ export default function ServerPluginManagerTab({
  const failed = results.filter((r) => !r.success).length;
  if (failed > 0)
  notifyError(
- `${failed} plugin${failed !== 1 ? 's' : ''} failed to update`,
+ t('tabs.plugins.updateSomeFailed', { count: failed }),
  );
  if (succeeded > 0)
  notifySuccess(
- `${succeeded} plugin${succeeded !== 1 ? 's' : ''} updated successfully`,
+ t('tabs.plugins.updateSomeSucceeded', { count: succeeded }),
  );
  refetchInstalledPlugins();
  setUpdateConfirmPlugins([]);
  } catch {
- notifyError('Failed to update plugins');
+ notifyError(t('tabs.plugins.updateFailed'));
  } finally {
  setIsUpdatingPlugins(false);
  }
@@ -639,13 +651,13 @@ export default function ServerPluginManagerTab({
  refetchInstalledPlugins();
  if (result.updatesAvailable > 0) {
  notifySuccess(
- `${result.updatesAvailable} update${result.updatesAvailable !== 1 ? 's' : ''} available`,
+ t('tabs.plugins.updatesAvailable', { count: result.updatesAvailable }),
  );
  } else {
- notifySuccess('All plugins are up to date');
+ notifySuccess(t('tabs.plugins.allUpToDate'));
  }
  } catch {
- notifyError('Failed to check for updates');
+ notifyError(t('tabs.plugins.checkUpdatesFailed'));
  } finally {
  setIsCheckingPluginUpdates(false);
  }
@@ -655,8 +667,8 @@ export default function ServerPluginManagerTab({
  if (!pluginManagerConfig) {
  return (
  <EmptyState
- title="Plugin manager not available"
- description="This server template does not have a plugin manager configured."
+ title={t('tabs.plugins.unavailableTitle')}
+ description={t('tabs.plugins.unavailableDescription')}
  />
  );
  }
@@ -672,20 +684,20 @@ export default function ServerPluginManagerTab({
  <motion.div variants={itemVariants}>
  <TabHeader
  icon={Puzzle}
- title="Plugins"
- description="Discover, install, and update plugins for your server."
+ title={t('tabs.plugins.title')}
+ description={t('tabs.plugins.description')}
  actions={(
  <div className="flex items-center gap-2">
  {installedPlugins.length > 0 && (
  <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
  <Package className="h-2.5 w-2.5" />
- {installedPlugins.length} installed
+ {t('tabs.plugins.installedCount', { count: installedPlugins.length })}
  </Badge>
  )}
  {pluginsWithUpdates.length > 0 && (
  <Badge variant="warning" className="h-8 gap-1.5 px-3 text-xs">
  <ArrowUpCircle className="h-2.5 w-2.5" />
- {pluginsWithUpdates.length} update{pluginsWithUpdates.length !== 1 ? 's' : ''}
+ {t('tabs.plugins.updatesBadge', { count: pluginsWithUpdates.length })}
  </Badge>
  )}
  </div>
@@ -709,7 +721,7 @@ export default function ServerPluginManagerTab({
  if (tab === 'installed') refetchInstalledPlugins();
  }}
  >
- {tab === 'browse' ? 'Browse' : 'Installed'}
+ {tab === 'browse' ? t('tabs.plugins.tabBrowse') : t('tabs.plugins.tabInstalled')}
  {tab === 'installed' && installedPlugins.length > 0 && (
  <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
  pluginSubTab === 'installed' ? 'bg-primary-foreground/20' : 'bg-surface-2'
@@ -743,7 +755,7 @@ export default function ServerPluginManagerTab({
  onKeyDown={(e) => {
  if (e.key === 'Enter') handleSearch();
  }}
- placeholder="Search plugins…"
+ placeholder={t('tabs.plugins.searchPlaceholder')}
  className="pl-9"
  />
  </div>
@@ -753,12 +765,12 @@ export default function ServerPluginManagerTab({
  className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
  value={pluginGameVersion}
  onChange={(e) => setPluginGameVersion(e.target.value)}
- aria-label="Filter by game version"
+ aria-label={t('tabs.plugins.filterByGameVersion')}
  >
- <option value="">Any game version</option>
+ <option value="">{t('tabs.plugins.anyGameVersion')}</option>
  {detectedVersion && !gameVersionTagsIncludeDetected && (
  <option value={detectedVersion}>
- Server version ({detectedVersion})
+ {t('tabs.plugins.serverVersion', { version: detectedVersion })}
  </option>
  )}
  {(pluginGameVersionTags ?? []).slice(0, 60).map((v) => (
@@ -793,7 +805,7 @@ export default function ServerPluginManagerTab({
  ) : (
  <Search className="h-3.5 w-3.5" />
  )}
- Search
+ {t('common:actions.search')}
  </Button>
  </div>
  </motion.div>
@@ -804,7 +816,7 @@ export default function ServerPluginManagerTab({
  className="flex flex-wrap items-center justify-between gap-2"
  >
  <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border/50 bg-card/60 p-1 backdrop-blur-sm">
- {PLUGIN_SORT_OPTIONS.map(({ id, label, icon: SortIcon }) => (
+ {pluginSortOptions(t).map(({ id, label, icon: SortIcon }) => (
  <button
  key={id}
  type="button"
@@ -822,9 +834,9 @@ export default function ServerPluginManagerTab({
  </div>
  {availablePluginProviders.length > 0 && (
  <span className="text-xs text-muted-foreground">
- {totalHits.toLocaleString()} result{totalHits !== 1 ? 's' : ''}
+ {t('tabs.plugins.resultCount', { count: totalHits, formatted: formatNumber(totalHits) })}
  {totalHits > RESULTS_PER_PAGE && (
- <> · page {searchPage} of {totalPages}</>
+ <> · {t('tabs.plugins.pageOf', { page: searchPage, total: totalPages })}</>
  )}
  </span>
  )}
@@ -834,8 +846,8 @@ export default function ServerPluginManagerTab({
  {availablePluginProviders.length === 0 ? (
  <motion.div variants={itemVariants}>
  <EmptyState
- title="No providers available"
- description="Every provider this template offers requires an API key that isn't configured. An administrator can add one under Admin → System → Mod Manager API Keys."
+ title={t('tabs.plugins.noProvidersTitle')}
+ description={t('tabs.plugins.noProvidersDescription')}
  />
  </motion.div>
  ) : !keyStatusSettled ? (
@@ -859,23 +871,26 @@ export default function ServerPluginManagerTab({
  if (status === 409) {
  return (
  detail ||
- 'Provider API key not configured. Set it under Admin → System → Mod Manager API Keys.'
+ t('tabs.plugins.providerKeyMissing')
  );
  }
  if (detail) {
- return `Search failed${status ? ` (HTTP ${status})` : ''}: ${String(detail).slice(0, 200)}`;
+ return t('tabs.plugins.searchFailed', {
+  status: status ? t('tabs.plugins.searchFailedStatus', { status }) : '',
+  detail: String(detail).slice(0, 200),
+ });
  }
- return 'Unable to load search results. Try again in a moment.';
+ return t('tabs.plugins.searchResultsFailed');
  })()}
  </motion.div>
  ) : pluginResults.length === 0 ? (
  <motion.div variants={itemVariants}>
  <EmptyState
- title="No results"
+ title={t('tabs.plugins.noResultsTitle')}
  description={
  pluginQuery.trim()
- ? 'Try a different search term or adjust your filters.'
- : 'Search for a plugin to get started.'
+ ? t('tabs.plugins.noResultsFiltered')
+ : t('tabs.plugins.noResultsEmpty')
  }
  />
  </motion.div>
@@ -910,7 +925,7 @@ export default function ServerPluginManagerTab({
  entry.tag ||
  entry.slug ||
  entry.id ||
- 'Untitled';
+ t('tabs.plugins.untitled');
  // Provider payloads vary — never render a non-string as a React child.
  const titleText = typeof title === 'string' ? title : String(title);
  const rawSummary =
@@ -1030,7 +1045,7 @@ export default function ServerPluginManagerTab({
  </div>
  {author && (
  <p className="truncate text-[11px] text-muted-foreground">
- by {author}
+ {t('tabs.plugins.byAuthor', { author })}
  </p>
  )}
  </div>
@@ -1050,7 +1065,7 @@ export default function ServerPluginManagerTab({
  )}
  {updatedLabel && (
  <span className="truncate">
- updated {updatedLabel}
+ {t('tabs.plugins.updated', { time: updatedLabel })}
  </span>
  )}
  </div>
@@ -1106,7 +1121,7 @@ export default function ServerPluginManagerTab({
  className="gap-1.5"
  >
  <ChevronLeft className="h-3.5 w-3.5" />
- Previous
+ {t('tabs.plugins.previous')}
  </Button>
  <div className="flex items-center gap-1">
  {Array.from(
@@ -1152,7 +1167,7 @@ export default function ServerPluginManagerTab({
  }
  className="gap-1.5"
  >
- Next
+ {t('common:actions.next')}
  <ChevronRight className="h-3.5 w-3.5" />
  </Button>
  </motion.div>
@@ -1180,7 +1195,7 @@ export default function ServerPluginManagerTab({
  onChange={(e) =>
  setPluginInstalledSearch(e.target.value)
  }
- placeholder="Search installed plugins…"
+ placeholder={t('tabs.plugins.searchInstalledPlaceholder')}
  className="pl-9"
  />
  </div>
@@ -1194,10 +1209,10 @@ export default function ServerPluginManagerTab({
  )
  }
  >
- <option value="all">All</option>
- <option value="updates">Has Updates</option>
- <option value="tracked">Tracked</option>
- <option value="untracked">Untracked</option>
+ <option value="all">{t('tabs.plugins.filter.all')}</option>
+ <option value="updates">{t('tabs.plugins.filter.updates')}</option>
+ <option value="tracked">{t('tabs.plugins.filter.tracked')}</option>
+ <option value="untracked">{t('tabs.plugins.filter.untracked')}</option>
  </select>
 
  <select
@@ -1209,9 +1224,9 @@ export default function ServerPluginManagerTab({
  )
  }
  >
- <option value="name">Name</option>
- <option value="size">Size</option>
- <option value="date">Date</option>
+ <option value="name">{t('tabs.plugins.sort.name')}</option>
+ <option value="size">{t('tabs.plugins.sort.size')}</option>
+ <option value="date">{t('tabs.plugins.sort.date')}</option>
  </select>
 
  <div className="ml-auto flex items-center gap-1.5">
@@ -1241,10 +1256,10 @@ export default function ServerPluginManagerTab({
  }}
  >
  <ArrowUpCircle className="h-3.5 w-3.5" />
- Update
+ {t('tabs.plugins.update')}
  {pluginsWithUpdatesSelected.length > 0
- ? ` (${pluginsWithUpdatesSelected.length})`
- : ` All (${pluginsWithUpdates.length})`}
+ ? t('tabs.plugins.updateSelectedCount', { count: pluginsWithUpdatesSelected.length })
+ : t('tabs.plugins.updateAllCount', { count: pluginsWithUpdates.length })}
  </Button>
  )}
 
@@ -1258,7 +1273,7 @@ export default function ServerPluginManagerTab({
  }}
  >
  <Trash2 className="h-3.5 w-3.5" />
- Remove ({selectedPluginFiles.size})
+ {t('tabs.plugins.removeSelected', { count: selectedPluginFiles.size })}
  </Button>
  )}
 
@@ -1274,7 +1289,7 @@ export default function ServerPluginManagerTab({
  ) : (
  <RefreshCw className="h-3.5 w-3.5" />
  )}
- Check Updates
+ {t('tabs.plugins.checkUpdates')}
  </Button>
  </div>
  </motion.div>
@@ -1288,9 +1303,9 @@ export default function ServerPluginManagerTab({
  {filteredInstalledPlugins.length}
  {filteredInstalledPlugins.length !==
  installedPlugins.length
- ? ` of ${installedPlugins.length}`
+ ? t('tabs.plugins.filteredOf', { total: installedPlugins.length })
  : ''}{' '}
- plugin{installedPlugins.length !== 1 ? 's' : ''}
+ {t('tabs.plugins.pluginCount', { count: installedPlugins.length })}
  </span>
  {filteredInstalledPlugins.length > 0 && (
  <button
@@ -1316,8 +1331,8 @@ export default function ServerPluginManagerTab({
  {selectedPluginFiles.size ===
  filteredInstalledPlugins.length &&
  selectedPluginFiles.size > 0
- ? 'Deselect all'
- : 'Select all'}
+ ? t('tabs.plugins.deselectAll')
+ : t('tabs.plugins.selectAll')}
  </button>
  )}
  </motion.div>
@@ -1329,14 +1344,14 @@ export default function ServerPluginManagerTab({
  title={
  pluginInstalledSearch ||
  pluginInstalledFilter !== 'all'
- ? 'No matching plugins'
- : 'No plugins installed'
+ ? t('tabs.plugins.noMatching')
+ : t('tabs.plugins.noneInstalled')
  }
  description={
  pluginInstalledSearch ||
  pluginInstalledFilter !== 'all'
- ? 'Try adjusting your search or filter.'
- : 'Install plugins from the Browse tab to see them here.'
+ ? t('tabs.plugins.adjustFilters')
+ : t('tabs.plugins.installHint')
  }
  />
  </motion.div>
@@ -1425,7 +1440,7 @@ export default function ServerPluginManagerTab({
  className="gap-1 px-1.5 py-0 text-[10px]"
  >
  <ArrowUpCircle className="h-2.5 w-2.5" />
- Update
+ {t('tabs.plugins.update')}
  </Badge>
  )}
  {plugin.provider && (
@@ -1443,14 +1458,12 @@ export default function ServerPluginManagerTab({
  </span>
  {plugin.modifiedAt && (
  <span>
- {new Date(
- plugin.modifiedAt,
- ).toLocaleDateString()}
+ {formatDate(plugin.modifiedAt)}
  </span>
  )}
  {!plugin.provider && (
  <span className="italic text-foreground/60">
- untracked
+ {t('tabs.plugins.untracked')}
  </span>
  )}
  </div>
@@ -1477,7 +1490,7 @@ export default function ServerPluginManagerTab({
  <button
  type="button"
  className="rounded-lg p-1.5 text-warning transition-colors hover:bg-warning/10"
- title="Update to latest version"
+ title={t('tabs.plugins.updateToLatest')}
  disabled={isUpdatingPlugins}
  onClick={() =>
  setUpdateConfirmPlugins([
@@ -1499,7 +1512,7 @@ export default function ServerPluginManagerTab({
  <button
  type="button"
  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
- title="Remove"
+ title={t('common:actions.remove')}
  onClick={() => {
  setPendingRemovePlugins([plugin.name]);
  }}
@@ -1519,14 +1532,14 @@ export default function ServerPluginManagerTab({
  <ConfirmDialog
  open={pendingRemovePlugins !== null && pendingRemovePlugins.length > 0}
  title={
- pendingRemovePlugins?.length === 1 ? 'Remove plugin' : 'Remove plugins'
+ pendingRemovePlugins?.length === 1 ? t('tabs.plugins.removeOne') : t('tabs.plugins.removeMany')
  }
  message={
  pendingRemovePlugins?.length === 1
- ? `Remove ${pendingRemovePlugins[0]}? This cannot be undone.`
- : `Remove ${pendingRemovePlugins?.length ?? 0} selected plugins? This cannot be undone.`
+ ? t('tabs.plugins.removeConfirm', { name: pendingRemovePlugins[0] })
+ : t('tabs.plugins.removeConfirmMany', { count: pendingRemovePlugins?.length ?? 0 })
  }
- confirmText="Remove"
+ confirmText={t('common:actions.remove')}
  variant="danger"
  loading={uninstallPluginMutation.isPending}
  onConfirm={() => {
@@ -1544,10 +1557,10 @@ export default function ServerPluginManagerTab({
 
  {/* Update confirmation modal */}
  <UpdateConfirmModal
- itemType="Plugin"
+ itemKind="plugin"
  items={updateConfirmPlugins}
  isUpdating={isUpdatingPlugins}
- warningMessage="⚠️ Updating plugins may cause compatibility issues. Test on a staging server if possible, and always maintain backups."
+ warningMessage={t('tabs.plugins.updateWarning')}
  onCancel={() => setUpdateConfirmPlugins([])}
  onConfirm={handleUpdatePlugins}
  />

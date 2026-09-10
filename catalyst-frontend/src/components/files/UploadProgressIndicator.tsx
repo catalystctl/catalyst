@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Upload, X, AlertTriangle } from 'lucide-react';
 import { useUploadStore, COMPLETED_SESSION_TTL_MS } from '../../stores/uploadStore';
@@ -13,6 +14,7 @@ import { formatBytes } from '../../utils/formatters';
  * Supports canceling in-flight sessions via the store's abort registry.
  */
 function UploadProgressIndicator() {
+  const { t } = useTranslation('server-tabs');
   const sessions = useUploadStore((s) => s.sessions);
   const cancelSession = useUploadStore((s) => s.cancelSession);
   const dismissSession = useUploadStore((s) => s.dismissSession);
@@ -27,7 +29,7 @@ function UploadProgressIndicator() {
         const wait = Math.max(COMPLETED_SESSION_TTL_MS - (Date.now() - finishedAt), 0);
         return window.setTimeout(() => dismissSession(s.id), wait);
       });
-    return () => timers.forEach((t) => window.clearTimeout(t));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [sessions, dismissSession]);
 
   if (sessions.length === 0) return null;
@@ -50,12 +52,15 @@ function UploadProgressIndicator() {
           const isCanceled = session.status === 'canceled';
           const hasError = session.status === 'error';
           const title = isCanceled
-            ? 'Upload canceled'
+            ? t('files.upload.canceled')
             : hasError
-              ? 'Upload failed'
+              ? t('files.upload.failed')
               : isActive
-                ? `Uploading ${doneCount + 1}/${session.files.length}`
-                : 'Upload complete';
+                ? t('files.upload.uploading', {
+                    current: doneCount + 1,
+                    total: session.files.length,
+                  })
+                : t('files.upload.complete');
 
           return (
             <motion.div
@@ -107,7 +112,7 @@ function UploadProgressIndicator() {
                   <div className="truncate text-[11px] text-muted-foreground">
                     {session.files.length === 1
                       ? session.files[0].name
-                      : `${session.files.length} files`}
+                      : t('files.upload.fileCount', { count: session.files.length })}
                   </div>
                   {isActive && (
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-3">
@@ -121,13 +126,16 @@ function UploadProgressIndicator() {
                   )}
                   {isActive && totals.total > 0 && (
                     <div className="mt-1 text-[10px] tabular-nums text-muted-foreground">
-                      {formatBytes(totals.loaded)} of {formatBytes(totals.total)}
+                      {t('files.upload.of', {
+                        loaded: formatBytes(totals.loaded),
+                        total: formatBytes(totals.total),
+                      })}
                     </div>
                   )}
                   {hasError && (
                     <div className="mt-0.5 truncate text-[11px] text-danger">
                       {session.files.find((f) => f.errorMessage)?.errorMessage ??
-                        'One or more files failed to upload'}
+                        t('files.upload.filesFailed')}
                     </div>
                   )}
                 </div>
@@ -136,7 +144,7 @@ function UploadProgressIndicator() {
                   <button
                     type="button"
                     className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-                    aria-label="Cancel upload"
+                    aria-label={t('files.upload.cancel')}
                     onClick={() => cancelSession(session.id)}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -145,7 +153,7 @@ function UploadProgressIndicator() {
                   <button
                     type="button"
                     className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-                    aria-label="Dismiss"
+                    aria-label={t('files.progress.dismiss')}
                     onClick={() => dismissSession(session.id)}
                   >
                     <X className="h-3.5 w-3.5" />

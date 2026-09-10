@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
 import { useBackups } from '../../hooks/useBackups';
@@ -24,15 +26,21 @@ import { useAuthStore } from '../../stores/authStore';
 import { Shield, HardDrive } from 'lucide-react';
 import { reportSystemError } from '../../services/api/systemErrors';
 
-const formatProgress = (progress?: { loaded: number; total?: number }) => {
+const formatProgress = (
+  progress: { loaded: number; total?: number } | undefined,
+  t: TFunction,
+) => {
  if (!progress) return undefined;
  if (progress.total) {
  const percent = (progress.loaded / progress.total) * 100;
- return `${formatPercent(Math.min(100, percent))} (${formatBytes(progress.loaded)}/${formatBytes(
- progress.total,
- )})`;
+ return t('backups.download.progress', {
+ ns: 'server-tabs',
+ percent: formatPercent(Math.min(100, percent)),
+ loaded: formatBytes(progress.loaded),
+ total: formatBytes(progress.total),
+ });
  }
- return `Downloading ${formatBytes(progress.loaded)}`;
+ return t('backups.download.downloading', { ns: 'server-tabs', loaded: formatBytes(progress.loaded) });
 };
 
 function BackupSection({
@@ -45,6 +53,7 @@ function BackupSection({
  isSuspended?: boolean;
 }) {
   const [page, setPage] = useState(1);
+  const { t } = useTranslation('server-tabs');
   const { data: server } = useServer(serverId);
   const user = useAuthStore((s) => s.user);
   const [storageMode, setStorageMode] = useState<BackupStorageMode>('local');
@@ -137,7 +146,7 @@ function BackupSection({
       link.remove();
       URL.revokeObjectURL(url);
       clearProgress(`${progressKeyPrefix}${backupId}`);
-      notifyInfo('Backup download started');
+      notifyInfo(t('backups.download.started'));
     } catch (error: unknown) {
       reportSystemError({
         level: 'error',
@@ -147,7 +156,7 @@ function BackupSection({
         metadata: { context: 'download backup' },
       });
       clearProgress(`${progressKeyPrefix}${backupId}`);
-      notifyError(getErrorMessage(error, 'Failed to download backup'));
+      notifyError(getErrorMessage(error, t('backups.download.failed')));
     }
   };
 
@@ -158,23 +167,24 @@ function BackupSection({
  <div className="space-y-4">
  <TabHeader
  icon={Shield}
- title="Backups"
- description={`Create, restore, and manage server backups. Allocation: ${backupAllocationMb > 0 ? `${backupAllocationMb} MB` : 'Disabled'}`}
+ title={t('backups.title')}
+ description={t('backups.description', {
+ allocation: backupAllocationMb > 0 ? `${backupAllocationMb} MB` : t('common:actions.disabled'),
+ })}
  actions={<CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} />}
  />
  {backupAllocationMb <= 0 ? (
  <div className="rounded-md border border-warning/20 bg-warning/5 px-3 py-2 text-xs text-warning">
- Provider backup allocation is not available for this server. Local and Stream storage modes require an allocation. Configure your own S3 or SFTP
- storage to enable backups.
+ {t('backups.allocationWarning')}
  </div>
  ) : null}
 
  <ServerTabCard>
- <SectionHeader icon={HardDrive} title="Backup settings" description="Storage mode and retention rules." />
+ <SectionHeader icon={HardDrive} title={t('backups.settings.title')} description={t('backups.settings.description')} />
  <div className="grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-3">
  <div>
  <label className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Storage mode
+ {t('backups.settings.storageMode')}
  </label>
  <select
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -182,15 +192,15 @@ function BackupSection({
  onChange={(event) => setStorageMode(event.target.value as BackupStorageMode)}
  disabled={isSuspended || !canWrite}
  >
- {!localDisabled ? <option value="local">Local</option> : null}
- <option value="s3">S3</option>
- <option value="sftp">SFTP</option>
- {!localDisabled ? <option value="stream">Stream (backend-local)</option> : null}
+ {!localDisabled ? <option value="local">{t('backups.settings.mode.local')}</option> : null}
+ <option value="s3">{t('backups.settings.mode.s3')}</option>
+ <option value="sftp">{t('backups.settings.mode.sftp')}</option>
+ {!localDisabled ? <option value="stream">{t('backups.settings.mode.stream')}</option> : null}
  </select>
  </div>
  <div>
  <label className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Keep last N
+ {t('backups.settings.keepLastN')}
  </label>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -204,7 +214,7 @@ function BackupSection({
  </div>
  <div>
  <label className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Max age (days)
+ {t('backups.settings.maxAgeDays')}
  </label>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -221,7 +231,7 @@ function BackupSection({
  <div className="grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-2">
  <label className="block">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Bucket
+ {t('backups.settings.bucket')}
  </span>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -233,7 +243,7 @@ function BackupSection({
  </label>
  <label className="block">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Region
+ {t('backups.settings.region')}
  </span>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -245,7 +255,7 @@ function BackupSection({
  </label>
  <label className="block sm:col-span-2">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Endpoint (optional)
+ {t('backups.settings.endpoint')}
  </span>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -257,7 +267,7 @@ function BackupSection({
  </label>
  <label className="block">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Access key ID
+ {t('backups.settings.accessKeyId')}
  </span>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -269,7 +279,7 @@ function BackupSection({
  </label>
  <label className="block">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Secret access key
+ {t('backups.settings.secretAccessKey')}
  </span>
  <input
  type="password"
@@ -289,7 +299,7 @@ function BackupSection({
  onChange={(event) => setS3PathStyle(event.target.checked)}
  disabled={isSuspended || !canWrite}
  />
- Force path-style addressing
+ {t('backups.settings.forcePathStyle')}
  </label>
  </div>
  ) : null}
@@ -297,7 +307,7 @@ function BackupSection({
  <div className="grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-2">
  <label className="block">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Host
+ {t('backups.settings.host')}
  </span>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -309,7 +319,7 @@ function BackupSection({
  </label>
  <label className="block">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Port
+ {t('backups.settings.port')}
  </span>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -323,7 +333,7 @@ function BackupSection({
  </label>
  <label className="block">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Username
+ {t('backups.settings.username')}
  </span>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -335,7 +345,7 @@ function BackupSection({
  </label>
  <label className="block">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Password
+ {t('backups.settings.password')}
  </span>
  <input
  type="password"
@@ -349,7 +359,7 @@ function BackupSection({
  </label>
  <label className="block sm:col-span-2">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Private key (optional)
+ {t('backups.settings.privateKey')}
  </span>
   {/* sphinx:ignore secret:private-key - UI placeholder, not a credential */}
   <textarea
@@ -362,7 +372,7 @@ function BackupSection({
   </label>
   <label className="block sm:col-span-2">
   <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
-  Private key passphrase (optional)
+  {t('backups.settings.privateKeyPassphrase')}
  </span>
  <input
  type="password"
@@ -376,7 +386,7 @@ function BackupSection({
  </label>
  <label className="block sm:col-span-2">
  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
- Base path
+ {t('backups.settings.basePath')}
  </span>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -398,28 +408,28 @@ function BackupSection({
  const parsedDays = retentionDays.trim() === '' ? undefined : Number(retentionDays);
  if (parsedCount !== undefined && (!Number.isFinite(parsedCount) || parsedCount < 0)) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'Retention count must be 0 or more', metadata: { context: 'save settings' } });
- throw new Error('Retention count must be 0 or more');
+ throw new Error(t('backups.settings.errors.retentionCount'));
  }
  if (parsedDays !== undefined && (!Number.isFinite(parsedDays) || parsedDays < 0)) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'Retention days must be 0 or more', metadata: { context: 'save settings' } });
- throw new Error('Retention days must be 0 or more');
+ throw new Error(t('backups.settings.errors.retentionDays'));
  }
  if (storageMode === 's3') {
  if (!s3Bucket.trim()) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'S3 bucket is required', metadata: { context: 'save settings' } });
- throw new Error('S3 bucket is required');
+ throw new Error(t('backups.settings.errors.s3Bucket'));
  }
  if (!s3Region.trim()) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'S3 region is required', metadata: { context: 'save settings' } });
- throw new Error('S3 region is required');
+ throw new Error(t('backups.settings.errors.s3Region'));
  }
  if (!s3AccessKeyId.trim()) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'S3 access key ID is required', metadata: { context: 'save settings' } });
- throw new Error('S3 access key ID is required');
+ throw new Error(t('backups.settings.errors.s3AccessKeyId'));
  }
  if (!s3SecretAccessKey.trim()) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'S3 secret access key is required', metadata: { context: 'save settings' } });
- throw new Error('S3 secret access key is required');
+ throw new Error(t('backups.settings.errors.s3SecretAccessKey'));
  }
  }
  const s3Config =
@@ -441,7 +451,7 @@ function BackupSection({
  (!Number.isFinite(sftpPortValue) || sftpPortValue <= 0 || sftpPortValue > 65535)
  ) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'SFTP port must be between 1 and 65535', metadata: { context: 'save settings' } });
- throw new Error('SFTP port must be between 1 and 65535');
+ throw new Error(t('backups.settings.errors.sftpPort'));
  }
  const sftpConfig =
  storageMode === 'sftp'
@@ -458,15 +468,15 @@ function BackupSection({
  if (storageMode === 'sftp') {
  if (!sftpHost.trim()) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'SFTP host is required', metadata: { context: 'save settings' } });
- throw new Error('SFTP host is required');
+ throw new Error(t('backups.settings.errors.sftpHost'));
  }
  if (!sftpUsername.trim()) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'SFTP username is required', metadata: { context: 'save settings' } });
- throw new Error('SFTP username is required');
+ throw new Error(t('backups.settings.errors.sftpUsername'));
  }
  if (!sftpPassword.trim() && !sftpPrivateKey.trim()) {
  reportSystemError({ level: 'error', component: 'BackupSection', message: 'SFTP password or private key is required', metadata: { context: 'save settings' } });
- throw new Error('SFTP password or private key is required');
+ throw new Error(t('backups.settings.errors.sftpCredentials'));
  }
  }
  await serversApi.updateBackupSettings(serverId, {
@@ -476,7 +486,7 @@ function BackupSection({
  s3Config,
  sftpConfig,
  });
- notifySuccess('Backup settings updated');
+ notifySuccess(t('backups.settings.updateSuccess'));
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  } catch (error: unknown) {
  reportSystemError({
@@ -486,12 +496,12 @@ function BackupSection({
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'update backup settings' },
  });
- notifyError(getErrorMessage(error, 'Failed to update settings'));
+ notifyError(getErrorMessage(error, t('backups.settings.updateFailed')));
  }
  }}
  disabled={isSuspended || !canWrite}
  >
- Save settings
+ {t('backups.settings.save')}
  </button>
  </div>
  </ServerTabCard>
@@ -499,28 +509,28 @@ function BackupSection({
  {isLoading ? (
  <TabLoadingState rows={5} />
  ) : isError ? (
- <TabErrorState message="Unable to load backups." />
+ <TabErrorState message={t('backups.loadFailed')} />
  ) : backups.length ? (
  <div className="space-y-3">
  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
- <span>{data?.total ?? backups.length} backups</span>
+ <span>{t('backups.pagination.count', { count: data?.total ?? backups.length })}</span>
  <div className="flex items-center gap-2">
  <button
  className="rounded-md border border-border/40 px-2 py-1 text-xs text-muted-foreground hover:border-primary/30 disabled:opacity-60"
  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
  disabled={page === 1}
  >
- Previous
+ {t('backups.pagination.previous')}
  </button>
  <span>
- Page {page} of {totalPages}
+ {t('backups.pagination.pageOf', { page, totalPages })}
  </span>
  <button
  className="rounded-md border border-border/40 px-2 py-1 text-xs text-muted-foreground hover:border-primary/30 disabled:opacity-60"
  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
  disabled={page >= totalPages}
  >
- Next
+ {t('common:actions.next')}
  </button>
  </div>
  </div>
@@ -529,7 +539,7 @@ function BackupSection({
  backups={backups.map((backup) => ({
  ...backup,
  download: isSuspended || !canRead ? undefined : () => handleDownload(backup.id, backup.name),
- downloadProgress: formatProgress(progressByBackup[`${progressKeyPrefix}${backup.id}`]),
+ downloadProgress: formatProgress(progressByBackup[`${progressKeyPrefix}${backup.id}`], t),
  }))}
  serverStatus={serverStatus}
  isSuspended={isSuspended}
@@ -540,8 +550,8 @@ function BackupSection({
  </div>
  ) : (
  <TabEmptyState
- title="No backups yet"
- description="Create a backup to protect your server data."
+ title={t('backups.emptyTitle')}
+ description={t('backups.emptyDescription')}
  action={<CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} />}
  />
  )}

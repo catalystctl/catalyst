@@ -1,4 +1,5 @@
 import { type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 
@@ -35,6 +36,7 @@ import { filesApi, DEFAULT_MAX_UPLOAD_MB } from '../../services/api/files';
 import { adminApi } from '../../services/api/admin';
 import type { FileEntry } from '../../types/file';
 import { formatFileMode } from '../../utils/formatters';
+import { formatNumber } from '@/i18n/format';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import { collectDroppedFiles, isFileDrag } from '../../utils/droppedFiles';
 import { buildBreadcrumbs, getParentPath, joinPath, normalizePath } from '../../utils/filePaths';
@@ -92,6 +94,7 @@ const itemVariants: Variants = {
 };
 
 function FileManager({ serverId, isSuspended = false, canWrite = false }: { serverId: string; isSuspended?: boolean; canWrite?: boolean }) {
+ const { t } = useTranslation('server-tabs');
  const {
  path,
  setPath,
@@ -274,13 +277,13 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  setCreateName('');
  setCreateContent('');
  setCreateMode(null);
- notifySuccess(entry.isDirectory ? 'Folder created' : 'File created');
+ notifySuccess(entry.isDirectory ? t('files.manager.folderCreated') : t('files.manager.fileCreated'));
  if (!entry.isDirectory) {
  openFile(entry);
  }
  },
  onError: (error: any) => {
- notifyError(error?.message || 'Failed to create item');
+ notifyError(error?.message || t('files.manager.createFailed'));
  },
  onSettled: () => {
  invalidateFiles();
@@ -294,10 +297,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  },
  onSuccess: () => {
  markActiveSaved();
- notifySuccess('File saved');
+ notifySuccess(t('files.manager.fileSaved'));
  },
  onError: (error: any) => {
- notifyError(error?.message || 'Failed to save file');
+ notifyError(error?.message || t('files.manager.saveFailed'));
  },
  onSettled: () => {
  invalidateFiles();
@@ -314,10 +317,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  if (activeFile && paths.includes(activeFile.path)) {
  closeActiveFile();
  }
- notifySuccess('Deleted selection');
+ notifySuccess(t('files.manager.deletedSelection'));
  },
  onError: (error: any) => {
- notifyError(error?.message || 'Failed to delete selection');
+ notifyError(error?.message || t('files.manager.deleteFailed'));
  },
  onSettled: () => {
  invalidateFiles();
@@ -344,7 +347,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  const oversized = files.filter((f) => f.size > maxBytes);
  if (oversized.length > 0) {
  const names = oversized.map((f) => f.name).join(', ');
- throw new Error(`Files exceed the maximum upload size of ${maxUploadMb}MB: ${names}`);
+ throw new Error(t('files.manager.uploadTooLarge', { max: maxUploadMb, names }));
  }
  }, [resolveMaxUploadMb]);
 
@@ -400,7 +403,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  if (aborted) {
  uploadStore.markSessionCanceled(sessionId);
  } else {
- const message = error?.message || 'Upload failed';
+ const message = error?.message || t('files.manager.uploadError');
  batchFiles.forEach((_, fileIndex) => uploadStore.setFileError(sessionId, fileIndex, message));
  }
  throw error;
@@ -417,14 +420,14 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  },
  onSuccess: () => {
  setShowUpload(false);
- notifySuccess('Upload complete');
+ notifySuccess(t('files.manager.uploadComplete'));
  },
  onError: (error: any) => {
  if (error?.message === 'Upload aborted') {
- notifyInfo('Upload canceled');
+ notifyInfo(t('files.manager.uploadCanceled'));
  return;
  }
- notifyError(error?.message || 'Failed to upload files');
+ notifyError(error?.message || t('files.manager.uploadFailed'));
  },
  onSettled: () => {
  invalidateFiles();
@@ -436,12 +439,12 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  filesApi.compress(serverId, { paths, archiveName: archive }),
  onSuccess: (data) => {
  setShowCompress(false);
- notifySuccess(data?.archivePath ? `Archive created at ${data.archivePath}` : 'Archive created');
+ notifySuccess(data?.archivePath ? t('files.manager.archiveCreatedAt', { path: data.archivePath }) : t('files.manager.archiveCreated'));
  },
  onError: (error: any) => {
  const bufErr = isBufferError(error);
  if (bufErr) return setBufferError(bufErr);
- notifyError(error?.message || 'Failed to compress files');
+ notifyError(error?.message || t('files.manager.compressFailed'));
  },
  onSettled: () => {
  invalidateFiles();
@@ -453,12 +456,12 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  filesApi.decompress(serverId, { archivePath, targetPath }),
  onSuccess: () => {
  setShowDecompress(false);
- notifySuccess('Archive extracted');
+ notifySuccess(t('files.manager.archiveExtracted'));
  },
  onError: (error: any) => {
  const bufErr = isBufferError(error);
  if (bufErr) return setBufferError(bufErr);
- notifyError(error?.message || 'Failed to extract archive');
+ notifyError(error?.message || t('files.manager.extractFailed'));
  },
  onSettled: () => {
  invalidateFiles();
@@ -470,10 +473,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  filesApi.updatePermissions(serverId, targetPath, mode),
  onSuccess: () => {
  setPermissionsEntry(null);
- notifySuccess('Permissions updated');
+ notifySuccess(t('files.manager.permissionsUpdated'));
  },
  onError: (error: any) => {
- notifyError(error?.message || 'Failed to update permissions');
+ notifyError(error?.message || t('files.manager.permissionsFailed'));
  },
  onSettled: () => {
  invalidateFiles();
@@ -485,10 +488,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  filesApi.rename(serverId, from, to),
  onSuccess: () => {
  setRenamingEntry(null);
- notifySuccess('Renamed');
+ notifySuccess(t('files.manager.renamed'));
  },
  onError: (error: any) => {
- notifyError(error?.message || 'Failed to rename');
+ notifyError(error?.message || t('files.manager.renameFailed'));
  },
  onSettled: () => {
  invalidateFiles();
@@ -534,14 +537,14 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  event.stopPropagation();
  resetFileDrop();
  if (writeDisabled) {
- notifyError(isSuspended ? 'Server is suspended' : 'You do not have permission to modify files');
+ notifyError(isSuspended ? t('files.manager.serverSuspended') : t('files.manager.noPermission'));
  return;
  }
  if (!isFileDrag(event.dataTransfer)) return;
  try {
  const dropped = await collectDroppedFiles(event.dataTransfer);
  if (!dropped.length) {
- notifyError('No files found in that drop');
+ notifyError(t('files.manager.noDropFiles'));
  return;
  }
  const groups = new Map<string, File[]>();
@@ -560,7 +563,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  batches,
  });
  } catch (error: unknown) {
- notifyError(error instanceof Error ? error.message : 'Failed to upload files');
+ notifyError(error instanceof Error ? error.message : t('files.manager.uploadFailed'));
  }
  },
  [isSuspended, path, resetFileDrop, uploadMutation, writeDisabled],
@@ -598,7 +601,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  setBufferError(bufErr);
  setArchiveBrowsePath(null);
  } else {
- notifyError('Failed to read archive');
+ notifyError(t('files.manager.readArchiveFailed'));
  setArchiveBrowsePath(null);
  }
  } finally {
@@ -662,23 +665,23 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  link.click();
  link.remove();
  URL.revokeObjectURL(url);
- notifySuccess('Download complete');
+ notifySuccess(t('files.manager.downloadComplete'));
  } catch (error: any) {
  const aborted = controller.signal.aborted || error?.message === 'Download aborted';
  if (aborted) {
  useDownloadStore.getState().markSessionCanceled(sessionId);
- notifyInfo('Download canceled');
+ notifyInfo(t('files.manager.downloadCanceled'));
  } else {
- useDownloadStore.getState().setFileError(sessionId, 0, error?.message || 'Failed to download file');
- notifyError(error?.message || 'Failed to download file');
+ useDownloadStore.getState().setFileError(sessionId, 0, error?.message || t('files.manager.downloadFailed'));
+ notifyError(error?.message || t('files.manager.downloadFailed'));
  }
  }
  };
 
  const handleCopyPath = (entry: FileEntry) => {
  navigator.clipboard.writeText(entry.path).then(
- () => notifyInfo('Path copied'),
- () => notifyError('Failed to copy path'),
+ () => notifyInfo(t('files.manager.pathCopied')),
+ () => notifyError(t('files.manager.copyPathFailed')),
  );
  };
 
@@ -705,7 +708,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  const selected = Array.from(selectedPaths);
  const name = archiveName.trim();
  if (!selected.length || !name) {
- notifyError('Select files and provide an archive name');
+ notifyError(t('files.manager.selectForArchive'));
  return;
  }
  const archivePath = name.startsWith('/') ? normalizePath(name) : joinPath(path, name);
@@ -744,7 +747,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  if (!permissionsEntry) return;
  const parsed = parseModeInput(permissionsValue);
  if (!parsed) {
- setPermissionsError('Enter a 3-4 digit octal mode, e.g. 644 or 0755.');
+ setPermissionsError(t('files.manager.invalidMode'));
  return;
  }
  setPermissionsError(null);
@@ -765,7 +768,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 
  const guardSuspended = (fn: () => void) => () => {
  if (isSuspended) {
- notifyError('Server is suspended');
+ notifyError(t('files.manager.serverSuspended'));
  return;
  }
  fn();
@@ -798,7 +801,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onClick={() => setShowSidebar(!showSidebar)}
  >
  <Menu className="h-4 w-4" />
- Folders
+ {t('files.manager.folders')}
  </motion.button>
 
  {/* Mobile overlay */}
@@ -829,7 +832,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <HardDrive className="h-3.5 w-3.5 text-primary" />
  </div>
  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
- Directory Tree
+ {t('files.manager.directoryTree')}
  </div>
  </div>
  <button
@@ -862,10 +865,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  type="button"
  className="flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-surface-2 hover:text-foreground shrink-0 transition-colors"
  onClick={() => setPath('/')}
- title="Root"
+ title={t('files.manager.root')}
  >
  <Home className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Root</span>
+ <span className="hidden sm:inline">{t('files.manager.root')}</span>
  </button>
  {breadcrumbs.map((crumb, idx) => (
  <div key={crumb.path} className="flex items-center gap-1 shrink-0">
@@ -892,7 +895,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
  <input
  type="text"
- placeholder="Filter files…"
+ placeholder={t('files.manager.filterPlaceholder')}
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
  className="w-full rounded-lg border border-border bg-surface-1 pl-8 pr-3 py-1.5 text-xs text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/20 dark:border-border dark:bg-surface-2"
@@ -907,10 +910,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  className={tbtn}
  onClick={() => setPath(getParentPath(path))}
  disabled={path === '/'}
- title="Go up"
+ title={t('files.manager.goUp')}
  >
  <ArrowUp className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Up</span>
+ <span className="hidden sm:inline">{t('files.manager.up')}</span>
  </button>
 
  <div className="hidden sm:block h-4 w-px bg-border/60" />
@@ -925,7 +928,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  disabled={writeDisabled}
  >
  <Upload className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Upload</span>
+ <span className="hidden sm:inline">{t('common:actions.upload')}</span>
  </button>
  <button
  type="button"
@@ -934,7 +937,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  disabled={writeDisabled}
  >
  <FilePlus className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">New File</span>
+ <span className="hidden sm:inline">{t('files.manager.newFile')}</span>
  </button>
  <button
  type="button"
@@ -943,14 +946,14 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  disabled={writeDisabled}
  >
  <FolderPlus className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">New Folder</span>
+ <span className="hidden sm:inline">{t('files.manager.newFolder')}</span>
  </button>
  </>
  )}
 
  <div className="hidden sm:block h-4 w-px bg-border/60" />
 
- <button type="button" className={tbtnIcon} onClick={() => refetch()} title="Refresh">
+ <button type="button" className={tbtnIcon} onClick={() => refetch()} title={t('common:actions.refresh')}>
  <RefreshCw className="h-3.5 w-3.5" />
  </button>
 
@@ -975,7 +978,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  disabled={writeDisabled}
  >
  <Archive className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Compress</span>
+ <span className="hidden sm:inline">{t('files.actions.compress')}</span>
  </button>
  )}
  {canWrite && selectedArchive && (
@@ -986,7 +989,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  disabled={writeDisabled}
  >
  <ArchiveRestore className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Extract</span>
+ <span className="hidden sm:inline">{t('files.actions.extract')}</span>
  </button>
  )}
  {canWrite && (
@@ -997,14 +1000,14 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  disabled={writeDisabled}
  >
  <Trash2 className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Delete</span>
+ <span className="hidden sm:inline">{t('common:actions.delete')}</span>
  </button>
  )}
  <button
  type="button"
  className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  onClick={() => setSelectedPaths(new Set())}
- title="Clear selection"
+ title={t('files.manager.clearSelection')}
  >
  <XCircle className="h-4 w-4" />
  </button>
@@ -1036,7 +1039,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <Trash2 className="h-4 w-4 text-danger" />
  </div>
  <span className="text-sm text-danger">
- Delete {selectedEntries.length} item{selectedEntries.length !== 1 ? 's' : ''}? This cannot be undone.
+ {t('files.manager.deleteConfirm', { count: selectedEntries.length })}
  </span>
  </div>
  <div className="flex items-center gap-2">
@@ -1049,11 +1052,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {deleteMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />
  ) : (
- 'Confirm Delete'
+ t('files.manager.confirmDelete')
  )}
  </button>
  <button type="button" className={tbtn} onClick={() => setConfirmDelete(false)}>
- Cancel
+ {t('common:actions.cancel')}
  </button>
  </div>
  </motion.div>
@@ -1075,7 +1078,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {isFileDropActive && canWrite && !isSuspended && (
  <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-primary/10 backdrop-blur-[1px]">
  <Upload className="h-8 w-8 text-primary" />
- <p className="text-sm font-semibold text-primary">Drop to upload</p>
+ <p className="text-sm font-semibold text-primary">{t('files.manager.dropToUpload')}</p>
  <p className="font-mono text-[11px] text-muted-foreground">{path}</p>
  </div>
  )}
@@ -1097,11 +1100,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onCopyPath={handleCopyPath}
  onRename={(entry) => {
  if (!canWrite) {
- notifyError('You do not have permission to modify files');
+ notifyError(t('files.manager.noPermission'));
  return;
  }
  if (isSuspended) {
- notifyError('Server is suspended');
+ notifyError(t('files.manager.serverSuspended'));
  return;
  }
  setRenamingEntry(entry);
@@ -1110,11 +1113,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onRenameCancel={() => setRenamingEntry(null)}
  onDelete={(entry) => {
  if (!canWrite) {
- notifyError('You do not have permission to modify files');
+ notifyError(t('files.manager.noPermission'));
  return;
  }
  if (isSuspended) {
- notifyError('Server is suspended');
+ notifyError(t('files.manager.serverSuspended'));
  return;
  }
  setSelectedPaths(new Set([entry.path]));
@@ -1122,33 +1125,33 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  }}
  onCompress={(entry) => {
  if (!canWrite) {
- notifyError('You do not have permission to modify files');
+ notifyError(t('files.manager.noPermission'));
  return;
  }
  if (isSuspended) {
- notifyError('Server is suspended');
+ notifyError(t('files.manager.serverSuspended'));
  return;
  }
  handleBulkCompressFromEntry(entry);
  }}
  onDecompress={(entry) => {
  if (!canWrite) {
- notifyError('You do not have permission to modify files');
+ notifyError(t('files.manager.noPermission'));
  return;
  }
  if (isSuspended) {
- notifyError('Server is suspended');
+ notifyError(t('files.manager.serverSuspended'));
  return;
  }
  handleBulkDecompressFromEntry(entry);
  }}
  onPermissions={(entry) => {
  if (!canWrite) {
- notifyError('You do not have permission to modify files');
+ notifyError(t('files.manager.noPermission'));
  return;
  }
  if (isSuspended) {
- notifyError('Server is suspended');
+ notifyError(t('files.manager.serverSuspended'));
  return;
  }
  handlePermissionsOpen(entry);
@@ -1170,9 +1173,9 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  className="h-[92dvh]"
  onOpenAutoFocus={(event) => event.preventDefault()}
  >
- <DialogTitle className="sr-only">Edit file</DialogTitle>
+ <DialogTitle className="sr-only">{t('files.manager.editFile')}</DialogTitle>
  <DialogDescription className="sr-only">
- {activeFile ? activeFile.path : 'File editor'}
+ {activeFile ? activeFile.path : t('files.manager.fileEditor')}
  </DialogDescription>
  <DialogBody className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-4">
  {activeFile && (
@@ -1184,7 +1187,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onChange={updateActiveContent}
  onSave={() => {
  if (!canWrite) {
- notifyError('You do not have permission to modify files');
+ notifyError(t('files.manager.noPermission'));
  return;
  }
  saveMutation.mutate();
@@ -1215,14 +1218,14 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  icon={<Shield className="h-4 w-4" />}
  iconClassName="border-success/20 bg-success/10 text-success"
  >
- <DialogTitle>Edit permissions</DialogTitle>
+ <DialogTitle>{t('files.manager.editPermissions')}</DialogTitle>
  <DialogDescription className="truncate">
- {permissionsEntry?.path ?? 'Set the octal mode for this path.'}
+ {permissionsEntry?.path ?? t('files.manager.permissionsDescription')}
  </DialogDescription>
  </DialogHeader>
  <DialogBody className="space-y-3">
  <div className="space-y-1.5">
- <Label htmlFor="file-permissions-mode">Mode (octal)</Label>
+ <Label htmlFor="file-permissions-mode">{t('files.manager.modeOctal')}</Label>
  <Input
  id="file-permissions-mode"
  className="font-mono"
@@ -1235,9 +1238,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  autoFocus
  />
  <p className="text-[11px] text-muted-foreground/70">
- Three or four digits. Example:{' '}
- <span className="font-mono text-foreground/80">644</span> for files,{' '}
- <span className="font-mono text-foreground/80">755</span> for folders.
+ {t('files.manager.modeHint.prefix')}
+ <span className="font-mono text-foreground/80">644</span>
+ {t('files.manager.modeHint.forFiles')}
+ <span className="font-mono text-foreground/80">755</span>
+ {t('files.manager.modeHint.forFolders')}
  </p>
  </div>
  {permissionsError && (
@@ -1248,13 +1253,13 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </DialogBody>
  <DialogFooter>
  <Button type="button" variant="outline" onClick={() => setPermissionsEntry(null)}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  <Button type="submit" disabled={permissionsMutation.isPending || writeDisabled}>
  {permissionsMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />
  ) : (
- 'Update permissions'
+ t('files.manager.updatePermissions')
  )}
  </Button>
  </DialogFooter>
@@ -1275,9 +1280,9 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  iconClassName="border-warning/30 bg-warning/10 text-warning"
  >
  <DialogTitle className="truncate">
- {archiveBrowsePath?.split('/').pop() || 'Archive'}
+ {archiveBrowsePath?.split('/').pop() || t('files.manager.archive')}
  </DialogTitle>
- <DialogDescription>Read-only preview</DialogDescription>
+ <DialogDescription>{t('files.manager.readOnlyPreview')}</DialogDescription>
  </DialogHeader>
  <DialogToolbar>
  <div className="flex items-center gap-1 overflow-x-auto text-xs scrollbar-hide">
@@ -1310,7 +1315,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {archiveLoading ? (
  <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
  <Loader2 className="h-6 w-6 animate-spin text-primary" />
- Reading archive…
+ {t('files.manager.readingArchive')}
  </div>
  ) : (
  <ArchiveListing
@@ -1322,10 +1327,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </DialogBody>
  <DialogFooter className="sm:justify-between">
  <span className="text-[11px] text-muted-foreground">
- {archiveEntries.length} entries total
+ {t('files.manager.entriesTotal', { count: archiveEntries.length })}
  </span>
  <Button type="button" variant="outline" onClick={() => setArchiveBrowsePath(null)}>
- Close
+ {t('common:actions.close')}
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -1343,35 +1348,33 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  icon={<AlertTriangle className="h-4 w-4" />}
  iconClassName="border-warning/20 bg-warning/10 text-warning"
  >
- <DialogTitle>Buffer limit exceeded</DialogTitle>
+ <DialogTitle>{t('files.manager.bufferLimitTitle')}</DialogTitle>
  <DialogDescription>
- This operation produced more output than the current buffer limit allows. This typically
- happens with large archives containing many files.
+ {t('files.manager.bufferLimitDescription')}
  </DialogDescription>
  </DialogHeader>
  <DialogBody className="space-y-3">
  <div className="rounded-lg border border-border bg-surface-2 p-3 dark:border-border dark:bg-surface-2">
  <div className="flex justify-between text-sm">
- <span className="text-muted-foreground">Current limit</span>
+ <span className="text-muted-foreground">{t('files.manager.currentLimit')}</span>
  <span className="font-medium text-foreground">
- {bufferError?.currentMaxBufferMb} MB
+ {formatNumber(bufferError?.currentMaxBufferMb ?? 0)} MB
  </span>
  </div>
  <div className="mt-1 flex justify-between text-sm">
- <span className="text-muted-foreground">Recommended</span>
+ <span className="text-muted-foreground">{t('files.manager.recommended')}</span>
  <span className="font-medium text-primary">
- {bufferError?.recommendedMaxBufferMb} MB
+ {formatNumber(bufferError?.recommendedMaxBufferMb ?? 0)} MB
  </span>
  </div>
  </div>
  <p className="text-xs leading-relaxed text-muted-foreground">
- An admin can increase the <span className="font-medium text-foreground">Max buffer (MB)</span> setting
- under <span className="font-medium text-foreground">Admin → Security</span> to resolve this.
+ {t('files.manager.bufferAdminHint.prefix')}<span className="font-medium text-foreground">{t('files.manager.bufferAdminHint.maxBufferSetting')}</span>{t('files.manager.bufferAdminHint.middle')}<span className="font-medium text-foreground">{t('files.manager.bufferAdminHint.adminSecurity')}</span>{t('files.manager.bufferAdminHint.suffix')}
  </p>
  </DialogBody>
  <DialogFooter>
  <Button type="button" onClick={() => setBufferError(null)}>
- Got it
+ {t('files.manager.gotIt')}
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -1381,9 +1384,9 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <Dialog open={showUpload} onOpenChange={setShowUpload}>
  <DialogContent size="md">
  <DialogHeader icon={<Upload className="h-4 w-4" />}>
- <DialogTitle>Upload files</DialogTitle>
+ <DialogTitle>{t('files.manager.uploadFiles')}</DialogTitle>
  <DialogDescription>
- Target: <span className="font-mono">{path}</span>
+ {t('files.uploader.target')} <span className="font-mono">{path}</span>
  </DialogDescription>
  </DialogHeader>
  <DialogBody>
@@ -1399,7 +1402,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </DialogBody>
  <DialogFooter>
  <Button type="button" variant="outline" onClick={() => setShowUpload(false)}>
- Close
+ {t('common:actions.close')}
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -1424,17 +1427,17 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  }
  >
  <DialogTitle>
- {createMode === 'directory' ? 'Create folder' : 'Create file'}
+ {createMode === 'directory' ? t('files.manager.createFolder') : t('files.manager.createFile')}
  </DialogTitle>
  <DialogDescription>
  {createMode === 'directory'
- ? 'Add a new folder in the current directory.'
- : 'Add a new file in the current directory.'}
+ ? t('files.manager.createFolderDescription')
+ : t('files.manager.createFileDescription')}
  </DialogDescription>
  </DialogHeader>
  <DialogBody className="space-y-3">
  <div className="space-y-1.5">
- <Label htmlFor="create-entry-name">Name</Label>
+ <Label htmlFor="create-entry-name">{t('files.manager.name')}</Label>
  <Input
  id="create-entry-name"
  value={createName}
@@ -1445,7 +1448,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </div>
  {createMode === 'file' && (
  <div className="space-y-1.5">
- <Label htmlFor="create-file-content">Initial content</Label>
+ <Label htmlFor="create-file-content">{t('files.manager.initialContent')}</Label>
  <Textarea
  id="create-file-content"
  className="h-24 font-mono"
@@ -1458,7 +1461,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </DialogBody>
  <DialogFooter>
  <Button type="button" variant="outline" onClick={() => setCreateMode(null)}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  <Button
  type="submit"
@@ -1467,9 +1470,9 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {createMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />
  ) : createMode === 'directory' ? (
- 'Create folder'
+ t('files.manager.createFolder')
  ) : (
- 'Create file'
+ t('files.manager.createFile')
  )}
  </Button>
  </DialogFooter>
@@ -1485,13 +1488,13 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  iconClassName="border-warning/20 bg-warning/10 text-warning"
  >
  <DialogTitle>
- Compress {selectedEntries.length} item{selectedEntries.length !== 1 ? 's' : ''}
+ {t('files.manager.compressTitle', { count: selectedEntries.length })}
  </DialogTitle>
- <DialogDescription>Create an archive from the selected files.</DialogDescription>
+ <DialogDescription>{t('files.manager.compressDescription')}</DialogDescription>
  </DialogHeader>
  <DialogBody>
  <div className="space-y-1.5">
- <Label htmlFor="compress-archive-name">Archive name</Label>
+ <Label htmlFor="compress-archive-name">{t('files.manager.archiveName')}</Label>
  <Input
  id="compress-archive-name"
  value={archiveName}
@@ -1503,7 +1506,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </DialogBody>
  <DialogFooter>
  <Button type="button" variant="outline" onClick={() => setShowCompress(false)}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  <Button
  type="button"
@@ -1515,7 +1518,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  ) : (
  <>
  <Archive className="h-3.5 w-3.5" />
- Create archive
+ {t('files.manager.createArchive')}
  </>
  )}
  </Button>
@@ -1533,14 +1536,14 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  icon={<ArchiveRestore className="h-4 w-4" />}
  iconClassName="border-warning/20 bg-warning/10 text-warning"
  >
- <DialogTitle>Extract archive</DialogTitle>
+ <DialogTitle>{t('files.manager.extractArchive')}</DialogTitle>
  <DialogDescription className="truncate">
- {selectedArchive?.name ?? 'Choose a destination for the extracted files.'}
+ {selectedArchive?.name ?? t('files.manager.extractDescription')}
  </DialogDescription>
  </DialogHeader>
  <DialogBody>
  <div className="space-y-1.5">
- <Label htmlFor="decompress-target-path">Target path</Label>
+ <Label htmlFor="decompress-target-path">{t('files.manager.targetPath')}</Label>
  <Input
  id="decompress-target-path"
  value={decompressTarget}
@@ -1552,7 +1555,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </DialogBody>
  <DialogFooter>
  <Button type="button" variant="outline" onClick={() => setShowDecompress(false)}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  <Button
  type="button"
@@ -1564,7 +1567,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  ) : (
  <>
  <ArchiveRestore className="h-3.5 w-3.5" />
- Extract archive
+ {t('files.manager.extractArchive')}
  </>
  )}
  </Button>
@@ -1595,6 +1598,7 @@ function ArchiveListing({
  currentDir: string;
  onNavigate: (dir: string) => void;
 }) {
+ const { t } = useTranslation('server-tabs');
  const prefix = currentDir === '/' ? '' : currentDir.replace(/^\//, '') + '/';
 
  const visible = useMemo(() => {
@@ -1633,7 +1637,7 @@ function ArchiveListing({
  return (
  <div className="flex flex-col items-center justify-center py-16 text-sm text-muted-foreground gap-2">
  <Folder className="h-8 w-8 text-muted-foreground/20" />
- Empty directory
+ {t('files.manager.emptyDirectory')}
  </div>
  );
  }
@@ -1642,8 +1646,8 @@ function ArchiveListing({
  <table className="w-full text-left text-sm">
  <thead>
  <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
- <th className="px-4 py-2.5">Name</th>
- <th className="px-4 py-2.5 text-right">Size</th>
+ <th className="px-4 py-2.5">{t('files.list.name')}</th>
+ <th className="px-4 py-2.5 text-right">{t('files.list.size')}</th>
  </tr>
  </thead>
  <tbody>

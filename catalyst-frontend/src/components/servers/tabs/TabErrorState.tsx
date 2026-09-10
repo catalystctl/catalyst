@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { AlertCircle } from 'lucide-react';
 
 interface TabErrorStateProps {
@@ -8,7 +9,8 @@ interface TabErrorStateProps {
 }
 
 export default function TabErrorState({ message, title, description, onRetry }: TabErrorStateProps) {
-  const heading = message ?? title ?? 'Something went wrong';
+  const { t } = useTranslation('server-tabs');
+  const heading = message ?? title ?? t('shared.somethingWentWrong');
 
   return (
     <div className="rounded-lg border border-danger/25 bg-danger/5 px-4 py-3">
@@ -27,7 +29,7 @@ export default function TabErrorState({ message, title, description, onRetry }: 
           onClick={onRetry}
           className="mt-2.5 ml-7 rounded-md border border-danger/20 bg-danger/5 px-2.5 py-1 text-[10px] font-semibold text-danger transition-colors hover:bg-danger/10 hover:border-danger/30"
         >
-          Retry
+          {t('common:actions.retry')}
         </button>
       )}
     </div>

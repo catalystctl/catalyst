@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
 import { filesApi } from '../../../services/api/files';
@@ -18,6 +19,13 @@ import ServerStartupVariablesSection from './ServerStartupVariablesSection';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
 import { Wrench, Terminal } from 'lucide-react';
+
+/**
+ * Internal title for the section holding top-level keys. It doubles as the
+ * marker used to rebuild the config record, so it stays English in state and
+ * is translated only when rendered.
+ */
+const GENERAL_SECTION_TITLE = 'General';
 
 type ConfigEntry = {
  key: string;
@@ -99,19 +107,19 @@ const toSections = (record: ConfigMap): ConfigSection[] => {
  const nestedEntries = Object.entries(value).map(([childKey, childValue]) =>
  normalizeEntry(childKey, childValue),
  );
- sections.push({ title: key, entries: nestedEntries, collapsed: true });
- } else {
- rootEntries.push(normalizeEntry(key, value));
- }
- });
- if (rootEntries.length || sections.length === 0) {
- sections.unshift({
- title: 'General',
- entries: rootEntries,
- collapsed: false,
- });
- }
- return sections;
+        sections.push({ title: key, entries: nestedEntries, collapsed: true });
+      } else {
+        rootEntries.push(normalizeEntry(key, value));
+      }
+    });
+    if (rootEntries.length || sections.length === 0) {
+      sections.unshift({
+        title: GENERAL_SECTION_TITLE,
+        entries: rootEntries,
+        collapsed: false,
+      });
+    }
+    return sections;
 };
 
 export default function ServerConfigurationTab({
@@ -125,6 +133,7 @@ export default function ServerConfigurationTab({
  onSaveStartupCommand,
  onResetStartupCommand,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  // ── Config file state ──
  const [configFiles, setConfigFiles] = useState<ConfigFileState[]>([]);
  const [openConfigIndex, setOpenConfigIndex] = useState(-1);
@@ -175,7 +184,7 @@ export default function ServerConfigurationTab({
 
  sections.forEach((section) => {
  const target =
- section.title === 'General'
+ section.title === GENERAL_SECTION_TITLE
  ? record
  : ((record[section.title] ||= {}) as ConfigMap);
  section.entries.forEach((entry) => {
@@ -194,7 +203,7 @@ export default function ServerConfigurationTab({
  path: pathValue,
  sections: [],
  format: null,
- error: 'Unsupported config format.',
+ error: t('tabs.configuration.errors.unsupportedFormat'),
  loaded: true,
  viewMode: 'form',
  rawContent: '',
@@ -225,7 +234,7 @@ export default function ServerConfigurationTab({
  path: pathValue,
  sections: [],
  format,
- error: getErrorMessage(error, 'Failed to load config file'),
+ error: getErrorMessage(error, t('tabs.configuration.errors.loadFailed')),
  loaded: true,
  viewMode: 'form',
  rawContent: '',
@@ -281,12 +290,12 @@ export default function ServerConfigurationTab({
  mutationFn: async (index: number) => {
  if (!serverId) {
  reportSystemError({ level: 'error', component: 'ServerConfigurationTab', message: 'Missing server id', metadata: { context: 'config mutation' } });
- throw new Error('Missing server id');
+ throw new Error(t('tabs.configuration.errors.missingServerId'));
  }
  const target = configFiles[index];
  if (!target || !target.format) {
  reportSystemError({ level: 'error', component: 'ServerConfigurationTab', message: 'Missing config file path', metadata: { context: 'config mutation' } });
- throw new Error('Missing config file path');
+ throw new Error(t('tabs.configuration.errors.missingFilePath'));
  }
  if (target.viewMode === 'raw') {
  await filesApi.write(serverId, target.path, target.rawContent);
@@ -296,7 +305,7 @@ export default function ServerConfigurationTab({
  const content = serializeConfig(target.format, record);
  await filesApi.write(serverId, target.path, content);
  },
- onSuccess: () => notifySuccess('Configuration saved'),
+ onSuccess: () => notifySuccess(t('tabs.configuration.saved')),
  onSettled: () => {
  if (serverId) {
  queryClient.invalidateQueries({ queryKey: qk.files(serverId, '/') });
@@ -305,7 +314,7 @@ export default function ServerConfigurationTab({
  onError: (error: any) => {
  const message =
  error?.message ||
- 'Failed to save config';
+ t('tabs.configuration.saveFailed');
  notifyError(message);
  },
  });
@@ -500,7 +509,7 @@ export default function ServerConfigurationTab({
  className={`${className} rounded-md border border-border/40 bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none`}
  value={entry.value}
  onChange={(event) => onValueChange(event.target.value)}
- placeholder="Value"
+ placeholder={t('tabs.configuration.valuePlaceholder')}
  />
  );
  };
@@ -511,14 +520,14 @@ export default function ServerConfigurationTab({
  {/* ── Tab Header ── */}
  <TabHeader
  icon={Wrench}
- title="Configuration"
- description="Manage startup command, environment variables, and config files."
+ title={t('tabs.configuration.title')}
+ description={t('tabs.configuration.description')}
  />
 
       {canEdit && (
         <ServerTabCard>
           <div className="flex items-start justify-between gap-4">
-            <SectionHeader icon={Terminal} title="Startup command" />
+            <SectionHeader icon={Terminal} title={t('tabs.configuration.startupCommand')} />
 
  {server.startupCommand && (
  <button
@@ -527,7 +536,7 @@ export default function ServerConfigurationTab({
  onClick={onResetStartupCommand}
  disabled={isSuspended}
  >
- Reset to default
+ {t('tabs.configuration.resetToDefault')}
  </button>
  )}
  </div>
@@ -553,13 +562,13 @@ export default function ServerConfigurationTab({
  (server.startupCommand ?? server.template?.startup ?? '')
  }
  >
- Save
+ {t('common:actions.save')}
  </button>
  </div>
  {server.template?.startup &&
  startupCommand.trim() !== server.template.startup && (
  <p className="mt-1.5 text-[10px] text-muted-foreground">
- Template default:{' '}
+ {t('tabs.configuration.templateDefault')}{' '}
  <button
  type="button"
  className="font-mono underline decoration-dotted hover:text-primary"
@@ -587,10 +596,10 @@ export default function ServerConfigurationTab({
 
       <ServerTabCard>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionHeader icon={Wrench} title="Config files" />
+          <SectionHeader icon={Wrench} title={t('tabs.configuration.configFiles')} />
           <input
             className="w-full rounded-md border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none sm:w-64"
-            placeholder="Search keys…"
+            placeholder={t('tabs.configuration.searchPlaceholder')}
             value={configSearch}
             onChange={(event) => setConfigSearch(event.target.value)}
           />
@@ -599,17 +608,17 @@ export default function ServerConfigurationTab({
  <div className="mt-4 space-y-3">
  {!combinedConfigPaths.length ? (
  <p className="py-4 text-center text-xs text-muted-foreground">
- Add{' '}
+ {t('tabs.configuration.addConfigFilesPrefix')}{' '}
  <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[10px] dark:bg-surface-2">
  features.configFiles
  </code>{' '}
- to the template to enable dynamic settings.
+ {t('tabs.configuration.addConfigFilesSuffix')}
  </p>
  ) : (
  <div className="space-y-2">
  {filteredConfigFiles.length === 0 ? (
  <p className="rounded-lg border border-dashed border-border py-4 text-center text-xs text-muted-foreground">
- No matches found.
+ {t('tabs.configuration.noMatches')}
  </p>
  ) : (
  filteredConfigFiles.map((configFile) => (
@@ -642,11 +651,11 @@ export default function ServerConfigurationTab({
  }`}
  >
  {configSearch
- ? 'Filtered'
+ ? t('tabs.configuration.filtered')
  : openConfigIndex ===
  (fileIndexByPath.get(configFile.path) ?? -1)
- ? 'Collapse'
- : 'Expand'}
+ ? t('tabs.configuration.collapse')
+ : t('tabs.configuration.expand')}
  </span>
  </button>
  {configSearch ||
@@ -655,7 +664,7 @@ export default function ServerConfigurationTab({
  <div className="border-t border-border px-4 py-4">
  {!configFile.loaded ? (
  <p className="text-xs text-muted-foreground">
- Loading config values…
+ {t('tabs.configuration.loadingValues')}
  </p>
  ) : configFile.error ? (
  <div className="rounded-lg border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
@@ -665,10 +674,10 @@ export default function ServerConfigurationTab({
  <div className="space-y-3 text-xs text-muted-foreground">
  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/30 bg-card px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-surface-2">
  <div className="flex items-center gap-2">
- <span className="font-semibold">View</span>
+ <span className="font-semibold">{t('tabs.configuration.view')}</span>
  {configSearch ? (
  <span className="rounded-full bg-primary-muted px-2 py-0.5 text-[10px] font-semibold text-primary">
- Filtered
+ {t('tabs.configuration.filtered')}
  </span>
  ) : null}
  </div>
@@ -690,7 +699,7 @@ export default function ServerConfigurationTab({
  )
  }
  >
- Form
+ {t('tabs.configuration.mode.form')}
  </button>
  <button
  type="button"
@@ -709,7 +718,7 @@ export default function ServerConfigurationTab({
  )
  }
  >
- Raw
+ {t('tabs.configuration.mode.raw')}
  </button>
  </div>
  </div>
@@ -768,7 +777,9 @@ export default function ServerConfigurationTab({
  <div className="flex items-center gap-3 text-sm font-semibold text-foreground">
  <span className="h-2 w-2 rounded-full bg-primary" />
  <span className="uppercase tracking-wide">
- {section.title}
+ {section.title === GENERAL_SECTION_TITLE
+ ? t('tabs.configuration.generalSection')
+ : section.title}
  </span>
  </div>
  <span
@@ -779,8 +790,8 @@ export default function ServerConfigurationTab({
  }`}
  >
  {section.collapsed
- ? 'Expand'
- : 'Collapse'}
+ ? t('tabs.configuration.expand')
+ : t('tabs.configuration.collapse')}
  </span>
  </button>
  {section.collapsed ? null : (
@@ -795,7 +806,7 @@ export default function ServerConfigurationTab({
  >
  <div className="flex items-center justify-between">
  <h4 className="text-sm font-semibold text-foreground">
- {entry.key || 'Object'}
+ {entry.key || t('tabs.configuration.unnamedObject')}
  </h4>
  <button
  type="button"
@@ -810,7 +821,7 @@ export default function ServerConfigurationTab({
  )
  }
  >
- Add entry
+ {t('tabs.configuration.addEntry')}
  </button>
  </div>
  <div className="mt-3">
@@ -828,7 +839,7 @@ export default function ServerConfigurationTab({
  <div className="flex items-start justify-between gap-3">
  <div className="text-base font-semibold text-foreground">
  {child.key ||
- 'Key'}
+ t('tabs.configuration.unnamedKey')}
  </div>
  <button
  type="button"
@@ -872,7 +883,7 @@ export default function ServerConfigurationTab({
  >
  <div className="flex items-start justify-between gap-3">
  <div className="text-base font-semibold text-foreground">
- {entry.key || 'Key'}
+ {entry.key || t('tabs.configuration.unnamedKey')}
  </div>
  <button
  type="button"
@@ -919,7 +930,7 @@ export default function ServerConfigurationTab({
  )
  }
  >
- Add entry
+ {t('tabs.configuration.addEntry')}
  </button>
  </div>
  </div>
@@ -941,7 +952,7 @@ export default function ServerConfigurationTab({
  }
  disabled={configMutation.isPending}
  >
- Save config
+ {t('tabs.configuration.saveConfig')}
  </button>
  </div>
  </div>

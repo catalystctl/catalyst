@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useMutation, useQuery } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
@@ -32,6 +33,7 @@ import TabEmptyState from './TabEmptyState';
 import SectionHeader from './SectionHeader';
 import DataField from './DataField';
 import SettingsRow from './SettingsRow';
+import { formatDateTime } from '@/i18n/format';
 
 
 // ── Types ──
@@ -205,6 +207,7 @@ export default function ServerAdminTab({
  onResetCrashCount,
  canDelete,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  // Defensive: parent may pass non-array from cache/API shape mismatches.
  const safeAllocations = Array.isArray(allocations) ? allocations : [];
  const safeAvailableNodeAllocations = Array.isArray(availableNodeAllocations)
@@ -353,7 +356,7 @@ export default function ServerAdminTab({
  return serversApi.update(serverId, { environment: env });
  },
  onSuccess: () => {
- notifySuccess('Environment variables updated');
+ notifySuccess(t('tabs.admin.envUpdated'));
  setEnvDirty(false);
  },
  onSettled: () => {
@@ -364,7 +367,7 @@ export default function ServerAdminTab({
  notifyError(
  error?.response?.data?.error ||
  error?.message ||
- 'Failed to update environment',
+ t('tabs.admin.envUpdateFailed'),
  ),
  });
 
@@ -378,7 +381,7 @@ export default function ServerAdminTab({
  '';
  const currentImageLabel =
  templateImages.find((img) => img.name === currentImageVariant)?.label ??
- (currentImageVariant || 'Default');
+ (currentImageVariant || t('tabs.admin.defaultVariant'));
 
  // When IMAGE_VARIANT is unset, treat the template default (or current image match) as active.
  const activeVariantName = (() => {
@@ -390,6 +393,15 @@ export default function ServerAdminTab({
  );
  return byDefault?.name ?? '';
  })();
+
+ const restartPolicyLabel =
+ restartPolicy === 'always'
+ ? t('tabs.admin.policyValues.always')
+ : restartPolicy === 'on-failure'
+ ? t('tabs.admin.policyValues.onFailure')
+ : restartPolicy === 'never'
+ ? t('tabs.admin.policyValues.never')
+ : (restartPolicy as string).replace('-', ' ');
 
  const canEdit = !isSuspended && server.status !== 'archived';
  const canEditWhenStopped =
@@ -403,7 +415,7 @@ export default function ServerAdminTab({
  try {
  setRebuildPending(true);
  await serversApi.rebuild(serverId);
- notifySuccess('Container rebuild initiated');
+ notifySuccess(t('tabs.admin.rebuildInitiated'));
  setRebuildConfirm(false);
  } catch (err: unknown) {
  reportSystemError({
@@ -413,7 +425,7 @@ export default function ServerAdminTab({
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'rebuild container' },
  });
- notifyError(err instanceof Error ? err.message : 'Failed to rebuild container');
+ notifyError(err instanceof Error ? err.message : t('tabs.admin.rebuildFailed'));
  } finally {
  setRebuildPending(false);
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
@@ -439,8 +451,8 @@ export default function ServerAdminTab({
  await serversApi.rebuild(serverId);
  notifySuccess(
  variantName
- ? `Switched to ${imageVariantConfirm.label} and started rebuild`
- : 'Reset to default image and started rebuild',
+ ? t('tabs.admin.switchedVariant', { label: imageVariantConfirm.label })
+ : t('tabs.admin.resetDefaultImage'),
  );
  setImageVariantConfirm(null);
  } catch (err: unknown) {
@@ -451,7 +463,7 @@ export default function ServerAdminTab({
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'change image variant' },
  });
- notifyError(err instanceof Error ? err.message : 'Failed to change image variant');
+ notifyError(err instanceof Error ? err.message : t('tabs.admin.variantFailed'));
  } finally {
  setImageVariantPending(false);
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
@@ -464,7 +476,7 @@ export default function ServerAdminTab({
  try {
  setKillPending(true);
  await serversApi.kill(serverId);
- notifySuccess('Server process killed');
+ notifySuccess(t('tabs.admin.killed'));
  setKillConfirm(false);
  } catch (err: unknown) {
  reportSystemError({
@@ -474,7 +486,7 @@ export default function ServerAdminTab({
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'kill server' },
  });
- notifyError(err instanceof Error ? err.message : 'Failed to kill server');
+ notifyError(err instanceof Error ? err.message : t('tabs.admin.killFailed'));
  } finally {
  setKillPending(false);
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
@@ -486,7 +498,7 @@ export default function ServerAdminTab({
  try {
  setReinstallPending(true);
  await serversApi.install(serverId);
- notifySuccess('Reinstall initiated');
+ notifySuccess(t('tabs.admin.reinstallInitiated'));
  setReinstallConfirm(false);
  } catch (err: unknown) {
  reportSystemError({
@@ -496,7 +508,7 @@ export default function ServerAdminTab({
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'reinstall server' },
  });
- notifyError(err instanceof Error ? err.message : 'Failed to reinstall');
+ notifyError(err instanceof Error ? err.message : t('tabs.admin.reinstallFailed'));
  } finally {
  setReinstallPending(false);
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
@@ -508,7 +520,7 @@ export default function ServerAdminTab({
  try {
  setTransferOwnerPending(true);
  await serversApi.transferOwnership(serverId, { newOwnerId: newOwnerId.trim() });
- notifySuccess('Ownership transferred');
+ notifySuccess(t('tabs.admin.transferred'));
  setNewOwnerId('');
  setNewOwnerLabel('');
  setOwnerSearch('');
@@ -521,7 +533,7 @@ export default function ServerAdminTab({
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'transfer ownership' },
  });
- notifyError(err instanceof Error ? err.message : 'Failed to transfer ownership');
+ notifyError(err instanceof Error ? err.message : t('tabs.admin.transferFailed'));
  } finally {
  setTransferOwnerPending(false);
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
@@ -553,7 +565,7 @@ export default function ServerAdminTab({
  return (
  <div className="rounded-xl border border-danger/30 bg-danger-muted px-4 py-6 text-center text-sm text-danger">
  <Shield className="mx-auto mb-2 h-8 w-8 opacity-50" />
- Admin access required to view this tab.
+ {t('tabs.admin.accessRequired')}
  </div>
  );
  }
@@ -563,18 +575,18 @@ export default function ServerAdminTab({
  {/* ── Tab Header ── */}
  <TabHeader
  icon={Shield}
- title="Administration"
- description="Server info, container management, resources, and danger zone actions."
+ title={t('tabs.admin.title')}
+ description={t('tabs.admin.description')}
  />
 
       <ServerTabCard>
-        <SectionHeader icon={Server} title="Identity" />
-        <DataField label="Server ID" value={server.id} copyable />
-        <DataField label="Node" value={server.node?.name ?? server.nodeName ?? server.nodeId} copyable />
-        <DataField label="Template" value={server.template?.name ?? server.templateId ?? '—'} copyable />
-        <DataField label="Primary port" value={String(server.primaryPort ?? '—')} copyable />
-        <DataField label="Connection" value={`${server.connection?.host ?? '—'}:${server.connection?.port ?? '—'}`} copyable />
-        <DataField label="Network" value={server.networkMode ?? 'bridge'} copyable />
+        <SectionHeader icon={Server} title={t('tabs.admin.identity')} />
+        <DataField label={t('tabs.admin.fields.serverId')} value={server.id} copyable />
+        <DataField label={t('tabs.admin.fields.node')} value={server.node?.name ?? server.nodeName ?? server.nodeId} copyable />
+        <DataField label={t('tabs.admin.fields.template')} value={server.template?.name ?? server.templateId ?? '—'} copyable />
+        <DataField label={t('tabs.admin.fields.primaryPort')} value={String(server.primaryPort ?? '—')} copyable />
+        <DataField label={t('tabs.admin.fields.connection')} value={`${server.connection?.host ?? '—'}:${server.connection?.port ?? '—'}`} copyable />
+        <DataField label={t('tabs.admin.fields.network')} value={server.networkMode ?? 'bridge'} copyable />
 
 
         <button
@@ -583,7 +595,7 @@ export default function ServerAdminTab({
           onClick={() => setEnvExpanded(!envExpanded)}
         >
           <span className="text-sm font-medium text-foreground">
-            Environment
+            {t('tabs.admin.environment')}
             <span className="ml-2 type-meta">({Object.keys(server.environment ?? {}).length})</span>
           </span>
           <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${envExpanded ? 'rotate-180' : ''}`} />
@@ -593,7 +605,7 @@ export default function ServerAdminTab({
             {canAdminWrite ? (
               <>
                 {envVars.length === 0 && (
-                  <p className="type-meta py-2">No environment variables.</p>
+                  <p className="type-meta py-2">{t('tabs.admin.noEnvironment')}</p>
                 )}
                 {envVars.map((row, idx) => (
                   <div key={idx} className="group flex items-center gap-2">
@@ -630,7 +642,7 @@ export default function ServerAdminTab({
                         setEnvDirty(true);
                       }}
                       disabled={isSuspended}
-                      aria-label="Remove"
+                      aria-label={t('common:actions.remove')}
                     >
                       ×
                     </button>
@@ -646,7 +658,7 @@ export default function ServerAdminTab({
                     }}
                     disabled={isSuspended}
                   >
-                    Add
+                    {t('tabs.admin.add')}
                   </button>
                   {envDirty && (
                     <button
@@ -655,7 +667,7 @@ export default function ServerAdminTab({
                       onClick={() => envMutation.mutate()}
                       disabled={isSuspended || envMutation.isPending}
                     >
-                      {envMutation.isPending ? 'Saving…' : 'Save'}
+                      {envMutation.isPending ? t('tabs.admin.saving') : t('common:actions.save')}
                     </button>
                   )}
                 </div>
@@ -667,7 +679,7 @@ export default function ServerAdminTab({
                     <DataField key={key} label={key} value={String(value)} />
                   ))
                 ) : (
-                  <p className="type-meta py-2">No environment variables.</p>
+                  <p className="type-meta py-2">{t('tabs.admin.noEnvironment')}</p>
                 )}
               </div>
             )}
@@ -677,17 +689,17 @@ export default function ServerAdminTab({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ServerTabCard>
-          <SectionHeader icon={Container} title="Image" />
-          <DataField label="Image" value={currentResolvedImage} copyable />
+          <SectionHeader icon={Container} title={t('tabs.admin.image')} />
+          <DataField label={t('tabs.admin.fields.image')} value={currentResolvedImage} copyable />
           {(currentImageVariant || activeVariantName) && (
             <DataField
-              label="Variant"
+              label={t('tabs.admin.fields.variant')}
               value={
-                currentImageLabel !== 'Default'
+                currentImageLabel !== t('tabs.admin.defaultVariant')
                   ? currentImageLabel
                   : (templateImages.find((img) => img.name === activeVariantName)?.label ??
                     templateImages.find((img) => img.name === activeVariantName)?.name ??
-                    'Default')
+                    t('tabs.admin.defaultVariant'))
               }
             />
           )}
@@ -717,9 +729,9 @@ export default function ServerAdminTab({
                       <div className="truncate font-mono text-[10px] text-muted-foreground">{img.image}</div>
                     </div>
                     {isActive ? (
-                      <span className="type-meta">Active</span>
+                      <span className="type-meta">{t('tabs.admin.active')}</span>
                     ) : canEdit ? (
-                      <span className="text-[10px] text-primary">Use</span>
+                      <span className="text-[10px] text-primary">{t('tabs.admin.use')}</span>
                     ) : null}
                   </button>
                 );
@@ -730,35 +742,35 @@ export default function ServerAdminTab({
 
 
         <ServerTabCard>
-          <SectionHeader icon={Zap} title="Container" />
-          <SettingsRow label="Rebuild" description="Recreate from the current image. Data is kept.">
+          <SectionHeader icon={Zap} title={t('tabs.admin.container')} />
+          <SettingsRow label={t('tabs.admin.rebuild')} description={t('tabs.admin.rebuildDescription')}>
             <button
               type="button"
               onClick={() => setRebuildConfirm(true)}
               disabled={!canEdit}
               className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
             >
-              Rebuild
+              {t('tabs.admin.rebuild')}
             </button>
           </SettingsRow>
-          <SettingsRow label="Reinstall" description="Wipe files and re-run the install script.">
+          <SettingsRow label={t('tabs.admin.reinstall')} description={t('tabs.admin.reinstallDescription')}>
             <button
               type="button"
               onClick={() => setReinstallConfirm(true)}
               disabled={!canEditWhenStopped}
               className="rounded-md border border-warning/30 px-3 py-1.5 text-xs font-semibold text-warning disabled:opacity-50"
             >
-              Reinstall
+              {t('tabs.admin.reinstall')}
             </button>
           </SettingsRow>
-          <SettingsRow label="Force kill" description="Immediate terminate. No graceful shutdown.">
+          <SettingsRow label={t('tabs.admin.forceKill')} description={t('tabs.admin.forceKillDescription')}>
             <button
               type="button"
               onClick={() => setKillConfirm(true)}
               disabled={server.status !== 'running' && server.status !== 'starting' && server.status !== 'stopping'}
               className="rounded-md bg-danger px-3 py-1.5 text-xs font-semibold text-danger-foreground disabled:opacity-50"
             >
-              Kill
+              {t('tabs.admin.kill')}
             </button>
           </SettingsRow>
         </ServerTabCard>
@@ -766,25 +778,25 @@ export default function ServerAdminTab({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ServerTabCard>
-          <SectionHeader icon={BarChart3} title="Resources" />
-          <DataField label="Memory" value={`${server.allocatedMemoryMb ?? 0} MB`} />
-          <DataField label="CPU" value={`${server.allocatedCpuCores ?? 0} cores`} />
-          <DataField label="Disk" value={`${server.allocatedDiskMb ?? 0} MB`} />
-          <DataField label="Swap" value={`${server.allocatedSwapMb ?? 0} MB`} />
+          <SectionHeader icon={BarChart3} title={t('tabs.admin.resources')} />
+          <DataField label={t('tabs.admin.fields.memory')} value={t('tabs.admin.values.mb', { value: server.allocatedMemoryMb ?? 0 })} />
+          <DataField label={t('tabs.admin.fields.cpu')} value={t('tabs.admin.values.cores', { value: server.allocatedCpuCores ?? 0 })} />
+          <DataField label={t('tabs.admin.fields.disk')} value={t('tabs.admin.values.mb', { value: server.allocatedDiskMb ?? 0 })} />
+          <DataField label={t('tabs.admin.fields.swap')} value={t('tabs.admin.values.mb', { value: server.allocatedSwapMb ?? 0 })} />
           <DataField
-            label="Backup allocation"
+            label={t('tabs.admin.fields.backupAllocation')}
             value={
               (server.backupAllocationMb ?? 0) > 0
-                ? `${server.backupAllocationMb} MB`
-                : 'Disabled'
+                ? t('tabs.admin.values.mb', { value: server.backupAllocationMb })
+                : t('common:actions.disabled')
             }
           />
           <DataField
-            label="Database allocation"
+            label={t('tabs.admin.fields.databaseAllocation')}
             value={
               (server.databaseAllocation ?? 0) > 0
-                ? `${server.databaseAllocation} databases`
-                : 'Disabled'
+                ? t('tabs.admin.values.databases', { value: server.databaseAllocation })
+                : t('common:actions.disabled')
             }
           />
           <div className="mt-3 flex flex-wrap gap-2">
@@ -794,7 +806,7 @@ export default function ServerAdminTab({
         </ServerTabCard>
 
         <ServerTabCard>
-          <SectionHeader icon={Network} title="Ports" />
+          <SectionHeader icon={Network} title={t('tabs.admin.ports')} />
           {allocationsError && (
             <div className="mb-3 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
               {allocationsError}
@@ -818,7 +830,7 @@ export default function ServerAdminTab({
  }}
  disabled={!canEditAllocations}
  >
- <option value="">Select allocation</option>
+ <option value="">{t('tabs.admin.selectAllocation')}</option>
  {safeAvailableNodeAllocations
  .filter((a) => !safeAllocations.some((alloc) => alloc.hostPort === a.port && alloc.ip === a.ip))
  .map((allocation) => (
@@ -832,7 +844,7 @@ export default function ServerAdminTab({
  className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none sm:w-28"
  value={newContainerPort}
  onChange={(e) => onNewContainerPortChange(e.target.value)}
- placeholder="Container port"
+ placeholder={t('tabs.admin.containerPortPlaceholder')}
  type="number"
  min={1}
  max={65535}
@@ -844,7 +856,7 @@ export default function ServerAdminTab({
  ) : null}
  {!availableNodeAllocationsError && safeAvailableNodeAllocations.length === 0 ? (
  <p className="text-[10px] text-muted-foreground">
- No free node allocations.
+ {t('tabs.admin.noFreeAllocations')}
  {server.nodeId ? (
  <>
  {' '}
@@ -854,7 +866,7 @@ export default function ServerAdminTab({
  rel="noopener noreferrer"
  className="font-medium text-primary hover:underline"
  >
- Create one →
+ {t('tabs.admin.createOne')}
  </a>
  </>
  ) : null}
@@ -866,7 +878,7 @@ export default function ServerAdminTab({
  onClick={onAddAllocation}
  disabled={!canEditAllocations || addAllocationPending || !selectedAllocationId}
  >
- Add allocation
+ {t('tabs.admin.addAllocation')}
  </button>
  </div>
 
@@ -874,8 +886,8 @@ export default function ServerAdminTab({
  <div className="mt-3 space-y-1.5">
  {safeAllocations.length === 0 ? (
  <TabEmptyState
- title="No allocations configured"
- description="Add a port binding to make the server reachable."
+ title={t('tabs.admin.noAllocationsTitle')}
+ description={t('tabs.admin.noAllocationsDescription')}
  />
  ) : (
  safeAllocations.map((alloc) => (
@@ -904,10 +916,10 @@ export default function ServerAdminTab({
  <span className="truncate text-[10px] text-muted-foreground">({alloc.alias})</span>
  ) : null}
  {alloc.isPrimary && (
- <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">Primary</span>
+ <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">{t('tabs.admin.primary')}</span>
  )}
  {!alloc.isPrimary && (
- <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Secondary</span>
+ <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{t('tabs.admin.secondary')}</span>
  )}
  </div>
  {!alloc.isPrimary && (
@@ -918,7 +930,7 @@ export default function ServerAdminTab({
  disabled={!canEditAllocations || setPrimaryPending}
  className="rounded border border-border px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-50"
  >
- Set primary
+ {t('tabs.admin.setPrimary')}
  </button>
  <button
  type="button"
@@ -926,7 +938,7 @@ export default function ServerAdminTab({
  disabled={!canEditAllocations || removeAllocationPending || removeAllocationHotPending}
  className="rounded border border-danger/30 px-1.5 py-0.5 text-[9px] font-medium text-danger transition-colors hover:border-danger/50 disabled:opacity-50"
  >
- Remove
+ {t('common:actions.remove')}
  </button>
  </div>
  )}
@@ -939,27 +951,27 @@ export default function ServerAdminTab({
 
  {/* ── Crash Recovery ── */}
       <ServerTabCard>
-        <SectionHeader icon={RotateCcw} title="Crash recovery" />
-        <DataField label="Crashes" value={`${crashCount} / ${maxCrashCountValue}`} />
-        <DataField label="Policy" value={restartPolicy.replace('-', ' ')} />
-        <DataField label="Last crash" value={lastCrashAt ? new Date(lastCrashAt).toLocaleString() : 'Never'} />
+        <SectionHeader icon={RotateCcw} title={t('tabs.admin.crashRecovery')} />
+        <DataField label={t('tabs.admin.fields.crashes')} value={`${crashCount} / ${maxCrashCountValue}`} />
+        <DataField label={t('tabs.admin.fields.policy')} value={restartPolicyLabel} />
+        <DataField label={t('tabs.admin.fields.lastCrash')} value={lastCrashAt ? formatDateTime(lastCrashAt) : t('tabs.admin.never')} />
         <DataField label="Exit code" value={lastExitCode !== null && lastExitCode !== undefined ? String(lastExitCode) : '—'} />
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <div className="min-w-[160px] flex-1">
-            <label className="type-overline">Restart policy</label>
+            <label className="type-overline">{t('tabs.admin.restartPolicyLabel')}</label>
             <select
               className="mt-1 w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground focus:border-primary focus:outline-none"
               value={restartPolicy}
               onChange={(e) => onRestartPolicyChange(e.target.value as 'always' | 'on-failure' | 'never')}
               disabled={isSuspended}
             >
-              <option value="always">Always restart</option>
-              <option value="on-failure">Restart on failure</option>
-              <option value="never">Never restart</option>
+              <option value="always">{t('tabs.admin.restartPolicy.always')}</option>
+              <option value="on-failure">{t('tabs.admin.restartPolicy.onFailure')}</option>
+              <option value="never">{t('tabs.admin.restartPolicy.never')}</option>
             </select>
           </div>
           <div className="min-w-[120px]">
-            <label className="type-overline">Max crashes</label>
+            <label className="type-overline">{t('tabs.admin.maxCrashes')}</label>
             <input
               className="mt-1 w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground focus:border-primary focus:outline-none"
               type="number"
@@ -977,7 +989,7 @@ export default function ServerAdminTab({
               onClick={onSaveRestartPolicy}
               disabled={isSuspended || restartPolicyPending}
             >
-              Save
+              {t('common:actions.save')}
             </button>
             <button
               type="button"
@@ -985,7 +997,7 @@ export default function ServerAdminTab({
               onClick={onResetCrashCount}
               disabled={isSuspended || resetCrashCountPending}
             >
-              Reset
+              {t('common:actions.reset')}
             </button>
           </div>
         </div>
@@ -996,11 +1008,11 @@ export default function ServerAdminTab({
  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
  {/* Transfer Ownership */}
  <ServerTabCard>
- <SectionHeader icon={UserRoundCog} title="Transfer Ownership" description="Transfer this server to another user." />
+ <SectionHeader icon={UserRoundCog} title={t('tabs.admin.transferOwnership')} description={t('tabs.admin.transferOwnershipDescription')} />
 
  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
  <div className="min-w-0 flex-1">
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">New owner</label>
+ <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('tabs.admin.newOwner')}</label>
  <div className="mt-1">
  <Combobox
  value={newOwnerId}
@@ -1020,21 +1032,21 @@ export default function ServerAdminTab({
  onSearchChange={setOwnerSearch}
  placeholder={
  transferCandidatesQuery.isLoading
- ? 'Loading users...'
- : 'Search by username or email...'
+ ? t('tabs.admin.loadingUsers')
+ : t('tabs.admin.searchUsersPlaceholder')
  }
- searchPlaceholder="Search username or email..."
+ searchPlaceholder={t('tabs.admin.searchUsersPlaceholder')}
  emptyMessage={
  transferCandidatesQuery.isLoading
- ? 'Searching…'
- : 'No users found.'
+ ? t('tabs.admin.searching')
+ : t('tabs.admin.noUsersFound')
  }
  className="w-full"
  />
  </div>
  {transferCandidatesQuery.isError ? (
  <p className="mt-1 text-[10px] text-warning">
- Unable to load users. You may not have permission to search accounts.
+ {t('tabs.admin.usersLoadFailed')}
  </p>
  ) : null}
  </div>
@@ -1044,13 +1056,13 @@ export default function ServerAdminTab({
  disabled={!newOwnerId.trim() || isSuspended || newOwnerId === server.ownerId}
  className="rounded-md border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-foreground transition-all hover:bg-warning disabled:opacity-50"
  >
- Transfer
+ {t('tabs.admin.transfer')}
  </button>
  </div>
 
  {currentOwnerDisplay && (
  <div className="mt-3 rounded-lg border border-border/30 bg-surface-2/20 px-3 py-2">
- <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Current Owner</div>
+ <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('tabs.admin.currentOwner')}</div>
  <div className="mt-0.5 text-xs font-medium text-foreground">{currentOwnerDisplay.primary}</div>
  {currentOwnerDisplay.secondary ? (
  <div className="mt-0.5 text-[10px] text-muted-foreground">{currentOwnerDisplay.secondary}</div>
@@ -1061,14 +1073,14 @@ export default function ServerAdminTab({
 
  {/* Suspension */}
  <ServerTabCard>
- <SectionHeader icon={AlertTriangle} title="Server Suspension" accent="warning" description="Suspend or restore access to this server." />
+ <SectionHeader icon={AlertTriangle} title={t('tabs.admin.suspension')} accent="warning" description={t('tabs.admin.suspensionDescription')} />
 
  {server.status === 'suspended' ? (
  <div className="flex items-center justify-between rounded-lg border border-warning/20 bg-warning/5 p-3">
  <div>
- <div className="text-xs font-medium text-foreground">Server is suspended</div>
+ <div className="text-xs font-medium text-foreground">{t('tabs.admin.suspended')}</div>
  {server.suspensionReason && (
- <div className="mt-0.5 text-[10px] text-muted-foreground">Reason: {server.suspensionReason}</div>
+ <div className="mt-0.5 text-[10px] text-muted-foreground">{t('tabs.admin.suspendReason', { reason: server.suspensionReason })}</div>
  )}
  </div>
  <button
@@ -1077,18 +1089,18 @@ export default function ServerAdminTab({
  disabled={unsuspendPending}
  className="shrink-0 rounded-md border border-success/30 bg-success px-3 py-1.5 text-[10px] font-semibold text-foreground transition-all hover:bg-success disabled:opacity-50"
  >
- Unsuspend
+ {t('tabs.admin.unsuspend')}
  </button>
  </div>
  ) : (
  <div className="flex flex-wrap items-end gap-3">
  <div className="flex-1 min-w-[200px]">
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Suspension reason (optional)</label>
+ <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('tabs.admin.suspensionReasonLabel')}</label>
  <input
  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
  value={suspendReason}
  onChange={(e) => onSuspendReasonChange(e.target.value)}
- placeholder="Billing, abuse, or admin notes"
+ placeholder={t('tabs.admin.suspensionReasonPlaceholder')}
  />
  </div>
  <button
@@ -1097,7 +1109,7 @@ export default function ServerAdminTab({
  disabled={suspendPending}
  className="rounded-md bg-danger px-3 py-2 text-xs font-semibold text-foreground transition-all hover:bg-danger disabled:opacity-50"
  >
- Suspend
+ {t('tabs.admin.suspend')}
  </button>
  </div>
  )}
@@ -1106,7 +1118,7 @@ export default function ServerAdminTab({
 
  {/* ── Danger Zone ── */}
  <div className="rounded-xl border border-danger/30 bg-danger/5 p-5">
- <SectionHeader icon={Skull} title="Danger Zone" accent="danger" description="These actions are permanent and cannot be undone." />
+ <SectionHeader icon={Skull} title={t('tabs.admin.dangerZone')} accent="danger" description={t('tabs.admin.dangerZoneDescription')} />
 
  <DeleteServerDialog
  serverId={serverId}
@@ -1119,9 +1131,9 @@ export default function ServerAdminTab({
  {/* ── Confirm dialogs ── */}
  <ConfirmDialog
  open={rebuildConfirm}
- title="Rebuild container"
- message="This will stop the server if it is running, remove the container, and recreate it from the current image. Server data is preserved. The server will not start automatically after rebuilding."
- confirmText="Rebuild"
+ title={t('tabs.admin.rebuildConfirmTitle')}
+ message={t('tabs.admin.rebuildConfirmMessage')}
+ confirmText={t('tabs.admin.rebuild')}
  variant="default"
  loading={rebuildPending}
  onConfirm={handleRebuild}
@@ -1129,13 +1141,13 @@ export default function ServerAdminTab({
  />
  <ConfirmDialog
  open={Boolean(imageVariantConfirm?.open)}
- title="Change container image"
+ title={t('tabs.admin.changeImageTitle')}
  message={
  imageVariantConfirm
- ? `Switch to "${imageVariantConfirm.label}" (${imageVariantConfirm.image})? This updates IMAGE_VARIANT and rebuilds the container. Server data is preserved; the server will not start automatically after rebuilding.`
+ ? t('tabs.admin.changeImageMessage', { label: imageVariantConfirm.label, image: imageVariantConfirm.image })
  : ''
  }
- confirmText="Change and rebuild"
+ confirmText={t('tabs.admin.changeAndRebuild')}
  variant="default"
  loading={imageVariantPending}
  onConfirm={handleChangeImageVariant}
@@ -1143,9 +1155,9 @@ export default function ServerAdminTab({
  />
  <ConfirmDialog
  open={killConfirm}
- title="Force kill server"
- message="This will immediately terminate the server process without a graceful shutdown. Players may lose unsaved progress. This cannot be undone."
- confirmText="Kill process"
+ title={t('tabs.admin.killConfirmTitle')}
+ message={t('tabs.admin.killConfirmMessage')}
+ confirmText={t('tabs.admin.killProcess')}
  variant="danger"
  loading={killPending}
  onConfirm={handleKill}
@@ -1153,9 +1165,9 @@ export default function ServerAdminTab({
  />
  <ConfirmDialog
  open={reinstallConfirm}
- title="Reinstall server"
- message="This will wipe all server data and re-run the template install script. World files, configurations, and plugins will be permanently deleted. This cannot be undone."
- confirmText="Reinstall"
+ title={t('tabs.admin.reinstallConfirmTitle')}
+ message={t('tabs.admin.reinstallConfirmMessage')}
+ confirmText={t('tabs.admin.reinstall')}
  variant="warning"
  loading={reinstallPending}
  onConfirm={handleReinstall}
@@ -1163,9 +1175,9 @@ export default function ServerAdminTab({
  />
  <ConfirmDialog
  open={transferOwnerConfirm}
- title="Transfer ownership"
- message={`Transfer ownership of "${serverName}" to ${newOwnerLabel || newOwnerId.trim()}. The new owner will receive full management access. You will retain your current access permissions.`}
- confirmText="Transfer ownership"
+ title={t('tabs.admin.transferConfirmTitle')}
+ message={t('tabs.admin.transferConfirmMessage', { server: serverName, owner: newOwnerLabel || newOwnerId.trim() })}
+ confirmText={t('tabs.admin.transferConfirm')}
  variant="warning"
  loading={transferOwnerPending}
  onConfirm={handleTransferOwnership}
@@ -1173,9 +1185,9 @@ export default function ServerAdminTab({
  />
  <ConfirmDialog
  open={removeAllocationConfirm.open}
- title="Remove allocation from running server"
- message="This server is currently running. Removing an allocation will immediately close the firewall rule for this port, making it unreachable. Players connected through this port will be disconnected."
- confirmText="Remove allocation"
+ title={t('tabs.admin.removeAllocationTitle')}
+ message={t('tabs.admin.removeAllocationMessage')}
+ confirmText={t('tabs.admin.removeAllocation')}
  variant="danger"
  loading={removeAllocationHotPending}
  onConfirm={confirmRemoveAllocation}

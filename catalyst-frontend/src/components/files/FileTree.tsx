@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 
@@ -31,6 +32,7 @@ type NodeProps = {
 };
 
 function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, onNavigate }: NodeProps) {
+  const { t } = useTranslation('server-tabs');
   const isExpanded = expanded.has(entry.path);
   const isActive = normalizePath(activePath) === entry.path;
   const { data, isLoading } = useQuery({
@@ -71,7 +73,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
             e.stopPropagation();
             onToggle(entry.path);
           }}
-          aria-label={isExpanded ? 'Collapse' : 'Expand'}
+          aria-label={isExpanded ? t('files.tree.collapse') : t('files.tree.expand')}
         >
           <motion.div animate={{ rotate: isExpanded ? 0 : -90 }} transition={{ duration: 0.15 }}>
             <ChevronDown className="h-3 w-3" />
@@ -111,14 +113,14 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
                   className="flex items-center gap-1.5 py-1"
                 >
                   <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-pulse" />
-                  <span className="text-[11px] text-muted-foreground/60">Scanning…</span>
+                  <span className="text-[11px] text-muted-foreground/60">{t('files.tree.scanning')}</span>
                 </div>
               ) : isActuallyEmpty ? (
                 <div
                   style={{ paddingLeft: (depth + 1) * 12 + 24 }}
                   className="text-[11px] text-muted-foreground/50 py-1"
                 >
-                  Empty folder
+                  {t('files.tree.emptyFolder')}
                 </div>
               ) : (
                 <div className="space-y-0.5">
@@ -156,6 +158,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
 }
 
 function FileTree({ serverId, activePath, onNavigate }: Props) {
+  const { t } = useTranslation('server-tabs');
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['/']));
   const { data, isLoading, isError } = useQuery({
     queryKey: qk.files(serverId, '/'),
@@ -190,7 +193,7 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
         onClick={() => onNavigate('/')}
       >
         <Server className="h-3.5 w-3.5 shrink-0 text-primary" />
-        <span className="font-medium">Server Root</span>
+        <span className="font-medium">{t('files.tree.serverRoot')}</span>
       </button>
 
       {isLoading ? (
@@ -203,7 +206,7 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
           ))}
         </div>
       ) : isError ? (
-        <div className="px-2 py-2 text-[11px] text-destructive">Unable to load directory tree.</div>
+        <div className="px-2 py-2 text-[11px] text-destructive">{t('files.tree.loadFailed')}</div>
       ) : directories.length ? (
         directories.map((entry) => (
           <FileTreeNode
@@ -218,7 +221,7 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
           />
         ))
       ) : (
-        <div className="px-2 py-2 text-[11px] text-muted-foreground/60">No folders found</div>
+        <div className="px-2 py-2 text-[11px] text-muted-foreground/60">{t('files.tree.noFolders')}</div>
       )}
     </div>
   );

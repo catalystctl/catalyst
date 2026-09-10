@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { ArrowUpCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,8 +18,8 @@ export interface UpdateItem {
 }
 
 interface UpdateConfirmModalProps {
-  /** e.g. "Mod" or "Plugin" */
-  itemType: string;
+  /** Which kind of item is being updated */
+  itemKind: 'mod' | 'plugin';
   items: UpdateItem[];
   isUpdating: boolean;
   warningMessage: string;
@@ -31,14 +32,20 @@ interface UpdateConfirmModalProps {
  * Used by both ModManager and PluginManager tabs.
  */
 export default function UpdateConfirmModal({
-  itemType,
+  itemKind,
   items,
   isUpdating,
   warningMessage,
   onCancel,
   onConfirm,
 }: UpdateConfirmModalProps) {
-  const pluralized = items.length !== 1 ? `${itemType}s` : itemType;
+  const { t } = useTranslation('server-tabs');
+  const itemType =
+    itemKind === 'mod' ? t('shared.itemKind.mod') : t('shared.itemKind.plugin');
+  const itemTypeLower =
+    itemKind === 'mod' ? t('shared.itemKind.modLower') : t('shared.itemKind.pluginLower');
+  const itemTypePlural =
+    itemKind === 'mod' ? t('shared.itemKind.mods') : t('shared.itemKind.plugins');
 
   return (
     <Dialog
@@ -53,10 +60,15 @@ export default function UpdateConfirmModal({
           iconClassName="border-warning/30 bg-warning/10 text-warning"
         >
           <DialogTitle>
-            Confirm {itemType.toLowerCase()} {items.length > 1 ? 'updates' : 'update'}
+            {items.length > 1
+              ? t('shared.updateConfirm.titlePlural', { itemType: itemTypeLower })
+              : t('shared.updateConfirm.titleSingular', { itemType: itemTypeLower })}
           </DialogTitle>
           <DialogDescription>
-            {items.length} {pluralized} will be updated
+            {t('shared.updateConfirm.description', {
+              count: items.length,
+              itemType: items.length !== 1 ? itemTypePlural : itemType,
+            })}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
@@ -82,7 +94,7 @@ export default function UpdateConfirmModal({
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onCancel} disabled={isUpdating}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             className="bg-warning text-foreground hover:bg-warning/90"
@@ -95,8 +107,10 @@ export default function UpdateConfirmModal({
               <ArrowUpCircle className="h-4 w-4" />
             )}
             {isUpdating
-              ? 'Updating…'
-              : `Update ${items.length > 1 ? 'All' : itemType}`}
+              ? t('shared.updateConfirm.updating')
+              : items.length > 1
+                ? t('shared.updateConfirm.updateAll')
+                : t('shared.updateConfirm.updateOne', { itemType })}
           </Button>
         </DialogFooter>
       </DialogContent>

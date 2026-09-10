@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import EditTaskModal from '../../tasks/EditTaskModal';
 import CreateTaskModal from '../../tasks/CreateTaskModal';
 import ServerTabCard from './ServerTabCard';
@@ -8,10 +9,11 @@ import TabEmptyState from './TabEmptyState';
 import TabLoadingState from './TabLoadingState';
 import { ConfirmDialog } from '../../shared/ConfirmDialog';
 import { Clock } from 'lucide-react';
+import { formatDateTime } from '@/i18n/format';
 import type { Task } from '../../../types/task';
 
-const formatDateTime = (value?: string | null) =>
- value ? new Date(value).toLocaleString() : '—';
+const formatTaskDateTime = (value?: string | null) =>
+ value ? formatDateTime(value) : '—';
 
 interface Props {
  serverId: string;
@@ -34,6 +36,7 @@ export default function ServerTasksTab({
  onDelete,
  deletePending,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  const tasks = Array.isArray(tasksProp) ? tasksProp : [];
  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
  const pendingDeleteTask = tasks.find((task) => task.id === pendingDeleteId);
@@ -42,8 +45,8 @@ export default function ServerTasksTab({
  <div className="space-y-4">
  <TabHeader
  icon={Clock}
- title="Scheduled Tasks"
- description="Automate restarts, backups, and commands."
+ title={t('tabs.tasks.title')}
+ description={t('tabs.tasks.description')}
  actions={
  <CreateTaskModal serverId={serverId} disabled={isSuspended} />
  }
@@ -54,8 +57,8 @@ export default function ServerTasksTab({
  <TabLoadingState rows={3} />
  ) : tasks.length === 0 ? (
  <TabEmptyState
- title="No tasks configured"
- description="Create a task to automate server operations on a schedule."
+ title={t('tabs.tasks.emptyTitle')}
+ description={t('tabs.tasks.emptyDescription')}
  action={
  <CreateTaskModal serverId={serverId} disabled={isSuspended} />
  }
@@ -95,10 +98,10 @@ export default function ServerTasksTab({
  columns={4}
  className="mt-2.5"
  items={[
- { label: 'Next run', value: formatDateTime(task.nextRunAt) },
- { label: 'Last run', value: formatDateTime(task.lastRunAt) },
- { label: 'Status', value: task.lastStatus ?? '—' },
- { label: 'Runs', value: task.runCount ?? 0 },
+ { label: t('tabs.tasks.nextRun'), value: formatTaskDateTime(task.nextRunAt) },
+ { label: t('tabs.tasks.lastRun'), value: formatTaskDateTime(task.lastRunAt) },
+ { label: t('shared.status'), value: task.lastStatus ?? '—' },
+ { label: t('tabs.tasks.runs'), value: task.runCount ?? 0 },
  ]}
  />
 
@@ -126,7 +129,7 @@ export default function ServerTasksTab({
  }
  disabled={pausePending || isSuspended}
  >
- {task.enabled === false ? 'Resume' : 'Pause'}
+ {task.enabled === false ? t('tabs.tasks.resume') : t('tabs.tasks.pause')}
  </button>
  <button
  type="button"
@@ -134,7 +137,7 @@ export default function ServerTasksTab({
  onClick={() => setPendingDeleteId(task.id)}
  disabled={deletePending || isSuspended}
  >
- Delete
+ {t('common:actions.delete')}
  </button>
  </div>
  </div>
@@ -145,14 +148,14 @@ export default function ServerTasksTab({
 
  <ConfirmDialog
  open={Boolean(pendingDeleteId)}
- title="Delete scheduled task?"
+ title={t('tabs.tasks.deleteTitle')}
  message={
  pendingDeleteTask
- ? `Delete task "${pendingDeleteTask.name}"? This cannot be undone.`
- : 'Delete this scheduled task? This cannot be undone.'
+ ? t('tabs.tasks.deleteConfirm', { name: pendingDeleteTask.name })
+ : t('tabs.tasks.deleteConfirmFallback')
  }
- confirmText="Delete"
- cancelText="Cancel"
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={deletePending}
  onConfirm={() => {

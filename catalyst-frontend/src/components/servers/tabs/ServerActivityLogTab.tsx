@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@/csync';
 import {
   ChevronDown,
@@ -26,12 +27,14 @@ import TabHeader from './TabHeader';
 import TabEmptyState from './TabEmptyState';
 import TabErrorState from './TabErrorState';
 import TabLoadingState from './TabLoadingState';
+import i18n from '@/i18n';
+import { formatDateTime } from '@/i18n/format';
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
-const formatDateTime = (value?: string | null) =>
+const formatEntryTimestamp = (value?: string | null) =>
   value
-    ? new Date(value).toLocaleString(undefined, {
+    ? formatDateTime(value, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -107,7 +110,11 @@ function humanizeKey(key: string): string {
 
 function formatDetailValue(value: unknown): string {
   if (value === null || value === undefined) return '—';
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'boolean') {
+    return value
+      ? i18n.t('actions.yes', { ns: 'common' })
+      : i18n.t('actions.no', { ns: 'common' });
+  }
   if (typeof value === 'number') return String(value);
   if (typeof value === 'string') {
     if (/^c[a-z0-9]{20,}$/i.test(value) || /^[0-9a-f-]{36}$/i.test(value)) {
@@ -117,11 +124,16 @@ function formatDetailValue(value: unknown): string {
     return value;
   }
   if (Array.isArray(value)) {
-    if (value.length === 0) return 'None';
+    if (value.length === 0) return i18n.t('actions.none', { ns: 'common' });
     if (value.every((v) => typeof v !== 'object')) {
-      return value.slice(0, 6).map(String).join(', ') + (value.length > 6 ? ` +${value.length - 6}` : '');
+      return (
+        value.slice(0, 6).map(String).join(', ') +
+        (value.length > 6
+          ? i18n.t('tabs.activity.moreItems', { ns: 'server-tabs', count: value.length - 6 })
+          : '')
+      );
     }
-    return `${value.length} items`;
+    return i18n.t('tabs.activity.itemsCount', { ns: 'server-tabs', count: value.length });
   }
   if (typeof value === 'object') {
     const keys = Object.keys(value as object);
@@ -183,7 +195,7 @@ function buildSummary(_action: string, details: DetailBag): string | null {
   if (prev && next && prev !== next) {
     parts.push(`${String(prev)} → ${String(next)}`);
   } else if (next && typeof next === 'string') {
-    parts.push(`Status: ${next}`);
+    parts.push(i18n.t('tabs.activity.statusSummary', { ns: 'server-tabs', status: next }));
   }
 
   const path = details.path ?? details.filePath ?? details.file;
@@ -191,13 +203,15 @@ function buildSummary(_action: string, details: DetailBag): string | null {
     parts.push(path.length > 48 ? `…${path.slice(-48)}` : path);
   }
 
-  if (details.force === true) parts.push('Forced');
+  if (details.force === true) parts.push(i18n.t('tabs.activity.forced', { ns: 'server-tabs' }));
   if (typeof details.powerResult === 'string') parts.push(details.powerResult);
   if (typeof details.serverName === 'string') parts.push(details.serverName);
-  if (typeof details.nodeName === 'string') parts.push(`Node: ${details.nodeName}`);
+  if (typeof details.nodeName === 'string') {
+    parts.push(i18n.t('tabs.activity.node', { ns: 'server-tabs', name: details.nodeName }));
+  }
   if (typeof details.hostPort === 'number' || typeof details.primaryPort === 'number') {
     const port = details.hostPort ?? details.primaryPort;
-    parts.push(`Port ${port}`);
+    parts.push(i18n.t('tabs.activity.port', { ns: 'server-tabs', port: String(port) }));
   }
   if (typeof details.name === 'string' && !parts.includes(details.name)) {
     parts.push(details.name);
@@ -251,6 +265,7 @@ function publicDetailEntries(details: DetailBag): [string, unknown][] {
 // ── Row ─────────────────────────────────────────────────────────────────────
 
 function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
+  const { t } = useTranslation('server-tabs');
   const [expanded, setExpanded] = useState(false);
   const details = useMemo(
     () => coerceDetails((entry as any).details ?? (entry as any).metadata),
@@ -261,7 +276,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
   const tone = getActionTone(entry.action);
   const Icon = getActionIcon(entry.action);
   const actor =
-    entry.user?.username ?? entry.user?.name ?? entry.user?.email ?? 'System';
+    entry.user?.username ?? entry.user?.name ?? entry.user?.email ?? i18n.t('tabs.activity.system', { ns: 'server-tabs' });
   const initial = (actor[0] ?? 'S').toUpperCase();
   const hasExpandable = publicEntries.length > 0;
 
@@ -332,7 +347,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
             dateTime={entry.timestamp}
             title={entry.timestamp}
           >
-            {formatDateTime(entry.timestamp)}
+            {formatEntryTimestamp(entry.timestamp)}
           </time>
           {hasExpandable && (
             <button
@@ -341,7 +356,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
               className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
               aria-expanded={expanded}
             >
-              {expanded ? 'Less' : 'Details'}
+              {expanded ? t('tabs.activity.less') : t('tabs.activity.details')}
               <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
             </button>
           )}
@@ -356,7 +371,7 @@ function renderExpandedValue(value: unknown): ReactNode {
     return <span className="italic text-muted-foreground/50">null</span>;
   }
   if (typeof value === 'boolean') {
-    return value ? 'Yes' : 'No';
+    return value ? i18n.t('actions.yes', { ns: 'common' }) : i18n.t('actions.no', { ns: 'common' });
   }
   if (typeof value === 'number') {
     return <span className="tabular-nums">{value}</span>;
@@ -365,7 +380,11 @@ function renderExpandedValue(value: unknown): ReactNode {
     return <span className="break-all">{value}</span>;
   }
   if (Array.isArray(value)) {
-    if (value.length === 0) return <span className="italic text-muted-foreground/50">empty</span>;
+    if (value.length === 0) {
+      return (
+        <span className="italic text-muted-foreground/50">{i18n.t('tabs.activity.empty', { ns: 'server-tabs' })}</span>
+      );
+    }
     return (
       <ul className="list-inside list-disc space-y-0.5">
         {value.slice(0, 12).map((item, i) => (
@@ -373,7 +392,11 @@ function renderExpandedValue(value: unknown): ReactNode {
             {typeof item === 'object' ? JSON.stringify(item) : String(item)}
           </li>
         ))}
-        {value.length > 12 && <li className="text-muted-foreground">+{value.length - 12} more</li>}
+        {value.length > 12 && (
+          <li className="text-muted-foreground">
+            {i18n.t('tabs.activity.moreItemsList', { ns: 'server-tabs', count: value.length - 12 })}
+          </li>
+        )}
       </ul>
     );
   }
@@ -382,7 +405,9 @@ function renderExpandedValue(value: unknown): ReactNode {
       ([k]) => !isHiddenKey(k),
     );
     if (entries.length === 0) {
-      return <span className="italic text-muted-foreground/50">empty</span>;
+      return (
+        <span className="italic text-muted-foreground/50">{i18n.t('tabs.activity.empty', { ns: 'server-tabs' })}</span>
+      );
     }
     return (
       <div className="space-y-0.5">
@@ -393,7 +418,9 @@ function renderExpandedValue(value: unknown): ReactNode {
           </div>
         ))}
         {entries.length > 8 && (
-          <div className="text-muted-foreground">+{entries.length - 8} more fields</div>
+          <div className="text-muted-foreground">
+            {i18n.t('tabs.activity.moreFields', { ns: 'server-tabs', count: entries.length - 8 })}
+          </div>
         )}
       </div>
     );
@@ -408,6 +435,7 @@ interface Props {
 }
 
 export default function ServerActivityLogTab({ serverId }: Props) {
+  const { t } = useTranslation('server-tabs');
   const [page, setPage] = useState(1);
   const limit = 25;
 
@@ -428,8 +456,8 @@ export default function ServerActivityLogTab({ serverId }: Props) {
     <div className="space-y-4">
       <TabHeader
         icon={Activity}
-        title="Activity Log"
-        description="Recent actions performed on this server."
+        title={t('tabs.activity.title')}
+        description={t('tabs.activity.description')}
       />
 
       <ServerTabCard>
@@ -437,12 +465,12 @@ export default function ServerActivityLogTab({ serverId }: Props) {
           <TabLoadingState rows={5} />
         ) : isError ? (
           <TabErrorState
-            message={error instanceof Error ? error.message : 'Failed to load activity log'}
+            message={error instanceof Error ? error.message : t('tabs.activity.loadFailed')}
           />
         ) : items.length === 0 ? (
           <TabEmptyState
-            title="No activity recorded"
-            description="Actions performed on this server will appear here."
+            title={t('tabs.activity.emptyTitle')}
+            description={t('tabs.activity.emptyDescription')}
           />
         ) : (
           <div className="space-y-1.5 overflow-x-hidden">
@@ -455,7 +483,11 @@ export default function ServerActivityLogTab({ serverId }: Props) {
         {pagination && pagination.totalPages > 1 && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <span className="text-[10px] tabular-nums text-muted-foreground/60">
-              Page {pagination.page} of {pagination.totalPages} · {pagination.total} entries
+              {t('tabs.activity.pagination', {
+                page: pagination.page,
+                totalPages: pagination.totalPages,
+                total: pagination.total,
+              })}
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -463,7 +495,7 @@ export default function ServerActivityLogTab({ serverId }: Props) {
                 className="rounded-md border border-border/40 p-1 text-muted-foreground transition-colors hover:bg-surface-2/50 disabled:opacity-30"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1 || isLoading}
-                title="Previous"
+                title={t('tabs.activity.previous')}
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
@@ -472,7 +504,7 @@ export default function ServerActivityLogTab({ serverId }: Props) {
                 className="rounded-md border border-border/40 p-1 text-muted-foreground transition-colors hover:bg-surface-2/50 disabled:opacity-30"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page >= pagination.totalPages || isLoading}
-                title="Next"
+                title={t('common:actions.next')}
               >
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>

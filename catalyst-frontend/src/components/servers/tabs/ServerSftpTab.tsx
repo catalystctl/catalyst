@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import SftpConnectionInfo from '../../files/SftpConnectionInfo';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
@@ -10,12 +11,13 @@ interface Props {
 }
 
 export default function ServerSftpTab({ serverId, ownerId, currentUserId }: Props) {
+ const { t } = useTranslation('server-tabs');
  return (
  <div className="space-y-4">
  <TabHeader
  icon={FolderSync}
- title="SFTP Access"
- description="Connect to your server files via SFTP using the credentials below."
+ title={t('tabs.sftp.title')}
+ description={t('tabs.sftp.description')}
  />
  <ServerTabCard>
  <SftpConnectionInfo

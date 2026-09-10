@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -18,18 +19,19 @@ import {
 } from '@/components/ui/dialog';
 
 function CreateBackupModal({ serverId, disabled = false }: { serverId: string; disabled?: boolean }) {
+  const { t } = useTranslation('server-tabs');
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
 
   const mutation = useMutation({
     mutationFn: () => backupsApi.create(serverId, { name: name.trim() || undefined }),
     onSuccess: () => {
-      notifySuccess('Backup creation started');
+      notifySuccess(t('backups.create.success'));
       setOpen(false);
       setName('');
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to create backup';
+      const message = error?.response?.data?.error || t('backups.create.failed');
       notifyError(message);
     },
     onSettled: () => {
@@ -46,19 +48,19 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
         }}
         disabled={disabled}
       >
-        Create backup
+        {t('backups.create.action')}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Create backup</DialogTitle>
+            <DialogTitle>{t('backups.create.title')}</DialogTitle>
             <DialogDescription>
-              Leave blank to auto-generate a name with the current timestamp.
+              {t('backups.create.description')}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="create-backup-name">Backup name (optional)</Label>
+              <Label htmlFor="create-backup-name">{t('backups.create.nameLabel')}</Label>
               <Input
                 id="create-backup-name"
                 value={name}
@@ -69,10 +71,10 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || disabled}>
-              Create backup
+              {t('backups.create.action')}
             </Button>
           </DialogFooter>
         </DialogContent>

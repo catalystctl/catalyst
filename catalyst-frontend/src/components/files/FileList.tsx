@@ -1,10 +1,12 @@
 // ponytail: responsive FileList card layout + bottom nav deferred to a dedicated mobile pass
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useFileListVirtualizer } from '../../hooks/useFileListVirtualizer';
 import { ArrowDown, ArrowUp, Folder, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { FileEntry } from '../../types/file';
 import { formatBytes, formatFileMode } from '../../utils/formatters';
+import { formatDate, formatDateTime } from '@/i18n/format';
 import EmptyState from '../shared/EmptyState';
 import FileContextMenu from './FileContextMenu';
 import { FileTypeIcon } from './FileTypeIcon';
@@ -127,6 +129,7 @@ function FileList({
  onDecompress,
  onPermissions,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  const parentRef = useRef<HTMLDivElement>(null);
  const [contextMenuEntry, setContextMenuEntry] = useState<FileEntry | null>(null);
  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -178,7 +181,7 @@ function FileList({
  return (
  <div className="flex flex-col h-full items-center justify-center gap-3">
  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
- <p className="text-sm text-muted-foreground">Scanning directory…</p>
+ <p className="text-sm text-muted-foreground">{t('files.list.scanning')}</p>
  </div>
  );
  }
@@ -189,8 +192,8 @@ function FileList({
  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger-muted">
  <Folder className="h-6 w-6 text-danger" />
  </div>
- <p className="text-sm font-medium text-destructive">Unable to load file listing</p>
- <p className="text-xs text-muted-foreground">Check server connectivity and try again</p>
+ <p className="text-sm font-medium text-destructive">{t('files.list.loadFailed')}</p>
+ <p className="text-xs text-muted-foreground">{t('files.list.loadFailedHint')}</p>
  </div>
  );
  }
@@ -199,8 +202,8 @@ function FileList({
  return (
  <div className="flex h-full items-center justify-center p-6">
  <EmptyState
- title="This folder is empty"
- description="Drop files here, or use Upload to add files to this folder."
+ title={t('files.list.emptyTitle')}
+ description={t('files.list.emptyDescription')}
  />
  </div>
  );
@@ -232,16 +235,16 @@ function FileList({
  </button>
  </div>
  <div className={`${thBase} flex-1 min-w-0`} onClick={() => onSort('name')}>
- Name <SortIndicator field="name" active={sortField} direction={sortDirection} />
+ {t('files.list.name')} <SortIndicator field="name" active={sortField} direction={sortDirection} />
  </div>
  <div className={`${thBase} hidden sm:block w-20`} onClick={() => onSort('mode')}>
- Mode <SortIndicator field="mode" active={sortField} direction={sortDirection} />
+ {t('files.list.mode')} <SortIndicator field="mode" active={sortField} direction={sortDirection} />
  </div>
  <div className={`${thBase} hidden md:block w-24`} onClick={() => onSort('size')}>
- Size <SortIndicator field="size" active={sortField} direction={sortDirection} />
+ {t('files.list.size')} <SortIndicator field="size" active={sortField} direction={sortDirection} />
  </div>
  <div className={`${thBase} hidden lg:block w-40`} onClick={() => onSort('modified')}>
- Modified <SortIndicator field="modified" active={sortField} direction={sortDirection} />
+ {t('files.list.modified')} <SortIndicator field="modified" active={sortField} direction={sortDirection} />
  </div>
  <div className="w-10 px-3" />
  </div>
@@ -372,17 +375,10 @@ function FileList({
  {/* Modified */}
  <div className="hidden lg:block w-40 px-3 text-xs text-muted-foreground">
  {entry.modified ? (
- <span className="tabular-nums" title={new Date(entry.modified).toLocaleString()}>
- {new Date(entry.modified).toLocaleDateString(undefined, {
- month: 'short',
- day: 'numeric',
- year: 'numeric',
- })}{' '}
+ <span className="tabular-nums" title={formatDateTime(entry.modified)}>
+ {formatDate(entry.modified)}{' '}
  <span className="text-muted-foreground/60">
- {new Date(entry.modified).toLocaleTimeString(undefined, {
- hour: '2-digit',
- minute: '2-digit',
- })}
+ {formatDateTime(entry.modified, { hour: '2-digit', minute: '2-digit' })}
  </span>
  </span>
  ) : (
@@ -421,16 +417,16 @@ function FileList({
  <div className="flex-none border-t border-border bg-surface-1/80 backdrop-blur-sm dark:bg-surface-0/80">
  <div className="flex items-center justify-between px-4 py-2">
  <span className="text-[11px] text-muted-foreground">
- {files.length} item{files.length !== 1 ? 's' : ''}
+ {t('files.list.itemCount', { count: files.length })}
  {totalSize > 0 && (
  <span className="ml-2 text-muted-foreground/60">
- · {formatBytes(totalSize)} total
+ {t('files.list.totalSize', { size: formatBytes(totalSize) })}
  </span>
  )}
  </span>
  {selectedPaths.size > 0 && (
  <span className="text-[11px] font-medium text-primary">
- {selectedPaths.size} selected
+ {t('files.list.selected', { count: selectedPaths.size })}
  </span>
  )}
  </div>

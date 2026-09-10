@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import ServerMetrics from '../ServerMetrics';
 import ServerMetricsTrends from '../ServerMetricsTrends';
 import MetricsTimeRangeSelector from '../MetricsTimeRangeSelector';
@@ -46,6 +47,7 @@ export default function ServerMetricsTab({
   metricsTimeRange,
   onMetricsTimeRangeChange,
 }: Props) {
+  const { t } = useTranslation('server-tabs');
   const cpu = liveMetrics?.cpuPercent ?? serverCpuPercent ?? 0;
   const memory = liveMetrics?.memoryPercent ?? serverMemoryPercent ?? 0;
   const memUsed = liveMetrics?.memoryUsageMb;
@@ -56,17 +58,21 @@ export default function ServerMetricsTab({
     <div className="space-y-4">
       <TabHeader
         icon={BarChart3}
-        title="Metrics"
+        title={t('tabs.metrics.title')}
         description={
           isConnected
             ? [
-                memUsed != null ? `${memUsed} MB RAM` : null,
-                diskUsed != null && diskTotal ? `${diskUsed}/${diskTotal} MB disk` : null,
-                liveMetrics?.networkRxBytes != null ? `RX ${formatBytes(liveMetrics.networkRxBytes)}` : null,
+                memUsed != null ? t('tabs.metrics.ram', { used: memUsed }) : null,
+                diskUsed != null && diskTotal
+                  ? t('tabs.metrics.disk', { used: diskUsed, total: diskTotal })
+                  : null,
+                liveMetrics?.networkRxBytes != null
+                  ? t('tabs.metrics.rx', { value: formatBytes(liveMetrics.networkRxBytes) })
+                  : null,
               ]
                 .filter(Boolean)
-                .join(' · ') || 'Live resource usage.'
-            : 'Agent offline. Showing last known values.'
+                .join(' · ') || t('tabs.metrics.liveUsage')
+            : t('tabs.metrics.agentOffline')
         }
         actions={
           <MetricsTimeRangeSelector

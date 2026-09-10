@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -24,15 +26,16 @@ function toLocalDateTimeInputValue(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export const actionOptions: Array<{ value: Task['action']; label: string }> = [
-  { value: 'restart', label: 'Restart server' },
-  { value: 'start', label: 'Start server' },
-  { value: 'stop', label: 'Stop server' },
-  { value: 'backup', label: 'Create backup' },
-  { value: 'command', label: 'Send command' },
+export const actionOptions = (t: TFunction): Array<{ value: Task['action']; label: string }> => [
+  { value: 'restart', label: t('tasks.actions.restart', { ns: 'server-tabs' }) },
+  { value: 'start', label: t('tasks.actions.start', { ns: 'server-tabs' }) },
+  { value: 'stop', label: t('tasks.actions.stop', { ns: 'server-tabs' }) },
+  { value: 'backup', label: t('tasks.actions.backup', { ns: 'server-tabs' }) },
+  { value: 'command', label: t('tasks.actions.command', { ns: 'server-tabs' }) },
 ];
 
 function CreateTaskModal({ serverId, disabled = false }: { serverId: string; disabled?: boolean }) {
+  const { t } = useTranslation('server-tabs');
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [repeat, setRepeat] = useState<'minute' | 'hour' | 'daily' | 'weekly' | 'monthly'>('daily');
@@ -80,7 +83,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
       const schedule = buildCron(startDate, repeat, weekday);
       if (!schedule) {
         reportSystemError({ level: 'error', component: 'CreateTaskModal', message: 'Invalid start time', metadata: { context: 'create task mutation' } });
-        throw new Error('Invalid start time');
+        throw new Error(t('tasks.errors.invalidStartTime'));
       }
       return tasksApi.create(serverId, {
         name: name.trim(),
@@ -90,7 +93,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
       });
     },
     onSuccess: () => {
-      notifySuccess('Task created');
+      notifySuccess(t('tasks.create.success'));
       setOpen(false);
       setName('');
       setRepeat('daily');
@@ -105,7 +108,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
       setCommand('');
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to create task';
+      const message = error?.response?.data?.error || t('tasks.create.failed');
       notifyError(message);
     },
     onSettled: () => {
@@ -130,35 +133,35 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
         }}
         disabled={disabled}
       >
-        Create task
+        {t('tasks.create.action')}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Create task</DialogTitle>
+            <DialogTitle>{t('tasks.create.title')}</DialogTitle>
             <DialogDescription>
-              Schedule a recurring action for this server.
+              {t('tasks.create.description')}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="create-task-name">Name</Label>
+              <Label htmlFor="create-task-name">{t('tasks.name')}</Label>
               <Input
                 id="create-task-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Nightly restart"
+                placeholder={t('tasks.create.namePlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-task-action">Action</Label>
+              <Label htmlFor="create-task-action">{t('tasks.action')}</Label>
               <select
                 id="create-task-action"
                 className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
                 value={action}
                 onChange={(event) => setAction(event.target.value as Task['action'])}
               >
-                {actionOptions.map((option) => (
+                {actionOptions(t).map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -167,7 +170,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
             </div>
             {action === 'command' ? (
               <div className="space-y-2">
-                <Label htmlFor="create-task-command">Command</Label>
+                <Label htmlFor="create-task-command">{t('tasks.command')}</Label>
                 <Input
                   id="create-task-command"
                   value={command}
@@ -177,7 +180,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
               </div>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="create-task-start">Start time</Label>
+              <Label htmlFor="create-task-start">{t('tasks.startTime')}</Label>
               <Input
                 id="create-task-start"
                 type="datetime-local"
@@ -186,51 +189,51 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
               />
               <span className="text-xs text-muted-foreground">
                 {timezoneLabel
-                  ? `Times are interpreted using your local timezone (${timezoneLabel}).`
-                  : 'Times are interpreted using your local timezone.'}
+                  ? t('tasks.timezone.withLabel', { timezone: timezoneLabel })
+                  : t('tasks.timezone.withoutLabel')}
               </span>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-task-repeat">Repeat</Label>
+              <Label htmlFor="create-task-repeat">{t('tasks.repeat')}</Label>
               <select
                 id="create-task-repeat"
                 className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
                 value={repeat}
                 onChange={(event) => setRepeat(event.target.value as typeof repeat)}
               >
-                <option value="minute">Every minute</option>
-                <option value="hour">Every hour</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
+                <option value="minute">{t('tasks.repeatOptions.minute')}</option>
+                <option value="hour">{t('tasks.repeatOptions.hour')}</option>
+                <option value="daily">{t('tasks.repeatOptions.daily')}</option>
+                <option value="weekly">{t('tasks.repeatOptions.weekly')}</option>
+                <option value="monthly">{t('tasks.repeatOptions.monthly')}</option>
               </select>
             </div>
             {repeat === 'weekly' ? (
               <div className="space-y-2">
-                <Label htmlFor="create-task-weekday">Day of week</Label>
+                <Label htmlFor="create-task-weekday">{t('tasks.dayOfWeek')}</Label>
                 <select
                   id="create-task-weekday"
                   className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
                   value={weekday}
                   onChange={(event) => setWeekday(event.target.value)}
                 >
-                  <option value="0">Sunday</option>
-                  <option value="1">Monday</option>
-                  <option value="2">Tuesday</option>
-                  <option value="3">Wednesday</option>
-                  <option value="4">Thursday</option>
-                  <option value="5">Friday</option>
-                  <option value="6">Saturday</option>
+                  <option value="0">{t('tasks.days.sunday')}</option>
+                  <option value="1">{t('tasks.days.monday')}</option>
+                  <option value="2">{t('tasks.days.tuesday')}</option>
+                  <option value="3">{t('tasks.days.wednesday')}</option>
+                  <option value="4">{t('tasks.days.thursday')}</option>
+                  <option value="5">{t('tasks.days.friday')}</option>
+                  <option value="6">{t('tasks.days.saturday')}</option>
                 </select>
               </div>
             ) : null}
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
-              {mutation.isPending ? 'Creating...' : 'Create'}
+              {mutation.isPending ? t('tasks.create.submitting') : t('common:actions.create')}
             </Button>
           </DialogFooter>
         </DialogContent>

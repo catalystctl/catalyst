@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -28,6 +29,7 @@ function EditTaskModal({
   task: Omit<Task, 'serverId'>;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation('server-tabs');
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(task.name);
   const [description, setDescription] = useState(task.description ?? '');
@@ -47,11 +49,11 @@ function EditTaskModal({
         payload: action === 'command' && command.trim() ? { command: command.trim() } : {},
       }),
     onSuccess: () => {
-      notifySuccess('Task updated');
+      notifySuccess(t('tasks.edit.success'));
       setOpen(false);
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to update task';
+      const message = error?.response?.data?.error || t('tasks.edit.failed');
       notifyError(message);
     },
     onSettled: () => {
@@ -74,17 +76,17 @@ function EditTaskModal({
         }}
         disabled={disabled}
       >
-        Edit
+        {t('common:actions.edit')}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Edit task</DialogTitle>
-            <DialogDescription>Update this scheduled task.</DialogDescription>
+            <DialogTitle>{t('tasks.edit.title')}</DialogTitle>
+            <DialogDescription>{t('tasks.edit.description')}</DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="edit-task-name">Name</Label>
+              <Label htmlFor="edit-task-name">{t('tasks.name')}</Label>
               <Input
                 id="edit-task-name"
                 value={name}
@@ -92,7 +94,7 @@ function EditTaskModal({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-task-description">Description (optional)</Label>
+              <Label htmlFor="edit-task-description">{t('tasks.descriptionLabel')}</Label>
               <Input
                 id="edit-task-description"
                 value={description}
@@ -100,14 +102,14 @@ function EditTaskModal({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-task-action">Action</Label>
+              <Label htmlFor="edit-task-action">{t('tasks.action')}</Label>
               <select
                 id="edit-task-action"
                 className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
                 value={action}
                 onChange={(event) => setAction(event.target.value as Task['action'])}
               >
-                {actionOptions.map((option) => (
+                {actionOptions(t).map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -116,7 +118,7 @@ function EditTaskModal({
             </div>
             {action === 'command' ? (
               <div className="space-y-2">
-                <Label htmlFor="edit-task-command">Command</Label>
+                <Label htmlFor="edit-task-command">{t('tasks.command')}</Label>
                 <Input
                   id="edit-task-command"
                   value={command}
@@ -125,7 +127,7 @@ function EditTaskModal({
               </div>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="edit-task-schedule">Schedule (cron)</Label>
+              <Label htmlFor="edit-task-schedule">{t('tasks.scheduleCron')}</Label>
               <Input
                 id="edit-task-schedule"
                 value={schedule}
@@ -135,10 +137,10 @@ function EditTaskModal({
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
-              {mutation.isPending ? 'Saving...' : 'Save'}
+              {mutation.isPending ? t('tasks.edit.saving') : t('common:actions.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

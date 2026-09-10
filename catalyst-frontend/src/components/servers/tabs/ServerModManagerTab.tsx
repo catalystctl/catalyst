@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@/csync';
 import {
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { formatBytes } from '../../../utils/formatters';
+import { formatDate, formatNumber } from '@/i18n/format';
 import { modManagerApi } from '../../../services/api/modManager';
 import {
  providerKeysApi,
@@ -169,6 +171,7 @@ function VersionSelector({
  onInstall: () => void;
  isInstalling: boolean;
 }) {
+ const { t } = useTranslation('server-tabs');
  return (
  <motion.div
  initial={{ height: 0, opacity: 0 }}
@@ -179,10 +182,10 @@ function VersionSelector({
  >
  <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
  <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
- Version
+ {t('tabs.mods.versionLabel')}
  </label>
  {isError ? (
- <p className="text-xs text-danger">Failed to load versions.</p>
+ <p className="text-xs text-danger">{t('tabs.mods.versionsFailed')}</p>
  ) : (
  <div className="flex items-end gap-2">
  <div className="relative flex-1">
@@ -193,7 +196,7 @@ function VersionSelector({
  disabled={isLoading}
  >
  <option value="">
- {isLoading ? 'Loading…' : 'Select version'}
+ {isLoading ? t('common:actions.loading') : t('tabs.mods.selectVersion')}
  </option>
  {versionOptions.map((version: any) => {
  const vid = normalizeVersionId(version);
@@ -219,7 +222,7 @@ function VersionSelector({
  ) : (
  <Download className="h-3.5 w-3.5" />
  )}
- {isInstalling ? 'Installing…' : 'Install'}
+ {isInstalling ? t('tabs.mods.installing') : t('tabs.mods.install')}
  </Button>
  </div>
  )}
@@ -234,6 +237,7 @@ export default function ServerModManagerTab({
  serverGameVersion,
  modManagerConfig,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  const queryClient = useQueryClient();
  // ── Provider options ──
  const modProviderOptions = useMemo<ModManagerProviderOption[]>(() => {
@@ -474,12 +478,12 @@ export default function ServerModManagerTab({
  const uninstallModMutation = useMutation({
  mutationFn: (filename: string) =>
  modManagerApi.uninstall(serverId!, filename, modTarget),
- onSuccess: () => notifySuccess('Mod removed'),
+ onSuccess: () => notifySuccess(t('tabs.mods.removed')),
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId ?? '', modTarget) });
  },
  onError: (error: any) => {
- notifyError(error?.response?.data?.error || 'Failed to remove mod');
+ notifyError(error?.response?.data?.error || t('tabs.mods.removeFailed'));
  },
  });
 
@@ -487,7 +491,7 @@ export default function ServerModManagerTab({
  mutationFn: () => {
  if (!serverId || !selectedProject || !selectedVersion) {
  reportSystemError({ level: 'error', component: 'ServerModManagerTab', message: 'Missing mod selection', metadata: { context: 'install mod mutation' } });
- throw new Error('Missing mod selection');
+ throw new Error(t('tabs.mods.missingSelection'));
  }
  return modManagerApi.install(serverId, {
  provider: modProvider,
@@ -498,12 +502,12 @@ export default function ServerModManagerTab({
  projectName: selectedProjectName || undefined,
  });
  },
- onSuccess: () => notifySuccess('Mod installed successfully'),
+ onSuccess: () => notifySuccess(t('tabs.mods.installedSuccess')),
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId ?? '', modTarget) });
  },
  onError: (error: any) => {
- notifyError(error?.response?.data?.error || 'Failed to install mod');
+ notifyError(error?.response?.data?.error || t('tabs.mods.installFailed'));
  },
  });
 
@@ -612,16 +616,16 @@ export default function ServerModManagerTab({
  const failed = results.filter((r) => !r.success).length;
  if (failed > 0)
  notifyError(
- `${failed} mod${failed !== 1 ? 's' : ''} failed to update`,
+ t('tabs.mods.updateSomeFailed', { count: failed }),
  );
  if (succeeded > 0)
  notifySuccess(
- `${succeeded} mod${succeeded !== 1 ? 's' : ''} updated successfully`,
+ t('tabs.mods.updateSomeSucceeded', { count: succeeded }),
  );
  refetchInstalledMods();
  setUpdateConfirmMods([]);
  } catch {
- notifyError('Failed to update mods');
+ notifyError(t('tabs.mods.updateFailed'));
  } finally {
  setIsUpdatingMods(false);
  }
@@ -635,13 +639,13 @@ export default function ServerModManagerTab({
  refetchInstalledMods();
  if (result.updatesAvailable > 0) {
  notifySuccess(
- `${result.updatesAvailable} update${result.updatesAvailable !== 1 ? 's' : ''} available`,
+ t('tabs.mods.updatesAvailable', { count: result.updatesAvailable }),
  );
  } else {
- notifySuccess('All mods are up to date');
+ notifySuccess(t('tabs.mods.allUpToDate'));
  }
  } catch {
- notifyError('Failed to check for updates');
+ notifyError(t('tabs.mods.checkUpdatesFailed'));
  } finally {
  setIsCheckingModUpdates(false);
  }
@@ -651,8 +655,8 @@ export default function ServerModManagerTab({
  if (!modManagerConfig) {
  return (
  <EmptyState
- title="Mod manager not available"
- description="This server template does not have a mod manager configured."
+ title={t('tabs.mods.unavailableTitle')}
+ description={t('tabs.mods.unavailableDescription')}
  />
  );
  }
@@ -668,20 +672,20 @@ export default function ServerModManagerTab({
  <motion.div variants={itemVariants}>
  <TabHeader
  icon={Package}
- title="Mods"
- description="Browse and install mods, datapacks, and modpacks."
+ title={t('tabs.mods.title')}
+ description={t('tabs.mods.description')}
  actions={(
  <div className="flex items-center gap-2">
  {installedMods.length > 0 && (
  <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
  <Package className="h-2.5 w-2.5" />
- {installedMods.length} installed
+ {t('tabs.mods.installedCount', { count: installedMods.length })}
  </Badge>
  )}
  {modsWithUpdates.length > 0 && (
  <Badge variant="warning" className="h-8 gap-1.5 px-3 text-xs">
  <ArrowUpCircle className="h-2.5 w-2.5" />
- {modsWithUpdates.length} update{modsWithUpdates.length !== 1 ? 's' : ''}
+ {t('tabs.mods.updatesBadge', { count: modsWithUpdates.length })}
  </Badge>
  )}
  </div>
@@ -705,7 +709,7 @@ export default function ServerModManagerTab({
  if (tab === 'installed') refetchInstalledMods();
  }}
  >
- {tab === 'browse' ? 'Browse' : 'Installed'}
+ {tab === 'browse' ? t('tabs.mods.tabBrowse') : t('tabs.mods.tabInstalled')}
  {tab === 'installed' && installedMods.length > 0 && (
  <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
  modSubTab === 'installed' ? 'bg-primary-foreground/20' : 'bg-surface-2'
@@ -738,7 +742,7 @@ export default function ServerModManagerTab({
  onKeyDown={(e) => {
  if (e.key === 'Enter') handleSearch();
  }}
- placeholder="Search mods, datapacks, modpacks…"
+ placeholder={t('tabs.mods.searchPlaceholder')}
  className="pl-9"
  />
  </div>
@@ -780,7 +784,11 @@ export default function ServerModManagerTab({
  >
  {modTargetOptions.map((target) => (
  <option key={target} value={target}>
- {titleCase(target)}
+ {target === 'mods'
+ ? t('tabs.mods.target.mods')
+ : target === 'datapacks'
+ ? t('tabs.mods.target.datapacks')
+ : t('tabs.mods.target.modpacks')}
  </option>
  ))}
  </select>
@@ -790,7 +798,7 @@ export default function ServerModManagerTab({
  <Input
  value={modGameVersion}
  onChange={(e) => setModGameVersion(e.target.value)}
- placeholder={serverGameVersion || 'Game version'}
+ placeholder={serverGameVersion || t('tabs.mods.gameVersionPlaceholder')}
  className="w-40"
  list="mod-game-version-tags"
  />
@@ -816,7 +824,7 @@ export default function ServerModManagerTab({
  ) : (
  <Search className="h-3.5 w-3.5" />
  )}
- Search
+ {t('common:actions.search')}
  </Button>
  </motion.div>
 
@@ -824,8 +832,8 @@ export default function ServerModManagerTab({
  {availableModProviderOptions.length === 0 ? (
  <motion.div variants={itemVariants}>
  <EmptyState
- title="No providers available"
- description="Every provider this template offers requires an API key that isn't configured. An administrator can add one under Admin → System → Mod Manager API Keys."
+ title={t('tabs.mods.noProvidersTitle')}
+ description={t('tabs.mods.noProvidersDescription')}
  />
  </motion.div>
  ) : modSearchLoading ? (
@@ -845,23 +853,26 @@ export default function ServerModManagerTab({
  if (status === 409) {
  return (
  detail ||
- 'Provider API key not configured. Set it under Admin → System → Mod Manager API Keys.'
+ t('tabs.mods.providerKeyMissing')
  );
  }
  if (detail) {
- return `Search failed${status ? ` (HTTP ${status})` : ''}: ${String(detail).slice(0, 200)}`;
+ return t('tabs.mods.searchFailed', {
+ status: status ? t('tabs.mods.searchFailedStatus', { status }) : '',
+ detail: String(detail).slice(0, 200),
+ });
  }
- return 'Unable to load search results. Try again in a moment.';
+ return t('tabs.mods.searchResultsFailed');
  })()}
  </motion.div>
  ) : modResults.length === 0 ? (
  <motion.div variants={itemVariants}>
  <EmptyState
- title="No results"
+ title={t('tabs.mods.noResultsTitle')}
  description={
  modQuery.trim()
- ? 'Try a different search term or adjust your filters.'
- : 'Search for a mod to get started.'
+ ? t('tabs.mods.noResultsFiltered')
+ : t('tabs.mods.noResultsEmpty')
  }
  />
  </motion.div>
@@ -873,9 +884,9 @@ export default function ServerModManagerTab({
  className="flex items-center justify-between"
  >
  <span className="text-xs text-muted-foreground">
- {totalHits.toLocaleString()} result{totalHits !== 1 ? 's' : ''}
+ {t('tabs.mods.resultCount', { count: totalHits, formatted: formatNumber(totalHits) })}
  {totalHits > RESULTS_PER_PAGE && (
- <> · Page {searchPage} of {totalPages}</>
+ <> · {t('tabs.mods.pageOf', { page: searchPage, total: totalPages })}</>
  )}
  </span>
  {totalHits > RESULTS_PER_PAGE && (
@@ -921,7 +932,7 @@ export default function ServerModManagerTab({
  entry.slug ||
  entry.name;
  const title =
- entry.title || entry.name || entry.slug || 'Untitled';
+ entry.title || entry.name || entry.slug || t('tabs.mods.untitled');
  const summary =
  entry.description || entry.summary || entry.excerpt || '';
  const isActive = selectedProject === String(id);
@@ -933,7 +944,7 @@ export default function ServerModManagerTab({
  entry.downloads ?? entry.downloadCount ?? 0;
  const providerLabel =
  selectedModProvider?.label ||
- displayProviderName(modProvider || 'provider');
+ displayProviderName(modProvider || t('tabs.mods.providerFallback'));
  let externalUrl = '';
  if (modProvider === 'modrinth') {
  const slug =
@@ -1056,7 +1067,7 @@ export default function ServerModManagerTab({
  className="gap-1.5"
  >
  <ChevronLeft className="h-3.5 w-3.5" />
- Previous
+ {t('tabs.mods.previous')}
  </Button>
  <div className="flex items-center gap-1">
  {Array.from(
@@ -1096,7 +1107,7 @@ export default function ServerModManagerTab({
  onClick={() => setSearchPage((p) => Math.min(totalPages, p + 1))}
  className="gap-1.5"
  >
- Next
+ {t('common:actions.next')}
  <ChevronRight className="h-3.5 w-3.5" />
  </Button>
  </motion.div>
@@ -1122,7 +1133,7 @@ export default function ServerModManagerTab({
  <Input
  value={modInstalledSearch}
  onChange={(e) => setModInstalledSearch(e.target.value)}
- placeholder="Search installed mods…"
+ placeholder={t('tabs.mods.searchInstalledPlaceholder')}
  className="pl-9"
  />
  </div>
@@ -1136,10 +1147,10 @@ export default function ServerModManagerTab({
  )
  }
  >
- <option value="all">All</option>
- <option value="updates">Has Updates</option>
- <option value="tracked">Tracked</option>
- <option value="untracked">Untracked</option>
+ <option value="all">{t('tabs.mods.filter.all')}</option>
+ <option value="updates">{t('tabs.mods.filter.updates')}</option>
+ <option value="tracked">{t('tabs.mods.filter.tracked')}</option>
+ <option value="untracked">{t('tabs.mods.filter.untracked')}</option>
  </select>
 
  <select
@@ -1151,9 +1162,9 @@ export default function ServerModManagerTab({
  )
  }
  >
- <option value="name">Name</option>
- <option value="size">Size</option>
- <option value="date">Date</option>
+ <option value="name">{t('tabs.mods.sort.name')}</option>
+ <option value="size">{t('tabs.mods.sort.size')}</option>
+ <option value="date">{t('tabs.mods.sort.date')}</option>
  </select>
 
  <div className="ml-auto flex items-center gap-1.5">
@@ -1182,10 +1193,10 @@ export default function ServerModManagerTab({
  }}
  >
  <ArrowUpCircle className="h-3.5 w-3.5" />
- Update
+ {t('tabs.mods.update')}
  {modsWithUpdatesSelected.length > 0
- ? ` (${modsWithUpdatesSelected.length})`
- : ` All (${modsWithUpdates.length})`}
+ ? t('tabs.mods.updateSelectedCount', { count: modsWithUpdatesSelected.length })
+ : t('tabs.mods.updateAllCount', { count: modsWithUpdates.length })}
  </Button>
  )}
 
@@ -1199,7 +1210,7 @@ export default function ServerModManagerTab({
  }}
  >
  <Trash2 className="h-3.5 w-3.5" />
- Remove ({selectedModFiles.size})
+ {t('tabs.mods.removeSelected', { count: selectedModFiles.size })}
  </Button>
  )}
 
@@ -1215,7 +1226,7 @@ export default function ServerModManagerTab({
  ) : (
  <RefreshCw className="h-3.5 w-3.5" />
  )}
- Check Updates
+ {t('tabs.mods.checkUpdates')}
  </Button>
  </div>
  </motion.div>
@@ -1235,16 +1246,20 @@ export default function ServerModManagerTab({
  >
  {modTargetOptions.map((target) => (
  <option key={target} value={target}>
- {titleCase(target)}
+ {target === 'mods'
+ ? t('tabs.mods.target.mods')
+ : target === 'datapacks'
+ ? t('tabs.mods.target.datapacks')
+ : t('tabs.mods.target.modpacks')}
  </option>
  ))}
  </select>
  <span className="text-xs text-muted-foreground">
  {filteredInstalledMods.length}
  {filteredInstalledMods.length !== installedMods.length
- ? ` of ${installedMods.length}`
+ ? t('tabs.mods.filteredOf', { total: installedMods.length })
  : ''}{' '}
- file{installedMods.length !== 1 ? 's' : ''}
+ {t('tabs.mods.fileCount', { count: installedMods.length })}
  </span>
  </div>
  {filteredInstalledMods.length > 0 && (
@@ -1267,8 +1282,8 @@ export default function ServerModManagerTab({
  {selectedModFiles.size ===
  filteredInstalledMods.length &&
  selectedModFiles.size > 0
- ? 'Deselect all'
- : 'Select all'}
+ ? t('tabs.mods.deselectAll')
+ : t('tabs.mods.selectAll')}
  </button>
  )}
  </motion.div>
@@ -1279,13 +1294,17 @@ export default function ServerModManagerTab({
  <EmptyState
  title={
  modInstalledSearch || modInstalledFilter !== 'all'
- ? 'No matching mods'
- : `No ${modTarget} installed`
+ ? t('tabs.mods.noMatching')
+ : modTarget === 'mods'
+ ? t('tabs.mods.noneInstalledMods')
+ : modTarget === 'datapacks'
+ ? t('tabs.mods.noneInstalledDatapacks')
+ : t('tabs.mods.noneInstalledModpacks')
  }
  description={
  modInstalledSearch || modInstalledFilter !== 'all'
- ? 'Try adjusting your search or filter.'
- : 'Install mods from the Browse tab to see them here.'
+ ? t('tabs.mods.adjustFilters')
+ : t('tabs.mods.installHint')
  }
  />
  </motion.div>
@@ -1375,7 +1394,7 @@ export default function ServerModManagerTab({
  className="gap-1 px-1.5 py-0 text-[10px]"
  >
  <ArrowUpCircle className="h-2.5 w-2.5" />
- Update
+ {t('tabs.mods.update')}
  </Badge>
  )}
  {mod.provider && (
@@ -1393,12 +1412,12 @@ export default function ServerModManagerTab({
  </span>
  {mod.modifiedAt && (
  <span>
- {new Date(mod.modifiedAt).toLocaleDateString()}
+ {formatDate(mod.modifiedAt)}
  </span>
  )}
  {!mod.provider && (
  <span className="italic text-foreground/60">
- untracked
+ {t('tabs.mods.untracked')}
  </span>
  )}
  </div>
@@ -1425,7 +1444,7 @@ export default function ServerModManagerTab({
  <button
  type="button"
  className="rounded-lg p-1.5 text-warning transition-colors hover:bg-warning/10"
- title="Update to latest version"
+ title={t('tabs.mods.updateToLatest')}
  disabled={isUpdatingMods}
  onClick={() =>
  setUpdateConfirmMods([
@@ -1446,7 +1465,7 @@ export default function ServerModManagerTab({
  <button
  type="button"
  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
- title="Remove"
+ title={t('common:actions.remove')}
  onClick={() => {
  setPendingRemoveMods([mod.name]);
  }}
@@ -1465,13 +1484,13 @@ export default function ServerModManagerTab({
  {/* Remove confirmation modal */}
  <ConfirmDialog
  open={pendingRemoveMods !== null && pendingRemoveMods.length > 0}
- title={pendingRemoveMods?.length === 1 ? 'Remove mod' : 'Remove mods'}
+ title={pendingRemoveMods?.length === 1 ? t('tabs.mods.removeOne') : t('tabs.mods.removeMany')}
  message={
  pendingRemoveMods?.length === 1
- ? `Remove ${pendingRemoveMods[0]}? This cannot be undone.`
- : `Remove ${pendingRemoveMods?.length ?? 0} selected mods? This cannot be undone.`
+ ? t('tabs.mods.removeConfirm', { name: pendingRemoveMods[0] })
+ : t('tabs.mods.removeConfirmMany', { count: pendingRemoveMods?.length ?? 0 })
  }
- confirmText="Remove"
+ confirmText={t('common:actions.remove')}
  variant="danger"
  loading={uninstallModMutation.isPending}
  onConfirm={() => {
@@ -1487,10 +1506,10 @@ export default function ServerModManagerTab({
 
  {/* Update confirmation modal */}
  <UpdateConfirmModal
- itemType="Mod"
+ itemKind="mod"
  items={updateConfirmMods}
  isUpdating={isUpdatingMods}
- warningMessage="⚠️ Updating mods may break compatibility with other mods or your world. Make sure to back up your server before proceeding."
+ warningMessage={t('tabs.mods.updateWarning')}
  onCancel={() => setUpdateConfirmMods([])}
  onConfirm={handleUpdateMods}
  />

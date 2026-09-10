@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ServerTabCard from './ServerTabCard';
 
 import TabHeader from './TabHeader';
@@ -65,6 +66,7 @@ export default function ServerDatabasesTab({
  deletePending,
  onDelete,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  const databases = Array.isArray(databasesProp) ? databasesProp : [];
  const databaseHosts = Array.isArray(hostsProp) ? hostsProp : [];
  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -77,11 +79,14 @@ export default function ServerDatabasesTab({
  <div className="space-y-4">
  <TabHeader
  icon={Database}
- title="Databases"
+ title={t('tabs.databases.title')}
  description={
  databaseAllocation === 0
- ? 'Database allocation disabled'
- : `${databases.length} / ${databaseAllocation} databases used`
+ ? t('tabs.databases.allocationDisabled')
+ : t('tabs.databases.used', {
+ used: databases.length,
+ total: databaseAllocation,
+ })
  }
  actions={
  canManageDatabases ? (
@@ -92,7 +97,7 @@ export default function ServerDatabasesTab({
  onChange={(e) => onDatabaseHostIdChange(e.target.value)}
  disabled={disabled}
  >
- <option value="">Select host</option>
+ <option value="">{t('tabs.databases.selectHost')}</option>
  {databaseHosts.map((host) => (
  <option key={host.id} value={host.id}>
  {host.name} ({host.host}:{host.port})
@@ -112,7 +117,7 @@ export default function ServerDatabasesTab({
  onClick={onCreate}
  disabled={!databaseHostId || createPending || disabled || databaseLimitReached}
  >
- Create
+ {t('common:actions.create')}
  </button>
  </div>
  ) : undefined
@@ -122,18 +127,18 @@ export default function ServerDatabasesTab({
  <ServerTabCard>
  {databaseAllocation === 0 && (
  <div className="rounded-lg border border-warning/20 bg-warning/5 px-3 py-2.5 text-[11px] text-warning">
- Database allocation is not available for this server.
+ {t('tabs.databases.allocationUnavailable')}
  </div>
  )}
 
  {databasesLoading ? (
  <TabLoadingState rows={2} />
  ) : databasesError ? (
- <TabErrorState message="Unable to load databases." />
+ <TabErrorState message={t('tabs.databases.loadFailed')} />
  ) : databases.length === 0 ? (
  <TabEmptyState
- title="No databases created"
- description="Create a database to store your server's data."
+ title={t('tabs.databases.emptyTitle')}
+ description={t('tabs.databases.emptyDescription')}
  />
  ) : (
  <div className="space-y-2">
@@ -161,7 +166,7 @@ export default function ServerDatabasesTab({
  onClick={() => onRotate(db.id)}
  disabled={rotatePending || isSuspended}
  >
- Rotate
+ {t('tabs.databases.rotate')}
  </button>
  <button
  type="button"
@@ -169,15 +174,15 @@ export default function ServerDatabasesTab({
  onClick={() => setPendingDeleteId(db.id)}
  disabled={deletePending || isSuspended}
  >
- Delete
+ {t('common:actions.delete')}
  </button>
  </div>
  )}
  </div>
  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
- <DataField label="Database" value={db.name} copyable concealable />
- <DataField label="Username" value={db.username} copyable />
- <DataField label="Password" value={db.password} concealable />
+ <DataField label={t('tabs.databases.fields.database')} value={db.name} copyable concealable />
+ <DataField label={t('tabs.databases.fields.username')} value={db.username} copyable />
+ <DataField label={t('tabs.databases.fields.password')} value={db.password} concealable />
  </div>
  </div>
  ))}
@@ -187,14 +192,14 @@ export default function ServerDatabasesTab({
 
  <ConfirmDialog
  open={Boolean(pendingDeleteId)}
- title="Delete database?"
+ title={t('tabs.databases.deleteTitle')}
  message={
  pendingDeleteDb
- ? `This will permanently drop database "${pendingDeleteDb.name}" and its credentials. This cannot be undone.`
- : 'This will permanently drop the database and its credentials. This cannot be undone.'
+ ? t('tabs.databases.deleteConfirm', { name: pendingDeleteDb.name })
+ : t('tabs.databases.deleteConfirmFallback')
  }
- confirmText="Delete"
- cancelText="Cancel"
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={deletePending}
  onConfirm={() => {

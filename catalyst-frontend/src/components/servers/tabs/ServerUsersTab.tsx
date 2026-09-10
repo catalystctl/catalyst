@@ -1,7 +1,9 @@
+import { useTranslation } from 'react-i18next';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
 import SectionHeader from './SectionHeader';
 import TabEmptyState from './TabEmptyState';
+import { formatDateTime } from '@/i18n/format';
 import { Users, UserPlus, ShieldCheck, Mail, Link2, RefreshCw } from 'lucide-react';
 
 interface UserEntry {
@@ -69,17 +71,18 @@ export default function ServerUsersTab({
  onRegenerateInvite,
  onCopyInviteLink,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  return (
  <div className="space-y-4">
  <TabHeader
  icon={Users}
- title="Users & Access"
- description="Manage who can access this server and their permissions."
+ title={t('tabs.users.title')}
+ description={t('tabs.users.description')}
  />
 
  {/* ── Invite ── */}
  <ServerTabCard>
- <SectionHeader icon={UserPlus} title="Invite user" />
+ <SectionHeader icon={UserPlus} title={t('tabs.users.inviteSection')} />
  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
  <input
  className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
@@ -94,10 +97,10 @@ export default function ServerUsersTab({
  onInvitePresetChange(e.target.value as 'readOnly' | 'power' | 'full' | 'custom')
  }
  >
- <option value="readOnly">Read-only</option>
- <option value="power">Power user</option>
- <option value="full">Full access</option>
- <option value="custom">Custom</option>
+ <option value="readOnly">{t('tabs.users.preset.readOnly')}</option>
+ <option value="power">{t('tabs.users.preset.power')}</option>
+ <option value="full">{t('tabs.users.preset.full')}</option>
+ <option value="custom">{t('tabs.users.preset.custom')}</option>
  </select>
  <button
  type="button"
@@ -105,7 +108,7 @@ export default function ServerUsersTab({
  onClick={onCreateInvite}
  disabled={!inviteEmail.trim() || createInvitePending}
  >
- Send invite
+ {t('tabs.users.sendInvite')}
  </button>
  </div>
  {invitePreset === 'custom' && (
@@ -133,7 +136,7 @@ export default function ServerUsersTab({
 
  {/* ── Active access ── */}
  <ServerTabCard>
- <SectionHeader icon={ShieldCheck} title="Active access" />
+ <SectionHeader icon={ShieldCheck} title={t('tabs.users.activeAccessSection')} />
  <div className="space-y-2">
  {permissionsData?.length ? (
  permissionsData.map((entry) => (
@@ -154,7 +157,7 @@ export default function ServerUsersTab({
  </div>
  {entry.userId === ownerId ? (
  <span className="rounded border border-primary/15 bg-primary/5 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">
- Owner
+ {t('tabs.users.owner')}
  </span>
  ) : (
  <button
@@ -163,7 +166,7 @@ export default function ServerUsersTab({
  onClick={() => onRemoveAccess(entry.userId)}
  disabled={removeAccessPending}
  >
- Remove
+ {t('common:actions.remove')}
  </button>
  )}
  </div>
@@ -224,7 +227,7 @@ export default function ServerUsersTab({
  onClick={() => onSaveAccess(entry)}
  disabled={saveAccessPending}
  >
- Save permissions
+ {t('tabs.users.savePermissions')}
  </button>
  </div>
  )}
@@ -232,8 +235,8 @@ export default function ServerUsersTab({
  ))
  ) : (
  <TabEmptyState
- title="No additional users"
- description="Invite someone above to grant them access."
+ title={t('tabs.users.noUsersTitle')}
+ description={t('tabs.users.noUsersDescription')}
  />
  )}
  </div>
@@ -241,7 +244,7 @@ export default function ServerUsersTab({
 
  {/* ── Pending invites ── */}
  <ServerTabCard>
- <SectionHeader icon={Mail} title="Pending invites" />
+ <SectionHeader icon={Mail} title={t('tabs.users.pendingInvitesSection')} />
  <div className="space-y-1.5">
  {invites.length ? (
  invites.map((invite) => (
@@ -253,7 +256,7 @@ export default function ServerUsersTab({
  <div>
  <div className="text-xs font-medium text-foreground">{invite.email}</div>
  <div className="font-mono text-[10px] tabular-nums text-muted-foreground/40">
- Expires {new Date(invite.expiresAt).toLocaleString()}
+ {t('tabs.users.expires', { date: formatDateTime(invite.expiresAt) })}
  </div>
  </div>
  <div className="flex items-center gap-1.5">
@@ -261,18 +264,18 @@ export default function ServerUsersTab({
  type="button"
  className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground disabled:opacity-50"
  onClick={() => onCopyInviteLink(invite)}
- title="Copy invite link"
+ title={t('tabs.users.copyInviteLinkTitle')}
  >
- <Link2 className="h-3 w-3" /> Copy link
+ <Link2 className="h-3 w-3" /> {t('tabs.users.copyLink')}
  </button>
  <button
  type="button"
  className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground disabled:opacity-50"
  onClick={() => onRegenerateInvite(invite.id)}
  disabled={regenerateInvitePending}
- title="Regenerate link (invalidates the old one)"
+ title={t('tabs.users.regenerateTitle')}
  >
- <RefreshCw className={`h-3 w-3 ${regenerateInvitePending ? 'animate-spin' : ''}`} /> Regenerate
+ <RefreshCw className={`h-3 w-3 ${regenerateInvitePending ? 'animate-spin' : ''}`} /> {t('tabs.users.regenerate')}
  </button>
  <button
  type="button"
@@ -280,15 +283,15 @@ export default function ServerUsersTab({
  onClick={() => onCancelInvite(invite.id)}
  disabled={cancelInvitePending}
  >
- Cancel
+ {t('common:actions.cancel')}
  </button>
  </div>
  </div>
  ))
  ) : (
  <TabEmptyState
- title="No pending invites"
- description="Invites will appear here after you send them."
+ title={t('tabs.users.noInvitesTitle')}
+ description={t('tabs.users.noInvitesDescription')}
  />
  )}
  </div>

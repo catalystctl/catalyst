@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { Save, RotateCcw, AlertCircle, CheckCircle2, Cog } from 'lucide-react';
 import { qk } from '../../../lib/queryKeys';
@@ -22,6 +23,7 @@ export default function ServerStartupVariablesSection({
  isSuspended,
  canEdit,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  const queryClient = useQueryClient();
  const [localValues, setLocalValues] = useState<Record<string, string>>({});
  const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
@@ -57,7 +59,7 @@ export default function ServerStartupVariablesSection({
  mutationFn: (payload: Record<string, string>) =>
  serversApi.updateVariables(serverId, payload),
  onSuccess: () => {
- notifySuccess('Startup variables saved');
+ notifySuccess(t('tabs.startup.saved'));
  setTouched(new Set());
  },
  onSettled: () => {
@@ -65,7 +67,7 @@ export default function ServerStartupVariablesSection({
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || error?.message || 'Failed to save variables';
+ const message = error?.response?.data?.error || error?.message || t('tabs.startup.saveFailed');
  const fields = error?.response?.data?.fields as Record<string, string> | undefined;
  if (fields) {
  setLocalErrors(fields);
@@ -116,10 +118,10 @@ export default function ServerStartupVariablesSection({
 
  const clientValidate = (variable: ServerStartupVariable, value: string): string | null => {
  if (variable.required && value.trim() === '') {
- return 'This field is required';
+ return t('tabs.startup.validation.required');
  }
  if (variable.input === 'number' && value.trim() !== '' && Number.isNaN(Number(value))) {
- return 'Must be a valid number';
+ return t('tabs.startup.validation.number');
  }
  for (const rule of variable.rules) {
  const [ruleName, ...rest] = rule.split(':');
@@ -136,10 +138,10 @@ export default function ServerStartupVariablesSection({
  if (isNumericRule) {
  const num = Number(value);
  if (Number.isNaN(num) || num < min || num > max) {
- return `Must be between ${min} and ${max}`;
+ return t('tabs.startup.validation.between', { min, max });
  }
  } else if (value.length < min || value.length > max) {
- return `Must be between ${min} and ${max} characters`;
+ return t('tabs.startup.validation.betweenLength', { min, max });
  }
  }
  }
@@ -147,7 +149,7 @@ export default function ServerStartupVariablesSection({
  try {
  const re = new RegExp(param);
  if (!re.test(value)) {
- return 'Invalid format';
+ return t('tabs.startup.validation.format');
  }
  } catch {
  // ignore invalid regex
@@ -156,7 +158,7 @@ export default function ServerStartupVariablesSection({
  if (ruleName === 'in') {
  const allowed = param.split(',');
  if (!allowed.includes(value)) {
- return `Must be one of: ${allowed.join(', ')}`;
+ return t('tabs.startup.validation.oneOf', { values: allowed.join(', ') });
  }
  }
  }
@@ -222,7 +224,7 @@ export default function ServerStartupVariablesSection({
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
-        <SectionHeader icon={Cog} title="Startup variables" />
+        <SectionHeader icon={Cog} title={t('tabs.startup.title')} />
         {canEdit && !isSuspended && (
           <div className="flex items-center gap-2">
             {hasChanges && (
@@ -233,7 +235,7 @@ export default function ServerStartupVariablesSection({
                 disabled={updateMutation.isPending}
               >
                 <RotateCcw className="h-3 w-3" />
-                Reset
+                {t('common:actions.reset')}
               </button>
             )}
             <button
@@ -243,7 +245,7 @@ export default function ServerStartupVariablesSection({
               disabled={!hasChanges || isSuspended || updateMutation.isPending}
             >
               <Save className="h-3 w-3" />
-              {updateMutation.isPending ? 'Saving…' : 'Save'}
+              {updateMutation.isPending ? t('tabs.startup.saving') : t('common:actions.save')}
             </button>
           </div>
         )}
@@ -259,10 +261,10 @@ export default function ServerStartupVariablesSection({
         ) : isError ? (
           <div className="flex items-center gap-2 py-3 text-xs text-danger">
             <AlertCircle className="h-4 w-4" />
-            Failed to load startup variables
+            {t('tabs.startup.loadFailed')}
           </div>
         ) : variables.length === 0 ? (
-          <p className="type-meta py-3">No startup variables on this template.</p>
+          <p className="type-meta py-3">{t('tabs.startup.empty')}</p>
         ) : (
           <div>
             {variables.map((variable) => {

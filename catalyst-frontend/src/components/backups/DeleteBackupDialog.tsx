@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -17,16 +18,17 @@ function DeleteBackupDialog({
   backup: Backup;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation('server-tabs');
   const [open, setOpen] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () => backupsApi.remove(serverId, backup.id),
     onSuccess: () => {
-      notifySuccess('Backup deleted');
+      notifySuccess(t('backups.delete.success'));
       setOpen(false);
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to delete backup';
+      const message = error?.response?.data?.error || t('backups.delete.failed');
       notifyError(message);
     },
     onSettled: () => {
@@ -45,18 +47,19 @@ function DeleteBackupDialog({
         }}
         disabled={disabled}
       >
-        Delete
+        {t('common:actions.delete')}
       </Button>
       <ConfirmDialog
         open={open}
-        title="Delete backup"
+        title={t('backups.delete.title')}
         message={
           <>
-            Delete <span className="font-semibold text-foreground">{backup.name}</span>? This action
-            cannot be undone.
+            {t('backups.delete.confirmPrefix')}
+            <span className="font-semibold text-foreground">{backup.name}</span>
+            {t('backups.delete.confirmSuffix')}
           </>
         }
-        confirmText="Delete"
+        confirmText={t('common:actions.delete')}
         variant="danger"
         loading={mutation.isPending}
         onConfirm={() => mutation.mutate()}

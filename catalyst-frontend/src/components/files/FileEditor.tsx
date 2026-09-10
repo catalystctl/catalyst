@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import ConfirmDialog from '../shared/ConfirmDialog';
 
 const Editor = lazy(() => import('@monaco-editor/react'));
@@ -87,6 +88,7 @@ function FileEditor({
  onReset,
  onClose,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  const language = useMemo(() => (file ? resolveLanguage(file.name) : 'plaintext'), [file]);
  const theme = useThemeStore((s) => s.theme);
  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'vs';
@@ -137,10 +139,10 @@ function FileEditor({
  const closeConfirmDialog = (
  <ConfirmDialog
  open={confirmCloseOpen}
- title="Unsaved changes"
- message="You have unsaved changes. Are you sure you want to close this file? Your edits will be lost."
- confirmText="Discard"
- cancelText="Keep editing"
+ title={t('files.editor.unsavedTitle')}
+ message={t('files.editor.unsavedMessage')}
+ confirmText={t('files.editor.discard')}
+ cancelText={t('files.editor.keepEditing')}
  variant="warning"
  onConfirm={confirmClose}
  onCancel={() => setConfirmCloseOpen(false)}
@@ -174,12 +176,12 @@ function FileEditor({
  className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning dark:bg-warning/15 dark:text-warning"
  >
  <Circle className="h-1.5 w-1.5 fill-warning" />
- Unsaved
+ {t('files.editor.unsaved')}
  </motion.span>
  )}
  {isSuspended && (
  <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive dark:bg-destructive/15 dark:text-destructive">
- Suspended
+ {t('common:status.suspended')}
  </span>
  )}
  </div>
@@ -194,10 +196,10 @@ function FileEditor({
  className={btnSecondary}
  onClick={onReset}
  disabled={!isDirty || isSaving || isLoading || isSuspended}
- title="Revert changes (Ctrl+Z stack)"
+ title={t('files.editor.revertTitle')}
  >
  <RotateCcw className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Revert</span>
+ <span className="hidden sm:inline">{t('files.editor.revert')}</span>
  </button>
  {onDownload && (
  <button
@@ -205,10 +207,10 @@ function FileEditor({
  className={btnSecondary}
  onClick={onDownload}
  disabled={isSaving || isLoading}
- title="Download file"
+ title={t('files.editor.downloadTitle')}
  >
  <Download className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Download</span>
+ <span className="hidden sm:inline">{t('common:actions.download')}</span>
  </button>
  )}
  <button
@@ -216,16 +218,16 @@ function FileEditor({
  className={btnPrimary}
  onClick={onSave}
  disabled={!isDirty || isSaving || isLoading || isSuspended}
- title="Save (Ctrl+S)"
+ title={t('files.editor.saveTitle')}
  >
  <Save className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">Save</span>
+ <span className="hidden sm:inline">{t('common:actions.save')}</span>
  </button>
  <button
  type="button"
  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
  onClick={handleClose}
- title="Close"
+ title={t('common:actions.close')}
  >
  <X className="h-4 w-4" />
  </button>
@@ -238,7 +240,7 @@ function FileEditor({
  <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
  <div className="flex flex-col items-center gap-2">
  <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
- Loading file contents…
+ {t('files.editor.loadingContents')}
  </div>
  </div>
  ) : (
@@ -247,7 +249,7 @@ function FileEditor({
  <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
  <div className="flex flex-col items-center gap-2">
  <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
- Loading editor…
+ {t('files.editor.loadingEditor')}
  </div>
  </div>
  }

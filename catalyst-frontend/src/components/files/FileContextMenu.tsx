@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import {
  Archive,
@@ -41,6 +42,7 @@ function FileContextMenu({
  contextPosition,
  onRequestClose,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  const detailsRef = useRef<HTMLDetailsElement | null>(null);
  const menuRef = useRef<HTMLDivElement | null>(null);
  const [adjustedPos, setAdjustedPos] = useState<{ x: number; y: number } | null>(null);
@@ -68,14 +70,14 @@ function FileContextMenu({
  ) : (
  <FileText className={`${itemIconClass} text-info`} />
  )}
- <span className="flex-1 text-left">{entry.isDirectory ? 'Open Folder' : 'Open File'}</span>
+ <span className="flex-1 text-left">{entry.isDirectory ? t('files.contextMenu.openFolder') : t('files.contextMenu.openFile')}</span>
  <kbd className="hidden sm:inline text-[10px] text-muted-foreground/40 font-mono">↵</kbd>
  </button>
 
  {onDownload && (
  <button type="button" className={itemClass} onClick={wrap(onDownload)}>
  <Download className={`${itemIconClass} text-primary`} />
- <span className="flex-1 text-left">Download</span>
+ <span className="flex-1 text-left">{t('common:actions.download')}</span>
  </button>
  )}
 
@@ -84,13 +86,13 @@ function FileContextMenu({
  {onCopyPath && (
  <button type="button" className={itemClass} onClick={wrap(onCopyPath)}>
  <ClipboardCopy className={`${itemIconClass} text-muted-foreground`} />
- <span className="flex-1 text-left">Copy Path</span>
+ <span className="flex-1 text-left">{t('files.contextMenu.copyPath')}</span>
  </button>
  )}
  {onRename && (
  <button type="button" className={itemClass} onClick={wrap(onRename)}>
  <Pencil className={`${itemIconClass} text-warning`} />
- <span className="flex-1 text-left">Rename</span>
+ <span className="flex-1 text-left">{t('files.contextMenu.rename')}</span>
  <kbd className="hidden sm:inline text-[10px] text-muted-foreground/40 font-mono">F2</kbd>
  </button>
  )}
@@ -100,19 +102,19 @@ function FileContextMenu({
  {onCompress && (
  <button type="button" className={itemClass} onClick={wrap(onCompress)}>
  <Archive className={`${itemIconClass} text-warning`} />
- <span className="flex-1 text-left">Compress</span>
+ <span className="flex-1 text-left">{t('files.actions.compress')}</span>
  </button>
  )}
  {onDecompress && (
  <button type="button" className={itemClass} onClick={wrap(onDecompress)}>
  <ArchiveRestore className={`${itemIconClass} text-warning`} />
- <span className="flex-1 text-left">Extract</span>
+ <span className="flex-1 text-left">{t('files.actions.extract')}</span>
  </button>
  )}
  {onPermissions && (
  <button type="button" className={itemClass} onClick={wrap(onPermissions)}>
  <Shield className={`${itemIconClass} text-success`} />
- <span className="flex-1 text-left">Permissions</span>
+ <span className="flex-1 text-left">{t('files.contextMenu.permissions')}</span>
  </button>
  )}
 
@@ -120,7 +122,7 @@ function FileContextMenu({
 
  <button type="button" className={dangerClass} onClick={wrap(onDelete)}>
  <Trash2 className={`${itemIconClass} text-destructive`} />
- <span className="flex-1 text-left">Delete</span>
+ <span className="flex-1 text-left">{t('common:actions.delete')}</span>
  <kbd className="hidden sm:inline text-[10px] text-destructive/40 font-mono">Del</kbd>
  </button>
  </div>
@@ -180,7 +182,7 @@ function FileContextMenu({
  <details ref={detailsRef} className="relative" onClick={(e) => e.stopPropagation()}>
  <summary
  className="list-none flex cursor-pointer items-center justify-center rounded-lg p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground [&::-webkit-details-marker]:hidden"
- aria-label="File actions"
+ aria-label={t('files.contextMenu.fileActions')}
  >
  <MoreHorizontal className="h-4 w-4" />
  </summary>

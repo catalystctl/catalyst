@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Upload, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileTypeIcon } from './FileTypeIcon';
@@ -13,6 +14,7 @@ type Props = {
 };
 
 function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }: Props) {
+ const { t } = useTranslation('server-tabs');
  const inputRef = useRef<HTMLInputElement | null>(null);
  const abortRef = useRef<AbortController | null>(null);
  const [isDragActive, setIsDragActive] = useState(false);
@@ -51,8 +53,8 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  <Upload className="h-4 w-4 text-primary" />
  </div>
  <div>
- <h3 className="text-sm font-semibold text-foreground dark:text-foreground">Upload Files</h3>
- <p className="text-[11px] text-muted-foreground">Target: <span className="font-mono">{path}</span></p>
+ <h3 className="text-sm font-semibold text-foreground dark:text-foreground">{t('files.uploader.title')}</h3>
+ <p className="text-[11px] text-muted-foreground">{t('files.uploader.target')} <span className="font-mono">{path}</span></p>
  </div>
  </div>
  <button
@@ -104,9 +106,9 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  <Upload className={`mb-3 h-10 w-10 ${isDragActive ? 'text-primary' : 'text-muted-foreground/40'}`} />
  </motion.div>
  <p className={`text-sm font-medium ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`}>
- {isDragActive ? 'Drop files here' : 'Drag files here'}
+ {isDragActive ? t('files.uploader.dropHere') : t('files.uploader.dragHere')}
  </p>
- <p className="mt-1 text-xs text-muted-foreground/60">or select from your device</p>
+ <p className="mt-1 text-xs text-muted-foreground/60">{t('files.uploader.orSelect')}</p>
  <div className="mt-4">
  <input
  ref={inputRef}
@@ -121,7 +123,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  onClick={() => inputRef.current?.click()}
  disabled={isUploading}
  >
- {isUploading ? 'Uploading…' : 'Choose Files'}
+ {isUploading ? t('files.uploader.uploading') : t('files.uploader.chooseFiles')}
  </button>
  {isUploading && (
  <button
@@ -130,7 +132,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  onClick={handleCancel}
  >
  <X className="h-3.5 w-3.5" />
- Cancel
+ {t('common:actions.cancel')}
  </button>
  )}
  </div>
@@ -164,7 +166,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  {name}
  </span>
  <span className="text-[11px] tabular-nums text-muted-foreground w-8 text-right">
- {isDone ? 'Done' : `${pct}%`}
+ {isDone ? t('files.uploader.done') : `${pct}%`}
  </span>
  <div className="h-1.5 w-20 flex-shrink-0 overflow-hidden rounded-full bg-surface-3 dark:bg-surface-3">
  <motion.div
@@ -188,7 +190,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  className="mt-3 flex items-center gap-1.5 text-xs text-success"
  >
  <Check className="h-3.5 w-3.5" />
- All files uploaded successfully
+ {t('files.uploader.allUploaded')}
  </motion.div>
  )}
  </>

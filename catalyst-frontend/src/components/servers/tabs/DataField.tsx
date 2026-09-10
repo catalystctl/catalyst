@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Copy, Eye, EyeOff } from 'lucide-react';
 import { notifySuccess, notifyError } from '../../../utils/notify';
 
@@ -20,14 +21,15 @@ export default function DataField({
  /** Show eye toggle to hide/reveal value */
  concealable?: boolean;
 }) {
+ const { t } = useTranslation('server-tabs');
  const [visible, setVisible] = useState(!concealable);
 
  const copy = useCallback(() => {
  navigator.clipboard.writeText(value).then(
- () => notifySuccess('Copied'),
- () => notifyError('Failed to copy'),
+ () => notifySuccess(t('common:actions.copied')),
+ () => notifyError(t('shared.copyFailed')),
  );
- }, [value]);
+ }, [t, value]);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 py-2 last:border-0">
@@ -41,7 +43,7 @@ export default function DataField({
             type="button"
             onClick={() => setVisible(!visible)}
             className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-            aria-label={visible ? 'Hide value' : 'Show value'}
+            aria-label={visible ? t('shared.hideValue') : t('shared.showValue')}
           >
             {visible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
           </button>
@@ -51,7 +53,7 @@ export default function DataField({
             type="button"
             onClick={copy}
             className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-            aria-label="Copy"
+            aria-label={t('common:actions.copy')}
           >
             <Copy className="h-3 w-3" />
           </button>

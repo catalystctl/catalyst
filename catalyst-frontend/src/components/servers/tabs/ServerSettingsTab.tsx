@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
 import { useQueryClient } from '@/csync';
@@ -40,6 +41,7 @@ export default function ServerSettingsTab({
  server,
  permissions,
 }: Props) {
+ const { t } = useTranslation('server-tabs');
  const queryClient = useQueryClient();
  const [showReinstallConfirm, setShowReinstallConfirm] = useState(false);
  const [reinstallPending, setReinstallPending] = useState(false);
@@ -57,7 +59,7 @@ export default function ServerSettingsTab({
  setReinstallPending(true);
  try {
  await serversApi.install(serverId);
- notifySuccess('Reinstall started');
+ notifySuccess(t('tabs.settings.reinstallStarted'));
  setShowReinstallConfirm(false);
  } catch (error: unknown) {
  reportSystemError({
@@ -67,7 +69,7 @@ export default function ServerSettingsTab({
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'reinstall server' },
  });
- notifyError(error instanceof Error ? error.message : 'Failed to reinstall server');
+ notifyError(error instanceof Error ? error.message : t('tabs.settings.reinstallFailed'));
  } finally {
  setReinstallPending(false);
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
@@ -79,7 +81,7 @@ export default function ServerSettingsTab({
  setCancelInstallPending(true);
  try {
  await serversApi.cancelInstall(serverId);
- notifySuccess('Install cancelled');
+ notifySuccess(t('tabs.settings.installCancelled'));
  setShowCancelInstallConfirm(false);
  } catch (error: unknown) {
  reportSystemError({
@@ -89,7 +91,7 @@ export default function ServerSettingsTab({
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'cancel install' },
  });
- notifyError(error instanceof Error ? error.message : 'Failed to cancel install');
+ notifyError(error instanceof Error ? error.message : t('tabs.settings.cancelInstallFailed'));
  } finally {
  setCancelInstallPending(false);
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
@@ -101,23 +103,23 @@ export default function ServerSettingsTab({
  <div className="space-y-4">
  <TabHeader
  icon={Settings}
- title="Settings"
- description="Manage server name and maintenance options."
+ title={t('tabs.settings.title')}
+ description={t('tabs.settings.description')}
  />
     <ServerTabCard>
-      <SettingsRow label="Name" description="Shown in lists and the server header.">
+      <SettingsRow label={t('shared.name')} description={t('tabs.settings.nameDescription')}>
         <Input
           className="min-w-[160px]"
           value={serverName}
           onChange={(e) => onServerNameChange(e.target.value)}
-          placeholder="Server name"
+          placeholder={t('tabs.settings.namePlaceholder')}
           disabled={isSuspended}
         />
         <Button type="button" size="sm" onClick={onRename} disabled={renamePending || isSuspended || !serverName.trim()}>
-          Save
+          {t('common:actions.save')}
         </Button>
       </SettingsRow>
-      <SettingsRow label="Maintenance">
+      <SettingsRow label={t('tabs.settings.maintenance')}>
         {canReinstall && (
           <Button
             type="button"
@@ -127,7 +129,7 @@ export default function ServerSettingsTab({
             disabled={serverStatus !== 'stopped' || isSuspended || reinstallPending}
             onClick={() => setShowReinstallConfirm(true)}
           >
-            Reinstall
+            {t('tabs.settings.reinstall')}
           </Button>
         )}
         {canReinstall && isInstalling && (
@@ -138,7 +140,7 @@ export default function ServerSettingsTab({
             disabled={isSuspended || cancelInstallPending}
             onClick={() => setShowCancelInstallConfirm(true)}
           >
-            {cancelInstallPending ? 'Cancelling…' : 'Cancel install'}
+            {cancelInstallPending ? t('tabs.settings.cancelling') : t('tabs.settings.cancelInstall')}
           </Button>
         )}
         <CloneServerDialog server={server} disabled={isSuspended} />
@@ -149,10 +151,10 @@ export default function ServerSettingsTab({
 
  <ConfirmDialog
  open={showReinstallConfirm}
- title="Reinstall server?"
- message="This will wipe server files and re-run the install script. Data that is not backed up will be lost. Are you sure?"
- confirmText="Reinstall"
- cancelText="Cancel"
+ title={t('tabs.settings.reinstallConfirmTitle')}
+ message={t('tabs.settings.reinstallConfirmMessage')}
+ confirmText={t('tabs.settings.reinstall')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={reinstallPending}
  onConfirm={() => { void handleReinstall(); }}
@@ -160,10 +162,10 @@ export default function ServerSettingsTab({
  />
  <ConfirmDialog
  open={showCancelInstallConfirm}
- title="Cancel install?"
- message="This will kill the stuck installer container and reset the server to stopped so you can reinstall. Partial install files are kept. Are you sure?"
- confirmText="Cancel install"
- cancelText="Keep installing"
+ title={t('tabs.settings.cancelInstallConfirmTitle')}
+ message={t('tabs.settings.cancelInstallConfirmMessage')}
+ confirmText={t('tabs.settings.cancelInstall')}
+ cancelText={t('tabs.settings.keepInstalling')}
  variant="danger"
  loading={cancelInstallPending}
  onConfirm={() => { void handleCancelInstall(); }}

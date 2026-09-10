@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Backup } from '../../types/backup';
 import { formatBackupSize } from '../../utils/formatters';
+import { formatDateTime } from '@/i18n/format';
 import { getBackupStatus } from '../../utils/backupStatus';
 import BackupStatusBadge from './BackupStatusBadge';
 import RestoreBackupDialog from './RestoreBackupDialog';
 import DeleteBackupDialog from './DeleteBackupDialog';
 
-const formatDateTime = (value: string) => new Date(value).toLocaleString();
 const toNumber = (value: unknown) => {
  const parsed = Number(value);
  return Number.isFinite(parsed) ? parsed : 0;
@@ -32,6 +33,7 @@ function BackupList({
  canRestore?: boolean;
  canDelete?: boolean;
 }) {
+ const { t } = useTranslation('server-tabs');
  const allowRestore = canRestore ?? canWrite;
  const allowDelete = canDelete ?? canWrite;
  const sorted = useMemo(() => {
@@ -42,9 +44,9 @@ function BackupList({
 
  if (!sorted.length) {
  return (
- <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-10 text-center text-sm text-muted-foreground">
- No backups yet. Create a backup to protect your server data.
- </div>
+        <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-10 text-center text-sm text-muted-foreground">
+          {t('backups.list.empty')}
+        </div>
  );
  }
 
@@ -65,8 +67,8 @@ function BackupList({
  <BackupStatusBadge status={status} />
  </div>
  <div className="mt-1 text-xs text-muted-foreground">
- Created {formatDateTime(backup.createdAt)}
- {backup.restoredAt ? ` · Restored ${formatDateTime(backup.restoredAt)}` : ''}
+ {t('backups.list.created', { date: formatDateTime(backup.createdAt) })}
+ {backup.restoredAt ? ` · ${t('backups.list.restored', { date: formatDateTime(backup.restoredAt) })}` : ''}
  </div>
  </div>
  <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -76,7 +78,7 @@ function BackupList({
  onClick={backup.download}
  disabled={Boolean(backup.downloadProgress) || isSuspended}
  >
- {backup.downloadProgress ?? 'Download'}
+ {backup.downloadProgress ?? t('common:actions.download')}
  </button>
  ) : null}
  {allowRestore ? (
@@ -93,31 +95,31 @@ function BackupList({
  </div>
  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-5">
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Size</div>
+ <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.size')}</div>
  <div className="text-sm font-semibold font-mono tabular-nums text-foreground">
  {formatBackupSize(toNumber(backup.sizeMb))}
  </div>
  </div>
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Storage</div>
+ <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.storage')}</div>
  <div className="text-sm font-semibold font-mono tabular-nums text-foreground">
  {backup.storageMode ?? 'local'}
  </div>
  </div>
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Compressed</div>
+ <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.compressed')}</div>
  <div className="text-sm font-semibold font-mono tabular-nums text-foreground">
- {backup.compressed === false ? 'No' : 'Yes'}
+ {backup.compressed === false ? t('common:actions.no') : t('common:actions.yes')}
  </div>
  </div>
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Checksum</div>
+ <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.checksum')}</div>
  <div className="text-[11px] font-mono text-muted-foreground/50">
- {backup.checksum ? `${backup.checksum.slice(0, 12)}...` : 'n/a'}
+ {backup.checksum ? `${backup.checksum.slice(0, 12)}...` : t('backups.list.notAvailable')}
  </div>
  </div>
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Path</div>
+ <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.path')}</div>
  <div className="text-[11px] text-muted-foreground truncate">{backup.path}</div>
  </div>
  </div>

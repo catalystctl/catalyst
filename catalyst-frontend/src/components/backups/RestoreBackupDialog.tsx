@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -17,16 +18,17 @@ function RestoreBackupDialog({
   backup: Backup;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation('server-tabs');
   const [open, setOpen] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () => backupsApi.restore(serverId, backup.id),
     onSuccess: () => {
-      notifySuccess('Backup restoration started');
+      notifySuccess(t('backups.restore.success'));
       setOpen(false);
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to restore backup';
+      const message = error?.response?.data?.error || t('backups.restore.failed');
       notifyError(message);
     },
     onSettled: () => {
@@ -43,19 +45,19 @@ function RestoreBackupDialog({
         onClick={() => setOpen(true)}
         disabled={disabled}
       >
-        Restore
+        {t('backups.restore.action')}
       </Button>
       <ConfirmDialog
         open={open}
-        title="Restore backup"
+        title={t('backups.restore.title')}
         message={
           <>
-            Restore <span className="font-semibold text-foreground">{backup.name}</span> to this
-            server? The server must be stopped before restoring and current files will be
-            overwritten.
+            {t('backups.restore.confirmPrefix')}
+            <span className="font-semibold text-foreground">{backup.name}</span>
+            {t('backups.restore.confirmSuffix')}
           </>
         }
-        confirmText="Restore"
+        confirmText={t('backups.restore.action')}
         variant="warning"
         loading={mutation.isPending || !!disabled}
         onConfirm={() => mutation.mutate()}
