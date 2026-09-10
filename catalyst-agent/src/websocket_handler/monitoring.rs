@@ -106,8 +106,7 @@ impl WebSocketHandler {
 
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
-            let mut w = ws.lock().await;
-            w.send(Message::Text(health_text.into()))
+            send_ws_with_timeout(&ws, Message::Text(health_text.into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         }
@@ -191,8 +190,7 @@ impl WebSocketHandler {
             };
             let text = serde_json::to_string(&msg).unwrap_or_default();
 
-            let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(text.into())).await {
+            if let Err(err) = send_ws_with_timeout(&ws, Message::Text(text.into())).await {
                 warn!("Failed to send state sync: {}", err);
                 break;
             }
@@ -216,8 +214,7 @@ impl WebSocketHandler {
         };
         let complete_text = serde_json::to_string(&complete_msg).unwrap_or_default();
 
-        let mut w = ws.lock().await;
-        if let Err(err) = w.send(Message::Text(complete_text.into())).await {
+        if let Err(err) = send_ws_with_timeout(&ws, Message::Text(complete_text.into())).await {
             warn!("Failed to send reconciliation complete: {}", err);
         }
 
@@ -265,7 +262,8 @@ impl WebSocketHandler {
             };
             let discovered_text = serde_json::to_string(&discovered_msg).unwrap_or_default();
 
-            if let Err(err) = w.send(Message::Text(discovered_text.into())).await {
+            if let Err(err) = send_ws_with_timeout(&ws, Message::Text(discovered_text.into())).await
+            {
                 warn!("Failed to send discovered servers: {}", err);
             }
         }
@@ -604,8 +602,7 @@ impl WebSocketHandler {
         };
         let text = serde_json::to_string(&msg).unwrap_or_default();
 
-        let mut w = ws.lock().await;
-        w.send(Message::Text(text.into()))
+        send_ws_with_timeout(&ws, Message::Text(text.into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -629,8 +626,7 @@ impl WebSocketHandler {
         };
         let text = serde_json::to_string(&msg).unwrap_or_default();
 
-        let mut w = ws.lock().await;
-        w.send(Message::Text(text.into()))
+        send_ws_with_timeout(&ws, Message::Text(text.into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -728,8 +724,9 @@ impl WebSocketHandler {
 
                 match &writer_opt {
                     Some(ws) => {
-                        let mut w = ws.lock().await;
-                        match w.send(Message::Text(payload_text.clone().into())).await {
+                        match send_ws_with_timeout(ws, Message::Text(payload_text.clone().into()))
+                            .await
+                        {
                             Ok(_) => {}
                             Err(err) => {
                                 warn!("Failed to send resource stats: {}. Buffering to disk.", err);
@@ -886,8 +883,7 @@ impl WebSocketHandler {
 
         match &writer_opt {
             Some(ws) => {
-                let mut w = ws.lock().await;
-                match w.send(Message::Text(payload_text.clone().into())).await {
+                match send_ws_with_timeout(ws, Message::Text(payload_text.clone().into())).await {
                     Ok(_) => {}
                     Err(err) => {
                         warn!(
