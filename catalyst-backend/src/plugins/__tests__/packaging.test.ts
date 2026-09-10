@@ -27,7 +27,7 @@ const VALID_MANIFEST = JSON.stringify({
 
 async function makeZip(
   zipPath: string,
-  entries: Array<{ name: string; content?: string }>,
+  entries: Array<{ name: string; content?: string; symlinkTarget?: string }>,
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const output = fs.createWriteStream(zipPath);
@@ -40,6 +40,10 @@ async function makeZip(
     const backing = path.join(path.dirname(zipPath), `src-${path.basename(zipPath, '.zip')}`);
     fs.mkdirSync(backing, { recursive: true });
     for (const entry of entries) {
+      if (entry.symlinkTarget !== undefined) {
+        archive.symlink(entry.name, entry.symlinkTarget);
+        continue;
+      }
       const dest = path.join(backing, entry.name.replace(/\\/g, '/').replace(/:\/\//g, '/'));
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.writeFileSync(dest, entry.content ?? '');
@@ -93,6 +97,17 @@ describe('extractPackage', () => {
       { name: '../evil.txt', content: 'nope' },
     ]);
     const dest = path.join(tmpRoot, 'slip-out');
+    await expect(extractPackage(zip, dest)).rejects.toMatchObject({ code: 'UNSAFE_ENTRY' });
+    await expect(fsp.access(dest)).rejects.toBeTruthy(); // dest cleaned up
+  });
+
+  it('rejects symlink entries (links would escape the extraction root)', async () => {
+    const zip = path.join(tmpRoot, 'symlink.zip');
+    await makeZip(zip, [
+      { name: 'plugin.json', content: VALID_MANIFEST },
+      { name: 'assets/evil', symlinkTarget: '/etc/passwd' },
+    ]);
+    const dest = path.join(tmpRoot, 'symlink-out');
     await expect(extractPackage(zip, dest)).rejects.toMatchObject({ code: 'UNSAFE_ENTRY' });
     await expect(fsp.access(dest)).rejects.toBeTruthy(); // dest cleaned up
   });

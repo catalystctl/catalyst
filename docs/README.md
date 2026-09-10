@@ -20,8 +20,11 @@ Welcome to the Catalyst documentation. This is the central index for all guides,
 For most users who just want Catalyst running:
 
 ```bash
-# One-line install
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+# One-line install (download + verify checksum first — see installation.md)
+VERSION=v1.18.8  # replace with the release you want
+curl -fsSL -o install.sh "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh"
+curl -fsSL -o install.sh.sha256 "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh.sha256"
+sha256sum -c install.sh.sha256 && bash install.sh
 cd catalyst-docker && nano .env && docker compose up -d
 ```
 

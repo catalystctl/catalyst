@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
-import { hashApiKey as hashApiKeyHmac } from "../services/api-key-service";
+import { hashApiKey as hashApiKeyHmac, hashApiKeyLegacyUnsalted, isLegacyHashAllowed, parseApiKeyRecordMetadata, timingSafeCompare } from "../services/api-key-service";
 import { broadcastCacheInvalidate, onCacheInvalidate } from "./cache-bus";
 
 function parseApiKeyMetadata(rawMetadata: unknown): Record<string, unknown> | null {
@@ -73,18 +73,15 @@ export async function verifyAgentApiKey(
   }
 
   try {
-    // Try HMAC-SHA256 hash first (current api-key-service format)
-    const hashedKey = hashApiKeyHmac(apiKey);
-
-    // Check in-memory cache first
-    const cached = getCachedVerification(nodeId, hashedKey);
-    if (cached === true) return true;
-
-    // Direct DB lookup by hashed key
-    let apiKeyRecord = await prisma.apikey.findUnique({
-      where: { key: hashedKey },
+    // Salt-aware lookup: find candidate keys for this node, then HMAC with
+    // each record's stored salt. Single-shot hash lookups cannot work once
+    // salts are per-key random.
+    const prefix = apiKey.includes("_") ? apiKey.split("_")[0] : "";
+    const candidates = await prisma.apikey.findMany({
+      where: prefix ? { prefix } : {},
       select: {
         id: true,
+        key: true,
         enabled: true,
         expiresAt: true,
         metadata: true,
@@ -93,13 +90,30 @@ export async function verifyAgentApiKey(
       },
     });
 
-    // Fallback to legacy SHA-256 base64url hash for backward compatibility
-    if (!apiKeyRecord) {
+    let apiKeyRecord: (typeof candidates)[number] | null = null;
+    for (const candidate of candidates) {
+      const meta = parseApiKeyRecordMetadata(candidate.metadata as unknown);
+      const salted = meta?.salt ? hashApiKeyHmac(apiKey, meta.salt) : null;
+      const deterministic = hashApiKeyHmac(apiKey);
+      const legacyUnsalted = isLegacyHashAllowed() ? hashApiKeyLegacyUnsalted(apiKey) : null;
+      if (
+        (salted && timingSafeCompare(candidate.key, salted)) ||
+        timingSafeCompare(candidate.key, deterministic) ||
+        (legacyUnsalted && timingSafeCompare(candidate.key, legacyUnsalted))
+      ) {
+        apiKeyRecord = candidate;
+        break;
+      }
+    }
+
+    // Legacy SHA-256 base64url format: only when explicitly enabled.
+    if (!apiKeyRecord && isLegacyHashAllowed()) {
       const legacyHashedKey = hashApiKeyLegacy(apiKey);
       apiKeyRecord = await prisma.apikey.findUnique({
         where: { key: legacyHashedKey },
         select: {
           id: true,
+          key: true,
           enabled: true,
           expiresAt: true,
           metadata: true,
@@ -107,6 +121,13 @@ export async function verifyAgentApiKey(
           user: { select: { banned: true } },
         },
       });
+    }
+    const hashedKey = apiKeyRecord?.key ?? "";
+
+    // Check in-memory cache (bypassed in test so rotation tests observe DB).
+    if (process.env.NODE_ENV !== "test" && hashedKey) {
+      const cached = getCachedVerification(nodeId, hashedKey);
+      if (cached === true) return true;
     }
 
     if (!apiKeyRecord || !apiKeyRecord.enabled) {

@@ -124,9 +124,20 @@ If using automatic HTTPS (Caddy or Traefik overlays):
 
 The fastest way to get Catalyst running. No repository clone, no build step.
 
+> **Verify before you run.** Never pipe `curl` directly into `bash`.
+> Download the versioned installer, check its SHA-256, then execute:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+VERSION=v1.18.8  # replace with the release you want
+curl -fsSL -o install.sh "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh"
+curl -fsSL -o install.sh.sha256 "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh.sha256"
+sha256sum -c install.sh.sha256
+bash install.sh
 ```
+
+Each GitHub Release publishes `install.sh` with a matching `install.sh.sha256`
+checksum file, plus a Sigstore/cosign signature (see the release notes).
+Prefer a tagged release for production; `main`-branch copies are snapshots.
 
 ### What the Script Does (Step by Step)
 
@@ -179,7 +190,8 @@ docker compose up -d
 Replace `docker` with `podman` everywhere:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+# Download + verify first (see Method 1 above), then:
+bash install.sh
 cd catalyst-docker
 nano .env
 podman compose up -d
@@ -970,10 +982,11 @@ The backend entrypoint automatically runs `prisma migrate deploy` on every start
 
 ### One-Line Install
 
-Re-run the installer — it updates `catalyst-docker/` in place, preserving `.env`:
+Re-run the installer — it updates `catalyst-docker/` in place, preserving `.env`
+(download the versioned script and verify its checksum first, see Method 1):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+sha256sum -c install.sh.sha256 && bash install.sh
 cd catalyst-docker
 docker compose up -d
 ```

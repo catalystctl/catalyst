@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::{error, info, warn};
 
@@ -29,6 +29,86 @@ pub struct AgentUpdater {
 pub struct UpdateOptions {
     /// Specific version to download (e.g. "1.12.2"). If None, downloads latest.
     pub target_version: Option<String>,
+    /// Allow installing a version older than the running agent. Audited.
+    pub allow_downgrade: bool,
+}
+
+/// SEC-H-11: streaming download cap (256 MiB) + per-download timeout.
+pub const MAX_UPDATE_BYTES: u64 = 256 * 1024 * 1024;
+pub const UPDATE_DOWNLOAD_TIMEOUT_SECS: u64 = 300;
+
+fn parse_semver(v: &str) -> Option<(u32, u32, u32)> {
+    let mut parts = v.split('.');
+    let major = parts.next()?.parse::<u32>().ok()?;
+    let minor = parts.next()?.parse::<u32>().ok()?;
+    let patch = parts.next()?.parse::<u32>().ok()?;
+    Some((major, minor, patch))
+}
+
+/// SEC-H-11: refuse downgrades (target < current) unless allow_downgrade,
+/// which the caller must audit.
+pub fn check_update_direction(
+    current: &str,
+    target: Option<&str>,
+    allow_downgrade: bool,
+) -> AgentResult<()> {
+    let Some(t) = target else { return Ok(()) };
+    let (Some(cur), Some(tgt)) = (parse_semver(current), parse_semver(t)) else {
+        return Ok(());
+    };
+    if tgt < cur && !allow_downgrade {
+        return Err(AgentError::SecurityViolation(format!(
+            "Refusing downgrade {} -> {} without --allow-downgrade (audited)",
+            current, t
+        )));
+    }
+    Ok(())
+}
+
+/// SEC-H-11: reject http:// unless loopback; hard-fail invalid release_repo.
+pub fn validate_release_repo(repo: &str) -> AgentResult<()> {
+    let ok = repo
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '/' || c == '-' || c == '_' || c == '.')
+        && repo.split('/').count() == 2
+        && {
+            let mut parts = repo.split('/');
+            let (o, r) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+            !o.is_empty() && !r.is_empty() && o != "." && o != ".." && r != "." && r != ".."
+        };
+    if !ok {
+        return Err(AgentError::SecurityViolation(format!(
+            "Invalid release_repo '{}': expected 'owner/repo'",
+            repo
+        )));
+    }
+    Ok(())
+}
+
+pub fn backend_download_url_is_safe(backend_url: &str) -> bool {
+    let lower = backend_url.to_ascii_lowercase();
+    if lower.starts_with("https://") || lower.starts_with("wss://") {
+        return true;
+    }
+    // http/ws only safe for loopback targets.
+    if lower.starts_with("http://") || lower.starts_with("ws://") {
+        let host = lower
+            .split("://")
+            .nth(1)
+            .unwrap_or("")
+            .split(['/', '?', ':'])
+            .next()
+            .unwrap_or("");
+        return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]";
+    }
+    false
+}
+
+fn unpredictable_temp_path(anchor: &Path) -> PathBuf {
+    // rand 0.10: rand::random() is the stable entry point.
+    let v: u128 = rand::random();
+    let suffix = format!("{:032x}", v);
+    anchor.with_extension(format!("update-{}.tmp", suffix))
 }
 
 impl AgentUpdater {
@@ -38,17 +118,9 @@ impl AgentUpdater {
             std::env::current_exe().unwrap_or_else(|_| PathBuf::from("./catalyst-agent"));
         let release_repo = config.agent.release_repo.clone();
 
-        // Validate release_repo format: must be "owner/repo" with safe characters only.
-        // This prevents URL injection via a malicious config value.
-        if !release_repo
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '/' || c == '-' || c == '_')
-            || release_repo.split('/').count() != 2
-        {
-            warn!(
-                "Invalid release_repo format '{}': expected 'owner/repo' with alphanumeric/-/_ chars",
-                release_repo
-            );
+        // SEC-H-11: hard-fail invalid release_repo (was warn-only).
+        if let Err(e) = validate_release_repo(&release_repo) {
+            warn!("{} — update downloads will fail closed", e);
         }
 
         Self {
@@ -89,6 +161,65 @@ impl AgentUpdater {
         }
     }
 
+    /// SEC-H-11: stream the body to disk with a byte cap + timeout instead
+    /// of buffering the whole binary in RAM. Uses O_EXCL unpredictable temp.
+    async fn stream_response_to_temp(
+        response: reqwest::Response,
+        temp_path: &PathBuf,
+    ) -> AgentResult<()> {
+        use futures::StreamExt;
+        use tokio::io::AsyncWriteExt;
+        // O_EXCL unpredictable temp: fail if the path already exists.
+        let file = tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(temp_path)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("create update temp: {}", e)))?;
+        let mut out = tokio::io::BufWriter::new(file);
+        let mut stream = response.bytes_stream();
+        let mut total: u64 = 0;
+        let deadline = tokio::time::Instant::now()
+            + std::time::Duration::from_secs(UPDATE_DOWNLOAD_TIMEOUT_SECS);
+        loop {
+            if tokio::time::Instant::now() > deadline {
+                let _ = tokio::fs::remove_file(temp_path).await;
+                return Err(AgentError::NetworkError(
+                    "Update download timed out".to_string(),
+                ));
+            }
+            let chunk = tokio::time::timeout(std::time::Duration::from_secs(60), stream.next())
+                .await
+                .map_err(|_| AgentError::NetworkError("Update chunk timed out".to_string()))?;
+            let Some(chunk) = chunk else { break };
+            let bytes = chunk
+                .map_err(|e| AgentError::NetworkError(format!("Update stream failed: {}", e)))?;
+            total = total.saturating_add(bytes.len() as u64);
+            if total > MAX_UPDATE_BYTES {
+                drop(out);
+                let _ = tokio::fs::remove_file(temp_path).await;
+                return Err(AgentError::SecurityViolation(format!(
+                    "Update exceeds {}MiB cap",
+                    MAX_UPDATE_BYTES / 1024 / 1024
+                )));
+            }
+            out.write_all(&bytes).await.map_err(|e| {
+                AgentError::FileSystemError(format!("Failed to write update file: {}", e))
+            })?;
+        }
+        out.flush().await.map_err(|e| {
+            AgentError::FileSystemError(format!("Failed to write update file: {}", e))
+        })?;
+        drop(out);
+        if total < 1024 {
+            let _ = tokio::fs::remove_file(temp_path).await;
+            return Err(AgentError::NetworkError(
+                "Update response too small — likely not a valid binary".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Try downloading the agent binary from GitHub Releases.
     /// If target_version is set, downloads that specific tag; otherwise downloads latest.
     async fn download_from_github(
@@ -96,6 +227,7 @@ impl AgentUpdater {
         temp_path: &PathBuf,
         target_version: Option<&str>,
     ) -> AgentResult<()> {
+        validate_release_repo(&self.release_repo)?;
         if let Some(ver) = target_version {
             if !is_valid_version(ver) {
                 return Err(AgentError::SecurityViolation(format!(
@@ -137,20 +269,7 @@ impl AgentUpdater {
             )));
         }
 
-        let bytes = response.bytes().await.map_err(|e| {
-            AgentError::NetworkError(format!("Failed to read GitHub response: {}", e))
-        })?;
-
-        if bytes.len() < 1024 {
-            // A real ELF binary is always > 1 KiB; anything smaller is likely an error page.
-            return Err(AgentError::NetworkError(
-                "GitHub response too small — likely not a valid binary".to_string(),
-            ));
-        }
-
-        fs::write(temp_path, &bytes).await.map_err(|e| {
-            AgentError::FileSystemError(format!("Failed to write update file: {}", e))
-        })?;
+        Self::stream_response_to_temp(response, temp_path).await?;
 
         self.make_executable(temp_path).await?;
 
@@ -167,6 +286,12 @@ impl AgentUpdater {
         temp_path: &PathBuf,
         target_version: Option<&str>,
     ) -> AgentResult<()> {
+        // SEC-H-11: reject http:// unless loopback.
+        if !backend_download_url_is_safe(&self.backend_url) {
+            return Err(AgentError::SecurityViolation(
+                "Refusing backend update over cleartext http:// for non-loopback host".to_string(),
+            ));
+        }
         if let Some(ver) = target_version {
             if !is_valid_version(ver) {
                 return Err(AgentError::SecurityViolation(format!(
@@ -205,13 +330,7 @@ impl AgentUpdater {
             )));
         }
 
-        let bytes = response.bytes().await.map_err(|e| {
-            AgentError::NetworkError(format!("Failed to read backend response: {}", e))
-        })?;
-
-        fs::write(temp_path, &bytes).await.map_err(|e| {
-            AgentError::FileSystemError(format!("Failed to write update file: {}", e))
-        })?;
+        Self::stream_response_to_temp(response, temp_path).await?;
 
         self.make_executable(temp_path).await?;
 
@@ -359,9 +478,22 @@ impl AgentUpdater {
     /// Download the agent binary, trying GitHub Releases first, then the backend.
     /// Verifies SHA-256 checksum when a sidecar .sha256 file is available.
     pub async fn download_update(&self, options: &UpdateOptions) -> AgentResult<PathBuf> {
+        // SEC-H-11: enforce target>=current unless --allow-downgrade (audited).
+        check_update_direction(
+            CURRENT_VERSION,
+            options.target_version.as_deref(),
+            options.allow_downgrade,
+        )?;
+        if options.allow_downgrade {
+            warn!(
+                "Agent update with --allow-downgrade to {:?} (audit)",
+                options.target_version
+            );
+        }
         // Place the temporary file next to the current binary so that
         // `rename` is guaranteed to be atomic (same filesystem).
-        let temp_path = self.current_binary_path.with_extension("update");
+        // SEC-H-11: O_EXCL unpredictable temp (no fixed "update" sibling).
+        let temp_path = unpredictable_temp_path(&self.current_binary_path);
 
         // Priority 1: GitHub Releases (pre-built, versioned binaries)
         match self
@@ -533,6 +665,7 @@ impl AgentUpdater {
                 );
                 return Ok(());
             }
+            check_update_direction(CURRENT_VERSION, Some(target), options.allow_downgrade)?;
         }
         let new_binary = self.download_update(options).await?;
         self.apply_update(new_binary).await
@@ -542,6 +675,45 @@ impl AgentUpdater {
     #[allow(dead_code)]
     pub fn current_version() -> &'static str {
         CURRENT_VERSION
+    }
+}
+
+#[cfg(test)]
+mod security_hardening_tests {
+    use super::*;
+
+    #[test]
+    fn downgrade_refused_without_flag() {
+        assert!(check_update_direction("1.44.0", Some("1.43.0"), false).is_err());
+        assert!(check_update_direction("1.44.0", Some("1.43.0"), true).is_ok());
+        assert!(check_update_direction("1.44.0", Some("1.45.0"), false).is_ok());
+        assert!(check_update_direction("1.44.0", None, false).is_ok());
+    }
+
+    #[test]
+    fn release_repo_hard_fail() {
+        assert!(validate_release_repo("catalystctl/catalyst").is_ok());
+        assert!(validate_release_repo("../../etc").is_err());
+        assert!(validate_release_repo("no-slash").is_err());
+        assert!(validate_release_repo("a/b/c").is_err());
+        assert!(validate_release_repo("").is_err());
+    }
+
+    #[test]
+    fn backend_cleartext_refused_unless_loopback() {
+        assert!(backend_download_url_is_safe("https://panel.example/api"));
+        assert!(backend_download_url_is_safe("http://127.0.0.1:3000/api"));
+        assert!(backend_download_url_is_safe("http://localhost:3000/api"));
+        assert!(!backend_download_url_is_safe("http://panel.example/api"));
+    }
+
+    #[test]
+    fn update_temp_paths_unpredictable() {
+        let anchor = PathBuf::from("/tmp/catalyst-agent");
+        let a = unpredictable_temp_path(&anchor);
+        let b = unpredictable_temp_path(&anchor);
+        assert_ne!(a, b);
+        assert!(a.parent() == anchor.parent());
     }
 }
 

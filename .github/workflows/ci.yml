@@ -34,8 +34,7 @@ on:
     branches: [main, develop]
 
 permissions:
-  contents: write    # needed for GHCR docker pushes
-  packages: write    # needed for GHCR docker pushes
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -63,34 +62,36 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   lint:
     name: Lint & Static Analysis
+    permissions:
+      contents: read
     # 2 vCPU is enough for eslint + clippy; keep free-tier-friendly.
     runs-on: blacksmith-2vcpu-ubuntu-2404
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       # Plugin frontends under catalyst-plugins/ compile into the panel build
       # (build-time discovery via import.meta.glob). The plugins live in their
       # own repo: catalystctl/catalyst-plugins.
       - name: Checkout plugins repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: catalystctl/catalyst-plugins
-          ref: main
+          ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
           path: catalyst-plugins
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: latest
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: rustfmt, clippy
 
@@ -98,7 +99,7 @@ jobs:
       # Was in original agent-ci.yml; missing from first version of unified workflow
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             ~/.local/bin/protoc
@@ -109,8 +110,10 @@ jobs:
         if: steps.cache-protoc.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.local/bin ~/.local/include
-          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
-          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d ~/.local
+          curl -fsSL -o /tmp/protoc-${{ env.PROTOC_VERSION }}.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          echo "ed8fca87a11c888fed329d6a59c34c7d436165f662a2c875246ddb1ac2b6dd50  /tmp/protoc-${{ env.PROTOC_VERSION }}.zip" | sha256sum -c -
+          unzip "/tmp/protoc-${{ env.PROTOC_VERSION }}.zip" -d ~/.local
+          rm -f "/tmp/protoc-${{ env.PROTOC_VERSION }}.zip"
           chmod +x ~/.local/bin/protoc
 
       - name: Add protoc to PATH
@@ -127,7 +130,7 @@ jobs:
       # (e.g. catalyst-backend/node_modules/.bin/eslint -> ../eslint/...) that
       # break after lockfile upgrades. Store hits still keep installs fast.
       - name: Cache pnpm store
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ${{ env.STORE_PATH }}
           key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
@@ -135,7 +138,7 @@ jobs:
             pnpm-store-v2-${{ runner.os }}-
 
       - name: Cache Prisma Client
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             node_modules/.prisma
@@ -151,7 +154,7 @@ jobs:
       # Smart cargo cache (registry + dependency target artifacts).
       # Replaces separate registry/target caches that rarely hit on the build job.
       - name: Cache Rust (lint)
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: catalyst-agent -> target
           shared-key: agent-ci
@@ -169,8 +172,45 @@ jobs:
         run: pnpm --filter catalyst-frontend run lint
 
       - name: Security audit
-        run: pnpm audit || true
+        run: pnpm audit --audit-level=high
+        continue-on-error: false
+
+      - name: Cargo audit (blocking)
+        run: |
+          cargo install --locked cargo-audit 2>/dev/null || cargo install cargo-audit
+          # RUSTSEC-2023-0071 (rsa Marvin Attack) has no patched release; rsa is
+          # a transitive dep of russh (SFTP key exchange), not panel traffic.
+          # Revisit when russh drops the rsa default feature.
+          # cargo-audit selects its input with -f <lockfile>; it has no
+          # --manifest-path flag.
+          mkdir -p /tmp/audit-home
+          printf '[advisories]\nignore = ["RUSTSEC-2023-0071"]\n' > /tmp/audit-home/audit.toml
+          CARGO_HOME=/tmp/audit-home cargo audit -f catalyst-agent/Cargo.lock
+
+      - name: Cargo deny (blocking)
+        run: |
+          cargo install --locked cargo-deny 2>/dev/null || cargo install cargo-deny
+          # Minimal policy if the repo has no deny.toml yet: advisories +
+          # default license/ban/source lints.
+          if [ ! -f catalyst-agent/deny.toml ] && [ ! -f deny.toml ]; then
+            printf '[advisories]\nversion = 2\n[licenses]\nversion = 2\n[bans]\nversion = 2\n[sources]\nversion = 2\n' > /tmp/catalyst-deny.toml
+            cargo deny --manifest-path catalyst-agent/Cargo.toml --config /tmp/catalyst-deny.toml check
+          else
+            cargo deny --manifest-path catalyst-agent/Cargo.toml check
+          fi
+
+      - name: Workflow lint (zizmor)
+        # Advisory-only for now: the existing workflow set reports 151 findings
+        # (artipacked credential persistence, template injection in
+        # github-script blocks, cache poisoning). Findings surface as job
+        # annotations; flipping this into a blocking gate means remediating
+        # them first. advanced-security is off so the job needs no
+        # security-events: write permission.
         continue-on-error: true
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
+          annotations: true
 
       - name: Check Rust formatting
         run: cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check
@@ -188,6 +228,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   test:
     name: Unit & Integration Tests
+    permissions:
+      contents: read
     runs-on: blacksmith-2vcpu-ubuntu-2404
 
     services:
@@ -214,32 +256,32 @@ jobs:
       BETTER_AUTH_SECRET: ci-test-better-auth-secret-do-not-use-in-production
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Checkout plugins repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: catalystctl/catalyst-plugins
-          ref: main
+          ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
           path: catalyst-plugins
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: latest
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
       # ── Install protoc ──
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             ~/.local/bin/protoc
@@ -250,8 +292,10 @@ jobs:
         if: steps.cache-protoc.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.local/bin ~/.local/include
-          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
-          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d ~/.local
+          curl -fsSL -o /tmp/protoc-${{ env.PROTOC_VERSION }}.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          echo "ed8fca87a11c888fed329d6a59c34c7d436165f662a2c875246ddb1ac2b6dd50  /tmp/protoc-${{ env.PROTOC_VERSION }}.zip" | sha256sum -c -
+          unzip "/tmp/protoc-${{ env.PROTOC_VERSION }}.zip" -d ~/.local
+          rm -f "/tmp/protoc-${{ env.PROTOC_VERSION }}.zip"
           chmod +x ~/.local/bin/protoc
 
       - name: Add protoc to PATH
@@ -267,7 +311,7 @@ jobs:
       # (e.g. catalyst-backend/node_modules/.bin/eslint -> ../eslint/...) that
       # break after lockfile upgrades. Store hits still keep installs fast.
       - name: Cache pnpm store
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ${{ env.STORE_PATH }}
           key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
@@ -275,7 +319,7 @@ jobs:
             pnpm-store-v2-${{ runner.os }}-
 
       - name: Cache Prisma Client
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             node_modules/.prisma
@@ -293,7 +337,7 @@ jobs:
         run: pnpm run db:push
 
       - name: Cache Rust (test)
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: catalyst-agent -> target
           shared-key: agent-ci
@@ -319,38 +363,40 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   build:
     name: Build Verification
+    permissions:
+      contents: read
     needs: [lint, test]
     # 4 vCPU: agent debug cargo build is the bottleneck (~75s on 2 vCPU).
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event_name == 'push'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Checkout plugins repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: catalystctl/catalyst-plugins
-          ref: main
+          ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
           path: catalyst-plugins
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: latest
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
       # ── Install protoc ──
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             ~/.local/bin/protoc
@@ -361,8 +407,10 @@ jobs:
         if: steps.cache-protoc.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.local/bin ~/.local/include
-          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
-          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d ~/.local
+          curl -fsSL -o /tmp/protoc-${{ env.PROTOC_VERSION }}.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          echo "ed8fca87a11c888fed329d6a59c34c7d436165f662a2c875246ddb1ac2b6dd50  /tmp/protoc-${{ env.PROTOC_VERSION }}.zip" | sha256sum -c -
+          unzip "/tmp/protoc-${{ env.PROTOC_VERSION }}.zip" -d ~/.local
+          rm -f "/tmp/protoc-${{ env.PROTOC_VERSION }}.zip"
           chmod +x ~/.local/bin/protoc
 
       - name: Add protoc to PATH
@@ -378,7 +426,7 @@ jobs:
       # (e.g. catalyst-backend/node_modules/.bin/eslint -> ../eslint/...) that
       # break after lockfile upgrades. Store hits still keep installs fast.
       - name: Cache pnpm store
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ${{ env.STORE_PATH }}
           key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
@@ -386,7 +434,7 @@ jobs:
             pnpm-store-v2-${{ runner.os }}-
 
       - name: Cache Prisma Client
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             node_modules/.prisma
@@ -403,7 +451,7 @@ jobs:
       # "Build agent (debug)" recompiled everything (~75s). Share the same
       # rust-cache key as lint/test so dependency objects are reused.
       - name: Cache Rust (build)
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: catalyst-agent -> target
           shared-key: agent-ci
@@ -430,6 +478,11 @@ jobs:
       - name: Build agent (debug)
         run: cargo build --manifest-path catalyst-agent/Cargo.toml
 
+      - name: Checksum build artifacts
+        run: |
+          sha256sum catalyst-agent/target/debug/catalyst-agent | tee /tmp/agent-debug.sha256
+          cat /tmp/agent-debug.sha256
+
   # ──────────────────────────────────────────────────────────────────────────
   # Job 4 was: Agent Release Build (v* tags only)
   # Moved to auto-version.yml — runs in the same workflow that creates
@@ -444,6 +497,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   detect-changes:
     name: Detect Changes
+    permissions:
+      contents: read
     # Only needs lint+test green; run in parallel with Build Verification so
     # Docker publish can start as soon as both finish (not after build alone).
     needs: [lint, test]
@@ -452,9 +507,9 @@ jobs:
     outputs:
       release: ${{ steps.filter.outputs.release }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
           # A version bump is lockstep: backend, frontend, and agent all ship
@@ -480,6 +535,10 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   publish-backend:
     name: Publish Backend Image
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # SLSA provenance via attest-build-provenance
     # Docker build is independent of the TypeScript/cargo verify job — only wait
     # for gates + path detect. Overlaps with Build Verification wall-clock.
     needs: [lint, test, detect-changes]
@@ -491,13 +550,13 @@ jobs:
       needs.detect-changes.outputs.release == 'true'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v1
+        uses: useblacksmith/setup-docker-builder@e4c1c000c95f9cc255f72940e9c56bcbd1239436 # v1
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -505,7 +564,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-backend
           tags: |
@@ -515,13 +574,21 @@ jobs:
             type=semver,pattern={{version}}
 
       - name: Build and push
-        uses: useblacksmith/build-push-action@v2
+        id: build-push
+        uses: useblacksmith/build-push-action@9b0579bbec7a6cad2f171596c57e7ac1e7658850 # v2
         with:
           context: .
           file: catalyst-backend/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Attest image provenance (SLSA/Sigstore)
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-backend
+          subject-digest: ${{ steps.build-push.outputs.digest }}
+          push-to-registry: true
 
   # ──────────────────────────────────────────────────────────────────────────────
   # Job 5c: Publish Frontend Docker Image
@@ -531,6 +598,10 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   publish-frontend:
     name: Publish Frontend Image
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # SLSA provenance via attest-build-provenance
     needs: [lint, test, detect-changes]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: >-
@@ -539,20 +610,20 @@ jobs:
       needs.detect-changes.outputs.release == 'true'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Checkout plugins repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: catalystctl/catalyst-plugins
-          ref: main
+          ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
           path: catalyst-plugins
 
       - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v1
+        uses: useblacksmith/setup-docker-builder@e4c1c000c95f9cc255f72940e9c56bcbd1239436 # v1
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -560,7 +631,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-frontend
           tags: |
@@ -570,10 +641,18 @@ jobs:
             type=semver,pattern={{version}}
 
       - name: Build and push
-        uses: useblacksmith/build-push-action@v2
+        id: build-push
+        uses: useblacksmith/build-push-action@9b0579bbec7a6cad2f171596c57e7ac1e7658850 # v2
         with:
           context: .
           file: catalyst-frontend/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Attest image provenance (SLSA/Sigstore)
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-frontend
+          subject-digest: ${{ steps.build-push.outputs.digest }}
+          push-to-registry: true

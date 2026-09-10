@@ -53,7 +53,28 @@ impl ContainerdRuntime {
         }
 
         // Build OCI spec
+        // Host network mode shares the node's network namespace (no
+        // isolation) and is denied unless the operator explicitly opted in
+        // via containerd.allow_host_network / CATALYST_ALLOW_HOST_NETWORK.
         let use_host_network = config.network_mode == Some("host");
+        if use_host_network && !self.allow_host_network {
+            warn!(
+                "Rejecting networkMode=host for {}: host networking is disabled (set containerd.allow_host_network=true to permit)",
+                config.container_id
+            );
+            self.report_runtime_error(
+                crate::error_reporter::ErrorLevel::Warn,
+                "agent:network",
+                format!(
+                    "Rejected networkMode=host for server {}: host networking is disabled",
+                    config.server_id
+                ),
+                Some(serde_json::json!({ "serverId": config.server_id })),
+            );
+            return Err(AgentError::InvalidRequest(
+                "networkMode \"host\" is disabled on this node".to_string(),
+            ));
+        }
         let spec = self.build_oci_spec(
             &config,
             &io_dir,
@@ -296,14 +317,10 @@ impl ContainerdRuntime {
         }
         // Install containers need broader capabilities than runtime containers because
         // install scripts commonly fix file ownership/permissions for the runtime user.
-        let caps = [
-            "CAP_CHOWN",
-            "CAP_FOWNER",
-            "CAP_DAC_OVERRIDE",
-            "CAP_SETUID",
-            "CAP_SETGID",
-            "CAP_NET_BIND_SERVICE",
-        ];
+        // They stay uid 0 (egg scripts call chown/chmod/useradd and the wrapper's
+        // exit trap does a final `chown -R 1000:1000 /data`, which needs root);
+        // see installer_capabilities() for the dropped-caps rationale.
+        let caps = installer_capabilities();
 
         // Build mounts including DNS resolv.conf and a writable /tmp tmpfs.
         // NOTE: noexec is intentionally NOT added here. Many Pterodactyl install
@@ -409,7 +426,7 @@ impl ContainerdRuntime {
             "hostname": &container_id,
             "mounts": mounts,
             "linux": {
-                "namespaces": [{"type":"pid"},{"type":"ipc"},{"type":"uts"},{"type":"mount"}],
+                "namespaces": installer_namespaces(),
                 "maskedPaths": masked_paths(), "readonlyPaths": readonly_paths(),
                 "seccomp": default_seccomp_profile(),
                 // SECURITY: installers parse the most attacker-influenced
@@ -509,22 +526,45 @@ impl ContainerdRuntime {
         };
         let req = with_namespace!(req, &self.namespace);
         let start_result = tasks.start(req).await;
-        match &start_result {
+        let installer_pid = match &start_result {
             Ok(resp) => {
                 let inner = resp.get_ref();
                 info!(
                     "[DEBUG] Installer {} task started, pid={}",
                     container_id, inner.pid
                 );
+                inner.pid
             }
             Err(e) => {
                 error!(
                     "[DEBUG] Installer {} task START FAILED: {:?}",
                     container_id, e
                 );
+                0
             }
-        }
+        };
         start_result.map_err(grpc_err)?;
+
+        // The installer spec uses a private network namespace, so attach it
+        // to the bridge network for connectivity (no port forwards).
+        if let Err(e) = self
+            .setup_cni_network(
+                &container_id,
+                installer_pid,
+                Some("bridge"),
+                None,
+                0,
+                &HashMap::new(),
+            )
+            .await
+        {
+            warn!("Installer CNI network setup failed: {}", e);
+            let _ = self.remove_container(&container_id).await;
+            return Err(AgentError::ContainerError(format!(
+                "Installer CNI network setup failed for {}: {}",
+                container_id, e
+            )));
+        }
 
         Ok(InstallerHandle {
             container_id,
@@ -906,7 +946,7 @@ impl ContainerdRuntime {
         }
         create_fifo(&ep).ok();
         File::create(&eo).ok();
-        let spec = serde_json::json!({"args":["sh","-c","cat > /proc/1/fd/0"],"env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"cwd":"/"});
+        let spec = serde_json::json!({"args":["sh","-c","cat > /proc/1/fd/0"],"user":{"uid":1000,"gid":1000},"env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"cwd":"/"});
         let spec_any = Any {
             type_url: "types.containerd.io/opencontainers/runtime-spec/1/Process".to_string(),
             value: spec.to_string().into_bytes(),

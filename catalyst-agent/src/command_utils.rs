@@ -49,6 +49,17 @@ pub fn run_command_capture(command: &str, args: &[&str]) -> AgentResult<String> 
     run_command_with_timeout(command, args, 600, true, &[])
 }
 
+/// SEC-7: truncate child stderr to 2 KiB and strip control characters
+/// before it reaches logs/errors (container-influenced bytes).
+pub fn sanitize_child_stderr(raw: &str) -> String {
+    let mut s: String = raw.chars().take(2048).collect();
+    s = s
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .collect();
+    s.trim().to_string()
+}
+
 fn run_command_with_timeout(
     command: &str,
     args: &[&str],
@@ -56,8 +67,19 @@ fn run_command_with_timeout(
     capture_stdout: bool,
     ok_codes: &[i32],
 ) -> AgentResult<String> {
+    // SEC-7: children must not inherit NODE_API_KEY (or other secrets) from
+    // the agent environment. Clear all env, allow-list PATH/LANG only.
+    // hidepid=2 on /proc is additionally recommended (see config.rs warning)
+    // since env of the agent process itself stays visible via /proc/<pid>/environ.
+    let safe_path = std::env::var("PATH").unwrap_or_else(|_| {
+        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string()
+    });
+    let safe_lang = std::env::var("LANG").unwrap_or_else(|_| "C.UTF-8".to_string());
     let mut child = std::process::Command::new(command)
         .args(args)
+        .env_clear()
+        .env("PATH", safe_path)
+        .env("LANG", safe_lang)
         .stdout(if capture_stdout {
             std::process::Stdio::piped()
         } else {
@@ -87,7 +109,7 @@ fn run_command_with_timeout(
                 if status.success() || ok_codes.contains(&code) {
                     return Ok(stdout);
                 }
-                let stderr = stderr.trim();
+                let stderr = sanitize_child_stderr(&stderr);
                 return Err(AgentError::FileSystemError(if stderr.is_empty() {
                     format!("{} failed with status {}", command, status)
                 } else {
@@ -215,5 +237,13 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("7"), "{msg}");
         assert!(msg.contains("boom"), "{msg}");
+    }
+
+    #[test]
+    fn child_stderr_truncated_and_stripped() {
+        let long = "A".repeat(5000);
+        let s = sanitize_child_stderr(&format!("{}\x00\x1b[31m", long));
+        assert!(s.len() <= 2048, "len={}", s.len());
+        assert!(!s.contains('\x00'));
     }
 }

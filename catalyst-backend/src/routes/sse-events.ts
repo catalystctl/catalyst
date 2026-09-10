@@ -236,8 +236,9 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
             EVENT_TYPES,
             push,
             allowedServerIds === undefined ? undefined : [...allowedServerIds],
+            userId ?? undefined,
           )
-        : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push);
+        : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push, userId ?? undefined);
 
       // Push cached latest metric immediately so the client doesn't wait for the next agent tick
       if (!isGlobal) {

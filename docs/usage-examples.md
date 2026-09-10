@@ -57,7 +57,7 @@ All API requests require authentication via API key. The same key authenticates 
 ```bash
 # All requests include the API key in the Authorization header
 curl -X GET http://localhost:3000/api/servers \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 API keys follow the format `catalyst_<base64-encoded-uuid>`.
@@ -103,7 +103,7 @@ For full agent details, see [agent.md](./agent.md).
 # Basic server creation
 curl -X POST http://localhost:3000/api/servers \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "name": "my-minecraft-server",
     "description": "Survival server for friends",
@@ -138,11 +138,11 @@ curl -X POST http://localhost:3000/api/servers \
 ```bash
 # List all servers for the current user
 curl http://localhost:3000/api/servers \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 
 # List with pagination
 curl "http://localhost:3000/api/servers?page=1&limit=20" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Server Details
@@ -150,7 +150,7 @@ curl "http://localhost:3000/api/servers?page=1&limit=20" \
 ```bash
 # Get full server details including console, settings, and resources
 curl http://localhost:3000/api/servers/srv_xyz789 \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Power Operations
@@ -159,25 +159,25 @@ curl http://localhost:3000/api/servers/srv_xyz789 \
 # Start
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{"signal":"start"}'
 
 # Stop
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{"signal":"stop"}'
 
 # Restart
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{"signal":"restart"}'
 
 # Kill (force stop)
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{"signal":"kill"}'
 ```
 
@@ -186,7 +186,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
 ```bash
 # Delete with confirmation
 curl -X DELETE http://localhost:3000/api/servers/srv_xyz789 \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ---
@@ -200,7 +200,7 @@ Send a command to the server console:
 ```bash
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/command \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{"command":"say Hello from API!"}'
 ```
 
@@ -210,7 +210,7 @@ Stream real-time console output via Server-Sent Events:
 
 ```bash
 curl -N http://localhost:3000/api/servers/srv_xyz789/console-stream \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 Example output:
@@ -229,7 +229,7 @@ Connect a WebSocket client for bidirectional console interaction:
 
 ```bash
 # Example with websocat (install: https://github.com/vi/websocat)
-websocat "wss://your-catalyst.example.com/ws?token=catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+websocat "wss://your-catalyst.example.com/ws?token=catalyst_YOUR_API_KEY"
 ```
 
 WebSocket message types:
@@ -252,7 +252,7 @@ WebSocket message types:
 ```bash
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/backups \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "name": "pre-update-backup",
     "description": "Backup before applying config changes"
@@ -263,7 +263,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/backups \
 
 ```bash
 curl http://localhost:3000/api/servers/srv_xyz789/backups \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Restore a Backup
@@ -271,7 +271,7 @@ curl http://localhost:3000/api/servers/srv_xyz789/backups \
 ```bash
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/backups/bkp_abc/restore \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{"backupId":"bkp_abc"}'
 ```
 
@@ -279,7 +279,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/backups/bkp_abc/restor
 
 ```bash
 curl -X DELETE http://localhost:3000/api/servers/srv_xyz789/backups/bkp_abc \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 For scheduled backup tasks, see [automation.md](./automation.md).
@@ -319,7 +319,7 @@ Create a recurring task:
 # Daily restart at 3 AM UTC
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/tasks \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "name": "Daily Restart",
     "action": "restart",
@@ -329,7 +329,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/tasks \
 # Hourly backup
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/tasks \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "name": "Hourly Backup",
     "action": "backup",
@@ -348,7 +348,7 @@ For more examples and supported actions, see [automation.md](./automation.md).
 ```bash
 curl -X POST http://localhost:3000/api/webhooks \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "name": "Server Monitor",
     "url": "https://your-endpoint.example.com/webhook",
@@ -464,7 +464,7 @@ All available webhook events: `server.created`, `server.deleted`, `server.suspen
 ```bash
 # Read a single file (returns base64-encoded content)
 curl http://localhost:3000/api/servers/srv_xyz789/files/read \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{"path":"server.properties"}'
 ```
 
@@ -474,7 +474,7 @@ curl http://localhost:3000/api/servers/srv_xyz789/files/read \
 # Create or overwrite a file
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/files/write \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "path": "config.yml",
     "content": "server-name: My Server\nmax-players: 20"
@@ -487,7 +487,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/files/write \
 # List files in a directory
 curl http://localhost:3000/api/servers/srv_xyz789/files/list \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{"path":"/"}'
 ```
 
@@ -502,7 +502,7 @@ curl http://localhost:3000/api/servers/srv_xyz789/files/list \
 ```bash
 # Paginated user list
 curl "http://localhost:3000/api/admin/users?page=1&limit=20" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Create a User
@@ -510,7 +510,7 @@ curl "http://localhost:3000/api/admin/users?page=1&limit=20" \
 ```bash
 curl -X POST http://localhost:3000/api/admin/users \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "email": "newuser@example.com",
     "username": "newuser",
@@ -524,7 +524,7 @@ curl -X POST http://localhost:3000/api/admin/users \
 
 ```bash
 curl http://localhost:3000/api/admin/nodes \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Deploy a Node
@@ -532,7 +532,7 @@ curl http://localhost:3000/api/admin/nodes \
 ```bash
 curl -X POST http://localhost:3000/api/admin/nodes/deploy \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "name": "game-node-03",
     "host": "192.168.1.100",
@@ -547,12 +547,12 @@ curl -X POST http://localhost:3000/api/admin/nodes/deploy \
 ```bash
 # List templates
 curl http://localhost:3000/api/admin/templates \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 
 # Create a template
 curl -X POST http://localhost:3000/api/admin/templates \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "name": "my-modded-server",
     "dockerImage": "ghcr.io/catalystctl/pterodactyl-images-modded:1.20",
@@ -584,7 +584,7 @@ import sys
 import time
 
 CATALYST_URL = "http://localhost:3000"
-API_KEY = "catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
+API_KEY = "catalyst_YOUR_API_KEY"
 HEADERS = {"Authorization": f"Bearer {API_KEY}"}
 
 def create_server(name, node_id, template_id, owner_email, limits=None):
@@ -652,7 +652,7 @@ if __name__ == "__main__":
 const https = require('https');
 
 const CATALYST_URL = 'http://localhost:3000';
-const API_KEY = 'catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6';
+const API_KEY = 'catalyst_YOUR_API_KEY';
 const POLL_INTERVAL_MS = 30000; // 30 seconds
 
 function listServers() {

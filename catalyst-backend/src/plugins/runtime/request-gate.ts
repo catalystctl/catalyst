@@ -5,17 +5,29 @@ import { performance } from 'perf_hooks';
 export interface PluginGateConfig {
   pluginName: string;
   requestTimeoutMs: number;
+  /** Process-wide heap-pressure observation threshold (see DEFAULT_GATE_CONFIG). */
   memoryLimitMb: number;
   maxConcurrentRequests: number;
 }
 
 export const DEFAULT_GATE_CONFIG: Omit<PluginGateConfig, 'pluginName'> = {
   requestTimeoutMs: 30000,
-  memoryLimitMb: 256,
+  // Process-wide heap pressure threshold (NOT per-plugin usage — plugins run
+  // in-process, so process.memoryUsage() cannot be attributed to one plugin).
+  // 256MB was tripping on normal backend heaps (350MB+); 1024MB only fires
+  // under genuine memory pressure. Overridable via PLUGIN_PROCESS_HEAP_LIMIT_MB.
+  memoryLimitMb: Number(process.env.PLUGIN_PROCESS_HEAP_LIMIT_MB) > 0
+    ? Number(process.env.PLUGIN_PROCESS_HEAP_LIMIT_MB)
+    : 1024,
   maxConcurrentRequests: 10,
 };
 
 const activeRequests = new Map<string, number>();
+
+// Throttle pressure warnings so a hot backend does not spam a systemError row
+// on every plugin request while heap stays above the threshold.
+const lastMemoryWarnAt = new Map<string, number>();
+const MEMORY_WARN_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
  * Plugins whose Fastify routes should hard-deny all traffic.
@@ -63,20 +75,26 @@ export function createGatedHandler(
 
     const startTime = performance.now();
 
-    // Check memory
+    // Backend heap-pressure observation (warn-only, never rejects).
+    // Plugins run in-process, so process.memoryUsage() is process-wide and
+    // cannot be attributed to one plugin. Rejecting here blamed whichever
+    // plugin received the request (e.g. cs16-admin 503s at 355MB > 256MB on
+    // a healthy backend) and made that plugin unusable while the heap was
+    // high for unrelated reasons. Log throttled pressure warnings instead.
     const memUsage = process.memoryUsage();
     const heapMb = memUsage.heapUsed / 1024 / 1024;
     if (heapMb > memoryLimitMb) {
-      captureSystemError({
-        level: 'warn',
-        component: 'PluginGateway',
-        message: `Plugin ${pluginName} exceeded memory limit: ${Math.round(heapMb)}MB > ${memoryLimitMb}MB`,
-        metadata: { pluginName, heapMb, memoryLimitMb },
-      }).catch(() => {});
-      return reply.status(503).send({
-        success: false,
-        error: `Plugin memory limit exceeded (${Math.round(heapMb)}MB > ${memoryLimitMb}MB)`,
-      });
+      const now = Date.now();
+      const lastWarn = lastMemoryWarnAt.get(pluginName) ?? 0;
+      if (now - lastWarn >= MEMORY_WARN_INTERVAL_MS) {
+        lastMemoryWarnAt.set(pluginName, now);
+        captureSystemError({
+          level: 'warn',
+          component: 'PluginGateway',
+          message: `Backend process heap pressure while serving plugin ${pluginName}: ${Math.round(heapMb)}MB > ${memoryLimitMb}MB (process-wide, not per-plugin usage)`,
+          metadata: { pluginName, heapMb, memoryLimitMb, scope: 'process' },
+        }).catch(() => {});
+      }
     }
 
     // Check concurrent request count

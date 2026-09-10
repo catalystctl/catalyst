@@ -10,9 +10,20 @@
 import { execSync } from "child_process";
 import { describe, it, expect } from "vitest";
 
+// Anchor all git queries to the repository root (not process.cwd()): the
+// vitest config may be invoked from the repo root or from catalyst-backend,
+// and `git ls-files` output differs between those two CWDs.
+const REPO_ROOT = execSync("git rev-parse --show-toplevel", {
+  encoding: "utf-8",
+  cwd: import.meta.dirname,
+})
+  .trim()
+  .replace(/\\/g, "/");
+const GIT_OPTS = { encoding: "utf-8", cwd: REPO_ROOT } as const;
+
 function gitLsFiles(): string {
   try {
-    return execSync("git ls-files", { encoding: "utf-8" });
+    return execSync("git ls-files", { ...GIT_OPTS });
   } catch {
     // Not a git checkout (e.g. exported tarball) — nothing to assert.
     return "";
@@ -38,10 +49,10 @@ describe("secret hygiene: tracked files", () => {
     for (const f of tracked) {
       if (f.startsWith("catalyst-agent/target/") || f.startsWith("node_modules/")) continue;
       try {
-        const content = execSync(`git show "HEAD:${f.replace(/"/g, '\\"')}" 2>/dev/null`, {
-          encoding: "utf-8",
-          maxBuffer: 32 * 1024 * 1024,
-        });
+        const content = execSync(
+          `git show "HEAD:${f.replace(/"/g, '\\"')}" 2>/dev/null`,
+          { encoding: "utf-8", maxBuffer: 32 * 1024 * 1024, cwd: REPO_ROOT },
+        );
         if (/catalyst_[A-Za-z0-9]{20,}/.test(content)) offenders.push(f);
       } catch {
         // binary or unreadable — skip

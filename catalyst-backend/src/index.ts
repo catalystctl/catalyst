@@ -14,6 +14,7 @@ import fastifyHelmet from "@fastify/helmet";
 import fastifyMultipart from "@fastify/multipart";
 import fastifySwagger from "@fastify/swagger";
 import { describeError } from "./utils/describe-error.js";
+import { redactUrlForLog } from "./lib/secret-redaction.js";
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import pino from "pino";
 import { prisma } from "./db";
@@ -118,13 +119,14 @@ const logger = pino(
 			},
 );
 
-// TRUST_PROXY defaults true for Docker/reverse-proxy deployments; set TRUST_PROXY=false
-// when the process is reached directly and client IPs must not be taken from X-Forwarded-*.
+// TRUST_PROXY defaults FALSE: client IPs must not be taken from X-Forwarded-*
+// unless the process is behind a known proxy. Set TRUST_PROXY=true (or 1/yes/on)
+// only when a trusted reverse proxy strips/spoofs headers correctly.
 const trustProxyEnv = process.env.TRUST_PROXY;
 const trustProxy =
 	trustProxyEnv === undefined || trustProxyEnv === ""
-		? true
-		: !["0", "false", "no", "off"].includes(trustProxyEnv.toLowerCase());
+		? false
+		: ["1", "true", "yes", "on"].includes(trustProxyEnv.toLowerCase());
 
 const app = Fastify({
 	logger: true,
@@ -153,7 +155,7 @@ app.setErrorHandler((error, request, reply) => {
 		err: error,
 		statusCode: mapped.status,
 		code: mapped.code,
-		url: request.url,
+		url: redactUrlForLog(request.url),
 		method: request.method,
 		requestId,
 	};
@@ -175,7 +177,7 @@ app.setErrorHandler((error, request, reply) => {
 				statusCode: mapped.status,
 				code: mapped.code,
 				prismaCode: mapped.prismaCode,
-				url: request.url,
+				url: redactUrlForLog(request.url),
 				method: request.method,
 			},
 			userId: (request as { user?: { userId?: string } }).user?.userId,
@@ -642,10 +644,18 @@ async function bootstrap() {
 				return err;
 			},
 			keyGenerator: (request) => {
-				// Rate-limit plugin runs before authenticate, so request.user is usually unset.
-				// Key by IP always, and when an API key is present add a stable hash of that
-				// credential so each key gets its own bucket (shared-IP clients don't collide).
+				// Key by socket+auth identity, not just IP: NAT/CGNAT clients
+				// share IPs, so IP-only buckets let one abuser exhaust the
+				// budget for everyone behind the same egress.
 				const ip = request.ip || "unknown";
+				const socketKey = (() => {
+					try {
+						const addr = (request.socket as { remoteAddress?: string; remotePort?: number } | undefined);
+						return addr?.remotePort ? `${addr.remoteAddress ?? ip}:${addr.remotePort}` : null;
+					} catch {
+						return null;
+					}
+				})();
 				const authHeader = typeof request.headers.authorization === "string"
 					? request.headers.authorization
 					: "";
@@ -666,13 +676,15 @@ async function bootstrap() {
 						.update(apiKeyMaterial)
 						.digest("hex")
 						.slice(0, 16);
-					return `ip:${ip}|key:${keyHash}`;
+					// Socket distinguishes connections behind shared IPs; the
+					// key hash distinguishes credentials on the same socket pool.
+					return socketKey ? `sock:${socketKey}|ip:${ip}|key:${keyHash}` : `ip:${ip}|key:${keyHash}`;
 				}
 				// Prefer authenticated user id when available (route-level rate limits after auth).
 				if (request.user?.userId) {
-					return `user:${request.user.userId}`;
+					return socketKey ? `sock:${socketKey}|user:${request.user.userId}` : `user:${request.user.userId}`;
 				}
-				return `ip:${ip}`;
+				return socketKey ? `sock:${socketKey}|ip:${ip}` : `ip:${ip}`;
 			},
 			allowList: async (request) => {
 				// Benchmark fair mode: bypass ALL rate limiting for max throughput
@@ -793,9 +805,18 @@ async function bootstrap() {
 			}
 		});
 
-		const wsMaxPayload = Number(process.env.WS_MAX_PAYLOAD_BYTES) || 8 * 1024 * 1024;
+		const wsMinPayload = 1 * 1024 * 1024;
+		const wsMaxAllowed = 2 * 1024 * 1024;
+		const wsConfigured = Number(process.env.WS_MAX_PAYLOAD_BYTES);
+		const wsMaxPayload = Number.isFinite(wsConfigured) && wsConfigured > 0
+			? Math.min(wsMaxAllowed, Math.max(wsMinPayload, wsConfigured))
+			: wsMaxAllowed;
 		await app.register(fastifyWebsocket, {
-			options: { maxPayload: Number.isFinite(wsMaxPayload) && wsMaxPayload > 0 ? wsMaxPayload : 8 * 1024 * 1024 },
+			options: {
+				maxPayload: wsMaxPayload,
+				idleTimeout: 120_000,
+				perMessageDeflate: { threshold: 1024, concurrencyLimit: 4, maxPayload: wsMaxPayload },
+			},
 			errorHandler: (error) => {
 				captureSystemError({
 					level: 'error',
@@ -1199,7 +1220,11 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			return reply.send(fs.createReadStream(deployScriptPath));
 		});
 
-		// Node deployment script endpoint (public)
+		// Node deployment script endpoint (public). Single-use short-lived
+		// token in the URL only; the long-lived agent API key travels via the
+		// Authorization Bearer header (or not at all — the response is the
+		// rendered script). Query strings are logged by proxies; the API key
+		// must never appear there.
 		app.get(
 			"/api/deploy/:token",
 			{
@@ -1207,7 +1232,12 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			},
 			async (request, reply) => {
 			const { token } = request.params as { token: string };
-			const { apiKey } = (request.query as { apiKey?: string }) || {};
+			const authHeader = typeof request.headers.authorization === "string"
+				? request.headers.authorization
+				: "";
+			const bearerKey = authHeader.toLowerCase().startsWith("bearer ")
+				? authHeader.slice(7).trim()
+				: "";
 
 			const deployToken = await prisma.deploymentToken.findUnique({
 				where: { token },
@@ -1223,8 +1253,17 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				return reply.status(401).send({ error: "Invalid deployment credentials" });
 			}
 
-			const apiKeyValue = typeof apiKey === "string" ? apiKey.trim() : "";
+			const apiKeyValue = bearerKey;
 			if (!apiKeyValue) {
+				return reply
+					.status(401)
+					.send({ error: "Invalid deployment credentials" });
+			}
+			// Refuse a key echoed back in the query string: proxies log URLs,
+			// so ?apiKey= would leak the long-lived credential.
+			const queryKey = (request.query as { apiKey?: string })?.apiKey;
+			if (typeof queryKey === "string" && queryKey.trim()) {
+				request.log.warn("Deploy script requested with apiKey in query string");
 				return reply
 					.status(401)
 					.send({ error: "Invalid deployment credentials" });
@@ -1328,6 +1367,10 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					return reply.send({ success: true, data: { valid: false } });
 				}
 
+				// SEC-M-01: bind the token's server to the calling node. A token
+				// minted for server S on node A must not validate when presented
+				// by node B (cross-node replay). Look up the server's nodeId and
+				// reject mismatches explicitly (401) vs unknown servers (404).
 				// Look up the user's permissions for this server
 				const serverAccess = await prisma.serverAccess.findFirst({
 					where: { serverId: result.serverId, userId: result.userId },
@@ -1340,8 +1383,18 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				// token (up to 1 year).
 				const sftpvServer = await prisma.server.findUnique({
 					where: { id: result.serverId },
-					select: { uuid: true, suspendedAt: true },
+					select: { uuid: true, suspendedAt: true, nodeId: true },
 				});
+				if (!sftpvServer) {
+					return reply.status(404).send({ success: true, data: { valid: false } });
+				}
+				if (sftpvServer.nodeId !== headerNodeId) {
+					request.log.warn(
+						{ serverId: result.serverId, expectedNodeId: sftpvServer.nodeId, actualNodeId: headerNodeId },
+						"SFTP validate-token node mismatch",
+					);
+					return reply.status(401).send({ success: true, data: { valid: false } });
+				}
 				if (
 					process.env.SUSPENSION_ENFORCED !== "false" &&
 					sftpvServer?.suspendedAt
@@ -2198,14 +2251,18 @@ BACKEND_HTTP_URL="\${BACKEND_HTTP_URL%/ws}"
 BACKEND_HTTP_URL="\${BACKEND_HTTP_URL%/}"
 
 NODE_ID=${shellEscape(nodeId)}
-NODE_API_KEY=${shellEscape(apiKey)}
 NODE_HOSTNAME=${shellEscape(hostName)}
 ${pathExports}
 DEPLOY_SCRIPT_URL="\${BACKEND_HTTP_URL}/api/agent/deploy-script"
 TMP_SCRIPT="$(mktemp /tmp/catalyst-deploy-agent.XXXXXX.sh)"
+# Agent API key: prefer the Authorization header (never the URL — proxies log
+# query strings). Fall back to a 0600 file when CATALYST_API_KEY is exported.
+KEY_FILE="$(mktemp /tmp/catalyst-agent-key.XXXXXX)"
+chmod 600 "$KEY_FILE"
+printf '%s' "${shellEscape(apiKey)}" > "$KEY_FILE"
 
 cleanup() {
-  rm -f "$TMP_SCRIPT"
+  rm -f "$TMP_SCRIPT" "$KEY_FILE"
 }
 trap cleanup EXIT
 
@@ -2214,7 +2271,7 @@ curl -fsSL "\${DEPLOY_SCRIPT_URL}" -o "$TMP_SCRIPT"
 chmod +x "$TMP_SCRIPT"
 
 echo "Running deploy script..."
-"$TMP_SCRIPT" "$BACKEND_HTTP_URL" "$NODE_ID" "$NODE_API_KEY" "$NODE_HOSTNAME"
+CATALYST_API_KEY_FILE="$KEY_FILE" "$TMP_SCRIPT" "$BACKEND_HTTP_URL" "$NODE_ID" "$NODE_HOSTNAME"
 `;
 }
 

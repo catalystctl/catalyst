@@ -25,6 +25,12 @@ use std::sync::OnceLock;
 use tracing::{debug, info, warn};
 
 const MAX_CONFIG_FILE_BYTES: u64 = 64 * 1024 * 1024;
+/// SEC-H-13: panel-driven rewrite caps.
+pub const MAX_CONFIG_SPECS: usize = 64;
+pub const MAX_CONFIG_REPLACEMENTS: usize = 1024;
+pub const MAX_CONFIG_OUTPUT_BYTES: u64 = 64 * 1024 * 1024;
+/// SEC-H-13: YAML anchor/alias/depth cap (billion-laughs guard).
+pub const MAX_YAML_ANCHOR_DEPTH: usize = 50;
 
 #[derive(Debug, Clone)]
 pub struct ConfigReplacement {
@@ -104,6 +110,7 @@ impl ConfigResolveContext {
 }
 
 /// Parse egg `features.pterodactylConfigFiles` (or raw egg config.files) into specs.
+/// SEC-H-13: caps specs<=64, replacements<=1024.
 pub fn parse_config_file_specs(value: &Value) -> Vec<ConfigFileSpec> {
     let obj = match value {
         Value::Object(map) => map,
@@ -183,6 +190,24 @@ pub fn parse_config_file_specs(value: &Value) -> Vec<ConfigFileSpec> {
             parser,
             replacements,
         });
+        // SEC-H-13: cap specs at 64 (oldest panels sent unbounded maps).
+        if specs.len() >= MAX_CONFIG_SPECS {
+            warn!(
+                "Config specs exceed {} — truncating remainder",
+                MAX_CONFIG_SPECS
+            );
+            break;
+        }
+    }
+
+    for spec in &mut specs {
+        if spec.replacements.len() > MAX_CONFIG_REPLACEMENTS {
+            warn!(
+                "Config replacements for {} exceed {} — truncating",
+                spec.file_name, MAX_CONFIG_REPLACEMENTS
+            );
+            spec.replacements.truncate(MAX_CONFIG_REPLACEMENTS);
+        }
     }
 
     specs
@@ -231,6 +256,17 @@ pub async fn apply_configuration_files(
     specs: &[ConfigFileSpec],
     ctx: &ConfigResolveContext,
 ) -> AgentResult<()> {
+    // SEC-H-13: cap total specs applied per start.
+    let specs: &[ConfigFileSpec] = if specs.len() > MAX_CONFIG_SPECS {
+        warn!(
+            "Applying only first {} of {} config specs",
+            MAX_CONFIG_SPECS,
+            specs.len()
+        );
+        &specs[..MAX_CONFIG_SPECS]
+    } else {
+        specs
+    };
     if specs.is_empty() {
         return Ok(());
     }
@@ -331,6 +367,14 @@ async fn read_or_empty(path: &Path) -> AgentResult<String> {
 }
 
 async fn atomic_write(path: &Path, content: &str) -> AgentResult<()> {
+    // SEC-H-13: cap rewritten output bytes (replacement expansion guard).
+    if content.len() as u64 > MAX_CONFIG_OUTPUT_BYTES {
+        return Err(AgentError::FileSystemError(format!(
+            "Config rewrite for {} exceeds {} bytes",
+            path.display(),
+            MAX_CONFIG_OUTPUT_BYTES
+        )));
+    }
     // SECURITY: the temp name used to be a predictable sibling
     // ("*.catalyst-cfg-tmp"), and this module does not go through
     // FileManager::resolve_path — so a container-planted symlink at that name
@@ -652,6 +696,10 @@ fn parse_array_part(part: &str) -> (&str, Option<usize>) {
 async fn apply_yaml(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
     // Convert YAML → JSON via serde_yaml, reuse JSON path setter, write YAML back.
     let raw = read_or_empty(path).await?;
+    // SEC-H-13: reject anchors/aliases outright (billion-laughs + alias bombs);
+    // legitimate game configs (server.properties-style YAML) never need them.
+    // Also cap nesting depth lexically before parsing.
+    reject_yaml_anchors(&raw, path)?;
     let mut json_value: Value = if raw.trim().is_empty() {
         Value::Object(Map::new())
     } else {
@@ -676,6 +724,37 @@ async fn apply_yaml(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> 
     let out = serde_yaml::to_string(&yaml_val)
         .map_err(|e| AgentError::FileSystemError(format!("Failed to serialize YAML: {}", e)))?;
     atomic_write(path, &out).await
+}
+
+/// SEC-H-13: reject YAML anchors (`&`) / aliases (`*`) and over-deep nesting
+/// before parsing. Lexical scan: `&`/`*` at a value position indicate anchors.
+fn reject_yaml_anchors(raw: &str, path: &Path) -> AgentResult<()> {
+    let mut max_depth: usize = 0;
+    for line in raw.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        // Depth heuristic: 2-space indent levels.
+        let indent = line.len() - trimmed.len();
+        max_depth = max_depth.max(indent / 2);
+        if max_depth > MAX_YAML_ANCHOR_DEPTH {
+            return Err(AgentError::FileSystemError(format!(
+                "YAML in {} exceeds nesting depth {}",
+                path.display(),
+                MAX_YAML_ANCHOR_DEPTH
+            )));
+        }
+        // Anchor (`key: &anchor`) or alias (`key: *alias`) value positions.
+        let val = trimmed.split_once(':').map(|(_, v)| v.trim()).unwrap_or("");
+        if val.starts_with('&') || val.starts_with('*') {
+            return Err(AgentError::SecurityViolation(format!(
+                "YAML anchors/aliases not allowed in {}",
+                path.display()
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Minimal INI parser supporting `key`, `section.key`, and `[Section.With.Dots].key`.
@@ -801,10 +880,11 @@ fn set_xml_path_text(xml: &str, path: &str, value: &str) -> String {
     if parts.is_empty() {
         return xml.to_string();
     }
+    // SEC-H-13: escape the panel-supplied tag in BOTH regexes so `match`
+    // text cannot become a regex injection.
     let tag = parts.last().copied().unwrap_or("");
-    // Prefer replacing existing <tag>...</tag> or <tag .../> near end of path
-    let _open_re = format!(r"(?s)<{tag}(\s[^>]*)?>");
-    let paired = Regex::new(&format!(r"(?s)(<{tag}(?:\s[^>]*)?>)(.*?)(</{tag}>)")).ok();
+    let esc = regex::escape(tag);
+    let paired = Regex::new(&format!(r"(?s)(<{esc}(?:\s[^>]*)?>)(.*?)(</{esc}>)")).ok();
     if let Some(re) = paired {
         if re.is_match(xml) {
             let escaped = xml_escape(value);
@@ -817,7 +897,7 @@ fn set_xml_path_text(xml: &str, path: &str, value: &str) -> String {
     }
 
     // Self-closing → expand
-    if let Ok(re) = Regex::new(&format!(r"<{}(\s[^>]*)?/>", regex::escape(tag))) {
+    if let Ok(re) = Regex::new(&format!(r"<{}(\s[^>]*)?/>", esc)) {
         if re.is_match(xml) {
             let escaped = xml_escape(value);
             return re
@@ -1087,5 +1167,38 @@ mod tests {
             out.contains("exit: false") || out.contains("exit:false"),
             "{out}"
         );
+    }
+
+    #[test]
+    fn specs_capped_at_64_replacements_at_1024() {
+        let mut obj = serde_json::Map::new();
+        for i in 0..100 {
+            obj.insert(
+                format!("file{}.txt", i),
+                serde_json::json!({"parser": "file", "find": {"a": "b"}}),
+            );
+        }
+        let specs = parse_config_file_specs(&serde_json::Value::Object(obj));
+        assert!(specs.len() <= MAX_CONFIG_SPECS, "len={}", specs.len());
+    }
+
+    #[tokio::test]
+    async fn yaml_anchors_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.yml");
+        std::fs::write(&path, "a: &x 1\nb: *x\n").unwrap();
+        let reps = vec![ConfigReplacement {
+            match_key: "a".into(),
+            if_value: None,
+            replace_with: "2".into(),
+        }];
+        assert!(apply_yaml(&path, &reps).await.is_err());
+    }
+
+    #[test]
+    fn xml_tag_escaped_in_regex() {
+        // A hostile tag with regex metachars must not panic or match broadly.
+        let out = set_xml_path_text("<root><a>1</a></root>", ".*", "2");
+        assert!(out.contains("<root>"), "got {out}");
     }
 }

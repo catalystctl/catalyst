@@ -1532,17 +1532,27 @@ export async function adminRoutes(app: FastifyInstance) {
         include: { node: true, template: true },
       });
 
-      // Validate per-server access for non-admin users
+      // Validate per-server access for non-admin users via decideServerAccess:
+      // owner | explicit grant | admin | role permission | node.manage
+      // (node assignment + node.update). Bare node access alone denies.
       const isAdmin = checkPerm(request, 'admin.write');
       if (!isAdmin) {
+        const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
+        const { decideServerAccess } = await import('../lib/server-access.js');
         for (const server of servers) {
           const access = await prisma.serverAccess.findUnique({
             where: { userId_serverId: { userId: user.userId, serverId: server.id } },
           });
           const hasExplicitPerm = access?.permissions.includes(requiredPerm);
-          const canAccess = server.ownerId === user.userId || hasExplicitPerm ||
-            await hasNodeAccess(prisma, user.userId, server.nodeId);
-          if (!canAccess) {
+          const rolePerms = await resolveServerPermissions(user.userId, server.id, server.nodeId);
+          const decision = decideServerAccess({
+            isOwner: server.ownerId === user.userId,
+            hasExplicitServerAccess: Boolean(hasExplicitPerm),
+            rolePermissions: rolePerms,
+            hasNodeAccess: await hasNodeAccess(prisma, user.userId, server.nodeId),
+            requiredPermission: requiredPerm,
+          });
+          if (!decision.allowed) {
             return reply.status(403).send({
               error: `Cannot perform ${action} on server ${server.id}: access denied`,
             });

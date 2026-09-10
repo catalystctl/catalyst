@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::{RwLock, Semaphore};
 
 use futures::StreamExt;
@@ -713,10 +712,25 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
             }
         }
 
-        let mut file = match tokio::fs::File::create(&target_path).await {
-            Ok(f) => f,
+        // Stream into an unpredictable O_EXCL temp (never File::create on a
+        // container-plantable name), then rename onto the target: rename
+        // replaces a destination symlink instead of following it.
+        let mut temp = match FileManager::create_secure_temp_sibling(&target_path).await {
+            Ok(t) => t,
             Err(e) => {
                 send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
+                return;
+            }
+        };
+        let temp_path = temp.path().to_path_buf();
+        // Re-resolve the destination AFTER temp creation so a concurrent
+        // plant at the target is caught by resolve + rename semantics.
+        let dest = match fm.resolve_path(&req.server_uuid, &req.path) {
+            Ok(d) => d,
+            Err(e) => {
+                drop(temp);
+                let _ = tokio::fs::remove_file(&temp_path).await;
+                send_json_response(ctx, false, None, Some(e.to_string())).await;
                 return;
             }
         };
@@ -727,8 +741,8 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
             let chunk = match chunk {
                 Ok(c) => c,
                 Err(e) => {
-                    drop(file);
-                    let _ = tokio::fs::remove_file(&target_path).await;
+                    drop(temp);
+                    let _ = tokio::fs::remove_file(&temp_path).await;
                     send_json_response(
                         ctx,
                         false,
@@ -742,8 +756,8 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
 
             written = written.saturating_add(chunk.len() as u64);
             if written > max_bytes {
-                drop(file);
-                let _ = tokio::fs::remove_file(&target_path).await;
+                drop(temp);
+                let _ = tokio::fs::remove_file(&temp_path).await;
                 send_json_response(
                     ctx,
                     false,
@@ -757,23 +771,29 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
                 return;
             }
 
-            if let Err(e) = file.write_all(&chunk).await {
-                drop(file);
-                let _ = tokio::fs::remove_file(&target_path).await;
+            if let Err(e) = temp.write_all(&chunk).await {
+                drop(temp);
+                let _ = tokio::fs::remove_file(&temp_path).await;
                 send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
                 return;
             }
         }
 
-        if let Err(e) = file.flush().await {
-            drop(file);
-            let _ = tokio::fs::remove_file(&target_path).await;
+        if let Err(e) = temp.sync_all().await {
+            drop(temp);
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
+            return;
+        }
+        drop(temp);
+        if let Err(e) = tokio::fs::rename(&temp_path, &dest).await {
+            let _ = tokio::fs::remove_file(&temp_path).await;
             send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
             return;
         }
 
         // Hand the downloaded file (and created parents) to the container user (#237).
-        crate::ownership::ensure_container_owned(fm.data_dir(), &target_path).await;
+        crate::ownership::ensure_container_owned(fm.data_dir(), &dest).await;
 
         send_json_response(ctx, true, None, None).await;
         return;

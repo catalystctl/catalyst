@@ -352,6 +352,15 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                 let full_path = fm
                     .resolve_path(&server_id, &filename)
                     .map_err(|e| SftpError(format!("Failed to resolve path: {}", e)))?;
+                // O_NOFOLLOW probe: a planted symlink at the target is rejected
+                // (ELOOP) instead of followed by root.
+                match crate::file_manager::open_no_follow(&full_path, false) {
+                    Ok(_) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(_) => {
+                        return Err(SftpError("Permission denied: refusing symlink".into()));
+                    }
+                }
                 let exists = tokio::fs::metadata(&full_path).await.is_ok();
                 if pflags.contains(OpenFlags::TRUNCATE)
                     || (pflags.contains(OpenFlags::CREATE) && !exists)
@@ -419,13 +428,19 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             }
             // Stream: resolve path (permission check), then seek+read exactly
             // len bytes instead of loading the entire file into memory.
+            // O_NOFOLLOW: a planted symlink at the target is rejected (ELOOP).
             let full_path = fm
                 .resolve_path(&server_id, &path)
                 .map_err(|e| SftpError(format!("Read failed: {}", e)))?;
 
-            let mut file = tokio::fs::File::open(&full_path)
-                .await
-                .map_err(|e| SftpError(format!("Read failed: {}", e)))?;
+            let std_file = crate::file_manager::open_no_follow(&full_path, false).map_err(|e| {
+                if e.raw_os_error() == Some(libc::ELOOP) {
+                    SftpError("Permission denied: refusing symlink".into())
+                } else {
+                    SftpError(format!("Read failed: {}", e))
+                }
+            })?;
+            let mut file = tokio::fs::File::from_std(std_file);
 
             let file_len = file
                 .metadata()
@@ -494,13 +509,35 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                 return Err(SftpError(e.to_string()));
             }
 
-            let mut file = tokio::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(false)
-                .open(&full_path)
-                .await
-                .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
+            // O_NOFOLLOW: never open through a planted symlink. Try a
+            // no-follow open first; only when the file is missing fall back
+            // to an O_EXCL create (which also refuses symlinks).
+            let std_file = match crate::file_manager::open_no_follow(&full_path, true) {
+                Ok(f) => f,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .custom_flags(libc::O_NOFOLLOW)
+                        .open(&full_path)
+                        .map_err(|e| {
+                            if e.raw_os_error() == Some(libc::ELOOP) {
+                                SftpError("Permission denied: refusing symlink".into())
+                            } else {
+                                SftpError(format!("Write failed: {}", e))
+                            }
+                        })?
+                }
+                Err(e) => {
+                    return Err(if e.raw_os_error() == Some(libc::ELOOP) {
+                        SftpError("Permission denied: refusing symlink".into())
+                    } else {
+                        SftpError(format!("Write failed: {}", e))
+                    });
+                }
+            };
+            let mut file = tokio::fs::File::from_std(std_file);
 
             file.seek(SeekFrom::Start(offset))
                 .await

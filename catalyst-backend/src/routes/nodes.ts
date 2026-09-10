@@ -1187,6 +1187,17 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			await prisma.node.delete({ where: { id: nodeId } });
 
+			// Immediate revoke: close live agent sockets + fail pending
+			// requests so a deleted node stops receiving commands now.
+			try {
+				const gw = (app as any).wsGateway as {
+					closeAgentConnections?: (id: string, reason: string) => void;
+					failPendingRequestsForNodePublic?: (id: string, reason: string) => void;
+				} | undefined;
+				gw?.closeAgentConnections?.(nodeId, "Node deleted");
+				gw?.failPendingRequestsForNodePublic?.(nodeId, "Node deleted");
+			} catch { /* best-effort */ }
+
 			reply.send({ success: true, deletedApiKeys: deletedKeys });
 
 			// Broadcast node_deleted event

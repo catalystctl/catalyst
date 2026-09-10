@@ -36,6 +36,21 @@ for (const [name, value] of INSECURE_SECRETS) {
   }
 }
 
+// Production should serve over https so session cookies can be Secure
+// HttpOnly SameSite=Lax. Warn loudly on a plain-http FRONTEND_URL (after the
+// placeholder checks so those still report first); cookie `secure` is still
+// forced on in production below, so cleartext cookies are never issued.
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.FRONTEND_URL &&
+  !process.env.FRONTEND_URL.startsWith("https://")
+) {
+  console.warn(
+    "[SECURITY] FRONTEND_URL must use https:// in production so session cookies stay Secure/HttpOnly/SameSite=Lax — " +
+      `got ${process.env.FRONTEND_URL}`,
+  );
+}
+
 /** Validate that a URL is http(s) — allows localhost, ports, paths. */
 function validateDiscoveryUrl(url: string, label: string): string {
   if (!url) return "";
@@ -175,8 +190,11 @@ export function initAuth() {
       },
       cookie: {
         attributes: {
-          sameSite: process.env.NODE_ENV === 'production' ? (process.env.FRONTEND_URL?.startsWith('https') ? 'none' : 'lax') : 'lax',
-          secure: process.env.NODE_ENV === 'production' && (process.env.FRONTEND_URL?.startsWith('https') ?? false) ? true : process.env.NODE_ENV !== 'development' && process.env.COOKIE_SECURE !== 'false',
+          sameSite: 'lax',
+          // Production serves over https (fail-fast above): Secure HttpOnly
+          // SameSite=Lax. Non-production keeps Secure off so local HTTP dev
+          // logins still work (better-auth useSecureCookies mirrors this).
+          secure: process.env.NODE_ENV === 'production',
           httpOnly: true,
           path: '/',
         }

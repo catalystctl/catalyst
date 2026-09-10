@@ -545,6 +545,109 @@ pub fn is_forbidden_install_ip(ip: IpAddr) -> bool {
 }
 
 /// Validate that an install URL does not point to a private/link-local/loopback address.
+///
+/// NOTE on per-hop revalidation: the file_tunnel download loop calls this on
+/// every redirect hop (redirect policy is `none`, each `Location` is joined
+/// and revalidated before the next fetch), so a redirect to an internal
+/// address is refused at the hop that introduces it. TOCTOU caveat: DNS is
+/// re-resolved per hop but the TCP connection itself is not bound to the
+/// validated address (reqwest offers no remote_addr hook without a custom
+/// connector), so a fast-flux name could resolve differently between the
+/// check and the connect. Mitigation is defense-in-depth: numeric forms are
+/// canonicalized below, DNS results are all checked, and egress to
+/// RFC1918/link-local ranges should additionally be dropped at the host
+/// firewall for high-risk deployments.
+/// Parse one dotted-quad component in decimal, octal (`0177`), or hex
+/// (`0x7f`) form, mirroring `inet_aton` semantics.
+fn parse_ip_component(part: &str) -> Option<u32> {
+    let part = part.trim();
+    if part.is_empty() {
+        return None;
+    }
+    if let Some(hex) = part.strip_prefix("0x").or_else(|| part.strip_prefix("0X")) {
+        if hex.is_empty() || hex.len() > 8 {
+            return None;
+        }
+        u32::from_str_radix(hex, 16).ok()
+    } else if part.len() > 1 && part.starts_with('0') && part.bytes().all(|b| b.is_ascii_digit()) {
+        if part.len() > 11 {
+            return None;
+        }
+        u32::from_str_radix(part, 8).ok()
+    } else {
+        if part.len() > 10 || !part.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        part.parse::<u32>().ok()
+    }
+}
+
+/// Canonicalize a URL host that is an IP in a non-standard numeric form to an
+/// `IpAddr`, so SSRF checks cannot be bypassed with decimal/octal/hex or
+/// shortened encodings (`2130706433`, `0x7f.0.0.1`, `0177.0.0.1`,
+/// `0x7f000001`, `127.1`). Returns `None` for DNS names (handled by the
+/// resolver path) and for malformed input.
+pub fn canonicalize_numeric_ip_host(host: &str) -> Option<IpAddr> {
+    let host = host.trim();
+    let bare = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    // Standard literal (v4/v6): nothing to canonicalize.
+    if let Ok(ip) = bare.parse::<IpAddr>() {
+        return Some(ip);
+    }
+    if bare.is_empty() || bare.contains(':') || bare.contains('%') {
+        return None;
+    }
+    // Single number: full 32-bit value in decimal or hex.
+    if !bare.contains('.') {
+        let value = if bare.starts_with("0x") || bare.starts_with("0X") {
+            u32::from_str_radix(&bare[2..], 16).ok()?
+        } else if bare.len() > 1 && bare.starts_with('0') {
+            u32::from_str_radix(bare, 8).ok()?
+        } else {
+            bare.parse::<u64>().ok().and_then(|v| v.try_into().ok())?
+        };
+        return Some(IpAddr::V4(Ipv4Addr::from(value)));
+    }
+    // Dotted form with 2-4 parts, inet_aton-style tail packing.
+    let parts: Vec<&str> = bare.split('.').collect();
+    if parts.len() < 2 || parts.len() > 4 {
+        return None;
+    }
+    let nums: Vec<u32> = parts
+        .iter()
+        .map(|p| parse_ip_component(p))
+        .collect::<Option<_>>()?;
+    let value: u64 = match nums.len() {
+        4 => {
+            if nums.iter().any(|&n| n > 255) {
+                return None;
+            }
+            ((nums[0] as u64) << 24)
+                | ((nums[1] as u64) << 16)
+                | ((nums[2] as u64) << 8)
+                | nums[3] as u64
+        }
+        3 => {
+            if nums[0] > 255 || nums[1] > 255 || nums[2] > 0xffff {
+                return None;
+            }
+            ((nums[0] as u64) << 24) | ((nums[1] as u64) << 16) | nums[2] as u64
+        }
+        2 => {
+            if nums[0] > 255 || nums[1] > 0xffffff {
+                return None;
+            }
+            ((nums[0] as u64) << 24) | nums[1] as u64
+        }
+        _ => return None,
+    };
+    let value: u32 = value.try_into().ok()?;
+    Some(IpAddr::V4(Ipv4Addr::from(value)))
+}
+
 pub async fn validate_install_url(url: &reqwest::Url) -> Result<(), String> {
     match url.scheme() {
         "http" | "https" => {}
@@ -562,13 +665,18 @@ pub async fn validate_install_url(url: &reqwest::Url) -> Result<(), String> {
         .port_or_known_default()
         .ok_or_else(|| "URL is missing a port".to_string())?;
 
-    // If the host is already an IP literal, validate directly.
-    if let Ok(ip) = host.parse::<IpAddr>() {
+    // If the host is an IP literal — including non-standard numeric forms
+    // like 2130706433, 0x7f.0.0.1, 0177.0.0.1, or 127.1 — canonicalize and
+    // validate directly so SSRF checks cannot be bypassed by encoding.
+    if let Some(ip) = canonicalize_numeric_ip_host(host) {
         if is_forbidden_install_ip(ip) {
             return Err("Refusing to download from a private/link-local/loopback IP".to_string());
         }
         return Ok(());
     }
+    // Anything else (DNS names, zoned IPv6) goes through the resolver path
+    // below; IP literals that reach it are returned as-is by lookup_host
+    // and checked per resolved address.
 
     // Resolve host to IPs and block any private/link-local/loopback ranges.
     let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, port))
@@ -674,6 +782,149 @@ pub fn validate_network_config(
     Ok(())
 }
 
+/// Parse a panel-supplied port value, validating 1..=65535 before any
+/// narrowing cast (a bare `as u16` silently truncates, e.g. 65536 -> 0).
+pub fn parse_port_value(value: u64) -> Result<u16, AgentError> {
+    if value == 0 || value > u16::MAX as u64 {
+        return Err(AgentError::InvalidRequest(format!(
+            "Invalid port '{}': must be 1-65535",
+            value
+        )));
+    }
+    Ok(value as u16)
+}
+
+/// Parse a panel-supplied `portBindings` map (`{containerPort: hostPort}`).
+/// Both sides must be valid u16 ports; privileged host ports (<1024) are
+/// denied because binding them implies host-level service impersonation.
+pub fn parse_port_bindings(
+    map: &serde_json::Map<String, serde_json::Value>,
+) -> Result<std::collections::HashMap<u16, u16>, AgentError> {
+    let mut out = std::collections::HashMap::new();
+    for (container_port, host_port) in map {
+        let container_port = container_port.parse::<u16>().map_err(|_| {
+            AgentError::InvalidRequest(format!(
+                "Invalid portBindings container port '{}': must be 1-65535",
+                container_port
+            ))
+        })?;
+        if container_port == 0 {
+            return Err(AgentError::InvalidRequest(
+                "Invalid portBindings container port '0'".to_string(),
+            ));
+        }
+        let host_raw = host_port.as_u64().ok_or_else(|| {
+            AgentError::InvalidRequest("Invalid portBindings host port".to_string())
+        })?;
+        let host_port = parse_port_value(host_raw).map_err(|_| {
+            AgentError::InvalidRequest("Invalid portBindings host port".to_string())
+        })?;
+        if host_port < 1024 {
+            warn!(
+                "Denying portBindings host port {} (<1024, privileged range)",
+                host_port
+            );
+            return Err(AgentError::InvalidRequest(format!(
+                "portBindings host port {} is in the privileged range (<1024) and is denied",
+                host_port
+            )));
+        }
+        out.insert(container_port, host_port);
+    }
+    Ok(out)
+}
+
+/// Validate a panel-requested static container IP (`CATALYST_NETWORK_IP` /
+/// `AERO_NETWORK_IP`): must parse as an IP, sit inside the bridge subnet,
+/// and must not be the subnet's network, gateway, or broadcast address.
+/// Returns the validated IP string, or an error describing why DHCP
+/// fallback should be used instead.
+pub fn validate_static_ip_in_subnet(ip: &str, bridge_subnet: &str) -> Result<String, String> {
+    let addr: IpAddr = ip
+        .trim()
+        .parse()
+        .map_err(|_| format!("Invalid static container IP '{}'", ip))?;
+    let (net_str, prefix_str) = bridge_subnet
+        .split_once('/')
+        .ok_or_else(|| format!("Invalid bridge subnet '{}'", bridge_subnet))?;
+    let prefix: u32 = prefix_str
+        .parse()
+        .map_err(|_| format!("Invalid bridge subnet '{}'", bridge_subnet))?;
+    match addr {
+        IpAddr::V4(v4) => {
+            if prefix > 32 {
+                return Err(format!("Invalid bridge subnet '{}'", bridge_subnet));
+            }
+            let net_v4: Ipv4Addr = net_str
+                .parse()
+                .map_err(|_| format!("Invalid bridge subnet '{}'", bridge_subnet))?;
+            let mask = if prefix == 0 {
+                0u32
+            } else {
+                u32::MAX << (32 - prefix)
+            };
+            let net = u32::from(net_v4) & mask;
+            let broadcast = net | (!mask);
+            let gateway = net + 1;
+            let candidate = u32::from(v4);
+            if (candidate & mask) != net {
+                return Err(format!(
+                    "Static IP {} is not inside the bridge subnet {}",
+                    ip, bridge_subnet
+                ));
+            }
+            if candidate == net || candidate == gateway || candidate == broadcast {
+                return Err(format!(
+                    "Static IP {} is the network, gateway, or broadcast address of {}",
+                    ip, bridge_subnet
+                ));
+            }
+        }
+        IpAddr::V6(_) => {
+            return Err(format!(
+                "Static IP {} is IPv6 but the bridge subnet {} is IPv4",
+                ip, bridge_subnet
+            ));
+        }
+    }
+    Ok(ip.trim().to_string())
+}
+
+/// Validate a CNI network name with the same label rules as NetworkManager.
+/// Panel-supplied `networkMode` values flow into CNI config file paths and
+/// plugin JSON, so path separators and odd characters are rejected.
+pub fn validate_cni_network_name(name: &str) -> Result<(), AgentError> {
+    let name = name.trim();
+    if name.is_empty() || name.len() > 63 {
+        return Err(AgentError::InvalidRequest(
+            "Invalid network name: must be 1-63 characters".to_string(),
+        ));
+    }
+    if name.contains('/') || name.contains('\\') || name.contains('\0') {
+        return Err(AgentError::InvalidRequest(
+            "Invalid network name: must not contain path separators".to_string(),
+        ));
+    }
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphanumeric() => {}
+        _ => {
+            return Err(AgentError::InvalidRequest(
+                "Invalid network name: must start with an alphanumeric character".to_string(),
+            ));
+        }
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return Err(AgentError::InvalidRequest(
+            "Invalid network name: allowed characters are a-z, A-Z, 0-9, '-', '_', '.'".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -738,5 +989,128 @@ mod tests {
         let (start, end) = cidr_usable_range("192.168.1.0/24").unwrap();
         assert_eq!(start, "192.168.1.1");
         assert_eq!(end, "192.168.1.254");
+    }
+
+    #[test]
+    fn test_numeric_ip_canonicalization_vectors() {
+        // Every encoding of 127.0.0.1 must canonicalize to the loopback.
+        for host in [
+            "2130706433",   // decimal u32
+            "0x7f000001",   // hex u32
+            "0x7F000001",   // hex uppercase
+            "0x7f.0.0.1",   // dotted hex
+            "0177.0.0.1",   // dotted octal
+            "017700000001", // octal u32 (0o1770000001 = 2130706433)
+            "127.1",        // shortened form
+            "127.0.1",      // shortened form
+            "0x7f.1",
+        ] {
+            let ip = canonicalize_numeric_ip_host(host)
+                .unwrap_or_else(|| panic!("{} should canonicalize", host));
+            assert_eq!(ip, "127.0.0.1".parse::<IpAddr>().unwrap(), "host {}", host);
+            assert!(
+                is_forbidden_install_ip(ip),
+                "host {} must be forbidden",
+                host
+            );
+        }
+        // 192.168.1.1 in decimal / hex.
+        for host in ["3232235777", "0xc0a80101"] {
+            let ip = canonicalize_numeric_ip_host(host).expect("should canonicalize");
+            assert_eq!(ip, "192.168.1.1".parse::<IpAddr>().unwrap());
+            assert!(is_forbidden_install_ip(ip));
+        }
+        // Public IPs stay public through the canonicalizer.
+        let ip = canonicalize_numeric_ip_host("134744072").expect("8.8.8.8 decimal");
+        assert_eq!(ip, "8.8.8.8".parse::<IpAddr>().unwrap());
+        assert!(!is_forbidden_install_ip(ip));
+        let ip = canonicalize_numeric_ip_host("0x08080808").expect("8.8.8.8 hex");
+        assert_eq!(ip, "8.8.8.8".parse::<IpAddr>().unwrap());
+        // Standard literals pass through unchanged.
+        assert_eq!(
+            canonicalize_numeric_ip_host("1.1.1.1"),
+            Some("1.1.1.1".parse().unwrap())
+        );
+        assert_eq!(
+            canonicalize_numeric_ip_host("[::1]"),
+            Some("::1".parse().unwrap())
+        );
+        // DNS names and garbage do not canonicalize.
+        assert_eq!(canonicalize_numeric_ip_host("panel.example.com"), None);
+        assert_eq!(canonicalize_numeric_ip_host(""), None);
+        assert_eq!(canonicalize_numeric_ip_host("999.999.999.999"), None);
+        assert_eq!(canonicalize_numeric_ip_host("0xzzzz"), None);
+    }
+
+    #[test]
+    fn test_parse_port_value_matrix() {
+        assert_eq!(parse_port_value(1).unwrap(), 1);
+        assert_eq!(parse_port_value(25565).unwrap(), 25565);
+        assert_eq!(parse_port_value(65535).unwrap(), 65535);
+        // Truncation traps: bare `as u16` would map these to 0 / 4464.
+        assert!(parse_port_value(0).is_err());
+        assert!(parse_port_value(65536).is_err());
+        assert!(parse_port_value(70000).is_err());
+        assert!(parse_port_value(u64::MAX).is_err());
+    }
+
+    #[test]
+    fn test_parse_port_bindings_matrix() {
+        // Valid matrix.
+        let map: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(r#"{"25565": 25565, "25566": 25570}"#).unwrap();
+        let out = parse_port_bindings(&map).unwrap();
+        assert_eq!(out.get(&25565), Some(&25565));
+        assert_eq!(out.get(&25566), Some(&25570));
+        // Privileged host ports are denied.
+        for raw in [r#"{"80": 80}"#, r#"{"443": 443}"#, r#"{"25565": 22}"#] {
+            let map: serde_json::Map<String, serde_json::Value> =
+                serde_json::from_str(raw).unwrap();
+            assert!(parse_port_bindings(&map).is_err(), "raw {}", raw);
+        }
+        // Out-of-range sides are denied.
+        for raw in [
+            r#"{"0": 25565}"#,
+            r#"{"65536": 25565}"#,
+            r#"{"abc": 25565}"#,
+            r#"{"25565": 0}"#,
+            r#"{"25565": 70000}"#,
+            r#"{"25565": "25565"}"#,
+        ] {
+            let map: serde_json::Map<String, serde_json::Value> =
+                serde_json::from_str(raw).unwrap();
+            assert!(parse_port_bindings(&map).is_err(), "raw {}", raw);
+        }
+    }
+
+    #[test]
+    fn test_validate_static_ip_in_subnet() {
+        let subnet = "10.42.0.0/16";
+        assert_eq!(
+            validate_static_ip_in_subnet("10.42.5.20", subnet).unwrap(),
+            "10.42.5.20"
+        );
+        // Network, gateway, and broadcast are unusable.
+        assert!(validate_static_ip_in_subnet("10.42.0.0", subnet).is_err());
+        assert!(validate_static_ip_in_subnet("10.42.0.1", subnet).is_err());
+        assert!(validate_static_ip_in_subnet("10.42.255.255", subnet).is_err());
+        // Outside the subnet, garbage, and IPv6 are rejected.
+        assert!(validate_static_ip_in_subnet("10.43.0.5", subnet).is_err());
+        assert!(validate_static_ip_in_subnet("not-an-ip", subnet).is_err());
+        assert!(validate_static_ip_in_subnet("fd00::5", subnet).is_err());
+    }
+
+    #[test]
+    fn test_validate_cni_network_name() {
+        assert!(validate_cni_network_name("bridge").is_ok());
+        assert!(validate_cni_network_name("tenant-net_1.prod").is_ok());
+        assert!(validate_cni_network_name("").is_err());
+        assert!(validate_cni_network_name("../evil").is_err());
+        assert!(validate_cni_network_name("a/b").is_err());
+        assert!(validate_cni_network_name("a\\b").is_err());
+        assert!(validate_cni_network_name("-lead").is_err());
+        assert!(validate_cni_network_name("has space").is_err());
+        assert!(validate_cni_network_name("semi;colon").is_err());
+        assert!(validate_cni_network_name(&"a".repeat(64)).is_err());
     }
 }

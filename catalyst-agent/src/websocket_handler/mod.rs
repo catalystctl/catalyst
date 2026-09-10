@@ -52,6 +52,185 @@ pub(crate) const WS_SEND_TIMEOUT: Duration = Duration::from_secs(10);
 /// and reconnect. Backend heartbeat timeout is 60s; stay under that.
 pub(crate) const WS_READ_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
 pub(crate) const WS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
+/// SEC-C-01/C-04 one-way auth + replay: agent-generated nonce echoed by panel
+/// with HMAC over (nonce, nodeId) keyed by the node api_key.
+pub(crate) const MAX_REPLAY_IDS: usize = 5000;
+/// Accept inbound timestamps within ±5 minutes (milliseconds skew window).
+pub(crate) const REPLAY_WINDOW_MILLIS: i64 = 5 * 60 * 1000;
+/// SEC-H-03: panel retryAfter clamp ceiling (seconds).
+pub(crate) const MAX_RETRY_AFTER_SECS: u64 = 300;
+/// SEC-H-03: cap consecutive auth lockouts before forcing a longer cool-down.
+pub(crate) const MAX_CONSEC_LOCKOUTS: u32 = 5;
+/// SEC-H-04: operator ceiling for panel-driven maxUploadBytes (10 GiB).
+pub(crate) const OPERATOR_MAX_UPLOAD_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+/// SEC-H-04: agent log line clamp range 1..=5000.
+pub(crate) const MAX_AGENT_LOG_LINES: usize = 5000;
+/// SEC-H-01: global in-flight command bound (try_acquire → busy response).
+pub(crate) const MAX_INFLIGHT_COMMANDS: usize = 32;
+/// SEC-H-04/05: chunk size for file_operation read responses (base64 chunks).
+pub(crate) const FILE_READ_CHUNK_BYTES: usize = 512 * 1024;
+
+/// SEC-C-01/C-04: agent-generated handshake nonce echoed by the panel with a
+/// keyed tag. Tag = sha256(api_key || nonce || node_id) hex, compared in
+/// constant time. sha2 is already a dependency; no new crates needed.
+pub(crate) fn generate_handshake_nonce() -> String {
+    // rand 0.10: rand::random() is the stable entry point (no RngCore import).
+    let v: u128 = rand::random();
+    format!("{:032x}", v)
+}
+
+pub(crate) fn compute_handshake_tag(api_key: &str, nonce: &str, node_id: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(api_key.as_bytes());
+    hasher.update(nonce.as_bytes());
+    hasher.update(node_id.as_bytes());
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect()
+}
+
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    let (ab, bb) = (a.as_bytes(), b.as_bytes());
+    if ab.len() != bb.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in ab.iter().zip(bb.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+pub(crate) fn verify_handshake_response(
+    api_key: &str,
+    nonce: &str,
+    node_id: &str,
+    echoed_nonce: Option<&str>,
+    tag: Option<&str>,
+) -> bool {
+    let (Some(echoed), Some(tag)) = (echoed_nonce, tag) else {
+        return false;
+    };
+    if echoed != nonce {
+        return false;
+    }
+    constant_time_eq(&compute_handshake_tag(api_key, nonce, node_id), tag)
+}
+
+/// SEC-C-04: bounded LRU of seen requestIds (5k) for replay rejection.
+pub(crate) struct ReplayCache {
+    order: VecDeque<String>,
+    set: HashSet<String>,
+}
+
+impl ReplayCache {
+    pub(crate) fn new() -> Self {
+        Self {
+            order: VecDeque::new(),
+            set: HashSet::new(),
+        }
+    }
+
+    /// Returns true when `id` was already seen (duplicate → reject).
+    pub(crate) fn insert_or_duplicate(&mut self, id: &str) -> bool {
+        if self.set.contains(id) {
+            return true;
+        }
+        self.set.insert(id.to_string());
+        self.order.push_back(id.to_string());
+        while self.order.len() > MAX_REPLAY_IDS {
+            if let Some(old) = self.order.pop_front() {
+                self.set.remove(&old);
+            }
+        }
+        false
+    }
+}
+
+/// SEC-C-04: 5-minute timestamp window check (millis). Missing timestamps are
+/// allowed (legacy panel messages); present-but-skewed ones are rejected.
+pub(crate) fn timestamp_in_window(ts_millis: i64, now_millis: i64) -> bool {
+    (now_millis - ts_millis).abs() <= REPLAY_WINDOW_MILLIS
+}
+
+/// SEC-H-03: clamp panel retryAfter to 300s ceiling + small jitter.
+/// Returns (clamped_secs, was_clamped).
+pub(crate) fn clamp_retry_after(raw_secs: u64) -> (u64, bool) {
+    if raw_secs > MAX_RETRY_AFTER_SECS {
+        (MAX_RETRY_AFTER_SECS, true)
+    } else {
+        // ±10% jitter so many agents don't reconnect in lockstep.
+        let jitter_span = (raw_secs / 10).max(1);
+        let raw = rand::random::<u64>() % (jitter_span * 2 + 1);
+        let jitter_delta = raw.abs_diff(jitter_span);
+        let jittered = if raw >= jitter_span {
+            raw_secs.saturating_add(jitter_delta)
+        } else {
+            raw_secs.saturating_sub(jitter_delta)
+        }
+        .clamp(1, MAX_RETRY_AFTER_SECS);
+        (jittered, false)
+    }
+}
+
+/// SEC-H-04: clamp panel maxUploadBytes to the operator ceiling.
+/// Rejects 0 and values above the 10 GiB cap (caller keeps previous limit).
+pub(crate) fn clamp_panel_upload_limit(bytes: u64) -> Option<u64> {
+    if bytes == 0 || bytes > OPERATOR_MAX_UPLOAD_BYTES {
+        None
+    } else {
+        Some(bytes)
+    }
+}
+
+/// SEC-H-04: clamp agent log line counts to 1..=5000.
+pub(crate) fn clamp_agent_log_lines(lines: u64) -> usize {
+    (lines as usize).clamp(1, MAX_AGENT_LOG_LINES)
+}
+
+/// SEC-H-04: deny-list for agent_config_update. These keys re-point the agent
+/// binary source, config persistence, network fabric, or file access and must
+/// never change via a panel message unless `allowUnsafe=true` (with backup +
+/// audit). Matching is substring-based on the raw TOML content so renamed
+/// tables/keys cannot slip past an exact-path check.
+pub(crate) fn config_update_denied_markers() -> &'static [&'static str] {
+    &["release_repo", "config_path", "cni_", "systemd", "sftp"]
+}
+
+pub(crate) fn validate_agent_config_update(
+    content: &str,
+    allow_unsafe: bool,
+) -> Result<(), String> {
+    let lower = content.to_lowercase();
+    // Never accept a redacted placeholder as the real api_key — it would
+    // lock the node out (or worse, become a known shared secret).
+    if let Ok(parsed) = content.parse::<toml::Value>() {
+        if let Some(key) = parsed
+            .get("server")
+            .and_then(|s| s.get("api_key"))
+            .and_then(|v| v.as_str())
+        {
+            if key.trim() == "[REDACTED]" {
+                return Err("server.api_key must not be [REDACTED]".to_string());
+            }
+        }
+    } else if lower.contains("[redacted]") && lower.contains("api_key") {
+        return Err("server.api_key must not be [REDACTED]".to_string());
+    }
+    if !allow_unsafe {
+        for marker in config_update_denied_markers() {
+            if lower.contains(marker) {
+                return Err(format!(
+                    "agent_config_update denies '{}' without allowUnsafe (backup + audit required)",
+                    marker
+                ));
+            }
+        }
+    }
+    Ok(())
+}
 pub(crate) const OOM_KILL_REASON: &str = "Killed by system OOM killer (cgroup memory limit exceeded). JVM off-heap (direct buffers, metaspace, threads) counts toward the limit — increase Memory allocation.";
 pub(crate) const OOM_KILL_CONSOLE_HINT: &str = "[Catalyst] Killed by system OOM killer — container exceeded its memory allocation. Increase the server Memory allocation. JVM heap is auto-capped below the allocation so off-heap (direct memory, metaspace, threads) fits.\n";
 
@@ -487,6 +666,20 @@ pub struct WebSocketHandler {
     /// Shutdown signal sender — used by restart_agent command to trigger graceful shutdown.
     /// Set after construction via set_shutdown_tx(). Uses RwLock for interior mutability.
     pub(crate) shutdown_tx: Arc<RwLock<Option<broadcast::Sender<()>>>>,
+    /// SEC-C-01: agent-generated nonce for the current connection handshake.
+    pub(crate) handshake_nonce: Arc<RwLock<String>>,
+    /// SEC-C-01: true once node_handshake_response verified the nonce echo + tag.
+    pub(crate) handshake_verified: Arc<RwLock<bool>>,
+    /// SEC-C-04: seen requestIds LRU (5k) for replay rejection.
+    pub(crate) seen_request_ids: Arc<tokio::sync::Mutex<ReplayCache>>,
+    /// SEC-H-03: consecutive auth lockout count (capped at MAX_CONSEC_LOCKOUTS).
+    pub(crate) consec_lockouts: Arc<RwLock<u32>>,
+    /// SEC-H-01: per-server command mutexes across validate->mutate->exec.
+    pub(crate) server_locks: Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
+    /// SEC-H-01: global in-flight command semaphore (try_acquire → busy).
+    pub(crate) inflight_slots: Arc<Semaphore>,
+    /// SEC-H-05: per-connection task set aborted on teardown.
+    pub(crate) connection_tasks: Arc<tokio::sync::Mutex<tokio::task::JoinSet<()>>>,
 }
 
 // LOCK ORDERING (must be respected to prevent deadlocks):
@@ -540,6 +733,13 @@ impl Clone for WebSocketHandler {
             active_installs: self.active_installs.clone(),
             cancelled_installs: self.cancelled_installs.clone(),
             shutdown_tx: self.shutdown_tx.clone(),
+            handshake_nonce: self.handshake_nonce.clone(),
+            handshake_verified: self.handshake_verified.clone(),
+            seen_request_ids: self.seen_request_ids.clone(),
+            consec_lockouts: self.consec_lockouts.clone(),
+            server_locks: self.server_locks.clone(),
+            inflight_slots: self.inflight_slots.clone(),
+            connection_tasks: self.connection_tasks.clone(),
         }
     }
 }
@@ -599,7 +799,23 @@ impl WebSocketHandler {
             active_installs: Arc::new(RwLock::new(HashMap::new())),
             cancelled_installs: Arc::new(RwLock::new(HashSet::new())),
             shutdown_tx: Arc::new(RwLock::new(None)),
+            handshake_nonce: Arc::new(RwLock::new(String::new())),
+            handshake_verified: Arc::new(RwLock::new(false)),
+            seen_request_ids: Arc::new(tokio::sync::Mutex::new(ReplayCache::new())),
+            consec_lockouts: Arc::new(RwLock::new(0)),
+            server_locks: Arc::new(RwLock::new(HashMap::new())),
+            inflight_slots: Arc::new(Semaphore::new(MAX_INFLIGHT_COMMANDS)),
+            connection_tasks: Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
         }
+    }
+
+    /// SEC-H-01: per-server mutex covering validate->mutate->exec.
+    pub(crate) async fn server_lock(&self, server_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        let mut guards = self.server_locks.write().await;
+        guards
+            .entry(server_id.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
     }
 
     /// Inject the shutdown signal sender from the main agent runtime.
@@ -619,10 +835,13 @@ impl WebSocketHandler {
         let Some(bytes) = msg.get("maxUploadBytes").and_then(|v| v.as_u64()) else {
             return;
         };
-        if bytes == 0 {
-            return;
+        match clamp_panel_upload_limit(bytes) {
+            Some(capped) => self.file_manager.set_max_file_size(capped),
+            None => warn!(
+                "Rejecting panel maxUploadBytes={} (0 or above {} operator cap); keeping previous limit",
+                bytes, OPERATOR_MAX_UPLOAD_BYTES
+            ),
         }
-        self.file_manager.set_max_file_size(bytes);
     }
 
     pub async fn report_error(
@@ -650,14 +869,16 @@ impl WebSocketHandler {
             dedup.insert(key, now);
         }
 
-        // Build the message payload
+        // Build the message payload. SEC-7: redact secrets + cap metadata;
+        // never log substituted bodies (hashes/lengths only at call sites).
+        let metadata = metadata.map(crate::error_reporter::redact_secrets);
         let payload = serde_json::json!({
             "type": "agent_error_report",
             "nodeId": self.config.server.node_id,
             "level": level.as_str(),
             "component": component,
-            "message": message,
-            "stack": stack,
+            "message": crate::errors::sanitize_error_for_panel(message),
+            "stack": stack.map(crate::errors::sanitize_error_for_panel),
             "metadata": metadata,
             "timestamp": chrono::Utc::now().timestamp_millis(),
         });
@@ -1100,7 +1321,11 @@ impl WebSocketHandler {
             *guard = Some(write.clone());
         }
 
-        // Send handshake
+        // Send handshake (SEC-C-01: agent-generated nonce; panel must echo
+        // it with an HMAC tag over (nonce, nodeId) keyed by the api_key).
+        let nonce = generate_handshake_nonce();
+        *self.handshake_nonce.write().await = nonce.clone();
+        *self.handshake_verified.write().await = false;
         let handshake = json!({
             "type": "node_handshake",
             "token": auth_token,
@@ -1108,6 +1333,7 @@ impl WebSocketHandler {
             "agentVersion": env!("CARGO_PKG_VERSION"),
             "tokenType": token_type,
             "protocolVersion": "1.0",
+            "nonce": nonce,
         });
 
         send_ws_with_timeout(&write, Message::Text(handshake.to_string().into())).await?;
@@ -1145,6 +1371,9 @@ impl WebSocketHandler {
         self.flush_startup_errors().await;
 
         // Connection-scoped background tasks. Abort on disconnect to avoid accumulation.
+        // SEC-H-05: tracked in the handler JoinSet so teardown aborts them.
+        self.connection_tasks.lock().await.abort_all();
+        while self.connection_tasks.lock().await.try_join_next().is_some() {}
         let mut connection_tasks: Vec<tokio::task::JoinHandle<()>> = Vec::new();
 
         // JSON heartbeat keeps the panel's lastHeartbeat fresh. WS Ping forces a
@@ -1275,19 +1504,30 @@ impl WebSocketHandler {
                 }
                 Ok(Message::Binary(data)) => {
                     // Binary frames are used for two purposes:
-                    // 1. Pipe relay: raw tar data when active_restore_request_id is set
+                    // 1. Pipe relay: raw tar data routed per-requestId (the map
+                    //    is the only routing source — no singleton id).
                     // 2. Upload backup chunks:
                     //    - v2 length-prefixed: [u16 BE idLen][id UTF-8][payload]
                     //    - legacy: fixed 16-byte zero-padded requestId prefix + payload
-                    let restore_id = { self.active_restore_request_id.read().await.clone() };
+                    let restore_ids: Vec<String> = {
+                        self.active_restore_streams
+                            .read()
+                            .await
+                            .keys()
+                            .cloned()
+                            .collect()
+                    };
                     let mut routed = false;
-                    if let Some(restore_id) = restore_id {
+                    for restore_id in restore_ids {
                         match self.write_restore_stream_chunk(&restore_id, &data).await {
-                            Ok(()) => routed = true,
+                            Ok(()) => {
+                                routed = true;
+                                break;
+                            }
                             Err(AgentError::InvalidRequest(ref msg))
                                 if msg == "No active restore stream" =>
                             {
-                                // Stream was closed between check and write; fall through to upload
+                                continue;
                             }
                             Err(e) => {
                                 error!("Error writing restore stream chunk: {}", e);
@@ -1300,6 +1540,7 @@ impl WebSocketHandler {
                                 )
                                 .await;
                                 routed = true;
+                                break;
                             }
                         }
                     }
@@ -1363,6 +1604,11 @@ impl WebSocketHandler {
 
         for task in connection_tasks {
             task.abort();
+        }
+        // SEC-H-05: abort tracked per-message tasks too.
+        {
+            let mut js = self.connection_tasks.lock().await;
+            js.abort_all();
         }
 
         // Teardown, bounded: every hang we have observed in production testing
@@ -1430,12 +1676,82 @@ impl WebSocketHandler {
     ) -> AgentResult<()> {
         let msg: Value = serde_json::from_str(text)?;
 
+        // SEC-C-04: replay + freshness guard. Applies to every inbound frame
+        // carrying a requestId; handshake/error frames bypass the
+        // handshake_verified gate below. Duplicates or timestamps outside the
+        // 5-minute window are dropped before any mutation.
+        if let Some(rid) = msg.get("requestId").and_then(|v| v.as_str()) {
+            if !rid.is_empty() {
+                if let Some(ts) = msg.get("timestamp").and_then(|v| v.as_i64()).or_else(|| {
+                    msg.get("timestamp")
+                        .and_then(|v| v.as_u64())
+                        .map(|u| u as i64)
+                }) {
+                    let now = chrono::Utc::now().timestamp_millis();
+                    if !timestamp_in_window(ts, now) {
+                        warn!("Dropping requestId {} outside 5-min window", rid);
+                        return Ok(());
+                    }
+                }
+                let mut seen = self.seen_request_ids.lock().await;
+                if seen.insert_or_duplicate(rid) {
+                    warn!("Dropping duplicate requestId {}", rid);
+                    return Ok(());
+                }
+            }
+        }
+
+        // SEC-C-01: gate everything until the panel proves possession of the
+        // api_key via the nonce echo + tag. The only frames allowed through
+        // are the handshake response itself and terminal auth errors.
+        let msg_type = msg["type"].as_str().unwrap_or("");
+        if !*self.handshake_verified.read().await
+            && !matches!(msg_type, "node_handshake_response" | "error")
+        {
+            warn!(
+                "Dropping pre-handshake frame of type '{}' (no verified handshake)",
+                msg_type
+            );
+            return Err(AgentError::SecurityViolation(
+                "handshake not verified".to_string(),
+            ));
+        }
+
+        // SEC-H-01: global in-flight bound. Non-blocking: panels get a busy
+        // response instead of unbounded task/memory growth.
+        let _slot = match self.inflight_slots.try_acquire() {
+            Ok(p) => p,
+            Err(_) => {
+                if let Some(rid) = msg.get("requestId").and_then(|v| v.as_str()) {
+                    let busy = json!({
+                        "type": "busy",
+                        "requestId": rid,
+                        "error": "agent busy: too many in-flight commands",
+                        "timestamp": chrono::Utc::now().timestamp_millis(),
+                    });
+                    // NOTE: no outer write.lock() here — the helper locks internally.
+                    let _ =
+                        send_ws_with_timeout(write, Message::Text(busy.to_string().into())).await;
+                }
+                return Err(AgentError::InternalError("agent busy".to_string()));
+            }
+        };
+
         match msg["type"].as_str() {
             Some("server_control") => self.handle_server_control(&msg).await?,
             Some("install_server") => {
                 let handler = self.clone();
                 let msg = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.install_server(&msg).await {
                         error!("Error in install_server handler: {}", e);
                         let server_id = msg["serverId"].as_str().unwrap_or("unknown");
@@ -1454,7 +1770,16 @@ impl WebSocketHandler {
             Some("reinstall_server") => {
                 let handler = self.clone();
                 let msg = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.reinstall_server(&msg).await {
                         error!("Error in reinstall_server handler: {}", e);
                         handler
@@ -1472,7 +1797,16 @@ impl WebSocketHandler {
             Some("cancel_install_server") => {
                 let handler = self.clone();
                 let msg = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.cancel_install_server(&msg).await {
                         error!("Error in cancel_install_server handler: {}", e);
                         handler
@@ -1490,7 +1824,16 @@ impl WebSocketHandler {
             Some("rebuild_server") => {
                 let handler = self.clone();
                 let msg = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.rebuild_server(&msg).await {
                         error!("Error in rebuild_server handler: {}", e);
                         handler
@@ -1508,7 +1851,16 @@ impl WebSocketHandler {
             Some("start_server") => {
                 let handler = self.clone();
                 let msg = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     let request_id = msg["requestId"].as_str().map(|s| s.to_string());
                     let server_id = msg["serverId"]
                         .as_str()
@@ -1609,7 +1961,16 @@ impl WebSocketHandler {
             Some("restart_server") => {
                 let handler = self.clone();
                 let msg = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     let request_id = msg["requestId"].as_str().map(|s| s.to_string());
                     let Some(server_uuid) = msg["serverUuid"].as_str() else {
                         error!("Error in restart_server handler: Missing serverUuid");
@@ -1736,7 +2097,16 @@ impl WebSocketHandler {
                 // execution stalled every other server's control traffic.
                 let handler = self.clone();
                 let msg = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     let server_uuid = msg["serverUuid"].as_str().unwrap_or("");
                     let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
                     if let Err(e) = handler.delete_server(server_id, server_uuid).await {
@@ -1765,7 +2135,7 @@ impl WebSocketHandler {
                 // encoded) must not stall the shared read loop.
                 let handler = self.clone();
                 let msg = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
                     if let Err(e) = handler.handle_file_operation(&msg).await {
                         warn!("file_operation handler failed: {}", e);
                     }
@@ -1775,7 +2145,16 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_create_backup(&msg, &write).await {
                         error!("Error in handle_create_backup handler: {}", e);
                         handler
@@ -1794,7 +2173,16 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_restore_backup(&msg, &write).await {
                         error!("Error in handle_restore_backup handler: {}", e);
                         handler
@@ -1818,7 +2206,16 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_delete_backup(&msg, &write).await {
                         warn!("delete_backup handler failed: {}", e);
                     }
@@ -1828,7 +2225,16 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_download_backup_start(&msg, &write).await {
                         warn!("download_backup_start handler failed: {}", e);
                     }
@@ -1838,7 +2244,16 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_download_backup(&msg, &write).await {
                         warn!("download_backup handler failed: {}", e);
                     }
@@ -1853,7 +2268,16 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_start_backup_stream(&msg, &write).await {
                         error!("Error in handle_start_backup_stream handler: {}", e);
                         handler
@@ -1876,7 +2300,16 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_finish_restore_stream(&msg, &write).await {
                         warn!("finish_restore_stream handler failed: {}", e);
                     }
@@ -1886,7 +2319,16 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_clone_server_files(&msg, &write).await {
                         error!("Error in handle_clone_server_files handler: {}", e);
                         handler
@@ -1907,7 +2349,16 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg
+                        .get("serverId")
+                        .or_else(|| msg.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_resize_storage(&msg, &write).await {
                         warn!("resize_storage handler failed: {}", e);
                     }
@@ -1960,12 +2411,30 @@ impl WebSocketHandler {
                         "targetVersion": target_version,
                         "currentVersion": env!("CARGO_PKG_VERSION"),
                     });
-                    let mut w = write.lock().await;
-                    let _ = w.send(Message::Text(payload.to_string().into())).await;
+                    let _ = send_ws_with_timeout(&write, Message::Text(payload.to_string().into()))
+                        .await;
                 }
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
+                    // SEC-H-01: per-server lock across validate->mutate->exec.
+                    let __srv = msg_clone
+                        .get("serverId")
+                        .or_else(|| msg_clone.get("serverUuid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let __lock = handler.server_lock(&__srv).await;
+                    let _guard = __lock.lock().await;
                     let updater = crate::updater::AgentUpdater::new(&handler.config);
-                    let options = crate::updater::UpdateOptions { target_version };
+                    // SEC-H-11: panel may request allowDowngrade; audited in updater.
+                    let allow_downgrade = msg_clone
+                        .get("allowDowngrade")
+                        .or_else(|| msg_clone.get("allow_downgrade"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let options = crate::updater::UpdateOptions {
+                        target_version,
+                        allow_downgrade,
+                    };
                     // Mid-flight heartbeat while download/apply runs (best-effort).
                     let progress_write = Arc::clone(&write);
                     let progress_handler = handler.clone();
@@ -1990,8 +2459,11 @@ impl WebSocketHandler {
                             "targetVersion": mid_target,
                             "currentVersion": env!("CARGO_PKG_VERSION"),
                         });
-                        let mut w = progress_write.lock().await;
-                        let _ = w.send(Message::Text(payload.to_string().into())).await;
+                        let _ = send_ws_with_timeout(
+                            &progress_write,
+                            Message::Text(payload.to_string().into()),
+                        )
+                        .await;
                         // 60% later
                         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                         {
@@ -2010,8 +2482,11 @@ impl WebSocketHandler {
                             "targetVersion": mid_target,
                             "currentVersion": env!("CARGO_PKG_VERSION"),
                         });
-                        let mut w = progress_write.lock().await;
-                        let _ = w.send(Message::Text(payload.to_string().into())).await;
+                        let _ = send_ws_with_timeout(
+                            &progress_write,
+                            Message::Text(payload.to_string().into()),
+                        )
+                        .await;
                     });
                     match updater.update(&options).await {
                         Ok(_) => {
@@ -2037,8 +2512,11 @@ impl WebSocketHandler {
                                 "targetVersion": options.target_version,
                                 "currentVersion": env!("CARGO_PKG_VERSION"),
                             });
-                            let mut w = write.lock().await;
-                            let _ = w.send(Message::Text(payload.to_string().into())).await;
+                            let _ = send_ws_with_timeout(
+                                &write,
+                                Message::Text(payload.to_string().into()),
+                            )
+                            .await;
                         }
                         Err(e) => {
                             mid_task.abort();
@@ -2067,8 +2545,11 @@ impl WebSocketHandler {
                                 "requestId": msg_clone.get("requestId"),
                                 "error": e.to_string(),
                             });
-                            let mut w = write.lock().await;
-                            let _ = w.send(Message::Text(payload.to_string().into())).await;
+                            let _ = send_ws_with_timeout(
+                                &write,
+                                Message::Text(payload.to_string().into()),
+                            )
+                            .await;
                         }
                     }
                 });
@@ -2095,8 +2576,8 @@ impl WebSocketHandler {
                     "error": error,
                     "startedAt": started_at,
                 });
-                let mut w = write.lock().await;
-                let _ = w.send(Message::Text(response.to_string().into())).await;
+                let _ =
+                    send_ws_with_timeout(write, Message::Text(response.to_string().into())).await;
             }
             Some("agent_status") => {
                 let config_path = self.config.agent.config_path.clone();
@@ -2107,7 +2588,7 @@ impl WebSocketHandler {
                     .unwrap_or(true);
                 let msg_clone = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
                     // OS, kernel, and containerd version never change at runtime —
                     // cache them on first call to avoid repeated syscalls and subprocess spawns.
                     static CACHED_SYSINFO: OnceLock<(String, String, String)> = OnceLock::new();
@@ -2161,8 +2642,7 @@ impl WebSocketHandler {
                         "sftpEnabled": sftp_enabled,
                         "sftpPort": sftp_port,
                     });
-                    let mut w = write.lock().await;
-                    let _ = w.send(Message::Text(response.to_string().into())).await;
+                    let _ = send_ws_with_timeout(&write, Message::Text(response.to_string().into())).await;
                 });
             }
             Some("create_network") => self.handle_create_network(&msg, write).await?,
@@ -2171,15 +2651,15 @@ impl WebSocketHandler {
                 let msg_clone = msg.clone();
                 let handler = self.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
                     // Acknowledge the restart command
                     let ack = json!({
                         "type": "agent_restart_ack",
                         "requestId": msg_clone.get("requestId"),
                     });
                     {
-                        let mut w = write.lock().await;
-                        let _ = w.send(Message::Text(ack.to_string().into())).await;
+                        let _ = send_ws_with_timeout(&write, Message::Text(ack.to_string().into()))
+                            .await;
                     }
                     // Give the ack time to be sent before we shut down
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -2195,21 +2675,22 @@ impl WebSocketHandler {
             Some("ping") => {
                 let write = Arc::clone(write);
                 let msg_clone = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
                     let pong = json!({
                         "type": "pong",
                         "requestId": msg_clone.get("requestId"),
                         "timestamp": chrono::Utc::now().to_rfc3339(),
                     });
-                    let mut w = write.lock().await;
-                    let _ = w.send(Message::Text(pong.to_string().into())).await;
+                    let _ =
+                        send_ws_with_timeout(&write, Message::Text(pong.to_string().into())).await;
                 });
             }
             Some("agent_logs") => {
-                let lines = msg.get("lines").and_then(|v| v.as_u64()).unwrap_or(200) as usize;
+                let lines =
+                    clamp_agent_log_lines(msg.get("lines").and_then(|v| v.as_u64()).unwrap_or(200));
                 let msg_clone = msg.clone();
                 let write = Arc::clone(write);
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
                     // Try journalctl first (systemd-managed agents)
                     let journal_output = tokio::process::Command::new("journalctl")
                         .args([
@@ -2288,15 +2769,16 @@ impl WebSocketHandler {
                         "requestId": msg_clone.get("requestId"),
                         "logs": logs,
                     });
-                    let mut w = write.lock().await;
-                    let _ = w.send(Message::Text(response.to_string().into())).await;
+                    let _ =
+                        send_ws_with_timeout(&write, Message::Text(response.to_string().into()))
+                            .await;
                 });
             }
             Some("agent_config") => {
                 let config_path = self.config.agent.config_path.clone();
                 let write = Arc::clone(write);
                 let msg_clone = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
                     let path = if config_path.as_os_str().is_empty() {
                         PathBuf::from("/opt/catalyst-agent/config.toml")
                     } else {
@@ -2317,19 +2799,29 @@ impl WebSocketHandler {
                             .and_then(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0))
                             .map(|dt| dt.to_rfc3339()),
                     });
-                    let mut w = write.lock().await;
-                    let _ = w.send(Message::Text(response.to_string().into())).await;
+                    let _ =
+                        send_ws_with_timeout(&write, Message::Text(response.to_string().into()))
+                            .await;
                 });
             }
             Some("agent_config_update") => {
                 let config_path = self.config.agent.config_path.clone();
+                let audit_config_path = config_path.clone();
                 let content = msg
                     .get("content")
                     .and_then(|v| v.as_str())
                     .map(String::from);
+                // SEC-H-04: allowlist — dangerous knobs need explicit
+                // allowUnsafe=true plus a pre-write backup + audit log.
+                let allow_unsafe = msg
+                    .get("allowUnsafe")
+                    .or_else(|| msg.get("allow_unsafe"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let handler_clone = self.clone();
                 let write = Arc::clone(write);
                 let msg_clone = msg.clone();
-                tokio::spawn(async move {
+                self.connection_tasks.lock().await.spawn(async move {
                     let path = if config_path.as_os_str().is_empty() {
                         PathBuf::from("/opt/catalyst-agent/config.toml")
                     } else {
@@ -2337,9 +2829,28 @@ impl WebSocketHandler {
                     };
                     let response = match content {
                         Some(c) => {
+                            // SEC-H-04 allowlist gate runs before TOML parse.
+                            if let Err(gate_err) = validate_agent_config_update(&c, allow_unsafe) {
+                                warn!("agent_config_update denied: {}", gate_err);
+                                handler_clone
+                                    .report_error(
+                                        ErrorLevel::Warn,
+                                        "agent:config_update_denied",
+                                        &format!("agent_config_update denied: {}", gate_err),
+                                        None,
+                                        None,
+                                    )
+                                    .await;
+                                json!({
+                                    "type": "agent_config_update_response",
+                                    "requestId": msg_clone.get("requestId"),
+                                    "saved": false,
+                                    "error": gate_err,
+                                })
                             // Validate parseable TOML + required fields, then atomic write + 0600.
-                            match c.parse::<toml::Value>() {
-                                Ok(parsed) => {
+                            } else {
+                                match c.parse::<toml::Value>() {
+                                    Ok(parsed) => {
                                     let validation_err = (|| -> Option<String> {
                                         let table = parsed.as_table()?;
                                         let server = table.get("server")?.as_table()?;
@@ -2372,6 +2883,29 @@ impl WebSocketHandler {
                                             "error": err,
                                         })
                                     } else {
+                                        // SEC-H-04: with allowUnsafe, back up current config
+                                        // + audit before overwriting privileged knobs.
+                                        if allow_unsafe {
+                                            if let Ok(raw) =
+                                                tokio::fs::read_to_string(&path).await
+                                            {
+                                                let bak = path.with_extension("toml.panel-bak");
+                                                let _ = tokio::fs::write(&bak, raw).await;
+                                                handler_clone
+                                                    .report_error(
+                                                        ErrorLevel::Warn,
+                                                        "agent:config_update_unsafe",
+                                                        &format!(
+                                                            "agent_config_update with allowUnsafe backed up to {} (path {})",
+                                                            bak.display(),
+                                                            audit_config_path.display()
+                                                        ),
+                                                        None,
+                                                        None,
+                                                    )
+                                                    .await;
+                                            }
+                                        }
                                         match atomic_write::atomic_write(&path, &c).await {
                                             Ok(_) => json!({
                                                 "type": "agent_config_update_response",
@@ -2393,6 +2927,7 @@ impl WebSocketHandler {
                                     "saved": false,
                                     "error": format!("Invalid TOML: {}", e),
                                 }),
+                                }
                             }
                         }
                         None => json!({
@@ -2402,8 +2937,7 @@ impl WebSocketHandler {
                             "error": "No content provided",
                         }),
                     };
-                    let mut w = write.lock().await;
-                    let _ = w.send(Message::Text(response.to_string().into())).await;
+                    let _ = send_ws_with_timeout(&write, Message::Text(response.to_string().into())).await;
                 });
             }
             Some("update_network") => self.handle_update_network(&msg, write).await?,
@@ -2413,7 +2947,28 @@ impl WebSocketHandler {
             Some("accept_eula") => self.handle_eula_response(&msg, true).await?,
             Some("decline_eula") => self.handle_eula_response(&msg, false).await?,
             Some("node_handshake_response") => {
-                info!("Handshake accepted by backend");
+                // SEC-C-01: the panel must echo our nonce with a tag over
+                // (nonce, nodeId) keyed by the node api_key. Anything else
+                // keeps the gate closed and forces a reconnect.
+                let api_key = self.config.server.api_key.trim().to_string();
+                let nonce = self.handshake_nonce.read().await.clone();
+                let node_id = self.config.server.node_id.clone();
+                let echoed = msg.get("nonce").and_then(|v| v.as_str());
+                let tag = msg
+                    .get("authTag")
+                    .or_else(|| msg.get("auth_tag"))
+                    .or_else(|| msg.get("hmac"))
+                    .and_then(|v| v.as_str());
+                if !verify_handshake_response(&api_key, &nonce, &node_id, echoed, tag) {
+                    warn!("Handshake response failed nonce/tag verification; reconnecting");
+                    *self.handshake_verified.write().await = false;
+                    return Err(AgentError::SecurityViolation(
+                        "handshake verification failed".to_string(),
+                    ));
+                }
+                info!("Handshake accepted by backend (nonce verified)");
+                *self.handshake_verified.write().await = true;
+                *self.consec_lockouts.write().await = 0;
                 self.apply_panel_upload_limit(&msg);
                 self.set_backend_connected(true).await;
             }
@@ -2423,19 +2978,40 @@ impl WebSocketHandler {
             Some("error") => {
                 let error_type = msg["error"].as_str().unwrap_or("unknown");
                 let retry_after = msg["retryAfterSeconds"].as_u64();
+                // SEC-H-03: clamp to 300s ceiling + jitter; cap consecutive
+                // lockouts so a malicious panel cannot park the agent forever.
+                let mut lockouts = self.consec_lockouts.write().await;
+                let apply_lockout = |secs: &mut Option<u64>, raw: u64, lockouts: &mut u32| {
+                    let (clamped, was_clamped) = clamp_retry_after(raw);
+                    if was_clamped {
+                        warn!("Clamped panel retryAfter {}s to {}s ceiling", raw, clamped);
+                    }
+                    *lockouts = (*lockouts + 1).min(MAX_CONSEC_LOCKOUTS + 1);
+                    let mut final_secs = clamped;
+                    if *lockouts > MAX_CONSEC_LOCKOUTS {
+                        final_secs = MAX_RETRY_AFTER_SECS;
+                        warn!(
+                            "Consecutive lockouts ({}) exceed cap; forcing {}s cool-down",
+                            *lockouts, final_secs
+                        );
+                    }
+                    *secs = Some(final_secs);
+                };
                 match error_type {
                     "auth_lockout" => {
-                        let secs = retry_after.unwrap_or(60);
+                        let raw = retry_after.unwrap_or(60);
                         warn!(
                             "Backend auth lockout active — must wait {}s before reconnecting",
-                            secs
+                            raw
                         );
-                        *self.retry_after_seconds.write().await = Some(secs);
+                        let mut slot = self.retry_after_seconds.write().await;
+                        apply_lockout(&mut slot, raw, &mut lockouts);
                     }
                     "auth_failed" => {
-                        let secs = retry_after.unwrap_or(5);
-                        warn!("Backend rejected auth credentials — retrying in {}s", secs);
-                        *self.retry_after_seconds.write().await = Some(secs);
+                        let raw = retry_after.unwrap_or(5);
+                        warn!("Backend rejected auth credentials — retrying in {}s", raw);
+                        let mut slot = self.retry_after_seconds.write().await;
+                        apply_lockout(&mut slot, raw, &mut lockouts);
                     }
                     _ => {
                         warn!("Backend error: {}", error_type);
@@ -2464,6 +3040,9 @@ impl WebSocketHandler {
         let server_id = msg["serverId"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        // SEC-H-01: per-server lock across validate->mutate->exec.
+        let __server_lock = self.server_lock(server_id).await;
+        let _guard = __server_lock.lock().await;
 
         let server_uuid = msg
             .get("serverUuid")
@@ -2586,14 +3165,30 @@ impl WebSocketHandler {
             .ok_or_else(|| AgentError::InvalidRequest("Missing path".to_string()))?;
 
         let request_id = msg["requestId"].as_str().map(|value| value.to_string());
+        // SEC-H-13: file reads stream with a take(MAX+1) cap; panels can also
+        // page via the "read_chunk" operation (offset + length).
         let result = match op_type {
-            "read" => self
-                .file_manager
-                .read_file(server_uuid, path)
-                .await
-                .map(|data| {
-                    Some(json!({ "data": base64::engine::general_purpose::STANDARD.encode(data) }))
-                }),
+            "read" => self.read_file_bounded(server_uuid, path).await.map(|data| {
+                Some(json!({ "data": base64::engine::general_purpose::STANDARD.encode(data) }))
+            }),
+            "read_chunk" => {
+                let offset = msg.get("offset").and_then(|v| v.as_u64()).unwrap_or(0);
+                let length = msg
+                    .get("length")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(FILE_READ_CHUNK_BYTES as u64)
+                    .min(FILE_READ_CHUNK_BYTES as u64)
+                    .max(1);
+                self.read_file_chunk(server_uuid, path, offset, length)
+                    .await
+                    .map(|(data, total)| {
+                        Some(json!({
+                            "data": base64::engine::general_purpose::STANDARD.encode(data),
+                            "offset": offset,
+                            "totalBytes": total,
+                        }))
+                    })
+            }
             "write" => {
                 let data = msg["data"]
                     .as_str()
@@ -2658,12 +3253,90 @@ impl WebSocketHandler {
             };
             let writer = { self.write.read().await.clone() };
             if let Some(ws) = writer {
-                let mut w = ws.lock().await;
-                let _ = w.send(Message::Text(payload.to_string().into())).await;
+                // SEC-H-05: timeout-bounded send.
+                let _ = send_ws_with_timeout(&ws, Message::Text(payload.to_string().into())).await;
             }
         }
 
         result.map(|_| ())
+    }
+
+    /// SEC-H-01/13: bounded whole-file read — streaming take(MAX+1) so a
+    /// 10 GiB file can never be buffered into RAM at once.
+    pub(crate) async fn read_file_bounded(
+        &self,
+        server_uuid: &str,
+        path: &str,
+    ) -> AgentResult<Vec<u8>> {
+        let full = self.file_manager.resolve_path(server_uuid, path)?;
+        let meta = tokio::fs::metadata(&full)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Cannot access file: {}", e)))?;
+        let max = self.file_manager.max_file_size();
+        if meta.len() > max {
+            return Err(AgentError::FileSystemError(format!(
+                "File too large: {} > {}MB",
+                meta.len(),
+                max / 1024 / 1024
+            )));
+        }
+        // take(MAX+1): detect over-limit growth between stat and read.
+        let cap = max.saturating_add(1);
+        let file = tokio::fs::File::open(&full)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Failed to read file: {}", e)))?;
+        use tokio::io::AsyncReadExt;
+        let mut limited = file.take(cap);
+        let mut buf = Vec::new();
+        limited
+            .read_to_end(&mut buf)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Failed to read file: {}", e)))?;
+        if buf.len() as u64 > max {
+            return Err(AgentError::FileSystemError("File too large".to_string()));
+        }
+        Ok(buf)
+    }
+
+    /// SEC-H-13: chunk-loop read for the file read protocol (offset+length).
+    pub(crate) async fn read_file_chunk(
+        &self,
+        server_uuid: &str,
+        path: &str,
+        offset: u64,
+        length: u64,
+    ) -> AgentResult<(Vec<u8>, u64)> {
+        let full = self.file_manager.resolve_path(server_uuid, path)?;
+        let meta = tokio::fs::metadata(&full)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Cannot access file: {}", e)))?;
+        let total = meta.len();
+        if offset > total {
+            return Err(AgentError::InvalidRequest("offset past EOF".to_string()));
+        }
+        let want = length.min(total - offset).min(FILE_READ_CHUNK_BYTES as u64);
+        let file = tokio::fs::File::open(&full)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Failed to read file: {}", e)))?;
+        use tokio::io::{AsyncReadExt, AsyncSeekExt};
+        let mut f = file;
+        f.seek(std::io::SeekFrom::Start(offset))
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("seek failed: {}", e)))?;
+        let mut buf = vec![0u8; want as usize];
+        let mut filled = 0;
+        while filled < buf.len() {
+            let n = f
+                .read(&mut buf[filled..])
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("read failed: {}", e)))?;
+            if n == 0 {
+                break;
+            }
+            filled += n;
+        }
+        buf.truncate(filled);
+        Ok((buf, total))
     }
 
     async fn handle_clone_server_files(
@@ -2694,8 +3367,7 @@ impl WebSocketHandler {
                 "success": false,
                 "error": format!("Source server directory not found: {}", source_dir.display()),
             });
-            let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into()))
+            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
@@ -2714,11 +3386,19 @@ impl WebSocketHandler {
             target_dir.display()
         );
 
-        // Use cp -a to copy all files preserving permissions, ownership, symlinks
+        // Use cp -a to copy all files preserving permissions, ownership, symlinks.
+        // SEC-7: env_clear + PATH/LANG allow-list so children never inherit
+        // NODE_API_KEY (hidepid=2 recommended per config.rs).
+        let safe_path = std::env::var("PATH").unwrap_or_else(|_| {
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string()
+        });
         let status = tokio::process::Command::new("cp")
             .arg("-a")
             .arg(format!("{}/.", source_dir.display()))
             .arg(&target_dir)
+            .env_clear()
+            .env("PATH", safe_path)
+            .env("LANG", "C.UTF-8")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped())
             .status()
@@ -2733,8 +3413,7 @@ impl WebSocketHandler {
                 "success": false,
                 "error": format!("cp -a exited with code {}", status.code().unwrap_or(-1)),
             });
-            let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into()))
+            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
@@ -2779,8 +3458,7 @@ impl WebSocketHandler {
             "serverId": server_id,
             "success": true,
         });
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -2840,8 +3518,7 @@ impl WebSocketHandler {
             }),
         };
 
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -2876,8 +3553,7 @@ impl WebSocketHandler {
             }),
         };
 
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -2921,8 +3597,7 @@ impl WebSocketHandler {
             }),
         };
 
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -2959,8 +3634,7 @@ impl WebSocketHandler {
             }),
         };
 
-        let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into()))
+        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -3042,8 +3716,8 @@ impl WebSocketHandler {
 
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
-            let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(text.into())).await {
+            // SEC-H-05: every send goes through the timeout helper.
+            if let Err(err) = send_ws_with_timeout(&ws, Message::Text(text.into())).await {
                 warn!(
                     "Failed to send power_command_ack for {} ({}): {}",
                     action, server_id, err
@@ -3062,29 +3736,33 @@ impl WebSocketHandler {
             return Ok(());
         }
 
+        // SEC-H-05: console is best-effort. Sanitize ANSI/CSI/OSC on emit so
+        // terminal escapes from game output cannot attack panel terminals,
+        // then drop (don't error) when the slow consumer times out.
+        let clean = sanitize_console_text(data);
         let msg = ConsoleOutput {
             ty: "console_output",
             serverId: server_id,
             stream,
-            data,
+            data: &clean,
             timestamp: chrono::Utc::now().timestamp_millis(),
         };
         let text = serde_json::to_string(&msg).unwrap_or_default();
 
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
-            let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(text.into())).await {
-                return Err(AgentError::NetworkError(format!(
-                    "Failed to send console output: {}",
-                    err
-                )));
+            if let Err(err) = send_ws_with_timeout(&ws, Message::Text(text.into())).await {
+                debug!(
+                    "console_output dropped for server {} (slow consumer: {})",
+                    server_id, err
+                );
+            } else {
+                debug!(
+                    "console_output sent for server {} ({} bytes)",
+                    server_id,
+                    data.len()
+                );
             }
-            debug!(
-                "console_output sent for server {} ({} bytes)",
-                server_id,
-                data.len()
-            );
         } else {
             debug!(
                 "console_output dropped for server {} — no active WebSocket",
@@ -3116,12 +3794,9 @@ impl WebSocketHandler {
 
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
-            let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(text.into())).await {
-                return Err(AgentError::NetworkError(format!(
-                    "Failed to send eula_required: {}",
-                    err
-                )));
+            // SEC-H-05: timeout-bounded send; eula stays best-effort.
+            if let Err(err) = send_ws_with_timeout(&ws, Message::Text(text.into())).await {
+                debug!("eula_required dropped for {}: {}", server_id, err);
             }
         }
 
@@ -3315,6 +3990,70 @@ impl WebSocketHandler {
 
         Ok(())
     }
+}
+
+/// SEC-H-05/7: strip ANSI/CSI/OSC escapes from console text before emit.
+/// Hand-rolled byte scanner (no regex escapes to mis-compile): ESC is ASCII
+/// so it never appears inside a multi-byte UTF-8 sequence, and cuts happen
+/// only at ASCII boundaries — output stays valid UTF-8.
+pub(crate) fn sanitize_console_text(data: &str) -> String {
+    let bytes = data.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(data.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1b && i + 1 < bytes.len() {
+            match bytes[i + 1] {
+                // CSI: ESC [ params... intermediates... final(@-~)
+                b'[' => {
+                    let mut j = i + 2;
+                    while j < bytes.len() && !(0x40..=0x7e).contains(&bytes[j]) {
+                        j += 1;
+                    }
+                    i = if j < bytes.len() { j + 1 } else { bytes.len() };
+                    continue;
+                }
+                // OSC: ESC ] ... (BEL | ESC \)
+                b']' => {
+                    let mut j = i + 2;
+                    while j < bytes.len() {
+                        if bytes[j] == 0x07 {
+                            j += 1;
+                            break;
+                        }
+                        if bytes[j] == 0x1b && j + 1 < bytes.len() && bytes[j + 1] == b'\\' {
+                            j += 2;
+                            break;
+                        }
+                        j += 1;
+                    }
+                    i = j;
+                    continue;
+                }
+                // Charset select: ESC ( X / ESC ) X
+                b'(' | b')' => {
+                    i = (i + 3).min(bytes.len());
+                    continue;
+                }
+                // Two-byte escapes: keypad modes, RI, save/restore cursor
+                b'=' | b'>' | b'M' | b'7' | b'8' => {
+                    i += 2;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    let mut s = String::from_utf8_lossy(&out).into_owned();
+    if s.len() > MAX_CONSOLE_BATCH_BYTES * 2 {
+        let mut end = MAX_CONSOLE_BATCH_BYTES * 2;
+        while !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        s.truncate(end);
+    }
+    s
 }
 
 /// Parse a plain-text log line into (level, target, message).
@@ -3595,20 +4334,124 @@ async fn send_ws_with_timeout(
 }
 
 #[cfg(test)]
-pub(crate) fn parse_df_output_mb(output: &str) -> Option<(u64, u64)> {
-    let mut lines = output.lines().filter(|line| !line.trim().is_empty());
-    let header = lines.next()?;
-    if !header.to_lowercase().contains("filesystem") {
-        return None;
+mod security_hardening_tests {
+    use super::*;
+
+    #[test]
+    fn handshake_nonce_echo_and_tag_verify() {
+        let nonce = generate_handshake_nonce();
+        assert_eq!(nonce.len(), 32);
+        let tag = compute_handshake_tag("key123", &nonce, "node1");
+        assert!(verify_handshake_response(
+            "key123",
+            &nonce,
+            "node1",
+            Some(&nonce),
+            Some(&tag)
+        ));
+        // Wrong nonce, wrong tag, wrong key all fail.
+        assert!(!verify_handshake_response(
+            "key123",
+            &nonce,
+            "node1",
+            Some("other"),
+            Some(&tag)
+        ));
+        assert!(!verify_handshake_response(
+            "key123",
+            &nonce,
+            "node1",
+            Some(&nonce),
+            Some("00")
+        ));
+        assert!(!verify_handshake_response(
+            "wrong",
+            &nonce,
+            "node1",
+            Some(&nonce),
+            Some(&tag)
+        ));
+        assert!(!verify_handshake_response(
+            "key123",
+            &nonce,
+            "node1",
+            None,
+            Some(&tag)
+        ));
     }
-    let data = lines.next()?;
-    let parts: Vec<&str> = data.split_whitespace().collect();
-    if parts.len() < 6 {
-        return None;
+
+    #[test]
+    fn replay_cache_rejects_duplicates_and_caps() {
+        let mut cache = ReplayCache::new();
+        assert!(!cache.insert_or_duplicate("a"));
+        assert!(cache.insert_or_duplicate("a"));
+        for i in 0..(MAX_REPLAY_IDS + 10) {
+            cache.insert_or_duplicate(&format!("id-{}", i));
+        }
+        assert!(cache.order.len() <= MAX_REPLAY_IDS);
     }
-    let total_mb = parts[1].parse::<u64>().ok()?;
-    let used_mb = parts[2].parse::<u64>().ok()?;
-    Some((used_mb, total_mb))
+
+    #[test]
+    fn timestamp_window_enforced() {
+        let now = 1_700_000_000_000i64;
+        assert!(timestamp_in_window(now, now));
+        assert!(timestamp_in_window(now - REPLAY_WINDOW_MILLIS, now));
+        assert!(!timestamp_in_window(now - REPLAY_WINDOW_MILLIS - 1, now));
+        assert!(!timestamp_in_window(now + REPLAY_WINDOW_MILLIS + 1, now));
+    }
+
+    #[test]
+    fn retry_after_clamped_to_ceiling() {
+        let (secs, clamped) = clamp_retry_after(3600);
+        assert_eq!(secs, MAX_RETRY_AFTER_SECS);
+        assert!(clamped);
+        let (secs, clamped) = clamp_retry_after(30);
+        assert!(!clamped);
+        assert!((27..=33).contains(&secs));
+    }
+
+    #[test]
+    fn panel_upload_limit_clamped() {
+        assert_eq!(clamp_panel_upload_limit(1024), Some(1024));
+        assert_eq!(clamp_panel_upload_limit(0), None);
+        assert_eq!(
+            clamp_panel_upload_limit(OPERATOR_MAX_UPLOAD_BYTES + 1),
+            None
+        );
+        assert_eq!(
+            clamp_panel_upload_limit(OPERATOR_MAX_UPLOAD_BYTES),
+            Some(OPERATOR_MAX_UPLOAD_BYTES)
+        );
+    }
+
+    #[test]
+    fn log_lines_clamped() {
+        assert_eq!(clamp_agent_log_lines(0), 1);
+        assert_eq!(clamp_agent_log_lines(200), 200);
+        assert_eq!(clamp_agent_log_lines(99999), MAX_AGENT_LOG_LINES);
+    }
+
+    #[test]
+    fn config_update_allowlist_denies_privileged_keys() {
+        let bad = "[server]\nbackend_url=\"x\"\nnode_id=\"y\"\napi_key=\"z\"\nhostname=\"h\"\ndata_dir=\"/d\"\n[agent]\nrelease_repo=\"evil/x\"\n";
+        assert!(validate_agent_config_update(bad, false).is_err());
+        assert!(validate_agent_config_update(bad, true).is_ok());
+        let redacted = bad.replace("api_key=\"z\"", "api_key=\"[REDACTED]\"");
+        assert!(validate_agent_config_update(&redacted, true).is_err());
+        let good = "[server]\nbackend_url=\"x\"\nnode_id=\"y\"\napi_key=\"z\"\nhostname=\"h\"\ndata_dir=\"/d\"\n";
+        assert!(validate_agent_config_update(good, false).is_ok());
+    }
+
+    #[test]
+    fn console_sanitize_strips_escapes() {
+        let dirty = "hello\x1b[31mRED\x1b[0m world\x1b]0;title\x07!";
+        let clean = sanitize_console_text(dirty);
+        assert!(!clean.contains('\x1b'));
+        assert!(clean.contains("hello"));
+        assert!(clean.contains("RED"));
+        // Plain text untouched.
+        assert_eq!(sanitize_console_text("plain"), "plain");
+    }
 }
 
 #[cfg(test)]

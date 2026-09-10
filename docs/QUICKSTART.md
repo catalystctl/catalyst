@@ -24,7 +24,10 @@ Welcome! This guide gets you from zero to a running Catalyst panel in about five
 Open a terminal and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+VERSION=v1.18.8  # replace with the release you want
+curl -fsSL -o install.sh "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh"
+curl -fsSL -o install.sh.sha256 "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh.sha256"
+sha256sum -c install.sh.sha256 && bash install.sh
 ```
 
 This downloads the `catalyst-docker/` folder with pre-built images and generates a `.env` file for you.

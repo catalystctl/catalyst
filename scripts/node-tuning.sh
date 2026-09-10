@@ -122,9 +122,14 @@ cat > "${SERVICE_OVERRIDE}" <<'EOF'
 [Service]
 LimitNOFILE=1048576
 LimitNOFILESoft=1048576
-TasksMax=infinity
+# Bounded: infinity lets a fork bomb wedge the node. Matches the agent unit.
+TasksMax=8192
 CPUWeight=1000
 IOWeight=1000
+# Mirrors the hardening in deploy-agent.sh write_systemd_unit (documented there).
+ProtectHome=true
+RestrictNamespaces=mnt net uts ipc
+SystemCallFilter=@system-service
 EOF
 
 systemctl daemon-reload

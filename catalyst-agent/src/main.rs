@@ -66,6 +66,7 @@ impl CatalystAgent {
             cni_bin_dir: config.containerd.cni_bin_dir.clone(),
             cni_bridge_name: config.containerd.cni_bridge_name.clone(),
             cni_bridge_subnet: config.containerd.cni_bridge_subnet.clone(),
+            allow_host_network: config.containerd.allow_host_network,
         };
         let runtime = Arc::new(ContainerdRuntime::new(runtime_config).await?);
 
@@ -380,6 +381,12 @@ impl CatalystAgent {
 
 #[tokio::main]
 async fn main() -> AgentResult<()> {
+    // SEC-7: umask 027 — logs/buffers/dirs default to owner-only (0600/0700
+    // after enforcement) even if created before explicit chmod paths run.
+    #[cfg(unix)]
+    unsafe {
+        libc::umask(0o027);
+    }
     // Install the rustls crypto provider before any TLS connection is made.
     // Both tokio-tungstenite and reqwest pull in rustls, and with multiple
     // backends available (ring + aws-lc-rs), rustls cannot auto-select one.

@@ -113,6 +113,35 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "hostId is required" });
       }
 
+      // Authorize the host: admins, node managers, or explicit database.create
+      // grantees may use it. The legacy permissive path let any server member
+      // provision onto any host.
+      const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+      const { decideServerAccess } = await import("../../lib/server-access.js");
+      const scopeServer = await prisma.server.findUnique({
+        where: { id: serverId },
+        select: { ownerId: true, nodeId: true },
+      });
+      if (!scopeServer) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+      const scopeAccess = await prisma.serverAccess.findFirst({
+        where: { serverId, userId, permissions: { has: "database.create" } },
+        select: { userId: true },
+      });
+      const scopePerms = await resolveServerPermissions(userId, serverId, scopeServer.nodeId);
+      const { hasNodeAccess } = await import("../../lib/permissions.js");
+      const hostDecision = decideServerAccess({
+        isOwner: scopeServer.ownerId === userId,
+        hasExplicitServerAccess: Boolean(scopeAccess),
+        rolePermissions: scopePerms,
+        hasNodeAccess: await hasNodeAccess(prisma, userId, scopeServer.nodeId),
+        requiredPermission: "database.create",
+      });
+      if (!hostDecision.allowed) {
+        return reply.status(403).send({ error: "Database host not authorized for this server" });
+      }
+
        const server = await prisma.server.findUnique({
          where: { id: serverId },
          select: { databaseAllocation: true },
@@ -150,8 +179,12 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         });
       }
 
-      const databaseUsername = generateSafeIdentifier("u", 12);
+      // Usernames are prefixed per server (srv_<short>-<rand>) so collisions
+      // across tenants are impossible and ownership is auditable.
+      const shortServer = serverId.replace(/[^a-z0-9]/gi, "").slice(0, 6).toLowerCase() || "srv";
+      const databaseUsername = generateSafeIdentifier(`srv_${shortServer}_`, 8);
       const databasePassword = generateSafeIdentifier("p", 24);
+      const { encryptSecretValue } = await import("../../services/backup-credentials.js");
 
       if (!isValidDatabaseIdentifier(databaseUsername)) {
         return reply.status(500).send({ error: "Generated database username is invalid" });
@@ -169,7 +202,9 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
             hostId,
             name: databaseName,
             username: databaseUsername,
-            password: databasePassword,
+            // Encrypt at rest (backup-credentials AES-GCM pattern); one-time
+            // display below decrypts once, list endpoints never expose it.
+            password: (encryptSecretValue(databasePassword) ?? databasePassword) as string,
           },
         });
 
@@ -203,7 +238,8 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
             id: database.id,
             name: database.name,
             username: database.username,
-            password: database.password,
+            // One-time display: decrypt the just-stored value once.
+            password: databasePassword,
             host: host.host,
             port: host.port,
             hostId: host.id,
@@ -254,7 +290,14 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Database not found" });
       }
 
+      // Verify the joined host matches the stored hostId (cross-host
+      // confusion on rotate would set the password on the wrong engine).
+      if (!database.host || database.host.id !== database.hostId) {
+        return reply.status(409).send({ error: "Database host mismatch" });
+      }
+
       const nextPassword = generateSafeIdentifier("p", 24);
+      const { encryptSecretValue: encryptRotatedSecret } = await import("../../services/backup-credentials.js");
 
       try {
         await rotateDatabasePassword(database.host, database.username, nextPassword);
@@ -267,7 +310,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
 
       const updated = await prisma.serverDatabase.update({
         where: { id: database.id },
-        data: { password: nextPassword },
+        data: { password: (encryptRotatedSecret(nextPassword) ?? nextPassword) as string },
       });
 
       await createAuditLog(userId, {
@@ -300,7 +343,8 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
           id: updated.id,
           name: updated.name,
           username: updated.username,
-          password: updated.password,
+          // One-time display after rotation.
+          password: nextPassword,
           host: database.host.host,
           port: database.host.port,
           hostId: database.host.id,
@@ -348,6 +392,9 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
 
       if (!host) {
         return reply.status(404).send({ error: "Database host not found" });
+      }
+      if (host.id !== database.hostId) {
+        return reply.status(409).send({ error: "Database host mismatch" });
       }
 
       try {

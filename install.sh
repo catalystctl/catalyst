@@ -5,6 +5,20 @@
 # Usage:    bash install.sh [-y] [--dry-run] [--uninstall] [--help]
 # ============================================================
 set -euo pipefail
+umask 077
+
+# Pinned release metadata for verified installs (see "Versioned install" note
+# in docs/installation.md). Release artifacts publish install.sh + .sha256;
+# always verify before executing.
+INSTALL_VERSION="${INSTALL_VERSION:-main}"
+INSTALL_SHA256="${INSTALL_SHA256:-}"
+
+# Full fingerprint of Docker's official release key (Docker Release CE deb).
+# Verified 2026-09-10 via `gpg --show-keys download.docker.com/linux/*/gpg`.
+# Install snippets below compare this BEFORE dearmoring; a mismatch aborts.
+# Used inside the heredoc install snippets below (shellcheck SC2034 N/A).
+# shellcheck disable=SC2034
+DOCKER_GPG_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
 
 REPO="catalystctl/catalyst"
 BRANCH="main"
@@ -136,13 +150,13 @@ ask() {
     # If the variable is already set in the environment, use it
     if [[ -n "${!var_name:-}" ]]; then
         local env_val="${!var_name}"
-        eval "$var_name=\"${env_val}\""
+        printf -v "$var_name" '%s' "$env_val"
         ok "${var_name}=${env_val}  (from environment)"
         return
     fi
 
     if [[ "$NON_INTERACTIVE" == "true" ]]; then
-        eval "$var_name=\"${default_val}\""
+        printf -v "$var_name" '%s' "$default_val"
         info "${var_name}=${default_val}  (default, non-interactive)"
         return
     fi
@@ -159,7 +173,7 @@ ask() {
     if [[ -z "$answer" ]]; then
         answer="$default_val"
     fi
-    eval "$var_name=\"${answer}\""
+    printf -v "$var_name" '%s' "$answer"
 }
 
 confirm() {
@@ -220,11 +234,14 @@ for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker c
     sudo apt-get remove -y $pkg 2>/dev/null || true
 done
 
-# Add Docker's official GPG key
+# Add Docker's official GPG key (fingerprint-checked before dearmor)
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /tmp/docker.gpg
+gpg --show-keys /tmp/docker.gpg | grep -q "9DC858229FC7DD38854AE2D88D81803C0EBFCD88" || { echo "Docker GPG fingerprint mismatch — aborting" >&2; exit 1; }
+sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg /tmp/docker.gpg
+rm -f /tmp/docker.gpg
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 # Add the Docker repository
@@ -248,11 +265,14 @@ for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker c
     sudo apt-get remove -y $pkg 2>/dev/null || true
 done
 
-# Add Docker's official GPG key
+# Add Docker's official GPG key (fingerprint-checked before dearmor)
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+curl -fsSL https://download.docker.com/linux/debian/gpg -o /tmp/docker.gpg
+gpg --show-keys /tmp/docker.gpg | grep -q "9DC858229FC7DD38854AE2D88D81803C0EBFCD88" || { echo "Docker GPG fingerprint mismatch — aborting" >&2; exit 1; }
+sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg /tmp/docker.gpg
+rm -f /tmp/docker.gpg
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 # Add the Docker repository
@@ -408,6 +428,72 @@ env_get() {
 is_placeholder_secret() {
     local val="${1:-}"
     [[ -z "$val" || "$val" == CHANGE_ME* ]]
+}
+
+# Set KEY=value in an env file without sed replacement pitfalls (values may
+# contain &, ~, |, backslashes). Rewrites via awk with the value passed in
+# the environment, so no metacharacter in the value is ever interpreted.
+# Uncommented matching lines are replaced; commented "# KEY=" lines are
+# replaced only when no active KEY= line exists; otherwise KEY is appended.
+env_set() {
+    local env_file="$1" key="$2" value="${3:-}"
+    ENV_SET_KEY="$key" ENV_SET_VAL="$value" awk '
+        BEGIN { active_done = 0 }
+        {
+            line = $0
+            stripped = line
+            sub(/^[ \t]+/, "", stripped)
+            if (stripped ~ "^"ENVIRON["ENV_SET_KEY"]"=") {
+                if (active_done == 0) {
+                    print ENVIRON["ENV_SET_KEY"]"="ENVIRON["ENV_SET_VAL"]
+                    active_done = 1
+                }
+                next
+            }
+            if (stripped ~ "^#[ \t]*"ENVIRON["ENV_SET_KEY"]"=") {
+                if (pending_comment == "") { pending_comment = line }
+                next
+            }
+            print line
+        }
+        END {
+            # Re-check: awk cannot easily look ahead, so handle the
+            # commented-only case with a second pass marker via exit code.
+            if (active_done == 0) { exit 3 }
+        }
+    ' "$env_file" > "${env_file}.new" || {
+        local rc=$?
+        if [[ $rc -eq 3 ]]; then
+            # No active KEY= line: uncomment the first "# KEY=" match if any,
+            # else append.
+            if grep -q "^#[ \t]*${key}=" "$env_file"; then
+                ENV_SET_KEY="$key" ENV_SET_VAL="$value" awk '
+                    BEGIN { done = 0 }
+                    {
+                        tmp = $0
+                        sub(/^[ \t]+/, "", tmp)
+                        if (done == 0 && tmp ~ "^#[ \t]*"ENVIRON["ENV_SET_KEY"]"=") {
+                            print ENVIRON["ENV_SET_KEY"]"="ENVIRON["ENV_SET_VAL"]
+                            done = 1
+                        } else { print $0 }
+                    }
+                ' "$env_file" > "${env_file}.new"
+            else
+                cat "$env_file" > "${env_file}.new"
+                printf '%s=%s\n' "$key" "$value" >> "${env_file}.new"
+            fi
+        else
+            rm -f "${env_file}.new"
+            return $rc
+        fi
+    }
+    # Drop any leftover commented "# KEY=" duplicates after an active set.
+    if grep -q "^${key}=" "${env_file}.new" 2>/dev/null; then
+        grep -v "^#[ \t]*${key}=" "${env_file}.new" > "${env_file}.new2" && mv "${env_file}.new2" "${env_file}.new"
+    fi
+    cat "${env_file}.new" > "$env_file"
+    rm -f "${env_file}.new"
+    chmod 600 "$env_file" 2>/dev/null || true
 }
 
 # ── State ─────────────────────────────────────────────────────────────────────
@@ -780,16 +866,16 @@ phase_configure() {
         NEW_API_KEY_SECRET=$(openssl rand -base64 32)
     fi
 
-    sed -i "s~^POSTGRES_PASSWORD=.*~POSTGRES_PASSWORD=${NEW_PG_PASS}~" "$STAGING_ENV"
-    sed -i "s~^BETTER_AUTH_SECRET=.*~BETTER_AUTH_SECRET=${NEW_AUTH_SECRET}~" "$STAGING_ENV"
-    sed -i "s~^REDIS_PASSWORD=.*~REDIS_PASSWORD=${NEW_REDIS_PASS}~" "$STAGING_ENV"
+    env_set "$STAGING_ENV" POSTGRES_PASSWORD "$NEW_PG_PASS"
+    env_set "$STAGING_ENV" BETTER_AUTH_SECRET "$NEW_AUTH_SECRET"
+    env_set "$STAGING_ENV" REDIS_PASSWORD "$NEW_REDIS_PASS"
     # API_KEY_SECRET may be commented or absent in older .env.example copies.
-    if grep -q '^API_KEY_SECRET=' "$STAGING_ENV"; then
-        sed -i "s~^API_KEY_SECRET=.*~API_KEY_SECRET=${NEW_API_KEY_SECRET}~" "$STAGING_ENV"
-    elif grep -q '^# *API_KEY_SECRET=' "$STAGING_ENV"; then
-        sed -i "s~^# *API_KEY_SECRET=.*~API_KEY_SECRET=${NEW_API_KEY_SECRET}~" "$STAGING_ENV"
+    if grep -q '^API_KEY_SECRET=\|^# *API_KEY_SECRET=' "$STAGING_ENV"; then
+        env_set "$STAGING_ENV" API_KEY_SECRET "$NEW_API_KEY_SECRET"
     else
-        printf '\n# HMAC secret for panel/agent API keys\nAPI_KEY_SECRET=%s\n' "${NEW_API_KEY_SECRET}" >> "$STAGING_ENV"
+        printf '\n# HMAC secret for panel/agent API keys\n' >> "$STAGING_ENV"
+        printf '%s=%s\n' "API_KEY_SECRET" "$NEW_API_KEY_SECRET" >> "$STAGING_ENV"
+        chmod 600 "$STAGING_ENV" 2>/dev/null || true
     fi
 
     # SECURITY: backup S3/SFTP credentials are encrypted at rest with this key;
@@ -802,12 +888,12 @@ phase_configure() {
     else
         NEW_BACKUP_CRED_KEY=$(openssl rand -base64 32)
     fi
-    if grep -q '^BACKUP_CREDENTIALS_ENCRYPTION_KEY=' "$STAGING_ENV"; then
-        sed -i "s~^BACKUP_CREDENTIALS_ENCRYPTION_KEY=.*~BACKUP_CREDENTIALS_ENCRYPTION_KEY=${NEW_BACKUP_CRED_KEY}~" "$STAGING_ENV"
-    elif grep -q '^# *BACKUP_CREDENTIALS_ENCRYPTION_KEY=' "$STAGING_ENV"; then
-        sed -i "s~^# *BACKUP_CREDENTIALS_ENCRYPTION_KEY=.*~BACKUP_CREDENTIALS_ENCRYPTION_KEY=${NEW_BACKUP_CRED_KEY}~" "$STAGING_ENV"
+    if grep -q '^BACKUP_CREDENTIALS_ENCRYPTION_KEY=\|^# *BACKUP_CREDENTIALS_ENCRYPTION_KEY=' "$STAGING_ENV"; then
+        env_set "$STAGING_ENV" BACKUP_CREDENTIALS_ENCRYPTION_KEY "$NEW_BACKUP_CRED_KEY"
     else
-        printf '\n# AES key for encrypting backup S3/SFTP credentials at rest\nBACKUP_CREDENTIALS_ENCRYPTION_KEY=%s\n' "${NEW_BACKUP_CRED_KEY}" >> "$STAGING_ENV"
+        printf '\n# AES key for encrypting backup S3/SFTP credentials at rest\n' >> "$STAGING_ENV"
+        printf '%s=%s\n' "BACKUP_CREDENTIALS_ENCRYPTION_KEY" "$NEW_BACKUP_CRED_KEY" >> "$STAGING_ENV"
+        chmod 600 "$STAGING_ENV" 2>/dev/null || true
     fi
 
     if $reused_pg || $reused_auth || $reused_redis || $reused_api; then
@@ -860,9 +946,9 @@ phase_configure() {
     ask APP_NAME "Panel name (shown in UI and emails)" "Catalyst"
 
     # ── Apply to staging .env ────────────────────────────────────────────
-    sed -i "s~^PUBLIC_URL=.*~PUBLIC_URL=${PUBLIC_URL}~" "$STAGING_ENV"
-    sed -i "s~^PASSKEY_RP_ID=.*~PASSKEY_RP_ID=${PASSKEY_RP_ID}~" "$STAGING_ENV"
-    sed -i "s~^APP_NAME=.*~APP_NAME=${APP_NAME}~" "$STAGING_ENV"
+    env_set "$STAGING_ENV" PUBLIC_URL "$PUBLIC_URL"
+    env_set "$STAGING_ENV" PASSKEY_RP_ID "$PASSKEY_RP_ID"
+    env_set "$STAGING_ENV" APP_NAME "$APP_NAME"
 
     ok "PUBLIC_URL=${PUBLIC_URL}"
     ok "PASSKEY_RP_ID=${PASSKEY_RP_ID}  (auto-derived from PUBLIC_URL)"
@@ -870,7 +956,7 @@ phase_configure() {
 
     # ── NODE_ENV ─────────────────────────────────────────────────────────
     if [[ "$PUBLIC_URL" == https://* ]]; then
-        sed -i "s~^NODE_ENV=.*~NODE_ENV=production~" "$STAGING_ENV"
+        env_set "$STAGING_ENV" NODE_ENV "production"
         ok "NODE_ENV=production  (auto-set: PUBLIC_URL uses HTTPS)"
 
         warn "HTTPS detected — make sure TLS is configured."
@@ -887,14 +973,13 @@ phase_configure() {
                 ask ACME_EMAIL "Email for Let's Encrypt notifications" ""
 
                 PUBLIC_URL="https://${DOMAIN}"
-                sed -i "s~^PUBLIC_URL=.*~PUBLIC_URL=${PUBLIC_URL}~" "$STAGING_ENV"
-                sed -i "s~^PASSKEY_RP_ID=.*~PASSKEY_RP_ID=${DOMAIN}~" "$STAGING_ENV"
-                sed -i "s~^DOMAIN=.*~DOMAIN=${DOMAIN}~" "$STAGING_ENV"
+                env_set "$STAGING_ENV" PUBLIC_URL "$PUBLIC_URL"
+                env_set "$STAGING_ENV" PASSKEY_RP_ID "$DOMAIN"
+                env_set "$STAGING_ENV" DOMAIN "$DOMAIN"
                 if [[ -n "$ACME_EMAIL" ]]; then
-                    sed -i "s~^# ACME_EMAIL=.*~ACME_EMAIL=${ACME_EMAIL}~" "$STAGING_ENV"
-                    sed -i "s~^ACME_EMAIL=.*~ACME_EMAIL=${ACME_EMAIL}~" "$STAGING_ENV" 2>/dev/null || true
+                    env_set "$STAGING_ENV" ACME_EMAIL "$ACME_EMAIL"
                 fi
-                sed -i "s~^NODE_ENV=.*~NODE_ENV=production~" "$STAGING_ENV"
+                env_set "$STAGING_ENV" NODE_ENV "production"
 
                 ok "PUBLIC_URL updated to ${PUBLIC_URL}"
                 ok "PASSKEY_RP_ID=${DOMAIN}"
@@ -908,24 +993,33 @@ phase_configure() {
 
     # ── Panel Update button: same-path compose bind-mount ───────────────
     COMPOSE_DIR="$(cd "$DEST" && pwd)"
-    if grep -q "^CATALYST_COMPOSE_DIR=" "$STAGING_ENV"; then
-        sed -i "s~^CATALYST_COMPOSE_DIR=.*~CATALYST_COMPOSE_DIR=${COMPOSE_DIR}~" "$STAGING_ENV"
+    if grep -q "^CATALYST_COMPOSE_DIR=\|^# *CATALYST_COMPOSE_DIR=" "$STAGING_ENV"; then
+        env_set "$STAGING_ENV" CATALYST_COMPOSE_DIR "$COMPOSE_DIR"
     else
-        printf '\n# Absolute host path of this compose project (panel Update button)\nCATALYST_COMPOSE_DIR=%s\n' "$COMPOSE_DIR" >> "$STAGING_ENV"
+        printf '\n# Absolute host path of this compose project (panel Update button)\n' >> "$STAGING_ENV"
+        printf '%s=%s\n' "CATALYST_COMPOSE_DIR" "$COMPOSE_DIR" >> "$STAGING_ENV"
+        chmod 600 "$STAGING_ENV" 2>/dev/null || true
     fi
-    if grep -q "^AUTO_UPDATE_DOCKER_COMPOSE_PATH=" "$STAGING_ENV"; then
-        sed -i "s~^AUTO_UPDATE_DOCKER_COMPOSE_PATH=.*~AUTO_UPDATE_DOCKER_COMPOSE_PATH=${COMPOSE_DIR}/docker-compose.yml~" "$STAGING_ENV"
-    elif grep -q "^# AUTO_UPDATE_DOCKER_COMPOSE_PATH=" "$STAGING_ENV"; then
-        sed -i "s~^# AUTO_UPDATE_DOCKER_COMPOSE_PATH=.*~AUTO_UPDATE_DOCKER_COMPOSE_PATH=${COMPOSE_DIR}/docker-compose.yml~" "$STAGING_ENV"
+    if grep -q "^AUTO_UPDATE_DOCKER_COMPOSE_PATH=\|^# *AUTO_UPDATE_DOCKER_COMPOSE_PATH=" "$STAGING_ENV"; then
+        env_set "$STAGING_ENV" AUTO_UPDATE_DOCKER_COMPOSE_PATH "${COMPOSE_DIR}/docker-compose.yml"
     else
-        printf 'AUTO_UPDATE_DOCKER_COMPOSE_PATH=%s/docker-compose.yml\n' "$COMPOSE_DIR" >> "$STAGING_ENV"
+        printf '%s=%s\n' "AUTO_UPDATE_DOCKER_COMPOSE_PATH" "${COMPOSE_DIR}/docker-compose.yml" >> "$STAGING_ENV"
+        chmod 600 "$STAGING_ENV" 2>/dev/null || true
     fi
     ok "CATALYST_COMPOSE_DIR=${COMPOSE_DIR}"
     # Container user catalyst must traverse parents of the bind mount.
     chmod o+x "$(dirname "$COMPOSE_DIR")" 2>/dev/null || true
-    # SECURITY: open read access for the container user, but never on the
-    # .env (it holds all generated secrets) or its staging/backup variants.
-    chmod -R a+rX "$COMPOSE_DIR" 2>/dev/null || true
+    # Least privilege: only the compose YAML/configs need container-user reads.
+    # Never chmod the .env (secrets) or apply recursive a+rX.
+    if [[ -f "${COMPOSE_DIR}/docker-compose.yml" ]]; then
+        chmod 644 "${COMPOSE_DIR}/docker-compose.yml" 2>/dev/null || true
+    fi
+    for cfg in docker-compose.caddy.yml docker-compose.traefik.yml docker-compose.test.yml; do
+        if [[ -f "${COMPOSE_DIR}/${cfg}" ]]; then
+            chmod 644 "${COMPOSE_DIR}/${cfg}" 2>/dev/null || true
+        fi
+    done
+    chmod 600 "$STAGING_ENV" 2>/dev/null || true
     find "$COMPOSE_DIR" -maxdepth 1 -name ".env*" -exec chmod 600 {} \; 2>/dev/null || true
 
     # ── Commit: atomically move staging → .env ────────────────────────────

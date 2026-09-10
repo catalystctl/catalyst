@@ -257,6 +257,20 @@ export async function extractPackage(
             `Package contains disallowed entry: ${entry.fileName}`,
           );
         }
+
+        // Regular files and directories only. extract-zip materializes symlink
+        // entries verbatim (GHSA-jmr9-qjv8-65gv), so a link planted by a
+        // package would redirect a later write outside destDir. A .catpkg has
+        // no legitimate need for links, devices or FIFOs. Mode 0 means the
+        // archive recorded no attributes (common for Windows-built zips) and
+        // extract-zip falls back to name-based detection, so allow it.
+        const entryType = (entry.externalFileAttributes >>> 16) & 0o170000;
+        if (entryType !== 0 && entryType !== 0o040000 && entryType !== 0o100000) {
+          throw new PackagingError(
+            'UNSAFE_ENTRY',
+            `Package contains a non-regular file entry: ${entry.fileName}`,
+          );
+        }
       },
     });
   } catch (err) {

@@ -93,7 +93,7 @@ The session cookie is automatically sent by the frontend SPA. For API clients, e
 Use the `Authorization` header with a bearer token:
 
 ```http
-Authorization: Bearer catalyst_xxxxxxxxxxxxxxxxxxxxxxxx
+Authorization: Bearer catalyst_YOUR_API_KEY
 ```
 
 API keys follow the format `catalyst_<base64>`. They are scoped to specific permissions and can expire.
@@ -2328,7 +2328,7 @@ Generate or regenerate the API key for a node. Regenerating invalidates the prev
       "id": "key_xxx",
       "name": "Node API Key",
       "preview": "catalyst_A1B2...",
-      "token": "catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6",
+      "token": "catalyst_YOUR_API_KEY",
       "createdAt": "2024-01-01T00:00:00Z",
       "enabled": true
     },
@@ -5381,7 +5381,7 @@ GET /api/admin/users?page=1&limit=20
 
 API keys follow the format: `catalyst_<base64-encoded-uuid>`
 
-Example: `catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6`
+Example: `catalyst_YOUR_API_KEY`
 
 Keys can be scoped:
 - **Full access** (`allPermissions: true`) — uses the full set of the owning user’s **current** permissions (shrinks if the user loses perms; not an independent `*` grant)

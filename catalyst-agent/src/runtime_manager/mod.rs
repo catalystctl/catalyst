@@ -381,6 +381,9 @@ pub struct ContainerdRuntimeConfig {
     pub cni_bridge_name: String,
     /// Subnet for the default bridge NAT network.
     pub cni_bridge_subnet: String,
+    /// Whether panel-requested `networkMode: "host"` is permitted.
+    /// Default false: host mode shares the node's network namespace.
+    pub allow_host_network: bool,
 }
 
 #[derive(Clone)]
@@ -406,6 +409,8 @@ pub struct ContainerdRuntime {
     cni_bridge_name: String,
     /// Subnet for the default bridge NAT network.
     cni_bridge_subnet: String,
+    /// Whether panel-requested `networkMode: "host"` is permitted.
+    allow_host_network: bool,
     /// Error reporting sink installed by main.rs so non-fatal runtime errors
     /// (e.g. firewall rule failures) reach the panel's System Errors page.
     error_sink: Arc<std::sync::RwLock<Option<crate::error_reporter::ErrorSink>>>,
@@ -420,11 +425,12 @@ pub use helpers::{
     detect_host_network, discover_cni_bin_dir, find_container_cgroup, grpc_err, is_not_found,
     load_named_cni_plugin_config, open_fifo_rdwr, parse_ctr_event_line, parse_signal,
     read_block_io, read_cgroup_cpu_throttling, read_cgroup_cpu_usage, read_cgroup_memory,
-    read_cgroup_memory_limit, read_network_io, rotate_logs, set_dir_perms,
+    read_cgroup_memory_limit, read_network_io, resolve_cni_plugin_path, rotate_logs, set_dir_perms,
 };
 
 pub use image_and_spec::{
-    base_mounts, default_seccomp_profile, detect_install_interpreter, masked_paths, readonly_paths,
+    base_mounts, default_seccomp_profile, detect_install_interpreter, installer_capabilities,
+    installer_namespaces, masked_paths, readonly_paths, MAX_CPU_CORES, MAX_MEMORY_MB,
 };
 pub mod image_and_spec;
 
@@ -482,6 +488,7 @@ impl ContainerdRuntime {
             cni_bin_dir: config.cni_bin_dir,
             cni_bridge_name: config.cni_bridge_name,
             cni_bridge_subnet: config.cni_bridge_subnet,
+            allow_host_network: config.allow_host_network,
             error_sink: Arc::new(std::sync::RwLock::new(None)),
         })
     }

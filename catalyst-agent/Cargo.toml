@@ -2,6 +2,7 @@
 name = "catalyst-agent"
 version = "1.45.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 tokio = { version = "1", features = [
