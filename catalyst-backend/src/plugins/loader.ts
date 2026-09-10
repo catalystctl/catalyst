@@ -551,7 +551,7 @@ export class PluginLoader {
           return (originalHandler as Function)(request, reply);
         };
 
-        // Wrap with request gate for timeout, memory, and concurrency limits
+        // Wrap with request gate for timeout, heap-pressure observation, and concurrency limits
         const gateConfig = {
           ...DEFAULT_GATE_CONFIG,
           pluginName: manifest.name,
