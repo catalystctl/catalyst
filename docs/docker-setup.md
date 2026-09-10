@@ -28,8 +28,11 @@ Use this checklist before going to production. Details for each item are in the 
 If you already have Docker Compose installed and just want Catalyst running:
 
 ```bash
-# 1. Get the files (install.sh already generates .env with secrets — do not overwrite it)
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+# 1. Get the files (download + verify checksum first — see installation.md; install.sh already generates .env with secrets — do not overwrite it)
+VERSION=v1.18.8  # replace with the release you want
+curl -fsSL -o install.sh "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh"
+curl -fsSL -o install.sh.sha256 "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh.sha256"
+sha256sum -c install.sh.sha256 && bash install.sh
 cd catalyst-docker
 
 # 2. Configure (edit the generated .env; only fresh clones need `cp .env.example .env`)

@@ -1046,7 +1046,7 @@ To enable hot reload, ensure the PluginLoader is initialized with `hotReload: tr
 | Host auth user id shape | `request.user.userId` (not `.id`) | Use `context.getUserId(request)` |
 | RPC circuit breaker | Repeated failures open a 30s circuit | Keep plugin APIs fast; handle thrown circuit errors |
 | Component slots need host mounts | Only wired slots render | Use `dashboard-widgets` and `sidebar-bottom` today |
-| Memory gate is process heap | One plugin can trip the gate for others | Keep plugins lean; tune `memoryLimitMb` carefully |
+| Memory reading is process heap | Heap pressure cannot be attributed to one plugin | `memoryLimitMb` is an observation threshold only (warn, never 503); tune via `PLUGIN_PROCESS_HEAP_LIMIT_MB` |
 
 ---
 

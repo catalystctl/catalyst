@@ -52,12 +52,14 @@ concurrency:
 jobs:
   validate:
     name: Validate harness
+    permissions:
+      contents: read
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
 
@@ -96,7 +98,7 @@ jobs:
           cp /tmp/bench-mock/* benchmarks/results/mock/ || true
 
       - name: Upload mock report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: benchmark-mock-report
           path: |
@@ -107,15 +109,17 @@ jobs:
 
   live:
     name: Live benchmark (LXC lab)
+    permissions:
+      contents: read
     # Self-hosted runner with the LXC lab on the host. Falls back to skip if unavailable.
     runs-on: [self-hosted, benchmark]
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
 
@@ -146,7 +150,7 @@ jobs:
 
       - name: Upload live results
         if: steps.lab.outputs.state_missing == 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: benchmark-results
           path: |

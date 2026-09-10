@@ -50,11 +50,24 @@ Complete instructions for deploying **Catalyst** with Docker Compose. This guide
 
 ## Option 1: One-Line Install (Recommended)
 
-The fastest way to get Catalyst running — no repo clone needed:
+The fastest way to get Catalyst running — no repo clone needed.
+
+> **Verify before you run.** Never pipe `curl` directly into `bash`.
+> Download the versioned installer, check its SHA-256, then execute:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+VERSION=v1.18.8  # replace with the release you want
+curl -fsSL -o install.sh "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh"
+curl -fsSL -o install.sh.sha256 "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh.sha256"
+sha256sum -c install.sh.sha256
+bash install.sh
 ```
+
+Each GitHub Release publishes `install.sh` with a matching `install.sh.sha256`
+checksum file. Releases are additionally signed (Sigstore/cosign — see the
+release notes for the `.sig`/bundle); verify the signature when your tooling
+supports it. `main`-branch copies are development snapshots: prefer a tagged
+release for production.
 
 **What it does:** checks Docker/Compose, downloads the `catalyst-docker/` folder, generates secure secrets, and creates `.env`.
 
@@ -441,10 +454,11 @@ docker compose up -d --build
 
 ### One-Line Install
 
-Re-run the installer — it updates `catalyst-docker/` in place, preserving `.env`:
+Re-run the installer — it updates `catalyst-docker/` in place, preserving `.env`.
+Download the versioned script and verify its checksum first (see [Option 1](#option-1-one-line-install-recommended)):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+sha256sum -c install.sh.sha256 && bash install.sh
 ```
 
 ---

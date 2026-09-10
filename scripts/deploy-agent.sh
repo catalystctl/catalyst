@@ -25,7 +25,17 @@ NODE_API_KEY="${3:-}"
 NODE_HOSTNAME="${4:-$(hostname -f 2>/dev/null || hostname)}"
 
 NERDCTL_VERSION="2.2.1"
-CNI_PLUGINS_VERSION="v1.4.1"
+# Pinned SHA-256 of nerdctl-<version>-linux-<arch>.tar.gz (upstream SHA256SUMS).
+NERDCTL_SHA256_AMD64="34144de7f12756aa4b9dc42a907fd95b0c5eb82a63566a650ca10c8abe7a26a0"
+NERDCTL_SHA256_ARM64="abc83c9ac3d843c3442eedfb61c6456b8b59b1e4cd69f69598ca1582acc7c094"
+# CNI plugins — single pinned version everywhere. Aligns with the agent's
+# ensure_cni_plugins() (v1.9.0) and docs (agent.md, troubleshooting.md).
+CNI_PLUGINS_VERSION="v1.9.0"
+# Pinned SHA-256 of cni-plugins-linux-<arch>-v1.9.0.tgz (upstream .sha256).
+CNI_PLUGINS_SHA256_AMD64="58c03705426e929658f45a851df15a86d06ef680cacbf3f2dc127731ca265c28"
+CNI_PLUGINS_SHA256_ARM64="2596ef56329dd1269026f46b8df262f09ba43c92dbfb940e1e69fbccccd30a29"
+# Docker's official release key fingerprint (verified 2026-09-10 via gpg --show-keys).
+DOCKER_GPG_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
 AGENT_RELEASE_REPO="${AGENT_RELEASE_REPO:-catalystctl/catalyst}"
 # Optional pin from the panel one-liner (`AGENT_VERSION=1.18.8`). Empty means
 # "ask the panel". Never default to GitHub /latest — that can install a newer
@@ -210,14 +220,23 @@ install_base_packages() {
                 iproute2 iptables rsync util-linux e2fsprogs gnupg lsb-release
 
             # Add Docker GPG key and repo if not already present.
+            # The full fingerprint is compared BEFORE dearmoring; mismatch aborts.
             if [ ! -f /etc/apt/sources.list.d/docker.list ] && \
                ! grep -rq 'download.docker.com' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
                 log "Adding Docker CE repository for containerd..."
-                local arch dpkg_arch
+                local arch dpkg_arch tmp_gpg actual_fp
                 dpkg_arch="$(dpkg --print-architecture)"
                 mkdir -p /etc/apt/keyrings
+                tmp_gpg="$(mktemp /tmp/docker-ce-gpg-XXXXXX)"
                 curl -fsSL "https://download.docker.com/linux/$(lsb_release -si | tr '[:upper:]' '[:lower:]')/gpg" \
-                    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null || true
+                    -o "$tmp_gpg"
+                actual_fp="$(gpg --show-keys --with-colons "$tmp_gpg" 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}')"
+                if [ "$actual_fp" != "$DOCKER_GPG_FINGERPRINT" ]; then
+                    rm -f "$tmp_gpg"
+                    fail "Docker GPG fingerprint mismatch (got ${actual_fp:-unknown}) — aborting."
+                fi
+                gpg --dearmor -o /etc/apt/keyrings/docker.gpg "$tmp_gpg" 2>/dev/null
+                rm -f "$tmp_gpg"
                 echo "deb [arch=${dpkg_arch} signed-by=/etc/apt/keyrings/docker.gpg] \
 https://download.docker.com/linux/$(lsb_release -si | tr '[:upper:]' '[:lower:]') \
 $(lsb_release -sc) stable" > /etc/apt/sources.list.d/docker.list
@@ -277,20 +296,42 @@ $(lsb_release -sc) stable" > /etc/apt/sources.list.d/docker.list
 # nerdctl (optional helper CLI for containerd)
 # ---------------------------------------------------------------------------
 
+# Verify a downloaded tarball against a pinned SHA-256 before extraction.
+# Aborts the deploy on mismatch (tampered tarball) — never extract unverified
+# bytes as root.
+verify_tarball_sha256() {
+    local file="$1" expected="$2" label="${3:-tarball}"
+    local actual
+    [ -s "$file" ] || fail "Downloaded ${label} is empty or missing: ${file}"
+    actual="$(sha256sum "$file" | awk '{print $1}')"
+    if [ "$actual" != "$expected" ]; then
+        rm -f "$file"
+        fail "Checksum mismatch for ${label}! Expected ${expected}, got ${actual}."
+    fi
+    log "${label} checksum verified."
+}
+
 install_nerdctl() {
     if command -v nerdctl >/dev/null 2>&1; then
         log "nerdctl already installed: $(nerdctl --version 2>/dev/null | head -1 || true)"
         return 0
     fi
 
-    local arch url archive extract_dir
+    local arch url archive extract_dir expected
     arch="$(os_arch)"
+    case "$arch" in
+        amd64) expected="$NERDCTL_SHA256_AMD64" ;;
+        arm64) expected="$NERDCTL_SHA256_ARM64" ;;
+        *) fail "Unsupported architecture for nerdctl: $arch" ;;
+    esac
     url="https://github.com/containerd/nerdctl/releases/download/v${NERDCTL_VERSION}/nerdctl-${NERDCTL_VERSION}-linux-${arch}.tar.gz"
-    archive="/tmp/nerdctl-${NERDCTL_VERSION}-${arch}.tar.gz"
-    extract_dir="/tmp/nerdctl-${NERDCTL_VERSION}-${arch}"
+    # Unpredictable temp names: root writes must not follow planted symlinks.
+    archive="$(mktemp /tmp/nerdctl-${NERDCTL_VERSION}-XXXXXX.tar.gz)"
+    extract_dir="$(mktemp -d /tmp/nerdctl-${NERDCTL_VERSION}-XXXXXX)"
 
     log "Installing nerdctl ${NERDCTL_VERSION} (${arch})..."
     curl -fsSL "$url" -o "$archive"
+    verify_tarball_sha256 "$archive" "$expected" "nerdctl ${NERDCTL_VERSION} (${arch})"
     rm -rf "$extract_dir"
     mkdir -p "$extract_dir"
     tar -xzf "$archive" -C "$extract_dir"
@@ -369,15 +410,21 @@ install_cni_plugins() {
         done
     fi
 
-    # Fallback: download upstream tarball
+    # Fallback: download upstream tarball (pinned version + pinned SHA-256).
     mkdir -p /opt/cni/bin
-    local arch url archive
+    local arch url archive expected
     arch="$(os_arch)"
+    case "$arch" in
+        amd64) expected="$CNI_PLUGINS_SHA256_AMD64" ;;
+        arm64) expected="$CNI_PLUGINS_SHA256_ARM64" ;;
+        *) fail "Unsupported architecture for CNI plugins: $arch" ;;
+    esac
     url="https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGINS_VERSION}/cni-plugins-linux-${arch}-${CNI_PLUGINS_VERSION}.tgz"
-    archive="/tmp/cni-plugins-${CNI_PLUGINS_VERSION}-${arch}.tgz"
+    archive="$(mktemp /tmp/cni-plugins-${CNI_PLUGINS_VERSION}-XXXXXX.tgz)"
 
     log "Installing CNI plugins ${CNI_PLUGINS_VERSION} (${arch}) from upstream..."
     curl -fsSL "$url" -o "$archive"
+    verify_tarball_sha256 "$archive" "$expected" "CNI plugins ${CNI_PLUGINS_VERSION} (${arch})"
     tar -xzf "$archive" -C /opt/cni/bin
     rm -f "$archive"
 
@@ -620,16 +667,16 @@ verify_and_install_binary() {
 }
 
 install_agent_binary() {
-    local agent_arch
+    local agent_arch tmp_binary asset_name
     case "$(uname -m)" in
         x86_64|amd64) agent_arch="x86_64" ;;
         aarch64|arm64) agent_arch="aarch64" ;;
         *) fail "Unsupported architecture for agent binary: $(uname -m)" ;;
     esac
 
-    local tmp_binary="/tmp/catalyst-agent.${agent_arch}"
-    local asset_name="catalyst-agent-${agent_arch}-linux-musl"
-    rm -f "$tmp_binary" "${tmp_binary}.sha256"
+    asset_name="catalyst-agent-${agent_arch}-linux-musl"
+    tmp_binary="$(mktemp /tmp/catalyst-agent-XXXXXX)"
+    rm -f "${tmp_binary}.sha256"
 
     resolve_agent_version || true
     if [ -z "${AGENT_VERSION:-}" ]; then
@@ -784,14 +831,31 @@ LimitNOFILE=65536
 # - ${data_dir} (server data, backups, console FIFOs under console/)
 # - /var/lib/cni and /etc/cni/net.d (container networking)
 #
-# Sandbox directives that ARE safe to enable (tested compatible):
+# Hardening (compatible with mount/iptables as root):
+# - CapabilityBoundingSet keeps only what the agent needs (net admin/bind,
+#   sys admin for mounts, chown/dac/fowner/setgid/setuid/kill/sys_chroot).
+# - SystemCallFilter=@system-service blocks exotic syscalls; mount/umask are
+#   in the default set so loop mounts keep working.
+# - RestrictNamespaces allows only mount/net/uts/ipc (no userns/pid/cgroup
+#   games) — the agent enters namespaces via nsenter, it does not create
+#   hostile ones.
+# - ProtectHome=true (agent state lives under /opt + data_dir, never $HOME).
+# - PrivateDevices=true is NOT set: loop devices are required for disk images.
+# - TasksMax is bounded (matches node-tuning.sh limits.conf): infinity would
+#   let a fork bomb wedge the node.
 NoNewPrivileges=true
 ProtectSystem=full
 PrivateTmp=true
+ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_FSETID CAP_KILL CAP_SETGID CAP_SETUID CAP_SETPCAP CAP_NET_BIND_SERVICE CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_SYS_PTRACE CAP_MKNOD
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+RestrictNamespaces=mnt net uts ipc
+TasksMax=8192
 #
 # ProtectSystem=full implies a private mount namespace. The agent MUST mount
 # server disk images in the host NS (nsenter -t 1 -m) so containerd bind-mounts
@@ -800,11 +864,11 @@ RestrictSUIDSGID=true
 # ProtectKernelTunables/Modules stay on: deploy-agent.sh sets ip_forward and
 # loads the loop module on the host (prepare_host_kernel). The sandboxed agent
 # cannot sysctl or modprobe.
-# Sandbox directives that MUST remain disabled (agent requires them):
+# Directives that MUST remain disabled (agent requires them):
 # PrivateDevices=false     (needs loop devices for disk images)
 # PrivateNetwork=false     (needs network for WebSocket + CNI)
-# RestrictNamespaces=false (agent may need nsenter for container namespace ops)
-# CapabilityBoundingSet=... (needs CAP_NET_BIND_SERVICE, CAP_SYS_ADMIN for mount)
+# RestrictNamespaces=user/pid/cgroup blocked above (agent may need nsenter for container namespace ops)
+# AmbientCapabilities=... (none granted; bounding set above is the ceiling while root)
 
 # Ensure access to required paths ("-" prefix = ignore if missing)
 ReadWritePaths=${rw_paths}
@@ -823,6 +887,7 @@ start_services_systemd() {
 
     # Wait for the socket
     local attempts=30 i
+    # shellcheck disable=SC2034 # retry counter, intentionally unused
     for i in $(seq 1 "$attempts"); do
         if systemctl is-active --quiet containerd; then break; fi
         if [ -S /run/containerd/containerd.sock ]; then
@@ -913,6 +978,7 @@ start_services_openrc() {
     fi
 
     local attempts=30 i
+    # shellcheck disable=SC2034 # retry counter, intentionally unused
     for i in $(seq 1 "$attempts"); do
         [ -S /run/containerd/containerd.sock ] && break
         sleep 1
@@ -977,12 +1043,23 @@ main() {
     # any install path, so nodes silently ran stock kernel defaults.
     TUNING_SCRIPT="$(dirname "$0")/node-tuning.sh"
     if [ ! -f "${TUNING_SCRIPT}" ]; then
-        # curl-pipe install: $0 is "bash", so fetch the script from the same
-        # source this script came from when possible.
-        if [ -n "${CATALYST_TUNING_URL:-}" ]; then
-            log "Fetching node-tuning.sh from ${CATALYST_TUNING_URL}..."
-            curl -fsSL "${CATALYST_TUNING_URL}" -o /tmp/catalyst-node-tuning.sh 2>/dev/null \
-                && TUNING_SCRIPT=/tmp/catalyst-node-tuning.sh
+        # curl-pipe install: $0 is "bash", so the tuning script may be fetched
+        # remotely — but ONLY with an explicit operator opt-in that pins the
+        # expected SHA-256. Unverified remote shell is never executed as root.
+        # Usage: --allow-remote-tuning <sha256-of-node-tuning.sh>
+        if [ -n "${CATALYST_REMOTE_TUNING_SHA256:-}" ] && [ -n "${CATALYST_TUNING_URL:-}" ]; then
+            log "Fetching node-tuning.sh from ${CATALYST_TUNING_URL} (verified)..."
+            _tuning_tmp="$(mktemp /tmp/catalyst-node-tuning-XXXXXX.sh)"
+            if curl -fsSL "${CATALYST_TUNING_URL}" -o "$_tuning_tmp" 2>/dev/null; then
+                verify_tarball_sha256 "$_tuning_tmp" "$CATALYST_REMOTE_TUNING_SHA256" "node-tuning.sh (remote)"
+                TUNING_SCRIPT="$_tuning_tmp"
+            else
+                rm -f "$_tuning_tmp"
+                warn "Remote tuning fetch failed — skipping kernel tuning"
+            fi
+            unset _tuning_tmp
+        elif [ -n "${CATALYST_TUNING_URL:-}" ]; then
+            warn "CATALYST_TUNING_URL is set but CATALYST_REMOTE_TUNING_SHA256 is not — refusing unverified remote shell (run scripts/node-tuning.sh manually after install)"
         fi
     fi
     if [ -f "${TUNING_SCRIPT}" ]; then

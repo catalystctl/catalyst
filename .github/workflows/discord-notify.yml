@@ -13,6 +13,8 @@ permissions:
 
 jobs:
   notify:
+    permissions:
+      contents: read
     runs-on: blacksmith-2vcpu-ubuntu-2404
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
