@@ -1041,9 +1041,12 @@ impl WebSocketHandler {
             return Err(err);
         }
 
+        // SEC-7: never log substituted bodies — length only.
         debug!(
-            "Console input for {} (container {}): {}",
-            server_id, container_id, data
+            "Console input for {} (container {}): {} bytes",
+            server_id,
+            container_id,
+            data.len()
         );
 
         self.spawn_log_stream(server_id, &container_id);
