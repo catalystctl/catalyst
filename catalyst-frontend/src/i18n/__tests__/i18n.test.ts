@@ -4,6 +4,7 @@ import i18n from '../index';
 import { matchLocaleTag, isSupportedLocale, LOCALE_STORAGE_KEY, detectDeviceLocale } from '../config';
 import { getLocalizedErrorMessage, getApiErrorCode } from '../api-errors';
 import { formatDate, formatTime, formatRelativeTime } from '../format';
+import { consoleStreamLabel, roleDescriptionLabel, roleLabel } from '../../utils/constants';
 
 describe('locale matching', () => {
   it('accepts exact and regional tags', () => {
@@ -107,6 +108,33 @@ describe('catalog loading', () => {
 
     i18n.addResourceBundle('en', 'fallback-test', { onlyEnglish: 'Only English' }, true, true);
     expect(i18n.t('onlyEnglish', { ns: 'fallback-test' })).toBe('Only English');
+  });
+});
+
+describe('value-to-key label helpers', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  it('translates seeded role names and passes custom ones through', async () => {
+    expect(roleLabel(i18n.t, 'Administrator')).toBe('Administrator');
+    expect(roleDescriptionLabel(i18n.t, 'Full system access')).toBe('Full system access');
+
+    await i18n.changeLanguage('zh-CN');
+    expect(roleLabel(i18n.t, 'Administrator')).toBe('管理员');
+    expect(roleLabel(i18n.t, 'moderator')).toBe('协管员');
+    expect(roleDescriptionLabel(i18n.t, 'Limited management permissions')).toBe('具有受限的管理权限');
+    // Renamed or plugin-provided roles keep their stored text.
+    expect(roleLabel(i18n.t, 'Server Owner')).toBe('Server Owner');
+    expect(roleDescriptionLabel(i18n.t, 'Runs the EU cluster')).toBe('Runs the EU cluster');
+  });
+
+  it('translates console stream names and passes unknown streams through', async () => {
+    expect(consoleStreamLabel(i18n.t, 'system')).toBe('system');
+    await i18n.changeLanguage('zh-CN');
+    expect(consoleStreamLabel(i18n.t, 'stdout')).toBe('标准输出');
+    expect(consoleStreamLabel(i18n.t, 'stderr')).toBe('标准错误');
+    expect(consoleStreamLabel(i18n.t, 'custom-stream')).toBe('custom-stream');
   });
 });
 
