@@ -15,6 +15,40 @@ use crate::command_utils;
 use crate::{AgentError, AgentResult};
 use serde_json::Value;
 
+/// SEC-7: ensure the data dir is 0700 and set 0600 on buffer files.
+/// Best-effort: logs a warning instead of failing when chmod fails.
+pub(crate) async fn secure_data_dir(dir: &Path) -> AgentResult<()> {
+    fs::create_dir_all(dir).await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o700);
+        if let Err(e) = fs::set_permissions(dir, perms).await {
+            warn!("Failed to set 0700 on {}: {}", dir.display(), e);
+        }
+    }
+    Ok(())
+}
+
+async fn secure_buffer_file(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = fs::metadata(path).await {
+            if meta.permissions().mode() & 0o077 != 0 {
+                let perms = std::fs::Permissions::from_mode(0o600);
+                if let Err(e) = fs::set_permissions(path, perms).await {
+                    warn!("Failed to set 0600 on {}: {}", path.display(), e);
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+}
+
 pub struct StorageManager {
     data_dir: PathBuf,
 }
@@ -926,7 +960,7 @@ impl StorageManager {
     }
 
     pub async fn append_buffered_metric(&self, line: &str) -> AgentResult<()> {
-        fs::create_dir_all(&self.data_dir).await?;
+        secure_data_dir(&self.data_dir).await?;
         let path = self.metrics_buffer_path();
         // Rotate if buffer exceeds cap; drop oldest backup
         if let Ok(meta) = fs::metadata(&path).await {
@@ -936,6 +970,7 @@ impl StorageManager {
                 let _ = fs::rename(&path, &rotated).await;
             }
         }
+        secure_buffer_file(&path).await;
         let file = fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -985,7 +1020,7 @@ impl StorageManager {
     }
 
     pub async fn append_buffered_event(&self, line: &str) -> AgentResult<()> {
-        fs::create_dir_all(&self.data_dir).await?;
+        secure_data_dir(&self.data_dir).await?;
         let path = self.events_buffer_path();
         const MAX_EVENT_BUFFER_BYTES: u64 = 4 * 1024 * 1024;
         if let Ok(meta) = fs::metadata(&path).await {
@@ -997,6 +1032,7 @@ impl StorageManager {
                 let _ = fs::rename(&path, &rotated).await;
             }
         }
+        secure_buffer_file(&path).await;
         let file = fs::OpenOptions::new()
             .create(true)
             .append(true)
