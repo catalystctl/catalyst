@@ -113,7 +113,7 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
 
       // Subscribe to resource_stats for this server via the gateway's global list
       // Filter by serverId so we only receive metrics for this specific server
-      const { unsubscribe, touch } = wsGateway.addGlobalSseSubscriber(METRICS_EVENT_TYPES, push, [serverId]);
+      const { unsubscribe, touch } = wsGateway.addGlobalSseSubscriber(METRICS_EVENT_TYPES, push, [serverId], userId);
 
       const heartbeatTimer = setInterval(() => {
         try {
