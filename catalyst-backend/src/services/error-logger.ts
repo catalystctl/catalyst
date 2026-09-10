@@ -1,6 +1,7 @@
 import { prisma } from '../db.js'
 import pino from 'pino'
 import { describeError } from '../utils/describe-error.js'
+import { capMetadata, redactSecrets } from '../lib/secret-redaction.js'
 
 let wsGatewayRef: any = null
 
@@ -32,14 +33,19 @@ const logger = pino(
 
 export async function captureSystemError(opts: CaptureOpts) {
   const level = opts.level || 'error'
+  // Central redaction + caps: secrets (tokens, API keys, DB URLs,
+  // Authorization/Cookie headers) never reach the DB or admin fan-out.
+  const message = redactSecrets(opts.message ?? '') as string
+  const stack = opts.stack ? (redactSecrets(opts.stack) as string) : undefined
+  const metadata = capMetadata(opts.metadata) as never
   try {
     const record = await prisma.systemError.create({
       data: {
         level,
         component: opts.component,
-        message: opts.message,
-        stack: opts.stack || null,
-        metadata: opts.metadata || null,
+        message,
+        stack: stack || null,
+        metadata: metadata || null,
         requestId: opts.requestId || null,
         userId: opts.userId || null,
         nodeId: opts.nodeId || null,
