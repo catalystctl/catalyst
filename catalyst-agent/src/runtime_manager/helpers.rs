@@ -133,6 +133,47 @@ pub async fn rotate_logs(console_log_dir: &Path, container_id: &str) {
     }
 }
 
+/// Resolve a CNI plugin binary path under `bin_dir`, allowlisting the plugin
+/// type to a strict basename (`^[A-Za-z0-9_-]+$`, max 64 chars). The `type`
+/// field comes from panel-influenced CNI JSON, so `/`, `.`, and NUL are
+/// rejected outright (no traversal, no hidden extensions) and the result is
+/// verified to stay under the canonicalized `bin_dir`.
+pub fn resolve_cni_plugin_path(
+    bin_dir: &Path,
+    plugin_type: &str,
+) -> Result<PathBuf, crate::errors::AgentError> {
+    use crate::errors::AgentError;
+    if plugin_type.is_empty() || plugin_type.len() > 64 {
+        return Err(AgentError::InvalidRequest(format!(
+            "Invalid CNI plugin type '{}': must be 1-64 characters",
+            plugin_type
+        )));
+    }
+    if !plugin_type
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(AgentError::InvalidRequest(format!(
+            "Invalid CNI plugin type '{}': allowed characters are A-Z, a-z, 0-9, '-', '_'",
+            plugin_type
+        )));
+    }
+    let candidate = bin_dir.join(plugin_type);
+    // Belt-and-suspenders: separators are rejected above so the join is
+    // lexical, but verify against the canonical base dir when it resolves.
+    if let (Ok(canonical_base), Ok(canonical)) = (bin_dir.canonicalize(), candidate.canonicalize())
+    {
+        if canonical.parent() != Some(canonical_base.as_path()) {
+            return Err(AgentError::InvalidRequest(format!(
+                "CNI plugin '{}' escapes the plugin directory",
+                plugin_type
+            )));
+        }
+        return Ok(canonical);
+    }
+    Ok(candidate)
+}
+
 pub fn discover_cni_bin_dir(configured_dir: &Path) -> PathBuf {
     const REQUIRED_PLUGINS: &[&str] = &["bridge", "host-local", "macvlan"];
 
@@ -627,4 +668,58 @@ pub async fn read_cgroup_memory_limit(path: &str) -> Option<u64> {
         return Some(0);
     }
     trimmed.parse().ok()
+}
+
+#[cfg(test)]
+mod cni_plugin_path_tests {
+    use super::*;
+
+    #[test]
+    fn cni_plugin_type_allowlist() {
+        let dir = tempfile::tempdir().unwrap();
+        // Valid plugin names resolve under the bin dir.
+        for name in [
+            "bridge",
+            "host-local",
+            "macvlan",
+            "portmap",
+            "firewall",
+            "tuning",
+        ] {
+            let p = resolve_cni_plugin_path(dir.path(), name).unwrap();
+            assert_eq!(p, dir.path().join(name));
+        }
+        // Traversal, separators, dots, NUL, empty, and overlong are rejected.
+        for bad in [
+            "../evil",
+            "../../bin/sh",
+            "a/b",
+            "a\\b",
+            ".",
+            "..",
+            "bridge.so",
+            "evil government",
+            "semi;colon",
+            "dol$ar",
+            "",
+            "a\0b",
+        ] {
+            assert!(
+                resolve_cni_plugin_path(dir.path(), bad).is_err(),
+                "type '{}' must be rejected",
+                bad
+            );
+        }
+        assert!(resolve_cni_plugin_path(dir.path(), &"a".repeat(65)).is_err());
+    }
+
+    #[test]
+    fn cni_plugin_path_canonicalizes_under_bin_dir() {
+        // Real plugin file: canonicalized path stays under the bin dir.
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("bridge"), "#!/bin/sh").unwrap();
+        let p = resolve_cni_plugin_path(dir.path(), "bridge").unwrap();
+        assert!(p.starts_with(dir.path()));
+        assert_eq!(p.file_name().unwrap(), "bridge");
+    }
 }
