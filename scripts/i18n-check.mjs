@@ -33,6 +33,32 @@ function namespaceOf(file) {
   return file.replace(/\.json$/, '');
 }
 
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+const PLURAL_VARIANTS = ['zero', 'one', 'two', 'few', 'many', 'other'];
+const baseKey = (key) => key.replace(PLURAL_SUFFIX, '');
+
+/**
+ * Localized value for an English key. Plural keys fall back to any variant of
+ * the same base: Chinese has a single plural category and only carries
+ * `_other` for a key English declares as `_one`/`_other`.
+ */
+function localeValue(entries, key) {
+  if (entries.has(key)) return entries.get(key);
+  if (PLURAL_SUFFIX.test(key)) {
+    const base = baseKey(key);
+    for (const variant of PLURAL_VARIANTS) {
+      const candidate = `${base}_${variant}`;
+      if (entries.has(candidate)) return entries.get(candidate);
+    }
+  }
+  return undefined;
+}
+
+/** Whether the English catalog declares a locale key (directly or as a plural variant). */
+function isKnownKey(primaryEntries, key) {
+  return primaryEntries.has(key) || (PLURAL_SUFFIX.test(key) && primaryEntries.has(baseKey(key)));
+}
+
 /** Flatten a catalog into dot-separated leaf keys. */
 function flattenLeaves(value, prefix, entries) {
   if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
@@ -88,12 +114,13 @@ for (const locale of locales) {
   for (const [namespace, primaryEntries] of primary) {
     const localeEntries = present.get(namespace) ?? new Map();
     for (const key of localeEntries.keys()) {
-      if (!primaryEntries.has(key)) {
+      if (!isKnownKey(primaryEntries, key)) {
         problems.push(`${locale}/${namespace}.json: key "${key}" does not exist in ${primaryLocale}`);
       }
     }
-    for (const [key, value] of primaryEntries) {
-      if (localeEntries.has(key) && localeEntries.get(key) !== '') translated += 1;
+    for (const [key] of primaryEntries) {
+      const value = localeValue(localeEntries, key);
+      if (value !== undefined && value !== '') translated += 1;
       else untranslated += 1;
     }
   }
