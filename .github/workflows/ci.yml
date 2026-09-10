@@ -539,6 +539,7 @@ jobs:
       contents: read
       packages: write
       id-token: write # SLSA provenance via attest-build-provenance
+      attestations: write
     # Docker build is independent of the TypeScript/cargo verify job — only wait
     # for gates + path detect. Overlaps with Build Verification wall-clock.
     needs: [lint, test, detect-changes]
@@ -602,6 +603,7 @@ jobs:
       contents: read
       packages: write
       id-token: write # SLSA provenance via attest-build-provenance
+      attestations: write
     needs: [lint, test, detect-changes]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: >-

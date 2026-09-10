@@ -319,6 +319,7 @@ jobs:
     permissions:
       contents: write
       id-token: write # SLSA provenance via attest-build-provenance
+      attestations: write
     needs: version
     if: needs.version.outputs.bump != 'none'
     # 8 vCPU: release + cross-compile is the slowest part of shipping a release.
@@ -467,6 +468,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      attestations: write # SLSA provenance via attest-build-provenance
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -506,6 +508,7 @@ jobs:
       contents: read
       packages: write
       id-token: write # SLSA provenance via attest-build-provenance
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
