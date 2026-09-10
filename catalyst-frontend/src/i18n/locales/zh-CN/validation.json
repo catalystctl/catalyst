@@ -1,13 +1,13 @@
 {
   "password": {
-    "lowercase": "",
-    "number": "",
-    "special": "",
-    "uppercase": ""
+    "lowercase": "密码必须至少包含一个小写字母",
+    "number": "密码必须至少包含一个数字",
+    "special": "密码必须至少包含一个特殊字符",
+    "uppercase": "密码必须至少包含一个大写字母"
   },
-  "VALIDATION_CUSTOM": "",
-  "VALIDATION_INVALID_FORMAT": "",
-  "VALIDATION_INVALID_TYPE": "",
-  "VALIDATION_TOO_BIG": "",
-  "VALIDATION_TOO_SMALL": ""
+  "VALIDATION_CUSTOM": "值无效",
+  "VALIDATION_INVALID_FORMAT": "{{format}} 格式无效",
+  "VALIDATION_INVALID_TYPE": "值无效",
+  "VALIDATION_TOO_BIG": "最多 {{max}} 个字符",
+  "VALIDATION_TOO_SMALL": "至少 {{min}} 个字符"
 }

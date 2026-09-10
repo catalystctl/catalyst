@@ -1,80 +1,80 @@
 {
   "admin": {
-    "confirmPassword": "",
-    "description": "",
-    "email": "",
-    "emailPlaceholder": "",
-    "password": "",
-    "passwordMismatch": "",
-    "title": "",
-    "username": "",
-    "usernamePlaceholder": ""
+    "confirmPassword": "确认密码",
+    "description": "这将是您的主要管理员账号。",
+    "email": "邮箱",
+    "emailPlaceholder": "admin@example.com",
+    "password": "密码",
+    "passwordMismatch": "两次输入的密码不一致",
+    "title": "创建管理员账号",
+    "username": "用户名",
+    "usernamePlaceholder": "admin"
   },
   "appearance": {
-    "accentButton": "",
-    "colorHarmony": "",
-    "dark": "",
-    "darkSurfaces": "",
-    "defaultTheme": "",
-    "description": "",
-    "light": "",
-    "lightSurfaces": "",
-    "livePreview": "",
-    "primaryButton": "",
-    "randomColor": "",
-    "seedColor": "",
-    "title": ""
+    "accentButton": "强调色按钮",
+    "colorHarmony": "色彩和谐",
+    "dark": "深色",
+    "darkSurfaces": "深色模式表面",
+    "defaultTheme": "默认主题",
+    "description": "选择一种颜色，我们将生成完整主题。",
+    "light": "浅色",
+    "lightSurfaces": "浅色模式表面",
+    "livePreview": "实时预览",
+    "primaryButton": "主色按钮",
+    "randomColor": "随机颜色",
+    "seedColor": "种子颜色",
+    "title": "外观"
   },
   "errors": {
-    "emailInvalid": "",
-    "emailRequired": "",
-    "logoTooLarge": "",
-    "passwordRequired": "",
-    "passwordTooShort": "",
-    "usernameRequired": "",
-    "usernameTooShort": ""
+    "emailInvalid": "邮箱地址无效",
+    "emailRequired": "请输入邮箱",
+    "logoTooLarge": "徽标必须小于 512KB",
+    "passwordRequired": "请输入密码",
+    "passwordTooShort": "密码至少需要 {{min}} 个字符",
+    "usernameRequired": "请输入用户名",
+    "usernameTooShort": "用户名至少需要 {{min}} 个字符"
   },
   "harmony": {
-    "analogous": "",
-    "auto": "",
-    "complement": "",
-    "diadic": "",
-    "mono": "",
-    "neutral": "",
-    "splitComplement": "",
-    "tetradic": "",
-    "triadic": ""
+    "analogous": "类似色",
+    "auto": "自动",
+    "complement": "互补色",
+    "diadic": "二色组",
+    "mono": "单色",
+    "neutral": "中性色",
+    "splitComplement": "分裂互补色",
+    "tetradic": "四色组",
+    "triadic": "三色组"
   },
   "palette": {
-    "accent": "",
-    "danger": "",
-    "info": "",
-    "primary": "",
-    "secondary": "",
-    "success": "",
-    "warning": ""
+    "accent": "强调色",
+    "danger": "危险",
+    "info": "信息",
+    "primary": "主色",
+    "secondary": "辅助色",
+    "success": "成功",
+    "warning": "警告"
   },
   "steps": {
-    "adminAccount": "",
-    "appearance": "",
-    "progress": "",
-    "welcome": ""
+    "adminAccount": "管理员账号",
+    "appearance": "外观",
+    "progress": "第 {{current}} 步，共 {{total}} 步",
+    "welcome": "欢迎"
   },
   "submit": {
-    "complete": "",
-    "completing": ""
+    "complete": "完成初始化",
+    "completing": "正在初始化…"
   },
   "welcome": {
-    "chooseFile": "",
-    "description": "",
-    "logoAlt": "",
-    "logoHint": "",
-    "logoPreviewAlt": "",
-    "panelLogo": "",
-    "panelName": "",
-    "panelPreview": "",
-    "preview": "",
-    "productTagline": "",
-    "title": ""
+    "chooseFile": "选择文件",
+    "description": "让我们来配置您的面板，只需一分钟。",
+    "logoAlt": "徽标",
+    "logoHint": "建议使用正方形图片，至少 128x128px，最大 512KB。",
+    "logoPreviewAlt": "徽标预览",
+    "panelLogo": "面板徽标（可选）",
+    "panelName": "面板名称",
+    "panelPreview": "{{panelName}} 面板",
+    "preview": "预览",
+    "productTagline": "游戏服务器管理",
+    "title": "欢迎使用 Catalyst"
   }
 }
