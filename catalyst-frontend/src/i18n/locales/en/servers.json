@@ -1,0 +1,346 @@
+{
+  "card": {
+    "console": "Console",
+    "manage": "Manage"
+  },
+  "cloneServer": {
+    "clone": "Clone",
+    "cloned": "Server cloned successfully",
+    "cloning": "Cloning...",
+    "copyFiles": "Copy Files",
+    "copyFilesHint": "Copy all files from the source server instead of running a fresh install",
+    "copyFilesStatusWarning": "The cloned server will be in \"cloning\" status while files are being transferred. It cannot be started until the copy completes.",
+    "description": "Create a new server with the same configuration as {{name}}.",
+    "namePlaceholder": "Server name",
+    "networkAllocation": "Network Allocation",
+    "ownerHint": "The user who will own this server. If not set, you will be the owner.",
+    "ownerPlaceholder": "Select owner...",
+    "ownerSearchPlaceholder": "Search by username, email, or ID...",
+    "serverOwner": "Server Owner",
+    "startedCopyingFiles": "Server clone started — copying files...",
+    "submit": "Clone Server",
+    "title": "Clone server",
+    "warningCopyFiles": "Files will be copied from the source server. The new server will be unavailable until the copy completes.",
+    "warningFreshInstall": "This will create a new server with the same configuration. A fresh install will run on the new server."
+  },
+  "console": {
+    "autoScroll": "Auto-scroll",
+    "clear": "Clear",
+    "connection": {
+      "connecting": "Connecting",
+      "disconnected": "Disconnected",
+      "live": "Live",
+      "reconnecting": "Reconnecting"
+    },
+    "filterPlaceholder": "Filter output…",
+    "lines_one": "{{count}} line",
+    "lines_other": "{{count}} lines",
+    "pageDescription": "Real-time output and command input",
+    "pageTitle": "Console",
+    "placeholderConnectToSend": "Connect to send commands",
+    "placeholderReconnecting": "Reconnecting…",
+    "placeholderSuspended": "Server suspended",
+    "placeholderTypeCommand": "Type a command…",
+    "placeholderTypeCommandHistory": "Type a command… (↑↓ for history)",
+    "send": "Send",
+    "suspendedNotice": "Server suspended — console input disabled.",
+    "tab": {
+      "bufferSize": "Buffer size",
+      "clearConsole": "Clear console",
+      "closeFind": "Close find",
+      "commandInput": "Console command",
+      "copyOutput": "Copy output",
+      "downloadOutput": "Download output",
+      "findAriaLabel": "Find in console",
+      "findPlaceholder": "Find…",
+      "findTitle": "Find (Ctrl+F)",
+      "follow": "Follow",
+      "followOff": "Follow output off",
+      "followOn": "Follow output on"
+    },
+    "xterm": {
+      "ariaLabel": "Server console output",
+      "empty": "No console output yet.",
+      "loadError": "Unable to load historical logs.",
+      "loadingLogs": "Loading recent logs…",
+      "newOutput": "New output"
+    }
+  },
+  "controls": {
+    "cancelInstall": "Cancel install",
+    "cancelInstallConfirmMessage": "This will kill the stuck installer container and reset the server to stopped so you can reinstall. Partial install files are kept. Are you sure?",
+    "cancelInstallConfirmTitle": "Cancel install?",
+    "cancelling": "Cancelling…",
+    "installCancelled": "Install cancelled",
+    "keepInstalling": "Keep installing",
+    "kill": "Kill",
+    "killConfirmMessage": "This will force-terminate the server process immediately without saving. Data may be lost. Are you sure?",
+    "killConfirmTitle": "Kill server?",
+    "restart": "Restart",
+    "restarting": "Restarting…",
+    "serverKilled": "Server killed",
+    "start": "Start",
+    "starting": "Starting…",
+    "stop": "Stop",
+    "stopping": "Stopping…"
+  },
+  "createServer": {
+    "created": "Server created and installation started",
+    "creating": "Creating...",
+    "description": "Deploy a new game server in a few steps.",
+    "fields": {
+      "description": "Description",
+      "descriptionPlaceholder": "Add notes or description for this server...",
+      "imageVariant": "Image Variant",
+      "name": "Server Name",
+      "node": "Node",
+      "nodePlaceholder": "Select a node...",
+      "nodeSearchPlaceholder": "Search nodes...",
+      "optional": "(optional)",
+      "template": "Template",
+      "templatePlaceholder": "Select a template...",
+      "templateSearchPlaceholder": "Search templates...",
+      "useDefaultImage": "Use default image"
+    },
+    "network": {
+      "addBinding": "+ Add binding",
+      "additionalBindings": "Additional Port Bindings",
+      "additionalBindingsHint": "Map additional allocations to container ports.",
+      "allocation": "Allocation",
+      "createAllocationsHint": "Create allocations — refreshes on return",
+      "interface": "Interface",
+      "interfaceOption_one": "{{network}} — {{cidr}} ({{count}} available)",
+      "interfaceOption_other": "{{network}} — {{cidr}} ({{count}} available)",
+      "ipAllocation": "IP Allocation",
+      "macvlanTitle": "Macvlan Configuration",
+      "newAllocation": "New",
+      "noInterfaces": "No macvlan interfaces configured for this node.",
+      "portPlaceholder": "Port",
+      "primaryAllocation": "Primary Allocation",
+      "primaryAllocationHint": "Choose a node allocation for the default IP and port.",
+      "primaryPort": "Primary Port",
+      "primaryPortFromAllocation": "Auto-populated from the primary allocation below.",
+      "primaryPortHint": "Port the server will listen on.",
+      "selectInterface": "Select interface"
+    },
+    "newServer": "New server",
+    "resources": {
+      "title": "Resource Allocation"
+    },
+    "startup": {
+      "environmentVariables": "Environment Variables",
+      "noVariables": "No startup variables for this template."
+    },
+    "steps": {
+      "details": "Details",
+      "network": "Network",
+      "resources": "Resources",
+      "startup": "Startup"
+    },
+    "submit": "Create server",
+    "title": "Create new server"
+  },
+  "deleteServer": {
+    "confirm": "Are you sure you want to delete <strong>{{name}}</strong>? This action cannot be undone.",
+    "deleted": "Server deleted",
+    "title": "Delete server"
+  },
+  "details": {
+    "accessRemoved": "Access removed",
+    "allocationAdded": "Allocation added",
+    "allocationRemoved": "Allocation removed",
+    "cloningNotice": "Cannot start until copy completes.",
+    "copiedAddress": "Copied address",
+    "copyFailed": "Failed to copy",
+    "crashCountReset": "Crash count reset",
+    "databaseCreated": "Database created",
+    "databaseDeleted": "Database deleted",
+    "databasePasswordRotated": "Database password rotated",
+    "inviteCancelled": "Invite cancelled",
+    "inviteRegeneratedCopyBelow": "Invite link regenerated — copy the new link below",
+    "inviteRegeneratedResent": "Invite link regenerated and re-sent",
+    "inviteSent": "Invite sent",
+    "permissionsUpdated": "Permissions updated",
+    "pluginTabNotFoundDescription": "The requested plugin tab could not be found or is not enabled.",
+    "pluginTabNotFoundTitle": "Plugin Tab Not Found",
+    "primaryAllocationUpdated": "Primary allocation updated",
+    "resetToTemplateDefault": "Reset to template default",
+    "restartPolicyUpdated": "Restart policy updated",
+    "serverNameUpdated": "Server name updated",
+    "serverSuspended": "Server suspended",
+    "serverUnsuspended": "Server unsuspended",
+    "startupCommandUpdated": "Startup command updated",
+    "tabErrorDescription": "Switch tabs or retry. The rest of the server page stays usable.",
+    "tabErrorTitle": "This tab hit an error",
+    "taskDeleted": "Task deleted",
+    "taskUpdated": "Task updated",
+    "untitledServer": "Server"
+  },
+  "errors": {
+    "serverSuspended": "Server is suspended",
+    "unableToLoadServerDetails": "Unable to load server details."
+  },
+  "eula": {
+    "accept": "I Agree",
+    "decline": "Decline",
+    "description": "Agree to the Minecraft End User License Agreement before the server can start.",
+    "scrollHint": "Scroll to the bottom to enable the accept button.",
+    "submitting": "Submitting...",
+    "textUnavailable": "EULA text could not be loaded from the server files.",
+    "title": "Minecraft EULA"
+  },
+  "fields": {
+    "autoAssign": "Auto-assign",
+    "backupMb": "Backup (MB)",
+    "cpuCores": "CPU Cores",
+    "createOne": "Create one →",
+    "databaseAllocation": "Database Allocation",
+    "diskMb": "Disk (MB)",
+    "leaveBlankDefaults": "Leave blank to use provider defaults.",
+    "memoryMb": "Memory (MB)",
+    "name": "Name",
+    "networkMode": "Network Mode",
+    "noAllocations": "No available allocations.",
+    "node": "Node",
+    "noIps": "No available IPs found.",
+    "selectAllocation": "Select allocation",
+    "swapMb": "Swap (MB)"
+  },
+  "files": {
+    "description": "{{name}} · Upload, edit, and manage server files.",
+    "noServerDescription": "Select a server to manage its files.",
+    "noServerTitle": "No server selected",
+    "title": "Files"
+  },
+  "filters": {
+    "allStatuses": "All statuses",
+    "clear": "Clear",
+    "searchPlaceholder": "Search by name or node..."
+  },
+  "inviteLink": {
+    "copyLink": "Copy invite link",
+    "description": "Email delivery is not available (SMTP not configured). Share this link with the user directly.",
+    "done": "Done",
+    "inviteFor": "Invite for <strong>{{email}}</strong>",
+    "regenerate": "Lost the link? Regenerate",
+    "regeneratedDescription": "The old link is no longer valid. Share the new one.",
+    "regeneratedTitle": "New invite link",
+    "title": "Invite link",
+    "warning": "Anyone with this link can accept the invite and join the server with the assigned permissions. Keep it private."
+  },
+  "list": {
+    "emptyDescription": "Create a server to get started.",
+    "emptyTitle": "No servers"
+  },
+  "metrics": {
+    "labels": {
+      "cpu": "CPU",
+      "disk": "Disk",
+      "diskIo": "Disk IO",
+      "diskUsage": "Disk Usage",
+      "memory": "Memory",
+      "network": "Network",
+      "ram": "RAM"
+    },
+    "last60Min": "Last 60 min",
+    "live": "Live",
+    "resourceUsage": "Resource usage"
+  },
+  "networkModes": {
+    "bridge": "Bridge",
+    "host": "Host (port mapping)",
+    "macvlan": "Macvlan",
+    "mcLanDynamic": "MC LAN Dynamic",
+    "mcLanStatic": "MC LAN Static"
+  },
+  "page": {
+    "access": {
+      "all": "All",
+      "other": "Other",
+      "owned": "Owned"
+    },
+    "description": "Manage your game servers, monitor resources, and control power states.",
+    "overview": "Overview",
+    "stats": {
+      "issues": "Issues",
+      "total": "Total"
+    },
+    "title": "Servers",
+    "view": {
+      "cards": "Cards",
+      "list": "List"
+    }
+  },
+  "tabBar": {
+    "moreTabs": "More server pages"
+  },
+  "tabs": {
+    "activity": "Activity",
+    "admin": "Admin",
+    "alerts": "Alerts",
+    "backups": "Backups",
+    "configuration": "Configuration",
+    "console": "Console",
+    "databases": "Databases",
+    "files": "Files",
+    "metrics": "Metrics",
+    "modManager": "Mod Manager",
+    "pluginManager": "Plugin Manager",
+    "settings": "Settings",
+    "sftp": "SFTP",
+    "tasks": "Tasks",
+    "users": "Users"
+  },
+  "timeRange": {
+    "customLabel": "{{hours}}h ({{limit}} points)",
+    "customRange": "Custom range",
+    "dataPoints": "Data points",
+    "hours": "Hours",
+    "hoursRangeError": "Hours must be between 1 and 8760 (1 year)",
+    "limitRangeError": "Limit must be between 1 and 1000 data points",
+    "presets": {
+      "days30": "30 days",
+      "days7": "7 days",
+      "hour1": "1 hour",
+      "hours24": "24 hours",
+      "hours6": "6 hours"
+    }
+  },
+  "transferServer": {
+    "description": "Transferring will reschedule workloads on the selected node.",
+    "modeLocal": "Shared filesystem",
+    "modeStream": "Stream",
+    "noNodes": "No nodes available",
+    "selectNode": "Select node",
+    "started": "Transfer started",
+    "storage": "Transfer storage",
+    "targetNode": "Target node",
+    "title": "Transfer server",
+    "transfer": "Transfer"
+  },
+  "unknownServer": "Unknown server",
+  "updateServer": {
+    "backupAllocation": "Backup allocation (MB)",
+    "backupAllocationHint": "Set to 0 to disable backups. Local and Stream modes require an allocation.",
+    "backupRetention": "Backup retention",
+    "backupRetentionHint": "Keep at most this many backups (0 = unlimited).",
+    "backupRetentionUpdated": "Backup retention updated",
+    "cpuCores": "CPU cores",
+    "currentIp": "{{ip}} (current)",
+    "databaseAllocation": "Database allocation",
+    "databaseAllocationHint": "Set to 0 to disable database provisioning.",
+    "description": "Change this server's name, resources, backup and database allocations, and network allocation.",
+    "noAllocations": "No allocations found.",
+    "primaryAllocation": "Primary allocation",
+    "primaryAllocationHint": "Choose the primary allocation (IP:port) for this server.",
+    "primaryIp": "Primary IP allocation",
+    "primaryIpHint": "Choose a primary IP or leave auto-assign selected.",
+    "resizeInitiated": "Storage resize initiated",
+    "resizeTimeout": "Storage resize timed out — the node agent may be offline. Try again.",
+    "save": "Save changes",
+    "shrinkWarning": "Shrinking requires the server to be stopped.",
+    "title": "Update server",
+    "trigger": "Update",
+    "updated": "Server updated"
+  }
+}

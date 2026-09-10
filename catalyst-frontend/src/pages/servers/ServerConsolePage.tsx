@@ -1,4 +1,5 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { ArrowDown, Check, Copy, Search, Trash2, X, Terminal } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
@@ -34,6 +35,7 @@ const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: str
 };
 
 function ServerConsolePage() {
+ const { t } = useTranslation('servers');
  const { serverId } = useParams();
  const { data: server } = useServer(serverId);
  const { entries, send, isConnected, isLoading, isError, refetch, clear, streamStatus } = useConsole(serverId);
@@ -51,7 +53,7 @@ function ServerConsolePage() {
  const inputRef = useRef<HTMLInputElement>(null);
  const searchRef = useRef<HTMLInputElement>(null);
 
- const title = server?.name ?? serverId ?? 'Unknown server';
+ const title = server?.name ?? serverId ?? t('unknownServer');
  const isSuspended = server?.status === 'suspended';
  // canSend: allow commands when SSE is connected (or reconnecting) AND server is running
  const canSend = Boolean(serverId) && (isConnected || streamStatus === 'reconnecting') && server?.status === 'running' && !isSuspended;
@@ -140,8 +142,8 @@ function ServerConsolePage() {
  <div className="flex min-h-[calc(100vh-10rem)] flex-col gap-4">
  <TabHeader
  icon={Terminal}
- title="Console"
- description="Real-time output and command input"
+ title={t('console.pageTitle')}
+ description={t('console.pageDescription')}
  variant={isSuspended ? 'danger' : server?.status === 'running' ? 'success' : 'default'}
  actions={
  <div className="flex items-center gap-2">
@@ -153,7 +155,7 @@ function ServerConsolePage() {
 
  {isSuspended ? (
  <div className="rounded-md border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
- Server suspended — console input disabled.
+ {t('console.suspendedNotice')}
  </div>
  ) : null}
 
@@ -180,7 +182,13 @@ function ServerConsolePage() {
  : 'bg-muted'
  }`}
  />
- {streamStatus === 'connected' ? 'Live' : streamStatus === 'reconnecting' ? 'Reconnecting' : streamStatus === 'closed' ? 'Disconnected' : 'Connecting'}
+ {streamStatus === 'connected'
+ ? t('console.connection.live')
+ : streamStatus === 'reconnecting'
+ ? t('console.connection.reconnecting')
+ : streamStatus === 'closed'
+ ? t('console.connection.disconnected')
+ : t('console.connection.connecting')}
  </span>
 
  <div className="h-4 w-px bg-surface-3" />
@@ -217,7 +225,7 @@ function ServerConsolePage() {
  className="w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
- placeholder="Filter output…"
+ placeholder={t('console.filterPlaceholder')}
  />
  {searchQuery ? (
  <span className="text-[10px] tabular-nums text-muted-foreground">
@@ -245,7 +253,7 @@ function ServerConsolePage() {
  className="flex items-center gap-1.5 rounded-md border border-border/30 px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/30"
  >
  <Search className="h-3 w-3" />
- Search
+ {t('common:actions.search')}
  </button>
  )}
 
@@ -253,7 +261,7 @@ function ServerConsolePage() {
 
  {/* Right-side actions */}
  <span className="text-[11px] tabular-nums text-muted-foreground">
- {entries.length} lines
+ {t('console.lines', { count: entries.length })}
  </span>
 
  <div className="h-4 w-px bg-surface-3" />
@@ -268,7 +276,7 @@ function ServerConsolePage() {
  }`}
  >
  <ArrowDown className="h-3 w-3" />
- Auto-scroll
+ {t('console.autoScroll')}
  </button>
 
  <button
@@ -277,7 +285,7 @@ function ServerConsolePage() {
  className="flex items-center gap-1.5 rounded-md border border-border/30 px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/30"
  >
  {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
- {copied ? 'Copied' : 'Copy'}
+ {copied ? t('common:actions.copied') : t('common:actions.copy')}
  </button>
 
  <button
@@ -286,7 +294,7 @@ function ServerConsolePage() {
  className="flex items-center gap-1.5 rounded-md border border-border/30 px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-danger/30 hover:text-danger"
  >
  <Trash2 className="h-3 w-3" />
- Clear
+ {t('console.clear')}
  </button>
  </div>
 
@@ -321,10 +329,10 @@ function ServerConsolePage() {
  onKeyDown={handleKeyDown}
  placeholder={
  isSuspended
- ? 'Server suspended'
+ ? t('console.placeholderSuspended')
  : canSend
- ? 'Type a command… (↑↓ for history)'
- : 'Connect to send commands'
+ ? t('console.placeholderTypeCommandHistory')
+ : t('console.placeholderConnectToSend')
  }
  disabled={!canSend}
  />
@@ -333,7 +341,7 @@ function ServerConsolePage() {
  className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
  disabled={!canSend || !command.trim()}
  >
- Send
+ {t('console.send')}
  </button>
  </form>
  </div>

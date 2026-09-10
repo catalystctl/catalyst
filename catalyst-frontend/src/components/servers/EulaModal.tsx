@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 import {
@@ -19,6 +20,7 @@ type EulaModalProps = {
 };
 
 export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: EulaModalProps) {
+  const { t } = useTranslation('servers');
   const [canAccept, setCanAccept] = useState(false);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -46,9 +48,9 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
           icon={<AlertTriangle className="h-4 w-4" />}
           iconClassName="border-warning/30 bg-warning/10 text-warning"
         >
-          <DialogTitle>Minecraft EULA</DialogTitle>
+          <DialogTitle>{t('eula.title')}</DialogTitle>
           <DialogDescription>
-            Agree to the Minecraft End User License Agreement before the server can start.
+            {t('eula.description')}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
@@ -57,20 +59,20 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
             onScroll={handleScroll}
             ref={handleContentRef}
           >
-            {eulaText || 'EULA text could not be loaded from the server files.'}
+            {eulaText || t('eula.textUnavailable')}
           </div>
           {!canAccept && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Scroll to the bottom to enable the accept button.
+              {t('eula.scrollHint')}
             </p>
           )}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onDecline} disabled={isLoading}>
-            Decline
+            {t('eula.decline')}
           </Button>
           <Button onClick={onAccept} disabled={isLoading || !canAccept}>
-            {isLoading ? 'Submitting...' : 'I Agree'}
+            {isLoading ? t('eula.submitting') : t('eula.accept')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -31,6 +32,7 @@ type Props = {
 };
 
 function TransferServerModal({ serverId, disabled = false }: Props) {
+  const { t } = useTranslation('servers');
   const [open, setOpen] = useState(false);
   const [targetNodeId, setTargetNodeId] = useState('');
   const [transferMode, setTransferMode] = useState<BackupStorageMode>('local');
@@ -43,14 +45,14 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
       transferMode,
     }),
     onSuccess: () => {
-      notifySuccess('Transfer started');
+      notifySuccess(t('transferServer.started'));
       setOpen(false);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
       queryClient.invalidateQueries({ queryKey: qk.servers() });
     },
-    onError: () => notifyError('Failed to transfer server'),
+    onError: (error) => notifyError(error),
   });
 
   return (
@@ -61,29 +63,29 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
         onClick={() => { if (!disabled) setOpen(true); }}
         disabled={disabled}
       >
-        Transfer
+        {t('transferServer.transfer')}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Transfer server</DialogTitle>
+            <DialogTitle>{t('transferServer.title')}</DialogTitle>
             <DialogDescription>
-              Transferring will reschedule workloads on the selected node.
+              {t('transferServer.description')}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-3">
             <div className="space-y-2">
-              <Label>Target node</Label>
+              <Label>{t('transferServer.targetNode')}</Label>
               <Select
                 value={selectedTargetNodeId}
                 onValueChange={setTargetNodeId}
                 disabled={nodesLoading || !nodes.length}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select node" />
+                  <SelectValue placeholder={t('transferServer.selectNode')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {!nodes.length && <SelectItem value="__none" disabled>No nodes available</SelectItem>}
+                  {!nodes.length && <SelectItem value="__none" disabled>{t('transferServer.noNodes')}</SelectItem>}
                   {nodes.map((n) => (
                     <SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>
                   ))}
@@ -91,7 +93,7 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Transfer storage</Label>
+              <Label>{t('transferServer.storage')}</Label>
               <Select
                 value={transferMode}
                 onValueChange={(v) => setTransferMode(v as BackupStorageMode)}
@@ -101,22 +103,22 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="local">Shared filesystem</SelectItem>
+                  <SelectItem value="local">{t('transferServer.modeLocal')}</SelectItem>
                   <SelectItem value="s3">S3</SelectItem>
-                  <SelectItem value="stream">Stream</SelectItem>
+                  <SelectItem value="stream">{t('transferServer.modeStream')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button
               onClick={() => mutation.mutate()}
               disabled={mutation.isPending || !selectedTargetNodeId || !nodes.length || disabled}
             >
-              Transfer
+              {t('transferServer.transfer')}
             </Button>
           </DialogFooter>
         </DialogContent>

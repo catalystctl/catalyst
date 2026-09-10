@@ -1,16 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { MetricsTimeRange } from '../../hooks/useServerMetricsHistory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChevronDown } from 'lucide-react';
-
-const PRESET_RANGES: MetricsTimeRange[] = [
- { hours: 1, limit: 60, label: '1 hour' },
- { hours: 6, limit: 100, label: '6 hours' },
- { hours: 24, limit: 144, label: '24 hours' },
- { hours: 168, limit: 300, label: '7 days' },
- { hours: 720, limit: 500, label: '30 days' },
-];
 
 interface MetricsTimeRangeSelectorProps {
  selectedRange: MetricsTimeRange;
@@ -18,9 +11,22 @@ interface MetricsTimeRangeSelectorProps {
 }
 
 function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeRangeSelectorProps) {
+ const { t } = useTranslation('servers');
  const [isOpen, setIsOpen] = useState(false);
  const [customHours, setCustomHours] = useState('');
  const [customLimit, setCustomLimit] = useState('');
+
+ // Preset captions are literal keys — never assembled dynamically.
+ const presets = useMemo<MetricsTimeRange[]>(
+ () => [
+ { hours: 1, limit: 60, label: t('timeRange.presets.hour1') },
+ { hours: 6, limit: 100, label: t('timeRange.presets.hours6') },
+ { hours: 24, limit: 144, label: t('timeRange.presets.hours24') },
+ { hours: 168, limit: 300, label: t('timeRange.presets.days7') },
+ { hours: 720, limit: 500, label: t('timeRange.presets.days30') },
+ ],
+ [t],
+ );
 
  const handlePresetClick = (range: MetricsTimeRange) => {
  onRangeChange(range);
@@ -34,19 +40,19 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
  const limit = Number(customLimit);
 
  if (!Number.isFinite(hours) || hours <= 0 || hours > 8760) {
- alert('Hours must be between 1 and 8760 (1 year)');
+ alert(t('timeRange.hoursRangeError'));
  return;
  }
 
  if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
- alert('Limit must be between 1 and 1000 data points');
+ alert(t('timeRange.limitRangeError'));
  return;
  }
 
  onRangeChange({
  hours,
  limit,
- label: `${hours}h (${limit} points)`,
+ label: t('timeRange.customLabel', { hours, limit }),
  });
  setIsOpen(false);
  setCustomHours('');
@@ -68,9 +74,9 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
  {isOpen && (
  <div className="absolute right-0 top-full z-10 mt-2 w-48 rounded-lg border border-border bg-card">
  <div className="space-y-1 p-2">
- {PRESET_RANGES.map((range) => (
+ {presets.map((range) => (
  <button
- key={range.label}
+ key={range.hours}
  type="button"
  className={`w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-all duration-300 ${
  selectedRange.label === range.label
@@ -84,11 +90,11 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
  ))}
  <div className="border-t border-border pt-2">
  <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
- Custom range
+ {t('timeRange.customRange')}
  </div>
  <div className="space-y-2 px-3 pb-2">
  <div>
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Hours</label>
+ <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('timeRange.hours')}</label>
  <Input
  type="number"
  min="1"
@@ -100,7 +106,7 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
  />
  </div>
  <div>
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Data points</label>
+ <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('timeRange.dataPoints')}</label>
  <Input
  type="number"
  min="1"
@@ -117,7 +123,7 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
  disabled={!customHours || !customLimit}
  className="w-full text-xs"
  >
- Apply
+ {t('common:actions.apply')}
  </Button>
  </div>
  </div>

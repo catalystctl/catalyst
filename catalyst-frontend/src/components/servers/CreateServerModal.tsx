@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import {
  Dialog,
@@ -18,11 +19,13 @@ import { serversApi } from '../../services/api/servers';
 import { useTemplates } from '../../hooks/useTemplates';
 import { useNodes, useAccessibleNodes } from '../../hooks/useNodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 import Combobox from '@/components/ui/combobox';
 
 function CreateServerModal() {
+ const { t } = useTranslation('servers');
  const user = useAuthStore((s) => s.user);
  const { data: accessibleNodesData } = useAccessibleNodes();
  const accessibleNodes = accessibleNodesData?.nodes || [];
@@ -190,9 +193,8 @@ function CreateServerModal() {
  })
  .catch((error: any) => {
  if (!active) return;
- const message = error?.response?.data?.error || 'Unable to load IP pool';
  setAvailableIps([]);
- setIpLoadError(message);
+ setIpLoadError(getLocalizedErrorMessage(error));
  });
 
  return () => {
@@ -239,9 +241,8 @@ function CreateServerModal() {
  })
  .catch((error: any) => {
  if (!active) return;
- const message = error?.response?.data?.error || 'Unable to load allocations';
  setAvailableAllocations([]);
- setAllocLoadError(message);
+ setAllocLoadError(getLocalizedErrorMessage(error));
  });
  return () => {
  active = false;
@@ -324,7 +325,7 @@ function CreateServerModal() {
  return server;
  },
  onSuccess: (server) => {
- notifySuccess('Server created and installation started');
+ notifySuccess(t('createServer.created'));
  setOpen(false);
  setName('');
  setDescription('');
@@ -356,8 +357,7 @@ function CreateServerModal() {
  : typeof data?.details === 'string'
  ? data.details
  : null;
- const message = firstDetail || data?.error || 'Failed to create server';
- notifyError(message);
+ notifyError(firstDetail || error);
  },
  });
 
@@ -408,6 +408,13 @@ function CreateServerModal() {
  return null;
  }
 
+ const stepNames: Record<(typeof stepOrder)[number], string> = {
+ details: t('createServer.steps.details'),
+ resources: t('createServer.steps.resources'),
+ build: t('createServer.steps.network'),
+ startup: t('createServer.steps.startup'),
+ };
+
  return (
  <>
  <style>{`
@@ -419,14 +426,14 @@ function CreateServerModal() {
  onClick={() => { setStep('details'); setOpen(true); }}
  >
  <Plus className="h-4 w-4" />
- New server
+ {t('createServer.newServer')}
  </Button>
 
  <Dialog open={open} onOpenChange={setOpen}>
  <DialogContent size="2xl">
  <DialogHeader icon={<Plus className="h-4 w-4" />}>
- <DialogTitle>Create new server</DialogTitle>
- <DialogDescription>Deploy a new game server in a few steps.</DialogDescription>
+ <DialogTitle>{t('createServer.title')}</DialogTitle>
+ <DialogDescription>{t('createServer.description')}</DialogDescription>
  </DialogHeader>
 
  {/* Progress Stepper */}
@@ -436,7 +443,6 @@ function CreateServerModal() {
  const isActive = step === key;
  const isCompleted = stepValidMap[key] && stepIndex > index;
  const canNavigate = canNavigateTo(index);
- const stepNames = { details: 'Details', resources: 'Resources', build: 'Network', startup: 'Startup' };
  return (
  <div key={key} className="flex flex-1 items-center min-w-0">
  <button
@@ -480,28 +486,28 @@ function CreateServerModal() {
  {step === 'details' ? (
  <div className="space-y-5">
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Server Name</span>
+ <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.name')}</span>
  <input className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={name} onChange={(e) => setName(e.target.value)} placeholder="my-awesome-server"/>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Description <span className="text-xs font-normal text-muted-foreground">(optional)</span></span>
- <textarea rows={3} className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add notes or description for this server..."/>
+ <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.description')} <span className="text-xs font-normal text-muted-foreground">{t('createServer.fields.optional')}</span></span>
+ <textarea rows={3} className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('createServer.fields.descriptionPlaceholder')}/>
  </label>
  <div className="grid gap-4 sm:grid-cols-2">
  <div className="space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Template</span>
- <Combobox value={templateId} onChange={(newTemplateId) => { setTemplateId(newTemplateId); setImageVariant(''); const template = templates.find((t) => t.id === newTemplateId); if (template?.variables) { const defaultEnv: Record<string, string> = {}; template.variables.filter((v) => v.name !== 'SERVER_DIR').forEach((v) => { defaultEnv[v.name] = v.default; }); setEnvironment(defaultEnv); } else { setEnvironment({}); } }} options={templates.map((t) => ({ value: t.id, label: t.name, keywords: [t.name, t.description || ''].filter(Boolean) }))} placeholder="Select a template..." searchPlaceholder="Search templates..."/>
+ <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.template')}</span>
+ <Combobox value={templateId} onChange={(newTemplateId) => { setTemplateId(newTemplateId); setImageVariant(''); const template = templates.find((t) => t.id === newTemplateId); if (template?.variables) { const defaultEnv: Record<string, string> = {}; template.variables.filter((v) => v.name !== 'SERVER_DIR').forEach((v) => { defaultEnv[v.name] = v.default; }); setEnvironment(defaultEnv); } else { setEnvironment({}); } }} options={templates.map((t) => ({ value: t.id, label: t.name, keywords: [t.name, t.description || ''].filter(Boolean) }))} placeholder={t('createServer.fields.templatePlaceholder')} searchPlaceholder={t('createServer.fields.templateSearchPlaceholder')}/>
  </div>
  <div className="space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Node</span>
- <Combobox value={nodeId} onChange={(newNodeId) => setNodeId(newNodeId)} options={availableNodes.map((n) => ({ value: n.id, label: n.name, keywords: [n.name] }))} placeholder="Select a node..." searchPlaceholder="Search nodes..."/>
+ <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.node')}</span>
+ <Combobox value={nodeId} onChange={(newNodeId) => setNodeId(newNodeId)} options={availableNodes.map((n) => ({ value: n.id, label: n.name, keywords: [n.name] }))} placeholder={t('createServer.fields.nodePlaceholder')} searchPlaceholder={t('createServer.fields.nodeSearchPlaceholder')}/>
  </div>
  </div>
  {selectedTemplate?.images?.length ? (
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Image Variant</span>
+ <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.imageVariant')}</span>
  <select className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={imageVariant} onChange={(e) => setImageVariant(e.target.value)}>
- <option value="">Use default image</option>
+ <option value="">{t('createServer.fields.useDefaultImage')}</option>
  {selectedTemplate.images.map((option) => (<option key={option.name} value={option.name}>{option.label ?? option.name}</option>))}
  </select>
  </label>
@@ -513,34 +519,34 @@ function CreateServerModal() {
  {step === 'resources' ? (
  <div className="space-y-5">
  <div className="rounded-xl border border-border bg-card p-5 sm:p-6 dark:border-border dark:bg-card">
- <h3 className="mb-5 text-sm font-bold tracking-tight text-foreground dark:text-white">Resource Allocation</h3>
+ <h3 className="mb-5 text-sm font-bold tracking-tight text-foreground dark:text-white">{t('createServer.resources.title')}</h3>
  <div className="grid gap-4 sm:grid-cols-3">
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Memory (MB)</span>
+ <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.memoryMb')}</span>
  <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={memory} onChange={(e) => setMemory(e.target.value)} type="number" min={256}/>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">CPU Cores</span>
+ <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.cpuCores')}</span>
  <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={cpu} onChange={(e) => setCpu(e.target.value)} type="number" min={1} step={1}/>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Disk (MB)</span>
+ <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.diskMb')}</span>
  <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={disk} onChange={(e) => setDisk(e.target.value)} type="number" min={1024} step={1024}/>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Swap (MB)</span>
+ <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.swapMb')}</span>
  <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={allocatedSwapMb} onChange={(e) => setAllocatedSwapMb(e.target.value)} type="number" min={0} step={128}/>
- <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">Leave blank to use provider defaults.</p>
+ <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{t('fields.leaveBlankDefaults')}</p>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Backup (MB)</span>
+ <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.backupMb')}</span>
  <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={backupAllocationMb} onChange={(e) => setBackupAllocationMb(e.target.value)} type="number" min={0} step={128}/>
- <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">Leave blank to use provider defaults.</p>
+ <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{t('fields.leaveBlankDefaults')}</p>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Database Allocation</span>
+ <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.databaseAllocation')}</span>
  <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={databaseAllocation} onChange={(e) => setDatabaseAllocation(e.target.value)} type="number" min={0} step={1}/>
- <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">Leave blank to use provider defaults.</p>
+ <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{t('fields.leaveBlankDefaults')}</p>
  </label>
  </div>
  </div>
@@ -551,38 +557,38 @@ function CreateServerModal() {
  {step === 'build' ? (
  <div className="space-y-5">
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Network Mode</span>
+ <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('fields.networkMode')}</span>
  <select className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={networkMode} onChange={(e) => setNetworkMode(e.target.value)}>
- <option value="host">Host (port mapping)</option>
- <option value="macvlan">Macvlan</option>
+ <option value="host">{t('networkModes.host')}</option>
+ <option value="macvlan">{t('networkModes.macvlan')}</option>
  </select>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Primary Port</span>
+ <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.network.primaryPort')}</span>
  <input className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400 disabled:opacity-50" value={port} onChange={(e) => setPort(e.target.value)} type="number" min={1024} max={65535} readOnly={networkMode === 'host'} disabled={networkMode === 'host'}/>
- <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{networkMode === 'host' ? 'Auto-populated from the primary allocation below.' : 'Port the server will listen on.'}</p>
+ <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{networkMode === 'host' ? t('createServer.network.primaryPortFromAllocation') : t('createServer.network.primaryPortHint')}</p>
  </label>
 
  {networkMode === 'macvlan' ? (
  <div className="rounded-xl border border-border bg-card p-5 space-y-4 dark:border-border dark:bg-card">
- <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">Macvlan Configuration</h4>
+ <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">{t('createServer.network.macvlanTitle')}</h4>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Interface</span>
+ <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('createServer.network.interface')}</span>
  <select className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={macvlanInterface} onChange={(e) => setMacvlanInterface(e.target.value)}>
- <option value="">Select interface</option>
- {nodeIpPools.map((pool) => (<option key={pool.id} value={pool.networkName}>{pool.networkName} — {pool.cidr} ({pool.availableCount} available)</option>))}
+ <option value="">{t('createServer.network.selectInterface')}</option>
+ {nodeIpPools.map((pool) => (<option key={pool.id} value={pool.networkName}>{t('createServer.network.interfaceOption', { network: pool.networkName, cidr: pool.cidr, count: pool.availableCount })}</option>))}
  </select>
  </label>
- {nodeIpPools.length === 0 && nodeId ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">No macvlan interfaces configured for this node.</p>) : null}
+ {nodeIpPools.length === 0 && nodeId ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">{t('createServer.network.noInterfaces')}</p>) : null}
  {macvlanInterface ? (
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">IP Allocation</span>
+ <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('createServer.network.ipAllocation')}</span>
  <select className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={primaryIp} onChange={(e) => setPrimaryIp(e.target.value)}>
- <option value="">Auto-assign</option>
+ <option value="">{t('fields.autoAssign')}</option>
  {availableIps.map((ip) => (<option key={ip} value={ip}>{ip}</option>))}
  </select>
  {ipLoadError ? (<p className="text-xs text-warning">{ipLoadError}</p>) : null}
- {!ipLoadError && availableIps.length === 0 ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">No available IPs found.</p>) : null}
+ {!ipLoadError && availableIps.length === 0 ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">{t('fields.noIps')}</p>) : null}
  </label>
  ) : null}
  </div>
@@ -592,47 +598,47 @@ function CreateServerModal() {
  <div className="space-y-4">
  <div className="rounded-xl border border-border bg-card p-5 space-y-3 dark:border-border dark:bg-card">
  <div>
- <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">Primary Allocation</h4>
- <p className="mt-0.5 text-xs text-muted-foreground dark:text-muted-foreground">Choose a node allocation for the default IP and port.</p>
+ <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">{t('createServer.network.primaryAllocation')}</h4>
+ <p className="mt-0.5 text-xs text-muted-foreground dark:text-muted-foreground">{t('createServer.network.primaryAllocationHint')}</p>
  </div>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Allocation</span>
+ <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('createServer.network.allocation')}</span>
  <div className="flex flex-col sm:flex-row gap-2">
  <select className="flex-1 rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={allocationId} onChange={(event) => setAllocationId(event.target.value)}>
- <option value="">Select allocation</option>
+ <option value="">{t('fields.selectAllocation')}</option>
  {availableAllocations.map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
  </select>
- <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 shrink-0 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary-500 hover:text-primary-600 dark:border-border dark:hover:border-primary/30 dark:hover:text-primary-400" title="Create allocations — refreshes on return">
- <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg> New
+ <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 shrink-0 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary-500 hover:text-primary-600 dark:border-border dark:hover:border-primary/30 dark:hover:text-primary-400" title={t('createServer.network.createAllocationsHint')}>
+ <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg> {t('createServer.network.newAllocation')}
  </a>
  </div>
  </label>
  {allocLoadError ? (<p className="text-xs text-warning">{allocLoadError}</p>) : null}
  {!allocLoadError && availableAllocations.length === 0 ? (
- <p className="text-xs text-muted-foreground dark:text-muted-foreground">No available allocations.{' '}<a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">Create one →</a></p>
+ <p className="text-xs text-muted-foreground dark:text-muted-foreground">{t('fields.noAllocations')}{' '}<a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">{t('fields.createOne')}</a></p>
  ) : null}
  </div>
 
  <div className="rounded-xl border border-border bg-card p-5 space-y-3 dark:border-border dark:bg-card">
  <div>
- <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">Additional Port Bindings</h4>
- <p className="mt-0.5 text-xs text-muted-foreground dark:text-muted-foreground">Map additional allocations to container ports.</p>
+ <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">{t('createServer.network.additionalBindings')}</h4>
+ <p className="mt-0.5 text-xs text-muted-foreground dark:text-muted-foreground">{t('createServer.network.additionalBindingsHint')}</p>
  </div>
  <div className="space-y-2.5">
  {additionalBindings.map((binding, index) => (
  <div key={`${binding.allocationId}-${index}`} className="flex flex-col sm:flex-row gap-2">
  <select className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={binding.allocationId} onChange={(event) => { const next = [...additionalBindings]; const allocation = availableAllocations.find((a) => a.id === event.target.value); next[index] = { allocationId: event.target.value, containerPort: allocation ? String(allocation.port) : binding.containerPort }; setAdditionalBindings(next); }}>
- <option value="">Select allocation</option>
+ <option value="">{t('fields.selectAllocation')}</option>
  {availableAllocations.filter((a) => a.id !== allocationId && !additionalBindings.some((b, i) => i !== index && b.allocationId === a.id)).map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
  </select>
  <div className="flex gap-2">
- <input className="w-full sm:w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" type="number" min={1} max={65535} value={binding.containerPort} onChange={(event) => { const next = [...additionalBindings]; next[index] = { ...next[index], containerPort: event.target.value }; setAdditionalBindings(next); }} placeholder="Port"/>
- <button type="button" className="shrink-0 rounded-lg border border-danger/20 px-2.5 py-2 text-xs font-semibold text-danger transition-all duration-200 hover:border-danger/40 hover:bg-danger-muted" onClick={() => { setAdditionalBindings(additionalBindings.filter((_, i) => i !== index)); }}>Remove</button>
+ <input className="w-full sm:w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" type="number" min={1} max={65535} value={binding.containerPort} onChange={(event) => { const next = [...additionalBindings]; next[index] = { ...next[index], containerPort: event.target.value }; setAdditionalBindings(next); }} placeholder={t('createServer.network.portPlaceholder')}/>
+ <button type="button" className="shrink-0 rounded-lg border border-danger/20 px-2.5 py-2 text-xs font-semibold text-danger transition-all duration-200 hover:border-danger/40 hover:bg-danger-muted" onClick={() => { setAdditionalBindings(additionalBindings.filter((_, i) => i !== index)); }}>{t('common:actions.remove')}</button>
  </div>
  </div>
  ))}
  <button type="button" className="rounded-lg border border-dashed border-border bg-transparent px-4 py-2 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary/40 hover:text-primary dark:hover:border-primary/30 dark:hover:text-primary-400" onClick={() => setAdditionalBindings([...additionalBindings, { allocationId: '', containerPort: '' }])}>
- + Add binding
+ {t('createServer.network.addBinding')}
  </button>
  </div>
  </div>
@@ -646,7 +652,7 @@ function CreateServerModal() {
  <>
  {templateVariables.length > 0 ? (
  <div className="space-y-4">
- <h3 className="text-sm font-semibold text-foreground dark:text-zinc-200">Environment Variables</h3>
+ <h3 className="text-sm font-semibold text-foreground dark:text-zinc-200">{t('createServer.startup.environmentVariables')}</h3>
  {templateVariables.map((variable) => (
  <label key={variable.name} className="block space-y-1.5">
  <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{variable.name}{variable.required ? <span className="ml-1 text-danger">*</span> : null}</span>
@@ -660,7 +666,7 @@ function CreateServerModal() {
  ))}
  </div>
  ) : (
- <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground dark:border-border dark:bg-muted/20 dark:text-muted-foreground">No startup variables for this template.</div>
+ <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground dark:border-border dark:bg-muted/20 dark:text-muted-foreground">{t('createServer.startup.noVariables')}</div>
  )}
  </>
  ) : null}
@@ -671,21 +677,21 @@ function CreateServerModal() {
 
  <DialogFooter className="sm:justify-between">
  <Button variant="outline" onClick={() => setOpen(false)}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  <div className="flex items-center gap-2">
  {stepIndex > 0 ? (
  <Button variant="outline" onClick={() => setStep(stepOrder[stepIndex - 1])}>
- Back
+ {t('common:actions.back')}
  </Button>
  ) : null}
  {stepIndex < stepOrder.length - 1 ? (
  <Button onClick={() => setStep(stepOrder[stepIndex + 1])} disabled={!canGoNext}>
- Next
+ {t('common:actions.next')}
  </Button>
  ) : (
  <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
- {mutation.isPending ? 'Creating...' : 'Create server'}
+ {mutation.isPending ? t('createServer.creating') : t('createServer.submit')}
  </Button>
  )}
  </div>

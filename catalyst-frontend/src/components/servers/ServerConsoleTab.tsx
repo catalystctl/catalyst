@@ -1,4 +1,5 @@
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowDown, Check, Copy, Download, Search, Trash2, X } from 'lucide-react';
 
 
@@ -60,11 +61,12 @@ const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: str
 const SCROLLBACK_OPTIONS = [500, 1000, 2000] as const;
 
 
-function connectionLabel(status?: Props['streamStatus'], isConnected?: boolean) {
-  if (status === 'reconnecting') return { label: 'Reconnecting', tone: 'text-warning' };
-  if (status === 'error' || status === 'closed') return { label: 'Disconnected', tone: 'text-muted-foreground' };
-  if (status === 'connecting' || !isConnected) return { label: 'Connecting', tone: 'text-warning' };
-  return { label: 'Live', tone: 'text-success' };
+/** Tone for the stream state pill; the label is picked next to the t() call. */
+function connectionTone(status?: Props['streamStatus'], isConnected?: boolean): string {
+  if (status === 'reconnecting') return 'text-warning';
+  if (status === 'error' || status === 'closed') return 'text-muted-foreground';
+  if (status === 'connecting' || !isConnected) return 'text-warning';
+  return 'text-success';
 }
 
 export default function ServerConsoleTab({
@@ -78,6 +80,7 @@ export default function ServerConsoleTab({
   isError,
   refetch,
 }: Props) {
+  const { t } = useTranslation('servers');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -182,12 +185,20 @@ export default function ServerConsoleTab({
   }, [searchOpen]);
 
 
-  const connection = connectionLabel(streamStatus, isConnected);
+  const connectionLabel =
+    streamStatus === 'reconnecting'
+      ? t('console.connection.reconnecting')
+      : streamStatus === 'error' || streamStatus === 'closed'
+        ? t('console.connection.disconnected')
+        : streamStatus === 'connecting' || !isConnected
+          ? t('console.connection.connecting')
+          : t('console.connection.live');
+  const connection = { label: connectionLabel, tone: connectionTone(streamStatus, isConnected) };
   const commandPlaceholder = !canSend
     ? streamStatus === 'reconnecting'
-      ? 'Reconnecting…'
-      : 'Connect to send commands'
-    : 'Type a command…';
+      ? t('console.placeholderReconnecting')
+      : t('console.placeholderConnectToSend')
+    : t('console.placeholderTypeCommand');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -235,7 +246,7 @@ export default function ServerConsoleTab({
                 ref={searchRef}
                 className="w-32 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 sm:w-40"
                 value={searchQuery}
-                aria-label="Find in console"
+                aria-label={t('console.tab.findAriaLabel')}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
@@ -244,14 +255,14 @@ export default function ServerConsoleTab({
                     else xtermRef.current?.findNext(searchQuery);
                   }
                 }}
-                placeholder="Find…"
+                placeholder={t('console.tab.findPlaceholder')}
               />
               {searchQuery ? (
                 <span className="type-numeric text-[10px] text-muted-foreground">{searchMatchCount}</span>
               ) : null}
               <button
                 type="button"
-                aria-label="Close find"
+                aria-label={t('console.tab.closeFind')}
                 onClick={() => {
                   setSearchOpen(false);
                   setSearchQuery('');
@@ -264,8 +275,8 @@ export default function ServerConsoleTab({
           ) : (
             <button
               type="button"
-              aria-label="Find in console"
-              title="Find (Ctrl+F)"
+              aria-label={t('console.tab.findAriaLabel')}
+              title={t('console.tab.findTitle')}
               onClick={() => {
                 setSearchOpen(true);
                 window.setTimeout(() => searchRef.current?.focus(), 50);
@@ -277,7 +288,7 @@ export default function ServerConsoleTab({
           )}
 
           <label className="sr-only" htmlFor="console-scrollback">
-            Buffer size
+            {t('console.tab.bufferSize')}
           </label>
           <select
             id="console-scrollback"
@@ -298,12 +309,12 @@ export default function ServerConsoleTab({
 
           <div className="flex-1" />
 
-          <span className="type-numeric text-[10px] text-muted-foreground">{visibleEntries.length} lines</span>
+          <span className="type-numeric text-[10px] text-muted-foreground">{t('console.lines', { count: visibleEntries.length })}</span>
 
           <button
             type="button"
             aria-pressed={autoScroll}
-            aria-label={autoScroll ? 'Follow output on' : 'Follow output off'}
+            aria-label={autoScroll ? t('console.tab.followOn') : t('console.tab.followOff')}
             onClick={() => {
               const next = !autoScroll;
               setAutoScroll(next);
@@ -315,20 +326,20 @@ export default function ServerConsoleTab({
             )}
           >
             <ArrowDown className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Follow</span>
+            <span className="hidden sm:inline">{t('console.tab.follow')}</span>
           </button>
 
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={copied ? 'Copied' : 'Copy output'} onClick={() => void handleCopy()}>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={copied ? t('common:actions.copied') : t('console.tab.copyOutput')} onClick={() => void handleCopy()}>
             {copied ? <Check className="text-success" /> : <Copy />}
           </Button>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="Download output" onClick={handleDownload}>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={t('console.tab.downloadOutput')} onClick={handleDownload}>
             <Download />
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Clear console"
+            aria-label={t('console.tab.clearConsole')}
             onClick={() => {
               clearConsole();
               setAutoScroll(true);
@@ -367,7 +378,7 @@ export default function ServerConsoleTab({
           <input
             ref={inputRef}
             defaultValue=""
-            aria-label="Console command"
+            aria-label={t('console.tab.commandInput')}
             className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
             onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
               if (event.key === 'Tab' && commandHistory.length > 0) {
@@ -403,7 +414,7 @@ export default function ServerConsoleTab({
             disabled={!canSend}
           />
           <Button type="submit" size="sm" disabled={!canSend}>
-            Send
+            {t('console.send')}
           </Button>
         </form>
       </div>

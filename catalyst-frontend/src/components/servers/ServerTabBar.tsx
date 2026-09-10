@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ComponentType } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 import {
   DropdownMenu,
@@ -47,6 +48,7 @@ function measureKey(tabs: ServerNavTab[]) {
 }
 
 export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
+  const { t } = useTranslation('servers');
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const moreMeasureRef = useRef<HTMLButtonElement>(null);
@@ -119,7 +121,7 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
         ))}
         <button ref={moreMeasureRef} type="button" className={TAB_CLASS} tabIndex={-1}>
           <MoreHorizontal className="h-3.5 w-3.5" />
-          More
+          {t('common:actions.more')}
         </button>
       </div>
 
@@ -138,10 +140,10 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-surface-2/60 hover:text-foreground',
                 )}
-                aria-label="More server pages"
+                aria-label={t('tabBar.moreTabs')}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
-                More
+                {t('common:actions.more')}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-44">

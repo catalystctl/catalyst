@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { Server } from '../../types/server';
 import ServerStatusBadge from './ServerStatusBadge';
@@ -17,6 +18,7 @@ const formatMB = (mb: number) => {
 };
 
 function ServerCard({ server }: { server: Server }) {
+ const { t } = useTranslation('servers');
  const host =
  server.connection?.host ??
  server.primaryIp ??
@@ -63,11 +65,11 @@ function ServerCard({ server }: { server: Server }) {
 
  const metrics = useMemo(
   () => [
-    { label: 'CPU', value: cpuPercent, bar: cpuBar, display: formatPercent(cpuPercent) },
-    { label: 'RAM', value: memoryPercent, bar: memoryBar, display: memoryDisplay },
-    { label: 'Disk', value: diskPercent, bar: diskBar, display: diskDisplay },
+    { label: t('metrics.labels.cpu'), value: cpuPercent, bar: cpuBar, display: formatPercent(cpuPercent) },
+    { label: t('metrics.labels.ram'), value: memoryPercent, bar: memoryBar, display: memoryDisplay },
+    { label: t('metrics.labels.disk'), value: diskPercent, bar: diskBar, display: diskDisplay },
   ],
-  [cpuPercent, cpuBar, memoryPercent, memoryBar, diskPercent, diskBar, diskDisplay, memoryDisplay],
+  [t, cpuPercent, cpuBar, memoryPercent, memoryBar, diskPercent, diskBar, diskDisplay, memoryDisplay],
  );
 
 
@@ -130,19 +132,19 @@ function ServerCard({ server }: { server: Server }) {
  onClick={(event) => {
  if (isSuspended) {
  event.preventDefault();
- notifyError('Server is suspended');
+ notifyError(t('errors.serverSuspended'));
  }
  }}
  className={isSuspended ? 'cursor-not-allowed opacity-60' : ''}
  >
  <Link to={isSuspended ? '#' : `/servers/${server.id}/console`} className="flex items-center gap-1.5">
  <Terminal className="h-3.5 w-3.5" />
- Console
+ {t('card.console')}
  </Link>
  </Button>
  <Button size="sm" asChild className="ml-auto ">
  <Link to={`/servers/${server.id}`} className="flex items-center gap-1.5">
- Manage
+ {t('card.manage')}
  <ChevronRight className="h-3.5 w-3.5" />
  </Link>
  </Button>

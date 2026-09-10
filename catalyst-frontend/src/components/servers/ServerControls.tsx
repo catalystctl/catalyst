@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@/csync';
 import { serversApi } from '../../services/api/servers';
 import { qk } from '../../lib/queryKeys';
@@ -28,6 +29,7 @@ const RESTARTABLE: ServerStatus[] = ['running', 'stopped', 'error', 'crashed'];
 const KILLABLE: ServerStatus[] = ['running', 'starting', 'stopping', 'error', 'crashed'];
 
 function ServerControls({ serverId, status, permissions }: Props) {
+  const { t } = useTranslation('servers');
   const queryClient = useQueryClient();
   const [showKillConfirm, setShowKillConfirm] = useState(false);
   const [showCancelInstallConfirm, setShowCancelInstallConfirm] = useState(false);
@@ -59,10 +61,10 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const start = useMutation({
     mutationFn: () => serversApi.start(serverId),
     onMutate: () => snapshotAndOptimistic(OPTIMISTIC_STATUS.start),
-    onError: (_err, _vars, prev) => {
+    onError: (err, _vars, prev) => {
       if (prev) queryClient.setQueryData(qk.server(serverId), prev);
       optimisticInvalidate(queryClient, qk.servers());
-      notifyError('Failed to start server');
+      notifyError(err);
     },
     onSettled: () => {
       optimisticInvalidate(queryClient, qk.server(serverId));
@@ -74,10 +76,10 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const stop = useMutation({
     mutationFn: () => serversApi.stop(serverId),
     onMutate: () => snapshotAndOptimistic(OPTIMISTIC_STATUS.stop),
-    onError: (_err, _vars, prev) => {
+    onError: (err, _vars, prev) => {
       if (prev) queryClient.setQueryData(qk.server(serverId), prev);
       optimisticInvalidate(queryClient, qk.servers());
-      notifyError('Failed to stop server');
+      notifyError(err);
     },
     onSettled: () => {
       optimisticInvalidate(queryClient, qk.server(serverId));
@@ -89,10 +91,10 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const restart = useMutation({
     mutationFn: () => serversApi.restart(serverId),
     onMutate: () => snapshotAndOptimistic(OPTIMISTIC_STATUS.restart),
-    onError: (_err, _vars, prev) => {
+    onError: (err, _vars, prev) => {
       if (prev) queryClient.setQueryData(qk.server(serverId), prev);
       optimisticInvalidate(queryClient, qk.servers());
-      notifyError('Failed to restart server');
+      notifyError(err);
     },
     onSettled: () => {
       optimisticInvalidate(queryClient, qk.server(serverId));
@@ -104,10 +106,10 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const kill = useMutation({
     mutationFn: () => serversApi.kill(serverId),
     onMutate: () => snapshotAndOptimistic(OPTIMISTIC_STATUS.kill),
-    onError: (_err, _vars, prev) => {
+    onError: (err, _vars, prev) => {
       if (prev) queryClient.setQueryData(qk.server(serverId), prev);
       optimisticInvalidate(queryClient, qk.servers());
-      notifyError('Failed to kill server');
+      notifyError(err);
       setShowKillConfirm(false);
     },
     onSettled: () => {
@@ -116,7 +118,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
       optimisticInvalidate(queryClient, qk.adminServers());
     },
     onSuccess: () => {
-      notifySuccess('Server killed');
+      notifySuccess(t('controls.serverKilled'));
       setShowKillConfirm(false);
     },
   });
@@ -124,10 +126,10 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const cancelInstall = useMutation({
     mutationFn: () => serversApi.cancelInstall(serverId),
     onMutate: () => snapshotAndOptimistic('stopped'),
-    onError: (_err, _vars, prev) => {
+    onError: (err, _vars, prev) => {
       if (prev) queryClient.setQueryData(qk.server(serverId), prev);
       optimisticInvalidate(queryClient, qk.servers());
-      notifyError('Failed to cancel install');
+      notifyError(err);
       setShowCancelInstallConfirm(false);
     },
     onSettled: () => {
@@ -136,7 +138,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
       optimisticInvalidate(queryClient, qk.adminServers());
     },
     onSuccess: () => {
-      notifySuccess('Install cancelled');
+      notifySuccess(t('controls.installCancelled'));
       setShowCancelInstallConfirm(false);
     },
   });
@@ -163,7 +165,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
             aria-busy={start.isPending}
             onClick={() => start.mutate()}
           >
-            {start.isPending ? 'Starting…' : 'Start'}
+            {start.isPending ? t('controls.starting') : t('controls.start')}
           </Button>
         )}
         {canStop && (
@@ -174,7 +176,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
             aria-busy={stop.isPending}
             onClick={() => stop.mutate()}
           >
-            {stop.isPending ? 'Stopping…' : 'Stop'}
+            {stop.isPending ? t('controls.stopping') : t('controls.stop')}
           </Button>
         )}
         {canRestart && (
@@ -185,7 +187,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
             aria-busy={restart.isPending}
             onClick={() => restart.mutate()}
           >
-            {restart.isPending ? 'Restarting…' : 'Restart'}
+            {restart.isPending ? t('controls.restarting') : t('controls.restart')}
           </Button>
         )}
         {canKill && (
@@ -196,7 +198,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
             aria-busy={kill.isPending}
             onClick={() => setShowKillConfirm(true)}
           >
-            Kill
+            {t('controls.kill')}
           </Button>
         )}
         {canCancelInstall && status === 'installing' && (
@@ -207,17 +209,17 @@ function ServerControls({ serverId, status, permissions }: Props) {
             aria-busy={cancelInstall.isPending}
             onClick={() => setShowCancelInstallConfirm(true)}
           >
-            {cancelInstall.isPending ? 'Cancelling…' : 'Cancel install'}
+            {cancelInstall.isPending ? t('controls.cancelling') : t('controls.cancelInstall')}
           </Button>
         )}
       </div>
 
       <ConfirmDialog
         open={showKillConfirm}
-        title="Kill server?"
-        message="This will force-terminate the server process immediately without saving. Data may be lost. Are you sure?"
-        confirmText="Kill"
-        cancelText="Cancel"
+        title={t('controls.killConfirmTitle')}
+        message={t('controls.killConfirmMessage')}
+        confirmText={t('controls.kill')}
+        cancelText={t('common:actions.cancel')}
         variant="danger"
         loading={kill.isPending}
         onConfirm={() => kill.mutate()}
@@ -225,10 +227,10 @@ function ServerControls({ serverId, status, permissions }: Props) {
       />
       <ConfirmDialog
         open={showCancelInstallConfirm}
-        title="Cancel install?"
-        message="This will kill the stuck installer container and reset the server to stopped so you can reinstall. Partial install files are kept. Are you sure?"
-        confirmText="Cancel install"
-        cancelText="Keep installing"
+        title={t('controls.cancelInstallConfirmTitle')}
+        message={t('controls.cancelInstallConfirmMessage')}
+        confirmText={t('controls.cancelInstall')}
+        cancelText={t('controls.keepInstalling')}
         variant="danger"
         loading={cancelInstall.isPending}
         onConfirm={() => cancelInstall.mutate()}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -7,6 +8,7 @@ import type { UpdateServerPayload } from '../../types/server';
 import { useServer } from '../../hooks/useServer';
 import { useSseResizeComplete } from '../../hooks/useSseResizeComplete';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { nodesApi } from '../../services/api/nodes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +31,7 @@ type Props = {
 };
 
 function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, onOpenChange }: Props) {
+  const { t } = useTranslation('servers');
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -64,10 +67,10 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     if (!awaitingResize) return;
     const timeout = setTimeout(() => {
       setAwaitingResize(false);
-      notifyError('Storage resize timed out — the node agent may be offline. Try again.');
+      notifyError(t('updateServer.resizeTimeout'));
     }, 45_000);
     return () => clearTimeout(timeout);
-  }, [awaitingResize]);
+  }, [awaitingResize, t]);
 
   const isRunning = server?.status !== 'stopped';
   const isIpamNetwork = server?.networkMode && !['bridge', 'host'].includes(server.networkMode);
@@ -128,11 +131,11 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     },
     onSuccess: () => {
       if (diskValue !== existingDiskMb) {
-        notifySuccess('Storage resize initiated');
+        notifySuccess(t('updateServer.resizeInitiated'));
         // Wait for SSE event to close modal (with a timeout guard above)
         setAwaitingResize(true);
       } else {
-        notifySuccess('Server updated');
+        notifySuccess(t('updateServer.updated'));
         setOpen(false);
       }
     },
@@ -140,7 +143,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
       queryClient.invalidateQueries({ queryKey: qk.servers() });
     },
-    onError: () => notifyError('Failed to update server'),
+    onError: (error) => notifyError(error),
   });
 
   // Retention rides the dedicated backup-settings endpoint; the plain server
@@ -148,8 +151,8 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   const backupSettingsMutation = useMutation({
     mutationFn: async (retentionCount: number) =>
       serversApi.updateBackupSettings(serverId, { retentionCount }),
-    onSuccess: () => notifySuccess('Backup retention updated'),
-    onError: () => notifyError('Failed to update backup retention'),
+    onSuccess: () => notifySuccess(t('updateServer.backupRetentionUpdated')),
+    onError: (error) => notifyError(error),
   });
 
   useEffect(() => {
@@ -202,9 +205,8 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
       })
       .catch((error: any) => {
         if (!active) return;
-        const message = error?.response?.data?.error || 'Unable to load IP pool';
         setAvailableIps([]);
-        setIpLoadError(message);
+        setIpLoadError(getLocalizedErrorMessage(error));
       });
 
     return () => {
@@ -260,9 +262,8 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
       })
       .catch((error: any) => {
         if (!active) return;
-        const message = error?.response?.data?.error || 'Unable to load allocations';
         setAvailableAllocations([]);
-        setAllocLoadError(message);
+        setAllocLoadError(getLocalizedErrorMessage(error));
       });
     return () => {
       active = false;
@@ -305,20 +306,20 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
           }}
           disabled={disabled}
         >
-          Update
+          {t('updateServer.trigger')}
         </button>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Update server</DialogTitle>
+            <DialogTitle>{t('updateServer.title')}</DialogTitle>
             <DialogDescription>
-              Change this server's name, resources, backup and database allocations, and network allocation.
+              {t('updateServer.description')}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="update-server-name">Name</Label>
+              <Label htmlFor="update-server-name">{t('fields.name')}</Label>
               <Input
                 id="update-server-name"
                 value={name}
@@ -327,7 +328,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="update-server-memory">Memory (MB)</Label>
+              <Label htmlFor="update-server-memory">{t('fields.memoryMb')}</Label>
               <Input
                 id="update-server-memory"
                 value={memory}
@@ -337,7 +338,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="update-server-cpu">CPU cores</Label>
+              <Label htmlFor="update-server-cpu">{t('updateServer.cpuCores')}</Label>
               <Input
                 id="update-server-cpu"
                 value={cpu}
@@ -348,7 +349,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="update-server-disk">Disk (MB)</Label>
+              <Label htmlFor="update-server-disk">{t('fields.diskMb')}</Label>
               <Input
                 id="update-server-disk"
                 value={disk}
@@ -359,12 +360,12 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
               />
               {isRunning && isShrink ? (
                 <span className="text-xs text-warning">
-                  Shrinking requires the server to be stopped.
+                  {t('updateServer.shrinkWarning')}
                 </span>
               ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="update-server-db">Database allocation</Label>
+              <Label htmlFor="update-server-db">{t('updateServer.databaseAllocation')}</Label>
               <Input
                 id="update-server-db"
                 value={databaseAllocation}
@@ -374,11 +375,11 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 step={1}
               />
               <span className="text-xs text-muted-foreground">
-                Set to 0 to disable database provisioning.
+                {t('updateServer.databaseAllocationHint')}
               </span>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="update-server-backup-allocation">Backup allocation (MB)</Label>
+              <Label htmlFor="update-server-backup-allocation">{t('updateServer.backupAllocation')}</Label>
               <Input
                 id="update-server-backup-allocation"
                 value={backupAllocationMb}
@@ -388,11 +389,11 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 step={128}
               />
               <span className="text-xs text-muted-foreground">
-                Set to 0 to disable backups. Local and Stream modes require an allocation.
+                {t('updateServer.backupAllocationHint')}
               </span>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="update-server-backup-retention">Backup retention</Label>
+              <Label htmlFor="update-server-backup-retention">{t('updateServer.backupRetention')}</Label>
               <Input
                 id="update-server-backup-retention"
                 value={backupRetentionCount}
@@ -403,15 +404,15 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 step={1}
               />
               <span className="text-xs text-muted-foreground">
-                Keep at most this many backups (0 = unlimited).
+                {t('updateServer.backupRetentionHint')}
               </span>
             </div>
             {isIpamNetwork ? (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Choose a primary IP or leave auto-assign selected.
+                  {t('updateServer.primaryIpHint')}
                 </p>
-                <Label htmlFor="update-server-ip">Primary IP allocation</Label>
+                <Label htmlFor="update-server-ip">{t('updateServer.primaryIp')}</Label>
                 <select
                   id="update-server-ip"
                   className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:text-foreground"
@@ -419,9 +420,9 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                   onChange={(event) => setPrimaryIp(event.target.value)}
                   disabled={isRunning}
                 >
-                  <option value="">Auto-assign</option>
+                  <option value="">{t('fields.autoAssign')}</option>
                   {server?.primaryIp ? (
-                    <option value={server.primaryIp}>{server.primaryIp} (current)</option>
+                    <option value={server.primaryIp}>{t('updateServer.currentIp', { ip: server.primaryIp })}</option>
                   ) : null}
                   {availableIps
                     .filter((ip) => ip !== server?.primaryIp)
@@ -433,15 +434,15 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 </select>
                 {ipLoadError ? <p className="text-xs text-warning">{ipLoadError}</p> : null}
                 {!ipLoadError && availableIps.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No available IPs found.</p>
+                  <p className="text-xs text-muted-foreground">{t('fields.noIps')}</p>
                 ) : null}
               </div>
             ) : isBridgeNetwork ? (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Choose the primary allocation (IP:port) for this server.
+                  {t('updateServer.primaryAllocationHint')}
                 </p>
-                <Label htmlFor="update-server-alloc">Primary allocation</Label>
+                <Label htmlFor="update-server-alloc">{t('updateServer.primaryAllocation')}</Label>
                 <select
                   id="update-server-alloc"
                   className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:text-foreground"
@@ -449,7 +450,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                   onChange={(event) => setAllocationId(event.target.value)}
                   disabled={isRunning}
                 >
-                  <option value="">Select allocation</option>
+                  <option value="">{t('fields.selectAllocation')}</option>
                   {availableAllocations.map((allocation) => (
                     <option key={allocation.id} value={allocation.id}>
                       {allocation.ip}:{allocation.port}
@@ -459,14 +460,14 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 </select>
                 {allocLoadError ? <p className="text-xs text-warning">{allocLoadError}</p> : null}
                 {!allocLoadError && availableAllocations.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No allocations found.</p>
+                  <p className="text-xs text-muted-foreground">{t('updateServer.noAllocations')}</p>
                 ) : null}
               </div>
             ) : null}
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button
               onClick={handleSave}
@@ -479,7 +480,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 disabled
               }
             >
-              Save changes
+              {t('updateServer.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

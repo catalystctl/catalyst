@@ -14,6 +14,7 @@
  *   and would force a full reset on every live line once the buffer is full.
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -100,6 +101,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
   isError,
   onRetry,
 }, ref) {
+  const { t } = useTranslation('servers');
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -503,7 +505,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
       <div
         ref={hostRef}
         role="log"
-        aria-label="Server console output"
+        aria-label={t('console.xterm.ariaLabel')}
         aria-live="polite"
         className="console-output xterm-console-host min-h-0 w-full flex-1 overflow-hidden bg-card [&_.xterm]:h-full [&_.xterm]:w-full"
       />
@@ -512,26 +514,26 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
       {isLoading && !hasContent && (
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
           <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary" />
-          Loading recent logs…
+          {t('console.xterm.loadingLogs')}
         </div>
       )}
 
       {isError && !hasContent && (
         <div className="absolute inset-x-4 top-3 z-10 flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <span>Unable to load historical logs.</span>
+          <span>{t('console.xterm.loadError')}</span>
           <button
             type="button"
             className="pointer-events-auto rounded border border-destructive/30 px-2 py-0.5 transition-colors hover:bg-destructive/20"
             onClick={() => onRetry?.()}
           >
-            Retry
+            {t('common:actions.retry')}
           </button>
         </div>
       )}
 
       {!isLoading && !hasContent && !isError && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
-          No console output yet.
+          {t('console.xterm.empty')}
         </div>
       )}
 
@@ -542,7 +544,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
           className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card/95 px-3 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur-sm transition-all hover:border-primary/40 hover:text-foreground"
         >
           <ArrowDown className="h-3 w-3" />
-          New output
+          {t('console.xterm.newOutput')}
         </button>
       )}
     </div>

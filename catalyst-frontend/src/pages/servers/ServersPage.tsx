@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ServerFilters from '../../components/servers/ServerFilters';
 import ServerList from '../../components/servers/ServerList';
 import CreateServerModal from '../../components/servers/CreateServerModal';
@@ -16,6 +17,7 @@ import { ServerIcon, BarChart3, LayoutGrid, List, Shield, Users, Globe } from 'l
 type AccessFilter = 'all' | 'owned' | 'other';
 
 function ServersPage() {
+ const { t } = useTranslation('servers');
  const [filters, setFilters] = useState<Record<string, any>>({});
  const [accessFilter, setAccessFilter] = useState<AccessFilter>('all');
  const { data, isLoading } = useServers(filters);
@@ -87,21 +89,21 @@ function ServersPage() {
  {/* ── Header ── */}
  <TabHeader
  icon={ServerIcon}
- title="Servers"
- description="Manage your game servers, monitor resources, and control power states."
+ title={t('page.title')}
+ description={t('page.description')}
  actions={canCreateServer ? <CreateServerModal /> : undefined}
  />
 
  {/* ── Stats Grid ── */}
  <ServerTabCard>
- <SectionHeader icon={BarChart3} title="Overview" />
+ <SectionHeader icon={BarChart3} title={t('page.overview')} />
  <StatGrid
  columns={4}
  items={[
- { label: 'Total', value: totalServers },
- { label: 'Running', value: statusCounts.running },
- { label: 'Stopped', value: statusCounts.stopped },
- { label: 'Issues', value: statusCounts.issues },
+ { label: t('page.stats.total'), value: totalServers },
+ { label: t('common:status.running'), value: statusCounts.running },
+ { label: t('common:status.stopped'), value: statusCounts.stopped },
+ { label: t('page.stats.issues'), value: statusCounts.issues },
  ]}
  />
  </ServerTabCard>
@@ -115,14 +117,14 @@ function ServersPage() {
  active={accessFilter === 'all'}
  onClick={() => setAccessFilter('all')}
  icon={<Globe className="h-3.5 w-3.5" />}
- label="All"
+ label={t('page.access.all')}
  count={totalServers}
  />
  <AccessTab
  active={accessFilter === 'owned'}
  onClick={() => setAccessFilter('owned')}
  icon={<Users className="h-3.5 w-3.5" />}
- label="Owned"
+ label={t('page.access.owned')}
  count={accessCounts.owned}
  />
  {(isAdmin || accessCounts.other > 0) && (
@@ -130,7 +132,7 @@ function ServersPage() {
  active={accessFilter === 'other'}
  onClick={() => setAccessFilter('other')}
  icon={<Shield className="h-3.5 w-3.5" />}
- label="Other"
+ label={t('page.access.other')}
  count={accessCounts.other}
  />
  )}
@@ -148,7 +150,7 @@ function ServersPage() {
  }`}
  >
  <LayoutGrid className="h-3.5 w-3.5" />
- Cards
+ {t('page.view.cards')}
  </button>
  <button
  type="button"
@@ -160,7 +162,7 @@ function ServersPage() {
  }`}
  >
  <List className="h-3.5 w-3.5" />
- List
+ {t('page.view.list')}
  </button>
  </div>
  </div>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ServerListParams, ServerStatus } from '../../types/server';
+import { serverStatusLabel } from '../../utils/constants';
 import { Input } from '@/components/ui/input';
 import {
  Select,
@@ -20,6 +22,7 @@ type Props = {
 };
 
 function ServerFilters({ onChange }: Props) {
+ const { t } = useTranslation('servers');
  const [search, setSearch] = useState('');
  const [status, setStatus] = useState<ServerStatus | undefined>();
 
@@ -37,7 +40,7 @@ function ServerFilters({ onChange }: Props) {
  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
  <Input
  type="search"
- placeholder="Search by name or node..."
+ placeholder={t('filters.searchPlaceholder')}
  value={search}
  onChange={(e) => setSearch(e.target.value)}
  className="pl-10"
@@ -50,13 +53,13 @@ function ServerFilters({ onChange }: Props) {
  onValueChange={(v) => setStatus(v === '__all__' ? undefined : (v as ServerStatus))}
  >
  <SelectTrigger className="w-full">
- <SelectValue placeholder="All statuses" />
+ <SelectValue placeholder={t('filters.allStatuses')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="__all__">All statuses</SelectItem>
+ <SelectItem value="__all__">{t('filters.allStatuses')}</SelectItem>
  {statuses.map((s) => (
  <SelectItem key={s} value={s}>
- {s.charAt(0).toUpperCase() + s.slice(1)}
+ {serverStatusLabel(t, s)}
  </SelectItem>
  ))}
  </SelectContent>
@@ -65,7 +68,7 @@ function ServerFilters({ onChange }: Props) {
  {hasFilters && (
  <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatus(undefined); }} className="gap-1.5 text-xs">
  <X className="h-3.5 w-3.5" />
- Clear
+ {t('filters.clear')}
  </Button>
  )}
  </div>

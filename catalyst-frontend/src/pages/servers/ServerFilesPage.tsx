@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { FolderOpen } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
@@ -9,15 +10,16 @@ import EmptyState from '../../components/shared/EmptyState';
 import { useServer } from '../../hooks/useServer';
 
 function ServerFilesPage() {
+ const { t } = useTranslation('servers');
  const { serverId } = useParams();
  const { data: server, isLoading, isError, refetch } = useServer(serverId);
- const title = server?.name ?? serverId ?? 'Unknown server';
+ const title = server?.name ?? serverId ?? t('unknownServer');
 
  if (!serverId) {
  return (
  <EmptyState
- title="No server selected"
- description="Select a server to manage its files."
+ title={t('files.noServerTitle')}
+ description={t('files.noServerDescription')}
  />
  );
  }
@@ -26,15 +28,15 @@ function ServerFilesPage() {
  <div className="space-y-4">
  <TabHeader
  icon={FolderOpen}
- title="Files"
- description={`${title} · Upload, edit, and manage server files.`}
+ title={t('files.title')}
+ description={t('files.description', { name: title })}
  />
 
  {isLoading ? (
  <TabLoadingState />
  ) : isError ? (
  <TabErrorState
- message="Unable to load server details."
+ message={t('errors.unableToLoadServerDetails')}
  onRetry={() => refetch()}
  />
  ) : (

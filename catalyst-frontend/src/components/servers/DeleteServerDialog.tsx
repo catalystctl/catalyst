@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import type { Query } from '@/csync';
 import { qk } from '@/lib/queryKeys';
@@ -19,6 +20,7 @@ type Props = {
 };
 
 function DeleteServerDialog({ serverId, serverName, disabled = false, open: controlledOpen, onOpenChange, onDeleted }: Props) {
+  const { t } = useTranslation('servers');
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -45,17 +47,17 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
       return { prev };
     },
     onSuccess: () => {
-      notifySuccess('Server deleted');
+      notifySuccess(t('deleteServer.deleted'));
       setOpen(false);
       onDeleted?.();
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
       if (ctx?.prev) {
         for (const [queryKey, data] of ctx.prev as Array<[unknown, unknown]>) {
           queryClient.setQueryData(queryKey as readonly unknown[], data);
         }
       }
-      notifyError('Failed to delete server');
+      notifyError(err);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.servers() });
@@ -72,20 +74,21 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
           onClick={() => { if (!disabled) setOpen(true); }}
           disabled={disabled}
         >
-          Delete
+          {t('common:actions.delete')}
         </Button>
       )}
       <ConfirmDialog
         open={open}
-        title="Delete server"
+        title={t('deleteServer.title')}
         message={
-          <>
-            Are you sure you want to delete{' '}
-            <span className="font-semibold text-foreground">{serverName}</span>? This action cannot
-            be undone.
-          </>
+          <Trans
+            ns="servers"
+            i18nKey="deleteServer.confirm"
+            values={{ name: serverName }}
+            components={{ strong: <span className="font-semibold text-foreground" /> }}
+          />
         }
-        confirmText="Delete"
+        confirmText={t('common:actions.delete')}
         variant="danger"
         loading={mutation.isPending || disabled}
         onConfirm={() => mutation.mutate()}

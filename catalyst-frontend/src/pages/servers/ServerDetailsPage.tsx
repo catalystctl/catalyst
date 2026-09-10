@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import {
@@ -42,8 +43,8 @@ import { serversApi } from '../../services/api/servers';
 import { nodesApi } from '../../services/api/nodes';
 import { databasesApi } from '../../services/api/databases';
 import { tasksApi } from '../../services/api/tasks';
-import { getErrorMessage } from '../../utils/errors';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { canShowServerDatabasesTab } from '../../utils/serverTabs';
 import { reportSystemError } from '../../services/api/systemErrors';
 import type {
@@ -86,28 +87,28 @@ const ServerPluginManagerTab = lazy(() => import('../../components/servers/tabs/
 const ServerActivityLogTab = lazy(() => import('../../components/servers/tabs/ServerActivityLogTab'));
 const AlertsPage = lazy(() => import('../alerts/AlertsPage'));
 
-const tabLabels = {
-  console: 'Console',
-  files: 'Files',
-  sftp: 'SFTP',
-  backups: 'Backups',
-  tasks: 'Tasks',
-  databases: 'Databases',
-  metrics: 'Metrics',
-  alerts: 'Alerts',
-  activity: 'Activity',
-  modManager: 'Mod Manager',
-  pluginManager: 'Plugin Manager',
-  configuration: 'Configuration',
-  users: 'Users',
-  settings: 'Settings',
-  admin: 'Admin',
-} as const;
+const TAB_KEYS = [
+  'console',
+  'files',
+  'sftp',
+  'backups',
+  'tasks',
+  'databases',
+  'metrics',
+  'alerts',
+  'activity',
+  'modManager',
+  'pluginManager',
+  'configuration',
+  'users',
+  'settings',
+  'admin',
+] as const;
 
-
+type TabKey = (typeof TAB_KEYS)[number];
 
 const tabIcons: Record<
- keyof typeof tabLabels,
+ TabKey,
  React.ComponentType<{ className?: string }>
 > = {
  console: Terminal,
@@ -136,6 +137,7 @@ function TabSkeleton() {
 }
 
 function ServerDetailsPage() {
+ const { t } = useTranslation('servers');
  const { serverId, tab } = useParams();
  const navigate = useNavigate();
  const queryClient = useQueryClient();
@@ -209,13 +211,35 @@ function ServerDetailsPage() {
  [serverPerms, isAdmin],
  );
 
+ // ── Tab labels ──
+ const tabLabels = useMemo<Record<TabKey, string>>(
+ () => ({
+ console: t('tabs.console'),
+ files: t('tabs.files'),
+ sftp: t('tabs.sftp'),
+ backups: t('tabs.backups'),
+ tasks: t('tabs.tasks'),
+ databases: t('tabs.databases'),
+ metrics: t('tabs.metrics'),
+ alerts: t('tabs.alerts'),
+ activity: t('tabs.activity'),
+ modManager: t('tabs.modManager'),
+ pluginManager: t('tabs.pluginManager'),
+ configuration: t('tabs.configuration'),
+ users: t('tabs.users'),
+ settings: t('tabs.settings'),
+ admin: t('tabs.admin'),
+ }),
+ [t],
+ );
+
  // ── Derived state ──
  const isSuspended = server?.status === 'suspended';
  const isPluginTab = Boolean(tab?.startsWith('plugin:'));
  const activePluginTabId = isPluginTab ? tab!.slice('plugin:'.length) : null;
  const activeTab = useMemo(() => {
  const key = tab ?? 'console';
- if (key in tabLabels) return key as keyof typeof tabLabels;
+ if ((TAB_KEYS as readonly string[]).includes(key)) return key as TabKey;
  // Plugin tabs use raw `tab` param; keep a built-in default for header logic only
  return 'console';
  }, [tab]);
@@ -282,7 +306,7 @@ function ServerDetailsPage() {
  });
  const allocations = Array.isArray(allocationsQuery.data) ? allocationsQuery.data : [];
  const allocationsError = allocationsQuery.error
- ? getErrorMessage(allocationsQuery.error, 'Unable to load allocations')
+ ? getLocalizedErrorMessage(allocationsQuery.error)
  : null;
 
  // Free node allocations for the server's node (dropdown options)
@@ -298,7 +322,7 @@ function ServerDetailsPage() {
  Array.isArray(nodeAllocationsQuery.data) ? nodeAllocationsQuery.data : []
  ).filter((allocation) => !allocation.serverId);
  const availableNodeAllocationsError = nodeAllocationsQuery.error
- ? getErrorMessage(nodeAllocationsQuery.error, 'Unable to load node allocations')
+ ? getLocalizedErrorMessage(nodeAllocationsQuery.error)
  : null;
 
  // ── State: Settings ──
@@ -398,13 +422,13 @@ function ServerDetailsPage() {
  }
  return tasksApi.update(server.id, task.id, { enabled: !task.enabled });
  },
- onSuccess: () => notifySuccess('Task updated'),
+ onSuccess: () => notifySuccess(t('details.taskUpdated')),
  onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
  },
  onError: (error: any) =>
- notifyError(error?.response?.data?.error || 'Failed to update task'),
+ notifyError(error),
  });
 
  const deleteTaskMutation = useMutation({
@@ -415,13 +439,13 @@ function ServerDetailsPage() {
  }
  return tasksApi.remove(server.id, taskId);
  },
- onSuccess: () => notifySuccess('Task deleted'),
+ onSuccess: () => notifySuccess(t('details.taskDeleted')),
  onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
  },
  onError: (error: any) =>
- notifyError(error?.response?.data?.error || 'Failed to delete task'),
+ notifyError(error),
  });
 
  const createDatabaseMutation = useMutation({
@@ -441,7 +465,7 @@ function ServerDetailsPage() {
  },
  onSuccess: () => {
  setDatabaseName('');
- notifySuccess('Database created');
+ notifySuccess(t('details.databaseCreated'));
  },
  onSettled: () => {
  if (server?.id)
@@ -450,7 +474,7 @@ function ServerDetailsPage() {
  });
  },
  onError: (error: any) =>
- notifyError(error?.response?.data?.error || 'Failed to create database'),
+ notifyError(error),
  });
 
  const rotateDatabaseMutation = useMutation({
@@ -461,7 +485,7 @@ function ServerDetailsPage() {
  }
  return databasesApi.rotatePassword(server.id, databaseId);
  },
- onSuccess: () => notifySuccess('Database password rotated'),
+ onSuccess: () => notifySuccess(t('details.databasePasswordRotated')),
  onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({
@@ -469,9 +493,7 @@ function ServerDetailsPage() {
  });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error || 'Failed to rotate password',
- ),
+ notifyError(error),
  });
 
  const deleteDatabaseMutation = useMutation({
@@ -482,7 +504,7 @@ function ServerDetailsPage() {
  }
  return databasesApi.remove(server.id, databaseId);
  },
- onSuccess: () => notifySuccess('Database deleted'),
+ onSuccess: () => notifySuccess(t('details.databaseDeleted')),
  onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({
@@ -490,7 +512,7 @@ function ServerDetailsPage() {
  });
  },
  onError: (error: any) =>
- notifyError(error?.response?.data?.error || 'Failed to delete database'),
+ notifyError(error),
  });
 
  const suspendMutation = useMutation({
@@ -502,7 +524,7 @@ function ServerDetailsPage() {
  return serversApi.suspend(server.id, reason);
  },
  onSuccess: () => {
- notifySuccess('Server suspended');
+ notifySuccess(t('details.serverSuspended'));
  setSuspendReason('');
  },
  onSettled: () => {
@@ -510,9 +532,7 @@ function ServerDetailsPage() {
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error || 'Failed to suspend server',
- ),
+ notifyError(error),
  });
 
  const unsuspendMutation = useMutation({
@@ -523,15 +543,13 @@ function ServerDetailsPage() {
  }
  return serversApi.unsuspend(server.id);
  },
- onSuccess: () => notifySuccess('Server unsuspended'),
+ onSuccess: () => notifySuccess(t('details.serverUnsuspended')),
  onSettled: () => {
  if (server?.id) queryClient.invalidateQueries({ queryKey: qk.server(server.id) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error || 'Failed to unsuspend server',
- ),
+ notifyError(error),
  });
 
  const addAllocationMutation = useMutation({
@@ -558,7 +576,7 @@ function ServerDetailsPage() {
  onSuccess: () => {
  setNewContainerPort('');
  setSelectedAllocationId('');
- notifySuccess('Allocation added');
+ notifySuccess(t('details.allocationAdded'));
  },
  onSettled: () => {
  if (serverId) {
@@ -570,11 +588,7 @@ function ServerDetailsPage() {
  }
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error ||
- error?.message ||
- 'Failed to add allocation',
- ),
+ notifyError(error),
  });
 
  const removeAllocationMutation = useMutation({
@@ -585,7 +599,7 @@ function ServerDetailsPage() {
  }
  return serversApi.removeAllocation(serverId, containerPort);
  },
- onSuccess: () => notifySuccess('Allocation removed'),
+ onSuccess: () => notifySuccess(t('details.allocationRemoved')),
  onSettled: () => {
  if (serverId) {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
@@ -596,9 +610,7 @@ function ServerDetailsPage() {
  }
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error || 'Failed to remove allocation',
- ),
+ notifyError(error),
  });
 
  const setPrimaryMutation = useMutation({
@@ -609,7 +621,7 @@ function ServerDetailsPage() {
  }
  return serversApi.setPrimaryAllocation(serverId, containerPort);
  },
- onSuccess: () => notifySuccess('Primary allocation updated'),
+ onSuccess: () => notifySuccess(t('details.primaryAllocationUpdated')),
  onSettled: () => {
  if (serverId) {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
@@ -617,10 +629,7 @@ function ServerDetailsPage() {
  }
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error ||
- 'Failed to update primary allocation',
- ),
+ notifyError(error),
  });
 
  const restartPolicyMutation = useMutation({
@@ -648,17 +657,13 @@ function ServerDetailsPage() {
  maxCrashCount: parsedMax,
  });
  },
- onSuccess: () => notifySuccess('Restart policy updated'),
+ onSuccess: () => notifySuccess(t('details.restartPolicyUpdated')),
  onSettled: () => {
  if (serverId) queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error ||
- error?.message ||
- 'Failed to update restart policy',
- ),
+ notifyError(error),
  });
 
  const resetCrashCountMutation = useMutation({
@@ -669,17 +674,13 @@ function ServerDetailsPage() {
  }
  return serversApi.resetCrashCount(serverId);
  },
- onSuccess: () => notifySuccess('Crash count reset'),
+ onSuccess: () => notifySuccess(t('details.crashCountReset')),
  onSettled: () => {
  if (serverId) queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error ||
- error?.message ||
- 'Failed to reset crash count',
- ),
+ notifyError(error),
  });
 
  const renameServerMutation = useMutation({
@@ -695,17 +696,13 @@ function ServerDetailsPage() {
  }
  return serversApi.update(serverId, { name: nextName });
  },
- onSuccess: () => notifySuccess('Server name updated'),
+ onSuccess: () => notifySuccess(t('details.serverNameUpdated')),
  onSettled: () => {
  if (serverId) queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error ||
- error?.message ||
- 'Failed to rename server',
- ),
+ notifyError(error),
  });
 
  const startupCommandMutation = useMutation({
@@ -720,16 +717,12 @@ function ServerDetailsPage() {
  startupCommand: trimmed === templateDefault ? null : trimmed || null,
  });
  },
- onSuccess: () => notifySuccess('Startup command updated'),
+ onSuccess: () => notifySuccess(t('details.startupCommandUpdated')),
  onSettled: () => {
  if (serverId) queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error ||
- error?.message ||
- 'Failed to update startup command',
- ),
+ notifyError(error),
  });
 
  const createInviteMutation = useMutation({
@@ -749,7 +742,7 @@ function ServerDetailsPage() {
  onSuccess: (result) => {
  setInviteEmail('');
  if (result.mailSent) {
- notifySuccess('Invite sent');
+ notifySuccess(t('details.inviteSent'));
  } else {
  // SMTP not configured (or delivery failed) — surface the link so the
  // user can share it directly.
@@ -763,7 +756,7 @@ function ServerDetailsPage() {
  });
  },
  onError: (error: any) =>
- notifyError(error?.response?.data?.error || 'Failed to send invite'),
+ notifyError(error),
  });
 
  const regenerateInviteMutation = useMutation({
@@ -777,9 +770,9 @@ function ServerDetailsPage() {
  onSuccess: (result) => {
  setInviteLinkModal({ email: result.invite.email, url: result.inviteUrl, inviteId: result.invite.id });
  if (result.mailSent) {
- notifySuccess('Invite link regenerated and re-sent');
+ notifySuccess(t('details.inviteRegeneratedResent'));
  } else {
- notifySuccess('Invite link regenerated — copy the new link below');
+ notifySuccess(t('details.inviteRegeneratedCopyBelow'));
  }
  },
  onSettled: () => {
@@ -789,9 +782,7 @@ function ServerDetailsPage() {
  });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error || 'Failed to regenerate invite',
- ),
+ notifyError(error),
  });
 
  const cancelInviteMutation = useMutation({
@@ -802,7 +793,7 @@ function ServerDetailsPage() {
  }
  return serversApi.cancelInvite(serverId, inviteId);
  },
- onSuccess: () => notifySuccess('Invite cancelled'),
+ onSuccess: () => notifySuccess(t('details.inviteCancelled')),
  onSettled: () => {
  if (serverId)
  queryClient.invalidateQueries({
@@ -810,9 +801,7 @@ function ServerDetailsPage() {
  });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error || 'Failed to cancel invite',
- ),
+ notifyError(error),
  });
 
  const saveAccessMutation = useMutation({
@@ -827,7 +816,7 @@ function ServerDetailsPage() {
  permissions,
  });
  },
- onSuccess: () => notifySuccess('Permissions updated'),
+ onSuccess: () => notifySuccess(t('details.permissionsUpdated')),
  onSettled: () => {
  if (serverId)
  queryClient.invalidateQueries({
@@ -835,9 +824,7 @@ function ServerDetailsPage() {
  });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error || 'Failed to update permissions',
- ),
+ notifyError(error),
  });
 
  const removeAccessMutation = useMutation({
@@ -848,7 +835,7 @@ function ServerDetailsPage() {
  }
  return serversApi.removeAccess(serverId, targetUserId);
  },
- onSuccess: () => notifySuccess('Access removed'),
+ onSuccess: () => notifySuccess(t('details.accessRemoved')),
  onSettled: () => {
  if (serverId)
  queryClient.invalidateQueries({
@@ -856,9 +843,7 @@ function ServerDetailsPage() {
  });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error || 'Failed to remove access',
- ),
+ notifyError(error),
  });
 
  const handleResetStartupCommand = () => {
@@ -867,17 +852,17 @@ function ServerDetailsPage() {
  serversApi
  .update(serverId, { startupCommand: null })
  .then(() => {
- notifySuccess('Reset to template default');
+ notifySuccess(t('details.resetToTemplateDefault'));
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  })
- .catch(() => notifyError('Failed to reset startup command'));
+ .catch((error) => notifyError(error));
  };
 
  // ── Tab visibility filter (BEFORE early returns so hook count is always the same) ──
  const modManagerConfig = server?.template?.features?.modManager;
  const pluginManagerConfig = server?.template?.features?.pluginManager;
  const visibleTabs = useMemo(() => {
- return Object.entries(tabLabels).filter(([key]) => {
+ return TAB_KEYS.filter((key) => {
  if (key === 'admin')
  return canAdminWrite || hasServerPerm('server.delete');
  if (key === 'console') return hasServerPerm('console.read');
@@ -918,7 +903,7 @@ function ServerDetailsPage() {
  if (key === 'pluginManager') return Boolean(pluginManagerConfig);
  if (key === 'activity') return hasServerPerm('server.read');
  return true;
- });
+ }).map((key) => [key, tabLabels[key]] as const);
  }, [
  canAdminWrite,
  hasServerPerm,
@@ -927,6 +912,7 @@ function ServerDetailsPage() {
  pluginManagerConfig,
  databaseAllocation,
  databaseHosts.length,
+ tabLabels,
  ]);
 
  const filteredServerPluginTabs = useMemo(() => {
@@ -945,7 +931,7 @@ function ServerDetailsPage() {
     const built: ServerNavTab[] = visibleTabs.map(([key, label]) => ({
       key,
       label,
-      icon: tabIcons[key as keyof typeof tabLabels],
+      icon: tabIcons[key],
       active: !isPluginTab && activeTab === key,
       onSelect: () => {
         if (id) navigate(`/servers/${id}/${key}`);
@@ -1006,7 +992,7 @@ function ServerDetailsPage() {
     return (
       <div className="flex items-center justify-center p-8">
         <TabErrorState
-          message="Unable to load server details."
+          message={t('errors.unableToLoadServerDetails')}
           onRetry={() => {
             void refetch();
           }}
@@ -1039,7 +1025,7 @@ function ServerDetailsPage() {
           isLoading ? (
             <div className="h-5 w-40 animate-pulse rounded-md bg-muted" />
           ) : (
-            server?.name ?? 'Server'
+            server?.name ?? t('details.untitledServer')
           )
         }
         titleAddon={
@@ -1063,8 +1049,8 @@ function ServerDetailsPage() {
               className="type-meta mt-0.5 inline-flex items-center gap-1 font-mono hover:text-foreground"
               onClick={() => {
                 void navigator.clipboard.writeText(`${nodeIp}:${nodePort}`).then(
-                  () => notifySuccess('Copied address'),
-                  () => notifyError('Failed to copy'),
+                  () => notifySuccess(t('details.copiedAddress')),
+                  () => notifyError(t('details.copyFailed')),
                 );
               }}
             >
@@ -1094,7 +1080,7 @@ function ServerDetailsPage() {
             {isSuspended && (
               <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-danger/30 bg-danger-muted px-2.5 py-1 text-xs text-danger">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                <span className="font-semibold">Suspended</span>
+                <span className="font-semibold">{t('common:status.suspended')}</span>
                 {server?.suspensionReason && (
                   <span className="text-danger/80">— {server.suspensionReason}</span>
                 )}
@@ -1103,8 +1089,8 @@ function ServerDetailsPage() {
             {server?.status === 'cloning' && (
               <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-info/30 bg-info-muted px-2.5 py-1 text-xs text-info">
                 <Copy className="h-3.5 w-3.5 shrink-0 animate-pulse" />
-                <span className="font-semibold">Cloning</span>
-                <span className="text-info/80">Cannot start until copy completes.</span>
+                <span className="font-semibold">{t('common:status.cloning')}</span>
+                <span className="text-info/80">{t('details.cloningNotice')}</span>
               </div>
             )}
           </>
@@ -1128,9 +1114,9 @@ function ServerDetailsPage() {
         resetKey={tab ?? activeTab}
         fallback={
           <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-xl border border-border/40 bg-card px-4 py-10 text-center">
-            <p className="text-sm font-medium text-foreground">This tab hit an error</p>
+            <p className="text-sm font-medium text-foreground">{t('details.tabErrorTitle')}</p>
             <p className="type-meta max-w-md">
-              Switch tabs or retry. The rest of the server page stays usable.
+              {t('details.tabErrorDescription')}
             </p>
           </div>
         }
@@ -1391,9 +1377,9 @@ function ServerDetailsPage() {
  if (!ptab) {
  return (
  <div className="rounded-lg border border-border bg-card p-12 text-center">
- <h2 className="mb-2 text-xl font-semibold text-foreground">Plugin Tab Not Found</h2>
+ <h2 className="mb-2 text-xl font-semibold text-foreground">{t('details.pluginTabNotFoundTitle')}</h2>
  <p className="text-muted-foreground">
- The requested plugin tab could not be found or is not enabled.
+ {t('details.pluginTabNotFoundDescription')}
  </p>
  </div>
  );

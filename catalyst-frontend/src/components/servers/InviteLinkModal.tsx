@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Check, Copy, MailWarning, RefreshCw } from 'lucide-react';
@@ -35,6 +36,7 @@ export default function InviteLinkModal({
   onRegenerate,
   regeneratePending,
 }: InviteLinkModalProps) {
+  const { t } = useTranslation('servers');
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -54,16 +56,21 @@ export default function InviteLinkModal({
           icon={<MailWarning className="h-4 w-4" />}
           iconClassName="border-warning/30 bg-warning/10 text-warning"
         >
-          <DialogTitle>{regenerated ? 'New invite link' : 'Invite link'}</DialogTitle>
+          <DialogTitle>{regenerated ? t('inviteLink.regeneratedTitle') : t('inviteLink.title')}</DialogTitle>
           <DialogDescription>
             {regenerated
-              ? 'The old link is no longer valid. Share the new one.'
-              : 'Email delivery is not available (SMTP not configured). Share this link with the user directly.'}
+              ? t('inviteLink.regeneratedDescription')
+              : t('inviteLink.description')}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
           <div className="mb-3 text-xs text-muted-foreground">
-            Invite for <span className="font-semibold text-foreground">{email}</span>
+            <Trans
+              ns="servers"
+              i18nKey="inviteLink.inviteFor"
+              values={{ email }}
+              components={{ strong: <span className="font-semibold text-foreground" /> }}
+            />
           </div>
           <div className="flex items-center gap-2">
             <Input
@@ -76,22 +83,21 @@ export default function InviteLinkModal({
               variant="outline"
               className="shrink-0 gap-1.5"
               onClick={copy}
-              title="Copy invite link"
+              title={t('inviteLink.copyLink')}
             >
               {copied ? (
                 <>
-                  <Check className="h-3.5 w-3.5 text-success" /> Copied
+                  <Check className="h-3.5 w-3.5 text-success" /> {t('common:actions.copied')}
                 </>
               ) : (
                 <>
-                  <Copy className="h-3.5 w-3.5" /> Copy
+                  <Copy className="h-3.5 w-3.5" /> {t('common:actions.copy')}
                 </>
               )}
             </Button>
           </div>
           <p className="mt-3 text-[11px] text-muted-foreground">
-            Anyone with this link can accept the invite and join the server with the
-            assigned permissions. Keep it private.
+            {t('inviteLink.warning')}
           </p>
         </DialogBody>
         <DialogFooter>
@@ -102,9 +108,9 @@ export default function InviteLinkModal({
             disabled={regeneratePending}
           >
             <RefreshCw className={`h-3.5 w-3.5 ${regeneratePending ? 'animate-spin' : ''}`} />
-            Lost the link? Regenerate
+            {t('inviteLink.regenerate')}
           </Button>
-          <Button onClick={onClose}>Done</Button>
+          <Button onClick={onClose}>{t('inviteLink.done')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Copy } from 'lucide-react';
@@ -10,6 +11,7 @@ import { adminApi } from '../../services/api/admin';
 import { useAccessibleNodes } from '../../hooks/useNodes';
 import { useAuthStore } from '../../stores/authStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { Button } from '@/components/ui/button';
 import Combobox from '@/components/ui/combobox';
 import {
@@ -31,6 +33,7 @@ type Props = {
 };
 
 function CloneServerDialog({ server, disabled = false }: Props) {
+  const { t } = useTranslation('servers');
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const [open, setOpen] = useState(false);
@@ -130,9 +133,8 @@ function CloneServerDialog({ server, disabled = false }: Props) {
       })
       .catch((error: any) => {
         if (!active) return;
-        const message = error?.response?.data?.error || 'Unable to load allocations';
         setAvailableAllocations([]);
-        setAllocLoadError(message);
+        setAllocLoadError(getLocalizedErrorMessage(error));
       });
     return () => {
       active = false;
@@ -177,7 +179,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
       return serversApi.clone(server.id, payload);
     },
     onSuccess: (newServer) => {
-      notifySuccess(copyFiles ? 'Server clone started — copying files...' : 'Server cloned successfully');
+      notifySuccess(copyFiles ? t('cloneServer.startedCopyingFiles') : t('cloneServer.cloned'));
       setOpen(false);
       // Navigate to the new server's page
       if (newServer?.id) {
@@ -192,9 +194,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
       }
     },
     onError: (error: any) => {
-      notifyError(
-        error?.response?.data?.error || 'Failed to clone server',
-      );
+      notifyError(error);
     },
   });
 
@@ -211,14 +211,14 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           disabled={disabled || !canClone}
           onClick={() => setOpen(true)}
         >
-          Clone
+          {t('cloneServer.clone')}
         </Button>
       </DialogTrigger>
       <DialogContent size="md">
         <DialogHeader>
-          <DialogTitle>Clone server</DialogTitle>
+          <DialogTitle>{t('cloneServer.title')}</DialogTitle>
           <DialogDescription>
-            Create a new server with the same configuration as {server.name}.
+            {t('cloneServer.description', { name: server.name })}
           </DialogDescription>
         </DialogHeader>
 
@@ -227,8 +227,8 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <span className="text-muted-foreground">
             {copyFiles
-              ? 'Files will be copied from the source server. The new server will be unavailable until the copy completes.'
-              : 'This will create a new server with the same configuration. A fresh install will run on the new server.'}
+              ? t('cloneServer.warningCopyFiles')
+              : t('cloneServer.warningFreshInstall')}
           </span>
         </div>
 
@@ -236,21 +236,21 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           {/* Name */}
           <div className="grid gap-2">
             <label htmlFor="clone-name" className="text-xs font-medium text-foreground">
-              Name
+              {t('fields.name')}
             </label>
             <input
               id="clone-name"
               className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Server name"
+              placeholder={t('cloneServer.namePlaceholder')}
             />
           </div>
 
           {/* Node */}
           <div className="grid gap-2">
             <label htmlFor="clone-node" className="text-xs font-medium text-foreground">
-              Node
+              {t('fields.node')}
             </label>
             <select
               id="clone-node"
@@ -269,7 +269,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           {/* Network Mode */}
           <div className="grid gap-2">
             <label htmlFor="clone-network" className="text-xs font-medium text-foreground">
-              Network Mode
+              {t('fields.networkMode')}
             </label>
             <select
               id="clone-network"
@@ -277,11 +277,11 @@ function CloneServerDialog({ server, disabled = false }: Props) {
               value={networkMode}
               onChange={(e) => setNetworkMode(e.target.value)}
             >
-              <option value="host">Host (port mapping)</option>
-              <option value="bridge">Bridge</option>
-              <option value="macvlan">Macvlan</option>
-              <option value="mc-lan-static">MC LAN Static</option>
-              <option value="mc-lan-dynamic">MC LAN Dynamic</option>
+              <option value="host">{t('networkModes.host')}</option>
+              <option value="bridge">{t('networkModes.bridge')}</option>
+              <option value="macvlan">{t('networkModes.macvlan')}</option>
+              <option value="mc-lan-static">{t('networkModes.mcLanStatic')}</option>
+              <option value="mc-lan-dynamic">{t('networkModes.mcLanDynamic')}</option>
             </select>
           </div>
 
@@ -289,14 +289,14 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           {isHostNetwork && (
             <div className="grid gap-2">
               <label className="text-xs font-medium text-foreground">
-                Network Allocation <span className="text-danger">*</span>
+                {t('cloneServer.networkAllocation')} <span className="text-danger">*</span>
               </label>
               <select
                 className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
                 value={allocationId}
                 onChange={(e) => setAllocationId(e.target.value)}
               >
-                <option value="">Select allocation</option>
+                <option value="">{t('fields.selectAllocation')}</option>
                 {availableAllocations.map((allocation) => (
                   <option key={allocation.id} value={allocation.id}>
                     {allocation.ip}:{allocation.port}
@@ -309,14 +309,14 @@ function CloneServerDialog({ server, disabled = false }: Props) {
               ) : null}
               {!allocLoadError && availableAllocations.length === 0 && nodeId ? (
                 <p className="text-xs text-muted-foreground">
-                  No available allocations.{' '}
+                  {t('fields.noAllocations')}{' '}
                   <a
                     href={`/admin/nodes/${encodeURIComponent(nodeId)}/allocations`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-primary hover:underline"
                   >
-                    Create one →
+                    {t('fields.createOne')}
                   </a>
                 </p>
               ) : null}
@@ -327,17 +327,17 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           {isAdmin && (
             <div className="grid gap-2">
               <label className="text-xs font-medium text-foreground">
-                Server Owner <span className="text-danger">*</span>
+                {t('cloneServer.serverOwner')} <span className="text-danger">*</span>
               </label>
               <Combobox
                 value={ownerId}
                 onChange={(val: string) => setOwnerId(val)}
                 options={userOptions}
-                placeholder="Select owner..."
-                searchPlaceholder="Search by username, email, or ID..."
+                placeholder={t('cloneServer.ownerPlaceholder')}
+                searchPlaceholder={t('cloneServer.ownerSearchPlaceholder')}
               />
               <p className="text-[11px] text-muted-foreground">
-                The user who will own this server. If not set, you will be the owner.
+                {t('cloneServer.ownerHint')}
               </p>
             </div>
           )}
@@ -348,9 +348,9 @@ function CloneServerDialog({ server, disabled = false }: Props) {
               <div className="flex items-center gap-2.5">
                 <Copy className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="text-xs font-medium text-foreground">Copy Files</p>
+                  <p className="text-xs font-medium text-foreground">{t('cloneServer.copyFiles')}</p>
                   <p className="text-[11px] text-muted-foreground">
-                    Copy all files from the source server instead of running a fresh install
+                    {t('cloneServer.copyFilesHint')}
                   </p>
                 </div>
               </div>
@@ -372,7 +372,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
             </div>
             {copyFiles && (
               <p className="text-[11px] text-warning">
-                The cloned server will be in "cloning" status while files are being transferred. It cannot be started until the copy completes.
+                {t('cloneServer.copyFilesStatusWarning')}
               </p>
             )}
           </div>
@@ -381,7 +381,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           <div className="grid grid-cols-3 gap-3">
             <div className="grid gap-2">
               <label htmlFor="clone-memory" className="text-xs font-medium text-foreground">
-                Memory (MB)
+                {t('fields.memoryMb')}
               </label>
               <input
                 id="clone-memory"
@@ -394,7 +394,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
             </div>
             <div className="grid gap-2">
               <label htmlFor="clone-cpu" className="text-xs font-medium text-foreground">
-                CPU Cores
+                {t('fields.cpuCores')}
               </label>
               <input
                 id="clone-cpu"
@@ -407,7 +407,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
             </div>
             <div className="grid gap-2">
               <label htmlFor="clone-disk" className="text-xs font-medium text-foreground">
-                Disk (MB)
+                {t('fields.diskMb')}
               </label>
               <input
                 id="clone-disk"
@@ -428,14 +428,14 @@ function CloneServerDialog({ server, disabled = false }: Props) {
             onClick={() => setOpen(false)}
             disabled={cloneMutation.isPending}
           >
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             size="sm"
             onClick={() => cloneMutation.mutate()}
             disabled={cloneMutation.isPending || !name.trim() || !allocationValid}
           >
-            {cloneMutation.isPending ? 'Cloning...' : 'Clone Server'}
+            {cloneMutation.isPending ? t('cloneServer.cloning') : t('cloneServer.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>

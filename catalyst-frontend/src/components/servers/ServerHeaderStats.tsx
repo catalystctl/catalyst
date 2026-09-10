@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Activity, Cpu, HardDrive, MemoryStick } from 'lucide-react';
 import { formatBytes } from '../../utils/formatters';
 import { cn } from '@/lib/utils';
@@ -56,6 +57,7 @@ export default function ServerHeaderStats({
   allocatedMemoryMb?: number | null;
   allocatedDiskMb?: number | null;
 }) {
+  const { t } = useTranslation('servers');
   const prevNetRef = useRef<{ rx: number; tx: number; t: number } | null>(null);
   const [netRate, setNetRate] = useState({ rx: 0, tx: 0 });
 
@@ -97,12 +99,12 @@ export default function ServerHeaderStats({
 
   return (
     <div className="hidden items-end gap-4 lg:flex">
-      <HeaderStat icon={Cpu} label="CPU" value={`${metrics.cpuPercent.toFixed(0)}%`} percent={metrics.cpuPercent} />
-      <HeaderStat icon={MemoryStick} label="Memory" value={memoryValue} percent={metrics.memoryPercent} />
-      <HeaderStat icon={HardDrive} label="Disk" value={diskValue} percent={diskPercent} />
+      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${metrics.cpuPercent.toFixed(0)}%`} percent={metrics.cpuPercent} />
+      <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={metrics.memoryPercent} />
+      <HeaderStat icon={HardDrive} label={t('metrics.labels.disk')} value={diskValue} percent={diskPercent} />
       <HeaderStat
         icon={Activity}
-        label="Network"
+        label={t('metrics.labels.network')}
         value={`↓ ${formatBytes(netRate.rx)}/s  ↑ ${formatBytes(netRate.tx)}/s`}
       />
     </div>

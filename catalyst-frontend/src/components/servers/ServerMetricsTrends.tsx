@@ -5,6 +5,7 @@ import {
  Tooltip,
  YAxis,
 } from 'recharts';
+import { useTranslation } from 'react-i18next';
 import type { ServerMetricsPoint } from '../../types/server';
 import { formatBytes } from '../../utils/formatters';
 
@@ -29,13 +30,15 @@ function ServerMetricsTrends({
  history,
  latest,
  allocatedMemoryMb = 0,
- timeRangeLabel = 'Last 60 min',
+ timeRangeLabel,
 }: {
  history: ServerMetricsPoint[];
  latest: ServerMetricsPoint | null;
  allocatedMemoryMb?: number;
  timeRangeLabel?: string;
 }) {
+ const { t } = useTranslation('servers');
+ const resolvedTimeRangeLabel = timeRangeLabel ?? t('metrics.last60Min');
  const cpuHistory = history.map((point) => point.cpuPercent);
  const memoryHistory = history.map((point) => point.memoryUsageMb);
  const diskHistory = history.map((point) => point.diskUsageMb);
@@ -47,14 +50,14 @@ function ServerMetricsTrends({
 
  const cards: TrendCard[] = [
  {
- label: 'CPU',
+ label: t('metrics.labels.cpu'),
  value: `${(latest?.cpuPercent ?? 0).toFixed(1)}%`,
  color: 'text-primary',
  stroke: 'hsl(var(--primary))',
  data: toChartData(cpuHistory),
  },
  {
- label: 'Memory',
+ label: t('metrics.labels.memory'),
  value: allocatedMemoryMb
  ? `${(latest?.memoryUsageMb ?? 0).toFixed(0)} / ${allocatedMemoryMb} MB`
  : 'n/a',
@@ -64,7 +67,7 @@ function ServerMetricsTrends({
  formatTooltip: (value) => `${value.toFixed(0)} MB`,
  },
  {
- label: 'Disk Usage',
+ label: t('metrics.labels.diskUsage'),
  value: formatBytes((latest?.diskUsageMb ?? 0) * 1024 * 1024),
  color: 'text-warning',
  stroke: 'hsl(var(--warning))',
@@ -72,7 +75,7 @@ function ServerMetricsTrends({
  formatTooltip: (value) => formatBytes(value * 1024 * 1024),
  },
  {
- label: 'Disk IO',
+ label: t('metrics.labels.diskIo'),
  value: formatBytes((latest?.diskIoMb ?? 0) * 1024 * 1024),
  color: 'text-warning',
  stroke: 'hsl(var(--warning))',
@@ -80,7 +83,7 @@ function ServerMetricsTrends({
  formatTooltip: (value) => formatBytes(value * 1024 * 1024),
  },
  {
- label: 'Network',
+ label: t('metrics.labels.network'),
  value: `${(throughput[throughput.length - 1] ?? 0).toFixed(2)} MB/s`,
  color: 'text-info',
  stroke: 'hsl(var(--info))',
@@ -104,7 +107,7 @@ function ServerMetricsTrends({
  </div>
  <div className={`text-lg font-semibold ${card.color}`}>{card.value}</div>
  </div>
- <div className="text-[11px] text-muted-foreground">{timeRangeLabel}</div>
+ <div className="text-[11px] text-muted-foreground">{resolvedTimeRangeLabel}</div>
  </div>
  <div className="mt-3">
  <div className="h-24 w-full">

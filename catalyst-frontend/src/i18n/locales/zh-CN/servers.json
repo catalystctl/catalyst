@@ -1,0 +1,344 @@
+{
+  "card": {
+    "console": "",
+    "manage": ""
+  },
+  "cloneServer": {
+    "clone": "",
+    "cloned": "",
+    "cloning": "",
+    "copyFiles": "",
+    "copyFilesHint": "",
+    "copyFilesStatusWarning": "",
+    "description": "",
+    "namePlaceholder": "",
+    "networkAllocation": "",
+    "ownerHint": "",
+    "ownerPlaceholder": "",
+    "ownerSearchPlaceholder": "",
+    "serverOwner": "",
+    "startedCopyingFiles": "",
+    "submit": "",
+    "title": "",
+    "warningCopyFiles": "",
+    "warningFreshInstall": ""
+  },
+  "console": {
+    "autoScroll": "",
+    "clear": "",
+    "connection": {
+      "connecting": "",
+      "disconnected": "",
+      "live": "",
+      "reconnecting": ""
+    },
+    "filterPlaceholder": "",
+    "lines_other": "",
+    "pageDescription": "",
+    "pageTitle": "",
+    "placeholderConnectToSend": "",
+    "placeholderReconnecting": "",
+    "placeholderSuspended": "",
+    "placeholderTypeCommand": "",
+    "placeholderTypeCommandHistory": "",
+    "send": "",
+    "suspendedNotice": "",
+    "tab": {
+      "bufferSize": "",
+      "clearConsole": "",
+      "closeFind": "",
+      "commandInput": "",
+      "copyOutput": "",
+      "downloadOutput": "",
+      "findAriaLabel": "",
+      "findPlaceholder": "",
+      "findTitle": "",
+      "follow": "",
+      "followOff": "",
+      "followOn": ""
+    },
+    "xterm": {
+      "ariaLabel": "",
+      "empty": "",
+      "loadError": "",
+      "loadingLogs": "",
+      "newOutput": ""
+    }
+  },
+  "controls": {
+    "cancelInstall": "",
+    "cancelInstallConfirmMessage": "",
+    "cancelInstallConfirmTitle": "",
+    "cancelling": "",
+    "installCancelled": "",
+    "keepInstalling": "",
+    "kill": "",
+    "killConfirmMessage": "",
+    "killConfirmTitle": "",
+    "restart": "",
+    "restarting": "",
+    "serverKilled": "",
+    "start": "",
+    "starting": "",
+    "stop": "",
+    "stopping": ""
+  },
+  "createServer": {
+    "created": "",
+    "creating": "",
+    "description": "",
+    "fields": {
+      "description": "",
+      "descriptionPlaceholder": "",
+      "imageVariant": "",
+      "name": "",
+      "node": "",
+      "nodePlaceholder": "",
+      "nodeSearchPlaceholder": "",
+      "optional": "",
+      "template": "",
+      "templatePlaceholder": "",
+      "templateSearchPlaceholder": "",
+      "useDefaultImage": ""
+    },
+    "network": {
+      "addBinding": "",
+      "additionalBindings": "",
+      "additionalBindingsHint": "",
+      "allocation": "",
+      "createAllocationsHint": "",
+      "interface": "",
+      "interfaceOption_other": "",
+      "ipAllocation": "",
+      "macvlanTitle": "",
+      "newAllocation": "",
+      "noInterfaces": "",
+      "portPlaceholder": "",
+      "primaryAllocation": "",
+      "primaryAllocationHint": "",
+      "primaryPort": "",
+      "primaryPortFromAllocation": "",
+      "primaryPortHint": "",
+      "selectInterface": ""
+    },
+    "newServer": "",
+    "resources": {
+      "title": ""
+    },
+    "startup": {
+      "environmentVariables": "",
+      "noVariables": ""
+    },
+    "steps": {
+      "details": "",
+      "network": "",
+      "resources": "",
+      "startup": ""
+    },
+    "submit": "",
+    "title": ""
+  },
+  "deleteServer": {
+    "confirm": "",
+    "deleted": "",
+    "title": ""
+  },
+  "details": {
+    "accessRemoved": "",
+    "allocationAdded": "",
+    "allocationRemoved": "",
+    "cloningNotice": "",
+    "copiedAddress": "",
+    "copyFailed": "",
+    "crashCountReset": "",
+    "databaseCreated": "",
+    "databaseDeleted": "",
+    "databasePasswordRotated": "",
+    "inviteCancelled": "",
+    "inviteRegeneratedCopyBelow": "",
+    "inviteRegeneratedResent": "",
+    "inviteSent": "",
+    "permissionsUpdated": "",
+    "pluginTabNotFoundDescription": "",
+    "pluginTabNotFoundTitle": "",
+    "primaryAllocationUpdated": "",
+    "resetToTemplateDefault": "",
+    "restartPolicyUpdated": "",
+    "serverNameUpdated": "",
+    "serverSuspended": "",
+    "serverUnsuspended": "",
+    "startupCommandUpdated": "",
+    "tabErrorDescription": "",
+    "tabErrorTitle": "",
+    "taskDeleted": "",
+    "taskUpdated": "",
+    "untitledServer": ""
+  },
+  "errors": {
+    "serverSuspended": "",
+    "unableToLoadServerDetails": ""
+  },
+  "eula": {
+    "accept": "",
+    "decline": "",
+    "description": "",
+    "scrollHint": "",
+    "submitting": "",
+    "textUnavailable": "",
+    "title": ""
+  },
+  "fields": {
+    "autoAssign": "",
+    "backupMb": "",
+    "cpuCores": "",
+    "createOne": "",
+    "databaseAllocation": "",
+    "diskMb": "",
+    "leaveBlankDefaults": "",
+    "memoryMb": "",
+    "name": "",
+    "networkMode": "",
+    "noAllocations": "",
+    "node": "",
+    "noIps": "",
+    "selectAllocation": "",
+    "swapMb": ""
+  },
+  "files": {
+    "description": "",
+    "noServerDescription": "",
+    "noServerTitle": "",
+    "title": ""
+  },
+  "filters": {
+    "allStatuses": "",
+    "clear": "",
+    "searchPlaceholder": ""
+  },
+  "inviteLink": {
+    "copyLink": "",
+    "description": "",
+    "done": "",
+    "inviteFor": "",
+    "regenerate": "",
+    "regeneratedDescription": "",
+    "regeneratedTitle": "",
+    "title": "",
+    "warning": ""
+  },
+  "list": {
+    "emptyDescription": "",
+    "emptyTitle": ""
+  },
+  "metrics": {
+    "labels": {
+      "cpu": "",
+      "disk": "",
+      "diskIo": "",
+      "diskUsage": "",
+      "memory": "",
+      "network": "",
+      "ram": ""
+    },
+    "last60Min": "",
+    "live": "",
+    "resourceUsage": ""
+  },
+  "networkModes": {
+    "bridge": "",
+    "host": "",
+    "macvlan": "",
+    "mcLanDynamic": "",
+    "mcLanStatic": ""
+  },
+  "page": {
+    "access": {
+      "all": "",
+      "other": "",
+      "owned": ""
+    },
+    "description": "",
+    "overview": "",
+    "stats": {
+      "issues": "",
+      "total": ""
+    },
+    "title": "",
+    "view": {
+      "cards": "",
+      "list": ""
+    }
+  },
+  "tabBar": {
+    "moreTabs": ""
+  },
+  "tabs": {
+    "activity": "",
+    "admin": "",
+    "alerts": "",
+    "backups": "",
+    "configuration": "",
+    "console": "",
+    "databases": "",
+    "files": "",
+    "metrics": "",
+    "modManager": "",
+    "pluginManager": "",
+    "settings": "",
+    "sftp": "",
+    "tasks": "",
+    "users": ""
+  },
+  "timeRange": {
+    "customLabel": "",
+    "customRange": "",
+    "dataPoints": "",
+    "hours": "",
+    "hoursRangeError": "",
+    "limitRangeError": "",
+    "presets": {
+      "days30": "",
+      "days7": "",
+      "hour1": "",
+      "hours24": "",
+      "hours6": ""
+    }
+  },
+  "transferServer": {
+    "description": "",
+    "modeLocal": "",
+    "modeStream": "",
+    "noNodes": "",
+    "selectNode": "",
+    "started": "",
+    "storage": "",
+    "targetNode": "",
+    "title": "",
+    "transfer": ""
+  },
+  "unknownServer": "",
+  "updateServer": {
+    "backupAllocation": "",
+    "backupAllocationHint": "",
+    "backupRetention": "",
+    "backupRetentionHint": "",
+    "backupRetentionUpdated": "",
+    "cpuCores": "",
+    "currentIp": "",
+    "databaseAllocation": "",
+    "databaseAllocationHint": "",
+    "description": "",
+    "noAllocations": "",
+    "primaryAllocation": "",
+    "primaryAllocationHint": "",
+    "primaryIp": "",
+    "primaryIpHint": "",
+    "resizeInitiated": "",
+    "resizeTimeout": "",
+    "save": "",
+    "shrinkWarning": "",
+    "title": "",
+    "trigger": "",
+    "updated": ""
+  }
+}
