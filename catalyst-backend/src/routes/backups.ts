@@ -19,6 +19,8 @@ import { captureSystemError } from '../services/error-logger';
 import { hasNodeAccess } from '../lib/permissions';
 import { ServerState } from '../shared-types';
 import { createServerBackup } from '../services/create-backup';
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 export async function backupRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -60,12 +62,13 @@ export async function backupRoutes(app: FastifyInstance) {
       select: { id: true, ownerId: true, suspendedAt: true, suspensionReason: true, nodeId: true },
     });
     if (!server) {
-      reply.status(404).send({ error: "Server not found" });
+      apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       return null;
     }
     if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
       reply.status(423).send({
         error: "Server is suspended",
+        code: ErrorCodes.SERVER_SUSPENDED,
         suspendedAt: server.suspendedAt,
         suspensionReason: server.suspensionReason ?? null,
       });
@@ -98,7 +101,7 @@ export async function backupRoutes(app: FastifyInstance) {
       rolePerms.includes("node.update") &&
       (await hasNodeAccess(prisma, userId, server.nodeId));
     if (!access && !hasNodeAccessToServer && !roleAllowed) {
-      reply.status(403).send({ error: "Forbidden" });
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       return null;
     }
     return server;
@@ -122,12 +125,12 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       const gateway = app.wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "Gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "Gateway not available");
       }
 
       const result = await createServerBackup({
@@ -153,11 +156,12 @@ export async function backupRoutes(app: FastifyInstance) {
         if (result.statusCode === 423) {
           return reply.status(423).send({
             error: result.error,
+            code: ErrorCodes.SERVER_SUSPENDED,
             suspendedAt: server.suspendedAt,
             suspensionReason: server.suspensionReason ?? null,
           });
         }
-        return reply.status(result.statusCode).send({ error: result.error });
+        return apiError(reply, result.statusCode, ErrorCodes.BACKUP_CREATE_FAILED, result.error);
       }
 
       reply.send(serialize({
@@ -197,6 +201,7 @@ export async function backupRoutes(app: FastifyInstance) {
         if (server?.suspendedAt) {
           return reply.status(423).send({
             error: "Server is suspended",
+            code: ErrorCodes.SERVER_SUSPENDED,
             suspendedAt: server.suspendedAt,
             suspensionReason: server.suspensionReason ?? null,
           });
@@ -278,7 +283,7 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!backup) {
-        return reply.status(404).send({ error: "Backup not found" });
+        return apiError(reply, 404, ErrorCodes.BACKUP_NOT_FOUND, "Backup not found");
       }
 
       if (process.env.SUSPENSION_ENFORCED !== "false") {
@@ -289,6 +294,7 @@ export async function backupRoutes(app: FastifyInstance) {
         if (server?.suspendedAt) {
           return reply.status(423).send({
             error: "Server is suspended",
+            code: ErrorCodes.SERVER_SUSPENDED,
             suspendedAt: server.suspendedAt,
             suspensionReason: server.suspensionReason ?? null,
           });
@@ -318,12 +324,13 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
+          code: ErrorCodes.SERVER_SUSPENDED,
           suspendedAt: server.suspendedAt,
           suspensionReason: server.suspensionReason ?? null,
         });
@@ -337,7 +344,7 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!backup) {
-        return reply.status(404).send({ error: "Backup not found" });
+        return apiError(reply, 404, ErrorCodes.BACKUP_NOT_FOUND, "Backup not found");
       }
 
       // Atomically transition server to RESTORING to prevent concurrent
@@ -352,18 +359,16 @@ export async function backupRoutes(app: FastifyInstance) {
           select: { status: true },
         });
         if (current?.status === ServerState.RESTORING) {
-          return reply.status(409).send({ error: "A restore is already in progress" });
+          return apiError(reply, 409, ErrorCodes.RESTORE_ALREADY_IN_PROGRESS, "A restore is already in progress");
         }
-        return reply.status(409).send({
-          error: `Server must be stopped before restoring (current: ${current?.status ?? "unknown"})`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, `Server must be stopped before restoring (current: ${current?.status ?? "unknown"})`, { params: { status: current?.status ?? "unknown" } });
       }
 
       // Check if node is online
       if (!server.node.isOnline) {
         // Revert status since we can't proceed
         await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-        return reply.status(503).send({ error: "Node is offline" });
+        return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
       }
 
       const serverDir = buildServerDir(server.uuid);
@@ -371,16 +376,14 @@ export async function backupRoutes(app: FastifyInstance) {
       const gateway = app.wsGateway;
       if (!gateway) {
         await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-        return reply.status(500).send({ error: "Gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "Gateway not available");
       }
        let restorePath = backup.path;
        if (backup.storageMode === "s3" || backup.storageMode === "sftp") {
          const { storageKey, agentPath } = backup.metadata as { storageKey?: string; agentPath?: string };
          if (!storageKey) {
            await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-           return reply
-             .status(500)
-             .send({ error: `Missing ${backup.storageMode?.toUpperCase() || "remote"} storage key` });
+           return apiError(reply, 500, ErrorCodes.BACKUP_STORAGE_KEY_MISSING, `Missing ${backup.storageMode?.toUpperCase() || "remote"} storage key`, { params: { mode: backup.storageMode?.toUpperCase() || "remote" } });
          }
          try {
            const { stream } = await openStorageStream(backup, server);
@@ -389,7 +392,7 @@ export async function backupRoutes(app: FastifyInstance) {
            restorePath = targetPath;
          } catch (dlError: any) {
            await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-           return reply.status(500).send({ error: dlError?.message || "Failed to stream backup to agent" });
+           return apiError(reply, 500, ErrorCodes.BACKUP_DOWNLOAD_FAILED, dlError?.message || "Failed to stream backup to agent");
          }
        }
 
@@ -400,7 +403,7 @@ export async function backupRoutes(app: FastifyInstance) {
         const rawKey = process.env.BACKUP_ENCRYPTION_KEY;
         if (!rawKey) {
           await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-          return reply.status(400).send({ error: "Backup is encrypted but no encryption key is configured" });
+          return apiError(reply, 400, ErrorCodes.BACKUP_ENCRYPTION_KEY_MISSING, "Backup is encrypted but no encryption key is configured");
         }
         encryptionKey = rawKey;
       }
@@ -418,7 +421,7 @@ export async function backupRoutes(app: FastifyInstance) {
 
       if (!success) {
         await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-        return reply.status(503).send({ error: "Failed to send restore request to agent" });
+        return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send restore request to agent");
       }
 
       // Note: restoredAt is updated in the gateway's backup_restore_complete handler,
@@ -462,7 +465,7 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!backup) {
-        return reply.status(404).send({ error: "Backup not found" });
+        return apiError(reply, 404, ErrorCodes.BACKUP_NOT_FOUND, "Backup not found");
       }
 
       const server = await prisma.server.findUnique({
@@ -471,12 +474,13 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
+          code: ErrorCodes.SERVER_SUSPENDED,
           suspendedAt: server.suspendedAt,
           suspensionReason: server.suspensionReason ?? null,
         });
@@ -484,7 +488,7 @@ export async function backupRoutes(app: FastifyInstance) {
 
       const gateway = app.wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "Gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "Gateway not available");
       }
        await deleteBackupFromStorage(gateway, backup, {
          id: server.id,
@@ -537,7 +541,7 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!backup) {
-        return reply.status(404).send({ error: "Backup not found" });
+        return apiError(reply, 404, ErrorCodes.BACKUP_NOT_FOUND, "Backup not found");
       }
 
       const server = await prisma.server.findUnique({
@@ -546,12 +550,13 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
+          code: ErrorCodes.SERVER_SUSPENDED,
           suspendedAt: server.suspendedAt,
           suspensionReason: server.suspensionReason ?? null,
         });
@@ -570,7 +575,7 @@ export async function backupRoutes(app: FastifyInstance) {
           );
           return reply.send(stream);
         } catch (error: any) {
-          return reply.status(500).send({ error: error?.message || "Failed to download backup" });
+          return apiError(reply, 500, ErrorCodes.BACKUP_DOWNLOAD_FAILED, error?.message || "Failed to download backup");
         }
       }
 
@@ -601,12 +606,12 @@ export async function backupRoutes(app: FastifyInstance) {
 
       // Stream from agent (used for local mode and when backend file is missing)
       if (!server || !server.node.isOnline) {
-        return reply.status(404).send({ error: "Backup file not found on disk" });
+        return apiError(reply, 404, ErrorCodes.BACKUP_FILE_NOT_FOUND, "Backup file not found on disk");
       }
 
       const gateway = app.wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "Gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "Gateway not available");
       }
       const stream = new PassThrough();
       let bytesWritten = 0;
@@ -670,7 +675,7 @@ export async function backupRoutes(app: FastifyInstance) {
       } catch (error: any) {
         finalize(error);
         if (bytesWritten === 0 && !reply.raw.headersSent) {
-          return reply.status(500).send({ error: error?.message || "Failed to download backup" });
+          return apiError(reply, 500, ErrorCodes.BACKUP_DOWNLOAD_FAILED, error?.message || "Failed to download backup");
         }
       }
     }

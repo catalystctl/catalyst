@@ -5,6 +5,8 @@ import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, 
 import { isMailConfigured } from '../../services/mailer.js';
 import { publishCacheInvalidate } from '../../lib/event-bus.js';
 import { withRegistrationBypass } from '../../lib/registration-gate.js';
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 export async function serverInvitesRoutes(app: FastifyInstance) {
   app.get(
@@ -19,12 +21,12 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       // Check if user has access - owner, admin.write/*, ServerAccess, or (node + node.update)
       if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       // Get all access entries for this server
@@ -59,11 +61,11 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!(await canAccessServer(userId, server))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       const invites = await prisma.serverAccessInvite.findMany({
@@ -88,7 +90,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       };
 
       if (!email || !permissions || permissions.length === 0) {
-        return reply.status(400).send({ error: "Email and permissions are required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Email and permissions are required");
       }
 
       const server = await prisma.server.findUnique({
@@ -97,13 +99,13 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       // Subuser management is owner-or-manage-path (admin, node manager) —
       // plain subusers cannot invite others.
       if (!(await canManageSubusers(userId, server))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       const normalizedEmail = email.toLowerCase();
@@ -113,7 +115,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
           where: { userId_serverId: { userId: existingUser.id, serverId } },
         });
         if (existingAccess) {
-          return reply.status(409).send({ error: "User already has access" });
+          return apiError(reply, 409, ErrorCodes.SERVER_ACCESS_ALREADY_GRANTED, "User already has access");
         }
       }
 
@@ -121,7 +123,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
       const sanitizedPermissions = permissions.map((entry) => entry.trim()).filter(Boolean);
       if (sanitizedPermissions.length === 0) {
-        return reply.status(400).send({ error: "Permissions cannot be empty" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Permissions cannot be empty");
       }
 
       // Validate inviter has all permissions they're granting — measured
@@ -139,9 +141,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
           (p) => !inviterPerms.includes(p),
         );
         if (cantGrant.length > 0) {
-          return reply.status(403).send({
-            error: `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`,
-          });
+          return apiError(reply, 403, ErrorCodes.SERVER_PERMISSIONS_NOT_GRANTABLE, `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`, { params: { permissions: cantGrant.join(', ') } });
         }
       }
 
@@ -243,20 +243,20 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         select: { id: true, name: true, ownerId: true, nodeId: true },
       });
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
       if (!(await canManageSubusers(userId, server))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       const invite = await prisma.serverAccessInvite.findFirst({
         where: { id: inviteId, serverId },
       });
       if (!invite) {
-        return reply.status(404).send({ error: "Invite not found" });
+        return apiError(reply, 404, ErrorCodes.INVITE_NOT_FOUND, "Invite not found");
       }
       if (invite.acceptedAt || invite.cancelledAt) {
-        return reply.status(409).send({ error: "Only pending invites can be regenerated" });
+        return apiError(reply, 409, ErrorCodes.INVITE_NOT_PENDING, "Only pending invites can be regenerated");
       }
 
       const token = nanoid(32);
@@ -320,11 +320,11 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!(await canManageSubusers(userId, server))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       const invite = await prisma.serverAccessInvite.findFirst({
@@ -332,7 +332,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       if (!invite) {
-        return reply.status(404).send({ error: "Invite not found" });
+        return apiError(reply, 404, ErrorCodes.INVITE_NOT_FOUND, "Invite not found");
       }
 
       await prisma.serverAccessInvite.update({
@@ -382,23 +382,23 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       args.invite ??
       (await prisma.serverAccessInvite.findUnique({ where: { token: args.token } }));
     if (!invite) {
-      args.reply.status(404).send({ error: "Invite not found" });
+      apiError(args.reply, 404, ErrorCodes.INVITE_NOT_FOUND, "Invite not found");
       return null;
     }
 
     if (invite.cancelledAt || invite.acceptedAt) {
-      args.reply.status(409).send({ error: "Invite no longer active" });
+      apiError(args.reply, 409, ErrorCodes.INVITE_NOT_ACTIVE, "Invite no longer active");
       return null;
     }
 
     if (invite.expiresAt <= new Date()) {
-      args.reply.status(410).send({ error: "Invite expired" });
+      apiError(args.reply, 410, ErrorCodes.INVITE_EXPIRED, "Invite expired");
       return null;
     }
 
     const user = await prisma.user.findUnique({ where: { id: args.userId } });
     if (!user || user.email.toLowerCase() !== invite.email.toLowerCase()) {
-      args.reply.status(403).send({ error: "Invite not valid for this account" });
+      apiError(args.reply, 403, ErrorCodes.INVITE_NOT_VALID_FOR_ACCOUNT, "Invite not valid for this account");
       return null;
     }
 
@@ -468,7 +468,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       const { token } = request.body as { token?: string };
 
       if (!token) {
-        return reply.status(400).send({ error: "Missing token" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing token");
       }
 
       const invite = await acceptInviteForUser({ userId, token, reply });
@@ -492,31 +492,31 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       };
 
       if (!token || !username || !password) {
-        return reply.status(400).send({ error: "Missing token, username, or password" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing token, username, or password");
       }
 
       if (password.length < 8) {
-        return reply.status(400).send({ error: "Password must be at least 8 characters" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Password must be at least 8 characters");
       }
 
       const invite = await prisma.serverAccessInvite.findUnique({ where: { token } });
       if (!invite) {
-        return reply.status(404).send({ error: "Invite not found" });
+        return apiError(reply, 404, ErrorCodes.INVITE_NOT_FOUND, "Invite not found");
       }
 
       if (invite.cancelledAt || invite.acceptedAt) {
-        return reply.status(409).send({ error: "Invite no longer active" });
+        return apiError(reply, 409, ErrorCodes.INVITE_NOT_ACTIVE, "Invite no longer active");
       }
 
       if (invite.expiresAt <= new Date()) {
-        return reply.status(410).send({ error: "Invite expired" });
+        return apiError(reply, 410, ErrorCodes.INVITE_EXPIRED, "Invite expired");
       }
 
       const existing = await prisma.user.findFirst({
         where: { OR: [{ email: invite.email }, { username }] },
       });
       if (existing) {
-        return reply.status(409).send({ error: "Email or username already in use" });
+        return apiError(reply, 409, ErrorCodes.CONFLICT, "Email or username already in use");
       }
 
       const signUpResponse = await withRegistrationBypass(() =>
@@ -539,7 +539,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
           ? signUpResponse.response.user
           : (signUpResponse as any)?.user;
       if (!signUpUser) {
-        return reply.status(400).send({ error: "Registration failed" });
+        return apiError(reply, 400, ErrorCodes.REGISTRATION_FAILED, "Registration failed");
       }
 
       const accepted = await acceptInviteForUser({ userId: signUpUser.id, token, reply, invite });
@@ -580,7 +580,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token } = request.params as { token: string };
       if (!token) {
-        return reply.status(400).send({ error: "Missing token" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing token");
       }
 
       const invite = await prisma.serverAccessInvite.findUnique({
@@ -591,15 +591,15 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       if (!invite) {
-        return reply.status(404).send({ error: "Invite not found" });
+        return apiError(reply, 404, ErrorCodes.INVITE_NOT_FOUND, "Invite not found");
       }
 
       if (invite.cancelledAt || invite.acceptedAt) {
-        return reply.status(409).send({ error: "Invite no longer active" });
+        return apiError(reply, 409, ErrorCodes.INVITE_NOT_ACTIVE, "Invite no longer active");
       }
 
       if (invite.expiresAt <= new Date()) {
-        return reply.status(410).send({ error: "Invite expired" });
+        return apiError(reply, 410, ErrorCodes.INVITE_EXPIRED, "Invite expired");
       }
 
       reply.send({
@@ -627,7 +627,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       };
 
       if (!targetUserId || !permissions || permissions.length === 0) {
-        return reply.status(400).send({ error: "targetUserId and permissions are required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "targetUserId and permissions are required");
       }
 
       const server = await prisma.server.findUnique({
@@ -636,25 +636,25 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!(await canManageSubusers(userId, server))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       if (targetUserId === server.ownerId) {
-        return reply.status(409).send({ error: "Owner permissions cannot be edited" });
+        return apiError(reply, 409, ErrorCodes.SERVER_OWNER_ACCESS_PROTECTED, "Owner permissions cannot be edited");
       }
 
       const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
       if (!targetUser) {
-        return reply.status(404).send({ error: "User not found" });
+        return apiError(reply, 404, ErrorCodes.USER_NOT_FOUND, "User not found");
       }
 
       const sanitizedPermissions = permissions.map((entry) => entry.trim()).filter(Boolean);
       if (sanitizedPermissions.length === 0) {
-        return reply.status(400).send({ error: "Permissions cannot be empty" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Permissions cannot be empty");
       }
 
       // Validate requester has all permissions they're granting — same
@@ -670,9 +670,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
           (p) => !requesterPerms.includes(p),
         );
         if (cantGrant.length > 0) {
-          return reply.status(403).send({
-            error: `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`,
-          });
+          return apiError(reply, 403, ErrorCodes.SERVER_PERMISSIONS_NOT_GRANTABLE, `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`, { params: { permissions: cantGrant.join(', ') } });
         }
       }
 
@@ -724,15 +722,15 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!(await canManageSubusers(userId, server))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       if (targetUserId === server.ownerId) {
-        return reply.status(409).send({ error: "Owner access cannot be removed" });
+        return apiError(reply, 409, ErrorCodes.SERVER_OWNER_ACCESS_PROTECTED, "Owner access cannot be removed");
       }
 
       await prisma.serverAccess.delete({

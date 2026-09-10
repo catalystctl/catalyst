@@ -5,6 +5,8 @@ import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.
 import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { emitServerStatusEvent } from "../../plugins/host-events.js";
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 /** Default timeouts for power command acks from the agent. */
 const POWER_ACK_TIMEOUT = {
@@ -112,7 +114,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -130,27 +132,25 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         });
         // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
         if (!access) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
       // Validate state transition
       const currentState = server.status as ServerState;
       if (!ServerStateMachine.canTransition(currentState, ServerState.INSTALLING)) {
-        return reply.status(409).send({
-          error: `Cannot install server in ${server.status} state`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Cannot install server in ${server.status} state`, { params: { status: server.status } });
       }
 
       // Check if node is online
       if (!server.node.isOnline) {
-        return reply.status(503).send({ error: "Node is offline" });
+        return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
       }
 
       // Send install command to agent via WebSocket
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
       // Automatically add SERVER_DIR to environment (uses node's configured server data directory)
@@ -181,7 +181,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         try {
           environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
         } catch (error: any) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
@@ -223,7 +223,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!success) {
-        return reply.status(503).send({ error: "Failed to send command to agent" });
+        return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");
       }
 
       // Update server status
@@ -275,7 +275,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -293,27 +293,25 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         });
         // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
         if (!access) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
       // Validate state transition
       const currentState = server.status as ServerState;
       if (!ServerStateMachine.canTransition(currentState, ServerState.INSTALLING)) {
-        return reply.status(409).send({
-          error: `Cannot reinstall server in ${server.status} state`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Cannot reinstall server in ${server.status} state`, { params: { status: server.status } });
       }
 
       // Check if node is online
       if (!server.node.isOnline) {
-        return reply.status(503).send({ error: "Node is offline" });
+        return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
       }
 
       // Send reinstall command to agent via WebSocket
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
       // Automatically add SERVER_DIR to environment
@@ -344,7 +342,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         try {
           environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
         } catch (error: any) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
@@ -385,7 +383,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!success) {
-        return reply.status(503).send({ error: "Failed to send command to agent" });
+        return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");
       }
 
       // Update server status
@@ -436,7 +434,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -456,19 +454,17 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           },
         });
         if (!access) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
       if (server.status !== ServerState.INSTALLING) {
-        return reply.status(409).send({
-          error: `Server is not installing (current state: ${server.status})`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_NOT_INSTALLING, `Server is not installing (current state: ${server.status})`, { params: { status: server.status } });
       }
 
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
       // Best-effort kill on the agent. The DB reset below still runs when the
@@ -487,9 +483,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       if (!ServerStateMachine.canTransition(server.status as ServerState, ServerState.STOPPED)) {
-        return reply.status(409).send({
-          error: `Cannot cancel install in ${server.status} state`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Cannot cancel install in ${server.status} state`, { params: { status: server.status } });
       }
 
       await prisma.server.update({
@@ -551,7 +545,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!serverId || typeof accepted !== "boolean") {
-        return reply.status(400).send({ error: "serverId (string) and accepted (boolean) are required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "serverId (string) and accepted (boolean) are required");
       }
 
       // Require ownership, ServerAccess with start (install flow), or admin.write/*
@@ -567,12 +561,12 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         include: { node: true },
       });
       if (!serverWithNode) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
       const success = await gateway.sendToAgent(serverWithNode.nodeId, {
@@ -582,7 +576,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!success) {
-        return reply.status(503).send({ error: "Failed to send command to agent" });
+        return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");
       }
 
       // Update server status
@@ -620,7 +614,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -638,7 +632,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         });
         // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
         if (!access) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
@@ -651,20 +645,18 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         ServerState.CRASHED,
       ];
       if (!allowedStates.includes(currentState)) {
-        return reply.status(409).send({
-          error: `Cannot rebuild server in ${server.status} state`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Cannot rebuild server in ${server.status} state`, { params: { status: server.status } });
       }
 
       // Check if node is online
       if (!server.node.isOnline) {
-        return reply.status(503).send({ error: "Node is offline" });
+        return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
       }
 
       // Send rebuild command to agent via WebSocket
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
       // Automatically add SERVER_DIR to environment
@@ -695,7 +687,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         try {
           environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
         } catch (error: any) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
@@ -739,7 +731,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!success) {
-        return reply.status(503).send({ error: "Failed to send command to agent" });
+        return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");
       }
 
       await prisma.serverLog.create({
@@ -771,7 +763,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -789,27 +781,25 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         });
         // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
         if (!access) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
       // Validate state transition
       const currentState = server.status as ServerState;
       if (!ServerStateMachine.canStart(currentState)) {
-        return reply.status(409).send({
-          error: `Cannot start server in ${server.status} state. Server must be stopped or crashed.`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Cannot start server in ${server.status} state. Server must be stopped or crashed.`, { params: { status: server.status } });
       }
 
       // Check if node is online
       if (!server.node.isOnline) {
-        return reply.status(503).send({ error: "Node is offline" });
+        return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
       }
 
       // Send start command to agent via WebSocket
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
       // Automatically add SERVER_DIR to environment
@@ -840,7 +830,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         try {
           environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
         } catch (error: any) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
@@ -899,9 +889,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       );
 
       if (powerResult.mode === "failed") {
-        return reply.status(powerFailureStatus(powerResult)).send({
-          error: powerResult.error.message || "Failed to send command to agent",
-        });
+        return apiError(reply, powerFailureStatus(powerResult), ErrorCodes.AGENT_COMMAND_FAILED,
+          powerResult.error.message || "Failed to send command to agent");
       }
 
       // Update server status optimistically; final state via server_state_update
@@ -971,7 +960,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -989,16 +978,14 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         });
         // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
         if (!access) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
       // Validate state transition
       const currentState = server.status as ServerState;
       if (!ServerStateMachine.canStop(currentState)) {
-        return reply.status(409).send({
-          error: `Cannot stop server in ${server.status} state. Server must be running or starting.`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Cannot stop server in ${server.status} state. Server must be running or starting.`, { params: { status: server.status } });
       }
 
       // If the server is crashed, the process is already dead — just set it to stopped directly
@@ -1023,13 +1010,13 @@ export async function serverPowerRoutes(app: FastifyInstance) {
 
       // Check if node is online
       if (!server.node.isOnline) {
-        return reply.status(503).send({ error: "Node is offline" });
+        return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
       }
 
       // Send stop command to agent via WebSocket
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
       // Update server status BEFORE sending to agent to avoid race condition
@@ -1058,9 +1045,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           where: { id: serverId },
           data: { status: server.status },
         });
-        return reply.status(powerFailureStatus(powerResult)).send({
-          error: powerResult.error.message || "Failed to send command to agent",
-        });
+        return apiError(reply, powerFailureStatus(powerResult), ErrorCodes.AGENT_COMMAND_FAILED,
+          powerResult.error.message || "Failed to send command to agent");
       }
 
       await createAuditLog(userId, {
@@ -1117,7 +1103,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -1134,7 +1120,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         });
         // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
         if (!access) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
@@ -1142,9 +1128,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       const canKill =
         ServerStateMachine.canStop(currentState) || currentState === ServerState.STOPPING;
       if (!canKill) {
-        return reply.status(409).send({
-          error: `Cannot kill server in ${server.status} state. Server must be running, starting, or stopping.`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Cannot kill server in ${server.status} state. Server must be running, starting, or stopping.`, { params: { status: server.status } });
       }
 
       // If the server is crashed, the process is already dead — just set it to stopped directly
@@ -1169,12 +1153,12 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       if (!server.node.isOnline) {
-        return reply.status(503).send({ error: "Node is offline" });
+        return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
       }
 
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
       await prisma.server.update({
@@ -1200,9 +1184,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           where: { id: serverId },
           data: { status: server.status },
         });
-        return reply.status(powerFailureStatus(powerResult)).send({
-          error: powerResult.error.message || "Failed to send command to agent",
-        });
+        return apiError(reply, powerFailureStatus(powerResult), ErrorCodes.AGENT_COMMAND_FAILED,
+          powerResult.error.message || "Failed to send command to agent");
       }
 
       await createAuditLog(userId, {
@@ -1258,7 +1241,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -1277,26 +1260,24 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         ]);
         // Require both start and stop; node assignment alone is not enough
         if (!startAccess || !stopAccess) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
       // Validate state
       const currentState = server.status as ServerState;
       if (!ServerStateMachine.canRestart(currentState)) {
-        return reply.status(409).send({
-          error: `Cannot restart server in ${server.status} state`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Cannot restart server in ${server.status} state`, { params: { status: server.status } });
       }
 
       // Check if node is online
       if (!server.node.isOnline) {
-        return reply.status(503).send({ error: "Node is offline" });
+        return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
       }
 
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
 
@@ -1329,7 +1310,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         try {
           environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
         } catch (error: any) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
       }
       // Sync port environment variables with primaryPort
@@ -1373,9 +1354,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       );
 
       if (powerResult.mode === "failed") {
-        return reply.status(powerFailureStatus(powerResult)).send({
-          error: powerResult.error.message || "Failed to send command to agent",
-        });
+        return apiError(reply, powerFailureStatus(powerResult), ErrorCodes.AGENT_COMMAND_FAILED,
+          powerResult.error.message || "Failed to send command to agent");
       }
 
       // Optimistic transitional state; final via server_state_update
@@ -1444,11 +1424,11 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (server.suspendedAt) {
-        return reply.status(409).send({ error: "Server is already suspended" });
+        return apiError(reply, 409, ErrorCodes.SERVER_ALREADY_SUSPENDED, "Server is already suspended");
       }
 
       // Reject suspend from transitional states — the in-flight operation
@@ -1463,9 +1443,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         ServerState.CLONING,
       ]);
       if (TRANSITIONAL_STATUSES.has(server.status)) {
-        return reply.status(409).send({
-          error: `Cannot suspend a server while it is ${server.status}`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Cannot suspend a server while it is ${server.status}`, { params: { status: server.status } });
       }
 
       // Determine whether to stop the server.
@@ -1486,10 +1464,10 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       if (shouldStop && (server.status === "running" || server.status === "starting")) {
         const gateway = (app as any).wsGateway;
         if (!gateway) {
-          return reply.status(500).send({ error: "WebSocket gateway not available" });
+          return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
         }
         if (!server.node?.isOnline) {
-          return reply.status(503).send({ error: "Node is offline" });
+          return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
         }
         const stopQueued = await gateway.sendToAgent(server.nodeId, {
           type: "stop_server",
@@ -1593,11 +1571,11 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!server.suspendedAt) {
-        return reply.status(409).send({ error: "Server is not suspended" });
+        return apiError(reply, 409, ErrorCodes.SERVER_NOT_SUSPENDED, "Server is not suspended");
       }
 
       const updated = await prisma.server.update({

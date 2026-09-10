@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { ModManagerTarget, buildProviderHeaders, ensureModManagerEnabled, ensurePluginManagerEnabled, ensureServerAccess, extractGameVersion, fileRateLimitMax, fileRateLimitWindowMs, getModManagerSettings, getProviderTargets, loadPluginProviderConfig, loadProviderConfig, normalizeTargetValue, path, resolveCurseforgeClassId, validateAndNormalizePath, resolveCurseforgeGameId, resolveCurseforgeLoaderType, resolveModManagerProvider, resolveModrinthGameVersion, resolvePaperDownload, resolveSpigotDownload, resolveTemplatePath, sanitizeFilename } from './_helpers.js';
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 // ── Plugin-manager search sort presets ──────────────────────────────────
 // Cross-provider sort options, mapped to each provider's native query params.
@@ -56,7 +58,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!provider) {
-        return reply.status(400).send({ error: "provider is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider is required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "server.read", reply);
@@ -65,7 +67,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       if (!modManager) return;
       const providerEntry = resolveModManagerProvider(modManager, provider, game);
       if (!providerEntry) {
-        return reply.status(400).send({ error: "Provider or game not enabled for this template" });
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_NOT_ENABLED, "Provider or game not enabled for this template");
       }
       const providerId = providerEntry.id;
 
@@ -76,14 +78,14 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
       const providerConfig = await loadProviderConfig(providerId);
       if (!providerConfig) {
-        return reply.status(404).send({ error: "Provider not found" });
+        return apiError(reply, 404, ErrorCodes.MOD_PROVIDER_NOT_FOUND, "Provider not found");
       }
       let headers: Record<string, string>;
       try {
         const settings = await getModManagerSettings();
         headers = buildProviderHeaders(providerConfig, settings);
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
@@ -126,7 +128,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!provider) {
-        return reply.status(400).send({ error: "provider is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider is required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "server.read", reply);
@@ -135,13 +137,13 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       if (!modManager) return;
       const providerEntry = resolveModManagerProvider(modManager, provider, game);
       if (!providerEntry) {
-        return reply.status(400).send({ error: "Provider or game not enabled for this template" });
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_NOT_ENABLED, "Provider or game not enabled for this template");
       }
       const allowedTargets = getProviderTargets(modManager, providerEntry);
       const rawTarget = (request.query as { target?: string }).target;
       const requestedTarget = normalizeTargetValue(rawTarget);
       if (rawTarget && !requestedTarget) {
-        return reply.status(400).send({ error: "Invalid target" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid target");
       }
       const targetValue = requestedTarget ?? allowedTargets[0] ?? "mods";
       if (!allowedTargets.includes(targetValue)) {
@@ -149,6 +151,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           error: `Target '${targetValue}' is not enabled for ${providerEntry.id}${
             providerEntry.game ? ` (${providerEntry.game})` : ""
           }`,
+          code: ErrorCodes.MOD_TARGET_NOT_ENABLED,
           allowedTargets,
         });
       }
@@ -156,14 +159,14 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
       const providerConfig = await loadProviderConfig(providerId);
       if (!providerConfig) {
-        return reply.status(404).send({ error: "Provider not found" });
+        return apiError(reply, 404, ErrorCodes.MOD_PROVIDER_NOT_FOUND, "Provider not found");
       }
       let headers: Record<string, string>;
       try {
         const settings = await getModManagerSettings();
         headers = buildProviderHeaders(providerConfig, settings);
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       const pageValue = typeof page === "string" ? Number(page) : page ?? 1;
@@ -216,12 +219,10 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
             headers
           );
         } catch (error: any) {
-          return reply.status(409).send({ error: error?.message || "Failed to resolve game metadata" });
+          return apiError(reply, 409, ErrorCodes.MOD_METADATA_RESOLVE_FAILED, error?.message || "Failed to resolve game metadata");
         }
         if (!classId && targetValue !== "mods") {
-          return reply.status(409).send({
-            error: `No CurseForge class configured for target '${targetValue}' in game '${providerEntry.game || gameId}'`,
-          });
+          return apiError(reply, 409, ErrorCodes.MOD_GAME_METADATA_UNRESOLVED, `No CurseForge class configured for target '${targetValue}' in game '${providerEntry.game || gameId}'`, { params: { target: targetValue, game: providerEntry.game || gameId } });
         }
 
         const modLoaderType = loaderValue
@@ -243,9 +244,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const response = await fetch(url, { headers });
       if (!response.ok) {
         const body = await response.text();
-        return reply
-          .status(response.status)
-          .send({ error: `Provider error: ${body}` });
+        return apiError(reply, response.status, ErrorCodes.MOD_PROVIDER_ERROR, `Provider error: ${body}`, { params: { reason: body } });
       }
       const payload = await response.json() as any;
       if (providerId === "paper" && payload && Array.isArray(payload?.result)) {
@@ -271,7 +270,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!provider || !projectId) {
-        return reply.status(400).send({ error: "provider and projectId are required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider and projectId are required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "server.read", reply);
@@ -280,20 +279,20 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       if (!modManager) return;
       const providerEntry = resolveModManagerProvider(modManager, provider, game);
       if (!providerEntry) {
-        return reply.status(400).send({ error: "Provider or game not enabled for this template" });
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_NOT_ENABLED, "Provider or game not enabled for this template");
       }
       const providerId = providerEntry.id;
 
       const providerConfig = await loadProviderConfig(providerId);
       if (!providerConfig) {
-        return reply.status(404).send({ error: "Provider not found" });
+        return apiError(reply, 404, ErrorCodes.MOD_PROVIDER_NOT_FOUND, "Provider not found");
       }
       let headers: Record<string, string>;
       try {
         const settings = await getModManagerSettings();
         headers = buildProviderHeaders(providerConfig, settings);
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
@@ -307,9 +306,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const response = await fetch(url, { headers });
       if (!response.ok) {
         const body = await response.text();
-        return reply
-          .status(response.status)
-          .send({ error: `Provider error: ${body}` });
+        return apiError(reply, response.status, ErrorCodes.MOD_PROVIDER_ERROR, `Provider error: ${body}`, { params: { reason: body } });
       }
       const payload = await response.json() as any;
       if (providerId === "paper" && payload && Array.isArray(payload?.result)) {
@@ -338,7 +335,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!provider || !projectId || !versionId || !target) {
-        return reply.status(400).send({ error: "provider, projectId, versionId, and target are required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider, projectId, versionId, and target are required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "file.write", reply);
@@ -347,7 +344,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       if (!modManager) return;
       const providerEntry = resolveModManagerProvider(modManager, provider, game);
       if (!providerEntry) {
-        return reply.status(400).send({ error: "Provider or game not enabled for this template" });
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_NOT_ENABLED, "Provider or game not enabled for this template");
       }
       const allowedTargets = getProviderTargets(modManager, providerEntry);
       if (!allowedTargets.includes(target)) {
@@ -355,6 +352,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           error: `Target '${target}' is not enabled for ${providerEntry.id}${
             providerEntry.game ? ` (${providerEntry.game})` : ""
           }`,
+          code: ErrorCodes.MOD_TARGET_NOT_ENABLED,
           allowedTargets,
         });
       }
@@ -362,14 +360,14 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
       const providerConfig = await loadProviderConfig(providerId);
       if (!providerConfig) {
-        return reply.status(404).send({ error: "Provider not found" });
+        return apiError(reply, 404, ErrorCodes.MOD_PROVIDER_NOT_FOUND, "Provider not found");
       }
       let headers: Record<string, string>;
       try {
         const settings = await getModManagerSettings();
         headers = buildProviderHeaders(providerConfig, settings);
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
@@ -385,9 +383,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const metadataResponse = await fetch(metadataUrl, { headers });
       if (!metadataResponse.ok) {
         const body = await metadataResponse.text();
-        return reply
-          .status(metadataResponse.status)
-          .send({ error: `Provider error: ${body}` });
+        return apiError(reply, metadataResponse.status, ErrorCodes.MOD_PROVIDER_ERROR, `Provider error: ${body}`, { params: { reason: body } });
       }
       const metadata = await metadataResponse.json() as any;
 
@@ -404,7 +400,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       }
 
       if (!downloadUrl || !filename) {
-        return reply.status(409).send({ error: "Unable to resolve download asset" });
+        return apiError(reply, 409, ErrorCodes.MOD_DOWNLOAD_ASSET_UNRESOLVED, "Unable to resolve download asset");
       }
 
       const normalizedBase = resolveTemplatePath(modManager.paths?.[target], target);
@@ -413,7 +409,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       try {
         const result = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to install asset" });
+          return apiError(reply, 400, ErrorCodes.MOD_INSTALL_FAILED, result.error || "Failed to install asset");
         }
         await createAuditLog(userId, {
           action: "mod_manager.install",
@@ -475,7 +471,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           });
         }
       } catch (error: any) {
-        reply.status(400).send({ error: error?.message || "Failed to install asset" });
+        apiError(reply, 400, ErrorCodes.MOD_INSTALL_FAILED, error?.message || "Failed to install asset");
       }
     }
   );
@@ -493,7 +489,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!provider) {
-        return reply.status(400).send({ error: "provider is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider is required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "server.read", reply);
@@ -506,7 +502,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       // the game-version filter also works for Paper/Spigot browse flows.
       const providerConfig = await loadPluginProviderConfig("modrinth");
       if (!providerConfig) {
-        return reply.status(404).send({ error: "Provider not found" });
+        return apiError(reply, 404, ErrorCodes.MOD_PROVIDER_NOT_FOUND, "Provider not found");
       }
       let headers: Record<string, string>;
       try {
@@ -556,7 +552,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!provider) {
-        return reply.status(400).send({ error: "provider is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider is required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "server.read", reply);
@@ -567,19 +563,19 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         entry === "spiget" ? "spigot" : entry
       );
       if (!allowedProviders.includes(provider)) {
-        return reply.status(400).send({ error: "Provider not enabled for this template" });
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_NOT_ENABLED, "Provider not enabled for this template");
       }
 
       const providerConfig = await loadPluginProviderConfig(provider);
       if (!providerConfig) {
-        return reply.status(404).send({ error: "Provider not found" });
+        return apiError(reply, 404, ErrorCodes.MOD_PROVIDER_NOT_FOUND, "Provider not found");
       }
       let headers: Record<string, string>;
       try {
         const settings = await getModManagerSettings();
         headers = buildProviderHeaders(providerConfig, settings);
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       const pageValue = typeof page === "string" ? Number(page) : page ?? 1;
@@ -591,9 +587,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       // ── Sort ──
       const requestedSort = typeof sort === "string" ? sort.trim().toLowerCase() : "";
       if (requestedSort && !PLUGIN_SORT_OPTIONS.has(requestedSort)) {
-        return reply.status(400).send({
-          error: `Invalid sort '${requestedSort}'. Valid options: ${[...PLUGIN_SORT_OPTIONS].join(", ")}`,
-        });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `Invalid sort '${requestedSort}'. Valid options: ${[...PLUGIN_SORT_OPTIONS].join(", ")}`, { params: { sort: requestedSort, options: [...PLUGIN_SORT_OPTIONS].join(", ") } });
       }
       const sortValue = requestedSort || (isTrending ? "trending" : "relevance");
 
@@ -641,15 +635,13 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         });
         url = `${baseUrl}${providerConfig.endpoints.projects}?${params.toString()}`;
       } else {
-        return reply.status(400).send({ error: "Unsupported provider" });
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_UNSUPPORTED, "Unsupported provider");
       }
 
       const response = await fetch(url, { headers });
       if (!response.ok) {
         const body = await response.text();
-        return reply
-          .status(response.status)
-          .send({ error: `Provider error: ${body}` });
+        return apiError(reply, response.status, ErrorCodes.MOD_PROVIDER_ERROR, `Provider error: ${body}`, { params: { reason: body } });
       }
       const payload = await response.json() as any;
       if (provider === "spigot" && Array.isArray(payload)) {
@@ -682,7 +674,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!provider || !projectId) {
-        return reply.status(400).send({ error: "provider and projectId are required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider and projectId are required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "server.read", reply);
@@ -693,19 +685,19 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         entry === "spiget" ? "spigot" : entry
       );
       if (!allowedProviders.includes(provider)) {
-        return reply.status(400).send({ error: "Provider not enabled for this template" });
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_NOT_ENABLED, "Provider not enabled for this template");
       }
 
       const providerConfig = await loadPluginProviderConfig(provider);
       if (!providerConfig) {
-        return reply.status(404).send({ error: "Provider not found" });
+        return apiError(reply, 404, ErrorCodes.MOD_PROVIDER_NOT_FOUND, "Provider not found");
       }
       let headers: Record<string, string>;
       try {
         const settings = await getModManagerSettings();
         headers = buildProviderHeaders(providerConfig, settings);
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
@@ -721,9 +713,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const response = await fetch(url, { headers });
       if (!response.ok) {
         const body = await response.text();
-        return reply
-          .status(response.status)
-          .send({ error: `Provider error: ${body}` });
+        return apiError(reply, response.status, ErrorCodes.MOD_PROVIDER_ERROR, `Provider error: ${body}`, { params: { reason: body } });
       }
       const payload = await response.json() as any;
       return reply.send({ success: true, data: payload });
@@ -748,7 +738,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!provider || !projectId || !versionId) {
-        return reply.status(400).send({ error: "provider, projectId, and versionId are required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider, projectId, and versionId are required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "file.write", reply);
@@ -759,19 +749,19 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         entry === "spiget" ? "spigot" : entry
       );
       if (!allowedProviders.includes(provider)) {
-        return reply.status(400).send({ error: "Provider not enabled for this template" });
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_NOT_ENABLED, "Provider not enabled for this template");
       }
 
       const providerConfig = await loadPluginProviderConfig(provider);
       if (!providerConfig) {
-        return reply.status(404).send({ error: "Provider not found" });
+        return apiError(reply, 404, ErrorCodes.MOD_PROVIDER_NOT_FOUND, "Provider not found");
       }
       let headers: Record<string, string>;
       try {
         const settings = await getModManagerSettings();
         headers = buildProviderHeaders(providerConfig, settings);
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
@@ -785,9 +775,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         const metadataResponse = await fetch(metadataUrl, { headers });
         if (!metadataResponse.ok) {
           const body = await metadataResponse.text();
-          return reply
-            .status(metadataResponse.status)
-            .send({ error: `Provider error: ${body}` });
+          return apiError(reply, metadataResponse.status, ErrorCodes.MOD_PROVIDER_ERROR, `Provider error: ${body}`, { params: { reason: body } });
         }
         const metadata = await metadataResponse.json() as any;
         const files = metadata?.files ?? [];
@@ -810,9 +798,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         const metadataResponse = await fetch(metadataUrl, { headers });
         if (!metadataResponse.ok) {
           const body = await metadataResponse.text();
-          return reply
-            .status(metadataResponse.status)
-            .send({ error: `Provider error: ${body}` });
+          return apiError(reply, metadataResponse.status, ErrorCodes.MOD_PROVIDER_ERROR, `Provider error: ${body}`, { params: { reason: body } });
         }
         const metadata = await metadataResponse.json() as any;
         const downloads = metadata?.downloads ?? {};
@@ -860,11 +846,11 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           filename = `${filename}-${versionId}.jar`;
         }
       } else {
-        return reply.status(400).send({ error: "Unsupported provider" });
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_UNSUPPORTED, "Unsupported provider");
       }
 
       if (!downloadUrl || !filename) {
-        return reply.status(409).send({ error: "Unable to resolve download asset" });
+        return apiError(reply, 409, ErrorCodes.MOD_DOWNLOAD_ASSET_UNRESOLVED, "Unable to resolve download asset");
       }
 
       const normalizedBase = resolveTemplatePath(pluginManager.paths?.plugins, "plugins");
@@ -873,7 +859,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       try {
         const result = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to install asset" });
+          return apiError(reply, 400, ErrorCodes.MOD_INSTALL_FAILED, result.error || "Failed to install asset");
         }
         await createAuditLog(userId, {
           action: "plugin_manager.install",
@@ -927,7 +913,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           });
         }
       } catch (error: any) {
-        reply.status(400).send({ error: error?.message || "Failed to install asset" });
+        apiError(reply, 400, ErrorCodes.MOD_INSTALL_FAILED, error?.message || "Failed to install asset");
       }
     }
   );
@@ -1044,7 +1030,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!filename) {
-        return reply.status(400).send({ error: "filename is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filename is required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "file.write", reply);
@@ -1060,7 +1046,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       try {
         const result = await tunnelFileOp(server.nodeId, "delete", server.uuid, normalizedFile);
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to uninstall mod" });
+          return apiError(reply, 400, ErrorCodes.MOD_UNINSTALL_FAILED, result.error || "Failed to uninstall mod");
         }
         await prisma.installedMod.deleteMany({ where: { serverId, filename: safeName } });
         await createAuditLog(userId, {
@@ -1091,7 +1077,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           });
         }
       } catch (error: any) {
-        reply.status(400).send({ error: error?.message || "Failed to uninstall mod" });
+        apiError(reply, 400, ErrorCodes.MOD_UNINSTALL_FAILED, error?.message || "Failed to uninstall mod");
       }
     }
   );
@@ -1109,7 +1095,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!filename) {
-        return reply.status(400).send({ error: "filename is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filename is required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "file.write", reply);
@@ -1124,7 +1110,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       try {
         const result = await tunnelFileOp(server.nodeId, "delete", server.uuid, normalizedFile);
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to uninstall plugin" });
+          return apiError(reply, 400, ErrorCodes.MOD_UNINSTALL_FAILED, result.error || "Failed to uninstall plugin");
         }
         await prisma.installedMod.deleteMany({ where: { serverId, filename: safeName } });
         await createAuditLog(userId, {
@@ -1153,7 +1139,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           });
         }
       } catch (error: any) {
-        reply.status(400).send({ error: error?.message || "Failed to uninstall plugin" });
+        apiError(reply, 400, ErrorCodes.MOD_UNINSTALL_FAILED, error?.message || "Failed to uninstall plugin");
       }
     }
   );
@@ -1185,7 +1171,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       try {
         settings = await getModManagerSettings();
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       let updatesAvailable = 0;
@@ -1302,7 +1288,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       try {
         settings = await getModManagerSettings();
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       let updatesAvailable = 0;
@@ -1395,7 +1381,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!filenames?.length) {
-        return reply.status(400).send({ error: "filenames array is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filenames array is required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "file.write", reply);
@@ -1407,7 +1393,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       try {
         settings = await getModManagerSettings();
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       const results: { filename: string; success: boolean; error?: string }[] = [];
@@ -1536,7 +1522,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!filenames?.length) {
-        return reply.status(400).send({ error: "filenames array is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filenames array is required");
       }
 
       const server = await ensureServerAccess(serverId, userId, "file.write", reply);
@@ -1548,7 +1534,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       try {
         settings = await getModManagerSettings();
       } catch (error: any) {
-        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
       }
 
       const normalizedBase = resolveTemplatePath(pluginManager.paths?.plugins, "plugins");

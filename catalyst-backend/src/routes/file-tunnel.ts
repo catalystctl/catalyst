@@ -5,6 +5,8 @@ import type { FileTunnelService, FileTunnelResponse } from "../services/file-tun
 import { getSecuritySettings } from "../services/mailer";
 import { verifyAgentApiKey } from "../lib/agent-auth";
 import { captureSystemError } from "../services/error-logger";
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 /**
  * Internal routes used by agents to poll for and respond to file operations.
@@ -28,19 +30,19 @@ export function fileTunnelRoutes(
     const apiKey = request.headers["x-node-api-key"] as string;
 
     if (!nodeId || !apiKey) {
-      reply.status(401).send({ error: "Missing authentication headers" });
+      apiError(reply, 401, ErrorCodes.AGENT_AUTH_MISSING, "Missing authentication headers");
       return null;
     }
 
     const node = await prisma.node.findUnique({ where: { id: nodeId } });
     if (!node) {
-      reply.status(401).send({ error: "Unknown node" });
+      apiError(reply, 401, ErrorCodes.NODE_NOT_FOUND, "Unknown node");
       return null;
     }
 
     const apiKeyMatches = await verifyAgentApiKey(prisma, nodeId, apiKey);
     if (!apiKeyMatches) {
-      reply.status(401).send({ error: "Invalid credentials" });
+      apiError(reply, 401, ErrorCodes.AGENT_INVALID_CREDENTIALS, "Invalid credentials");
       return null;
     }
 
@@ -93,7 +95,7 @@ export function fileTunnelRoutes(
           metadata: { nodeId, context: 'file_tunnel_poll' },
         }).catch(() => {});
         log.error({ err: error, nodeId }, "Poll error");
-        reply.status(500).send({ error: "Internal error" });
+        apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Internal error");
       }
     }
   );
@@ -133,7 +135,7 @@ export function fileTunnelRoutes(
       });
 
       if (!resolved) {
-        return reply.status(404).send({ error: "Unknown or expired request" });
+        return apiError(reply, 404, ErrorCodes.FILE_TUNNEL_REQUEST_NOT_FOUND, "Unknown or expired request");
       }
 
       reply.send({ success: true });
@@ -156,7 +158,7 @@ export function fileTunnelRoutes(
           const settings = await getSecuritySettings();
           const maxBytes = settings.fileTunnelMaxUploadMb * 1024 * 1024;
           if (Number(contentLength) > maxBytes) {
-            return reply.status(413).send({ error: `Upload exceeds maximum size of ${settings.fileTunnelMaxUploadMb}MB` });
+            return apiError(reply, 413, ErrorCodes.FILE_TOO_LARGE, `Upload exceeds maximum size of ${settings.fileTunnelMaxUploadMb}MB`, { params: { maxMb: settings.fileTunnelMaxUploadMb } });
           }
         }
       },
@@ -193,7 +195,7 @@ export function fileTunnelRoutes(
       });
 
       if (!resolved) {
-        return reply.status(404).send({ error: "Unknown or expired request" });
+        return apiError(reply, 404, ErrorCodes.FILE_TUNNEL_REQUEST_NOT_FOUND, "Unknown or expired request");
       }
 
       reply.send({ success: true });
@@ -227,7 +229,7 @@ export function fileTunnelRoutes(
       const upload = fileTunnel.getUploadStream(requestId, nodeId);
 
       if (!upload) {
-        return reply.status(404).send({ error: "Upload data not found or expired" });
+        return apiError(reply, 404, ErrorCodes.FILE_TUNNEL_UPLOAD_NOT_FOUND, "Upload data not found or expired");
       }
 
       reply.header("content-length", upload.size);

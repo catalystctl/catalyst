@@ -5,6 +5,8 @@ import cron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
 import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 /** Allowed scheduled-task actions (create + update). */
 const TASK_ACTIONS = ['restart', 'stop', 'start', 'backup', 'command'] as const;
@@ -28,13 +30,14 @@ export async function taskRoutes(app: FastifyInstance) {
     });
 
     if (!server) {
-      reply.status(404).send({ error: 'Server not found' });
+      apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
       return false;
     }
 
     if (process.env.SUSPENSION_ENFORCED !== 'false' && server.suspendedAt) {
       reply.status(423).send({
         error: 'Server is suspended',
+        code: ErrorCodes.SERVER_SUSPENDED,
         suspendedAt: server.suspendedAt,
         suspensionReason: server.suspensionReason ?? null,
       });
@@ -72,12 +75,12 @@ export async function taskRoutes(app: FastifyInstance) {
     const hasNodeAccessToServer = nodeGrant && rolePerms.includes('node.update');
 
     if (!serverAccess && !hasNodeAccessToServer && !roleAllowed) {
-      reply.status(403).send({ error: message });
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
       return false;
     }
 
     if (!hasNodeAccessToServer && !roleAllowed && !serverAccess?.permissions.includes('server.schedule')) {
-      reply.status(403).send({ error: message });
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
       return false;
     }
 
@@ -106,7 +109,7 @@ export async function taskRoutes(app: FastifyInstance) {
     if ((await hasNodeAccess(prisma, userId, nodeId)) && rolePerms.includes('node.update')) {
       return true;
     }
-    reply.status(403).send({ error: 'You do not have permission to run console commands on this server' });
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'You do not have permission to run console commands on this server');
     return false;
   };
 
@@ -127,23 +130,17 @@ export async function taskRoutes(app: FastifyInstance) {
 
       // Validation
       if (!name || !action || !schedule) {
-        return reply.status(400).send({
-          error: 'Missing required fields: name, action, schedule',
-        });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Missing required fields: name, action, schedule');
       }
 
       // Validate cron expression
       if (!cron.validate(schedule)) {
-        return reply.status(400).send({
-          error: 'Invalid cron expression. Use standard cron format (e.g., "0 3 * * *")',
-        });
+        return apiError(reply, 400, ErrorCodes.TASK_INVALID_CRON, 'Invalid cron expression. Use standard cron format (e.g., "0 3 * * *")');
       }
 
       // Validate action
       if (!isValidTaskAction(action)) {
-        return reply.status(400).send({
-          error: `Invalid action. Must be one of: ${TASK_ACTIONS.join(', ')}`,
-        });
+        return apiError(reply, 400, ErrorCodes.TASK_INVALID_ACTION, `Invalid action. Must be one of: ${TASK_ACTIONS.join(', ')}`, { params: { actions: TASK_ACTIONS.join(', ') } });
       }
 
       const canSchedule = await ensureSchedulePermission(
@@ -158,7 +155,7 @@ export async function taskRoutes(app: FastifyInstance) {
         const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
         if (!serverRow || !(await ensureCommandPermission(user.userId, serverId, serverRow.nodeId, reply))) {
           if (serverRow) return;
-          return reply.status(404).send({ error: 'Server not found' });
+          return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         }
       }
 
@@ -170,7 +167,7 @@ export async function taskRoutes(app: FastifyInstance) {
         });
         nextRunAt = interval.next().toDate();
       } catch (error) {
-        return reply.status(400).send({ error: 'Invalid cron expression' });
+        return apiError(reply, 400, ErrorCodes.TASK_INVALID_CRON, 'Invalid cron expression');
       }
 
       // Create task
@@ -259,7 +256,7 @@ export async function taskRoutes(app: FastifyInstance) {
       });
 
       if (!task) {
-        return reply.status(404).send({ error: 'Task not found' });
+        return apiError(reply, 404, ErrorCodes.TASK_NOT_FOUND, 'Task not found');
       }
 
       reply.send(serialize({ task }));
@@ -293,22 +290,18 @@ export async function taskRoutes(app: FastifyInstance) {
         const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
         if (!serverRow || !(await ensureCommandPermission(user.userId, serverId, serverRow.nodeId, reply))) {
           if (serverRow) return;
-          return reply.status(404).send({ error: 'Server not found' });
+          return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         }
       }
 
       // Re-validate action against the same allowlist as create
       if (action !== undefined && !isValidTaskAction(action)) {
-        return reply.status(400).send({
-          error: `Invalid action. Must be one of: ${TASK_ACTIONS.join(', ')}`,
-        });
+        return apiError(reply, 400, ErrorCodes.TASK_INVALID_ACTION, `Invalid action. Must be one of: ${TASK_ACTIONS.join(', ')}`, { params: { actions: TASK_ACTIONS.join(', ') } });
       }
 
       // Validate cron expression if provided
       if (schedule && !cron.validate(schedule)) {
-        return reply.status(400).send({
-          error: 'Invalid cron expression',
-        });
+        return apiError(reply, 400, ErrorCodes.TASK_INVALID_CRON, 'Invalid cron expression');
       }
 
       let nextRunAt: Date | undefined;
@@ -320,7 +313,7 @@ export async function taskRoutes(app: FastifyInstance) {
           });
           nextRunAt = interval.next().toDate();
         } catch (error) {
-          return reply.status(400).send({ error: 'Invalid cron expression' });
+          return apiError(reply, 400, ErrorCodes.TASK_INVALID_CRON, 'Invalid cron expression');
         }
       }
 
@@ -343,7 +336,7 @@ export async function taskRoutes(app: FastifyInstance) {
       });
 
       if (task.count === 0) {
-        return reply.status(404).send({ error: 'Task not found' });
+        return apiError(reply, 404, ErrorCodes.TASK_NOT_FOUND, 'Task not found');
       }
 
       // Reload task in scheduler
@@ -353,7 +346,7 @@ export async function taskRoutes(app: FastifyInstance) {
           where: { id: taskId },
         });
         if (!updatedTask) {
-          return reply.status(404).send({ error: 'Task not found' });
+          return apiError(reply, 404, ErrorCodes.TASK_NOT_FOUND, 'Task not found');
         }
         if (updatedTask.enabled) {
           scheduler.scheduleTask(updatedTask);
@@ -405,7 +398,7 @@ export async function taskRoutes(app: FastifyInstance) {
       });
 
       if (deleted.count === 0) {
-        return reply.status(404).send({ error: 'Task not found' });
+        return apiError(reply, 404, ErrorCodes.TASK_NOT_FOUND, 'Task not found');
       }
 
       // Unschedule in scheduler
@@ -455,13 +448,13 @@ export async function taskRoutes(app: FastifyInstance) {
       });
 
       if (!task) {
-        return reply.status(404).send({ error: 'Task not found' });
+        return apiError(reply, 404, ErrorCodes.TASK_NOT_FOUND, 'Task not found');
       }
       if (task.action === 'command') {
         const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
         if (!serverRow || !(await ensureCommandPermission(user.userId, serverId, serverRow.nodeId, reply))) {
           if (serverRow) return;
-          return reply.status(404).send({ error: 'Server not found' });
+          return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         }
       }
 
@@ -471,7 +464,7 @@ export async function taskRoutes(app: FastifyInstance) {
         await scheduler.executeTask(task);
         reply.send({ success: true, message: 'Task executed' });
       } else {
-        reply.status(500).send({ error: 'Task scheduler not available' });
+        apiError(reply, 500, ErrorCodes.TASK_SCHEDULER_UNAVAILABLE, 'Task scheduler not available');
       }
     }
   );

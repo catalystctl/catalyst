@@ -5,6 +5,8 @@ import { allocateIpForServer, canAccessServer, checkIsAdmin, decryptBackupConfig
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { publishCacheInvalidate } from "../../lib/event-bus.js";
 import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../../utils/java-memory.js";
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 export async function serverAdminopsRoutes(app: FastifyInstance) {
   app.patch(
@@ -20,16 +22,12 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       // Validate restart policy
       const validPolicies = ["always", "on-failure", "never"];
       if (restartPolicy && !validPolicies.includes(restartPolicy)) {
-        return reply.status(400).send({
-          error: `Invalid restart policy. Must be one of: ${validPolicies.join(", ")}`,
-        });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `Invalid restart policy. Must be one of: ${validPolicies.join(", ")}`, { params: { options: validPolicies.join(", ") } });
       }
 
       // Validate max crash count
       if (maxCrashCount !== undefined && (maxCrashCount < 0 || maxCrashCount > 100)) {
-        return reply.status(400).send({
-          error: "maxCrashCount must be between 0 and 100",
-        });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "maxCrashCount must be between 0 and 100");
       }
 
       const server = await prisma.server.findUnique({
@@ -37,7 +35,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -101,7 +99,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -187,30 +185,28 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
 
       const validModes = ["local", "s3", "sftp", "stream"];
       if (storageMode && !validModes.includes(storageMode)) {
-        return reply.status(400).send({
-          error: `Invalid storage mode. Must be one of: ${validModes.join(", ")}`,
-        });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `Invalid storage mode. Must be one of: ${validModes.join(", ")}`, { params: { options: validModes.join(", ") } });
       }
 
       if (
         retentionCount !== undefined &&
         (!Number.isFinite(retentionCount) || retentionCount < 0 || retentionCount > 1000)
       ) {
-        return reply.status(400).send({ error: "retentionCount must be between 0 and 1000" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "retentionCount must be between 0 and 1000");
       }
 
       if (
         retentionDays !== undefined &&
         (!Number.isFinite(retentionDays) || retentionDays < 0 || retentionDays > 3650)
       ) {
-        return reply.status(400).send({ error: "retentionDays must be between 0 and 3650" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "retentionDays must be between 0 and 3650");
       }
 
       if (
         backupAllocationMb !== undefined &&
         (!Number.isFinite(backupAllocationMb) || backupAllocationMb < 0 || backupAllocationMb > 1048576)
       ) {
-        return reply.status(400).send({ error: "backupAllocationMb must be between 0 and 1048576" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "backupAllocationMb must be between 0 and 1048576");
       }
 
       const server = await prisma.server.findUnique({
@@ -218,7 +214,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -277,9 +273,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
           decision.reason === "server_access" ||
           decision.reason === "role_permission"
         ) {
-          reply
-            .status(403)
-            .send({ error: "Storage/credential changes require admin or node-manage access" });
+          apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Storage/credential changes require admin or node-manage access");
           return;
         }
       }
@@ -343,7 +337,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       };
 
       if (!targetNodeId) {
-        return reply.status(400).send({ error: "targetNodeId is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "targetNodeId is required");
       }
 
       // Get server with current node
@@ -353,7 +347,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -379,18 +373,14 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
             (await hasNodeAccess(prisma, request.user.userId, server.nodeId)) &&
             rolePerms.includes("node.update");
           if (!rolePerms.includes("server.transfer") && !rolePerms.includes("*") && !nodeManage) {
-            return reply.status(403).send({
-              error: "You do not have permission to transfer this server",
-            });
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You do not have permission to transfer this server");
           }
         }
       }
 
       // Check if already on target node
       if (server.nodeId === targetNodeId) {
-        return reply.status(400).send({
-          error: "Server is already on the target node",
-        });
+        return apiError(reply, 400, ErrorCodes.SERVER_ALREADY_ON_NODE, "Server is already on the target node");
       }
 
       // Get target node
@@ -399,14 +389,12 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       if (!targetNode) {
-        return reply.status(404).send({ error: "Target node not found" });
+        return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Target node not found");
       }
 
       // Check if target node is online
       if (!targetNode.isOnline) {
-        return reply.status(400).send({
-          error: "Target node is offline",
-        });
+        return apiError(reply, 400, ErrorCodes.NODE_OFFLINE, "Target node is offline");
       }
 
       const serversOnTarget = await prisma.server.findMany({
@@ -437,6 +425,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       ) {
         return reply.status(400).send({
           error: "Target node does not have enough resources",
+          code: ErrorCodes.INSUFFICIENT_RESOURCES,
           available: {
             memory: effectiveMaxMemory === Infinity ? "unlimited" : effectiveMaxMemory - usedMemory,
             cpu: effectiveMaxCpu === Infinity ? "unlimited" : effectiveMaxCpu - usedCpu,
@@ -453,6 +442,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       if (server.status !== "stopped") {
         return reply.status(400).send({
           error: "Server must be stopped before transfer",
+          code: ErrorCodes.SERVER_NOT_STOPPED,
           currentStatus: server.status,
         });
       }
@@ -464,6 +454,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         const fresh = await prisma.server.findUnique({ where: { id }, select: { status: true } });
         return reply.status(409).send({
           error: "Server state changed before transfer could start",
+          code: ErrorCodes.SERVER_TRANSFER_STATE_CHANGED,
           currentStatus: fresh?.status ?? "unknown",
         });
       }
@@ -708,6 +699,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
 
         return reply.status(500).send({
           error: "Transfer failed",
+          code: ErrorCodes.SERVER_TRANSFER_FAILED,
           message: error.message,
         });
       }
@@ -728,17 +720,17 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         select: { id: true, ownerId: true },
       });
       if (!server) {
-        return reply.status(404).send({ error: "Not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Not found");
       }
 
       const isAdmin = checkIsAdmin(request, "admin.write");
       if (server.ownerId !== userId && !isAdmin) {
-        return reply.status(404).send({ error: "Not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Not found");
       }
 
       const searchQuery = typeof search === "string" ? search.trim() : "";
       if (searchQuery.length < 3) {
-        return reply.status(400).send({ error: "Invalid request" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid request");
       }
       const take = Math.min(Math.max(Number(limit) || 10, 1), 10);
 
@@ -775,7 +767,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       const { newOwnerId } = request.body as { newOwnerId?: string };
 
       if (!newOwnerId) {
-        return reply.status(400).send({ error: "newOwnerId is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "newOwnerId is required");
       }
 
       // Only the current owner or an admin can transfer ownership
@@ -785,22 +777,22 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       const isAdmin = checkIsAdmin(request, "admin.write");
       if (server.ownerId !== userId && !isAdmin) {
-        return reply.status(403).send({ error: "Only the server owner or an admin can transfer ownership" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Only the server owner or an admin can transfer ownership");
       }
 
       if (newOwnerId === server.ownerId) {
-        return reply.status(400).send({ error: "Cannot transfer ownership to the current owner" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Cannot transfer ownership to the current owner");
       }
 
       // Validate target user exists
       const targetUser = await prisma.user.findUnique({ where: { id: newOwnerId } });
       if (!targetUser) {
-        return reply.status(404).send({ error: "Target user not found" });
+        return apiError(reply, 404, ErrorCodes.USER_NOT_FOUND, "Target user not found");
       }
 
       // Transfer ownership and ensure the new owner has full access
@@ -896,11 +888,11 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (server.status === "archived") {
-        return reply.status(409).send({ error: "Server is already archived" });
+        return apiError(reply, 409, ErrorCodes.SERVER_ALREADY_ARCHIVED, "Server is already archived");
       }
 
       // Only allow archiving from stopped state (stop if running first)
@@ -982,11 +974,11 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (server.status !== "archived") {
-        return reply.status(409).send({ error: "Server is not archived" });
+        return apiError(reply, 409, ErrorCodes.SERVER_NOT_ARCHIVED, "Server is not archived");
       }
 
       const updated = await prisma.server.update({

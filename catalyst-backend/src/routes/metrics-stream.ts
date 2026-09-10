@@ -9,6 +9,8 @@ import type { FastifyInstance } from 'fastify';
 import type { WebSocketGateway } from '../websocket/gateway';
 import { prisma } from '../db.js';
 import { openSseStream } from '../utils/sse.js';
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const METRICS_EVENT_TYPES = ['resource_stats', 'storage_resize_complete'];
@@ -48,7 +50,7 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const { serverId } = request.params;
       const userId = (request as any).user?.userId as string | undefined;
       if (!userId) {
-        reply.status(401).send({ error: 'Unauthorized' });
+        apiError(reply, 401, ErrorCodes.AUTH_REQUIRED, 'Unauthorized');
         return;
       }
       const { ensureServerAccess } = await import('./servers/_helpers.js');
@@ -62,7 +64,7 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       });
 
       if (!server) {
-        reply.status(404).send({ error: 'Server not found' });
+        apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         return;
       }
 

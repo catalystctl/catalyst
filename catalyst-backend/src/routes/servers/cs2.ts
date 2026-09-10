@@ -14,6 +14,8 @@ import path from "path";
 import { describeError } from "../../utils/describe-error.js";
 import { promises as fs } from "fs";
 import { fileURLToPath } from "url";
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 const __filenameCs2 = fileURLToPath(import.meta.url);
 const __dirnameCs2 = path.dirname(path.dirname(__filenameCs2));
@@ -227,7 +229,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
       const fid = frameworkId.toLowerCase() as Cs2FrameworkId;
       const fw = CS2_FRAMEWORKS[fid];
-      if (!fw) return reply.status(404).send({ error: "Unknown framework" });
+      if (!fw) return apiError(reply, 404, ErrorCodes.FRAMEWORK_NOT_FOUND, "Unknown framework");
       const server = await ensureAccess(serverId, userId, "server.read", reply);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
@@ -249,7 +251,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
         return reply.send({ success: true, data: mapped });
       } catch (error: unknown) {
         const msg = describeError(error);
-        return reply.status(502).send({ error: `Failed to fetch releases: ${msg}` });
+        return apiError(reply, 502, ErrorCodes.FRAMEWORK_RELEASES_FETCH_FAILED, `Failed to fetch releases: ${msg}`, { params: { reason: msg } });
       }
     }
   );
@@ -264,8 +266,8 @@ export async function serverCs2Routes(app: FastifyInstance) {
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
       const fid = frameworkId.toLowerCase() as Cs2FrameworkId;
       const fw = CS2_FRAMEWORKS[fid];
-      if (!fw) return reply.status(404).send({ error: "Unknown framework" });
-      if (!tag || !String(tag).trim()) return reply.status(400).send({ error: "tag is required" });
+      if (!fw) return apiError(reply, 404, ErrorCodes.FRAMEWORK_NOT_FOUND, "Unknown framework");
+      if (!tag || !String(tag).trim()) return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "tag is required");
       const server = await ensureAccess(serverId, userId, "file.write", reply);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
@@ -281,6 +283,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
       if (!depCheck.ok && !allowDependencyInstall) {
         return reply.status(409).send({
           error: `Missing dependencies: ${depCheck.missing.join(", ")}`,
+          code: ErrorCodes.FRAMEWORK_MISSING_DEPENDENCIES,
           missingDependencies: depCheck.missing,
           hint: "Install dependencies first or set allowDependencyInstall:true",
         });
@@ -314,7 +317,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
         asset = await resolveGitHubAsset(fw.repo, String(tag).trim(), fw.assetPattern, fw.assetExclude);
       } catch (error: unknown) {
         const msg = describeError(error);
-        return reply.status(502).send({ error: msg });
+        return apiError(reply, 502, ErrorCodes.ALLOCATION_CONFLICT, msg);
       }
 
       const installedOk = await installFrameworkArchive(server, asset.downloadUrl, asset.filename, fileTunnel, reply);
@@ -367,7 +370,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
       const fid = frameworkId.toLowerCase() as Cs2FrameworkId;
       const fw = CS2_FRAMEWORKS[fid];
-      if (!fw) return reply.status(404).send({ error: "Unknown framework" });
+      if (!fw) return apiError(reply, 404, ErrorCodes.FRAMEWORK_NOT_FOUND, "Unknown framework");
       const server = await ensureAccess(serverId, userId, "file.write", reply);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
@@ -471,7 +474,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const { filename } = request.body as { filename?: string };
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
-      if (!filename || !String(filename).trim()) return reply.status(400).send({ error: "filename is required" });
+      if (!filename || !String(filename).trim()) return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filename is required");
       const server = await ensureAccess(serverId, userId, "file.write", reply);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
@@ -483,7 +486,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
       try {
         const normalized = validateAndNormalizePath(safePath, server.uuid);
         const res = await fileTunnel.queueRequest(server.nodeId, "delete", server.uuid, normalized);
-        if (!res.success) return reply.status(400).send({ error: res.error || "Failed to uninstall plugin" });
+        if (!res.success) return apiError(reply, 400, ErrorCodes.MOD_UNINSTALL_FAILED, res.error || "Failed to uninstall plugin");
         await prisma.installedMod.deleteMany({ where: { serverId, filename: targetName } });
         await createAuditLog(userId, {
           action: "cs2.plugin.uninstall",
@@ -495,7 +498,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
         return reply.send({ success: true });
       } catch (error: unknown) {
         const msg = describeError(error);
-        return reply.status(400).send({ error: msg || "Failed to uninstall plugin" });
+        return apiError(reply, 400, ErrorCodes.MOD_UNINSTALL_FAILED, msg || "Failed to uninstall plugin");
       }
     }
   );
@@ -516,14 +519,14 @@ async function installFrameworkArchive(
     const normTmp = validateAndNormalizePath(tmpArchive, server.uuid);
     const dl = await fileTunnel.queueRequest(server.nodeId, "install-url", server.uuid, normTmp, { url: downloadUrl });
     if (!dl.success) {
-      reply.status(502).send({ error: dl.error || "Failed to download framework archive" });
+      apiError(reply, 502, ErrorCodes.FRAMEWORK_DOWNLOAD_FAILED, dl.error || "Failed to download framework archive");
       return false;
     }
     const normArchive = validateAndNormalizePath(tmpArchive, server.uuid);
     const target = validateAndNormalizePath(extractTarget, server.uuid);
     const dec = await fileTunnel.queueRequest(server.nodeId, "decompress", server.uuid, normArchive, { targetPath: target });
     if (!dec.success) {
-      reply.status(500).send({ error: dec.error || "Failed to extract framework archive" });
+      apiError(reply, 500, ErrorCodes.FRAMEWORK_EXTRACT_FAILED, dec.error || "Failed to extract framework archive");
       try {
         await fileTunnel.queueRequest(server.nodeId, "delete", server.uuid, normTmp);
       } catch {
@@ -553,7 +556,7 @@ async function installFrameworkArchive(
     return true;
   } catch (error: unknown) {
     const msg = describeError(error);
-    if (!reply.sent) reply.status(500).send({ error: msg || "Failed to install framework" });
+    if (!reply.sent) apiError(reply, 500, ErrorCodes.FRAMEWORK_INSTALL_FAILED, msg || "Failed to install framework");
     return false;
   }
 }

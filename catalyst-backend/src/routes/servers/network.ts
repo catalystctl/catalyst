@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { canAccessServer, checkIsAdmin, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam, validateRequestBody } from './_helpers.js';
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 /** Statuses that allow allocation changes. Stopped servers can always change allocations;
  *  running servers support hot-add / hot-remove (the agent will sync firewall rules). */
@@ -44,7 +46,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -57,7 +59,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         ownerId: server.ownerId,
         nodeId: server.nodeId,
       }))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       const bindings = parseStoredPortBindings(server.portBindings);
@@ -122,7 +124,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -143,15 +145,13 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
           (await hasNodeAccess(prisma, userId, server.nodeId)) &&
           rolePerms.includes("node.update");
         if (!rolePerms.includes("server.update") && !rolePerms.includes("server.delete") && !rolePerms.includes("*") && !nodeManage) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
       // Allow allocation changes on stopped, running, crashed, and error servers (hot-add)
       if (!ALLOCATION_ALLOWED_STATUSES.has(server.status)) {
-        return reply.status(409).send({
-          error: `Server must be in one of these statuses to update allocations: ${[...ALLOCATION_ALLOWED_STATUSES].join(', ')}`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Server must be in one of these statuses to update allocations: ${[...ALLOCATION_ALLOWED_STATUSES].join(', ')}`, { params: { statuses: [...ALLOCATION_ALLOWED_STATUSES].join(', ') } });
       }
 
       let claimedAllocationId: string | null = null;
@@ -165,10 +165,10 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
           where: { id: body.allocationId },
         });
         if (!allocation || allocation.nodeId !== server.nodeId) {
-          return reply.status(404).send({ error: "Allocation not found" });
+          return apiError(reply, 404, ErrorCodes.ALLOCATION_NOT_FOUND, "Allocation not found");
         }
         if (allocation.serverId && allocation.serverId !== serverId) {
-          return reply.status(409).send({ error: "Allocation is already assigned to another server" });
+          return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, "Allocation is already assigned to another server");
         }
         claimedAllocationId = allocation.id;
         claimedAllocationIp = allocation.ip;
@@ -182,14 +182,14 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       }
 
       if (!parsedContainerPort || !parsedHostPort) {
-        return reply.status(400).send({ error: "Invalid port value" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid port value");
       }
       const containerPort = parsedContainerPort;
       const hostPort = parsedHostPort;
 
       const bindings = parseStoredPortBindings(server.portBindings);
       if (bindings[parsedContainerPort]) {
-        return reply.status(409).send({ error: "Allocation already exists for container port" });
+        return apiError(reply, 409, ErrorCodes.PORT_ALREADY_IN_USE, "Allocation already exists for container port");
       }
 
       const usedHostPorts = new Set(Object.values(bindings));
@@ -202,7 +202,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       const isPrimaryBinding =
         parsedContainerPort === server.primaryPort && parsedHostPort === server.primaryPort;
       if (!isPrimaryBinding && usedHostPorts.has(parsedHostPort)) {
-        return reply.status(409).send({ error: "Host port already assigned to allocation" });
+        return apiError(reply, 409, ErrorCodes.PORT_ALREADY_IN_USE, "Host port already assigned to allocation");
       }
 
       // When claiming a NodeAllocation, host-port ownership is already tracked there.
@@ -229,9 +229,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         const hostIp = server.primaryIp ?? null;
         const conflictPort = findPortConflict(usedPorts, hostIp, [parsedHostPort]);
         if (conflictPort) {
-          return reply.status(400).send({
-            error: `Port ${parsedHostPort} is already in use on this node`,
-          });
+          return apiError(reply, 400, ErrorCodes.PORT_ALREADY_IN_USE, `Port ${parsedHostPort} is already in use on this node`, { params: { port: parsedHostPort } });
         }
       }
 
@@ -285,7 +283,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
           msg === "Host port already assigned to allocation" ||
           msg === "Allocation is already assigned to another server"
         ) {
-          return reply.status(409).send({ error: msg });
+          return apiError(reply, 409, ErrorCodes.ALLOCATION_CONFLICT, msg);
         }
         throw err;
       }
@@ -359,7 +357,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -378,30 +376,28 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
           (await hasNodeAccess(prisma, userId, server.nodeId)) &&
           rolePerms.includes("node.update");
         if (!rolePerms.includes("server.update") && !rolePerms.includes("server.delete") && !rolePerms.includes("*") && !nodeManage) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
       // Allow allocation removal on stopped, running, crashed, and error servers (hot-remove)
       if (!ALLOCATION_ALLOWED_STATUSES.has(server.status)) {
-        return reply.status(409).send({
-          error: `Server must be in one of these statuses to update allocations: ${[...ALLOCATION_ALLOWED_STATUSES].join(', ')}`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Server must be in one of these statuses to update allocations: ${[...ALLOCATION_ALLOWED_STATUSES].join(', ')}`, { params: { statuses: [...ALLOCATION_ALLOWED_STATUSES].join(', ') } });
       }
 
       const parsedContainerPort = parsePortValue(containerPort);
       if (!parsedContainerPort) {
-        return reply.status(400).send({ error: "Invalid port value" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid port value");
       }
 
       // Primary allocation cannot be removed regardless of server status (AC-4)
       if (parsedContainerPort === server.primaryPort) {
-        return reply.status(400).send({ error: "Cannot remove primary allocation" });
+        return apiError(reply, 400, ErrorCodes.ALLOCATION_PRIMARY_IMMUTABLE, "Cannot remove primary allocation");
       }
 
       const bindings = parseStoredPortBindings(server.portBindings);
       if (!bindings[parsedContainerPort]) {
-        return reply.status(404).send({ error: "Allocation not found" });
+        return apiError(reply, 404, ErrorCodes.ALLOCATION_NOT_FOUND, "Allocation not found");
       }
 
       const removedHostPort = bindings[parsedContainerPort];
@@ -485,7 +481,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -504,25 +500,23 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
           (await hasNodeAccess(prisma, userId, server.nodeId)) &&
           rolePerms.includes("node.update");
         if (!rolePerms.includes("server.update") && !rolePerms.includes("server.delete") && !rolePerms.includes("*") && !nodeManage) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
       // Primary allocation change is allowed on stopped, running, crashed, and error servers
       if (!ALLOCATION_ALLOWED_STATUSES.has(server.status)) {
-        return reply.status(409).send({
-          error: `Server must be in one of these statuses to update allocations: ${[...ALLOCATION_ALLOWED_STATUSES].join(', ')}`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, `Server must be in one of these statuses to update allocations: ${[...ALLOCATION_ALLOWED_STATUSES].join(', ')}`, { params: { statuses: [...ALLOCATION_ALLOWED_STATUSES].join(', ') } });
       }
 
       const parsedContainerPort = parsePortValue(containerPort);
       if (!parsedContainerPort) {
-        return reply.status(400).send({ error: "Invalid port value" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid port value");
       }
 
       const bindings = parseStoredPortBindings(server.portBindings);
       if (!bindings[parsedContainerPort]) {
-        return reply.status(404).send({ error: "Allocation not found" });
+        return apiError(reply, 404, ErrorCodes.ALLOCATION_NOT_FOUND, "Allocation not found");
       }
 
       const updated = await prisma.server.update({

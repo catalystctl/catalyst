@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { canAccessServer, checkIsAdmin, ensureNotSuspended, validateVariableRule } from './_helpers.js';
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 export async function serverVariablesRoutes(app: FastifyInstance) {
   app.get(
@@ -16,7 +18,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         include: { template: true },
       });
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       // Permission check: owner | ServerAccess with server.read | role server.read | node+node.update | admin.write/*
@@ -32,7 +34,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
             (await hasNodeAccess(prisma, userId, server.nodeId)) &&
             rolePerms.includes("node.update");
           if (!rolePerms.includes("server.read") && !rolePerms.includes("*") && !nodeManage) {
-            return reply.status(403).send({ error: "Forbidden" });
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
           }
         }
       }
@@ -70,7 +72,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         include: { template: true },
       });
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -103,7 +105,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
             (await hasNodeAccess(prisma, userId, server.nodeId)) &&
             rolePerms.includes("node.update");
           if (!nodeManage) {
-            return reply.status(403).send({ error: "Forbidden" });
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
           }
         }
       }
@@ -170,7 +172,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
       if (hasErrors) {
         return reply.status(422).send({
           error: "Validation failed",
-          code: "VALIDATION_ERROR",
+          code: ErrorCodes.VALIDATION_ERROR,
           fields: errors,
         });
       }

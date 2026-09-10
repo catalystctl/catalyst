@@ -4,6 +4,8 @@ import { PrismaClient } from "@prisma/client";
 import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
 import { SimpleCache } from '../lib/cache.js';
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 // History payloads are polled every 30s per open server tab and each miss
 // scans up to 10k metric rows. TTL matches the poll cadence (time-series
@@ -83,12 +85,13 @@ export async function metricsRoutes(app: FastifyInstance) {
       app.log.info({ serverId, queryMs: queryTime }, "Metrics query time");
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
+          code: ErrorCodes.SERVER_SUSPENDED,
           suspendedAt: server.suspendedAt,
           suspensionReason: server.suspensionReason ?? null,
         });
@@ -111,7 +114,7 @@ export async function metricsRoutes(app: FastifyInstance) {
         rolePerms.includes("server.read") ||
         hasNodeAccessToServer;
       if (!canReadMetrics) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       // Return early if no metrics
@@ -320,12 +323,13 @@ export async function metricsRoutes(app: FastifyInstance) {
       ]);
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
+          code: ErrorCodes.SERVER_SUSPENDED,
           suspendedAt: server.suspendedAt,
           suspensionReason: server.suspensionReason ?? null,
         });
@@ -348,7 +352,7 @@ export async function metricsRoutes(app: FastifyInstance) {
         rolePerms.includes("server.read") ||
         hasNodeAccessToServer;
       if (!canReadMetrics) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       if (!latest) {
@@ -400,7 +404,7 @@ export async function metricsRoutes(app: FastifyInstance) {
         perms.includes("admin.write") ||
         perms.includes("admin.read");
       if (!isAdmin) {
-        return reply.status(403).send({ error: "Admin access required" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access required");
       }
       const { nodeId } = request.params as { nodeId: string };
       const { hours, limit } = request.query as { hours?: string; limit?: string };
@@ -410,7 +414,7 @@ export async function metricsRoutes(app: FastifyInstance) {
       });
 
       if (!node) {
-        return reply.status(404).send({ error: "Node not found" });
+        return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
       }
 
       // Calculate time range

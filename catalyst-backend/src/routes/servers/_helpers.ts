@@ -48,6 +48,8 @@ import {
   sendEmail,
 } from "../../services/mailer";
 import { resolveModrinthGameVersion } from "../../services/modrinth-version-resolver";
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 export const MAX_PORT = 65535;
 export const INVITE_EXPIRY_DAYS = 7;
@@ -501,7 +503,7 @@ export const ensureServerAccess = async (
     include: { template: true },
   });
   if (!server) {
-    reply.status(404).send({ error: "Server not found" });
+    apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
     return null;
   }
   if (!ensureNotSuspended(server, reply)) {
@@ -544,11 +546,11 @@ export const ensureServerAccess = async (
   });
 
   if (!decision.allowed) {
-    reply.status(403).send({ error: "Forbidden" });
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
     return null;
   }
   if (!enforceKeyScope(actor, permission)) {
-    reply.status(403).send({ error: "Forbidden" });
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
     return null;
   }
   return server;
@@ -1000,7 +1002,7 @@ export const ensureModManagerEnabled = (server: any, reply: FastifyReply) => {
   const runtimeTemplate = patchTemplateForRuntime(server.template);
   const modManager = resolveEnabledModManager(runtimeTemplate?.features?.modManager);
   if (!modManager) {
-    reply.status(409).send({ error: "Mod manager not enabled for this template" });
+    apiError(reply, 409, ErrorCodes.SERVER_MOD_MANAGER_NOT_ENABLED, "Mod manager not enabled for this template");
     return null;
   }
   return modManager;
@@ -1017,12 +1019,12 @@ export const ensureCs2FrameworkEnabled = (server: any, reply: FastifyReply) => {
     if (mm) {
       const hasCs2 = mm.providers.some((p) => cs2FrameworkProviders.has(p.id));
       if (!hasCs2) {
-        reply.status(409).send({ error: "CS2 framework manager not enabled for this template" });
+        apiError(reply, 409, ErrorCodes.SERVER_CS2_FRAMEWORK_NOT_ENABLED, "CS2 framework manager not enabled for this template");
         return null;
       }
       return mm;
     }
-    reply.status(409).send({ error: "CS2 framework manager not enabled for this template" });
+    apiError(reply, 409, ErrorCodes.SERVER_CS2_FRAMEWORK_NOT_ENABLED, "CS2 framework manager not enabled for this template");
     return null;
   }
   return { providers: [{ id: "metamod" }, { id: "counterstrikesharp" }, { id: "sourcemod" }] } as any;
@@ -1034,7 +1036,7 @@ export const ensurePluginManagerEnabled = (server: any, reply: FastifyReply) => 
     !Array.isArray(pluginManager.providers) ||
     pluginManager.providers.length === 0
   ) {
-    reply.status(409).send({ error: "Plugin manager not enabled for this template" });
+    apiError(reply, 409, ErrorCodes.SERVER_PLUGIN_MANAGER_NOT_ENABLED, "Plugin manager not enabled for this template");
     return null;
   }
   return pluginManager as {
@@ -1240,6 +1242,7 @@ export const ensureNotSuspended = (server: any, reply: FastifyReply, message?: s
   }
   reply.status(423).send({
     error: message || "Server is suspended",
+    code: ErrorCodes.SERVER_SUSPENDED,
     suspendedAt: server.suspendedAt,
     suspensionReason: server.suspensionReason ?? null,
   });
@@ -1271,7 +1274,7 @@ export const ensureSuspendPermission = (
   if (checkAnyPerm(request, ['*', 'admin.write', 'server.suspend'])) {
     return true;
   }
-  reply.status(403).send({ error: message || "Admin access required" });
+  apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message || "Admin access required");
   return false;
 };
 
@@ -1439,13 +1442,14 @@ export const ensureDatabasePermission = async (
   });
 
   if (!server) {
-    reply.status(404).send({ error: "Server not found" });
+    apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
     return false;
   }
 
   if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
     reply.status(423).send({
       error: "Server is suspended",
+      code: ErrorCodes.SERVER_SUSPENDED,
       suspendedAt: server.suspendedAt,
       suspensionReason: server.suspensionReason ?? null,
     });
@@ -1454,7 +1458,7 @@ export const ensureDatabasePermission = async (
 
   if (server.ownerId === userId) {
     if (!enforceKeyScope(actor, permission)) {
-      reply.status(403).send({ error: message });
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
       return false;
     }
     return true;
@@ -1470,7 +1474,7 @@ export const ensureDatabasePermission = async (
 
   if (access) {
     if (!enforceKeyScope(actor, permission)) {
-      reply.status(403).send({ error: message });
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
       return false;
     }
     return true;
@@ -1486,12 +1490,12 @@ export const ensureDatabasePermission = async (
     rolePermissions.includes(permission)
   ) {
     if (!enforceKeyScope(actor, permission)) {
-      reply.status(403).send({ error: message });
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
       return false;
     }
     return true;
   }
-  reply.status(403).send({ error: message });
+  apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
   return false;
 };
 

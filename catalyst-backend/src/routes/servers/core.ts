@@ -9,6 +9,8 @@ import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb
 import { SimpleCache } from "../../lib/cache.js";
 import { registerCacheStats } from "../../lib/cache.js";
 import { publishCacheInvalidate, subscribeCacheInvalidations } from "../../lib/event-bus.js";
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 // Hot-path cache for GET /api/servers — makes list-servers win by a huge margin.
 // 5s TTL for plain list (no metrics) gives ~98% hit-rate under benchmark hammering;
@@ -137,9 +139,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const hasNodeAccessResult = await hasNodeAccess(prisma, userId, nodeId);
 
       if (!canCreate && !hasNodeAccessResult) {
-        return reply
-          .status(403)
-          .send({ error: "Admin access, server.create permission, or node assignment required" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access, server.create permission, or node assignment required");
       }
 
       const effectiveOwnerId = (canCreate || hasNodeAccessResult) && bodyOwnerId ? bodyOwnerId : userId;
@@ -148,19 +148,19 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       if (effectiveOwnerId !== userId) {
         // Check if user has permission to create resources for other users
         if (!checkPerm(request, 'user.create')) {
-          return reply.status(403).send({ error: 'Insufficient permissions to create server for other user' });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create server for other user');
         }
 
         const targetUser = await prisma.user.findUnique({ where: { id: effectiveOwnerId } });
         if (!targetUser) {
-          return reply.status(400).send({ error: 'Specified owner does not exist' });
+          return apiError(reply, 400, ErrorCodes.USER_NOT_FOUND, 'Specified owner does not exist');
         }
       }
 
       // Validate required fields
       const validatedPrimaryPort = parsePortValue(primaryPort);
       if (!validatedPrimaryPort) {
-        return reply.status(400).send({ error: "Invalid primary port" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid primary port");
       }
 
       // Validate template exists and get variables
@@ -169,7 +169,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       if (!template) {
-        return reply.status(404).send({ error: "Template not found" });
+        return apiError(reply, 404, ErrorCodes.TEMPLATE_NOT_FOUND, "Template not found");
       }
 
       const templateFeatures =
@@ -204,6 +204,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             `(SteamCMD 0x202 means the server quota is full). ` +
             `Catalyst uses a loop-mounted quota, unlike Pterodactyl. ` +
             `CS2 needs about 40 GB.`,
+          code: ErrorCodes.SERVER_TEMPLATE_MINIMUM_DISK,
           minimumDiskMb,
         });
       }
@@ -220,7 +221,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       const resolvedImage = resolveTemplateImage(template, resolvedEnvironment);
       if (!resolvedImage) {
-        return reply.status(400).send({ error: "Template image is required" });
+        return apiError(reply, 400, ErrorCodes.SERVER_TEMPLATE_IMAGE_REQUIRED, "Template image is required");
       }
       if (template.images && Array.isArray(template.images)) {
         const hasVariant = template.images.some((option) => {
@@ -228,7 +229,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           return "name" in option && option.name === resolvedEnvironment.IMAGE_VARIANT;
         });
         if (resolvedEnvironment.IMAGE_VARIANT && !hasVariant) {
-          return reply.status(400).send({ error: "Invalid image variant selected" });
+          return apiError(reply, 400, ErrorCodes.SERVER_IMAGE_VARIANT_INVALID, "Invalid image variant selected");
         }
       }
 
@@ -237,9 +238,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const missingVars = requiredVars.filter((v) => v.name && !resolvedEnvironment[v.name]);
 
       if (missingVars.length > 0) {
-        return reply.status(400).send({
-          error: `Missing required template variables: ${missingVars.map((v) => v.name).join(", ")}`,
-        });
+        return apiError(reply, 400, ErrorCodes.SERVER_MISSING_TEMPLATE_VARIABLES, `Missing required template variables: ${missingVars.map((v) => v.name).join(", ")}`, { params: { variables: missingVars.map((v) => v.name).join(", ") } });
       }
 
       const templateBackupAllocation = Number(templateFeatures.backupAllocationMb);
@@ -258,16 +257,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             if (rule.startsWith("between:")) {
               const err = validateVariableRule(value, rule, rules);
               if (err) {
-                return reply.status(400).send({
-                  error: `Variable ${variable.name} ${err}`,
-                });
+                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_INVALID, `Variable ${variable.name} ${err}`, { params: { name: variable.name, reason: err } });
               }
             } else if (rule.startsWith("in:")) {
               const allowedValues = rule.substring(3).split(",");
               if (!allowedValues.includes(value)) {
-                return reply.status(400).send({
-                  error: `Variable ${variable.name} must be one of: ${allowedValues.join(", ")}`,
-                });
+                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_INVALID, `Variable ${variable.name} must be one of: ${allowedValues.join(", ")}`, { params: { name: variable.name, allowed: allowedValues.join(", ") } });
               }
             } else if (rule.startsWith("regex:")) {
               let pattern = rule.substring(6);
@@ -284,9 +279,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               ];
               const isUnsafeRegex = dangerousPatterns.some(p => p.test(pattern));
               if (isUnsafeRegex) {
-                return reply.status(400).send({
-                  error: `Invalid regex pattern for variable ${variable.name}: pattern contains potentially unsafe constructs`,
-                });
+                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_PATTERN_INVALID, `Invalid regex pattern for variable ${variable.name}: pattern contains potentially unsafe constructs`, { params: { name: variable.name } });
               }
               try {
                 const regex = new RegExp(pattern);
@@ -296,14 +289,10 @@ export async function serverCoreRoutes(app: FastifyInstance) {
                 const testValue = value.length > 4096 ? value.slice(0, 4096) : value;
                 const result = regex.test(testValue);
                 if (!result) {
-                  return reply.status(400).send({
-                    error: `Variable ${variable.name} does not match required pattern`,
-                  });
+                  return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_INVALID, `Variable ${variable.name} does not match required pattern`, { params: { name: variable.name } });
                 }
               } catch {
-                return reply.status(400).send({
-                  error: `Invalid regex pattern for variable ${variable.name}: ${pattern}`,
-                });
+                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_PATTERN_INVALID, `Invalid regex pattern for variable ${variable.name}: ${pattern}`, { params: { name: variable.name, pattern } });
               }
             }
           }
@@ -329,21 +318,21 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       if (!node) {
-        return reply.status(404).send({ error: "Node not found" });
+        return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
       }
 
       if (
         resolvedDatabaseAllocation !== undefined &&
         (!Number.isFinite(resolvedDatabaseAllocation) || resolvedDatabaseAllocation < 0)
       ) {
-        return reply.status(400).send({ error: "databaseAllocation must be 0 or more" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "databaseAllocation must be 0 or more");
       }
 
       if (
         resolvedBackupAllocationMb !== undefined &&
         (!Number.isFinite(resolvedBackupAllocationMb) || resolvedBackupAllocationMb < 0)
       ) {
-        return reply.status(400).send({ error: "backupAllocationMb must be 0 or more" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "backupAllocationMb must be 0 or more");
       }
 
       // Check resource availability (Java cgroup is allocation + off-heap overhead)
@@ -377,23 +366,19 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       if (totalAllocatedMemory + requiredMemory > effectiveMaxMemory) {
         const available = effectiveMaxMemory === Infinity ? "unlimited" : `${effectiveMaxMemory - totalAllocatedMemory}MB`;
-        return reply.status(400).send({
-          error: `Insufficient memory. Available: ${available}, Required: ${requiredMemory}MB`,
-        });
+        return apiError(reply, 400, ErrorCodes.INSUFFICIENT_RESOURCES, `Insufficient memory. Available: ${available}, Required: ${requiredMemory}MB`, { params: { available, required: requiredMemory } });
       }
 
       if (totalAllocatedCpu + allocatedCpuCores > effectiveMaxCpu) {
         const available = effectiveMaxCpu === Infinity ? "unlimited" : `${effectiveMaxCpu - totalAllocatedCpu} cores`;
-        return reply.status(400).send({
-          error: `Insufficient CPU. Available: ${available}, Required: ${allocatedCpuCores} cores`,
-        });
+        return apiError(reply, 400, ErrorCodes.INSUFFICIENT_RESOURCES, `Insufficient CPU. Available: ${available}, Required: ${allocatedCpuCores} cores`, { params: { available, required: allocatedCpuCores } });
       }
 
       if (
         databaseAllocation !== undefined &&
         (!Number.isFinite(databaseAllocation) || databaseAllocation < 0)
       ) {
-        return reply.status(400).send({ error: "databaseAllocation must be 0 or more" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "databaseAllocation must be 0 or more");
       }
 
       const desiredNetworkMode =
@@ -404,24 +389,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const normalizedPrimaryIp = typeof primaryIp === "string" ? primaryIp.trim() : null;
       const isHostNetwork = desiredNetworkMode === "host";
       if (allocationId && shouldUseIpam(desiredNetworkMode)) {
-        return reply.status(400).send({
-          error: "Allocation IDs are only valid for bridge networking",
-        });
+        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_MODE_INVALID, "Allocation IDs are only valid for bridge networking");
       }
       if (allocationId && normalizedPrimaryIp) {
-        return reply.status(400).send({
-          error: "Choose either allocationId or primaryIp",
-        });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Choose either allocationId or primaryIp");
       }
       if (hasPrimaryIp && !shouldUseIpam(desiredNetworkMode) && !allocationId) {
-        return reply.status(400).send({
-          error: "Primary IP can only be set for IPAM networks",
-        });
+        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_MODE_INVALID, "Primary IP can only be set for IPAM networks");
       }
       if (isHostNetwork && normalizedPrimaryIp) {
-        return reply.status(400).send({
-          error: "Primary IP is not used for host networking",
-        });
+        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_MODE_INVALID, "Primary IP is not used for host networking");
       }
       const resolvedPortBindings = normalizePortBindings(portBindings, validatedPrimaryPort);
 
@@ -432,14 +409,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             ? normalizeHostIp(resolvedEnvironment.CATALYST_NETWORK_IP)
             : null;
       } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
+        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
       }
       let hostNetworkIp: string | null = null;
       if (isHostNetwork) {
         try {
           hostNetworkIp = resolvedHostIp ?? normalizeHostIp(node.publicAddress);
         } catch (error: any) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
       }
       const nextEnvironment = isHostNetwork && hostNetworkIp
@@ -457,9 +434,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           Object.values(resolvedPortBindings)
         );
         if (conflictPort) {
-          return reply.status(400).send({
-            error: `Port ${conflictPort} is already in use on this node`,
-          });
+          return apiError(reply, 400, ErrorCodes.PORT_ALREADY_IN_USE, `Port ${conflictPort} is already in use on this node`, { params: { port: conflictPort } });
         }
       }
       const requestedIp = hasPrimaryIp
@@ -475,10 +450,10 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           where: { id: allocationId },
         });
         if (!allocation || allocation.nodeId !== nodeId) {
-          return reply.status(404).send({ error: "Allocation not found" });
+          return apiError(reply, 404, ErrorCodes.ALLOCATION_NOT_FOUND, "Allocation not found");
         }
         if (allocation.serverId) {
-          return reply.status(409).send({ error: "Allocation is already assigned" });
+          return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, "Allocation is already assigned");
         }
         allocationIp = allocation.ip;
         allocationPort = allocation.port;
@@ -488,9 +463,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           Object.values(resolvedPortBindings)
         );
         if (conflictPort) {
-          return reply.status(400).send({
-            error: `Port ${conflictPort} is already in use on this node`,
-          });
+          return apiError(reply, 400, ErrorCodes.PORT_ALREADY_IN_USE, `Port ${conflictPort} is already in use on this node`, { params: { port: conflictPort } });
         }
       }
 
@@ -630,14 +603,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         });
       } catch (error: any) {
         if (error?.message === "ALLOCATION_TAKEN") {
-          return reply.status(409).send({ error: "Allocation is no longer available" });
+          return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, "Allocation is no longer available");
         }
         if (error?.message === "PORT_CONFLICT") {
-          return reply.status(409).send({
-            error: "One of the requested ports is already in use on this node",
-          });
+          return apiError(reply, 409, ErrorCodes.PORT_ALREADY_IN_USE, "One of the requested ports is already in use on this node");
         }
-        return reply.status(400).send({ error: error.message });
+        return apiError(reply, 400, ErrorCodes.SERVER_CREATE_FAILED, error.message);
       }
 
       // Grant owner full permissions (consistent with DEFAULT_PERMISSION_PRESETS.full)
@@ -698,7 +669,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       // Permission check — cloning creates a new server, so server.create is required
       if (!checkPerm(request, 'server.create')) {
-        return reply.status(403).send({ error: 'Insufficient permissions to create a server' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create a server');
       }
 
       // Fetch the source server with template, node, and location
@@ -708,12 +679,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       if (!sourceServer) {
-        return reply.status(404).send({ error: 'Source server not found' });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Source server not found');
       }
 
       // Check access to the source server (owner / ServerAccess / node+node.update / admin.write)
       if (!(await canAccessServer(userId, { id: sourceServer.id, ownerId: sourceServer.ownerId, nodeId: sourceServer.nodeId }))) {
-        return reply.status(403).send({ error: 'Cannot access source server' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Cannot access source server');
       }
 
       const body = request.body as {
@@ -746,22 +717,22 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const canCreate = checkIsAdmin(request, 'admin.write');
       const hasNodeAccessResult = await hasNodeAccess(prisma, userId, targetNodeId);
       if (!canCreate && !hasNodeAccessResult) {
-        return reply.status(403).send({ error: 'Admin access or node assignment required' });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin access or node assignment required');
       }
       const effectiveOwnerId = (canCreate || hasNodeAccessResult) && body.ownerId ? body.ownerId : userId;
       if (effectiveOwnerId !== userId) {
         if (!checkPerm(request, 'user.create')) {
-          return reply.status(403).send({ error: 'Insufficient permissions to create server for other user' });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create server for other user');
         }
         const targetUser = await prisma.user.findUnique({ where: { id: effectiveOwnerId } });
         if (!targetUser) {
-          return reply.status(400).send({ error: 'Specified owner does not exist' });
+          return apiError(reply, 400, ErrorCodes.USER_NOT_FOUND, 'Specified owner does not exist');
         }
       }
 
       // Validate source server's template still exists
       if (!sourceServer.template) {
-        return reply.status(400).send({ error: 'Source server template not found' });
+        return apiError(reply, 400, ErrorCodes.TEMPLATE_NOT_FOUND, 'Source server template not found');
       }
 
       // Resolve environment — merge template defaults with source environment, then apply overrides
@@ -785,16 +756,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       const resolvedImage = resolveTemplateImage(sourceServer.template, resolvedEnvironment);
       if (!resolvedImage) {
-        return reply.status(400).send({ error: 'Template image is required' });
+        return apiError(reply, 400, ErrorCodes.SERVER_TEMPLATE_IMAGE_REQUIRED, 'Template image is required');
       }
 
       // Validate required template variables are provided
       const requiredVars = templateVariables.filter((v: any) => v.required);
       const missingVars = requiredVars.filter((v: any) => !resolvedEnvironment?.[v.name]);
       if (missingVars.length > 0) {
-        return reply.status(400).send({
-          error: `Missing required template variables: ${missingVars.map((v: any) => v.name).join(', ')}`,
-        });
+        return apiError(reply, 400, ErrorCodes.SERVER_MISSING_TEMPLATE_VARIABLES, `Missing required template variables: ${missingVars.map((v: any) => v.name).join(', ')}`, { params: { variables: missingVars.map((v: any) => v.name).join(', ') } });
       }
 
       // Validate variable values against rules (same as POST /)
@@ -806,12 +775,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             if (rule.startsWith('between:')) {
               const err = validateVariableRule(value, rule, rules);
               if (err) {
-                return reply.status(400).send({ error: `Variable ${variable.name} ${err}` });
+                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_INVALID, `Variable ${variable.name} ${err}`, { params: { name: variable.name, reason: err } });
               }
             } else if (rule.startsWith('in:')) {
               const allowedValues = rule.substring(3).split(',');
               if (!allowedValues.includes(value)) {
-                return reply.status(400).send({ error: `Variable ${variable.name} must be one of: ${allowedValues.join(', ')}` });
+                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_INVALID, `Variable ${variable.name} must be one of: ${allowedValues.join(', ')}`, { params: { name: variable.name, allowed: allowedValues.join(', ') } });
               }
             } else if (rule.startsWith('regex:')) {
               let pattern = rule.substring(6);
@@ -826,20 +795,20 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               ];
               const isUnsafeRegex = dangerousPatterns.some(p => p.test(pattern));
               if (isUnsafeRegex) {
-                return reply.status(400).send({ error: `Invalid regex pattern for variable ${variable.name}: pattern contains potentially unsafe constructs` });
+                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_PATTERN_INVALID, `Invalid regex pattern for variable ${variable.name}: pattern contains potentially unsafe constructs`, { params: { name: variable.name } });
               }
               try {
                 const regex = new RegExp(pattern);
                 const startTime = Date.now();
                 const result = regex.test(value);
                 if (Date.now() - startTime > 1000) {
-                  return reply.status(400).send({ error: `Variable ${variable.name} regex validation timeout` });
+                  return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_VALIDATION_TIMEOUT, `Variable ${variable.name} regex validation timeout`, { params: { name: variable.name } });
                 }
                 if (!result) {
-                  return reply.status(400).send({ error: `Variable ${variable.name} does not match required pattern` });
+                  return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_INVALID, `Variable ${variable.name} does not match required pattern`, { params: { name: variable.name } });
                 }
               } catch {
-                return reply.status(400).send({ error: `Invalid regex pattern for variable ${variable.name}: ${pattern}` });
+                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_PATTERN_INVALID, `Invalid regex pattern for variable ${variable.name}: ${pattern}`, { params: { name: variable.name, pattern } });
               }
             }
           }
@@ -865,7 +834,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       if (!node) {
-        return reply.status(404).send({ error: 'Node not found' });
+        return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, 'Node not found');
       }
 
       // Check resource availability
@@ -884,16 +853,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       if (totalAllocatedMemory + requiredMemory > effectiveMaxMemory) {
         const available = effectiveMaxMemory === Infinity ? 'unlimited' : `${effectiveMaxMemory - totalAllocatedMemory}MB`;
-        return reply.status(400).send({
-          error: `Insufficient memory. Available: ${available}, Required: ${requiredMemory}MB`,
-        });
+        return apiError(reply, 400, ErrorCodes.INSUFFICIENT_RESOURCES, `Insufficient memory. Available: ${available}, Required: ${requiredMemory}MB`, { params: { available, required: requiredMemory } });
       }
 
       if (totalAllocatedCpu + resolvedCpuCores > effectiveMaxCpu) {
         const available = effectiveMaxCpu === Infinity ? 'unlimited' : `${effectiveMaxCpu - totalAllocatedCpu} cores`;
-        return reply.status(400).send({
-          error: `Insufficient CPU. Available: ${available}, Required: ${resolvedCpuCores} cores`,
-        });
+        return apiError(reply, 400, ErrorCodes.INSUFFICIENT_RESOURCES, `Insufficient CPU. Available: ${available}, Required: ${resolvedCpuCores} cores`, { params: { available, required: resolvedCpuCores } });
       }
 
       // Network configuration — allow override, default to source server's mode
@@ -911,7 +876,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             ? normalizeHostIp(resolvedEnvironment.CATALYST_NETWORK_IP)
             : null;
       } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
+        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
       }
 
       let hostNetworkIp: string | null = null;
@@ -919,7 +884,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         try {
           hostNetworkIp = resolvedHostIp ?? normalizeHostIp(node.publicAddress);
         } catch (error: any) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
       }
 
@@ -985,16 +950,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       let allocationPort: number | null = null;
       if (cloneAllocationId) {
         if (shouldUseIpam(desiredNetworkMode)) {
-          return reply.status(400).send({ error: 'Allocation IDs are only valid for bridge/host networking' });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_MODE_INVALID, 'Allocation IDs are only valid for bridge/host networking');
         }
         const allocation = await prisma.nodeAllocation.findUnique({
           where: { id: cloneAllocationId },
         });
         if (!allocation || allocation.nodeId !== targetNodeId) {
-          return reply.status(404).send({ error: 'Allocation not found' });
+          return apiError(reply, 404, ErrorCodes.ALLOCATION_NOT_FOUND, 'Allocation not found');
         }
         if (allocation.serverId) {
-          return reply.status(409).send({ error: 'Allocation is already assigned to a server' });
+          return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, 'Allocation is already assigned to a server');
         }
         allocationIp = allocation.ip;
         allocationPort = allocation.port;
@@ -1095,9 +1060,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         });
       } catch (error: any) {
         if (error?.message === "ALLOCATION_TAKEN") {
-          return reply.status(409).send({ error: "Allocation is no longer available" });
+          return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, "Allocation is no longer available");
         }
-        return reply.status(400).send({ error: error.message });
+        return apiError(reply, 400, ErrorCodes.SERVER_CLONE_FAILED, error.message);
       }
 
       // Grant owner full permissions (same as POST /)
@@ -1646,7 +1611,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       // Determine access level with decideServerAccess contract:
@@ -1677,7 +1642,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             (ALL_SERVER_PERMISSIONS as readonly string[]).includes(p),
           );
         if (!decision.allowed && !hasGrant) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 
@@ -1736,7 +1701,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -1745,7 +1710,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       // Check permission - owner, admin.write/*, ServerAccess, or (node + node.update)
       if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       const {
@@ -1807,7 +1772,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             (await hasNodeAccess(prisma, userId, server.nodeId)) &&
             rolePerms.includes("node.update");
           if (!rolePerms.includes("server.rebuild") && !rolePerms.includes("*") && !nodeManage) {
-            return reply.status(403).send({ error: "Forbidden" });
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
           }
         }
       }
@@ -1823,9 +1788,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           hasAllocationUpdate) &&
         server.status !== "stopped"
       ) {
-        return reply.status(409).send({
-          error: "Server must be stopped to update resource allocation",
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, "Server must be stopped to update resource allocation");
       }
 
       // Validate resource changes if provided
@@ -1839,9 +1802,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           (allocatedCpuCores !== undefined && allocatedCpuCores <= 0) ||
           (allocatedDiskMb !== undefined && allocatedDiskMb <= 0)
         ) {
-          return reply.status(400).send({
-            error: "Resource values must be positive numbers",
-          });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Resource values must be positive numbers");
         }
 
         const node = server.node;
@@ -1885,24 +1846,18 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
         if (totalOtherMemory + requiredMemory > effectiveMaxMemory) {
           const available = effectiveMaxMemory === Infinity ? "unlimited" : `${effectiveMaxMemory - totalOtherMemory}MB`;
-          return reply.status(400).send({
-            error: `Insufficient memory. Available: ${available}`,
-          });
+          return apiError(reply, 400, ErrorCodes.INSUFFICIENT_RESOURCES, `Insufficient memory. Available: ${available}`, { params: { available } });
         }
 
         if (totalOtherCpu + newCpu > effectiveMaxCpu) {
           const available = effectiveMaxCpu === Infinity ? "unlimited" : `${effectiveMaxCpu - totalOtherCpu} cores`;
-          return reply.status(400).send({
-            error: `Insufficient CPU. Available: ${available}`,
-          });
+          return apiError(reply, 400, ErrorCodes.INSUFFICIENT_RESOURCES, `Insufficient CPU. Available: ${available}`, { params: { available } });
         }
 
         if (process.env.MAX_DISK_MB) {
           const maxDisk = Number(process.env.MAX_DISK_MB);
           if (Number.isFinite(maxDisk) && maxDisk > 0 && totalOtherDisk + newDisk > maxDisk) {
-            return reply.status(400).send({
-              error: `Insufficient disk. Available: ${maxDisk - totalOtherDisk}MB`,
-            });
+            return apiError(reply, 400, ErrorCodes.INSUFFICIENT_RESOURCES, `Insufficient disk. Available: ${maxDisk - totalOtherDisk}MB`, { params: { available: maxDisk - totalOtherDisk } });
           }
         }
       }
@@ -1911,18 +1866,18 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         backupAllocationMb !== undefined &&
         (!Number.isFinite(backupAllocationMb) || backupAllocationMb < 0)
       ) {
-        return reply.status(400).send({ error: "backupAllocationMb must be 0 or more" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "backupAllocationMb must be 0 or more");
       }
       if (
         databaseAllocation !== undefined &&
         (!Number.isFinite(databaseAllocation) || databaseAllocation < 0)
       ) {
-        return reply.status(400).send({ error: "databaseAllocation must be 0 or more" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "databaseAllocation must be 0 or more");
       }
 
       let nextPrimaryPort = primaryPort ?? server.primaryPort;
       if (!parsePortValue(nextPrimaryPort)) {
-        return reply.status(400).send({ error: "Invalid primary port" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid primary port");
       }
       const hasExplicitPortBindings =
         portBindings !== undefined && portBindings !== null;
@@ -1939,7 +1894,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         try {
           resolvedHostIp = normalizeHostIp(environment.CATALYST_NETWORK_IP);
         } catch (error: any) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
       }
       const isHostNetwork = server.networkMode === "host";
@@ -1948,7 +1903,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         try {
           hostNetworkIp = resolvedHostIp ?? normalizeHostIp(server.node.publicAddress);
         } catch (error: any) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
       }
 
@@ -1974,21 +1929,15 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           Object.values(effectiveBindings)
         );
         if (conflictPort) {
-          return reply.status(400).send({
-            error: `Port ${conflictPort} is already in use on this node`,
-          });
+          return apiError(reply, 400, ErrorCodes.PORT_ALREADY_IN_USE, `Port ${conflictPort} is already in use on this node`, { params: { port: conflictPort } });
         }
       }
 
       if (hasPrimaryIpUpdate && !shouldUseIpam(server.networkMode ?? undefined)) {
-        return reply.status(400).send({
-          error: "Primary IP can only be updated for IPAM networks",
-        });
+        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_MODE_INVALID, "Primary IP can only be updated for IPAM networks");
       }
       if (hasPrimaryIpUpdate && isHostNetwork && normalizedPrimaryIp) {
-        return reply.status(400).send({
-          error: "Primary IP is not used for host networking",
-        });
+        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_MODE_INVALID, "Primary IP is not used for host networking");
       }
 
       // Validate allocationId if provided
@@ -1996,18 +1945,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       if (hasAllocationUpdate && allocationId) {
         // Allocations only work for bridge or host networking
         if (shouldUseIpam(server.networkMode ?? undefined)) {
-          return reply.status(400).send({
-            error: "Allocation IDs are only valid for bridge/host networking",
-          });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_MODE_INVALID, "Allocation IDs are only valid for bridge/host networking");
         }
         const allocation = await prisma.nodeAllocation.findUnique({
           where: { id: allocationId },
         });
         if (!allocation || allocation.nodeId !== server.nodeId) {
-          return reply.status(404).send({ error: "Allocation not found" });
+          return apiError(reply, 404, ErrorCodes.ALLOCATION_NOT_FOUND, "Allocation not found");
         }
         if (allocation.serverId && allocation.serverId !== serverId) {
-          return reply.status(409).send({ error: "Allocation is already assigned to another server" });
+          return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, "Allocation is already assigned to another server");
         }
         newAllocation = { id: allocation.id, ip: allocation.ip, port: allocation.port };
       }
@@ -2025,9 +1972,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           if (requestedVariant && images.length > 0) {
             const hasVariant = images.some((option) => option?.name === requestedVariant);
             if (!hasVariant) {
-              return reply.status(400).send({
-                error: `Unknown image variant: ${requestedVariant}`,
-              });
+              return apiError(reply, 400, ErrorCodes.SERVER_IMAGE_VARIANT_INVALID, `Unknown image variant: ${requestedVariant}`, { params: { variant: requestedVariant } });
             }
           }
           // Empty IMAGE_VARIANT means "use template default"
@@ -2143,7 +2088,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         });
       } catch (error: any) {
         if (error?.message === "ALLOCATION_TAKEN") {
-          return reply.status(409).send({ error: "Allocation is no longer available" });
+          return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, "Allocation is no longer available");
         }
         throw error;
       }
@@ -2183,7 +2128,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       if (!allocatedDiskMb || allocatedDiskMb <= 0) {
-        return reply.status(400).send({ error: "Invalid disk size" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid disk size");
       }
 
       const server = await prisma.server.findUnique({
@@ -2192,7 +2137,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (!ensureNotSuspended(server, reply)) {
@@ -2221,25 +2166,25 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           requiredPermission: "server.update",
         });
         if (!decision.allowed) {
-          return reply.status(403).send({ error: "Forbidden" });
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
         // Explicit subuser grants still need a write-capable permission for resize
         if (decision.reason === "server_access") {
           const accessPermissions = (access?.permissions as string[] | undefined) ?? [];
           if (!accessPermissions.some((p) => p === 'file.write' || p === 'server.update')) {
-            return reply.status(403).send({ error: "Insufficient permissions for storage resize" });
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions for storage resize");
           }
         }
       }
 
       const isShrink = allocatedDiskMb < server.allocatedDiskMb;
       if (isShrink && server.status !== "stopped") {
-        return reply.status(409).send({ error: "Server must be stopped to shrink disk" });
+        return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, "Server must be stopped to shrink disk");
       }
 
       const gateway = (app as any).wsGateway;
       if (!gateway) {
-        return reply.status(500).send({ error: "WebSocket gateway not available" });
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
       const success = await gateway.sendToAgent(server.nodeId, {
@@ -2267,7 +2212,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             agentConnected: gateway.isAgentConnected(server.nodeId),
           },
         }).catch(() => {});
-        return reply.status(503).send({ error: "Failed to send resize command to agent" });
+        return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send resize command to agent");
       }
 
       await prisma.server.update({
@@ -2323,12 +2268,13 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       if (isSuspensionEnforced() && server.suspendedAt && isSuspensionDeleteBlocked()) {
         return reply.status(423).send({
           error: "Server is suspended",
+          code: ErrorCodes.SERVER_SUSPENDED,
           suspendedAt: server.suspendedAt,
           suspensionReason: server.suspensionReason ?? null,
         });
@@ -2347,16 +2293,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             (await hasNodeAccess(prisma, userId, server.nodeId)) &&
             rolePerms.includes("node.update");
           if (!rolePerms.includes("server.delete") && !nodeManage && !rolePerms.includes("*")) {
-            return reply.status(403).send({ error: "Forbidden" });
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
           }
         }
       }
 
       const deletableStates = ["stopped", "error", "crashed", "installing"];
       if (!deletableStates.includes(server.status)) {
-        return reply.status(409).send({
-          error: `Server must be stopped before deletion (current state: ${server.status})`,
-        });
+        return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, `Server must be stopped before deletion (current state: ${server.status})`, { params: { status: server.status } });
       }
 
       // Drop provisioned MySQL databases BEFORE cascade-deleting the Server row,

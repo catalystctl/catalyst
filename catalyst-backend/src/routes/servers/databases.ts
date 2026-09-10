@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { DatabaseProvisioningError, dropDatabase, ensureDatabasePermission, generateSafeIdentifier, isValidDatabaseIdentifier, provisionDatabase, rotateDatabasePassword, toDatabaseIdentifier } from './_helpers.js';
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 export async function serverDatabasesRoutes(app: FastifyInstance) {
   // Static path — must not be captured by GET /:serverId
@@ -26,7 +28,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
               (await prisma.serverAccess.count({ where: { userId } })) > 0,
           );
       if (!hasAnyServer) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
       const hosts = await prisma.databaseHost.findMany({
         orderBy: { name: "asc" },
@@ -110,7 +112,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
       }
 
       if (!hostId) {
-        return reply.status(400).send({ error: "hostId is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "hostId is required");
       }
 
       // Authorize the host: admins, node managers, or explicit database.create
@@ -123,7 +125,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         select: { ownerId: true, nodeId: true },
       });
       if (!scopeServer) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
       const scopeAccess = await prisma.serverAccess.findFirst({
         where: { serverId, userId, permissions: { has: "database.create" } },
@@ -139,7 +141,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         requiredPermission: "database.create",
       });
       if (!hostDecision.allowed) {
-        return reply.status(403).send({ error: "Database host not authorized for this server" });
+        return apiError(reply, 403, ErrorCodes.DATABASE_HOST_NOT_AUTHORIZED, "Database host not authorized for this server");
       }
 
        const server = await prisma.server.findUnique({
@@ -148,17 +150,17 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
        });
 
        if (!server) {
-         return reply.status(404).send({ error: "Server not found" });
+         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
        }
 
        const allocationLimit = server.databaseAllocation ?? 0;
        if (!Number.isFinite(allocationLimit) || allocationLimit <= 0) {
-         return reply.status(403).send({ error: "Database allocation disabled for this server" });
+         return apiError(reply, 403, ErrorCodes.DATABASE_ALLOCATION_DISABLED, "Database allocation disabled for this server");
        }
 
        const existingCount = await prisma.serverDatabase.count({ where: { serverId } });
        if (existingCount >= allocationLimit) {
-         return reply.status(409).send({ error: "Database allocation limit reached" });
+         return apiError(reply, 409, ErrorCodes.DATABASE_LIMIT_REACHED, "Database allocation limit reached");
        }
 
        const host = await prisma.databaseHost.findUnique({
@@ -166,7 +168,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
        });
 
        if (!host) {
-         return reply.status(404).send({ error: "Database host not found" });
+         return apiError(reply, 404, ErrorCodes.DATABASE_HOST_NOT_FOUND, "Database host not found");
        }
 
       const normalizedName = name ? toDatabaseIdentifier(name.trim()) : "";
@@ -174,9 +176,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         normalizedName.length >= 3 ? normalizedName : generateSafeIdentifier("srv_", 12);
 
       if (!isValidDatabaseIdentifier(databaseName)) {
-        return reply.status(400).send({
-          error: "Database name must start with a letter and use only lowercase letters, numbers, and underscores (max 32 chars)",
-        });
+        return apiError(reply, 400, ErrorCodes.DATABASE_NAME_INVALID, "Database name must start with a letter and use only lowercase letters, numbers, and underscores (max 32 chars)");
       }
 
       // Usernames are prefixed per server (srv_<short>-<rand>) so collisions
@@ -187,11 +187,11 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
       const { encryptSecretValue } = await import("../../services/backup-credentials.js");
 
       if (!isValidDatabaseIdentifier(databaseUsername)) {
-        return reply.status(500).send({ error: "Generated database username is invalid" });
+        return apiError(reply, 500, ErrorCodes.DATABASE_CREDENTIALS_INVALID, "Generated database username is invalid");
       }
 
       if (databasePassword.length < 16) {
-        return reply.status(500).send({ error: "Generated database password is too short" });
+        return apiError(reply, 500, ErrorCodes.DATABASE_CREDENTIALS_INVALID, "Generated database password is too short");
       }
 
       try {
@@ -249,9 +249,9 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         });
       } catch (error: any) {
         if (error instanceof DatabaseProvisioningError) {
-          return reply.status(error.statusCode).send({ error: error.message });
+          return apiError(reply, error.statusCode, ErrorCodes.DATABASE_PROVISION_FAILED, error.message);
         }
-        return reply.status(500).send({ error: "Database provisioning failed" });
+        return apiError(reply, 500, ErrorCodes.DATABASE_PROVISION_FAILED, "Database provisioning failed");
       }
     }
   );
@@ -287,13 +287,13 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
       });
 
       if (!database) {
-        return reply.status(404).send({ error: "Database not found" });
+        return apiError(reply, 404, ErrorCodes.DATABASE_NOT_FOUND, "Database not found");
       }
 
       // Verify the joined host matches the stored hostId (cross-host
       // confusion on rotate would set the password on the wrong engine).
       if (!database.host || database.host.id !== database.hostId) {
-        return reply.status(409).send({ error: "Database host mismatch" });
+        return apiError(reply, 409, ErrorCodes.DATABASE_HOST_MISMATCH, "Database host mismatch");
       }
 
       const nextPassword = generateSafeIdentifier("p", 24);
@@ -303,9 +303,9 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         await rotateDatabasePassword(database.host, database.username, nextPassword);
       } catch (error: any) {
         if (error instanceof DatabaseProvisioningError) {
-          return reply.status(error.statusCode).send({ error: error.message });
+          return apiError(reply, error.statusCode, ErrorCodes.DATABASE_ROTATE_FAILED, error.message);
         }
-        return reply.status(500).send({ error: "Database password rotation failed" });
+        return apiError(reply, 500, ErrorCodes.DATABASE_ROTATE_FAILED, "Database password rotation failed");
       }
 
       const updated = await prisma.serverDatabase.update({
@@ -383,7 +383,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
       });
 
       if (!database) {
-        return reply.status(404).send({ error: "Database not found" });
+        return apiError(reply, 404, ErrorCodes.DATABASE_NOT_FOUND, "Database not found");
       }
 
       const host = await prisma.databaseHost.findUnique({
@@ -391,19 +391,19 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
       });
 
       if (!host) {
-        return reply.status(404).send({ error: "Database host not found" });
+        return apiError(reply, 404, ErrorCodes.DATABASE_HOST_NOT_FOUND, "Database host not found");
       }
       if (host.id !== database.hostId) {
-        return reply.status(409).send({ error: "Database host mismatch" });
+        return apiError(reply, 409, ErrorCodes.DATABASE_HOST_MISMATCH, "Database host mismatch");
       }
 
       try {
         await dropDatabase(host, database.name, database.username);
       } catch (error: any) {
         if (error instanceof DatabaseProvisioningError) {
-          return reply.status(error.statusCode).send({ error: error.message });
+          return apiError(reply, error.statusCode, ErrorCodes.DATABASE_DELETE_FAILED, error.message);
         }
-        return reply.status(500).send({ error: "Database deletion failed" });
+        return apiError(reply, 500, ErrorCodes.DATABASE_DELETE_FAILED, "Database deletion failed");
       }
 
       await prisma.serverDatabase.delete({ where: { id: database.id } });

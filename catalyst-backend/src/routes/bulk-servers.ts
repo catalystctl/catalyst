@@ -10,6 +10,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { serialize } from '../utils/serialize';
 import { getUserAccessibleNodes } from '../lib/permissions';
 import { enrichAuditDetails, resolveActorDetails, buildServerAuditDetails } from '../middleware/audit.js';
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 interface BulkResult {
   success: string[];
@@ -31,7 +33,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
     ) {
       return true;
     }
-    reply.status(403).send({ error: 'Admin access required for bulk operations' });
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin access required for bulk operations');
     return false;
   };
 
@@ -104,11 +106,11 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       };
 
       if (!Array.isArray(serverIds) || serverIds.length === 0) {
-        return reply.status(400).send({ error: 'serverIds must be a non-empty array' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'serverIds must be a non-empty array');
       }
 
       if (serverIds.length > 100) {
-        return reply.status(400).send({ error: 'Maximum 100 servers per bulk operation' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Maximum 100 servers per bulk operation');
       }
 
       if (!(ensureBulkPermission(request, reply))) return;
@@ -274,11 +276,11 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       const { serverIds } = request.body as { serverIds?: string[] };
 
       if (!Array.isArray(serverIds) || serverIds.length === 0) {
-        return reply.status(400).send({ error: 'serverIds must be a non-empty array' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'serverIds must be a non-empty array');
       }
 
       if (serverIds.length > 100) {
-        return reply.status(400).send({ error: 'Maximum 100 servers per bulk operation' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Maximum 100 servers per bulk operation');
       }
 
       if (!(ensureBulkPermission(request, reply))) return;
@@ -418,11 +420,11 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       const { serverIds } = request.body as { serverIds?: string[] };
 
       if (!Array.isArray(serverIds) || serverIds.length === 0) {
-        return reply.status(400).send({ error: 'serverIds must be a non-empty array' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'serverIds must be a non-empty array');
       }
 
       if (serverIds.length > 100) {
-        return reply.status(400).send({ error: 'Maximum 100 servers per bulk operation' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Maximum 100 servers per bulk operation');
       }
 
       if (!(ensureBulkPermission(request, reply))) return;
@@ -594,11 +596,11 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       const { serverIds } = request.body as { serverIds?: string[] };
 
       if (!Array.isArray(serverIds) || serverIds.length === 0) {
-        return reply.status(400).send({ error: 'serverIds must be a non-empty array' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'serverIds must be a non-empty array');
       }
 
       if (serverIds.length > 200) {
-        return reply.status(400).send({ error: 'Maximum 200 servers per status check' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Maximum 200 servers per status check');
       }
 
       // Get user's accessible nodes for filtering

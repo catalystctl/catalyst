@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { serialize } from "../../utils/serialize.js";
 import { canAccessServer } from './_helpers.js';
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 export async function serverStatsRoutes(app: FastifyInstance) {
   app.get(
@@ -22,10 +24,10 @@ export async function serverStatsRoutes(app: FastifyInstance) {
         select: { id: true, ownerId: true, nodeId: true },
       });
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
       if (!(await canAccessServer(userId, server))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       // Parse time range — default to last 24 hours
@@ -36,16 +38,16 @@ export async function serverStatsRoutes(app: FastifyInstance) {
         : new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
       if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-        return reply.status(400).send({ error: "Invalid date format. Use ISO 8601." });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid date format. Use ISO 8601.");
       }
       if (from >= to) {
-        return reply.status(400).send({ error: "'from' must be before 'to'" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "'from' must be before 'to'");
       }
 
       // Limit query window to 7 days max
       const maxWindow = 7 * 24 * 60 * 60 * 1000;
       if (to.getTime() - from.getTime() > maxWindow) {
-        return reply.status(400).send({ error: "Query window cannot exceed 7 days" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Query window cannot exceed 7 days");
       }
 
       // Parse interval (seconds) for downsampling
@@ -120,12 +122,12 @@ export async function serverStatsRoutes(app: FastifyInstance) {
         select: { id: true, ownerId: true, nodeId: true },
       });
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
       // Permission check: decideServerAccess contract (not bare node assignment)
       if (!(await canAccessServer(userId, server))) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       const [items, total] = await Promise.all([

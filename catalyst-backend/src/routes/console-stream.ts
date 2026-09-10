@@ -21,6 +21,7 @@ import { describeError } from '../utils/describe-error.js';
 import { ErrorCodes } from '../shared-types.js';
 import { checkIsAdmin } from './servers/_helpers.js';
 import { openSseStream, formatSse as formatSseMessage } from '../utils/sse.js';
+import { apiError } from "../lib/http-error";
 
 interface ConsoleCommandBody {
   command: string;
@@ -40,7 +41,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const userId = request.user?.userId;
 
       if (!userId) {
-        reply.status(401).send({ error: 'Unauthorized' });
+        apiError(reply, 401, ErrorCodes.AUTH_REQUIRED, 'Unauthorized');
         return;
       }
 
@@ -53,7 +54,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       });
 
       if (!server) {
-        reply.status(404).send({ error: 'Server not found' });
+        apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         return;
       }
 
@@ -75,14 +76,14 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         rolePerms.includes('node.update');
 
       if (!isOwner && !hasConsoleRead && !isAdmin && !hasNodeAccessResult && !hasRoleConsoleRead) {
-        reply.status(403).send({ error: 'Access denied' });
+        apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Access denied');
         return;
       }
 
       // Cap check before hijacking so we can still send a JSON 503.
       const MAX_SSE_CONSOLE_PER_SERVER = 50;
       if (wsGateway.getSseSubscriberCount(serverId) >= MAX_SSE_CONSOLE_PER_SERVER) {
-        reply.status(503).send({ error: 'Too many console viewers. Please try again later.' });
+        apiError(reply, 503, ErrorCodes.CONSOLE_VIEWER_LIMIT_REACHED, 'Too many console viewers. Please try again later.');
         return;
       }
 
@@ -136,13 +137,13 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const userId = request.user?.userId;
 
       if (!command || typeof command !== 'string' || !command.trim()) {
-        reply.status(400).send({ error: 'Command is required' });
+        apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Command is required');
         return;
       }
 
       const trimmed = command.trim();
       if (trimmed.length > 4096) {
-        reply.status(400).send({ error: 'Command exceeds maximum length (4096 characters)' });
+        apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Command exceeds maximum length (4096 characters)');
         return;
       }
 
@@ -154,7 +155,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       });
 
       if (!server) {
-        reply.status(404).send({ error: 'Server not found' });
+        apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         return;
       }
 
@@ -179,12 +180,12 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         hasRoleConsoleWrite;
 
       if (!hasWritePermission) {
-        reply.status(403).send({ error: ErrorCodes.PERMISSION_DENIED });
+        apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, ErrorCodes.PERMISSION_DENIED);
         return;
       }
 
       if (server.suspendedAt) {
-        reply.status(403).send({ error: 'Server is suspended' });
+        apiError(reply, 403, ErrorCodes.SERVER_SUSPENDED, 'Server is suspended');
         return;
       }
 
@@ -204,7 +205,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
           stack: err.stack,
           metadata: { serverId, userId },
         }).catch(() => {});
-        reply.status(500).send({ error: describeError(err) || 'Failed to send command' });
+        apiError(reply, 500, ErrorCodes.AGENT_COMMAND_FAILED, describeError(err) || 'Failed to send command');
       }
     },
   );

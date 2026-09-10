@@ -8,6 +8,8 @@ import { createAuditLog } from '../../middleware/audit.js';
 import { captureSystemError, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, isArchiveName, path, validateAndNormalizePath } from './_helpers.js';
 import { describeError } from '../../utils/describe-error.js';
 import { getSecuritySettings, MAX_UPLOAD_MB_CEILING, maxUploadBytesFromMb } from "../../services/mailer.js";
+import { apiError } from "../../lib/http-error";
+import { ErrorCodes } from "../../shared-types";
 
 export async function serverFilesRoutes(app: FastifyInstance) {
   const uploadBodyLimit = MAX_UPLOAD_MB_CEILING * 1024 * 1024;
@@ -37,13 +39,13 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       select: { isOnline: true, name: true },
     });
     if (!node) {
-      reply.status(404).send({ error: "Node not found" });
+      apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
       return false;
     }
     if (!node.isOnline && !fileTunnel.isNodeConnected(nodeId)) {
       reply.status(503).send({
         error: "Node is offline",
-        code: "NODE_OFFLINE",
+        code: ErrorCodes.NODE_OFFLINE,
         nodeName: node.name,
       });
       return false;
@@ -57,13 +59,13 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     if (error?.message?.includes("timed out")) {
       return reply.status(504).send({
         error: "Agent file operation timed out",
-        code: "AGENT_TIMEOUT",
+        code: ErrorCodes.AGENT_TIMEOUT,
       });
     }
     if (error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
-      return reply.status(503).send({ error: error.message, code: "FILE_TUNNEL_BUSY" });
+      return reply.status(503).send({ error: error.message, code: ErrorCodes.FILE_TUNNEL_BUSY });
     }
-    return reply.status(400).send({ error: error?.message || "Invalid path" });
+    return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, error?.message || "Invalid path");
   };
 
   /**
@@ -126,7 +128,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           const errMsg = result.error || "Failed to list files";
           const status = errMsg.includes("not found") || errMsg.includes("missing") ? 404 : 400;
-          return reply.status(status).send({ error: errMsg });
+          return apiError(reply, status, ErrorCodes.FILE_OPERATION_FAILED, errMsg);
         }
 
         reply.send({
@@ -155,7 +157,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const { path: requestedPath } = request.query as { path?: string };
 
       if (!requestedPath) {
-        return reply.status(400).send({ error: "Missing path parameter" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing path parameter");
       }
 
       const server = await requireFileAccess(serverId, userId, "file.read", reply, request.user);
@@ -174,14 +176,14 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           const errMsg = result.error || "File not found";
           const status = errMsg.includes("not found") || errMsg.includes("missing") ? 404 : 400;
-          return reply.status(status).send({ error: errMsg });
+          return apiError(reply, status, ErrorCodes.FILE_OPERATION_FAILED, errMsg);
         }
 
         if (result.body) {
           reply.type(result.contentType || "application/octet-stream");
           reply.send(result.body);
         } else {
-          reply.status(500).send({ error: "No file data received from agent" });
+          apiError(reply, 500, ErrorCodes.FILE_OPERATION_FAILED, "No file data received from agent");
         }
       } catch (error: any) {
         return replyTunnelError(reply, error);
@@ -212,7 +214,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
 
       const upload = await request.file();
       if (!upload) {
-        return reply.status(400).send({ error: "Missing file upload" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing file upload");
       }
 
       const rawPath = (upload.fields as any)?.path?.value;
@@ -229,7 +231,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           userId,
         );
       } catch (pathErr: any) {
-        return reply.status(400).send({ error: pathErr?.message || "Invalid path" });
+        return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, pathErr?.message || "Invalid path");
       }
 
       try {
@@ -264,7 +266,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           { stagedFile: { filePath: stagedPath, size } },
         );
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to upload file" });
+          return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, result.error || "Failed to upload file");
         }
         notifyFileChange(server.id, server.status, 'upload', filePath);
         reply.send({ success: true });
@@ -273,9 +275,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           return replyTunnelError(reply, error);
         }
         if (error?.message?.includes("exceeds limit")) {
-          return reply.status(413).send({ error: error.message });
+          return apiError(reply, 413, ErrorCodes.FILE_TOO_LARGE, error.message);
         }
-        return reply.status(400).send({ error: error?.message || "Failed to upload file" });
+        return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to upload file");
       }
     }
   );
@@ -297,7 +299,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       };
 
       if (!requestedPath) {
-        return reply.status(400).send({ error: "Missing path" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing path");
       }
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
@@ -311,7 +313,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
 
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
       if (normalizedPath === "/") {
-        return reply.status(400).send({ error: "Invalid path" });
+        return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, "Invalid path");
       }
 
       try {
@@ -320,7 +322,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           content: content ?? "",
         });
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to create item" });
+          return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, result.error || "Failed to create item");
         }
         notifyFileChange(server.id, server.status, 'create', normalizedPath);
         reply.send({ success: true });
@@ -329,7 +331,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
           return replyTunnelError(reply, error);
         }
-        return reply.status(400).send({ error: error?.message || "Failed to create item" });
+        return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to create item");
       }
     }
   );
@@ -347,11 +349,11 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const { paths, archiveName } = request.body as { paths: string[]; archiveName: string };
 
       if (!paths?.length || !archiveName) {
-        return reply.status(400).send({ error: "Missing paths or archive name" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing paths or archive name");
       }
 
       if (!isArchiveName(archiveName)) {
-        return reply.status(400).send({ error: "Unsupported archive type" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Unsupported archive type");
       }
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
@@ -371,7 +373,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           paths: normalizedPaths,
         });
         if (!result.success) {
-          return reply.status(500).send({ error: result.error || "Failed to compress files" });
+          return apiError(reply, 500, ErrorCodes.FILE_OPERATION_FAILED, result.error || "Failed to compress files");
         }
         notifyFileChange(server.id, server.status, 'compress', normalizedArchive);
         reply.send({ success: true, data: { archivePath: normalizedArchive } });
@@ -380,9 +382,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           return replyTunnelError(reply, error);
         }
         if (error?.message?.includes("Path traversal") || error?.message?.includes("Invalid path")) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
-        reply.status(500).send({ error: error?.message || "Failed to compress files" });
+        apiError(reply, 500, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to compress files");
       }
     }
   );
@@ -403,7 +405,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       };
 
       if (!archivePath || !targetPath) {
-        return reply.status(400).send({ error: "Missing archive or target path" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing archive or target path");
       }
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
@@ -423,7 +425,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           targetPath: normalizedTarget,
         });
         if (!result.success) {
-          return reply.status(500).send({ error: result.error || "Failed to decompress archive" });
+          return apiError(reply, 500, ErrorCodes.FILE_OPERATION_FAILED, result.error || "Failed to decompress archive");
         }
         notifyFileChange(server.id, server.status, 'decompress', normalizedArchive);
         reply.send({ success: true });
@@ -432,9 +434,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           return replyTunnelError(reply, error);
         }
         if (error?.message?.includes("Path traversal") || error?.message?.includes("Invalid path")) {
-          return reply.status(400).send({ error: error.message });
+          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
-        reply.status(500).send({ error: error?.message || "Failed to decompress archive" });
+        apiError(reply, 500, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to decompress archive");
       }
     }
   );
@@ -452,7 +454,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const { archivePath } = request.body as { archivePath: string };
 
       if (!archivePath) {
-        return reply.status(400).send({ error: "Missing archive path" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing archive path");
       }
 
       const server = await requireFileAccess(serverId, userId, "file.read", reply, request.user);
@@ -471,7 +473,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           const errMsg = result.error || "Failed to read archive contents";
           const status = errMsg.includes("not found") ? 404 : 500;
-          return reply.status(status).send({ error: errMsg });
+          return apiError(reply, status, ErrorCodes.FILE_OPERATION_FAILED, errMsg);
         }
 
         reply.send({ success: true, data: result.data });
@@ -487,7 +489,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
           return replyTunnelError(reply, error);
         }
-        reply.status(500).send({ error: error?.message || "Failed to read archive contents" });
+        apiError(reply, 500, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to read archive contents");
       }
     }
   );
@@ -555,7 +557,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const { path: filePath, content } = request.body as { path: string; content: string };
 
       if (!filePath || content === undefined) {
-        return reply.status(400).send({ error: "Missing path or content" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing path or content");
       }
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
@@ -571,10 +573,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       try {
         normalizedPath = validateAndNormalizePath(filePath, server.uuid, userId);
       } catch (pathErr: any) {
-        return reply.status(400).send({ error: pathErr?.message || "Invalid path" });
+        return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, pathErr?.message || "Invalid path");
       }
       if (normalizedPath === "/") {
-        return reply.status(400).send({ error: "Invalid path" });
+        return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, "Invalid path");
       }
 
       try {
@@ -582,7 +584,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           content,
         });
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to write file" });
+          return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, result.error || "Failed to write file");
         }
         notifyFileChange(server.id, server.status, 'write', normalizedPath);
       } catch (error: any) {
@@ -590,7 +592,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
           return replyTunnelError(reply, error);
         }
-        return reply.status(400).send({ error: error?.message || "Failed to write file" });
+        return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to write file");
       }
 
       // Log action
@@ -619,7 +621,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const { path: requestedPath, mode } = request.body as { path: string; mode: string | number };
 
       if (!requestedPath || mode === undefined || mode === null) {
-        return reply.status(400).send({ error: "Missing path or mode" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing path or mode");
       }
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
@@ -633,7 +635,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
 
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
       if (normalizedPath === "/") {
-        return reply.status(400).send({ error: "Invalid path" });
+        return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, "Invalid path");
       }
 
       let parsedMode: number;
@@ -645,7 +647,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       }
 
       if (!Number.isFinite(parsedMode) || parsedMode < 0 || parsedMode > 0o777) {
-        return reply.status(400).send({ error: "Invalid mode" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid mode");
       }
 
       try {
@@ -653,7 +655,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           mode: parsedMode,
         });
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to update permissions" });
+          return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, result.error || "Failed to update permissions");
         }
         notifyFileChange(server.id, server.status, 'permissions', normalizedPath);
       } catch (error: any) {
@@ -661,7 +663,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
           return replyTunnelError(reply, error);
         }
-        return reply.status(400).send({ error: error?.message || "Failed to update permissions" });
+        return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to update permissions");
       }
 
       await createAuditLog(userId, {
@@ -686,7 +688,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const { path: requestedPath } = request.query as { path: string };
 
       if (!requestedPath) {
-        return reply.status(400).send({ error: "Missing path parameter" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing path parameter");
       }
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
@@ -700,13 +702,13 @@ export async function serverFilesRoutes(app: FastifyInstance) {
 
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
       if (normalizedPath === "/") {
-        return reply.status(400).send({ error: "Invalid path" });
+        return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, "Invalid path");
       }
 
       try {
         const result = await tunnelFileOp(server.nodeId, "delete", server.uuid, normalizedPath);
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to delete selection" });
+          return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, result.error || "Failed to delete selection");
         }
         notifyFileChange(server.id, server.status, 'delete', normalizedPath);
       } catch (error: any) {
@@ -714,7 +716,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
           return replyTunnelError(reply, error);
         }
-        return reply.status(400).send({ error: error?.message || "Failed to delete selection" });
+        return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to delete selection");
       }
 
       // Log action
@@ -743,7 +745,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const { from: fromPath, to: toPath } = request.body as { from: string; to: string };
 
       if (!fromPath || !toPath) {
-        return reply.status(400).send({ error: "Missing from or to path" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing from or to path");
       }
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
@@ -761,10 +763,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         normalizedFrom = validateAndNormalizePath(fromPath, server.uuid, userId);
         normalizedTo = validateAndNormalizePath(toPath, server.uuid, userId);
       } catch (pathErr: any) {
-        return reply.status(400).send({ error: pathErr?.message || "Invalid path" });
+        return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, pathErr?.message || "Invalid path");
       }
       if (normalizedFrom === "/" || normalizedTo === "/") {
-        return reply.status(400).send({ error: "Invalid path" });
+        return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, "Invalid path");
       }
 
       try {
@@ -772,7 +774,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           to: normalizedTo,
         });
         if (!result.success) {
-          return reply.status(400).send({ error: result.error || "Failed to rename" });
+          return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, result.error || "Failed to rename");
         }
         notifyFileChange(server.id, server.status, 'rename', undefined, normalizedFrom, normalizedTo);
       } catch (error: any) {
@@ -780,7 +782,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
           return replyTunnelError(reply, error);
         }
-        return reply.status(400).send({ error: error?.message || "Failed to rename" });
+        return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to rename");
       }
 
       await createAuditLog(userId, {
