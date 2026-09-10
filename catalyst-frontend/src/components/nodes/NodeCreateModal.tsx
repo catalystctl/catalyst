@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime } from '@/i18n/format';
 import { useMutation, useQuery } from '@/csync';
 import { MapPin, ArrowRight, CheckCircle, Loader2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { nodesApi } from '../../services/api/nodes';
@@ -38,6 +40,7 @@ const RETURN_EVENT = 'catalyst:return-to-node-create' as const;
 const OPEN_LOCATIONS_EVENT = 'catalyst:open-locations-modal' as const;
 
 function NodeCreateModal(_props: Props) {
+ const { t } = useTranslation('nodes');
  const [open, setOpen] = useState(false);
  const [step, setStep] = useState<1 | 2 | 3>(1);
  const [locationId, setLocationId] = useState('');
@@ -124,7 +127,7 @@ function NodeCreateModal(_props: Props) {
  return created;
  },
  onSuccess: (created) => {
- notifySuccess('Node registered');
+ notifySuccess(t('create.success'));
  setCreatedNodeId(created?.id ?? null);
  // Move to step 3 (deploy script) and immediately fetch the deployment token
  setStep(3);
@@ -138,9 +141,8 @@ function NodeCreateModal(_props: Props) {
  queryClient.invalidateQueries({ queryKey: qk.adminNodes() }),
  ]);
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to register node';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'nodes:create.error');
  },
  });
 
@@ -207,7 +209,7 @@ function NodeCreateModal(_props: Props) {
  setOpen(true);
  }}
  >
- Register Node
+ {t('create.open')}
  </button>
 
  {/* ── Main Modal ── */}
@@ -221,14 +223,18 @@ function NodeCreateModal(_props: Props) {
  <DialogContent size="2xl">
  <DialogHeader icon={<MapPin className="h-4 w-4" />}>
  <DialogTitle>
- {step === 1 ? 'Register node' : step === 2 ? 'Node details' : 'Deploy agent'}
+ {step === 1
+                ? t('create.step1Title')
+                : step === 2
+                  ? t('create.step2Title')
+                  : t('deploy.title')}
  </DialogTitle>
  <DialogDescription>
  {step === 1
- ? 'Choose a location for this node.'
- : step === 2
- ? 'Configure hostname, resources, and connection details.'
- : 'Install the agent on your node using the script below.'}
+                  ? t('create.step1Description')
+                  : step === 2
+                    ? t('create.step2Description')
+                    : t('create.step3Description')}
  </DialogDescription>
  </DialogHeader>
 
@@ -243,7 +249,7 @@ function NodeCreateModal(_props: Props) {
  >
  1
  </span>
- Location
+ {t('form.location')}
  </div>
  <div className="h-px flex-1 bg-border/30" />
  <div
@@ -254,7 +260,7 @@ function NodeCreateModal(_props: Props) {
  >
  2
  </span>
- Details
+ {t('create.stepDetails')}
  </div>
  <div className="h-px flex-1 bg-border/30" />
  <div
@@ -265,7 +271,7 @@ function NodeCreateModal(_props: Props) {
  >
  3
  </span>
- Deploy
+ {t('create.stepDeploy')}
  </div>
  </div>
  </DialogToolbar>
@@ -278,28 +284,23 @@ function NodeCreateModal(_props: Props) {
  <MapPin className="h-7 w-7 text-success" />
  </div>
  <h3 className="text-base font-semibold text-foreground">
- Assign this node to a location?
+ {t('create.assignTitle')}
  </h3>
  <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
- <span className="font-medium text-foreground">
- Locations
- </span>{' '}
- represent where your nodes physically reside. For example,{' '}
- <span className="font-medium">US-East</span> or{' '}
- <span className="font-medium">EU-West</span>.
+   {t('create.locationsHint')}
  </p>
 
  {locations.length > 0 ? (
  <label className="mt-6 block w-full max-w-xs space-y-1.5">
  <span className="text-xs font-medium text-muted-foreground">
- Select a location <span className="text-red-500">*</span>
+ {t('create.selectLocationLabel')} <span className="text-red-500">*</span>
  </span>
  <Select
  value={locationId || '__none__'}
  onValueChange={(v) => setLocationId(v === '__none__' ? '' : v)}
  >
  <SelectTrigger className="w-full max-w-xs border-border/40">
- <SelectValue placeholder="Choose a location…" />
+ <SelectValue placeholder={t('create.chooseLocation')} />
  </SelectTrigger>
  <SelectContent>
  {locations.map((location) => (
@@ -321,7 +322,7 @@ function NodeCreateModal(_props: Props) {
  ) : (
  <div className="mt-6 rounded-xl border border-dashed border-border/40 bg-surface-2/50 px-5 py-4">
  <p className="text-sm text-muted-foreground">
- No locations exist yet.{' '}
+ {t('form.noLocations')}{' '}
  <button
  type="button"
  className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80"
@@ -331,9 +332,9 @@ function NodeCreateModal(_props: Props) {
  window.dispatchEvent(new CustomEvent(OPEN_LOCATIONS_EVENT, { detail: { returnTo: 'node-create' } }));
  }}
  >
- Create a location
+ {t('form.createLocation')}
  </button>{' '}
- first before registering a node.
+     {t('create.noLocationsSuffix')}
  </p>
  </div>
  )}
@@ -347,12 +348,12 @@ function NodeCreateModal(_props: Props) {
  <div className="flex items-center gap-2 rounded-lg bg-success/5 px-3 py-2">
  <MapPin className="h-4 w-4 text-success" />
  <span className="text-xs font-medium text-success">
- Location: {locations.find((l) => l.id === locationId)?.name || locationId}
+ {t('create.location', { name: locations.find((l) => l.id === locationId)?.name || locationId })}
  </span>
  </div>
  )}
  <label className="block space-y-1">
- <span className="text-muted-foreground">Name</span>
+ <span className="text-muted-foreground">{t('form.name')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={name}
@@ -361,9 +362,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Description
- </span>
+ <span className="text-muted-foreground">{t('form.description')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={description}
@@ -372,9 +371,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Server data directory
- </span>
+ <span className="text-muted-foreground">{t('form.serverDataDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={serverDataDir}
@@ -382,13 +379,11 @@ function NodeCreateModal(_props: Props) {
  placeholder="/var/lib/catalyst/servers"
  />
  <p className="text-xs text-muted-foreground">
- Directory on the node where server files will be stored
+ {t('form.serverDataDirHint')}
  </p>
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Hostname
- </span>
+ <span className="text-muted-foreground">{t('form.hostname')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={hostname}
@@ -397,9 +392,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Public address
- </span>
+ <span className="text-muted-foreground">{t('form.publicAddress')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={publicAddress}
@@ -409,9 +402,7 @@ function NodeCreateModal(_props: Props) {
  </label>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Memory (MB)
- </span>
+ <span className="text-muted-foreground">{t('form.memoryMb')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={memory}
@@ -421,9 +412,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- CPU cores
- </span>
+ <span className="text-muted-foreground">{t('form.cpuCores')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cpu}
@@ -436,9 +425,7 @@ function NodeCreateModal(_props: Props) {
  </div>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Memory Over-allocation (%)
- </span>
+ <span className="text-muted-foreground">{t('form.memoryOverallocate')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={memoryOverallocate}
@@ -447,13 +434,11 @@ function NodeCreateModal(_props: Props) {
  min={-1}
  />
  <p className="text-xs text-muted-foreground">
- 0 = no over-allocation, -1 = unlimited
+ {t('form.overallocateHint')}
  </p>
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- CPU Over-allocation (%)
- </span>
+ <span className="text-muted-foreground">{t('form.cpuOverallocate')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cpuOverallocate}
@@ -462,7 +447,7 @@ function NodeCreateModal(_props: Props) {
  min={-1}
  />
  <p className="text-xs text-muted-foreground">
- 0 = no over-allocation, -1 = unlimited
+ {t('form.overallocateHint')}
  </p>
  </label>
  </div>
@@ -470,7 +455,7 @@ function NodeCreateModal(_props: Props) {
  {/* SFTP Configuration */}
  <div className="rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
  <div className="flex items-center justify-between">
- <span className="text-sm font-medium text-foreground">SFTP Access</span>
+ <span className="text-sm font-medium text-foreground">{t('form.sftpAccess')}</span>
  <label className="flex items-center gap-2 text-xs text-muted-foreground">
  <input
  type="checkbox"
@@ -478,13 +463,13 @@ function NodeCreateModal(_props: Props) {
  onChange={(e) => setSftpEnabled(e.target.checked)}
  className="rounded border-border/40 text-primary focus:ring-primary"
  />
- Enabled
+ {t('form.enabled')}
  </label>
  </div>
  {sftpEnabled && (
  <div className="mt-2">
  <label className="block space-y-1">
- <span className="text-muted-foreground">SFTP port</span>
+ <span className="text-muted-foreground">{t('form.sftpPort')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={sftpPort}
@@ -495,7 +480,7 @@ function NodeCreateModal(_props: Props) {
  placeholder="2022"
  />
  <p className="text-xs text-muted-foreground">
- Port the SFTP server will listen on (on this node). Default: 2022
+ {t('create.sftpPortHint')}
  </p>
  </label>
  </div>
@@ -510,22 +495,22 @@ function NodeCreateModal(_props: Props) {
  onClick={() => setShowAdvanced(!showAdvanced)}
  >
  {showAdvanced ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
- Advanced agent paths
+ {t('form.advancedPaths')}
  </button>
  {showAdvanced && (
  <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">Console log directory</span>
+ <span className="text-muted-foreground">{t('form.consoleLogDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={consoleLogDir}
  onChange={(e) => setConsoleLogDir(e.target.value)}
- placeholder="Defaults to {data_dir}/console"
+ placeholder={t('form.consoleLogDirPlaceholder')}
  />
  </label>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI config dir</span>
+ <span className="text-muted-foreground">{t('form.cniConfigDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniDir}
@@ -534,7 +519,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI bin dir</span>
+ <span className="text-muted-foreground">{t('form.cniBinDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniBinDir}
@@ -545,7 +530,7 @@ function NodeCreateModal(_props: Props) {
  </div>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI data dir</span>
+ <span className="text-muted-foreground">{t('form.cniDataDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniDataDir}
@@ -554,7 +539,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI results dir</span>
+ <span className="text-muted-foreground">{t('form.cniResultsDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniResultsDir}
@@ -565,7 +550,7 @@ function NodeCreateModal(_props: Props) {
  </div>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI bridge name</span>
+ <span className="text-muted-foreground">{t('form.cniBridgeName')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniBridgeName}
@@ -574,7 +559,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI bridge subnet</span>
+ <span className="text-muted-foreground">{t('form.cniBridgeSubnet')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniBridgeSubnet}
@@ -584,7 +569,7 @@ function NodeCreateModal(_props: Props) {
  </label>
  </div>
  <label className="block space-y-1">
- <span className="text-muted-foreground">Systemd override dir</span>
+ <span className="text-muted-foreground">{t('form.systemdOverrideDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={systemdOverrideDir}
@@ -594,7 +579,7 @@ function NodeCreateModal(_props: Props) {
  </label>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">Agent config path</span>
+ <span className="text-muted-foreground">{t('form.agentConfigPath')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={agentConfigPath}
@@ -603,7 +588,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">Agent release repo</span>
+ <span className="text-muted-foreground">{t('form.agentReleaseRepo')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={agentReleaseRepo}
@@ -613,7 +598,7 @@ function NodeCreateModal(_props: Props) {
  </label>
  </div>
  <p className="text-xs text-muted-foreground">
- Leave blank to use agent defaults. These paths are written into the node's config.toml during deployment.
+ {t('form.advancedPathsHint')}
  </p>
  </div>
  )}
@@ -628,16 +613,16 @@ function NodeCreateModal(_props: Props) {
  <CheckCircle className="h-7 w-7 text-success" />
  </div>
  <h3 className="text-base font-semibold text-foreground">
- Node registered successfully
+ {t('create.registered')}
  </h3>
  <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
- Run the script below on <span className="font-medium text-foreground">{hostname}</span> to install and register the agent.
+ {t('create.runScript', { hostname })}
  </p>
 
  {deployTokenMutation.isPending ? (
  <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
  <Loader2 className="h-4 w-4 animate-spin" />
- Generating deployment script…
+ {t('create.generating')}
  </div>
  ) : deployInfo ? (
  <div className="mt-6 w-full min-w-0 space-y-3 text-left">
@@ -647,25 +632,25 @@ function NodeCreateModal(_props: Props) {
  </code>
  </div>
  <div className="flex items-center justify-between text-xs text-muted-foreground">
- <span>Token expires: {new Date(deployInfo.expiresAt).toLocaleString()}</span>
+ <span>{t('deploy.tokenExpires', { time: formatDateTime(deployInfo.expiresAt) })}</span>
  <button
  className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80"
  onClick={() => {
  navigator.clipboard.writeText(
  `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`
  );
- notifySuccess('Copied to clipboard');
+ notifySuccess(t('deploy.copied'));
  }}
  >
  <Copy className="h-3.5 w-3.5" />
- Copy
+ {t('common:actions.copy')}
  </button>
  </div>
  </div>
  ) : deployTokenMutation.isError ? (
  <div className="mt-6 w-full space-y-3 text-left">
  <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
- Failed to generate deployment script automatically.
+ {t('create.deployFailed')}
  </div>
  <button
  className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90"
@@ -675,15 +660,15 @@ function NodeCreateModal(_props: Props) {
  }
  }}
  >
- Retry
+ {t('common:actions.retry')}
  </button>
  {createdNodeId && (
  <p className="text-xs text-muted-foreground">
- Or go to{' '}
+ {t('create.orGoTo')}{' '}
  <a href={`/admin/nodes/${createdNodeId}`} className="font-medium text-primary hover:text-primary/80">
- node settings
+   {t('create.nodeSettings')}
  </a>{' '}
- to generate the deploy script manually.
+ {t('create.generateManually')}
  </p>
  )}
  </div>
@@ -701,24 +686,24 @@ function NodeCreateModal(_props: Props) {
  resetForm();
  }}
  >
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  {step === 2 ? (
  <Button variant="outline" onClick={() => setStep(1)}>
- Back
+   {t('common:actions.back')}
  </Button>
  ) : null}
  </div>
  ) : null}
  {step === 1 && locations.length > 0 && locationId ? (
  <Button onClick={() => setStep(2)}>
- Continue
+ {t('create.continue')}
  <ArrowRight className="h-3.5 w-3.5" />
  </Button>
  ) : null}
  {step === 2 ? (
  <Button onClick={() => createMutation.mutate()} disabled={disableSubmit}>
- {createMutation.isPending ? 'Registering...' : 'Register node'}
+ {createMutation.isPending ? t('create.registering') : t('create.register')}
  </Button>
  ) : null}
  {step === 3 ? (
@@ -728,7 +713,7 @@ function NodeCreateModal(_props: Props) {
  resetForm();
  }}
  >
- Done
+ {t('create.done')}
  </Button>
  ) : null}
  </DialogFooter>

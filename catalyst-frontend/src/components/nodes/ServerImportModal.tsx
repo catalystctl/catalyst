@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@/csync';
 import { Download, Loader2, Server, X } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -45,6 +46,7 @@ export default function ServerImportModal({
  nodeId,
  containers,
 }: ServerImportModalProps) {
+ const { t } = useTranslation('nodes');
  const queryClient = useQueryClient();
  const [importingId, setImportingId] = useState<string | null>(null);
  const [formState, setFormState] = useState<Record<string, {
@@ -96,7 +98,7 @@ export default function ServerImportModal({
  mutationFn: async (containerId: string) => {
  const form = formState[containerId];
  if (!form?.name || !form?.templateId || !form?.ownerId) {
- throw new Error('Name, template, and owner are required');
+ throw new Error(t('import.required'));
  }
  return nodesApi.importServer(nodeId, {
  containerId,
@@ -110,7 +112,7 @@ export default function ServerImportModal({
  });
  },
  onSuccess: () => {
- notifySuccess('Server imported successfully');
+ notifySuccess(t('import.success'));
  setImportingId(null);
  setFormState((prev) => {
  const next = { ...prev };
@@ -125,9 +127,8 @@ export default function ServerImportModal({
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  queryClient.invalidateQueries({ queryKey: qk.adminServers() });
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || error?.message || 'Failed to import server';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'nodes:import.error');
  setImportingId(null);
  },
  });
@@ -176,21 +177,20 @@ export default function ServerImportModal({
  icon={<Download className="h-4 w-4" />}
  iconClassName="border-warning/30 bg-warning/10 text-warning"
  >
- <DialogTitle>Import discovered servers</DialogTitle>
+ <DialogTitle>{t('import.title')}</DialogTitle>
  <DialogDescription>
- Import unregistered containers on this node as Catalyst servers.
+ {t('import.description')}
  </DialogDescription>
  </DialogHeader>
 
  <DialogBody>
  <div className="mb-4 text-sm text-muted-foreground">
- {containers.length} container(s) found on this node that are not registered as servers.
- Select a container and fill in the required details to import it.
+ {t('import.found', { total: containers.length })}
  </div>
 
  {containers.length === 0 ? (
  <div className="py-8 text-center text-sm text-muted-foreground">
- No unregistered containers found.
+ {t('import.empty')}
  </div>
  ) : (
  <div className="space-y-3">
@@ -211,7 +211,7 @@ export default function ServerImportModal({
  {container.containerId}
  </div>
  <div className="flex items-center gap-2 text-xs text-muted-foreground">
- <span>{container.image || 'Unknown image'}</span>
+ <span>{container.image || t('import.unknownImage')}</span>
  <Badge
  variant={
  container.status.includes('Up')
@@ -220,14 +220,14 @@ export default function ServerImportModal({
  }
  className="text-[10px]"
  >
- {container.status.includes('Up') ? 'Running' : 'Stopped'}
+ {container.status.includes('Up') ? t('common:status.running') : t('common:status.stopped')}
  </Badge>
  {container.networkMode && (
  <Badge
  variant={container.networkMode === 'host' ? 'warning' : 'outline'}
  className="text-[10px]"
  >
- {container.networkMode === 'host' ? 'Host Network' : 'Bridge'}
+ {container.networkMode === 'host' ? t('import.hostNetwork') : t('import.bridge')}
  </Badge>
  )}
  </div>
@@ -244,7 +244,7 @@ export default function ServerImportModal({
  </span>
  ))}
  {container.envVarNames.length > 8 && (
- <span className="text-[9px] text-muted-foreground">+{container.envVarNames.length - 8} more</span>
+ <span className="text-[9px] text-muted-foreground">{t('import.moreEnvVars', { total: container.envVarNames.length - 8 })}</span>
  )}
  </div>
  )}
@@ -266,12 +266,12 @@ export default function ServerImportModal({
  {isExpanded ? (
  <>
  <X className="h-3 w-3" />
- Cancel
+ {t('common:actions.cancel')}
  </>
  ) : (
  <>
  <Download className="h-3 w-3" />
- Import
+ {t('import.button')}
  </>
  )}
  </Button>
@@ -281,34 +281,30 @@ export default function ServerImportModal({
  <div className="mt-4 space-y-3 border-t border-border/30 pt-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">
- Server Name *
- </label>
+ <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.serverName')}</label>
  <input
  type="text"
  value={form.name}
  onChange={(e) =>
  updateForm(container.containerId, { name: e.target.value })
  }
- placeholder="My Server"
+ placeholder={t('import.namePlaceholder')}
  className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
  />
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">
- Template *
- </label>
+ <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.template')}</label>
  <Combobox
  options={templateOptions}
  value={form.templateId}
  onChange={(val: string) =>
  updateForm(container.containerId, { templateId: val })
  }
- placeholder="Select template..."
+ placeholder={t('import.selectTemplate')}
  />
  {suggestions[container.containerId] && suggestions[container.containerId].length > 0 && (
  <div className="mt-1 flex flex-wrap items-center gap-1">
- <span className="text-[10px] text-muted-foreground">Suggested:</span>
+ <span className="text-[10px] text-muted-foreground">{t('import.suggested')}</span>
  {suggestions[container.containerId].slice(0, 3).map((s) => (
  <button
  key={s.templateId}
@@ -328,22 +324,18 @@ export default function ServerImportModal({
  )}
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">
- Owner *
- </label>
+ <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.owner')}</label>
  <Combobox
  options={userOptions}
  value={form.ownerId}
  onChange={(val: string) =>
  updateForm(container.containerId, { ownerId: val })
  }
- placeholder="Select owner..."
+ placeholder={t('import.selectOwner')}
  />
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">
- Primary Port
- </label>
+ <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.primaryPort')}</label>
  <input
  type="number"
  value={form.primaryPort}
@@ -354,9 +346,7 @@ export default function ServerImportModal({
  />
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">
- Memory (MB)
- </label>
+ <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.memoryMb')}</label>
  <input
  type="number"
  value={form.allocatedMemoryMb}
@@ -370,9 +360,7 @@ export default function ServerImportModal({
  />
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">
- CPU Cores
- </label>
+ <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.cpuCores')}</label>
  <input
  type="number"
  value={form.allocatedCpuCores}
@@ -389,11 +377,11 @@ export default function ServerImportModal({
 
  <div className="flex justify-end gap-2 pt-2">
  <Button
- size="sm"
- variant="outline"
- onClick={() => setImportingId(null)}
+   size="sm"
+   variant="outline"
+   onClick={() => setImportingId(null)}
  >
- Cancel
+   {t('common:actions.cancel')}
  </Button>
  <Button
  size="sm"
@@ -408,7 +396,7 @@ export default function ServerImportModal({
  ) : (
  <Download className="h-3 w-3" />
  )}
- Import Server
+ {t('import.serverButton')}
  </Button>
  </div>
  </div>
@@ -422,7 +410,7 @@ export default function ServerImportModal({
 
  <DialogFooter>
  <Button variant="outline" onClick={onClose}>
- Cancel
+   {t('common:actions.cancel')}
  </Button>
  </DialogFooter>
  </DialogContent>

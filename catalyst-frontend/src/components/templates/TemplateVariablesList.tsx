@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Badge } from '../../components/ui/badge';
 import type { TemplateVariable } from '../../types/template';
 
@@ -6,10 +7,11 @@ type Props = {
 };
 
 function TemplateVariablesList({ variables }: Props) {
+ const { t } = useTranslation('templates');
  if (!variables.length) {
  return (
  <div className="py-4 text-center text-sm text-muted-foreground">
- No variables defined.
+ {t('variables.empty')}
  </div>
  );
  }
@@ -34,11 +36,11 @@ function TemplateVariablesList({ variables }: Props) {
  <div className="mt-0.5 text-xs text-muted-foreground">{variable.description}</div>
  )}
  <div className="mt-1.5 text-xs text-muted-foreground">
- Default: <span className="font-medium text-foreground">{variable.default || '—'}</span>
+ {t('variables.default')} <span className="font-medium text-foreground">{variable.default || '—'}</span>
  </div>
  {variable.rules && variable.rules.length > 0 && (
  <div className="mt-0.5 text-xs text-muted-foreground">
- Rules: <span className="font-medium text-foreground">{variable.rules.join(', ')}</span>
+ {t('variables.rules')} <span className="font-medium text-foreground">{variable.rules.join(', ')}</span>
  </div>
  )}
  </div>

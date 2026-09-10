@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -29,6 +30,7 @@ type Props = {
 type AssignmentTarget = 'user' | 'role';
 
 function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
+  const { t } = useTranslation('nodes');
   const [targetType, setTargetType] = useState<AssignmentTarget>('user');
   const [targetId, setTargetId] = useState('');
   const [search, setSearch] = useState('');
@@ -64,15 +66,14 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
       });
     },
     onSuccess: () => {
-      notifySuccess('Node assigned successfully');
+      notifySuccess(t('assign.success'));
       handleClose();
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to assign node';
-      notifyError(message);
+    onError: (error: unknown) => {
+      notifyError(error, 'nodes:assign.error');
     },
   });
 
@@ -115,14 +116,14 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
     >
       <DialogContent size="lg">
         <DialogHeader>
-          <DialogTitle>Assign node</DialogTitle>
+          <DialogTitle>{t('assign.title')}</DialogTitle>
           <DialogDescription>
-            Grant a user or role access to this node.
+            {t('assign.description')}
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">
           <div className="space-y-2">
-            <Label>Assign to</Label>
+            <Label>{t('assign.target')}</Label>
             <div className="flex gap-2">
               <button
                 className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
@@ -135,9 +136,8 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
                   setTargetId('');
                 }}
               >
-                User
-              </button>
-              <button
+                {t('assign.user')}
+              </button>              <button
                 className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
                   targetType === 'role'
                     ? 'border-primary/50 bg-primary/10 text-primary'
@@ -148,20 +148,21 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
                   setTargetId('');
                 }}
               >
-                Role
-              </button>
-            </div>
+                {t('assign.role')}
+              </button>            </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="node-assign-search">
-              Search {targetType === 'user' ? 'users' : 'roles'}
+              {targetType === 'user' ? t('assign.searchUsers') : t('assign.searchRoles')}
             </Label>
             <Input
               id="node-assign-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={targetType === 'user' ? 'Search by username or email...' : 'Search roles...'}
+              placeholder={targetType === 'user'
+                ? t('assign.searchUsersPlaceholder')
+                : t('assign.searchRolesPlaceholder')}
             />
           </div>
 
@@ -169,11 +170,11 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
             {targetType === 'user' ? (
               usersLoading ? (
                 <div className="p-4 text-center text-muted-foreground">
-                  Loading users...
+                  {t('assign.loadingUsers')}
                 </div>
               ) : filteredUsers.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">
-                  No users found
+                  {t('assign.noUsers')}
                 </div>
               ) : (
                 <div className="divide-y divide-border/30">
@@ -197,11 +198,11 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
               )
             ) : rolesLoading ? (
               <div className="p-4 text-center text-muted-foreground">
-                Loading roles...
+                {t('assign.loadingRoles')}
               </div>
             ) : filteredRoles.length === 0 ? (
               <div className="p-4 text-center text-muted-foreground">
-                No roles found
+                {t('assign.noRoles')}
               </div>
             ) : (
               <div className="divide-y divide-border/30">
@@ -230,16 +231,17 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
           {targetId && (
             <div className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
               <span className="text-xs text-muted-foreground">
-                Selected: {targetType === 'user'
-                  ? filteredUsers.find((u) => u.id === targetId)?.username || 'Unknown user'
-                  : filteredRoles.find((r) => r.id === targetId)?.name || 'Unknown role'
-                }
+                {t('assign.selected', {
+                  name: targetType === 'user'
+                    ? filteredUsers.find((u) => u.id === targetId)?.username || t('assign.unknownUser')
+                    : filteredRoles.find((r) => r.id === targetId)?.name || t('assign.unknownRole'),
+                })}
               </span>
             </div>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="node-assign-expires">Expiration (optional)</Label>
+            <Label htmlFor="node-assign-expires">{t('assign.expiration')}</Label>
             <Input
               id="node-assign-expires"
               type="datetime-local"
@@ -248,16 +250,15 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
               min={new Date().toISOString().slice(0, 16)}
             />
             <p className="text-xs text-muted-foreground">
-              Leave empty for no expiration
+              {t('assign.expirationHint')}
             </p>
           </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={!targetId || assignMutation.isPending}>
-            {assignMutation.isPending ? 'Assigning...' : 'Assign node'}
+            {t('common:actions.cancel')}
+          </Button>          <Button onClick={handleSubmit} disabled={!targetId || assignMutation.isPending}>
+            {assignMutation.isPending ? t('assign.assigning') : t('assign.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,4 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime } from '@/i18n/format';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
@@ -57,6 +59,7 @@ function ModalShell({
   children: React.ReactNode;
   variant?: 'default' | 'danger';
 }) {
+  const { t } = useTranslation('nodes');
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
       <DialogContent size="lg">
@@ -71,7 +74,7 @@ function ModalShell({
         </DialogHeader>
         <DialogBody className="space-y-3">{children}</DialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button variant="outline" onClick={onClose}>{t('common:actions.close')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -79,6 +82,7 @@ function ModalShell({
 }
 
 function NodeDetailsPage() {
+  const { t } = useTranslation('nodes');
   const { nodeId } = useParams();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
@@ -130,14 +134,13 @@ function NodeDetailsPage() {
     },
     onSuccess: (info) => {
       setDeployInfo(info ?? null);
-      notifySuccess('Deployment script regenerated');
+      notifySuccess(t('deploy.regenerated'));
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.nodeApiKey(nodeId!) });
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to regenerate deployment script';
-      notifyError(message);
+    onError: (error: unknown) => {
+      notifyError(error, 'nodes:deploy.regenerateError');
     },
   });
 
@@ -152,14 +155,13 @@ function NodeDetailsPage() {
     },
     onSuccess: (info) => {
       setGeneratedApiKey(info?.apiKey ?? null);
-      notifySuccess(info?.regenerated ? 'API key regenerated' : 'API key generated');
+      notifySuccess(info?.regenerated ? t('apiKey.regenerated') : t('apiKey.generated'));
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.nodeApiKey(nodeId!) });
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to generate API key';
-      notifyError(message);
+    onError: (error: unknown) => {
+      notifyError(error, 'nodes:apiKey.generateError');
     },
   });
 
@@ -190,7 +192,7 @@ function NodeDetailsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="text-sm text-muted-foreground">Loading node…</div>
+        <div className="text-sm text-muted-foreground">{t('details.loading')}</div>
       </div>
     );
   }
@@ -199,7 +201,7 @@ function NodeDetailsPage() {
     return (
       <div className="flex items-center justify-center py-20">
         <TabErrorState
-          message="Unable to load node details."
+          message={t('details.loadError')}
           onRetry={() => refetch()}
         />
       </div>
@@ -216,7 +218,7 @@ function NodeDetailsPage() {
         className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-3 w-3" />
-        Back to Nodes
+        {t('details.backToNodes')}
       </Link>
 
       <WorkspaceHeader
@@ -229,7 +231,7 @@ function NodeDetailsPage() {
               variant={node.isOnline ? 'success' : 'secondary'}
               className="shrink-0 gap-1 text-[10px]"
             >
-              {node.isOnline ? 'Online' : 'Offline'}
+              {node.isOnline ? t('common:status.online') : t('common:status.offline')}
             </Badge>
             {node.agentVersion && stats?.agentUpdateAvailable && (
               <Badge variant="warning" className="shrink-0 gap-1 font-mono text-[10px]">
@@ -243,8 +245,8 @@ function NodeDetailsPage() {
           node.hostname,
           node.publicAddress,
           node.location?.name,
-          node.lastSeenAt ? `Seen ${new Date(node.lastSeenAt).toLocaleString()}` : 'Never seen',
-          node.agentVersion && !stats?.agentUpdateAvailable ? `Agent v${node.agentVersion}` : null,
+          node.lastSeenAt ? t('details.seen', { time: formatDateTime(node.lastSeenAt) }) : t('details.neverSeen'),
+          node.agentVersion && !stats?.agentUpdateAvailable ? t('details.agentVersion', { version: node.agentVersion }) : null,
         ]
           .filter(Boolean)
           .join(' · ')}
@@ -261,10 +263,10 @@ function NodeDetailsPage() {
                 <Key className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">
                   {apiKeyMutation.isPending
-                    ? 'Generating…'
+                    ? t('details.generating')
                     : apiKeyStatus?.exists
-                      ? 'Regenerate Key'
-                      : 'Generate Key'}
+                      ? t('apiKey.regenerate')
+                      : t('apiKey.generate')}
                 </span>
               </Button>
               <Button
@@ -276,13 +278,13 @@ function NodeDetailsPage() {
               >
                 <Terminal className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">
-                  {deployMutation.isPending ? 'Generating…' : 'Deploy'}
+                  {deployMutation.isPending ? t('details.generating') : t('details.deploy')}
                 </span>
               </Button>
               <Button asChild size="sm" variant="outline">
                 <Link to={`/admin/nodes/${node.id}/allocations`} className="gap-1.5">
                   <Shield className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Allocations</span>
+                  <span className="hidden sm:inline">{t('details.allocations')}</span>
                 </Link>
               </Button>
               <Button
@@ -323,7 +325,7 @@ function NodeDetailsPage() {
           <div className="flex items-center gap-2">
             <Server className="h-3.5 w-3.5 text-primary" />
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
-              Servers
+              {t('servers.title')}
             </h3>
           </div>
           <div className="flex items-center gap-2">
@@ -334,7 +336,7 @@ function NodeDetailsPage() {
               to="/servers"
               className="text-[10px] font-medium text-primary hover:text-primary/80"
             >
-              View all
+              {t('servers.viewAll')}
             </Link>
           </div>
         </div>
@@ -359,14 +361,14 @@ function NodeDetailsPage() {
                   to={`/servers/${server.id}`}
                   className="ml-3 flex shrink-0 items-center gap-1 rounded-md border border-border/30 px-2 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-all hover:border-primary/50 hover:text-primary group-hover:opacity-100"
                 >
-                  Open
+                  {t('servers.open')}
                   <ExternalLink className="h-2.5 w-2.5" />
                 </Link>
               </div>
             ))}
           </div>
         ) : (
-          <TabEmptyState title="No servers assigned yet." />
+          <TabEmptyState title={t('servers.empty')} />
         )}
       </div>
 
@@ -379,16 +381,16 @@ function NodeDetailsPage() {
             <div className="flex items-center gap-2">
               <Download className="h-3.5 w-3.5 text-warning" />
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
-                Discovered Servers
+                {t('discovered.title')}
               </h3>
             </div>
             <Button size="sm" onClick={() => setShowImportModal(true)} className="gap-1.5">
               <Download className="h-3.5 w-3.5" />
-              Import
+              {t('import.button')}
             </Button>
           </div>
           <div className="text-[11px] text-muted-foreground/50">
-            {unregisteredContainers.length} container(s) not registered in the panel.
+            {t('discovered.count', { total: unregisteredContainers.length })}
           </div>
           <div className="mt-2 divide-y divide-border/20">
             {unregisteredContainers.map((c: any) => (
@@ -396,19 +398,19 @@ function NodeDetailsPage() {
                 <div className="min-w-0 flex-1 overflow-hidden">
                   <div className="font-mono text-[11px] font-medium text-foreground">{c.containerId}</div>
                   <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground/50">
-                    <span>{c.image || 'Unknown image'}</span>
+                    <span>{c.image || t('import.unknownImage')}</span>
                     <Badge
                       variant={c.status?.includes('Up') ? 'success' : 'secondary'}
                       className="text-[9px]"
                     >
-                      {c.status?.includes('Up') ? 'Running' : 'Stopped'}
+                      {c.status?.includes('Up') ? t('common:status.running') : t('common:status.stopped')}
                     </Badge>
                     {c.networkMode && (
                       <Badge
                         variant={c.networkMode === 'host' ? 'warning' : 'outline'}
                         className="text-[9px]"
                       >
-                        {c.networkMode === 'host' ? 'Host' : 'Bridge'}
+                        {c.networkMode === 'host' ? t('import.host') : t('import.bridge')}
                       </Badge>
                     )}
                   </div>
@@ -434,7 +436,7 @@ function NodeDetailsPage() {
                 className="gap-1.5 border-dashed border-border/40"
               >
                 <Shield className="h-3.5 w-3.5" />
-                Assign Node to User or Role
+                {t('assign.cta')}
               </Button>
             </div>
           )}
@@ -449,8 +451,8 @@ function NodeDetailsPage() {
       <ModalShell
         open={!!deployInfo}
         onClose={() => setDeployInfo(null)}
-        title="Deploy agent"
-        description="Run this on the node to install and register the agent (valid for 24 hours)."
+        title={t('deploy.title')}
+        description={t('deploy.description')}
       >
         <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
           <code className="block max-w-full break-all whitespace-pre-wrap">
@@ -461,7 +463,7 @@ function NodeDetailsPage() {
         </div>
         <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           <span className="min-w-0">
-            Token expires: {deployInfo ? new Date(deployInfo.expiresAt).toLocaleString() : ''}
+            {t('deploy.tokenExpires', { time: deployInfo ? formatDateTime(deployInfo.expiresAt) : '' })}
           </span>
           <Button
             variant="outline"
@@ -472,11 +474,11 @@ function NodeDetailsPage() {
               navigator.clipboard.writeText(
                 `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`,
               );
-              notifySuccess('Copied to clipboard');
+              notifySuccess(t('deploy.copied'));
             }}
           >
             <Copy className="h-3 w-3" />
-            Copy
+            {t('common:actions.copy')}
           </Button>
         </div>
       </ModalShell>
@@ -485,17 +487,13 @@ function NodeDetailsPage() {
       <ModalShell
         open={!!generatedApiKey}
         onClose={() => setGeneratedApiKey(null)}
-        title="Agent API key"
-        description="Add this key to the agent's config.toml. It will not be shown again."
+        title={t('apiKey.title')}
+        description={t('apiKey.description')}
       >
         {apiKeyStatus?.exists && (
           <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-xs text-warning">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>
-              The previous API key has been revoked. Update the agent's{' '}
-              <code className="rounded bg-warning/10 px-1">config.toml</code>{' '}
-              with the new key below.
-            </span>
+            <span>{t('apiKey.revoked')}</span>
           </div>
         )}
         <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
@@ -505,7 +503,7 @@ function NodeDetailsPage() {
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-xs text-warning">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <strong>Important:</strong> Save this key now. It will not be shown again.
+          <strong>{t('apiKey.important')}</strong> {t('apiKey.saveNow')}
         </div>
         <div className="flex justify-end">
           <Button
@@ -514,13 +512,13 @@ function NodeDetailsPage() {
             onClick={() => {
               if (generatedApiKey) {
                 navigator.clipboard.writeText(generatedApiKey);
-                notifySuccess('API key copied to clipboard');
+                notifySuccess(t('apiKey.copied'));
               }
             }}
             className="gap-1.5"
           >
             <Copy className="h-3 w-3" />
-            Copy
+            {t('common:actions.copy')}
           </Button>
         </div>
       </ModalShell>

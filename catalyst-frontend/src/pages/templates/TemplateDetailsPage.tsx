@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
  FileCode,
@@ -21,6 +22,7 @@ import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
 
 function TemplateDetailsPage() {
+ const { t } = useTranslation('templates');
  const { templateId } = useParams();
  const navigate = useNavigate();
  const { data: template, isLoading, isError, refetch } = useTemplate(templateId);
@@ -48,7 +50,7 @@ function TemplateDetailsPage() {
  if (isLoading) {
  return (
  <div className="space-y-4">
- <TabHeader icon={FileCode} title="Template" description="Loading template details…" />
+ <TabHeader icon={FileCode} title={t('details.title')} description={t('details.loading')} />
  <ServerTabCard>
  <TabLoadingState rows={5} />
  </ServerTabCard>
@@ -59,20 +61,20 @@ function TemplateDetailsPage() {
  if (isError || !template) {
  return (
  <div className="space-y-4">
- <TabHeader icon={FileCode} title="Template" />
+ <TabHeader icon={FileCode} title={t('details.title')} />
  <TabErrorState
- message="Unable to load template details."
+ message={t('details.loadError')}
  onRetry={() => refetch()}
  />
  <div className="flex items-center gap-2">
  <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5 text-xs">
- Retry
+ {t('common:actions.retry')}
  </Button>
  <Link
  to="/admin/templates"
  className="text-xs text-muted-foreground hover:text-foreground"
  >
- ← Back to templates
+ {t('details.backLink')}
  </Link>
  </div>
  </div>
@@ -80,8 +82,8 @@ function TemplateDetailsPage() {
  }
 
  const portList = template.supportedPorts?.length
- ? template.supportedPorts.join(', ')
- : 'n/a';
+    ? template.supportedPorts.join(', ')
+    : t('state.notAvailable');
  const imageVariants = template.images ?? [];
 
  return (
@@ -92,7 +94,7 @@ function TemplateDetailsPage() {
  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
  >
  <ArrowLeft className="h-3 w-3" />
- Back to Templates
+ {t('details.back')}
  </Link>
 
  {/* ── Header ── */}
@@ -105,7 +107,7 @@ function TemplateDetailsPage() {
  <div className="flex flex-wrap items-center gap-2">
  <Button variant="outline" size="sm" onClick={() => setShowEditModal(true)} className="gap-1.5">
  <Settings className="h-3.5 w-3.5" />
- Edit
+ {t('common:actions.edit')}
  </Button>
  <Button
  variant="outline"
@@ -114,7 +116,7 @@ function TemplateDetailsPage() {
  className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20"
  >
  <Trash2 className="h-3.5 w-3.5" />
- Delete
+ {t('common:actions.delete')}
  </Button>
  </div>
  )
@@ -134,32 +136,32 @@ function TemplateDetailsPage() {
  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
  {/* Runtime card */}
  <ServerTabCard>
- <SectionHeader icon={FileCode} title="Runtime" />
+ <SectionHeader icon={FileCode} title={t('details.runtime')} />
  <div className="space-y-1.5">
- <DataField label="Image" value={template.defaultImage || template.image} />
+ <DataField label={t('image')} value={template.defaultImage || template.image} />
  {imageVariants.length > 0 && (
  <DataField
- label="Image variants"
+ label={t('details.imageVariants')}
  value={imageVariants.map((o) => o.label ?? o.name).join(', ')}
  />
  )}
  {template.defaultImage && (
- <DataField label="Default image" value={template.defaultImage} />
+ <DataField label={t('details.defaultImage')} value={template.defaultImage} />
  )}
- <DataField label="Install image" value={template.installImage ?? 'n/a'} />
- <DataField label="Stop command" value={template.stopCommand} />
- <DataField label="Signal" value={template.sendSignalTo} />
- <DataField label="Ports" value={portList} />
+ <DataField label={t('details.installImage')} value={template.installImage ?? t('state.notAvailable')} />
+ <DataField label={t('details.stopCommand')} value={template.stopCommand} />
+ <DataField label={t('details.signal')} value={template.sendSignalTo} />
+ <DataField label={t('details.ports')} value={portList} />
  <DataField
- label="Resources"
+ label={t('resources')}
  value={`${template.allocatedCpuCores} CPU · ${template.allocatedMemoryMb} MB`}
  />
  <DataField
- label="Config file(s)"
+ label={t('details.configFiles')}
  value={
  template.features?.configFiles?.length
  ? template.features.configFiles.join(', ')
- : template.features?.configFile ?? 'n/a'
+ : template.features?.configFile ?? t('state.notAvailable')
  }
  />
  </div>
@@ -167,16 +169,16 @@ function TemplateDetailsPage() {
 
  {/* Startup card */}
  <ServerTabCard>
- <SectionHeader icon={FileCode} title="Startup" />
+ <SectionHeader icon={FileCode} title={t('details.startup')} />
  <p className="mb-2 text-xs text-muted-foreground">
- Variables are substituted before container start.
+ {t('details.variablesHint')}
  </p>
  <div className="rounded-lg border border-border/30 bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground">
  {template.startup}
  </div>
  {template.installScript && (
  <>
- <SectionHeader icon={FileCode} title="Install script" />
+ <SectionHeader icon={FileCode} title={t('details.installScript')} />
  <div className="max-h-40 overflow-y-auto rounded-lg border border-border/30 bg-surface-2 px-3 py-2.5 font-mono text-xs whitespace-pre-wrap text-foreground">
  {template.installScript}
  </div>
@@ -188,7 +190,7 @@ function TemplateDetailsPage() {
  {/* ── Variables ── */}
  <ServerTabCard>
  <div className="flex items-center gap-2">
- <SectionHeader icon={FileCode} title="Variables" />
+ <SectionHeader icon={FileCode} title={t('details.variables')} />
  <Badge variant="outline" className="text-xs">
  {template.variables?.length ?? 0}
  </Badge>

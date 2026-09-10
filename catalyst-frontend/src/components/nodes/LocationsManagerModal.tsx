@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -38,6 +39,7 @@ function LocationForm({
  onCancel: () => void;
  isPending: boolean;
 }) {
+ const { t } = useTranslation('nodes');
  const [name, setName] = useState(initial?.name || '');
  const [description, setDescription] = useState(initial?.description || '');
 
@@ -47,7 +49,7 @@ function LocationForm({
  <div className="space-y-3">
  <label className="block space-y-1">
  <span className="text-xs font-medium text-muted-foreground">
- Name <span className="text-destructive">*</span>
+ {t('locations.name')} <span className="text-destructive">*</span>
  </span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
@@ -58,13 +60,13 @@ function LocationForm({
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Description (optional)</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('locations.descriptionOptional')}</span>
  <textarea
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  rows={2}
  value={description}
  onChange={(e) => setDescription(e.target.value)}
- placeholder="Brief description of this location"
+ placeholder={t('locations.descriptionPlaceholder')}
  />
  </label>
  <div className="flex justify-end gap-2 pt-1">
@@ -72,7 +74,7 @@ function LocationForm({
  className="rounded-full border border-border/40 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground"
  onClick={onCancel}
  >
- Cancel
+ {t('common:actions.cancel')}
  </button>
  <button
  className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-60"
@@ -84,7 +86,7 @@ function LocationForm({
  }
  disabled={disableSubmit}
  >
- {isPending ? 'Saving...' : initial ? 'Update' : 'Create'}
+ {isPending ? t('locations.saving') : initial ? t('locations.update') : t('common:actions.create')}
  </button>
  </div>
  </div>
@@ -98,6 +100,7 @@ type Props = {
 };
 
 export default function LocationsManagerModal({ open, onOpenChange }: Props) {
+  const { t } = useTranslation('nodes');
  const [editingLocation, setEditingLocation] = useState<Location | null>(null);
  const [isCreating, setIsCreating] = useState(false);
  const [deleteTarget, setDeleteTarget] = useState<Location | null>(null);
@@ -122,7 +125,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  const createMutation = useMutation({
  mutationFn: locationsApi.create,
  onSuccess: (created) => {
- notifySuccess('Location created');
+ notifySuccess(t('locations.created'));
  setIsCreating(false);
  // If opened from another modal, send the user back after creation
  if (returnToRef.current) {
@@ -137,9 +140,8 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  }
  }
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to create location';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'nodes:locations.createError');
  },
  onSettled: () => {
  Promise.all([
@@ -154,12 +156,11 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  mutationFn: ({ id, ...payload }: { id: string } & Parameters<typeof locationsApi.update>[1]) =>
  locationsApi.update(id, payload),
  onSuccess: () => {
- notifySuccess('Location updated');
+ notifySuccess(t('locations.updated'));
  setEditingLocation(null);
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to update location';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'nodes:locations.updateError');
  },
  onSettled: () => {
  Promise.all([
@@ -173,12 +174,11 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  const deleteMutation = useMutation({
  mutationFn: locationsApi.remove,
  onSuccess: () => {
- notifySuccess('Location deleted');
+ notifySuccess(t('locations.deleted'));
  setDeleteTarget(null);
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to delete location';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'nodes:locations.deleteError');
  },
  onSettled: () => {
  Promise.all([
@@ -206,8 +206,8 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  <Dialog open={open} onOpenChange={onOpenChange}>
  <DialogContent size="xl">
  <DialogHeader icon={<MapPin className="h-4 w-4" />} iconClassName="border-success/20 bg-success/10 text-success">
- <DialogTitle>Manage locations</DialogTitle>
- <DialogDescription>Organize nodes by physical or geographic location.</DialogDescription>
+ <DialogTitle>{t('locations.title')}</DialogTitle>
+ <DialogDescription>{t('locations.description')}</DialogDescription>
  </DialogHeader>
  <DialogBody>
  {/* Inline form */}
@@ -215,7 +215,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
  <div className="mb-3 flex items-center justify-between">
  <span className="text-sm font-semibold text-foreground">
- {editingLocation ? 'Edit location' : 'New location'}
+ {editingLocation ? t('locations.edit') : t('locations.new')}
  </span>
  <button
  className="rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
@@ -259,9 +259,9 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  ) : locations.length === 0 && !isCreating ? (
  <div className="flex flex-col items-center justify-center py-12 text-center">
  <MapPin className="mb-3 h-10 w-10 text-muted-foreground/40" />
- <p className="text-sm font-medium text-muted-foreground">No locations yet</p>
+ <p className="text-sm font-medium text-muted-foreground">{t('locations.empty')}</p>
  <p className="mt-1 text-xs text-muted-foreground/70">
- Create a location to group your nodes.
+ {t('locations.emptyHint')}
  </p>
  </div>
  ) : (
@@ -287,8 +287,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  </p>
  )}
  <span className="text-[11px] text-muted-foreground/70">
- {location.nodeCount ?? 0} node
- {(location.nodeCount ?? 0) !== 1 ? 's' : ''}
+ {t('locations.nodeCount', { count: location.nodeCount ?? 0 })}
  </span>
  </div>
 
@@ -300,14 +299,14 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  setEditingLocation(location);
  setIsCreating(false);
  }}
- title="Edit"
+ title={t('common:actions.edit')}
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
  <button
  className="rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/5 hover:text-destructive"
  onClick={() => setDeleteTarget(location)}
- title="Delete"
+ title={t('common:actions.delete')}
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
@@ -320,7 +319,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  {!isFormActive && (
  <DialogFooter className="sm:justify-between">
  <span className="text-xs text-muted-foreground">
- {locations.length} location{locations.length !== 1 ? 's' : ''}
+ {t('locations.count', { count: locations.length })}
  </span>
  <Button
  size="sm"
@@ -330,7 +329,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  }}
  >
  <Plus className="h-3.5 w-3.5" />
- Add location
+ {t('locations.add')}
  </Button>
  </DialogFooter>
  )}
@@ -340,19 +339,17 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  {/* Delete confirmation */}
  <ConfirmDialog
  open={!!deleteTarget}
- title="Delete Location"
+ title={t('locations.deleteTitle')}
  message={
  <div className="space-y-2">
- <p>
- Delete location <span className="font-semibold">{deleteTarget?.name}</span>?
- </p>
+ <p>{t('locations.deleteConfirm', { name: deleteTarget?.name })}</p>
  <p className="text-xs text-muted-foreground">
- Nodes in this location will also be deleted. This action cannot be undone.
+   {t('locations.deleteWarning')}
  </p>
  </div>
  }
- confirmText="Delete"
- cancelText="Cancel"
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
  onCancel={() => setDeleteTarget(null)}
  variant="danger"

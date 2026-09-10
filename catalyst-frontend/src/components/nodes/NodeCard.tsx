@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime } from '@/i18n/format';
 import { Server, Cpu, HardDrive, ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import type { NodeInfo } from '../../types/node';
@@ -10,7 +12,8 @@ type Props = {
 };
 
 function NodeCard({ node, latestAgentVersion }: Props) {
- const lastSeen = node.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : 'n/a';
+ const { t } = useTranslation('nodes');
+ const lastSeen = node.lastSeenAt ? formatDateTime(node.lastSeenAt) : t('state.notAvailable');
  const serverCount = node._count?.servers ?? node.servers?.length ?? 0;
  const memoryGB = node.maxMemoryMb ? (node.maxMemoryMb / 1024).toFixed(1) : '0';
 
@@ -76,7 +79,7 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  }`}
  />
  </span>
- {node.isOnline ? 'Online' : 'Offline'}
+ {node.isOnline ? t('common:status.online') : t('common:status.offline')}
  </Badge>
  {/* Agent version badge */}
  {agentVersion && (
@@ -89,7 +92,7 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  ) : (
  <CheckCircle className="h-2.5 w-2.5" />
  )}
- Agent v{agentVersion}
+ {t('card.agentVersion', { version: agentVersion })}
  {agentOutdated && latestAgentVersion && (
  <span className="text-muted-foreground">→ v{latestAgentVersion}</span>
  )}
@@ -97,7 +100,7 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  )}
  </div>
  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
- <span className="font-mono text-[11px] opacity-70">{node.hostname ?? 'hostname n/a'}</span>
+ <span className="font-mono text-[11px] opacity-70">{node.hostname ?? t('card.hostnameUnknown')}</span>
  {node.location && (
  <>
  <span className="text-muted-foreground">·</span>
@@ -105,7 +108,7 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  </>
  )}
  <span className="text-muted-foreground">·</span>
- <span>Last seen {lastSeen}</span>
+ <span>{t('card.lastSeen', { time: lastSeen })}</span>
  </div>
  </div>
  </div>
@@ -114,7 +117,7 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  to={`/admin/nodes/${node.id}`}
  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border/30 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
  >
- Manage
+ {t('card.manage')}
  <ExternalLink className="h-3 w-3" />
  </Link>
  </div>
@@ -124,7 +127,7 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  <div className="rounded-lg border border-border/30 bg-surface-2/30 p-3">
  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
  <Server className="h-3 w-3" />
- <span>Servers</span>
+ <span>{t('servers.title')}</span>
  </div>
  <div className="mt-1 text-lg font-semibold text-foreground">
  {serverCount}
@@ -133,24 +136,27 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  <div className="rounded-lg border border-border/30 bg-surface-2/30 p-3">
  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
  <Cpu className="h-3 w-3" />
- <span>CPU</span>
+ <span>{t('card.cpu')}</span>
  </div>
  <div className="mt-1 text-lg font-semibold text-foreground">
  {node.maxCpuCores ?? 0}
- <span className="ml-1 text-xs font-normal text-muted-foreground">cores</span>
+ <span className="ml-1 text-xs font-normal text-muted-foreground">{t('card.cores')}</span>
  </div>
  {node.cpuOverallocatePercent !== undefined && node.cpuOverallocatePercent !== 0 && (
  <div className="mt-0.5 text-[11px] text-muted-foreground">
  {node.cpuOverallocatePercent === -1
- ? 'effective: ∞'
- : `effective: ${((node.maxCpuCores ?? 0) * (1 + node.cpuOverallocatePercent / 100)).toFixed(1)} cores (${node.cpuOverallocatePercent}%)`}
+ ? t('card.effectiveUnlimited')
+ : t('card.effectiveCpu', {
+   cores: ((node.maxCpuCores ?? 0) * (1 + node.cpuOverallocatePercent / 100)).toFixed(1),
+   percent: node.cpuOverallocatePercent,
+ })}
  </div>
  )}
  </div>
  <div className="rounded-lg border border-border/30 bg-surface-2/30 p-3">
  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
  <HardDrive className="h-3 w-3" />
- <span>Memory</span>
+ <span>{t('card.memory')}</span>
  </div>
  <div className="mt-1 text-lg font-semibold text-foreground">
  {memoryGB}
@@ -159,8 +165,11 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  {node.memoryOverallocatePercent !== undefined && node.memoryOverallocatePercent !== 0 && (
  <div className="mt-0.5 text-[11px] text-muted-foreground">
  {node.memoryOverallocatePercent === -1
- ? 'effective: ∞'
- : `effective: ${((node.maxMemoryMb ?? 0) * (1 + node.memoryOverallocatePercent / 100) / 1024).toFixed(1)} GB (${node.memoryOverallocatePercent}%)`}
+ ? t('card.effectiveUnlimited')
+ : t('card.effectiveMemory', {
+   gb: ((node.maxMemoryMb ?? 0) * (1 + node.memoryOverallocatePercent / 100) / 1024).toFixed(1),
+   percent: node.memoryOverallocatePercent,
+ })}
  </div>
  )}
  </div>

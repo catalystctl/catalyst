@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 const MOD_PROVIDERS = ['curseforge', 'modrinth'] as const;
 const PLUGIN_PROVIDERS = ['spigot', 'paper', 'modrinth'] as const;
 
@@ -33,6 +35,8 @@ function TemplateProviderEditor({
  pluginProviders,
  onPluginProvidersChange,
 }: TemplateProviderEditorProps) {
+ const { t } = useTranslation('templates');
+
  const toggleModProvider = (id: string) => {
  if (modProviders.includes(id)) {
  onModProvidersChange(modProviders.filter((p) => p !== id));
@@ -55,7 +59,7 @@ function TemplateProviderEditor({
  return (
  <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
- Mod &amp; Plugin Providers
+ {t('provider.title')}
  </div>
 
  {/* ── Mod Manager ── */}
@@ -74,7 +78,7 @@ function TemplateProviderEditor({
  modManagerEnabled ? 'bg-card' : 'bg-muted-foreground'
  }`}
  />
- Mod Manager
+ {t('provider.modManager')}
  </button>
 
  {modManagerEnabled && (
@@ -98,7 +102,7 @@ function TemplateProviderEditor({
  })}
  {modProviders.length === 0 && (
  <span className="text-xs text-muted-foreground">
- Select at least one provider.
+ {t('provider.selectOne')}
  </span>
  )}
  </div>
@@ -121,7 +125,7 @@ function TemplateProviderEditor({
  pluginManagerEnabled ? 'bg-card' : 'bg-muted-foreground'
  }`}
  />
- Plugin Manager
+ {t('provider.pluginManager')}
  </button>
 
  {pluginManagerEnabled && (
@@ -145,7 +149,7 @@ function TemplateProviderEditor({
  })}
  {pluginProviders.length === 0 && (
  <span className="text-xs text-muted-foreground">
- Select at least one provider.
+ {t('provider.selectOne')}
  </span>
  )}
  </div>

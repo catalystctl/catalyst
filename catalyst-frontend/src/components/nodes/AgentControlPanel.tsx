@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime, formatTime } from '@/i18n/format';
 import { subscribeSharedEventSource } from '../../services/api/sse-hub';
 import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
@@ -43,12 +45,12 @@ import type { NodeInfo, NodeStats } from '../../types/node';
 // ── Tab IDs ──
 type AgentTab = 'status' | 'logs' | 'update' | 'config' | 'actions';
 
-const TABS: { id: AgentTab; label: string; icon: typeof Activity }[] = [
-  { id: 'status', label: 'Status', icon: Activity },
-  { id: 'logs', label: 'Logs', icon: Terminal },
-  { id: 'update', label: 'Update', icon: Upload },
-  { id: 'config', label: 'Config', icon: Settings },
-  { id: 'actions', label: 'Actions', icon: Zap },
+const TABS: { id: AgentTab; icon: typeof Activity }[] = [
+  { id: 'status', icon: Activity },
+  { id: 'logs', icon: Terminal },
+  { id: 'update', icon: Upload },
+  { id: 'config', icon: Settings },
+  { id: 'actions', icon: Zap },
 ];
 
 // ── Utility ──
@@ -67,10 +69,10 @@ function formatTimestamp(ts: string): string {
     // Handle epoch-seconds (e.g. "1718400000") — multiply by 1000 for JS Date
     const numeric = Number(ts);
     if (!isNaN(numeric) && numeric > 1_000_000_000 && numeric < 10_000_000_000) {
-      return new Date(numeric * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return formatTime(numeric * 1000, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
     // Handle ISO strings and other parseable formats
-    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return formatTime(ts, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   } catch {
     return ts;
   }
@@ -91,7 +93,15 @@ interface AgentControlPanelProps {
 }
 
 export default function AgentControlPanel({ node, stats }: AgentControlPanelProps) {
+  const { t } = useTranslation('nodes');
   const [activeTab, setActiveTab] = useState<AgentTab>('status');
+  const tabLabels: Record<AgentTab, string> = {
+    status: t('agent.tabs.status'),
+    logs: t('agent.tabs.logs'),
+    update: t('agent.tabs.update'),
+    config: t('agent.tabs.config'),
+    actions: t('agent.tabs.actions'),
+  };
 
   const isOnline = node.isOnline;
   const agentVersion = node.agentVersion;
@@ -121,7 +131,7 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
                 }`}
               >
                 <Icon className="h-3 w-3" />
-                {tab.label}
+                {tabLabels[tab.id]}
                 {showDot && (
                   <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
                 )}
@@ -171,16 +181,17 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
 // OFFLINE STATE
 // ══════════════════════════════════════════════════════════════════════════
 function AgentOfflineState() {
+  const { t } = useTranslation('nodes');
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-border/30 bg-surface-2">
         <WifiOff className="h-6 w-6 text-muted-foreground/40" />
       </div>
       <p className="mt-3 text-sm font-medium text-muted-foreground">
-        Agent is offline
+        {t('agent.offlineTitle')}
       </p>
       <p className="mt-1 text-xs text-muted-foreground/50">
-        Connect the agent to view this information
+        {t('agent.offlineHint')}
       </p>
     </div>
   );
@@ -190,6 +201,7 @@ function AgentOfflineState() {
 // STATUS TAB
 // ══════════════════════════════════════════════════════════════════════════
 function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | null | undefined }) {
+  const { t } = useTranslation('nodes');
   const { data: agentStatus } = useQuery({
     queryKey: qk.agentStatus(node.id),
     queryFn: () => agentApi.getStatus(node.id),
@@ -203,10 +215,10 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
   const { data: _, mutate: ping, isPending: isPinging } = useMutation({
     mutationFn: () => agentApi.ping(node.id),
     onSuccess: (result) => {
-      if (result) notifySuccess(`Ping: ${result.latencyMs}ms`);
-      else notifyError('Ping failed \u2014 no response');
+      if (result) notifySuccess(t('agent.pingResult', { ms: result.latencyMs }));
+      else notifyError(t('agent.pingFailedNoResponse'));
     },
-    onError: () => notifyError('Ping failed'),
+    onError: () => notifyError(t('agent.pingFailed')),
   });
 
   const res = stats?.resources;
@@ -224,7 +236,7 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
             {node.isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
           </div>
           <div>
-            <span className="text-xs font-semibold text-foreground">Connection</span>
+            <span className="text-xs font-semibold text-foreground">{t('agent.connection')}</span>
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
               {node.isOnline ? (
                 <>
@@ -232,10 +244,10 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
                     <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
                   </span>
-                  Connected
+                  {t('agent.connected')}
                 </>
               ) : (
-                'Disconnected'
+                t('agent.disconnected')
               )}
             </div>
           </div>
@@ -248,7 +260,7 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
           className="gap-1.5 text-xs"
         >
           {isPinging ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-          Ping
+          {t('agent.ping')}
         </Button>
       </div>
 
@@ -256,44 +268,50 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
       <StatGrid
         columns={3}
         items={[
-          { label: 'Agent version', value: node.agentVersion ?? '—' },
-          { label: 'Uptime', value: formatUptime(agentStatus?.uptime ?? null) },
-          { label: 'OS', value: agentStatus?.osInfo ?? '—' },
-          { label: 'Kernel', value: agentStatus?.kernelVersion ?? '—' },
-          { label: 'Container runtime', value: agentStatus?.containerRuntime ?? '—' },
-          { label: 'Containers', value: `${agentStatus?.runningContainers ?? stats?.servers.running ?? 0} / ${agentStatus?.totalContainers ?? stats?.servers.total ?? 0}` },
-          { label: 'SFTP', value: node.sftpEnabled ? `Enabled :${node.sftpPort ?? '—'}` : 'Disabled' },
-          { label: 'Config path', value: agentStatus?.configPath ?? node.agentConfigPath ?? '—' },
-          { label: 'Last seen', value: node.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : '—' },
+          { label: t('agent.info.agentVersion'), value: node.agentVersion ?? '—' },
+          { label: t('agent.info.uptime'), value: formatUptime(agentStatus?.uptime ?? null) },
+          { label: t('agent.info.os'), value: agentStatus?.osInfo ?? '—' },
+          { label: t('agent.info.kernel'), value: agentStatus?.kernelVersion ?? '—' },
+          { label: t('agent.info.containerRuntime'), value: agentStatus?.containerRuntime ?? '—' },
+          { label: t('agent.info.containers'), value: `${agentStatus?.runningContainers ?? stats?.servers.running ?? 0} / ${agentStatus?.totalContainers ?? stats?.servers.total ?? 0}` },
+          { label: t('agent.info.sftp'), value: node.sftpEnabled ? t('agent.sftpEnabledPort', { port: node.sftpPort ?? '—' }) : t('common:actions.disabled') },
+          { label: t('agent.info.configPath'), value: agentStatus?.configPath ?? node.agentConfigPath ?? '—' },
+          { label: t('agent.info.lastSeen'), value: node.lastSeenAt ? formatDateTime(node.lastSeenAt) : '—' },
         ]}
       />
 
       {/* ── Capacity ── */}
-      <SectionHeader icon={HardDrive} title="Capacity" />
+      <SectionHeader icon={HardDrive} title={t('agent.capacity')} />
       <StatGrid
         columns={3}
         items={[
           {
-            label: 'CPU cores',
+            label: t('form.cpuCores'),
             value: node.cpuOverallocatePercent && node.cpuOverallocatePercent !== 0
               ? node.cpuOverallocatePercent === -1
-                ? `${node.maxCpuCores ?? 0} (eff: ∞)`
-                : `${node.maxCpuCores ?? 0} (eff: ${res?.effectiveMaxCpuCores ?? ((node.maxCpuCores ?? 0) * (1 + node.cpuOverallocatePercent / 100)).toFixed(1)})`
+                ? t('agent.effectiveUnlimited', { value: node.maxCpuCores ?? 0 })
+                : t('agent.effectiveValue', {
+                    value: node.maxCpuCores ?? 0,
+                    effective: res?.effectiveMaxCpuCores ?? ((node.maxCpuCores ?? 0) * (1 + node.cpuOverallocatePercent / 100)).toFixed(1),
+                  })
               : String(node.maxCpuCores ?? 0),
           },
           {
-            label: 'Memory',
+            label: t('card.memory'),
             value: node.memoryOverallocatePercent && node.memoryOverallocatePercent !== 0
               ? node.memoryOverallocatePercent === -1
-                ? `${node.maxMemoryMb ?? 0} MB (eff: ∞)`
-                : `${node.maxMemoryMb ?? 0} MB (eff: ${res?.effectiveMaxMemoryMb ?? ((node.maxMemoryMb ?? 0) * (1 + node.memoryOverallocatePercent / 100)).toFixed(0)} MB)`
+                ? t('agent.effectiveUnlimited', { value: `${node.maxMemoryMb ?? 0} MB` })
+                : t('agent.effectiveValue', {
+                    value: `${node.maxMemoryMb ?? 0} MB`,
+                    effective: `${res?.effectiveMaxMemoryMb ?? ((node.maxMemoryMb ?? 0) * (1 + node.memoryOverallocatePercent / 100)).toFixed(0)} MB`,
+                  })
               : `${node.maxMemoryMb ?? 0} MB`,
           },
           {
-            label: 'Disk',
+            label: t('agent.disk'),
             value: res
               ? `${res.actualDiskUsageMb} / ${res.actualDiskTotalMb} MB`
-              : 'n/a',
+              : t('state.notAvailable'),
           },
         ]}
       />
@@ -301,11 +319,11 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
       {/* Live Resource Bars */}
       {res && (
         <div className="space-y-3">
-          <SectionHeader icon={MonitorDot} title="Live Resources" />
+          <SectionHeader icon={MonitorDot} title={t('agent.liveResources')} />
           {[
-            { label: 'CPU', pct: res.cpuUsagePercent, color: 'bg-primary' },
-            { label: 'Memory', pct: res.memoryUsagePercent, color: 'bg-success' },
-            { label: 'Disk', pct: res.actualDiskTotalMb ? (res.actualDiskUsageMb / res.actualDiskTotalMb) * 100 : 0, color: 'bg-warning' },
+            { label: t('card.cpu'), pct: res.cpuUsagePercent, color: 'bg-primary' },
+            { label: t('card.memory'), pct: res.memoryUsagePercent, color: 'bg-success' },
+            { label: t('agent.disk'), pct: res.actualDiskTotalMb ? (res.actualDiskUsageMb / res.actualDiskTotalMb) * 100 : 0, color: 'bg-warning' },
           ].map((m) => (
             <div key={m.label} className="space-y-1">
               <div className="flex items-center justify-between text-[10px]">
@@ -331,6 +349,7 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
 // node_updated / reconnect still refreshes via query invalidation on the initial batch.
 // ══════════════════════════════════════════════════════════════════════════
 function AgentLogsTab({ nodeId }: { nodeId: string }) {
+  const { t } = useTranslation('nodes');
   const [logs, setLogs] = useState<AgentLogEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [levelFilter, setLevelFilter] = useState<string>('all');
@@ -446,7 +465,7 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
           className="gap-1.5 text-xs"
         >
           {isStreaming ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-          {isStreaming ? 'Pause' : 'Live'}
+          {isStreaming ? t('agent.pause') : t('agent.live')}
         </Button>
 
         {isStreaming && (
@@ -455,7 +474,7 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
             </span>
-            Polling
+            {t('agent.polling')}
           </Badge>
         )}
 
@@ -466,7 +485,7 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
           className="gap-1.5 text-xs"
         >
           <RefreshCw className="h-3 w-3" />
-          Refresh
+          {t('common:actions.refresh')}
         </Button>
 
         {/* Level filter */}
@@ -493,20 +512,20 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Filter logs…"
+            placeholder={t('agent.filterLogs')}
             className="w-full rounded-md border border-border/30 bg-surface-2/40 py-1 pl-7 pr-2 text-xs text-foreground placeholder:text-muted-foreground/30 focus:border-primary/30 focus:outline-none"
           />
         </div>
 
         <Button variant="ghost" size="sm" onClick={clearLogs} className="gap-1 text-xs text-muted-foreground">
           <Trash2 className="h-3 w-3" />
-          Clear
+          {t('agent.clear')}
         </Button>
       </div>
 
       {/* Log count */}
       <div className="flex items-center justify-between text-[10px] text-muted-foreground/40">
-        <span>{filteredLogs.length} entries{levelFilter !== 'all' ? ` (${levelFilter})` : ''}</span>
+        <span>{t('agent.entries', { count: filteredLogs.length })}{levelFilter !== 'all' ? ` (${levelFilter})` : ''}</span>
         <label className="flex items-center gap-1 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -514,7 +533,7 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
             onChange={(e) => setAutoScroll(e.target.checked)}
             className="h-3 w-3 rounded border-border/40"
           />
-          Auto-scroll
+          {t('agent.autoScroll')}
         </label>
       </div>
 
@@ -525,11 +544,11 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
       >
         {isLoading && logs.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground/40">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading logs…
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> {t('agent.loadingLogs')}
           </div>
         ) : filteredLogs.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground/30">
-            No log entries{levelFilter !== 'all' ? ` at ${levelFilter} level` : ''}
+            {t('agent.noLogEntries')}{levelFilter !== 'all' ? t('agent.noLogEntriesLevel', { level: levelFilter }) : ''}
           </div>
         ) : (
           filteredLogs.map((entry, i) => (
@@ -572,6 +591,7 @@ function AgentUpdateTab({
   updateAvailable: boolean;
   latestVersion: string | null;
 }) {
+  const { t } = useTranslation('nodes');
   const queryClient = useQueryClient();
 
   const { data: updateStatus } = useQuery({
@@ -592,14 +612,14 @@ function AgentUpdateTab({
     mutationFn: () => agentApi.triggerUpdate(nodeId, latestVersion ?? undefined),
     onSuccess: (sent) => {
       if (sent) {
-        notifySuccess('Update command sent to agent');
+        notifySuccess(t('agent.updateSent'));
         queryClient.invalidateQueries({ queryKey: qk.agentUpdateStatus(nodeId) });
       } else {
-        notifyError('Agent did not receive update command');
+        notifyError(t('agent.updateNotReceived'));
       }
     },
-    onError: (err: any) => {
-      notifyError(err?.response?.data?.error || 'Failed to trigger update');
+    onError: (err: unknown) => {
+      notifyError(err, 'nodes:agent.updateError');
     },
   });
 
@@ -610,7 +630,7 @@ function AgentUpdateTab({
       {/* Version comparison */}
       <div className="flex items-center gap-4">
         <div className="flex-1 rounded-lg border border-border/30 bg-surface-2/30 px-4 py-3">
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40">Current</div>
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40">{t('agent.current')}</div>
           <div className="mt-1 font-mono text-lg font-bold text-foreground">
             v{String(agentVersion ?? '?').replace(/^v/i, '')}
           </div>
@@ -625,7 +645,7 @@ function AgentUpdateTab({
             ? 'border-warning/30 bg-warning/5'
             : 'border-success/20 bg-success/5'
         }`}>
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40">Latest</div>
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40">{t('agent.latest')}</div>
           <div className="mt-1 font-mono text-lg font-bold text-foreground">
             v{String(latestVersion ?? '?').replace(/^v/i, '')}
           </div>
@@ -667,12 +687,12 @@ function AgentUpdateTab({
           {updateAvailable ? (
             <>
               <AlertTriangle className="h-4 w-4 text-warning" />
-              <span className="text-sm text-foreground">Update available</span>
+              <span className="text-sm text-foreground">{t('agent.updateAvailable')}</span>
             </>
           ) : (
             <>
               <CheckCircle className="h-4 w-4 text-success" />
-              <span className="text-sm text-muted-foreground">Agent is up to date</span>
+              <span className="text-sm text-muted-foreground">{t('agent.upToDate')}</span>
             </>
           )}
         </div>
@@ -688,7 +708,7 @@ function AgentUpdateTab({
           ) : (
             <Upload className="h-3 w-3" />
           )}
-          {updateAvailable ? 'Update Agent' : 'No Update'}
+          {updateAvailable ? t('agent.updateAgent') : t('agent.noUpdate')}
         </Button>
       </div>
     </div>
@@ -699,6 +719,7 @@ function AgentUpdateTab({
 // CONFIG TAB
 // ══════════════════════════════════════════════════════════════════════════
 function AgentConfigTab({ nodeId }: { nodeId: string }) {
+  const { t } = useTranslation('nodes');
   const queryClient = useQueryClient();
   const [editContent, setEditContent] = useState<string | null>(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
@@ -721,14 +742,14 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
     mutationFn: () => agentApi.updateConfig(nodeId, editContent!),
     onSuccess: (saved) => {
       if (saved) {
-        notifySuccess('Agent config saved. Restart the agent to apply changes.');
+        notifySuccess(t('agent.configSaved'));
         queryClient.invalidateQueries({ queryKey: qk.agentConfig(nodeId) });
       } else {
-        notifyError('Failed to save agent config');
+        notifyError(t('agent.configSaveFailed'));
       }
     },
-    onError: (err: any) => {
-      notifyError(err?.response?.data?.error || 'Failed to save config');
+    onError: (err: unknown) => {
+      notifyError(err, 'nodes:agent.configSaveError');
     },
   });
 
@@ -741,7 +762,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
         <div className="flex items-center justify-between text-[10px] text-muted-foreground/40">
           <span className="font-mono">{config.path}</span>
           {config.lastModified && (
-            <span>Modified: {new Date(config.lastModified).toLocaleString()}</span>
+            <span>{t('agent.modified', { time: formatDateTime(config.lastModified) })}</span>
           )}
         </div>
       )}
@@ -750,7 +771,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-4 w-4 animate-spin mr-2 text-muted-foreground/40" />
-          <span className="text-xs text-muted-foreground/40">Loading config…</span>
+          <span className="text-xs text-muted-foreground/40">{t('agent.loadingConfig')}</span>
         </div>
       ) : (
         <textarea
@@ -767,7 +788,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
           {hasChanges && (
             <Badge variant="outline" className="gap-1 text-[10px] border-warning/30 text-warning">
               <Clock className="h-2.5 w-2.5" />
-              Unsaved changes
+              {t('agent.unsavedChanges')}
             </Badge>
           )}
         </div>
@@ -780,7 +801,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
             className="gap-1.5 text-xs"
           >
             <RotateCcw className="h-3 w-3" />
-            Reset
+            {t('common:actions.reset')}
           </Button>
           <Button
             variant="default"
@@ -790,22 +811,16 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
             className="gap-1.5 text-xs"
           >
             {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-            Save
+            {t('common:actions.save')}
           </Button>
         </div>
       </div>
 
       <ConfirmDialog
         open={showSaveConfirm}
-        title="Apply config changes?"
-        message={
-          <>
-            Saving the config file will overwrite the agent's{' '}
-            <code className="rounded bg-warning/10 px-1">config.toml</code>. The agent must be
-            restarted for changes to take effect.
-          </>
-        }
-        confirmText="Save config"
+        title={t('agent.applyTitle')}
+        message={t('agent.applyMessage')}
+        confirmText={t('agent.saveConfig')}
         variant="warning"
         loading={saveMutation.isPending}
         onConfirm={() => {
@@ -822,6 +837,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
 // ACTIONS TAB
 // ══════════════════════════════════════════════════════════════════════════
 function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline: boolean; node: NodeInfo }) {
+  const { t } = useTranslation('nodes');
   const queryClient = useQueryClient();
   const [restartConfirm, setRestartConfirm] = useState(false);
   const [pingResult, setPingResult] = useState<number | null>(null);
@@ -830,15 +846,15 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
     mutationFn: () => agentApi.restart(nodeId),
     onSuccess: (sent) => {
       if (sent) {
-        notifySuccess('Restart command sent. Agent will reconnect shortly.');
+        notifySuccess(t('agent.restartSent'));
         queryClient.invalidateQueries({ queryKey: qk.node(nodeId) });
         queryClient.invalidateQueries({ queryKey: qk.nodeStats(nodeId) });
       } else {
-        notifyError('Agent did not receive restart command');
+        notifyError(t('agent.restartNotReceived'));
       }
     },
-    onError: (err: any) => {
-      notifyError(err?.response?.data?.error || 'Failed to restart agent');
+    onError: (err: unknown) => {
+      notifyError(err, 'nodes:agent.restartError');
     },
   });
 
@@ -847,15 +863,15 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
     onSuccess: (result) => {
       if (result) {
         setPingResult(result.latencyMs);
-        notifySuccess(`Agent responded in ${result.latencyMs}ms`);
+        notifySuccess(t('agent.respondedIn', { ms: result.latencyMs }));
       } else {
         setPingResult(null);
-        notifyError('Agent did not respond to ping');
+        notifyError(t('agent.pingNoResponse'));
       }
     },
     onError: () => {
       setPingResult(null);
-      notifyError('Ping failed — agent may be unreachable');
+      notifyError(t('agent.pingUnreachable'));
     },
   });
 
@@ -863,8 +879,8 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
     {
       id: 'restart',
       icon: Power,
-      label: 'Restart Agent',
-      description: 'Gracefully shut down and restart the agent process. Running servers will not be affected.',
+      label: t('agent.action.restart'),
+      description: t('agent.action.restartDescription'),
       variant: 'outline' as const,
       danger: true,
       disabled: !isOnline,
@@ -873,8 +889,8 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
     {
       id: 'ping',
       icon: Zap,
-      label: 'Ping Agent',
-      description: 'Send a health-check request and measure round-trip latency.',
+      label: t('agent.action.ping'),
+      description: t('agent.action.pingDescription'),
       variant: 'outline' as const,
       danger: false,
       disabled: !isOnline || pingMutation.isPending,
@@ -883,28 +899,28 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
     {
       id: 'refresh-stats',
       icon: RefreshCw,
-      label: 'Refresh Stats',
-      description: 'Force the agent to send fresh resource metrics immediately.',
+      label: t('agent.action.refreshStats'),
+      description: t('agent.action.refreshStatsDescription'),
       variant: 'outline' as const,
       danger: false,
       disabled: !isOnline,
       onClick: () => {
         queryClient.invalidateQueries({ queryKey: qk.nodeStats(nodeId) });
         queryClient.invalidateQueries({ queryKey: qk.nodeMetrics(nodeId) });
-        notifySuccess('Stats refreshed');
+        notifySuccess(t('agent.statsRefreshed'));
       },
     },
     {
       id: 'copy-id',
       icon: Copy,
-      label: 'Copy Node ID',
-      description: `Copy this node's ID (${nodeId.slice(0, 8)}…) to clipboard.`,
+      label: t('agent.action.copyId'),
+      description: t('agent.action.copyIdDescription', { id: nodeId.slice(0, 8) }),
       variant: 'outline' as const,
       danger: false,
       disabled: false,
       onClick: () => {
         navigator.clipboard.writeText(nodeId);
-        notifySuccess('Node ID copied');
+        notifySuccess(t('agent.idCopied'));
       },
     },
   ];
@@ -947,7 +963,7 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
               ) : action.id === 'restart' && restartMutation.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : null}
-              {action.id === 'ping' && pingResult !== null ? `${pingResult}ms` : 'Run'}
+              {action.id === 'ping' && pingResult !== null ? `${pingResult}ms` : t('agent.run')}
             </Button>
           </div>
         );
@@ -955,16 +971,9 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
 
       <ConfirmDialog
         open={restartConfirm}
-        title="Restart agent?"
-        message={
-          <>
-            This will send a restart command to the agent on{' '}
-            <span className="font-semibold text-foreground">{node.name}</span>. The agent will
-            temporarily disconnect. Running game servers will continue operating. The agent should
-            reconnect within 10-30 seconds.
-          </>
-        }
-        confirmText="Restart agent"
+        title={t('agent.restartTitle')}
+        message={t('agent.restartMessage', { name: node.name })}
+        confirmText={t('agent.restartConfirm')}
         variant="danger"
         loading={restartMutation.isPending}
         onConfirm={() => {

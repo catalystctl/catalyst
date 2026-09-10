@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Cpu, HardDrive, ExternalLink } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import type { Template } from '../../types/template';
@@ -10,8 +11,9 @@ type Props = {
 };
 
 function TemplateCard({ template }: Props) {
+ const { t } = useTranslation('templates');
  const iconUrl = template.features?.iconUrl;
- const description = template.description?.trim() || 'No description provided.';
+ const description = template.description?.trim() || t('card.noDescription');
 
  return (
  <div className="group relative overflow-hidden rounded-xl border border-border/30 bg-card border-l-2 border-primary transition-colors hover:border-primary/60">
@@ -53,7 +55,7 @@ function TemplateCard({ template }: Props) {
  to={`/admin/templates/${template.id}`}
  className="flex items-center gap-1 rounded-md border border-border/30 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
  >
- View
+ {t('actions.view')}
  <ExternalLink className="h-3 w-3" />
  </Link>
  <TemplateDeleteDialog
@@ -72,7 +74,7 @@ function TemplateCard({ template }: Props) {
  <div className="rounded-lg border border-border/30 bg-surface-2/50 p-2.5">
  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
  <HardDrive className="h-3 w-3" />
- <span>Image</span>
+ <span>{t('image')}</span>
  </div>
  <div className="mt-1 truncate text-xs font-medium text-foreground">
  {template.defaultImage || template.image}
@@ -81,7 +83,7 @@ function TemplateCard({ template }: Props) {
  <div className="rounded-lg border border-border/30 bg-surface-2/50 p-2.5">
  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
  <Cpu className="h-3 w-3" />
- <span>Resources</span>
+ <span>{t('resources')}</span>
  </div>
  <div className="mt-1 text-xs font-medium text-foreground">
  {template.allocatedCpuCores} CPU · {template.allocatedMemoryMb} MB

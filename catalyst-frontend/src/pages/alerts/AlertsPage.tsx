@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime } from '@/i18n/format';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -75,6 +77,7 @@ function RuleRow({
  onDelete: () => void;
  isPending: boolean;
 }) {
+ const { t } = useTranslation('alerts');
  const isOwner = !rule.userId || !user?.id || rule.userId === user.id;
  return (
  <div className="group relative flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
@@ -83,7 +86,7 @@ function RuleRow({
  <div className="flex items-center gap-2">
  <span className="font-medium text-sm text-foreground">{rule.name}</span>
  <Badge variant={rule.enabled ? 'outline' : 'secondary'} className="text-[10px] border-success/40 text-success">
- {rule.enabled ? 'Enabled' : 'Disabled'}
+ {rule.enabled ? t('common:actions.enabled') : t('common:actions.disabled')}
  </Badge>
  {showAdminTargets && (
  <Badge variant="secondary" className="text-[10px]">{rule.target}</Badge>
@@ -100,14 +103,14 @@ function RuleRow({
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
  onClick={onToggle}
  disabled={isPending}
- title={rule.enabled ? 'Disable' : 'Enable'}
+ title={rule.enabled ? t('common:actions.disable') : t('common:actions.enable')}
  >
  {rule.enabled ? <X className="h-3.5 w-3.5" /> : <CheckCircle className="h-3.5 w-3.5" />}
  </button>
  <button
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
  onClick={onEdit}
- title="Edit"
+ title={t('common:actions.edit')}
  >
  <Settings className="h-3.5 w-3.5" />
  </button>
@@ -115,14 +118,14 @@ function RuleRow({
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={onDelete}
  disabled={isPending}
- title="Delete"
+ title={t('common:actions.delete')}
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
  </>
  )}
  {!isOwner && (
- <span className="text-[10px] text-muted-foreground">Read only</span>
+ <span className="text-[10px] text-muted-foreground">{t('ruleRow.readOnly')}</span>
  )}
  </div>
  </div>
@@ -133,6 +136,7 @@ function RuleRow({
 function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  alert: any; showAdminTargets: boolean; onResolve: () => void; isPending: boolean; index: number;
 }) {
+ const { t } = useTranslation('alerts');
  const severityAccent = alert.severity === 'critical'
  ? 'group-hover:bg-danger/50'
  : alert.severity === 'warning'
@@ -151,20 +155,20 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  </Badge>
  <span className="text-sm font-semibold text-foreground">{alert.title}</span>
  {alert.resolved && (
- <Badge variant="secondary" className="text-[10px]">Resolved</Badge>
+ <Badge variant="secondary" className="text-[10px]">{t('alertRow.resolved')}</Badge>
  )}
  </div>
  <p className="mt-1.5 text-xs text-muted-foreground">{alert.message}</p>
  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
- <span>{new Date(alert.createdAt).toLocaleString()}</span>
+ <span>{formatDateTime(alert.createdAt)}</span>
  {showAdminTargets && (
  <Badge variant="secondary" className="text-[10px]">
- {alert.nodeId ? 'Node' : alert.serverId ? 'Server' : 'Global'}
+ {alert.nodeId ? t('target.node') : alert.serverId ? t('target.server') : t('target.global')}
  </Badge>
  )}
- {showAdminTargets && alert.server?.name && <span>Server: {alert.server.name}</span>}
- {showAdminTargets && alert.node?.name && <span>Node: {alert.node.name}</span>}
- {alert.rule?.name && <span>Rule: {alert.rule.name}</span>}
+ {showAdminTargets && alert.server?.name && <span>{t('alertRow.server', { name: alert.server.name })}</span>}
+ {showAdminTargets && alert.node?.name && <span>{t('alertRow.node', { name: alert.node.name })}</span>}
+ {alert.rule?.name && <span>{t('alertRow.rule', { name: alert.rule.name })}</span>}
  </div>
  </div>
  {!alert.resolved && (
@@ -175,7 +179,7 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  onClick={onResolve}
  disabled={isPending}
  >
- Resolve
+ {t('alertRow.resolve')}
  </Button>
  )}
  </div>
@@ -214,6 +218,7 @@ type Props = {
 };
 
 function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Props) {
+ const { t } = useTranslation('alerts');
  const user = useAuthStore((s) => s.user);
  const [showRuleModal, setShowRuleModal] = useState(false);
  const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
@@ -285,9 +290,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  const hasAlerts = alerts.length > 0;
 
  const ruleTypeOptions: Array<{ value: AlertType; label: string }> = [
- { value: 'resource_threshold', label: 'Resource threshold' },
- { value: 'node_offline', label: 'Node offline' },
- { value: 'server_crashed', label: 'Server crashed' },
+ { value: 'resource_threshold', label: t('ruleModal.typeResourceThreshold') },
+ { value: 'node_offline', label: t('ruleModal.typeNodeOffline') },
+ { value: 'server_crashed', label: t('ruleModal.typeServerCrashed') },
  ];
 
  const targetOptions = useMemo(() => {
@@ -348,20 +353,20 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  });
  },
  onSuccess: () => {
- notifySuccess('Alert rule created');
+  notifySuccess(t('ruleModal.created'));
  setShowRuleModal(false);
  resetRuleForm();
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.alertRules() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to create alert rule'),
+ onError: (error: unknown) => notifyError(error, 'alerts:errors.createRule'),
  });
 
  const updateRuleMutation = useMutation({
  mutationFn: (payload: { rule: AlertRule; updates: any }) => alertsApi.updateRule(payload.rule.id, payload.updates),
  onSuccess: () => {
- notifySuccess('Alert rule updated');
+ notifySuccess(t('ruleModal.updated'));
  setShowRuleModal(false);
  setEditingRule(null);
  resetRuleForm();
@@ -369,18 +374,18 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.alertRules() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update alert rule'),
+ onError: (error: unknown) => notifyError(error, 'alerts:errors.updateRule'),
  });
 
  const deleteRuleMutation = useMutation({
  mutationFn: (ruleId: string) => alertsApi.deleteRule(ruleId),
  onSuccess: () => {
- notifySuccess('Alert rule deleted');
+ notifySuccess(t('ruleModal.deleted'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.alertRules() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete alert rule'),
+ onError: (error: unknown) => notifyError(error, 'alerts:errors.deleteRule'),
  });
 
  const invalidateAlerts = () => {
@@ -391,16 +396,16 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
  const resolveAlertMutation = useMutation({
  mutationFn: (alertId: string) => alertsApi.resolve(alertId),
- onSuccess: () => { notifySuccess('Alert resolved'); },
+ onSuccess: () => { notifySuccess(t('toast.resolved')); },
  onSettled: () => { invalidateAlerts(); },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to resolve alert'),
+ onError: (error: unknown) => notifyError(error, 'alerts:errors.resolve'),
  });
 
  const bulkResolveMutation = useMutation({
  mutationFn: (alertIds: string[]) => alertsApi.bulkResolve(alertIds),
- onSuccess: () => { notifySuccess('Alerts resolved'); },
+ onSuccess: () => { notifySuccess(t('toast.resolvedAll')); },
  onSettled: () => { invalidateAlerts(); },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to resolve alerts'),
+ onError: (error: unknown) => notifyError(error, 'alerts:errors.bulkResolve'),
  });
 
  const unresolvedAlertIds = alerts.filter((a) => !a.resolved).map((a) => a.id);
@@ -441,14 +446,14 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="space-y-4">
  <TabHeader
  icon={Bell}
- title={showAdminTargets ? 'Alerts' : 'Server Alerts'}
+ title={showAdminTargets ? t('page.titleAll') : t('page.titleMine')}
  description={showAdminTargets
- ? 'Monitor incidents and resolve alerts in real time.'
- : 'Manage alert rules and incidents for this server.'}
+  ? t('page.descriptionAll')
+  : t('page.descriptionMine')}
  actions={
  <Button size="sm" onClick={openCreateRule} className="gap-1.5">
  <Plus className="h-3.5 w-3.5" />
- Create Rule
+ {t('page.createRule')}
  </Button>
  }
  />
@@ -456,13 +461,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {/* ── Stats (admin overview only; header no longer duplicates badges) ── */}
  {alertStats && (
  <ServerTabCard>
- <SectionHeader icon={BarChart3} title="Overview" />
+ <SectionHeader icon={BarChart3} title={t('page.overview')} />
  <StatGrid
  columns={3}
  items={[
- { label: 'Active alerts', value: alertStats?.unresolved ?? unresolvedCount },
- { label: 'Total alerts', value: alertStats?.total ?? alerts.length },
- { label: 'Critical', value: alertStats?.bySeverity?.critical ?? 0 },
+ { label: t('page.activeAlerts'), value: alertStats?.unresolved ?? unresolvedCount },
+ { label: t('page.totalAlerts'), value: alertStats?.total ?? alerts.length },
+ { label: t('page.critical'), value: alertStats?.bySeverity?.critical ?? 0 },
  ]}
  />
  </ServerTabCard>
@@ -474,15 +479,15 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="min-w-0 flex-1">
  <SectionHeader
  icon={Settings}
- title="Alert rules"
+ title={t('page.rulesTitle')}
  description={hasRules
- ? 'Thresholds and notification targets that fire incidents.'
- : 'Rules define when incidents are created and how you are notified.'}
+   ? t('page.rulesDescription')
+   : t('page.rulesDescriptionEmpty')}
  />
  </div>
  {hasRules ? (
  <Badge variant="secondary" className="mt-0.5 text-[10px]">
- {alertRules.length} rule{alertRules.length === 1 ? '' : 's'}
+ {t('page.ruleCount', { count: alertRules.length })}
  </Badge>
  ) : null}
  </div>
@@ -502,8 +507,8 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  ))
  ) : (
  <TabEmptyState
- title="No alert rules yet"
- description="Use Create Rule above to set thresholds and notification targets. Incidents will appear in history once a rule fires."
+ title={t('page.noRulesTitle')}
+ description={t('page.noRulesDescription')}
  />
  )}
  </div>
@@ -515,8 +520,8 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="min-w-0 flex-1">
  <SectionHeader
  icon={Activity}
- title="Alert history"
- description="Triggered incidents and delivery status."
+ title={t('page.historyTitle')}
+ description={t('page.historyDescription')}
  />
  </div>
  <div className="flex flex-wrap items-center gap-2">
@@ -524,11 +529,11 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  value={filterResolved}
  onChange={(e) => setFilterResolved(e.target.value as 'false' | 'true' | 'all')}
  className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
- aria-label="Filter alerts by resolution status"
+ aria-label={t('page.filterAria')}
  >
- <option value="false">Unresolved</option>
- <option value="true">Resolved</option>
- <option value="all">All</option>
+ <option value="false">{t('page.filterUnresolved')}</option>
+ <option value="true">{t('page.filterResolved')}</option>
+ <option value="all">{t('page.filterAll')}</option>
  </select>
  <Button
  variant="outline"
@@ -536,7 +541,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  disabled={!canBulkResolve}
  onClick={() => bulkResolveMutation.mutate(unresolvedAlertIds)}
  >
- Resolve all{unresolvedCount > 0 ? ` (${unresolvedCount})` : ''}
+ {t('page.resolveAll')}{unresolvedCount > 0 ? ` (${unresolvedCount})` : ''}
  </Button>
  </div>
  </div>
@@ -556,13 +561,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  ))
  ) : (
  <TabEmptyState
- title={filterResolved === 'false' ? 'No unresolved alerts' : filterResolved === 'true' ? 'No resolved alerts' : 'No alerts yet'}
+ title={filterResolved === 'false' ? t('page.noUnresolved') : filterResolved === 'true' ? t('page.noResolved') : t('page.noAlerts')}
  description={
  !hasRules
- ? 'History stays empty until a rule fires. Create a rule to start monitoring.'
+ ? t('page.emptyNoRules')
  : filterResolved === 'false'
- ? 'Nothing needs attention right now. Switch the filter to see resolved history.'
- : 'No alerts match this filter.'
+ ? t('page.emptyNothing')
+ : t('page.emptyFilter')
  }
  />
  )}
@@ -582,8 +587,8 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 >
  <DialogContent size="2xl">
  <DialogHeader icon={<Bell className="h-4 w-4" />}>
- <DialogTitle>{editingRule ? 'Edit alert rule' : 'Create alert rule'}</DialogTitle>
- <DialogDescription>Configure thresholds and notification targets.</DialogDescription>
+ <DialogTitle>{editingRule ? t('ruleModal.editTitle') : t('ruleModal.createTitle')}</DialogTitle>
+ <DialogDescription>{t('ruleModal.description')}</DialogDescription>
  </DialogHeader>
 
  <DialogToolbar>
@@ -591,7 +596,11 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {ruleStepOrder.map((key, index) => {
  const isActive = ruleStep === key;
  const canNav = canNavigateRuleStep(index);
- const labels = { details: 'Details', conditions: 'Conditions', notifications: 'Notifications' };
+ const labels = {
+   details: t('ruleModal.stepDetails'),
+   conditions: t('ruleModal.stepConditions'),
+   notifications: t('ruleModal.stepNotifications'),
+ };
  return (
  <button
  key={key}
@@ -619,17 +628,17 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Rule name</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.ruleName')}</span>
  <Input value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder="High CPU usage" />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Description</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.descriptionLabel')}</span>
  <Input value={ruleDescription} onChange={(e) => setRuleDescription(e.target.value)} placeholder="Notify when CPU stays high" />
  </label>
  </div>
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Rule type</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.ruleType')}</span>
  <select
  value={ruleType}
  onChange={(e) => setRuleType(e.target.value as AlertType)}
@@ -639,27 +648,27 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </select>
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Target</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.target')}</span>
  <select
  value={ruleTarget}
  onChange={(e) => setRuleTarget(e.target.value as 'global' | 'server' | 'node')}
  disabled={!showAdminTargets}
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
  >
- <option value="global">Global</option>
- <option value="server">Server</option>
- <option value="node">Node</option>
+ <option value="global">{t('target.global')}</option>
+ <option value="server">{t('target.server')}</option>
+ <option value="node">{t('target.node')}</option>
  </select>
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Target ID</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.targetId')}</span>
  <select
  value={ruleTargetId}
  onChange={(e) => setRuleTargetId(e.target.value)}
  disabled={!showAdminTargets || ruleTarget === 'global'}
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
  >
- <option value="">{ruleTarget === 'global' ? 'Not required' : selectedTargetLabel || 'Select target'}</option>
+ <option value="">{ruleTarget === 'global' ? t('ruleModal.notRequired') : selectedTargetLabel || t('ruleModal.selectTarget')}</option>
  {targetOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
  </select>
  </label>
@@ -672,28 +681,28 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {ruleType === 'resource_threshold' && (
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">CPU threshold (%)</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.cpuThreshold')}</span>
  <Input type="number" min={1} max={100} value={cpuThreshold} onChange={(e) => setCpuThreshold(e.target.value)} />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Memory threshold (%)</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.memoryThreshold')}</span>
  <Input type="number" min={1} max={100} value={memoryThreshold} onChange={(e) => setMemoryThreshold(e.target.value)} />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Disk threshold (%)</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.diskThreshold')}</span>
  <Input type="number" min={1} max={100} value={diskThreshold} onChange={(e) => setDiskThreshold(e.target.value)} />
  </label>
  </div>
  )}
  {ruleType === 'node_offline' && (
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Offline threshold (minutes)</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.offlineThreshold')}</span>
  <Input type="number" min={1} value={offlineThreshold} onChange={(e) => setOfflineThreshold(e.target.value)} />
  </label>
  )}
  {ruleType === 'server_crashed' && (
  <div className="rounded-lg border border-border/50 bg-surface-2/40 px-4 py-3 text-xs text-muted-foreground">
- This rule triggers when the server reports a crash event.
+ {t('ruleModal.serverCrashedHint')}
  </div>
  )}
  </div>
@@ -704,8 +713,8 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
  <div className="space-y-2">
  <div className="flex items-center justify-between">
- <span className="text-xs font-medium text-muted-foreground">Webhook URLs</span>
- <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setWebhookTargets((c) => [...c, ''])}>+ Add</button>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.webhookUrls')}</span>
+ <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setWebhookTargets((c) => [...c, ''])}>{t('ruleModal.add')}</button>
  </div>
  {webhookTargets.map((value, i) => (
  <div key={`w-${i}`} className="flex items-center gap-2">
@@ -720,8 +729,8 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </div>
  <div className="space-y-2">
  <div className="flex items-center justify-between">
- <span className="text-xs font-medium text-muted-foreground">Email recipients</span>
- <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setEmailTargets((c) => [...c, ''])}>+ Add</button>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.emailRecipients')}</span>
+ <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setEmailTargets((c) => [...c, ''])}>{t('ruleModal.add')}</button>
  </div>
  {emailTargets.map((value, i) => (
  <div key={`e-${i}`} className="flex items-center gap-2">
@@ -738,10 +747,10 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
  <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
  <input type="checkbox" checked={notifyOwner} onChange={(e) => setNotifyOwner(e.target.checked)} className="h-4 w-4 rounded border-border bg-card text-primary" />
- Notify server owner
+ {t('ruleModal.notifyOwner')}
  </label>
  <label className="block space-y-1 sm:col-span-2">
- <span className="text-xs font-medium text-muted-foreground">Cooldown (minutes)</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.cooldown')}</span>
  <Input type="number" min={1} value={cooldownMinutes} onChange={(e) => setCooldownMinutes(e.target.value)} />
  </label>
  </div>
@@ -751,17 +760,17 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
  <DialogFooter className="sm:justify-between">
  <Button variant="outline" size="sm" onClick={() => { setShowRuleModal(false); setEditingRule(null); resetRuleForm(); }}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  <div className="flex items-center gap-2">
  {ruleStepIndex > 0 && (
  <Button variant="outline" size="sm" onClick={() => setRuleStep(ruleStepOrder[ruleStepIndex - 1])}>
- Back
+ {t('common:actions.back')}
  </Button>
  )}
  {ruleStepIndex < ruleStepOrder.length - 1 ? (
  <Button size="sm" disabled={!ruleStepValidMap[ruleStep]} onClick={() => setRuleStep(ruleStepOrder[ruleStepIndex + 1])}>
- Next
+ {t('common:actions.next')}
  </Button>
  ) : (
  <Button
@@ -780,8 +789,8 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  }}
  >
  {editingRule
- ? updateRuleMutation.isPending ? 'Saving…' : 'Save changes'
- : createRuleMutation.isPending ? 'Creating…' : 'Create rule'}
+        ? updateRuleMutation.isPending ? t('ruleModal.saving') : t('ruleModal.save')
+        : createRuleMutation.isPending ? t('ruleModal.creating') : t('ruleModal.create')}
  </Button>
  )}
  </div>
@@ -792,10 +801,10 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {/* ── Delete Rule Confirmation ── */}
  <ConfirmDialog
  open={!!deletingRule}
- title="Delete alert rule?"
- message={`Are you sure you want to delete "${deletingRule?.name}"? This action cannot be undone.`}
- confirmText="Delete"
- cancelText="Cancel"
+ title={t('ruleModal.deleteTitle')}
+ message={t('ruleModal.deleteConfirm', { name: deletingRule?.name })}
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={deleteRuleMutation.isPending}
  onConfirm={() => {

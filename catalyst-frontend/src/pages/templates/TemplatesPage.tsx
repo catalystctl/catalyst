@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
@@ -70,8 +71,9 @@ function TemplateRow({
  handleBulkDelete: (ids: string[], label: string) => void;
  deleteMutation: { isPending: boolean };
 }) {
+ const { t } = useTranslation('templates');
  const iconUrl = template.features?.iconUrl;
- const description = template.description?.trim() || 'No description provided.';
+ const description = template.description?.trim() || t('card.noDescription');
 
  return (
  <div
@@ -128,8 +130,7 @@ function TemplateRow({
  {template.defaultImage || template.image}
  </span>
   <span className="hidden md:inline">
-  {(template.variables?.length ?? 0)} variable
-  {(template.variables?.length ?? 0) !== 1 ? 's' : ''}
+  {t('page.variablesCount', { count: template.variables?.length ?? 0 })}
   </span>
  </div>
  </div>
@@ -141,7 +142,7 @@ function TemplateRow({
  <Cpu className="h-3 w-3 text-muted-foreground" />
  {template.allocatedCpuCores}
  </div>
- <div className="text-[11px] text-muted-foreground">cores</div>
+ <div className="text-[11px] text-muted-foreground">{t('page.cores')}</div>
  </div>
  <div className="text-right">
  <div className="flex items-center gap-1 text-xs font-medium text-foreground">
@@ -150,7 +151,7 @@ function TemplateRow({
  ? `${(template.allocatedMemoryMb / 1024).toFixed(1)} GB`
  : `${template.allocatedMemoryMb} MB`}
  </div>
- <div className="text-[11px] text-muted-foreground">memory</div>
+ <div className="text-[11px] text-muted-foreground">{t('page.memory')}</div>
  </div>
  </div>
 
@@ -161,7 +162,7 @@ function TemplateRow({
  className="flex items-center gap-1 rounded-md border border-border/30 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
  >
  <ExternalLink className="h-3 w-3" />
- <span className="hidden sm:inline">View</span>
+ <span className="hidden sm:inline">{t('actions.view')}</span>
  </Link>
 
  {canWrite && (
@@ -169,7 +170,7 @@ function TemplateRow({
  <DropdownMenuTrigger asChild>
  <button
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- title="More"
+ title={t('common:actions.more')}
  >
  <MoreHorizontal className="h-3.5 w-3.5" />
  </button>
@@ -178,7 +179,7 @@ function TemplateRow({
  <DropdownMenuItem asChild>
  <Link to={`/admin/templates/${template.id}`} className="gap-2 text-xs">
  <ExternalLink className="h-3.5 w-3.5" />
- View
+ {t('actions.view')}
  </Link>
  </DropdownMenuItem>
  <DropdownMenuItem
@@ -186,7 +187,7 @@ function TemplateRow({
  className="gap-2 text-xs"
  >
  <FileCode className="h-3.5 w-3.5" />
- Edit
+ {t('common:actions.edit')}
  </DropdownMenuItem>
  <DropdownMenuSeparator />
  <DropdownMenuItem
@@ -195,7 +196,7 @@ function TemplateRow({
  className="gap-2 text-xs text-destructive"
  >
  <Trash2 className="h-3.5 w-3.5" />
- Delete
+ {t('common:actions.delete')}
  </DropdownMenuItem>
  </DropdownMenuContent>
  </DropdownMenu>
@@ -207,14 +208,15 @@ function TemplateRow({
 
 // ── Nest Section Header ──
 function NestSectionHeader({ nest, count }: { nest: Nest | null; count: number }) {
- if (nest) {
+  const { t } = useTranslation('templates');
+  if (nest) {
  return (
  <div className="sticky top-0 z-10 border-b border-border/30 bg-card px-4 py-2">
  <div className="flex items-center gap-2">
  {nest.icon && <img src={nest.icon} className="h-4 w-4 rounded" alt="" />}
  <h3 className="text-sm font-semibold text-foreground">{nest.name}</h3>
  <Badge variant="secondary" className="text-[10px]">
- {count} template{count !== 1 ? 's' : ''}
+ {t('page.templateCount', { count })}
  </Badge>
  {nest.description && (
  <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -230,9 +232,9 @@ function NestSectionHeader({ nest, count }: { nest: Nest | null; count: number }
  <div className="sticky top-0 z-10 border-b border-border/30 bg-card px-4 py-2">
  <div className="flex items-center gap-2">
  <FolderOpen className="h-4 w-4 text-muted-foreground" />
- <h3 className="text-sm font-semibold text-foreground">Ungrouped</h3>
+ <h3 className="text-sm font-semibold text-foreground">{t('page.ungrouped')}</h3>
  <Badge variant="secondary" className="text-[10px]">
- {count} template{count !== 1 ? 's' : ''}
+ {t('page.templateCount', { count })}
  </Badge>
  </div>
  </div>
@@ -245,6 +247,7 @@ type Props = {
 };
 
 function TemplatesPage({ hideHeader }: Props) {
+ const { t } = useTranslation('templates');
  const { data: templates = [], isLoading } = useTemplates();
  const { data: nests = [] } = useQuery({
  queryKey: qk.nests(),
@@ -392,16 +395,15 @@ function TemplatesPage({ hideHeader }: Props) {
  return Promise.all(templateIds.map((id) => templatesApi.remove(id)));
  },
  onSuccess: (_data, templateIds) => {
- notifySuccess(`${templateIds.length} template${templateIds.length === 1 ? '' : 's'} deleted`);
+ notifySuccess(t('page.deleted', { count: templateIds.length }));
  setSelectedIds([]);
  setDeleteTargets(null);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.templates() });
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to delete template(s)';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'templates:page.deleteError');
  },
  });
 
@@ -418,8 +420,8 @@ function TemplatesPage({ hideHeader }: Props) {
  <>
  <TabHeader
  icon={FileCode}
- title="Templates"
- description="Define server templates with images and start commands."
+ title={t('page.title')}
+ description={t('page.description')}
  actions={
  <div className="flex items-center gap-2">
  {canWrite && (
@@ -428,26 +430,26 @@ function TemplatesPage({ hideHeader }: Props) {
  onClick={() => setNestsModalOpen(true)}
  >
  <FolderOpen className="mr-1.5 inline h-4 w-4" />
- Nests
+ {t('page.nests')}
  </button>
  )}
  {canWrite ? (
  <TemplateCreateModal />
  ) : (
- <span className="text-xs text-muted-foreground">Admin access required</span>
+ <span className="text-xs text-muted-foreground">{t('page.adminRequired')}</span>
  )}
  </div>
  }
  />
 
  <ServerTabCard>
- <SectionHeader icon={FileCode} title="Overview" />
+ <SectionHeader icon={FileCode} title={t('page.overview')} />
  <StatGrid
  columns={3}
  items={[
- { label: 'Templates', value: templates.length },
- { label: 'Authors', value: authors.length },
- { label: 'Nests', value: nests.length },
+ { label: t('page.templates'), value: templates.length },
+ { label: t('page.authors'), value: authors.length },
+ { label: t('page.nestsStat'), value: nests.length },
  ]}
  />
  </ServerTabCard>
@@ -459,7 +461,7 @@ function TemplatesPage({ hideHeader }: Props) {
  <Input
  value={search}
  onChange={(e) => setSearch(e.target.value)}
- placeholder="Search templates by name, author, or description…"
+ placeholder={t('page.searchPlaceholder')}
  className="pl-9 border-border/40"
  />
  </div>
@@ -471,7 +473,7 @@ function TemplatesPage({ hideHeader }: Props) {
  className="gap-2"
  >
  <Filter className="h-3.5 w-3.5" />
- Filters
+ {t('page.filters')}
  {hasActiveFilters && (
  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
  {[authorFilter, selectedNestId].filter(Boolean).length}
@@ -485,17 +487,17 @@ function TemplatesPage({ hideHeader }: Props) {
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="name-asc">Name A→Z</SelectItem>
- <SelectItem value="name-desc">Name Z→A</SelectItem>
- <SelectItem value="author">Author</SelectItem>
- <SelectItem value="version">Version</SelectItem>
- <SelectItem value="memory">Memory</SelectItem>
- <SelectItem value="cpu">CPU cores</SelectItem>
+ <SelectItem value="name-asc">{t('page.sortNameAsc')}</SelectItem>
+ <SelectItem value="name-desc">{t('page.sortNameDesc')}</SelectItem>
+ <SelectItem value="author">{t('page.sortAuthor')}</SelectItem>
+ <SelectItem value="version">{t('page.sortVersion')}</SelectItem>
+ <SelectItem value="memory">{t('page.sortMemory')}</SelectItem>
+ <SelectItem value="cpu">{t('page.sortCpu')}</SelectItem>
  </SelectContent>
  </Select>
 
  <span className="text-xs text-muted-foreground">
- {filteredTemplates.length} of {templates.length}
+ {t('page.count', { filtered: filteredTemplates.length, total: templates.length })}
  </span>
  </div>
 
@@ -510,7 +512,7 @@ function TemplatesPage({ hideHeader }: Props) {
  }`}
  onClick={() => setSelectedNestId(null)}
  >
- All
+ {t('page.all')}
  <span
  className={`text-[10px] ${selectedNestId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
  >
@@ -550,7 +552,7 @@ function TemplatesPage({ hideHeader }: Props) {
  onClick={() => setSelectedNestId('__ungrouped__')}
  >
  <FolderOpen className="h-3.5 w-3.5" />
- Ungrouped
+ {t('page.ungrouped')}
  <span
  className={`text-[10px] ${selectedNestId === '__ungrouped__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
  >
@@ -566,7 +568,7 @@ function TemplatesPage({ hideHeader }: Props) {
  <div className="rounded-xl border border-border/30 bg-card p-4">
  <div className="flex flex-wrap items-end gap-4">
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">Author</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('page.authorLabel')}</span>
  <Select
  value={authorFilter || 'all'}
  onValueChange={(value) => {
@@ -574,10 +576,10 @@ function TemplatesPage({ hideHeader }: Props) {
  }}
  >
  <SelectTrigger className="w-44 border-border/40">
- <SelectValue placeholder="All authors" />
+ <SelectValue placeholder={t('page.allAuthors')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All authors</SelectItem>
+ <SelectItem value="all">{t('page.allAuthors')}</SelectItem>
  {authors.map((author) => (
  <SelectItem key={author.name} value={author.name}>
  {author.name} ({author.count})
@@ -588,7 +590,7 @@ function TemplatesPage({ hideHeader }: Props) {
  </label>
  {nests.length > 0 && (
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">Nest</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('page.nestLabel')}</span>
  <Select
  value={selectedNestId || 'all'}
  onValueChange={(value) => {
@@ -596,10 +598,10 @@ function TemplatesPage({ hideHeader }: Props) {
  }}
  >
  <SelectTrigger className="w-44 border-border/40">
- <SelectValue placeholder="All nests" />
+ <SelectValue placeholder={t('page.allNests')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All nests</SelectItem>
+ <SelectItem value="all">{t('page.allNests')}</SelectItem>
  {nests.map((nest) => (
  <SelectItem key={nest.id} value={nest.id}>
  <span className="flex items-center gap-2">
@@ -619,7 +621,7 @@ function TemplatesPage({ hideHeader }: Props) {
  </SelectItem>
  ))}
  {nestCounts.ungroupedCount > 0 && (
- <SelectItem value="__ungrouped__">Ungrouped</SelectItem>
+ <SelectItem value="__ungrouped__">{t('page.ungrouped')}</SelectItem>
  )}
  </SelectContent>
  </Select>
@@ -633,7 +635,7 @@ function TemplatesPage({ hideHeader }: Props) {
  className="gap-1.5 text-xs"
  >
  <X className="h-3 w-3" />
- Clear all
+ {t('page.clearAll')}
  </Button>
  )}
  </div>
@@ -645,13 +647,13 @@ function TemplatesPage({ hideHeader }: Props) {
  <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
  <div className="flex items-center gap-3">
  <span className="text-sm font-medium text-foreground">
- {selectedIds.length} selected
+ {t('page.selected', { total: selectedIds.length })}
  </span>
  <button
  onClick={() => setSelectedIds([])}
  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
  >
- Clear
+ {t('page.clear')}
  </button>
  </div>
  <div className="flex items-center gap-1.5">
@@ -659,13 +661,13 @@ function TemplatesPage({ hideHeader }: Props) {
  variant="destructive"
  size="sm"
  onClick={() =>
- handleBulkDelete(selectedIds, `${selectedIds.length} templates`)
+ handleBulkDelete(selectedIds, t('page.bulkLabel', { count: selectedIds.length }))
  }
  disabled={deleteMutation.isPending}
  className="gap-1.5 text-xs"
  >
  <Trash2 className="h-3 w-3" />
- Delete
+ {t('common:actions.delete')}
  </Button>
  </div>
  </div>
@@ -709,7 +711,7 @@ function TemplatesPage({ hideHeader }: Props) {
  className="h-4 w-4 rounded border-border bg-card text-primary-600"
  />
  <span className="text-xs font-medium text-muted-foreground">
- Select all in section
+ {t('page.selectAllInSection')}
  </span>
  </label>
  </div>
@@ -736,17 +738,17 @@ function TemplatesPage({ hideHeader }: Props) {
  ) : (
  <div className="rounded-xl border border-border/30 bg-card p-6">
  <TabEmptyState
- title={search.trim() || authorFilter ? 'No templates found' : 'No templates'}
+ title={search.trim() || authorFilter ? t('page.noTemplatesFound') : t('list.emptyTitle')}
  description={
  search.trim() || authorFilter
- ? 'Try adjusting your search or filters.'
- : 'Create a template to bootstrap new game servers quickly.'
+ ? t('page.adjustSearch')
+ : t('list.emptyDescription')
  }
  action={
  search.trim() || authorFilter ? (
  <Button variant="outline" size="sm" onClick={clearFilters}>
  <X className="mr-1.5 h-3.5 w-3.5" />
- Clear filters
+ {t('page.clearFilters')}
  </Button>
  ) : canWrite && !search.trim() ? (
  <TemplateCreateModal />
@@ -780,7 +782,7 @@ function TemplatesPage({ hideHeader }: Props) {
  }
  className="h-4 w-4 rounded border-border bg-card text-primary-600"
  />
- <span className="text-xs font-medium text-muted-foreground">Select all</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('page.selectAll')}</span>
  </label>
  </div>
  )}
@@ -804,17 +806,17 @@ function TemplatesPage({ hideHeader }: Props) {
  ) : (
  <div className="p-6">
  <TabEmptyState
- title={search.trim() || hasActiveFilters ? 'No templates found' : 'No templates'}
+ title={search.trim() || hasActiveFilters ? t('page.noTemplatesFound') : t('list.emptyTitle')}
  description={
  search.trim() || hasActiveFilters
- ? 'Try adjusting your search or filters.'
- : 'Create a template to bootstrap new game servers quickly.'
+ ? t('page.adjustSearch')
+ : t('list.emptyDescription')
  }
  action={
  hasActiveFilters ? (
  <Button variant="outline" size="sm" onClick={clearFilters}>
  <X className="mr-1.5 h-3.5 w-3.5" />
- Clear filters
+ {t('page.clearFilters')}
  </Button>
  ) : canWrite && !search.trim() ? (
  <TemplateCreateModal />
@@ -848,20 +850,17 @@ function TemplatesPage({ hideHeader }: Props) {
  {/* ── Delete Confirmation Dialog ── */}
  <ConfirmDialog
  open={!!deleteTargets}
- title="Delete Templates"
+ title={t('page.deleteTitle')}
  message={
  <div className="space-y-2">
- <p>
- You are about to delete{' '}
- <span className="font-semibold">{deleteTargets?.label}</span>.
- </p>
+ <p>{t('page.deleteConfirm', { label: deleteTargets?.label })}</p>
  <p className="text-xs text-muted-foreground">
- Templates in use by existing servers cannot be deleted. This action cannot be undone.
+   {t('page.deleteWarning')}
  </p>
  </div>
  }
- confirmText="Delete"
- cancelText="Cancel"
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  onConfirm={() => deleteTargets && deleteMutation.mutate(deleteTargets.templateIds)}
  onCancel={() => setDeleteTargets(null)}
  variant="danger"

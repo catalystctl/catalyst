@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import { nodesApi } from '../../services/api/nodes';
 import { qk } from '../../lib/queryKeys';
@@ -15,6 +16,7 @@ type Props = {
 };
 
 function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange }: Props) {
+  const { t } = useTranslation('nodes');
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -37,14 +39,13 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
       );
       return { prev };
     },
-    onError: (_err: { response?: { data?: { error?: string } }; message?: string }, _vars, ctx) => {
+    onError: (error: unknown, _vars, ctx) => {
       if (ctx?.prev) {
         for (const [queryKey, data] of ctx.prev) {
           queryClient.setQueryData(queryKey, data);
         }
       }
-      const message = _err?.response?.data?.error || 'Failed to delete node';
-      notifyError(message);
+      notifyError(error, 'nodes:delete.error');
     },
     onSettled: () => {
       Promise.all([
@@ -53,7 +54,7 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
       ]);
     },
     onSuccess: () => {
-      notifySuccess('Node deleted');
+      notifySuccess(t('delete.success'));
       setOpen(false);
     },
   });
@@ -67,19 +68,13 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
           className="w-full"
           onClick={() => setOpen(true)}
         >
-          Delete
-        </Button>
-      )}
+          {t('common:actions.delete')}
+        </Button>      )}
       <ConfirmDialog
         open={open}
-        title="Delete node"
-        message={
-          <>
-            Are you sure you want to delete <span className="font-semibold text-foreground">{nodeName}</span>?
-            This action cannot be undone.
-          </>
-        }
-        confirmText="Delete"
+        title={t('delete.title')}
+        message={t('delete.confirm', { name: nodeName })}
+        confirmText={t('common:actions.delete')}
         variant="danger"
         loading={mutation.isPending}
         onConfirm={() => mutation.mutate()}

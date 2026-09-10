@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { ChevronDown, ChevronRight, MapPin } from 'lucide-react';
 import type { NodeInfo } from '../../types/node';
@@ -34,6 +35,7 @@ type Props = {
 };
 
 function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLocationId }: Props) {
+  const { t } = useTranslation('nodes');
  const [internalOpen, setInternalOpen] = useState(false);
  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
  const setOpen = (value: boolean) => {
@@ -114,7 +116,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  sftpEnabled,
  }),
  onSuccess: () => {
- notifySuccess('Node updated');
+ notifySuccess(t('update.success'));
  setOpen(false);
  },
  onSettled: () => {
@@ -124,9 +126,8 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  queryClient.invalidateQueries({ queryKey: qk.adminNodes() }),
  ]);
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to update node';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'nodes:update.error');
  },
  });
 
@@ -137,18 +138,18 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  className="w-full rounded-md border border-border/40 bg-card px-3 py-1 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground"
  onClick={() => setOpen(true)}
  >
- Update
+ {t('update.button')}
  </button>
  )}
  <Dialog open={open} onOpenChange={setOpen}>
  <DialogContent size="lg">
  <DialogHeader>
- <DialogTitle>Update node</DialogTitle>
- <DialogDescription>Change this node's identity, capacity, and agent paths.</DialogDescription>
+ <DialogTitle>{t('update.title')}</DialogTitle>
+ <DialogDescription>{t('update.description')}</DialogDescription>
  </DialogHeader>
  <DialogBody className="space-y-3 text-sm text-muted-foreground">
  <label className="block space-y-1">
- <span className="text-muted-foreground">Name</span>
+ <span className="text-muted-foreground">{t('form.name')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={name}
@@ -157,7 +158,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </label>
  <label className="block space-y-1">
  <span className="text-muted-foreground">
- Description
+ {t('form.description')}
  </span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
@@ -166,14 +167,14 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Location</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('form.location')}</span>
  {locations.length > 0 ? (
  <Select
  value={locationId || '__none__'}
  onValueChange={(v) => setLocationId(v === '__none__' ? '' : v)}
  >
  <SelectTrigger className="w-full border-border/40">
- <SelectValue placeholder="Select a location…" />
+ <SelectValue placeholder={t('form.selectLocation')} />
  </SelectTrigger>
  <SelectContent>
  {locations.map((location) => (
@@ -189,7 +190,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  ) : (
  <div className="rounded-lg border border-dashed border-border/40 bg-surface-2/50 px-3 py-2">
  <p className="text-xs text-muted-foreground">
- No locations exist yet.{' '}
+ {t('form.noLocations')}{' '}
  <button
  type="button"
  className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80"
@@ -198,7 +199,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  window.dispatchEvent(new CustomEvent('catalyst:open-locations-modal', { detail: { returnTo: 'node-update' } }));
  }}
  >
- Create a location
+ {t('form.createLocation')}
  </button>
  </p>
  </div>
@@ -206,7 +207,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </label>
  <label className="block space-y-1">
  <span className="text-muted-foreground">
- Server data directory
+ {t('form.serverDataDir')}
  </span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
@@ -215,11 +216,11 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  placeholder="/var/lib/catalyst/servers"
  />
  <p className="text-xs text-muted-foreground">
- Directory on the node where server files will be stored
+ {t('form.serverDataDirHint')}
  </p>
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">Hostname</span>
+ <span className="text-muted-foreground">{t('form.hostname')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={hostname}
@@ -228,7 +229,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </label>
  <label className="block space-y-1">
  <span className="text-muted-foreground">
- Public address
+ {t('form.publicAddress')}
  </span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
@@ -240,7 +241,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
  <span className="text-muted-foreground">
- Memory (MB)
+ {t('form.memoryMb')}
  </span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
@@ -252,7 +253,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </label>
  <label className="block space-y-1">
  <span className="text-muted-foreground">
- CPU cores
+ {t('form.cpuCores')}
  </span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
@@ -267,7 +268,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
  <span className="text-muted-foreground">
- Memory Over-allocation (%)
+ {t('form.memoryOverallocate')}
  </span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
@@ -277,12 +278,12 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  min={-1}
  />
  <p className="text-xs text-muted-foreground">
- 0 = no over-allocation, -1 = unlimited
+ {t('form.overallocateHint')}
  </p>
  </label>
  <label className="block space-y-1">
  <span className="text-muted-foreground">
- CPU Over-allocation (%)
+ {t('form.cpuOverallocate')}
  </span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
@@ -292,7 +293,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  min={-1}
  />
  <p className="text-xs text-muted-foreground">
- 0 = no over-allocation, -1 = unlimited
+ {t('form.overallocateHint')}
  </p>
  </label>
  </div>
@@ -300,7 +301,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  {/* SFTP Configuration */}
  <div className="rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
  <div className="flex items-center justify-between">
- <span className="text-sm font-medium text-foreground">SFTP Access</span>
+ <span className="text-sm font-medium text-foreground">{t('form.sftpAccess')}</span>
  <label className="flex items-center gap-2 text-xs text-muted-foreground">
  <input
  type="checkbox"
@@ -308,13 +309,13 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  onChange={(e) => setSftpEnabled(e.target.checked)}
  className="rounded border-border/40 text-primary focus:ring-primary"
  />
- Enabled
+ {t('form.enabled')}
  </label>
  </div>
  {sftpEnabled && (
  <div className="mt-2">
  <label className="block space-y-1">
- <span className="text-muted-foreground">SFTP port</span>
+ <span className="text-muted-foreground">{t('form.sftpPort')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={sftpPort}
@@ -325,7 +326,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  placeholder="2022"
  />
  <p className="text-xs text-muted-foreground">
- Port the SFTP server listens on (on this node). Default: 2022
+ {t('update.sftpPortHint')}
  </p>
  </label>
  </div>
@@ -340,22 +341,22 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  onClick={() => setShowAdvanced(!showAdvanced)}
  >
  {showAdvanced ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
- Advanced agent paths
+ {t('form.advancedPaths')}
  </button>
  {showAdvanced && (
  <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">Console log directory</span>
+ <span className="text-muted-foreground">{t('form.consoleLogDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={consoleLogDir}
  onChange={(e) => setConsoleLogDir(e.target.value)}
- placeholder="Defaults to {data_dir}/console"
+ placeholder={t('form.consoleLogDirPlaceholder')}
  />
  </label>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI config dir</span>
+ <span className="text-muted-foreground">{t('form.cniConfigDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniDir}
@@ -364,7 +365,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI bin dir</span>
+ <span className="text-muted-foreground">{t('form.cniBinDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniBinDir}
@@ -375,7 +376,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </div>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI data dir</span>
+ <span className="text-muted-foreground">{t('form.cniDataDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniDataDir}
@@ -384,7 +385,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI results dir</span>
+ <span className="text-muted-foreground">{t('form.cniResultsDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniResultsDir}
@@ -395,7 +396,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </div>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI bridge name</span>
+ <span className="text-muted-foreground">{t('form.cniBridgeName')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniBridgeName}
@@ -404,7 +405,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">CNI bridge subnet</span>
+ <span className="text-muted-foreground">{t('form.cniBridgeSubnet')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={cniBridgeSubnet}
@@ -414,7 +415,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </label>
  </div>
  <label className="block space-y-1">
- <span className="text-muted-foreground">Systemd override dir</span>
+ <span className="text-muted-foreground">{t('form.systemdOverrideDir')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={systemdOverrideDir}
@@ -424,7 +425,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </label>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">Agent config path</span>
+ <span className="text-muted-foreground">{t('form.agentConfigPath')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={agentConfigPath}
@@ -433,7 +434,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">Agent release repo</span>
+ <span className="text-muted-foreground">{t('form.agentReleaseRepo')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
  value={agentReleaseRepo}
@@ -443,7 +444,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </label>
  </div>
  <p className="text-xs text-muted-foreground">
- Leave blank to use agent defaults. These paths are written into the node's config.toml during deployment.
+ {t('form.advancedPathsHint')}
  </p>
  </div>
  )}
@@ -451,14 +452,14 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </DialogBody>
  <DialogFooter>
  <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  <Button
  size="sm"
  onClick={() => mutation.mutate()}
  disabled={mutation.isPending}
  >
- {mutation.isPending ? 'Saving…' : 'Save changes'}
+ {mutation.isPending ? t('update.saving') : t('update.save')}
  </Button>
  </DialogFooter>
  </DialogContent>

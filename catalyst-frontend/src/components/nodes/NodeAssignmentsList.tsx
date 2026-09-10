@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatDate } from '@/i18n/format';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -17,6 +19,7 @@ type Props = {
 };
 
 function NodeAssignmentsList({ nodeId, canManage }: Props) {
+ const { t } = useTranslation('nodes');
  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
 
  const { data: assignments = [], isLoading } = useQuery({
@@ -30,15 +33,14 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  return nodesApi.removeAssignment(nodeId, assignmentId);
  },
  onSuccess: () => {
- notifySuccess('Assignment removed');
+ notifySuccess(t('assignments.removed'));
  setPendingRemoveId(null);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to remove assignment';
- notifyError(message);
+ onError: (error: unknown) => {
+  notifyError(error, 'nodes:assignments.removeError');
  },
  });
 
@@ -55,7 +57,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  return (
  <ServerTabCard>
  <div className="mb-3 flex items-center justify-between">
- <SectionHeader icon={Shield} title="Node Assignments" />
+ <SectionHeader icon={Shield} title={t('assignments.title')} />
  {assignments.length > 0 && (
  <Badge variant="default" className="text-[10px]">
  {assignments.length}
@@ -69,7 +71,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  <div className="rounded-lg border border-dashed border-border/40 bg-surface-2/30 py-8 text-center">
  <Shield className="mx-auto mb-2 h-6 w-6 text-muted-foreground/50" />
  <p className="text-sm text-muted-foreground">
- No assignments yet. Assign this node to users or roles to grant them access.
+ {t('assignments.empty')}
  </p>
  </div>
  ) : (
@@ -84,7 +86,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  <>
  <Badge variant="outline" className="shrink-0 gap-1 text-[11px]">
  <User className="h-3 w-3" />
- User
+ {t('assign.user')}
  </Badge>
  <span className="truncate text-sm font-medium text-foreground">
  {assignment.userId}
@@ -94,7 +96,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  <>
  <Badge variant="outline" className="shrink-0 gap-1 text-[11px]">
  <Shield className="h-3 w-3" />
- Role
+ {t('assign.role')}
  </Badge>
  <span className="truncate text-sm font-medium text-foreground">
  {assignment.roleName || assignment.roleId}
@@ -105,7 +107,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
 
  <div className="flex items-center gap-3">
  <div className="hidden text-xs text-muted-foreground sm:block">
- <span>Assigned {new Date(assignment.assignedAt).toLocaleDateString()}</span>
+ <span>{t('assignments.assigned', { date: formatDate(assignment.assignedAt) })}</span>
  {assignment.expiresAt && (
  <span
  className={`ml-2 ${
@@ -114,8 +116,8 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  : ''
  }`}
  >
- · Exp {new Date(assignment.expiresAt).toLocaleDateString()}
- {new Date(assignment.expiresAt) < new Date() && ' (expired)'}
+ {t('assignments.expires', { date: formatDate(assignment.expiresAt) })}
+ {new Date(assignment.expiresAt) < new Date() ? t('assignments.expired') : ''}
  </span>
  )}
  </div>
@@ -125,7 +127,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={() => handleRemove(assignment.id)}
  disabled={removeMutation.isPending}
- title="Remove assignment"
+ title={t('assignments.removeTitle')}
  >
  <X className="h-3.5 w-3.5" />
  </button>
@@ -138,9 +140,9 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
 
  <ConfirmDialog
  open={pendingRemoveId !== null}
- title="Remove assignment"
- message="Are you sure you want to remove this assignment? The user or role will lose node access."
- confirmText="Remove"
+ title={t('assignments.removeTitle')}
+ message={t('assignments.removeConfirm')}
+ confirmText={t('common:actions.remove')}
  variant="danger"
  loading={removeMutation.isPending}
  onConfirm={confirmRemove}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -17,6 +18,7 @@ type Props = {
 };
 
 function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClassName, open: controlledOpen, onOpenChange }: Props) {
+  const { t } = useTranslation('templates');
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -26,13 +28,12 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
   const mutation = useMutation({
     mutationFn: () => templatesApi.remove(templateId),
     onSuccess: () => {
-      notifySuccess('Template deleted');
+      notifySuccess(t('delete.success'));
       setOpen(false);
       onDeleted?.();
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to delete template';
-      notifyError(message);
+    onError: (error: unknown) => {
+      notifyError(error, 'templates:delete.error');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.templates() });
@@ -49,20 +50,14 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
           className={buttonClassName}
           onClick={() => setOpen(true)}
         >
-          Delete
+          {t('common:actions.delete')}
         </Button>
       )}
       <ConfirmDialog
         open={open}
-        title="Delete template"
-        message={
-          <>
-            Are you sure you want to delete{' '}
-            <span className="font-semibold text-foreground">{templateName}</span>? This action
-            cannot be undone.
-          </>
-        }
-        confirmText="Delete"
+        title={t('delete.title')}
+        message={t('delete.confirm', { name: templateName })}
+        confirmText={t('common:actions.delete')}
         variant="danger"
         loading={mutation.isPending}
         onConfirm={() => mutation.mutate()}

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { Template } from '../../types/template';
 import EmptyState from '../shared/EmptyState';
 import TemplateCard from './TemplateCard';
@@ -7,11 +8,12 @@ type Props = {
 };
 
 function TemplateList({ templates }: Props) {
+ const { t } = useTranslation('templates');
  if (!templates.length) {
  return (
  <EmptyState
- title="No templates"
- description="Create a template to bootstrap new game servers quickly."
+ title={t('list.emptyTitle')}
+ description={t('list.emptyDescription')}
  />
  );
  }

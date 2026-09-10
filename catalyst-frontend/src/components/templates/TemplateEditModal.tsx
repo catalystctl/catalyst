@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@/csync';
@@ -72,6 +73,7 @@ type EditProps = {
 };
 
 function TemplateEditModal({ template, open: controlledOpen, onOpenChange, createdNestId }: EditProps) {
+ const { t } = useTranslation('templates');
  const [internalOpen, setInternalOpen] = useState(false);
  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
  const setOpen = (value: boolean) => {
@@ -227,7 +229,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
 
  const applyTemplateImport = (raw: any) => {
  if (!raw || typeof raw !== 'object') {
- setImportError('Invalid template JSON');
+ setImportError(t('create.invalidJson'));
  return;
  }
  const payload: any = normalizeTemplateImport(raw);
@@ -314,7 +316,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  const content = String(reader.result || '');
  const parsed = parseEggContent(content);
  if (!parsed) {
- setImportError('Failed to parse file (must be JSON or YAML)');
+ setImportError(t('create.parseFailed'));
  return;
  }
  applyTemplateImport(parsed);
@@ -326,11 +328,11 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  stack: error instanceof Error ? error.stack : undefined,
  metadata: { context: 'parse import file' },
  });
- setImportError('Failed to parse file (must be JSON or YAML)');
+ setImportError(t('create.parseFailed'));
  }
  };
  reader.onerror = () => {
- setImportError('Unable to read file');
+ setImportError(t('create.readFailed'));
  };
  reader.readAsText(file);
  event.target.value = '';
@@ -414,12 +416,11 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  nestId: nestId || null,
  }),
  onSuccess: () => {
- notifySuccess('Template updated');
+ notifySuccess(t('edit.updated'));
  setOpen(false);
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to update template';
- notifyError(message);
+ onError: (error: unknown) => {
+  notifyError(error, 'templates:edit.updateError');
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.templates() });
@@ -446,16 +447,16 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  const missingFields: string[] = useMemo(() => {
  const isSignalStop = sendSignalTo === 'SIGINT' || sendSignalTo === 'SIGKILL';
  const missing: string[] = [];
- if (!name) missing.push('Name');
- if (!author) missing.push('Author');
- if (!version) missing.push('Version');
- if (!image) missing.push('Container image');
- if (!startup) missing.push('Startup command');
+ if (!name) missing.push(t('missing.name'));
+ if (!author) missing.push(t('missing.author'));
+ if (!version) missing.push(t('missing.version'));
+ if (!image) missing.push(t('missing.image'));
+ if (!startup) missing.push(t('missing.startup'));
  // Stop command is only required when NOT using signal-based stop
- if (!stopCommand.trim() && !isSignalStop) missing.push('Stop command');
- if (!parsedPorts.length) missing.push('Valid ports');
- if (!Number(allocatedMemoryMb)) missing.push('Allocated memory');
- if (!Number(allocatedCpuCores)) missing.push('Allocated CPU cores');
+ if (!stopCommand.trim() && !isSignalStop) missing.push(t('missing.stopCommand'));
+ if (!parsedPorts.length) missing.push(t('missing.ports'));
+ if (!Number(allocatedMemoryMb)) missing.push(t('missing.memory'));
+ if (!Number(allocatedCpuCores)) missing.push(t('missing.cpu'));
  return missing;
  }, [
  name,
@@ -480,15 +481,15 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  setOpen(true);
  }}
  >
- Edit
+ {t('edit.button')}
  </button>
  )}
  <Dialog open={open} onOpenChange={setOpen}>
  <DialogContent size="2xl">
  <DialogHeader>
- <DialogTitle>Edit template</DialogTitle>
+ <DialogTitle>{t('edit.title')}</DialogTitle>
  <DialogDescription>
- Update images, resources, and startup configuration.
+ {t('edit.description')}
  </DialogDescription>
  </DialogHeader>
  <DialogToolbar>
@@ -498,7 +499,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  size="sm"
  onClick={() => importFileRef.current?.click()}
  >
- Import
+ {t('form.import')}
  </Button>
  <input
  ref={importFileRef}
@@ -517,7 +518,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  ) : null}
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
- <span className="text-muted-foreground">Name</span>
+ <span className="text-muted-foreground">{t('form.name')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={name}
@@ -525,7 +526,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">Author</span>
+ <span className="text-muted-foreground">{t('form.author')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={author}
@@ -533,18 +534,16 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Nest (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.nestOptional')}</span>
  <Select
  value={nestId || '__none__'}
  onValueChange={(v) => setNestId(v === '__none__' ? '' : v)}
  >
  <SelectTrigger>
- <SelectValue placeholder="None" />
+ <SelectValue placeholder={t('edit.none')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="__none__">None</SelectItem>
+ <SelectItem value="__none__">{t('edit.none')}</SelectItem>
  {nests.map((nest) => (
  <SelectItem key={nest.id} value={nest.id}>
  <span className="flex items-center gap-2">
@@ -567,7 +566,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </Select>
  {nests.length === 0 && (
  <p className="mt-1 text-[11px] text-muted-foreground/70">
- No nests available.{' '}
+ {t('edit.noNests')}{' '}
  <Link
  to="/admin/templates"
  onClick={(e) => {
@@ -576,16 +575,14 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  }}
  className="inline-flex items-center gap-0.5 font-medium text-primary hover:text-primary"
  >
- Create one
- </Link>{' '}
- to group templates by category.
+ {t('edit.createOne')}
+</Link>{' '}
+  {t('edit.noNestsSuffix')}
  </p>
  )}
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Version
- </span>
+ <span className="text-muted-foreground">{t('form.version')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={version}
@@ -593,9 +590,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Icon URL (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.iconUrl')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={iconUrl}
@@ -605,9 +600,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </label>
  </div>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Description
- </span>
+ <span className="text-muted-foreground">{t('form.description')}</span>
  <textarea
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  rows={2}
@@ -617,13 +610,11 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </label>
  <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
- Runtime images
+   {t('form.runtimeImages')}
  </div>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Container image
- </span>
+ <span className="text-muted-foreground">{t('form.containerImage')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={image}
@@ -631,9 +622,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Default image (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.defaultImage')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={defaultImage}
@@ -641,9 +630,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1 md:col-span-2">
- <span className="text-muted-foreground">
- Install image (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.installImage')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={installImage}
@@ -654,14 +641,14 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <div className="space-y-3 rounded-lg border border-border/30 bg-card p-3 transition-colors">
  <div className="flex flex-wrap items-center justify-between gap-2">
  <div className="text-xs font-semibold text-muted-foreground">
- Image variants
+   {t('form.imageVariants')}
  </div>
  <button
  className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
  onClick={() => setImageOptions((prev) => [...prev, createImageOptionDraft()])}
  type="button"
  >
- Add image
+ {t('form.addImage')}
  </button>
  </div>
  {imageOptions.length ? (
@@ -672,9 +659,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
  >
  <label className="block space-y-1">
- <span className="text-xs text-muted-foreground">
- Name
- </span>
+ <span className="text-xs text-muted-foreground">{t('form.name')}</span>
  <input
  className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={option.name}
@@ -690,9 +675,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs text-muted-foreground">
- Label
- </span>
+ <span className="text-xs text-muted-foreground">{t('form.variantLabel')}</span>
  <input
  className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={option.label ?? ''}
@@ -708,9 +691,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs text-muted-foreground">
- Image
- </span>
+ <span className="text-xs text-muted-foreground">{t('form.variantImage')}</span>
  <input
  className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={option.image}
@@ -734,26 +715,24 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  }
  type="button"
  >
- Remove
+ {t('common:actions.remove')}
  </button>
  </div>
  ))}
  </div>
  ) : (
  <p className="text-xs text-muted-foreground">
- Add optional image variants for selectable runtimes.
+ {t('form.variantsHint')}
  </p>
  )}
  </div>
  </div>
  <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
- Commands & config
+   {t('form.commandsConfig')}
  </div>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Config file path (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.configFile')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={configFile}
@@ -762,9 +741,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Config files (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.configFiles')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={configFiles.join(', ')}
@@ -779,9 +756,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Startup command
- </span>
+ <span className="text-muted-foreground">{t('form.startupCommand')}</span>
  <textarea
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  rows={2}
@@ -791,9 +766,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </label>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
  <label className="block space-y-1 md:col-span-2">
- <span className="text-muted-foreground">
- Stop command
- </span>
+ <span className="text-muted-foreground">{t('form.stopCommand')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={stopCommand}
@@ -801,9 +774,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Signal
- </span>
+ <span className="text-muted-foreground">{t('form.signal')}</span>
  <select
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={sendSignalTo}
@@ -818,9 +789,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </label>
  </div>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Install script (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.installScript')}</span>
  <textarea
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  rows={5}
@@ -831,13 +800,11 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </div>
  <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
- Resources & ports
+   {t('form.resourcesPorts')}
  </div>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Ports (comma separated)
- </span>
+ <span className="text-muted-foreground">{t('form.ports')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={supportedPorts}
@@ -845,9 +812,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Allocated memory (MB)
- </span>
+ <span className="text-muted-foreground">{t('form.allocatedMemory')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  type="number"
@@ -857,9 +822,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Allocated CPU cores
- </span>
+ <span className="text-muted-foreground">{t('form.allocatedCpu')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  type="number"
@@ -874,14 +837,14 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="flex flex-wrap items-center justify-between gap-2">
  <h3 className="text-sm font-semibold text-foreground">
- Variables
+   {t('form.variables')}
  </h3>
  <button
  className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
  onClick={() => setVariables((prev) => [...prev, createVariableDraft()])}
  type="button"
  >
- Add variable
+ {t('form.addVariable')}
  </button>
  </div>
  {variables.map((variable, index) => (
@@ -891,7 +854,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  >
  <div className="flex items-center justify-between gap-2">
  <div className="text-xs font-semibold text-muted-foreground">
- Variable {index + 1}
+   {t('form.variableIndex', { index: index + 1 })}
  </div>
  {variables.length > 1 ? (
  <button
@@ -903,15 +866,13 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  }
  type="button"
  >
- Remove
+ {t('common:actions.remove')}
  </button>
  ) : null}
  </div>
  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Name
- </span>
+ <span className="text-muted-foreground">{t('form.name')}</span>
  <input
  className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={variable.name}
@@ -927,9 +888,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Default
- </span>
+ <span className="text-muted-foreground">{t('form.default')}</span>
  <input
  className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={variable.defaultValue}
@@ -945,9 +904,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1 md:col-span-2">
- <span className="text-muted-foreground">
- Description
- </span>
+ <span className="text-muted-foreground">{t('form.description')}</span>
  <input
  className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={variable.description}
@@ -977,12 +934,10 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  )
  }
  />
- Required
+ {t('form.required')}
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Input type
- </span>
+ <span className="text-muted-foreground">{t('form.inputType')}</span>
  <select
  className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={variable.input}
@@ -999,18 +954,16 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  )
  }
  >
- <option value="text">Text</option>
- <option value="number">Number</option>
- <option value="password">Password</option>
- <option value="select">Select</option>
- <option value="checkbox">Checkbox</option>
- <option value="textarea">Textarea</option>
+ <option value="text">{t('form.inputText')}</option>
+ <option value="number">{t('form.inputNumber')}</option>
+ <option value="password">{t('form.inputPassword')}</option>
+ <option value="select">{t('form.inputSelect')}</option>
+ <option value="checkbox">{t('form.inputCheckbox')}</option>
+ <option value="textarea">{t('form.inputTextarea')}</option>
  </select>
  </label>
  <label className="block space-y-1 md:col-span-2">
- <span className="text-muted-foreground">
- Rules (semicolon separated)
- </span>
+ <span className="text-muted-foreground">{t('form.rules')}</span>
  <input
  className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={variable.rules}
@@ -1032,7 +985,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </div>
  <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
  <div className="text-sm font-semibold text-foreground">
- Advanced features
+   {t('form.advancedFeatures')}
  </div>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1042,19 +995,17 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  checked={restartOnExit}
  onChange={(event) => setRestartOnExit(event.target.checked)}
  />
- Restart on exit
+ {t('form.restartOnExit')}
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Max instances (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.maxInstances')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  type="number"
  min={1}
  value={maxInstances}
  onChange={(event) => setMaxInstances(event.target.value)}
- placeholder="Unlimited"
+ placeholder={t('form.maxInstancesPlaceholder')}
  />
  </label>
  <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1064,12 +1015,10 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  checked={fileEditorEnabled}
  onChange={(event) => setFileEditorEnabled(event.target.checked)}
  />
- Enable file editor
+ {t('form.enableFileEditor')}
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- File editor restricted paths (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.fileEditorRestrictedPaths')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={fileEditorRestrictedPaths}
@@ -1079,9 +1028,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </label>
  </div>
  <label className="block space-y-1">
- <span className="text-muted-foreground">
- Backup paths (optional)
- </span>
+ <span className="text-muted-foreground">{t('form.backupPaths')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={backupPaths}
@@ -1106,7 +1053,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  {missingFields.length > 0 ? (
  <div className="text-xs">
  <span className="text-muted-foreground">
- Missing required fields:{' '}
+ {t('form.missingFields')}{' '}
  </span>
  <span className="text-warning font-medium">
  {missingFields.join(', ')}
@@ -1114,16 +1061,16 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </div>
  ) : (
  <span className="text-xs text-muted-foreground">
- Changes apply immediately after save.
+ {t('edit.changesApply')}
  </span>
  )}
  </div>
  <div className="flex gap-2">
  <Button variant="outline" onClick={() => setOpen(false)}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
- {mutation.isPending ? 'Saving...' : 'Save changes'}
+ {mutation.isPending ? t('edit.saving') : t('edit.save')}
  </Button>
  </div>
  </DialogFooter>

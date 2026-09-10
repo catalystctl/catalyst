@@ -1,13 +1,15 @@
+import { useTranslation } from 'react-i18next';
 import type { NodeInfo } from '../../types/node';
 import EmptyState from '../shared/EmptyState';
 import NodeCard from './NodeCard';
 
 function NodeList({ nodes, latestAgentVersion }: { nodes: NodeInfo[]; latestAgentVersion?: string | null }) {
+ const { t } = useTranslation('nodes');
  if (!nodes.length) {
  return (
  <EmptyState
- title="No nodes detected"
- description="Install the Catalyst agent and register nodes to begin."
+ title={t('list.emptyTitle')}
+ description={t('list.emptyDescription')}
  />
  );
  }

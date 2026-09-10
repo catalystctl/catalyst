@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -38,6 +39,7 @@ function NestForm({
  onCancel: () => void;
  isPending: boolean;
 }) {
+ const { t } = useTranslation('templates');
  const [name, setName] = useState(initial?.name || '');
  const [description, setDescription] = useState(initial?.description || '');
  const [icon, setIcon] = useState(initial?.icon || '');
@@ -50,7 +52,7 @@ function NestForm({
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="text-xs font-medium text-muted-foreground">
- Name <span className="text-destructive">*</span>
+   {t('form.name')} <span className="text-destructive">*</span>
  </span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
@@ -61,7 +63,7 @@ function NestForm({
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Icon URL (optional)</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('nests.iconUrl')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={icon}
@@ -71,7 +73,7 @@ function NestForm({
  </label>
  </div>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Author (optional)</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('nests.authorOptional')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={author}
@@ -80,13 +82,13 @@ function NestForm({
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Description (optional)</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('nests.descriptionOptional')}</span>
  <textarea
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  rows={2}
  value={description}
  onChange={(e) => setDescription(e.target.value)}
- placeholder="Brief description of this nest category"
+ placeholder={t('nests.descriptionPlaceholder')}
  />
  </label>
  <div className="flex justify-end gap-2 pt-1">
@@ -94,7 +96,7 @@ function NestForm({
  className="rounded-full border border-border/40 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
  onClick={onCancel}
  >
- Cancel
+ {t('common:actions.cancel')}
  </button>
  <button
  className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
@@ -108,7 +110,7 @@ function NestForm({
  }
  disabled={disableSubmit}
  >
- {isPending ? 'Saving...' : initial ? 'Update' : 'Create'}
+ {isPending ? t('nests.saving') : initial ? t('nests.update') : t('common:actions.create')}
  </button>
  </div>
  </div>
@@ -122,6 +124,7 @@ type Props = {
 };
 
 export default function NestsManagerModal({ open, onOpenChange }: Props) {
+  const { t } = useTranslation('templates');
  const [editingNest, setEditingNest] = useState<Nest | null>(null);
  const [isCreating, setIsCreating] = useState(false);
  const [deleteTarget, setDeleteTarget] = useState<Nest | null>(null);
@@ -146,7 +149,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  const createMutation = useMutation({
  mutationFn: nestsApi.create,
  onSuccess: (created) => {
- notifySuccess('Nest created');
+ notifySuccess(t('nests.created'));
  setIsCreating(false);
  // If opened from another modal, send the user back after creation
  if (returnToRef.current) {
@@ -161,9 +164,8 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  }
  }
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to create nest';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'templates:nests.createError');
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.nests() });
@@ -175,12 +177,11 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  mutationFn: ({ id, ...payload }: { id: string } & Parameters<typeof nestsApi.update>[1]) =>
  nestsApi.update(id, payload),
  onSuccess: () => {
- notifySuccess('Nest updated');
+ notifySuccess(t('nests.updated'));
  setEditingNest(null);
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to update nest';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'templates:nests.updateError');
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.nests() });
@@ -191,12 +192,11 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  const deleteMutation = useMutation({
  mutationFn: nestsApi.remove,
  onSuccess: () => {
- notifySuccess('Nest deleted');
+ notifySuccess(t('nests.deleted'));
  setDeleteTarget(null);
  },
- onError: (error: any) => {
- const message = error?.response?.data?.error || 'Failed to delete nest';
- notifyError(message);
+ onError: (error: unknown) => {
+   notifyError(error, 'templates:nests.deleteError');
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.nests() });
@@ -221,8 +221,8 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  <Dialog open={open} onOpenChange={onOpenChange}>
  <DialogContent size="xl">
  <DialogHeader icon={<FolderOpen className="h-4 w-4" />} iconClassName="border-warning/20 bg-warning/10 text-warning">
- <DialogTitle>Manage nests</DialogTitle>
- <DialogDescription>Organize templates into categories.</DialogDescription>
+ <DialogTitle>{t('nests.title')}</DialogTitle>
+ <DialogDescription>{t('nests.description')}</DialogDescription>
  </DialogHeader>
  <DialogBody>
  {/* Inline form */}
@@ -230,7 +230,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
  <div className="mb-3 flex items-center justify-between">
  <span className="text-sm font-semibold text-foreground">
- {editingNest ? 'Edit nest' : 'New nest'}
+ {editingNest ? t('nests.edit') : t('nests.new')}
  </span>
  <button
  className="rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
@@ -274,9 +274,9 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  ) : nests.length === 0 && !isCreating ? (
  <div className="flex flex-col items-center justify-center py-12 text-center">
  <FolderOpen className="mb-3 h-10 w-10 text-muted-foreground/40" />
- <p className="text-sm font-medium text-muted-foreground">No nests yet</p>
+ <p className="text-sm font-medium text-muted-foreground">{t('nests.empty')}</p>
  <p className="mt-1 text-xs text-muted-foreground/70">
- Create a nest to group your templates by category.
+ {t('nests.emptyHint')}
  </p>
  </div>
  ) : (
@@ -304,7 +304,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  {nest.name}
  </span>
  {nest.author && (
- <span className="text-xs text-muted-foreground">by {nest.author}</span>
+ <span className="text-xs text-muted-foreground">{t('nests.byAuthor', { author: nest.author })}</span>
  )}
  </div>
  {nest.description && (
@@ -313,8 +313,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  </p>
  )}
  <span className="text-[11px] text-muted-foreground/70">
- {(nest as any).templateCount ?? 0} template
- {((nest as any).templateCount ?? 0) !== 1 ? 's' : ''}
+ {t('nests.templateCount', { count: (nest as any).templateCount ?? 0 })}
  </span>
  </div>
 
@@ -326,14 +325,14 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  setEditingNest(nest);
  setIsCreating(false);
  }}
- title="Edit"
+ title={t('common:actions.edit')}
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
  <button
  className="rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/5 hover:text-destructive"
  onClick={() => setDeleteTarget(nest)}
- title="Delete"
+ title={t('common:actions.delete')}
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
@@ -346,7 +345,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  {!isFormActive && (
  <DialogFooter className="sm:justify-between">
  <span className="text-xs text-muted-foreground">
- {nests.length} nest{nests.length !== 1 ? 's' : ''}
+ {t('nests.count', { count: nests.length })}
  </span>
  <Button
  size="sm"
@@ -356,7 +355,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  }}
  >
  <Plus className="h-3.5 w-3.5" />
- Add nest
+ {t('nests.add')}
  </Button>
  </DialogFooter>
  )}
@@ -366,19 +365,17 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  {/* Delete confirmation */}
  <ConfirmDialog
  open={!!deleteTarget}
- title="Delete Nest"
+ title={t('nests.deleteTitle')}
  message={
  <div className="space-y-2">
- <p>
- Delete nest <span className="font-semibold">{deleteTarget?.name}</span>?
- </p>
+ <p>{t('nests.deleteConfirm', { name: deleteTarget?.name })}</p>
  <p className="text-xs text-muted-foreground">
- Templates in this nest will become ungrouped. This action cannot be undone.
+   {t('nests.deleteWarning')}
  </p>
  </div>
  }
- confirmText="Delete"
- cancelText="Cancel"
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
  onCancel={() => setDeleteTarget(null)}
  variant="danger"
