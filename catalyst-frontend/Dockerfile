@@ -53,8 +53,12 @@ FROM nginx:alpine
 # Remove default config
 RUN rm /etc/nginx/conf.d/default.conf
 
-# Default internal listen port; overridable at runtime via the PORT env var.
+# Defaults for the two ports substituted into the config template: PORT is the
+# container's own listen port, BACKEND_UPSTREAM_PORT the backend upstream port
+# (set from BACKEND_INTERNAL_PORT by the compose stack). Both are overridable
+# at runtime (compose passes them explicitly).
 ENV PORT=80
+ENV BACKEND_UPSTREAM_PORT=3000
 
 # Copy nginx config (proxies /api, /auth, /ws, /docs to backend).
 # Installed as a template: the nginx image's entrypoint renders

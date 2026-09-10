@@ -116,7 +116,9 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       TZ: ${TZ:-UTC}
       LOG_LEVEL: info
-      PORT: 3000
+      # Container-internal listen port. The frontend nginx upstream follows it
+      # (BACKEND_INTERNAL_PORT is also passed to the frontend service below).
+      PORT: ${BACKEND_INTERNAL_PORT:-3000}
 
       # Database
       # NOTE: POSTGRES_PASSWORD is only applied by the official Postgres image on
@@ -224,7 +226,7 @@ services:
       MAX_DISK_MB: ${MAX_DISK_MB:-1048576}
     ports:
       # No SFTP publish here — port 2022 belongs to the node agent.
-      - "${BACKEND_PORT:-127.0.0.1:3000}:3000"
+      - "${BACKEND_PORT:-127.0.0.1:3000}:${BACKEND_INTERNAL_PORT:-3000}"
     volumes:
       - catalyst-server-data:/var/lib/catalyst/servers
       - catalyst-backup-data:/var/lib/catalyst/backups
@@ -232,7 +234,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${CATALYST_COMPOSE_DIR:-/opt/catalyst-docker}:${CATALYST_COMPOSE_DIR:-/opt/catalyst-docker}:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
+      # $$ defers expansion to the container shell, so the probe follows the
+      # backend's own PORT value instead of a host-side interpolation of it.
+      test: ["CMD-SHELL", "curl -sf http://localhost:$${PORT:-3000}/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -246,6 +250,9 @@ services:
   #   • Move the panel for users → change FRONTEND_PORT's left side (or PORT)
   #   • Change the internal nginx listen port → change PORT (rarely needed)
   # The Caddy/Traefik overlays read the same PORT variable.
+  # BACKEND_INTERNAL_PORT = port the backend listens on inside its container.
+  # One value drives the backend's PORT, this container's nginx upstream, and
+  # the backend healthcheck, so they cannot drift apart.
   # ===========================================================================
   frontend:
     image: ghcr.io/catalystctl/catalyst-frontend:latest
@@ -256,6 +263,12 @@ services:
         condition: service_healthy
     environment:
       PORT: ${PORT:-80}
+      # Backend upstream port rendered into ./nginx/default.conf.template's
+      # proxy_pass targets. Must match the backend service's PORT above.
+      # Named differently from the .env variable on purpose: podman-compose
+      # leaves a self-referencing ${VAR:-default} unexpanded, which would put a
+      # literal string into nginx's upstream.
+      BACKEND_UPSTREAM_PORT: ${BACKEND_INTERNAL_PORT:-3000}
     ports:
       - "${FRONTEND_PORT:-0.0.0.0:80}:${PORT:-80}"
     volumes:

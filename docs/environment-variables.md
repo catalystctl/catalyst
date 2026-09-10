@@ -322,6 +322,7 @@ cp catalyst-docker/.env.example catalyst-docker/.env
 | `PORT` | Number | `80` | Port nginx listens on **inside** the frontend container (same mechanism as the backend's `PORT`). Compose injects this port as the container side of `FRONTEND_PORT` and the TLS-overlay proxies follow it automatically. Advanced use — to change the port users visit, edit `FRONTEND_PORT` instead. |
 | `FRONTEND_PORT` | Host:Container binding | `0.0.0.0:8080` | Port binding for the frontend service. For podman (rootless), use a port ≥ 1024 (e.g., `0.0.0.0:8080`). |
 | `BACKEND_PORT` | Host:Container binding | `127.0.0.1:3000` (compose default) | Host publish for the backend API. Compose defaults to **localhost-only**; the process still listens on `0.0.0.0` inside the container. |
+| `BACKEND_INTERNAL_PORT` | Number | `3000` | Port the backend API listens on **inside** its container. Advanced use (host-network collisions, matching an existing port convention): one value drives the backend's `PORT`, the frontend nginx upstream, and the backend healthcheck, so they cannot drift apart. To change only the port users reach the API on, edit `BACKEND_PORT` instead. |
 
 ::: tip Restricting Bind Addresses
 Set the prefix to `127.0.0.1:` to restrict access to localhost only. Example: `FRONTEND_PORT=127.0.0.1:8080`.

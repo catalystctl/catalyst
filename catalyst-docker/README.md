@@ -105,6 +105,7 @@ nano .env
 | `FRONTEND_PORT` | `0.0.0.0:8080` | Change to `127.0.0.1:8080` to block external access |
 | `PORT` | `80` | Nginx listen port inside the frontend container (same mechanism as the backend's `PORT`). Advanced use — to move the panel for users, change `FRONTEND_PORT` instead. |
 | `BACKEND_PORT` | `127.0.0.1:3000` | Change to `127.0.0.1:3000` for localhost-only API |
+| `BACKEND_INTERNAL_PORT` | `3000` | Port the backend listens on inside its container. Advanced use — the frontend nginx upstream, backend healthcheck, and published mapping all follow it. |
 
 > SFTP is served by the node agent (default port `2022`), not by this compose stack.
 
@@ -426,13 +427,13 @@ docker compose logs --tail=50 redis
 | Backend crashes on start | Missing `BETTER_AUTH_SECRET` or `POSTGRES_PASSWORD` | Verify both are set in `.env` |
 | Backend keeps restarting | Database not ready yet | Wait 30s for postgres healthcheck; check `docker compose logs postgres` |
 | Frontend never starts | Backend unhealthy | Fix backend first; frontend depends on backend |
-| Port already in use | Another service uses 8080, 3000, or 2022 | Change ports in `.env` |
+| Port already in use | Another service uses 8080, 3000, or 2022 | Change the host side in `.env` (`FRONTEND_PORT` / `BACKEND_PORT`); a host-network collision instead needs `PORT` / `BACKEND_INTERNAL_PORT` |
 
 ### Health check failures
 
 ```bash
 # Check individual health
-docker compose exec backend curl -sf http://localhost:3000/health || echo "UNHEALTHY"
+docker compose exec backend sh -c 'curl -sf http://localhost:${PORT:-3000}/health' || echo "UNHEALTHY"
 docker compose exec postgres pg_isready -U catalyst || echo "UNHEALTHY"
 docker compose exec redis redis-cli --no-auth-warning ping || echo "UNHEALTHY"
 ```

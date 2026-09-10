@@ -75,6 +75,7 @@ All configuration lives in `.env`. The install script generates it automatically
 | `FRONTEND_PORT` | | `0.0.0.0:8080` | Panel port |
 | `PORT` | | `80` | Port nginx listens on inside the frontend container (advanced; `FRONTEND_PORT` is what users need) |
 | `BACKEND_PORT` | | `127.0.0.1:3000` | API port (localhost-only by default) |
+| `BACKEND_INTERNAL_PORT` | | `3000` | Port the API listens on inside its container (advanced; the frontend nginx upstream and healthcheck follow it) |
 
 > SFTP is served by the node agent (default port `2022`), not by the Docker stack.
 

@@ -261,6 +261,21 @@ RENDERED="$(docker exec catalyst-frontend sh -c "grep -m1 \"listen \" /etc/nginx
 [ -n "$RENDERED" ] || RENDERED="$(podman exec catalyst-frontend sh -c "grep -m1 \"listen \" /etc/nginx/conf.d/default.conf" 2>/dev/null | grep -oE "[0-9]+" | head -1)"
 echo "rendered listen port in container: ${RENDERED:-<frontend container not found or nginx down>}"
 '
+# Backend internal port: configured (BACKEND_INTERNAL_PORT in .env) vs rendered
+# (nginx upstream) vs running (backend container's PORT env). Divergence here
+# makes every proxied /api/ request fail with 502 (GitHub issue #250).
+collect "backend: internal port (env/rendered upstream/running)" bash -c '
+BIP_ENV="$(grep -E "^BACKEND_INTERNAL_PORT=" "'"$COMPOSE_DIR"'/.env" 2>/dev/null | head -1 | cut -d= -f2-)"
+echo "BACKEND_INTERNAL_PORT in .env: ${BIP_ENV:-<unset, compose default 3000>}"
+UPSTREAM="$(docker exec catalyst-frontend sh -c "grep -m1 -oE \"backend:[0-9]+\" /etc/nginx/conf.d/default.conf" 2>/dev/null | head -1)"
+[ -n "$UPSTREAM" ] || UPSTREAM="$(podman exec catalyst-frontend sh -c "grep -m1 -oE \"backend:[0-9]+\" /etc/nginx/conf.d/default.conf" 2>/dev/null | head -1)"
+echo "rendered nginx upstream in container: ${UPSTREAM:-<frontend container not found or nginx down>}"
+BACKEND_ENV_PORT="$(docker exec catalyst-backend printenv PORT 2>/dev/null || podman exec catalyst-backend printenv PORT 2>/dev/null)"
+echo "backend container PORT env: ${BACKEND_ENV_PORT:-<backend container not found>}"
+if [ -n "$UPSTREAM" ] && [ -n "$BACKEND_ENV_PORT" ] && [ "${UPSTREAM##*:}" != "$BACKEND_ENV_PORT" ]; then
+    echo "MISMATCH: nginx proxies to ${UPSTREAM} but the backend listens on ${BACKEND_ENV_PORT} — proxied API requests will 502"
+fi
+'
 if [[ -z "$COMPOSE_CMD" ]]; then
     sec "health: postgres pg_isready"
     echo "(no compose command found)" >> "$BUNDLE"

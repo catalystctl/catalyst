@@ -51,9 +51,10 @@ services:
     container_name: catalyst-backend-test
     ports:
       # No SFTP publish here — port 2022 belongs to the node agent.
-      - "${BACKEND_PORT:-127.0.0.1:3000}:3000"
+      - "${BACKEND_PORT:-127.0.0.1:3000}:${BACKEND_INTERNAL_PORT:-3000}"
     environment:
       NODE_ENV: test
+      PORT: ${BACKEND_INTERNAL_PORT:-3000}
       LOG_LEVEL: debug
       DATABASE_URL: postgresql://catalyst:${POSTGRES_PASSWORD}@postgres:5432/catalyst_db
       # Redis is wired to the backend cache/coordination layer (degrades gracefully when down).
@@ -95,7 +96,7 @@ services:
       CONSOLE_OUTPUT_BYTE_LIMIT_BYTES: ${CONSOLE_OUTPUT_BYTE_LIMIT_BYTES:-524288}
       MAX_DISK_MB: ${MAX_DISK_MB:-1048576}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:$${PORT:-3000}/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -118,6 +119,11 @@ services:
       dockerfile: catalyst-frontend/Dockerfile
     image: catalyst-frontend:test
     container_name: catalyst-frontend-test
+    environment:
+      # Same wiring as the base compose: the image's baked nginx template
+      # proxies to the backend container's internal port. Distinct name — see
+      # the note in docker-compose.yml (podman-compose self-reference).
+      BACKEND_UPSTREAM_PORT: ${BACKEND_INTERNAL_PORT:-3000}
     ports:
       - "${FRONTEND_PORT:-127.0.0.1:8080}:${PORT:-80}"
     healthcheck:

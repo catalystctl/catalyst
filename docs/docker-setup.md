@@ -229,6 +229,7 @@ Then start with: `docker compose -f docker-compose.yml -f docker-compose.overrid
 |----------|---------|-------------|
 | `FRONTEND_PORT` | `0.0.0.0:8080` (install / `.env.example`; bare compose fallback is `:80`) | Panel access. Use `127.0.0.1:8080` to restrict to localhost. |
 | `BACKEND_PORT` | `127.0.0.1:3000` | API access. Usually localhost-only (proxied by nginx). |
+| `BACKEND_INTERNAL_PORT` | `3000` | Port the backend listens on inside its container. Advanced use: one value drives the backend's `PORT`, the frontend nginx upstream, and the healthcheck, so they cannot drift apart. |
 | `POSTGRES_PORT` | `127.0.0.1:5432` | Database. Disable by commenting out if not needed externally. |
 | `REDIS_PORT` | `127.0.0.1:6379` | Redis. Localhost-only debug access. To make Redis fully internal-only, override with an empty `REDIS_PORT=` plus a `ports: []` override — commenting out the variable alone still publishes the compose default. Never set to `0.0.0.0:6379`. |
 
@@ -611,6 +612,8 @@ ss -tlnp | grep -E ':(80|8080|3000|2022|5432|6379)'
 FRONTEND_PORT=0.0.0.0:8081
 BACKEND_PORT=127.0.0.1:3001
 ```
+
+`FRONTEND_PORT` and `BACKEND_PORT` move only the **host** side of the mapping, so nginx is unaffected. If the collision is inside a shared network namespace (host networking), move the container-internal ports instead — `PORT` for nginx and `BACKEND_INTERNAL_PORT` for the backend API. The frontend's upstream and the backend healthcheck follow those automatically.
 
 ### 2. Permission Issues with Volumes
 
