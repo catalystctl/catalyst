@@ -256,19 +256,96 @@ export class WebSocketGateway {
   private serverCommandCounters = new Map<string, { count: number; resetAt: number }>();
 
   // Cache server access lists to avoid DB query on every routeToClients call.
-  // Refreshed every 30 seconds per server.
-  private serverAccessCache = new CappedMap<string, { allowedUsers: Set<string>; expiresAt: number }>(5000);
+  // Short TTL + userId-attached SSE subscribers: every emit re-checks the
+  // requester's grant, so revoke/transfer stops fan-out immediately.
+  private serverAccessCache = new CappedMap<string, { allowedUsers: Set<string>; expiresAt: number; grantVersion: number }>(5000);
 
   /** Drop a cached server access list after grant/revoke/transfer/user-delete. */
   invalidateServerAccess(serverId?: string): void {
+    this.grantVersion += 1;
     if (!serverId) {
       this.serverAccessCache.clear();
+      this.pruneServerSubscriptions();
       return;
     }
     this.serverAccessCache.delete(serverId);
+    this.pruneServerSubscriptions(serverId);
+  }
+
+  /**
+   * Drop SSE/WS subscriptions whose holder lost access. Called on every
+   * invalidate so revoke/transfer is immediate, not TTL-bound.
+   */
+  private pruneServerSubscriptions(serverId?: string): void {
+    try {
+      const checkServer = async (sid: string, userIds: Set<string>) => {
+        const allowedUsers = await this.getAllowedUsersForServer(sid, true);
+        if (!allowedUsers) {
+          for (const userId of userIds) this.removeUserServerSubscriptions(userId, sid);
+          return;
+        }
+        for (const userId of userIds) {
+          if (!allowedUsers.has(userId)) this.removeUserServerSubscriptions(userId, sid);
+        }
+      };
+      if (serverId) {
+        const holders = new Set<string>();
+        for (const [, client] of this.clients) {
+          if (client.subscriptions.has(serverId)) holders.add(client.userId);
+        }
+        for (const subs of [this.sseSubscribers.get(serverId), this.sseEventSubscribers.get(serverId)]) {
+          if (!subs) continue;
+          for (const [, sub] of subs) {
+            const uid = (sub as { userId?: string }).userId;
+            if (uid) holders.add(uid);
+          }
+        }
+        void checkServer(serverId, holders);
+      } else {
+        const byServer = new Map<string, Set<string>>();
+        for (const [, client] of this.clients) {
+          for (const sid of client.subscriptions) {
+            const set = byServer.get(sid) ?? new Set<string>();
+            set.add(client.userId);
+            byServer.set(sid, set);
+          }
+        }
+        for (const [sid, subs] of this.sseEventSubscribers) {
+          for (const [, sub] of subs) {
+            const uid = (sub as { userId?: string }).userId;
+            if (!uid) continue;
+            const set = byServer.get(sid) ?? new Set<string>();
+            set.add(uid);
+            byServer.set(sid, set);
+          }
+        }
+        for (const [sid, holders] of byServer) void checkServer(sid, holders);
+      }
+    } catch { /* best-effort */ }
+  }
+
+  /** Remove every WS/SSE subscription a user holds on a server. */
+  private removeUserServerSubscriptions(userId: string, serverId: string): void {
+    for (const [, client] of this.clients) {
+      if (client.userId === userId) client.subscriptions.delete(serverId);
+    }
+    for (const map of [this.sseSubscribers, this.sseEventSubscribers]) {
+      const subs = map.get(serverId);
+      if (!subs) continue;
+      for (const [id, sub] of [...subs]) {
+        if ((sub as { userId?: string }).userId === userId) subs.delete(id);
+      }
+      if (subs.size === 0) map.delete(serverId);
+    }
+    for (const [, sub] of this.globalSseSubscribers) {
+      if ((sub as { userId?: string }).userId === userId) sub.serverIds?.delete(serverId);
+    }
   }
   private latestResourceStats = new CappedMap<string, Record<string, unknown>>(5000);
   private static readonly SERVER_ACCESS_TTL_MS = 30_000;
+  /** Monotonic grant version: bumped on every invalidate so queued outbox
+   * entries stamped with an older version are dropped at drain time. */
+  private grantVersion = 0;
   private serverConsoleBytes = new Map<string, { count: number; resetAt: number }>();
   private consoleResumeTimestamps = new Map<string, number>();
   private lastConsoleLimitRefreshAt = 0;
@@ -297,7 +374,7 @@ export class WebSocketGateway {
   // Commands queued per node when sendToAgent() finds no connected agent
   // (brief reconnects, panel restarts mid-deploy). Drained on reconnection;
   // entries expire after OUTBOX_TTL_MS and the queue is capped per node.
-  private readonly outbox = new Map<string, Array<{ payload: string; queuedAt: number }>>();
+  private readonly outbox = new Map<string, Array<{ payload: string; queuedAt: number; userId?: string; serverId?: string; grantVersion: number }>>();
   private static readonly OUTBOX_MAX_PER_NODE = 50;
   private static readonly OUTBOX_TTL_MS = 30_000;
 
@@ -416,6 +493,11 @@ export class WebSocketGateway {
       queue = [];
       this.outbox.set(nodeId, queue);
     }
+    // Re-resolve the grant at drain: stamp the acting user + grant version so
+    // a revoke/transfer between queue and drain drops the command instead of
+    // replaying a stale authorization.
+    const entryUserId = typeof message.userId === "string" ? message.userId : undefined;
+    const entryServerId = typeof message.serverId === "string" ? message.serverId : undefined;
     // Expire stale entries before appending.
     while (queue.length > 0 && now - queue[0].queuedAt > WebSocketGateway.OUTBOX_TTL_MS) {
       queue.shift();
@@ -425,7 +507,7 @@ export class WebSocketGateway {
       this.bumpCounter(this.reliabilityOutboxDropped, nodeId);
       return false;
     }
-    queue.push({ payload: JSON.stringify(message), queuedAt: now });
+    queue.push({ payload: JSON.stringify(message), queuedAt: now, userId: entryUserId, serverId: entryServerId, grantVersion: this.grantVersion });
     this.bumpCounter(this.reliabilityOutboxQueued, nodeId);
     return true;
   }
@@ -528,7 +610,25 @@ export class WebSocketGateway {
       const entry = queue[i];
       if (now - entry.queuedAt > WebSocketGateway.OUTBOX_TTL_MS) {
         expired += 1;
+        try {
+          this.logger.info({ nodeId, type: (() => { try { return JSON.parse(entry.payload)?.type; } catch { return undefined; } })(), ageMs: now - entry.queuedAt }, "Outbox entry expired without drain");
+        } catch { /* ignore */ }
         continue;
+      }
+      // Grant-version staleness: a revoke/transfer bumped the version after
+      // this entry was queued. Re-resolve the actor's grant; drop on change.
+      if (entry.grantVersion !== this.grantVersion && entry.serverId && entry.userId) {
+        try {
+          const allowed = await this.getAllowedUsersForServer(entry.serverId, true);
+          if (!allowed || !allowed.has(entry.userId)) {
+            stale += 1;
+            this.logger.info({ nodeId, serverId: entry.serverId, userId: entry.userId }, "Outbox entry dropped: grant changed since queue");
+            continue;
+          }
+        } catch {
+          stale += 1;
+          continue;
+        }
       }
       if (staleServerIds.size > 0 || staleResizeServerIds.size > 0) {
         try {
@@ -590,12 +690,12 @@ export class WebSocketGateway {
   }
 
   // SSE console stream subscribers — maps serverId → subscriberId → { push, lastActivity }
-  private readonly sseSubscribers = new Map<string, Map<string, { push: (event: string, data: any) => void; lastActivity: number }>>();
+  private readonly sseSubscribers = new Map<string, Map<string, { push: (event: string, data: any) => void; lastActivity: number; userId?: string }>>();
   // SSE event subscribers — maps serverId → subscriberId → { eventTypes, push, lastActivity }
   // Used for non-console events (state updates, backups, alerts, etc.)
-  private readonly sseEventSubscribers = new Map<string, Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; lastActivity: number }>>();
+  private readonly sseEventSubscribers = new Map<string, Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; lastActivity: number; userId?: string }>>();
   // Global SSE event subscribers — receive ALL events across all servers (for AppLayout)
-  private readonly globalSseSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; serverIds?: Set<string>; lastActivity: number }>();
+  private readonly globalSseSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; serverIds?: Set<string>; lastActivity: number; userId?: string }>();
   // Admin SSE event subscribers — receive entity-level admin events (users, nodes, templates, alerts)
   private readonly adminEventSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; lastActivity: number }>();
   // Discovered containers on nodes (for auto-import of existing servers)
@@ -613,6 +713,9 @@ export class WebSocketGateway {
   }>>();
 
   // ── Agent auth lockout tracker (progressive backoff) ───────────────────────
+  // Dual (IP+nodeId) buckets: attempts are keyed by node AND source IP so a
+  // distributed probe cannot fill one global bucket and lock out the real
+  // node. Redis shares buckets across instances; the local map is a fallback.
   // Tracks failed auth attempts per nodeId. Lockout durations increase with
   // each successive failure: 5s, 15s, 60s, 300s, 900s, 3600s (max 1 hour).
   private agentAuthFailures = new Map<string, { count: number; lockedUntil: number }>();
@@ -623,13 +726,16 @@ export class WebSocketGateway {
     return tiers[Math.min(failureCount - 1, tiers.length - 1)];
   }
 
-  private recordAgentAuthFailure(nodeId: string): number {
-    const entry = this.agentAuthFailures.get(nodeId);
+  private recordAgentAuthFailure(nodeId: string, ip?: string): number {
+    // Dual bucket: nodeId + source IP. Same-IP probes share a bucket; probes
+    // from other IPs never extend this bucket (no cross-IP lockout bleed).
+    const key = ip ? `${nodeId}|${ip}` : nodeId;
+    const entry = this.agentAuthFailures.get(key);
     const now = Date.now();
     if (!entry || now >= entry.lockedUntil) {
       // First failure or previous lockout expired — start fresh
       const lockoutSeconds = this.getAgentLockoutSeconds(1);
-      this.agentAuthFailures.set(nodeId, { count: 1, lockedUntil: now + lockoutSeconds * 1000 });
+      this.agentAuthFailures.set(key, { count: 1, lockedUntil: now + lockoutSeconds * 1000 });
       return lockoutSeconds;
     }
     // Still within lockout window — increment and extend
@@ -639,20 +745,30 @@ export class WebSocketGateway {
     return lockoutSeconds;
   }
 
-  private checkAgentLockout(nodeId: string): { locked: boolean; retryAfterSeconds: number } {
-    const entry = this.agentAuthFailures.get(nodeId);
+  private checkAgentLockout(nodeId: string, ip?: string): { locked: boolean; retryAfterSeconds: number } {
+    // Same-IP only: a lockout recorded for one source IP never blocks the
+    // real agent connecting from a different IP.
+    const key = ip ? `${nodeId}|${ip}` : nodeId;
+    const entry = this.agentAuthFailures.get(key);
     if (!entry) return { locked: false, retryAfterSeconds: 0 };
     const now = Date.now();
     if (now >= entry.lockedUntil) {
       // Lockout expired, clean up
-      this.agentAuthFailures.delete(nodeId);
+      this.agentAuthFailures.delete(key);
       return { locked: false, retryAfterSeconds: 0 };
     }
     return { locked: true, retryAfterSeconds: Math.ceil((entry.lockedUntil - now) / 1000) };
   }
 
-  private clearAgentAuthFailures(nodeId: string): void {
+  private clearAgentAuthFailures(nodeId: string, ip?: string): void {
+    if (ip) {
+      this.agentAuthFailures.delete(`${nodeId}|${ip}`);
+      return;
+    }
     this.agentAuthFailures.delete(nodeId);
+    for (const key of [...this.agentAuthFailures.keys()]) {
+      if (key.startsWith(`${nodeId}|`)) this.agentAuthFailures.delete(key);
+    }
   }
 
   // ── Plugin WebSocket handler dispatch ─────────────────────────────────────
@@ -764,7 +880,17 @@ export class WebSocketGateway {
 
   async handleConnection(socket: any, request: FastifyRequest) {
     const query = (request.query as any) || {};
-    const token = typeof query.token === "string" ? query.token : null;
+    const peerIp = (request as { ip?: string }).ip
+      ?? (request.socket?.remoteAddress as string | undefined)
+      ?? undefined;
+    // ?token= is deprecated for agents: the agent handshake body carries the
+    // token, and server-to-server calls use headers. A query token is still
+    // honored once (back-compat) but never logged.
+    const deprecatedQueryToken = typeof query.token === "string" ? query.token : null;
+    if (deprecatedQueryToken) {
+      this.logger.warn({ nodeId: typeof query.nodeId === "string" ? query.nodeId : null }, "Agent connected with deprecated ?token= query auth");
+    }
+    const token = deprecatedQueryToken;
     const nodeId =
       typeof query.nodeId === "string"
         ? query.nodeId
@@ -772,14 +898,14 @@ export class WebSocketGateway {
 
     if (nodeId) {
       // Agent connection (token is expected in handshake if not provided here)
-      await this.handleAgentConnection(socket, nodeId, token);
+      await this.handleAgentConnection(socket, nodeId, token, peerIp);
     } else {
       // Client connection (token expected via Authorization header)
       await this.handleClientConnection(socket, request);
     }
   }
 
-  private async handleAgentConnection(socket: any, nodeId: string, token: string | null) {
+  private async handleAgentConnection(socket: any, nodeId: string, token: string | null, peerIp?: string) {
     try {
       // Check agent connection limit
       if (this.agents.size >= this.MAX_AGENT_CONNECTIONS) {
@@ -860,7 +986,7 @@ export class WebSocketGateway {
 
       if (token) {
         // Check progressive lockout before attempting auth
-        const lockout = this.checkAgentLockout(nodeId);
+        const lockout = this.checkAgentLockout(nodeId, peerIp);
         if (lockout.locked) {
           this.logger.warn(
             { nodeId, retryAfterSeconds: lockout.retryAfterSeconds },
@@ -873,7 +999,7 @@ export class WebSocketGateway {
 
         const authResult = await this.authenticateAgentToken(nodeId, token);
         if (authResult) {
-          this.clearAgentAuthFailures(nodeId);
+          this.clearAgentAuthFailures(nodeId, peerIp);
           const existing = this.agents.get(nodeId);
           if (existing && existing.socket !== socket) {
             this.logger.warn({ nodeId }, "Replacing existing agent connection");
@@ -894,9 +1020,9 @@ export class WebSocketGateway {
           agent.authenticated = true;
           await this.finalizeAgentConnection(authResult.node, agent);
         } else {
-          const lockoutSeconds = this.recordAgentAuthFailure(nodeId);
+          const lockoutSeconds = this.recordAgentAuthFailure(nodeId, peerIp);
           this.logger.warn(
-            { nodeId, failureCount: this.agentAuthFailures.get(nodeId)?.count, lockoutSeconds },
+            { nodeId, failureCount: this.agentAuthFailures.get(peerIp ? `${nodeId}|${peerIp}` : nodeId)?.count, lockoutSeconds },
             `Agent authentication failed for node: ${nodeId} — locked out for ${lockoutSeconds}s`,
           );
           socket.send(JSON.stringify({ type: 'error', error: 'auth_failed', retryAfterSeconds: lockoutSeconds }));
@@ -926,7 +1052,7 @@ export class WebSocketGateway {
 
         // Check progressive lockout for handshake path (pre-auth sockets
         // cannot displace anyone, but lockout still applies).
-        const lockout = this.checkAgentLockout(nodeId);
+        const lockout = this.checkAgentLockout(nodeId, peerIp);
         if (lockout.locked) {
           this.logger.warn(
             { nodeId, retryAfterSeconds: lockout.retryAfterSeconds },
@@ -2919,9 +3045,13 @@ export class WebSocketGateway {
         const component = typeof message.component === "string" ? message.component : `agent:${nodeId}`;
         const errorMessage = typeof message.message === "string" ? message.message : "Unknown agent error";
         const stack = typeof message.stack === "string" ? message.stack : undefined;
-        const metadata = typeof message.metadata === "object" && message.metadata !== null
+        const rawMetadata = typeof message.metadata === "object" && message.metadata !== null
           ? message.metadata
           : undefined;
+        // Redact + cap agent-supplied metadata before persistence (agents may
+        // echo tokens, URLs, or headers into error context).
+        const { redactSecrets, capMetadata } = await import("../lib/secret-redaction.js");
+        const metadata = rawMetadata ? capMetadata(redactSecrets(rawMetadata)) as Record<string, unknown> | undefined : undefined;
         const requestId = typeof message.requestId === "string" ? message.requestId : undefined;
 
         captureSystemError({
@@ -3511,9 +3641,16 @@ export class WebSocketGateway {
    * Used for server-scoped events (state changes, backups, alerts).
    */
   async routeToClients(serverId: string, message: any): Promise<void> {
-    // Use cached server access list
-    const allowedUsers = await this.getAllowedUsersForServer(serverId);
+    // Bypass the TTL cache on mutation/auth fan-out so a just-revoked user
+    // stops receiving immediately, not up to 30s later. Console/stats stay on
+    // the cached path (per-line DB lookups would flood).
+    const bypass = message?.type !== "console_output" && message?.type !== "resource_stats";
+    const allowedUsers = await this.getAllowedUsersForServer(serverId, bypass);
     if (!allowedUsers) return;
+
+    // Enforce the allowlist on every SSE emit: handshake-scoped global subs
+    // and per-server SSE subs are filtered here too, so a revoke between
+    // subscribe and emit still drops the event.
 
 
     // Sanitize console data before relaying to prevent XSS
@@ -3549,6 +3686,11 @@ export class WebSocketGateway {
     if (sseEventSubs) {
       for (const [, sub] of sseEventSubs) {
         if (sub.eventTypes.includes(eventType)) {
+          // Per-emit allowlist: drop SSE subscribers whose grant vanished
+          // after the handshake (revoke/transfer) instead of relying on the
+          // prune sweep alone.
+          const subUser = (sub as { userId?: string }).userId;
+          if (subUser && !allowedUsers.has(subUser)) continue;
           sub.lastActivity = Date.now();
           try { sub.push(eventType, wire); } catch { /* ignore */ }
         }
@@ -3558,6 +3700,8 @@ export class WebSocketGateway {
     // Also push to global SSE subscribers (serverIds filter applies)
     for (const [, sub] of this.globalSseSubscribers) {
       if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
+      const globalUser = (sub as { userId?: string }).userId;
+      if (globalUser && !allowedUsers.has(globalUser)) continue;
       if (sub.eventTypes.includes(eventType)) {
         sub.lastActivity = Date.now();
         try { sub.push(eventType, wire); } catch { /* ignore */ }
@@ -3720,18 +3864,50 @@ export class WebSocketGateway {
    * Returns null when the server no longer exists. The console path used to
    * run an uncached findUnique per console line — at the configured console
    * rate cap that is a per-line DB flood across every instance.
+   * Pass bypassCache=true on handshake/auth paths so grant changes apply
+   * immediately instead of waiting out the TTL.
    */
-  private async getAllowedUsersForServer(serverId: string): Promise<Set<string> | null> {
+  private async getAllowedUsersForServer(serverId: string, bypassCache = false): Promise<Set<string> | null> {
     const now = Date.now();
     const cached = this.serverAccessCache.get(serverId);
-    if (cached && cached.expiresAt > now) return cached.allowedUsers;
+    if (!bypassCache && cached && cached.expiresAt > now) return cached.allowedUsers;
     const server = await this.prisma.server.findUnique({
       where: { id: serverId },
-      include: { access: { select: { userId: true } } },
+      include: {
+        access: { select: { userId: true } },
+        node: { select: { id: true, nodeAssignments: { select: { userId: true, roleId: true } } } },
+      },
     });
     if (!server) return null;
+    // Same decision as subscribe: owner + explicit access + admins +
+    // node-managers (node.update) + role grants. Cached allowlist must not be
+    // narrower than the subscribe check or valid viewers lose fan-out.
     const allowedUsers = new Set([server.ownerId, ...server.access.map((a) => a.userId)]);
-    this.serverAccessCache.set(serverId, { allowedUsers, expiresAt: now + WebSocketGateway.SERVER_ACCESS_TTL_MS });
+    try {
+      const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
+      const { decideServerAccess } = await import("../lib/server-access.js");
+      const candidateIds = new Set<string>([...allowedUsers]);
+      for (const assignment of (server.node as unknown as { nodeAssignments?: Array<{ userId?: string | null }> })?.nodeAssignments ?? []) {
+        if (assignment.userId) candidateIds.add(assignment.userId);
+      }
+      for (const [, client] of this.clients) {
+        if (client.userId) candidateIds.add(client.userId);
+      }
+      for (const candidate of candidateIds) {
+        if (allowedUsers.has(candidate)) continue;
+        const rolePerms = await resolveServerPermissions(candidate, serverId, server.nodeId);
+        const { hasNodeAccess } = await import("../lib/permissions.js");
+        const decision = decideServerAccess({
+          isOwner: false,
+          hasExplicitServerAccess: false,
+          rolePermissions: rolePerms,
+          hasNodeAccess: await hasNodeAccess(this.prisma, candidate, server.nodeId),
+          requiredPermission: "server.read",
+        });
+        if (decision.allowed) allowedUsers.add(candidate);
+      }
+    } catch { /* owner+access baseline still enforced */ }
+    this.serverAccessCache.set(serverId, { allowedUsers, expiresAt: now + WebSocketGateway.SERVER_ACCESS_TTL_MS, grantVersion: this.grantVersion });
     return allowedUsers;
   }
 
@@ -3810,6 +3986,8 @@ export class WebSocketGateway {
     const sseSubs = this.sseSubscribers.get(serverId);
     if (sseSubs) {
       for (const [, sub] of sseSubs) {
+        const consoleUser = (sub as { userId?: string }).userId;
+        if (consoleUser && !allowedUsers.has(consoleUser)) continue;
         sub.lastActivity = Date.now();
         try {
           sub.push(event, eventData);
@@ -3832,6 +4010,7 @@ export class WebSocketGateway {
   addSseSubscriber(
     serverId: string,
     push: (event: string, data: string) => void,
+    userId?: string,
   ): { unsubscribe: () => void; touch: () => void } {
     if (!this.sseSubscribers.has(serverId)) {
       this.sseSubscribers.set(serverId, new Map());
@@ -3842,7 +4021,7 @@ export class WebSocketGateway {
     }
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     if (sseSubs) {
-      sseSubs.set(subscriberId, { push, lastActivity: Date.now() });
+      sseSubs.set(subscriberId, { push, lastActivity: Date.now(), userId });
     }
     this.logger.debug({ serverId, subscriberId }, 'SSE subscriber added');
 
@@ -3889,6 +4068,7 @@ export class WebSocketGateway {
     serverId: string,
     eventTypes: string[],
     push: (event: string, data: any) => void,
+    userId?: string,
   ): { unsubscribe: () => void; touch: () => void } {
     if (!this.sseEventSubscribers.has(serverId)) {
       this.sseEventSubscribers.set(serverId, new Map());
@@ -3899,7 +4079,7 @@ export class WebSocketGateway {
     }
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     if (sseEventSubs) {
-      sseEventSubs.set(subscriberId, { eventTypes, push, lastActivity: Date.now() });
+      sseEventSubs.set(subscriberId, { eventTypes, push, lastActivity: Date.now(), userId });
     }
     this.logger.debug({ serverId, subscriberId, eventTypes }, 'SSE event subscriber added');
 
@@ -3949,6 +4129,7 @@ export class WebSocketGateway {
     eventTypes: string[],
     push: (event: string, data: any) => void,
     serverIds?: string[],
+    userId?: string,
   ): { unsubscribe: () => void; touch: () => void } {
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     this.globalSseSubscribers.set(subscriberId, {
@@ -3957,6 +4138,7 @@ export class WebSocketGateway {
       // undefined = no filter (full admin). Explicit empty array = no servers allowed.
       serverIds: serverIds === undefined ? undefined : new Set(serverIds),
       lastActivity: Date.now(),
+      userId,
     });
     this.logger.debug({ subscriberId, eventTypes, serverIds }, 'Global SSE subscriber added');
 
@@ -4437,6 +4619,30 @@ export class WebSocketGateway {
       // Store timeout reference for cleanup
       (this.activeBackupRelay as any)._timeout = timeout;
     });
+  }
+
+  /**
+   * Close every live agent socket for a node (revoke/suspend/delete path).
+   * Fails pending requests too so callers never hang on a dead node.
+   */
+  closeAgentConnections(nodeId: string, _reason = "node revoked"): number {
+    let closed = 0;
+    for (const [key, agent] of [...this.agents]) {
+      const realId = agent.preAuthNodeId ?? agent.nodeId;
+      if (realId !== nodeId && key !== nodeId) continue;
+      try {
+        this.terminateSocket(agent.socket);
+      } catch { /* ignore */ }
+      this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} connection closed`);
+      this.agents.delete(key);
+      closed += 1;
+    }
+    return closed;
+  }
+
+  /** Public wrapper so routes/services can fail-fast node requests. */
+  failPendingRequestsForNodePublic(nodeId: string, reason: string): number {
+    return this.failPendingRequestsForNode(nodeId, reason);
   }
 
   /** Resolve an active backup relay (called when backup_stream_complete is received). */
