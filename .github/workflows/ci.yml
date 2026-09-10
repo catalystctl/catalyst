@@ -171,6 +171,12 @@ jobs:
       - name: Run ESLint (frontend)
         run: pnpm --filter catalyst-frontend run lint
 
+      - name: Check translation catalogs
+        run: pnpm i18n:check
+
+      - name: Verify translation extraction is up to date
+        run: pnpm --filter catalyst-frontend run i18n:verify
+
       - name: Security audit
         run: pnpm audit --audit-level=high
         continue-on-error: false

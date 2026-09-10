@@ -11,6 +11,9 @@ export default defineConfig({
   ],
   use: {
     baseURL: 'http://localhost:5173',
+    // Pin the browser locale so language detection always resolves to English;
+    // specs assert English copy. The locale-switching spec sets its own value.
+    locale: 'en-US',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     viewport: { width: 1920, height: 1080 },

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@/csync';
@@ -8,6 +8,12 @@ import { initErrorReporter } from './lib/error-reporter';
 import { debugLog } from './lib/debug-log';
 import { preApplyCachedTheme } from './stores/themeStore';
 import './styles/globals.css';
+
+// Initialize i18n before React mounts so the first render already uses the
+// detected language. `user-locale` follows the signed-in user's saved
+// preference once the session is restored.
+import './i18n';
+import './i18n/user-locale';
 
 // Replay the last saved palette + custom CSS before React mounts.
 // The index.html boot script already did this pre-paint; this covers
@@ -38,11 +44,20 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 initErrorReporter();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
- <React.StrictMode>
- <QueryClientProvider client={queryClient}>
- <BrowserRouter>
- <App />
- </BrowserRouter>
- </QueryClientProvider>
- </React.StrictMode>,
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        {/* Fallback while a translation catalog chunk loads. */}
+        <Suspense
+          fallback={
+            <div className="flex h-screen items-center justify-center bg-background">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          }
+        >
+          <App />
+        </Suspense>
+      </BrowserRouter>
+    </QueryClientProvider>
+  </React.StrictMode>,
 );

@@ -1,6 +1,8 @@
 import { Moon, Palette, RotateCcw, Sun, Monitor, LayoutTemplate } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import ServerTabCard from '../servers/tabs/ServerTabCard';
 import SectionHeader from '../servers/tabs/SectionHeader';
+import LanguageSwitcher from '../shared/LanguageSwitcher';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
 
 function PersonalColorField({
@@ -44,6 +46,7 @@ function PersonalColorField({
 }
 
 export default function AppearanceSettings() {
+  const { t } = useTranslation();
   const themePreference = useThemeStore((s) => s.themePreference);
   const setThemePreference = useThemeStore((s) => s.setThemePreference);
   const personalColors = useThemeStore((s) => s.personalColors);
@@ -140,6 +143,14 @@ export default function AppearanceSettings() {
           <p className="mt-2 text-[11px] text-muted-foreground">
             {hasCustom ? 'Using your colors in this browser.' : 'Currently using the panel defaults.'} Changes apply instantly.
           </p>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium text-foreground">{t('language.label')}</p>
+          <div className="max-w-xs">
+            <LanguageSwitcher />
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">{t('language.description')}</p>
         </div>
       </div>
     </ServerTabCard>

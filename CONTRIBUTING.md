@@ -717,6 +717,18 @@ We welcome documentation improvements! Areas that need help:
 - **Architecture Docs** - Explain design decisions
 - **Translation** - Translate documentation to other languages
 
+### Contributing translations (panel UI)
+
+The panel UI is localized with i18next. Catalogs live in
+`catalyst-frontend/src/i18n/locales/<locale>/<namespace>.json`. Adding or
+completing a language is pure JSON editing — no React knowledge required — and
+untranslated keys automatically fall back to English, so a partial translation
+is safe to merge.
+
+See **[docs/i18n.md](docs/i18n.md)** for the namespace layout, key conventions,
+and the exact workflow (including the `pnpm i18n:status` command that lists the
+keys still awaiting translation).
+
 ### Documentation Style
 
 - Use **clear, simple language**

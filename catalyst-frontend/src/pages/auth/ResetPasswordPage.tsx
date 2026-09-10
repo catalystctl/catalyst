@@ -5,6 +5,7 @@ import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage, describeError } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
+import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { Card, CardContent } from '@/components/ui/card';
@@ -101,7 +102,10 @@ function ResetPasswordPage() {
 
  if (!token || !isValid) {
  return (
- <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="absolute right-4 top-4 z-20">
+ <LanguageSwitcher variant="compact" />
+ </div>
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
         <CardContent className="px-3 py-4 sm:px-4">
           <div className="flex items-start gap-2.5">
@@ -125,7 +129,10 @@ function ResetPasswordPage() {
  }
 
  return (
- <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="absolute right-4 top-4 z-20">
+ <LanguageSwitcher variant="compact" />
+ </div>
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
         <CardContent className="px-3 py-4 sm:px-4">
           <div className="flex items-start gap-2.5">

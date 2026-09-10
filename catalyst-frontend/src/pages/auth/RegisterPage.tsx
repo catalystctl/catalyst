@@ -8,6 +8,7 @@ import { registerSchema } from '../../validators/auth';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { describeError } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
+import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,7 +49,10 @@ function RegisterPage() {
  };
 
  return (
- <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="absolute right-4 top-4 z-20">
+ <LanguageSwitcher variant="compact" />
+ </div>
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
  <CardContent className="px-3 py-4 sm:px-4">
  <h1 className="text-sm font-semibold tracking-tight text-foreground">Create account</h1>

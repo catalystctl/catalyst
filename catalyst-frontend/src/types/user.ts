@@ -11,4 +11,6 @@ export interface User {
   firstName?: string | null;
   lastName?: string | null;
   name?: string | null;
+  /** Free-form per-user settings (language, …) stored server-side. */
+  preferences?: Record<string, unknown>;
 }

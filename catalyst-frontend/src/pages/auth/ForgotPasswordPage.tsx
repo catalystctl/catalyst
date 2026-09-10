@@ -6,6 +6,7 @@ import { getErrorMessage, describeError } from '../../utils/errors';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { BrandFooter } from '../../components/shared/BrandFooter';
+import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +47,9 @@ function ForgotPasswordPage() {
 
  return (
  <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="absolute right-4 top-4 z-20">
+ <LanguageSwitcher variant="compact" />
+ </div>
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
  <CardContent className="px-3 py-4 sm:px-4">
  <div className="flex items-start gap-2.5">

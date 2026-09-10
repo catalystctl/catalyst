@@ -239,7 +239,7 @@ export const authApi = {
     }
 
     const doFetch = async (): Promise<{ user: User }> => {
-      const data = await apiClient.get<{ success: boolean; data?: { id: string; email: string; username: string; name?: string; firstName?: string; lastName?: string; image?: string; role?: string; permissions?: string[] }; error?: string }>('/api/auth/me');
+      const data = await apiClient.get<{ success: boolean; data?: { id: string; email: string; username: string; name?: string; firstName?: string; lastName?: string; image?: string; role?: string; permissions?: string[]; preferences?: Record<string, unknown> }; error?: string }>('/api/auth/me');
       if (!data?.success || !data?.data) {
         reportSystemError({
           level: 'error',
@@ -260,6 +260,7 @@ export const authApi = {
           image: data.data.image,
           role: (data.data.role as User['role']) || 'user',
           permissions: data.data.permissions ?? [],
+          preferences: data.data.preferences,
         },
       };
     };

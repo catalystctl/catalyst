@@ -8,6 +8,7 @@ import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthM
 import { reportSystemError } from '../../services/api/systemErrors';
 import { describeError } from '../../utils/errors';
 import { BrandFooter } from '../../components/shared/BrandFooter';
+import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generatePalette';
 import { cn } from '../../lib/utils';
 import type { ThemeColors } from '../../services/api/theme';
@@ -305,6 +306,9 @@ function SetupPage() {
 
  return (
  <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="absolute right-4 top-4 z-20">
+ <LanguageSwitcher variant="compact" />
+ </div>
  <div className="relative z-10 w-full max-w-lg space-y-4">
  <ServerTabCard>
  {/* ── Step indicator ── */}
