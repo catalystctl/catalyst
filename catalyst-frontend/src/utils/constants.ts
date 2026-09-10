@@ -58,3 +58,35 @@ export function consoleStreamLabel(t: TFunction, stream: string): string {
       return stream;
   }
 }
+
+/**
+ * Localized label for a role name. Only the roles the installer seeds have a
+ * translation; roles an administrator creates or renames render exactly as
+ * stored, since that text is their own.
+ */
+export function roleLabel(t: TFunction, name: string): string {
+  switch (name.toLowerCase()) {
+    case 'administrator':
+      return t('common:roles.administrator');
+    case 'moderator':
+      return t('common:roles.moderator');
+    case 'user':
+      return t('common:roles.user');
+    default:
+      return name;
+  }
+}
+
+/** Localized label for a seeded role description; custom text renders as stored. */
+export function roleDescriptionLabel(t: TFunction, description: string): string {
+  switch (description.toLowerCase()) {
+    case 'full system access':
+      return t('common:roles.description.administrator');
+    case 'limited management permissions':
+      return t('common:roles.description.moderator');
+    case 'standard user access':
+      return t('common:roles.description.user');
+    default:
+      return description;
+  }
+}

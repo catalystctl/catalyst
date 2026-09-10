@@ -612,7 +612,8 @@ function TemplateCreateModal() {
  parsedPorts.length,
  allocatedMemoryMb,
  allocatedCpuCores,
- ]);
+  t,
+]);
 
  return (
  <div>

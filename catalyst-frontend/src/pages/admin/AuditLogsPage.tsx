@@ -405,7 +405,7 @@ function AuditLogsPage() {
  groups.get(label)!.push(log);
  }
  return groups;
- }, [filteredLogs]);
+ }, [filteredLogs, t]);
 
  const clearFilters = () => {
  setAction('');

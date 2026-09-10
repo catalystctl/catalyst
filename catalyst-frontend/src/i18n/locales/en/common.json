@@ -90,6 +90,16 @@
     "monthsAgo": "{{value}}mo ago",
     "yearsAgo": "{{value}}y ago"
   },
+  "roles": {
+    "administrator": "Administrator",
+    "description": {
+      "administrator": "Full system access",
+      "moderator": "Limited management permissions",
+      "user": "Standard user access"
+    },
+    "moderator": "Moderator",
+    "user": "User"
+  },
   "serverPermissions": {
     "alertCreate": "Create alerts",
     "alertDelete": "Delete alerts",

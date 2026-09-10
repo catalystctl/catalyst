@@ -241,7 +241,7 @@ export default function ServerConfigurationTab({
  };
  }
  },
- [serverId],
+ [serverId, t],
  );
 
  // Load config files on mount

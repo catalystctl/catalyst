@@ -38,6 +38,7 @@ import {
 } from '../../lib/serverPermissions';
 import type { RoleScope, RoleScopeMode } from '../../types/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { roleDescriptionLabel, roleLabel } from '../../utils/constants';
 import { formatDate, formatTime } from '../../i18n/format';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
@@ -371,10 +372,10 @@ function RoleCard({
  </div>
  <div className="min-w-0">
  <div className="truncate font-semibold text-foreground">
- {role.name}
+ {roleLabel(t, role.name)}
  </div>
  {role.description && (
- <div className="truncate text-xs text-muted-foreground">{role.description}</div>
+ <div className="truncate text-xs text-muted-foreground">{roleDescriptionLabel(t, role.description)}</div>
  )}
  </div>
  </div>
@@ -1026,7 +1027,7 @@ function RolesPage() {
  setDescription(presetDescription(t, preset.key));
  setSelectedPermissions(new Set(preset.permissions));
  setActivePreset(preset.key);
- }, []);
+ }, [t]);
 
  const resetForm = useCallback(() => {
  setName('');
@@ -1476,7 +1477,7 @@ function RolesPage() {
  ? 'border-warning/20 bg-warning/10 text-warning'
  : 'border-primary/20 bg-primary/10 text-primary'}
  >
- <DialogTitle>{viewingRole?.name ?? t('roles.viewTitleFallback')}</DialogTitle>
+ <DialogTitle>{viewingRole ? roleLabel(t, viewingRole.name) : t('roles.viewTitleFallback')}</DialogTitle>
  <DialogDescription>
  {viewingRole?.description || t('roles.viewDescriptionFallback')}
  </DialogDescription>
@@ -1569,7 +1570,7 @@ function RolesPage() {
  <ConfirmDialog
  open={!!deletingRole}
  title={t('roles.deleteTitle')}
- message={t('roles.deleteConfirm', { name: deletingRole?.name })}
+ message={t('roles.deleteConfirm', { name: deletingRole ? roleLabel(t, deletingRole.name) : '' })}
  confirmText={t('common:actions.delete')}
  cancelText={t('common:actions.cancel')}
  variant="danger"

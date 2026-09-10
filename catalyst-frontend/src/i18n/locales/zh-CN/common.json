@@ -90,6 +90,16 @@
     "monthsAgo": "{{value}} 个月前",
     "yearsAgo": "{{value}} 年前"
   },
+  "roles": {
+    "administrator": "管理员",
+    "description": {
+      "administrator": "拥有完整的系统访问权限",
+      "moderator": "具有受限的管理权限",
+      "user": "标准用户访问权限"
+    },
+    "moderator": "协管员",
+    "user": "用户"
+  },
   "serverPermissions": {
     "alertCreate": "创建告警",
     "alertDelete": "删除告警",

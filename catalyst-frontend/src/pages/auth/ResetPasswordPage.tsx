@@ -48,7 +48,7 @@ function ResetPasswordPage() {
  if (tokenInvalid) {
  notifyError(t('resetPassword.invalidLinkToast'));
  }
- }, [tokenInvalid]);
+ }, [tokenInvalid, t]);
 
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();

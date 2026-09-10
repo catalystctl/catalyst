@@ -432,7 +432,7 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  }
- }, [serverId, queryClient]);
+ }, [serverId, queryClient, t]);
 
  const handleChangeImageVariant = useCallback(async () => {
  if (!imageVariantConfirm) return;
@@ -470,7 +470,7 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  }
- }, [imageVariantConfirm, server.environment, serverId, queryClient]);
+ }, [imageVariantConfirm, server.environment, serverId, queryClient, t]);
 
  const handleKill = useCallback(async () => {
  try {
@@ -492,7 +492,7 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  }
- }, [serverId, queryClient]);
+ }, [serverId, queryClient, t]);
 
  const handleReinstall = useCallback(async () => {
  try {
@@ -514,7 +514,7 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  }
- }, [serverId, queryClient]);
+ }, [serverId, queryClient, t]);
 
  const handleTransferOwnership = useCallback(async () => {
  try {
@@ -540,7 +540,7 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  queryClient.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
  }
- }, [serverId, newOwnerId, queryClient]);
+ }, [serverId, newOwnerId, queryClient, t]);
 
  // ── Hot-remove allocation handler ──
  const handleRemoveAllocation = useCallback((containerPort: number) => {

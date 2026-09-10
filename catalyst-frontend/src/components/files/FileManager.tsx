@@ -349,7 +349,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  const names = oversized.map((f) => f.name).join(', ');
  throw new Error(t('files.manager.uploadTooLarge', { max: maxUploadMb, names }));
  }
- }, [resolveMaxUploadMb]);
+ }, [resolveMaxUploadMb, t]);
 
  const uploadMutation = useMutation({
  mutationFn: async ({
@@ -566,7 +566,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  notifyError(error instanceof Error ? error.message : t('files.manager.uploadFailed'));
  }
  },
- [isSuspended, path, resetFileDrop, uploadMutation, writeDisabled],
+ [isSuspended, path, resetFileDrop, uploadMutation, writeDisabled, t],
  );
 
  const handleOpen = (entry: FileEntry) => {

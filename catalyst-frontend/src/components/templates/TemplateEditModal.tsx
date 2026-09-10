@@ -469,7 +469,8 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  parsedPorts.length,
  allocatedMemoryMb,
  allocatedCpuCores,
- ]);
+  t,
+]);
 
  return (
  <>

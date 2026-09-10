@@ -59,6 +59,7 @@ import {
 import { useAdminRoles, useAdminServers, useAdminUsers } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { roleLabel } from '../../utils/constants';
 import { formatDate, formatDateTime, formatTime } from '../../i18n/format';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
@@ -122,6 +123,7 @@ function StepIndicator({ steps, currentStep, onStepClick, canNavigate }: {
 
 // ── Role Chip ──
 function RoleChip({ role, selected, onToggle }: { role: { id: string; name: string }; selected: boolean; onToggle: () => void }) {
+ const { t } = useTranslation('admin-access');
  return (
  <button
  type="button"
@@ -134,7 +136,7 @@ function RoleChip({ role, selected, onToggle }: { role: { id: string; name: stri
  >
  <Shield className={`h-3 w-3 ${selected ? 'text-primary' : ''}`} />
  {selected && <Check className="h-2.5 w-2.5" />}
- {role.name}
+ {roleLabel(t, role.name)}
  </button>
  );
 }
@@ -1003,7 +1005,7 @@ function UsersPage() {
  <SelectItem value="all">{t('users.allRoles')}</SelectItem>
  {sortedRoles.map((role) => (
  <SelectItem key={role.id} value={role.id}>
- {role.name}
+ {roleLabel(t, role.name)}
  {roleCounts[role.id] ? ` (${roleCounts[role.id]})` : ''}
  </SelectItem>
  ))}
@@ -1181,7 +1183,7 @@ function UsersPage() {
  {user.roles.length > 0 && (
  <span className="hidden items-center gap-1 sm:flex">
  <Shield className="h-3 w-3 shrink-0" />
- {user.roles.map((role) => role.name).join(', ')}
+ {user.roles.map((role) => roleLabel(t, role.name)).join(', ')}
  </span>
  )}
  <span className="hidden md:inline">
@@ -1711,7 +1713,7 @@ function UsersPage() {
  {viewingUser.roles.map((role) => (
  <span key={role.id} className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary">
  <Shield className="h-3 w-3" />
- {role.name}
+ {roleLabel(t, role.name)}
  </span>
  ))}
  </div>

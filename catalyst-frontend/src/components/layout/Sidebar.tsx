@@ -37,6 +37,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { usePluginTabs, usePluginRoutes } from '../../plugins/hooks';
 import { PluginSlot } from '../../plugins/PluginSlot';
 import { PANEL_VERSION } from '../../utils/version';
+import { roleLabel } from '../../utils/constants';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 
 const buildMainLinks = (t: TFunction): MenuItemProps[] => [
@@ -470,7 +471,7 @@ function Sidebar() {
           {!collapsed && (
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-foreground">{displayName}</div>
-              <div className="truncate text-[11px] text-muted-foreground">{user?.role || t('sidebar.fallbackRole')}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{user?.role ? roleLabel(t, user.role) : t('sidebar.fallbackRole')}</div>
             </div>
           )}
         </NavLink>
