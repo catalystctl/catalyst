@@ -1,20 +1,20 @@
 {
   "errorBoundary": {
-    "message": "",
-    "title": "",
-    "tryAgain": "",
-    "widgetFailed": ""
+    "message": "此插件中发生了意外错误。",
+    "title": "⚠️ 插件错误：{{name}}",
+    "tryAgain": "重试",
+    "widgetFailed": "插件组件渲染失败"
   },
   "provider": {
-    "loadFailed": ""
+    "loadFailed": "加载插件失败"
   },
   "tabNotFound": {
-    "description": "",
-    "title": "",
-    "unavailable": ""
+    "description": "找不到请求的插件标签页，或该标签页未启用。",
+    "title": "找不到插件标签页",
+    "unavailable": "此插件标签页不可用。"
   },
   "webSocket": {
-    "connectionError": "",
-    "unavailable": ""
+    "connectionError": "WebSocket 连接错误",
+    "unavailable": "WebSocket 不可用"
   }
 }
