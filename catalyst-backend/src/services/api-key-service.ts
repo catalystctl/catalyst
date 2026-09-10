@@ -12,7 +12,7 @@
  */
 
 import { prisma } from "../db";
-import { createHash, createHmac, randomBytes } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { invalidateAgentApiKeyCache } from "../lib/agent-auth";
 
 const DEFAULT_PREFIX = "catalyst";
@@ -21,13 +21,9 @@ const KEY_LENGTH = 32; // bytes of randomness
 /**
  * Resolve the HMAC secret used to hash panel/agent API keys.
  *
- * Preference order (mirrors catalyst-docker/docker-compose.yml):
- *   1. `API_KEY_SECRET` — dedicated secret (recommended for rotation isolation)
- *   2. `BETTER_AUTH_SECRET` — always required for auth, so one-liner / local
- *      installs keep working without an extra env var
- *
- * Never falls back to a hardcoded constant (that was removed after the
- * exhaustive security review). Missing both secrets is a hard error.
+ * A dedicated `API_KEY_SECRET` is required in production (hard error);
+ * outside production it falls back to `BETTER_AUTH_SECRET` for one-liner /
+ * local installs. Never falls back to a hardcoded constant.
  */
 let warnedAboutApiKeySecretFallback = false;
 
@@ -35,6 +31,13 @@ export function resolveApiKeySecret(): string {
   const dedicated = process.env.API_KEY_SECRET?.trim();
   if (dedicated) {
     return dedicated;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "API_KEY_SECRET environment variable is required in production " +
+        "(set a dedicated secret: openssl rand -base64 32)",
+    );
   }
 
   const authSecret = process.env.BETTER_AUTH_SECRET?.trim();
@@ -63,20 +66,57 @@ function requireApiKeySecret(): string {
 }
 
 /**
- * Hash an API key using HMAC-SHA256 with a per-key salt.
+ * Hash an API key using HMAC-SHA256 with a per-key random salt.
  *
- * The salt is deterministically derived from the first 16 characters of the key,
- * ensuring unique salts per key without requiring an immediate schema migration.
- *
- * NOTE: For stronger security, add a `salt String?` column to the `apikey`
- * Prisma model and store a cryptographically random salt per key. When that
- * migration is applied, update this function to accept the stored salt and
- * adjust the lookup strategy in verifyApiKey accordingly.
+ * Each key gets a fresh 16-byte salt (stored alongside the record once the
+ * `salt` column migration lands; until then the salt is derived from the key
+ * prefix for lookup, plus a random per-key component persisted in the record
+ * metadata). Verification HMACs with the stored salt.
  */
-export function hashApiKey(key: string): string {
-  const salt = key.slice(0, 16);
+export function hashApiKey(key: string, salt?: string): string {
+  const effectiveSalt = salt ?? key.slice(0, 16);
   const secret = requireApiKeySecret();
-  return createHmac("sha256", secret).update(key + salt).digest("hex");
+  return createHmac("sha256", secret).update(key + effectiveSalt).digest("hex");
+}
+
+export function newApiKeySalt(): string {
+  return randomBytes(16).toString("hex");
+}
+
+/** Legacy unsalted sha256 path — only honored when explicitly enabled. */
+export function hashApiKeyLegacyUnsalted(key: string): string {
+  const secret = requireApiKeySecret();
+  return createHmac("sha256", secret).update(key).digest("hex");
+}
+
+export function isLegacyHashAllowed(): boolean {
+  return process.env.ALLOW_LEGACY_API_KEY_HASH === "1";
+}
+
+export function parseApiKeyRecordMetadata(raw: unknown): { salt?: string } | null {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const salt = (raw as Record<string, unknown>).salt;
+    return { salt: typeof salt === "string" ? salt : undefined };
+  }
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const salt = (parsed as Record<string, unknown>).salt;
+        return { salt: typeof salt === "string" ? salt : undefined };
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+export function timingSafeCompare(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
 }
 
 export interface CreateApiKeyParams {
@@ -152,12 +192,14 @@ export async function createApiKey(params: CreateApiKeyParams): Promise<ApiKeyRe
     throw new Error("userId is required to create an API key");
   }
 
-  // Generate random key
+  // Generate random key + random per-key salt (randomBytes(16) hex).
+  // The salt travels in the record metadata until the `salt` column migration
+  // lands; verification reads it back and HMACs with it.
   const random = randomBytes(KEY_LENGTH).toString("base64url");
   const fullKey = `${prefix}_${random}`;
-  const hashedKey = hashApiKey(fullKey);
-  // When a dedicated `salt` column is added, generate a random salt here
-  // and pass it to hashApiKey() instead of the deterministic derivation.
+  const salt = newApiKeySalt();
+  const hashedKey = hashApiKey(fullKey, salt);
+  const mergedMetadata = { ...(metadata ?? {}), salt };
 
   // Calculate expiry
   const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;
@@ -178,7 +220,7 @@ export async function createApiKey(params: CreateApiKeyParams): Promise<ApiKeyRe
       expiresAt,
       allPermissions,
       permissions,
-      ...(metadata ? { metadata: metadata as any } : {}),
+      metadata: mergedMetadata as any,
       rateLimitEnabled,
       rateLimitTimeWindow,
       rateLimitMax,
@@ -211,12 +253,17 @@ export async function createApiKey(params: CreateApiKeyParams): Promise<ApiKeyRe
 
 /**
  * Verify an API key. Returns the key record and associated user if valid.
+ *
+ * Salts are stored per record (metadata.salt until the `salt` column
+ * migration lands), so verification scans the prefix bucket and compares
+ * HMACs with each candidate's stored salt (constant-time). Pre-salt keys
+ * (deterministic salt) verify during the rotation window; the legacy
+ * unsalted sha256/base64url formats only verify when explicitly enabled.
  */
 export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | null> {
-  const hashedKey = hashApiKey(fullKey);
-
-  const apiKeyRecord = await prisma.apikey.findUnique({
-    where: { key: hashedKey },
+  const prefix = fullKey.includes("_") ? fullKey.split("_")[0] : "";
+  const candidates = await prisma.apikey.findMany({
+    where: prefix ? { prefix } : {},
     include: {
       user: {
         select: {
@@ -233,6 +280,24 @@ export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | nu
       },
     },
   });
+
+  let apiKeyRecord: (typeof candidates)[number] | null = null;
+  for (const candidate of candidates) {
+    const meta = parseApiKeyRecordMetadata(candidate.metadata);
+    const saltedHash = meta?.salt ? hashApiKey(fullKey, meta.salt) : null;
+    // Rotation window: keys minted before per-key salts used key.slice(0,16).
+    const deterministicHash = hashApiKey(fullKey);
+    const legacyAllowed = isLegacyHashAllowed();
+    const legacyHash = legacyAllowed ? hashApiKeyLegacyUnsalted(fullKey) : null;
+    if (
+      (saltedHash && timingSafeCompare(candidate.key, saltedHash)) ||
+      timingSafeCompare(candidate.key, deterministicHash) ||
+      (legacyHash && timingSafeCompare(candidate.key, legacyHash))
+    ) {
+      apiKeyRecord = candidate;
+      break;
+    }
+  }
 
   if (!apiKeyRecord || !apiKeyRecord.enabled) {
     return null;
@@ -325,7 +390,9 @@ export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | nu
 }
 
 /**
- * Delete (revoke) an API key by ID.
+ * Delete (revoke) an API key by ID. On enabled=false/delete the panel closes
+ * live sockets and fails pending node requests immediately (no TTL lag):
+ * agent keys drop the node socket, panel keys drop the user's WS sessions.
  */
 export async function deleteApiKey(keyId: string, userId?: string): Promise<boolean> {
   const where: any = { id: keyId };
@@ -334,9 +401,26 @@ export async function deleteApiKey(keyId: string, userId?: string): Promise<bool
   }
 
   try {
+    const doomed = await prisma.apikey.findUnique({
+      where: { id: keyId },
+      select: { id: true, metadata: true, userId: true },
+    });
     await prisma.apikey.delete({ where });
     // Invalidate agent-auth cache so revoked keys are immediately rejected
     invalidateAgentApiKeyCache();
+    try {
+      const { getWsGateway } = await import("../websocket/gateway.js");
+      const gw = getWsGateway();
+      const meta = parseApiKeyRecordMetadata(doomed?.metadata as unknown);
+      const nodeId = (doomed?.metadata as unknown as Record<string, unknown> | null)?.["nodeId"];
+      if (typeof nodeId === "string" && gw) {
+        gw.closeAgentConnections?.(nodeId, "API key revoked");
+        gw.failPendingRequestsForNodePublic?.(nodeId, "API key revoked");
+      } else if (doomed?.userId && gw?.disconnectUser) {
+        gw.disconnectUser(doomed.userId);
+      }
+      void meta;
+    } catch { /* best-effort */ }
     return true;
   } catch {
     return false;
@@ -400,6 +484,20 @@ export async function updateApiKey(
 
     // Invalidate agent-auth cache so changes take effect immediately
     invalidateAgentApiKeyCache();
+    // enabled=false revokes now: close live sockets + fail pending requests.
+    if (params.enabled === false) {
+      try {
+        const { getWsGateway } = await import("../websocket/gateway.js");
+        const gw = getWsGateway();
+        const nodeId = (record?.metadata as unknown as Record<string, unknown> | null)?.["nodeId"];
+        if (typeof nodeId === "string" && gw) {
+          (gw as unknown as { closeAgentConnections?: (id: string, reason: string) => void }).closeAgentConnections?.(nodeId, "API key disabled");
+          (gw as unknown as { failPendingRequestsForNodePublic?: (id: string, reason: string) => void }).failPendingRequestsForNodePublic?.(nodeId, "API key disabled");
+        } else if (record?.userId && gw?.disconnectUser) {
+          gw.disconnectUser(record.userId);
+        }
+      } catch { /* best-effort */ }
+    }
 
     return record;
   } catch {
