@@ -12,6 +12,7 @@ import SearchPalette from '../search/SearchPalette';
 import { cn } from '@/lib/utils';
 import UpdateNotification from '../shared/UpdateNotification';
 import UploadProgressIndicator from '../files/UploadProgressIndicator';
+import DownloadProgressIndicator from '../files/DownloadProgressIndicator';
 
 function AppLayout() {
   useServerStateUpdates();
@@ -123,7 +124,10 @@ function AppLayout() {
 
 
       <SearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-      <UploadProgressIndicator />
+      <div className="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col gap-2 lg:bottom-6 lg:right-6">
+        <UploadProgressIndicator />
+        <DownloadProgressIndicator />
+      </div>
     </div>
   );
 }

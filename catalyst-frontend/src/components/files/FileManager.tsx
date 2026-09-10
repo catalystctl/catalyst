@@ -39,6 +39,7 @@ import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import { collectDroppedFiles, isFileDrag } from '../../utils/droppedFiles';
 import { buildBreadcrumbs, getParentPath, joinPath, normalizePath } from '../../utils/filePaths';
 import { useUploadStore } from '../../stores/uploadStore';
+import { useDownloadStore } from '../../stores/downloadStore';
 import {
  Dialog,
  DialogContent,
@@ -638,8 +639,21 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  };
 
  const handleDownload = async (entry: FileEntry) => {
+ const store = useDownloadStore.getState();
+ const controller = new AbortController();
+ const knownTotal = entry.size > 0 ? entry.size : undefined;
+ const sessionId = store.beginSession([{ path: entry.path, name: entry.name, total: knownTotal }]);
+ store.registerAbort(sessionId, controller);
  try {
- const blob = await filesApi.download(serverId, entry.path);
+ const blob = await filesApi.download(
+ serverId,
+ entry.path,
+ (loaded, total) => {
+ useDownloadStore.getState().setFileProgress(sessionId, 0, loaded, total ?? knownTotal);
+ },
+ controller.signal,
+ );
+ useDownloadStore.getState().setFileDone(sessionId, 0);
  const url = URL.createObjectURL(blob);
  const link = document.createElement('a');
  link.href = url;
@@ -648,9 +662,16 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  link.click();
  link.remove();
  URL.revokeObjectURL(url);
- notifyInfo('Download started');
- } catch {
- notifyError('Failed to download file');
+ notifySuccess('Download complete');
+ } catch (error: any) {
+ const aborted = controller.signal.aborted || error?.message === 'Download aborted';
+ if (aborted) {
+ useDownloadStore.getState().markSessionCanceled(sessionId);
+ notifyInfo('Download canceled');
+ } else {
+ useDownloadStore.getState().setFileError(sessionId, 0, error?.message || 'Failed to download file');
+ notifyError(error?.message || 'Failed to download file');
+ }
  }
  };
 

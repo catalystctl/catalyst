@@ -85,3 +85,8 @@ SESSION_BRIDGE_CATCODE_OPENCODE.md
 
 # Plugins live in the standalone catalystctl/catalyst-plugins repo (checked out as a sibling or symlinked here for monorepo dev)
 /catalyst-plugins
+
+# Local docker backups, dumps, and announcements
+catalyst-docker-backup-*/
+dump.rdb
+important-announcement.md

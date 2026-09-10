@@ -162,14 +162,54 @@ export const filesApi = {
     return normalizeListing(data.data, normalizedPath);
   },
 
-  download: async (serverId: string, path: string) => {
+  download: async (
+    serverId: string,
+    path: string,
+    onProgress?: (loaded: number, total?: number) => void,
+    signal?: AbortSignal,
+  ) => {
     const normalizedPath = normalizePath(path);
-    const res = await fetch(
-      `/api/servers/${serverId}/files/download?path=${encodeURIComponent(normalizedPath)}`,
-      { method: 'GET', credentials: 'include' },
-    );
+    let res: Response;
+    try {
+      res = await fetch(
+        `/api/servers/${serverId}/files/download?path=${encodeURIComponent(normalizedPath)}`,
+        { method: 'GET', credentials: 'include', signal },
+      );
+    } catch (error: any) {
+      if (signal?.aborted || error?.name === 'AbortError') {
+        throw new Error('Download aborted', { cause: error });
+      }
+      throw error;
+    }
     await assertOk(res);
-    return res.blob();
+    if (!onProgress || !res.body) {
+      return res.blob();
+    }
+    const contentLength = Number(res.headers.get('Content-Length'));
+    const total = Number.isFinite(contentLength) && contentLength > 0 ? contentLength : undefined;
+    const contentType = res.headers.get('Content-Type') ?? undefined;
+    const reader = res.body.getReader();
+    const chunks: BlobPart[] = [];
+    let loaded = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          loaded += value.length;
+          onProgress(loaded, total);
+        }
+      }
+    } catch (error: any) {
+      if (signal?.aborted || error?.name === 'AbortError') {
+        throw new Error('Download aborted', { cause: error });
+      }
+      throw error;
+    } finally {
+      reader.releaseLock();
+    }
+    return new Blob(chunks, contentType ? { type: contentType } : undefined);
   },
 
   readText: async (serverId: string, path: string) => {

@@ -1,21 +1,21 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Upload, X, AlertTriangle } from 'lucide-react';
-import { useUploadStore, COMPLETED_SESSION_TTL_MS } from '../../stores/uploadStore';
+import { Check, Download, X, AlertTriangle } from 'lucide-react';
+import { useDownloadStore, COMPLETED_DOWNLOAD_TTL_MS } from '../../stores/downloadStore';
 import { formatBytes } from '../../utils/formatters';
 
 /**
- * Global upload progress indicator.
+ * Global download progress indicator.
  *
- * Renders one collapsible widget per tracked upload session in the
- * bottom-right corner. Sessions are visible across page navigation and
- * server switches — closing the upload modal no longer hides progress.
+ * Renders one collapsible widget per tracked download session in the
+ * bottom-right corner. Sessions stay visible across page navigation —
+ * starting a download no longer leaves the user guessing about progress.
  * Supports canceling in-flight sessions via the store's abort registry.
  */
-function UploadProgressIndicator() {
-  const sessions = useUploadStore((s) => s.sessions);
-  const cancelSession = useUploadStore((s) => s.cancelSession);
-  const dismissSession = useUploadStore((s) => s.dismissSession);
+function DownloadProgressIndicator() {
+  const sessions = useDownloadStore((s) => s.sessions);
+  const cancelSession = useDownloadStore((s) => s.cancelSession);
+  const dismissSession = useDownloadStore((s) => s.dismissSession);
 
   // Auto-dismiss terminal sessions after a short delay so the widget
   // doesn't accumulate.
@@ -24,7 +24,7 @@ function UploadProgressIndicator() {
       .filter((s) => s.status !== 'active')
       .map((s) => {
         const finishedAt = s.finishedAt ?? Date.now();
-        const wait = Math.max(COMPLETED_SESSION_TTL_MS - (Date.now() - finishedAt), 0);
+        const wait = Math.max(COMPLETED_DOWNLOAD_TTL_MS - (Date.now() - finishedAt), 0);
         return window.setTimeout(() => dismissSession(s.id), wait);
       });
     return () => timers.forEach((t) => window.clearTimeout(t));
@@ -50,12 +50,12 @@ function UploadProgressIndicator() {
           const isCanceled = session.status === 'canceled';
           const hasError = session.status === 'error';
           const title = isCanceled
-            ? 'Upload canceled'
+            ? 'Download canceled'
             : hasError
-              ? 'Upload failed'
+              ? 'Download failed'
               : isActive
-                ? `Uploading ${doneCount + 1}/${session.files.length}`
-                : 'Upload complete';
+                ? `Downloading ${doneCount + 1}/${session.files.length}`
+                : 'Download complete';
 
           return (
             <motion.div
@@ -87,7 +87,7 @@ function UploadProgressIndicator() {
                   ) : isCanceled ? (
                     <X className="h-4 w-4" />
                   ) : isActive ? (
-                    <Upload className="h-4 w-4" />
+                    <Download className="h-4 w-4" />
                   ) : (
                     <Check className="h-4 w-4" />
                   )}
@@ -127,7 +127,7 @@ function UploadProgressIndicator() {
                   {hasError && (
                     <div className="mt-0.5 truncate text-[11px] text-danger">
                       {session.files.find((f) => f.errorMessage)?.errorMessage ??
-                        'One or more files failed to upload'}
+                        'One or more files failed to download'}
                     </div>
                   )}
                 </div>
@@ -136,7 +136,7 @@ function UploadProgressIndicator() {
                   <button
                     type="button"
                     className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-                    aria-label="Cancel upload"
+                    aria-label="Cancel download"
                     onClick={() => cancelSession(session.id)}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -160,4 +160,4 @@ function UploadProgressIndicator() {
   );
 }
 
-export default UploadProgressIndicator;
+export default DownloadProgressIndicator;
