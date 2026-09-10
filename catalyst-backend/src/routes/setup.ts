@@ -6,6 +6,9 @@ import { z } from "zod";
 import { captureSystemError } from "../services/error-logger";
 import { withRegistrationBypass } from "../lib/registration-gate.js";
 import { invalidateConfig } from "../lib/config-cache.js";
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
+import { formatZodIssues } from "../lib/validation";
 
 const setupSchema = z.object({
 	email: z.string().email("Invalid email format"),
@@ -240,9 +243,7 @@ export async function setupRoutes(app: FastifyInstance) {
 		});
 
 		if (!fullUser) {
-			return reply.status(500).send({
-				error: "Failed to retrieve user record during setup recovery",
-			});
+			return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to retrieve user record during setup recovery");
 		}
 
 		return reply.send({
@@ -278,9 +279,7 @@ export async function setupRoutes(app: FastifyInstance) {
 			// account is later deleted (which would previously re-arm the
 			// unauthenticated admin-creation path below).
 			if (await isSetupCompleted()) {
-				return reply.status(409).send({
-					error: "Setup has already been completed",
-				});
+				return apiError(reply, 409, ErrorCodes.SETUP_ALREADY_COMPLETED, "Setup has already been completed");
 			}
 
 			// The admin-count gate is a secondary check covering installs that
@@ -295,20 +294,14 @@ export async function setupRoutes(app: FastifyInstance) {
 				// Backfill the flag so the wizard cannot be re-armed later if all
 				// admins are deleted after this point.
 				await markSetupCompleted().catch(() => {});
-				return reply.status(409).send({
-					error: "Setup has already been completed",
-				});
+				return apiError(reply, 409, ErrorCodes.SETUP_ALREADY_COMPLETED, "Setup has already been completed");
 			}
 
 			// 2. Validate request body
 			const parsed = setupSchema.safeParse(request.body);
 			if (!parsed.success) {
-				return reply.status(400).send({
-					error: "Validation failed",
-					details: parsed.error.issues.map((err) => ({
-						field: err.path.join("."),
-						message: err.message,
-					})),
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Validation failed", {
+					details: formatZodIssues(parsed.error.issues),
 				});
 			}
 
@@ -331,10 +324,7 @@ export async function setupRoutes(app: FastifyInstance) {
 				if (!namedUser) {
 					// Same status as the wrong-password path — a 400-vs-403 split
 					// here would be an account-enumeration oracle.
-					return reply.status(403).send({
-						error:
-							"Setup cannot be completed: verify the operator account credentials",
-					});
+					return apiError(reply, 403, ErrorCodes.SETUP_OPERATOR_VERIFICATION_FAILED, "Setup cannot be completed: verify the operator account credentials");
 				}
 				// Verify the caller controls this account via its existing password.
 				try {
@@ -343,16 +333,10 @@ export async function setupRoutes(app: FastifyInstance) {
 						body: { email: parsed.data.email, password: parsed.data.password },
 					});
 					if (!verify?.user || (verify as any).user?.id !== namedUser.id) {
-						return reply.status(403).send({
-							error:
-								"Setup cannot be completed: verify the operator account credentials",
-						});
+						return apiError(reply, 403, ErrorCodes.SETUP_OPERATOR_VERIFICATION_FAILED, "Setup cannot be completed: verify the operator account credentials");
 					}
 				} catch {
-					return reply.status(403).send({
-						error:
-							"Setup cannot be completed: verify the operator account credentials",
-					});
+					return apiError(reply, 403, ErrorCodes.SETUP_OPERATOR_VERIFICATION_FAILED, "Setup cannot be completed: verify the operator account credentials");
 				}
 				return ensureSetupComplete(reply, parsed.data, namedUser);
 			}
@@ -383,9 +367,7 @@ export async function setupRoutes(app: FastifyInstance) {
 				});
 				userCount = await prisma.user.count();
 				if (adminCount > 0) {
-					return reply.status(409).send({
-						error: "Setup has already been completed",
-					});
+					return apiError(reply, 409, ErrorCodes.SETUP_ALREADY_COMPLETED, "Setup has already been completed");
 				}
 				if (userCount > 0) {
 					const namedUser = await prisma.user.findUnique({
@@ -394,10 +376,7 @@ export async function setupRoutes(app: FastifyInstance) {
 					if (!namedUser) {
 						// Same status as the wrong-password path — a 400-vs-403 split
 						// here would be an account-enumeration oracle.
-						return reply.status(403).send({
-							error:
-								"Setup cannot be completed: verify the operator account credentials",
-						});
+						return apiError(reply, 403, ErrorCodes.SETUP_OPERATOR_VERIFICATION_FAILED, "Setup cannot be completed: verify the operator account credentials");
 					}
 					// SECURITY: same proof-of-control requirement as the pre-lock
 					// recovery branch — see the detailed comment there.
@@ -407,16 +386,10 @@ export async function setupRoutes(app: FastifyInstance) {
 							body: { email: parsed.data.email, password: parsed.data.password },
 						});
 						if (!verify?.user || (verify as any).user?.id !== namedUser.id) {
-							return reply.status(403).send({
-								error:
-									"Setup cannot be completed: verify the operator account credentials",
-							});
+							return apiError(reply, 403, ErrorCodes.SETUP_OPERATOR_VERIFICATION_FAILED, "Setup cannot be completed: verify the operator account credentials");
 						}
 					} catch {
-						return reply.status(403).send({
-							error:
-								"Setup cannot be completed: verify the operator account credentials",
-						});
+						return apiError(reply, 403, ErrorCodes.SETUP_OPERATOR_VERIFICATION_FAILED, "Setup cannot be completed: verify the operator account credentials");
 					}
 					return ensureSetupComplete(reply, parsed.data, namedUser);
 				}
@@ -481,9 +454,7 @@ export async function setupRoutes(app: FastifyInstance) {
 						: response;
 				const user = (data as any)?.user;
 				if (!user) {
-					return reply.status(500).send({
-						error: "Failed to create admin user",
-					});
+					return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to create admin user");
 				}
 
 				// 7. Assign Administrator role and mark email as verified
@@ -547,9 +518,7 @@ export async function setupRoutes(app: FastifyInstance) {
 				});
 
 				if (!fullUser) {
-					return reply.status(500).send({
-						error: "Failed to retrieve user record after creation",
-					});
+					return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to retrieve user record after creation");
 				}
 
 				return reply.send({
@@ -577,9 +546,7 @@ export async function setupRoutes(app: FastifyInstance) {
 						metadata: { context: "setup" },
 					}).catch(() => {});
 					request.log.error({ error }, "Setup failed");
-					return reply.status(500).send({
-						error: "An unexpected error occurred during setup",
-					});
+					return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "An unexpected error occurred during setup");
 				}
 			} finally {
 				await prisma

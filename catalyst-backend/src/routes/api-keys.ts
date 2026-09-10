@@ -6,6 +6,7 @@ import { PERMISSION_CATEGORIES, hasPermission, isAdmin } from "../lib/permission
 import { serialize } from '../utils/serialize';
 import { captureSystemError } from "../services/error-logger";
 import { createAuditLog } from "../middleware/audit.js";
+import { ErrorCodes } from "../shared-types";
 
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(100),
@@ -34,7 +35,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // Middleware: authenticate + check apikey.manage permission
   const requireApiKeyManage = async (request: any, reply: any) => {
     if (!hasPermission(request, 'apikey.manage')) {
-      return reply.status(403).send({ success: false, error: "Requires apikey.manage permission" });
+      return reply.status(403).send({ success: false, error: "Requires apikey.manage permission", code: ErrorCodes.PERMISSION_DENIED });
     }
   };
 
@@ -78,6 +79,8 @@ export async function apiKeyRoutes(app: FastifyInstance) {
           return reply.status(403).send({
             success: false,
             error: `Cannot grant permissions you don't have: ${invalidPerms.join(', ')}`,
+            code: ErrorCodes.PERMISSION_DENIED,
+            params: { permissions: invalidPerms.join(', ') },
           });
         }
       }
@@ -138,6 +141,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       return reply.status(500).send({
         success: false,
         error: error.message || "Failed to create API key",
+        code: ErrorCodes.INTERNAL_ERROR,
       });
     }
   });
@@ -188,7 +192,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         metadata: { context: 'api_key_list' },
       }).catch(() => {});
       request.log.error(error, "Failed to list API keys");
-      return reply.status(500).send({ success: false, error: "Failed to list API keys" });
+      return reply.status(500).send({ success: false, error: "Failed to list API keys", code: ErrorCodes.INTERNAL_ERROR });
     }
   });
 
@@ -210,12 +214,12 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       });
 
       if (!apiKey) {
-        return reply.status(404).send({ success: false, error: "API key not found" });
+        return reply.status(404).send({ success: false, error: "API key not found", code: ErrorCodes.API_KEY_NOT_FOUND });
       }
 
       // Non-admins may only read their own keys.
       if (apiKey.userId !== request.user.userId && !isAdmin(request)) {
-        return reply.status(403).send({ success: false, error: "Requires admin.read permission" });
+        return reply.status(403).send({ success: false, error: "Requires admin.read permission", code: ErrorCodes.PERMISSION_DENIED });
       }
 
       return reply.send(serialize({ success: true, data: apiKey }));
@@ -228,7 +232,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         metadata: { context: 'api_key_get' },
       }).catch(() => {});
       request.log.error(error, "Failed to get API key");
-      return reply.status(500).send({ success: false, error: "Failed to get API key" });
+      return reply.status(500).send({ success: false, error: "Failed to get API key", code: ErrorCodes.INTERNAL_ERROR });
     }
   });
 
@@ -249,16 +253,16 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         if (!ownsKey) {
           const exists = await prisma.apikey.findUnique({ where: { id }, select: { id: true } });
           if (!exists) {
-            return reply.status(404).send({ success: false, error: "API key not found" });
+            return reply.status(404).send({ success: false, error: "API key not found", code: ErrorCodes.API_KEY_NOT_FOUND });
           }
-          return reply.status(403).send({ success: false, error: "Requires admin.write permission" });
+          return reply.status(403).send({ success: false, error: "Requires admin.write permission", code: ErrorCodes.PERMISSION_DENIED });
         }
       }
 
       const apiKey = await updateApiKeyService(id, body);
 
       if (!apiKey) {
-        return reply.status(404).send({ success: false, error: "API key not found" });
+        return reply.status(404).send({ success: false, error: "API key not found", code: ErrorCodes.API_KEY_NOT_FOUND });
       }
 
       await createAuditLog(request.user.userId, {
@@ -295,7 +299,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         metadata: { context: 'api_key_update' },
       }).catch(() => {});
       request.log.error(error, "Failed to update API key");
-      return reply.status(500).send({ success: false, error: "Failed to update API key" });
+      return reply.status(500).send({ success: false, error: "Failed to update API key", code: ErrorCodes.INTERNAL_ERROR });
     }
   });
 
@@ -316,12 +320,12 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       });
 
       if (!apiKey) {
-        return reply.status(404).send({ success: false, error: "API key not found" });
+        return reply.status(404).send({ success: false, error: "API key not found", code: ErrorCodes.API_KEY_NOT_FOUND });
       }
 
       // Non-admins may only delete their own keys.
       if (apiKey.userId !== request.user.userId && !isWriteAdmin(request)) {
-        return reply.status(403).send({ success: false, error: "Requires admin.write permission" });
+        return reply.status(403).send({ success: false, error: "Requires admin.write permission", code: ErrorCodes.PERMISSION_DENIED });
       }
 
       await deleteApiKeyService(id);
@@ -359,7 +363,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         metadata: { context: 'api_key_delete' },
       }).catch(() => {});
       request.log.error(error, "Failed to delete API key");
-      return reply.status(500).send({ success: false, error: "Failed to delete API key" });
+      return reply.status(500).send({ success: false, error: "Failed to delete API key", code: ErrorCodes.INTERNAL_ERROR });
     }
   });
 
@@ -379,12 +383,12 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       });
 
       if (!apiKey) {
-        return reply.status(404).send({ success: false, error: "API key not found" });
+        return reply.status(404).send({ success: false, error: "API key not found", code: ErrorCodes.API_KEY_NOT_FOUND });
       }
 
       // Non-admins may only view usage of their own keys.
       if (apiKey.userId !== request.user.userId && !isAdmin(request)) {
-        return reply.status(403).send({ success: false, error: "Requires admin.read permission" });
+        return reply.status(403).send({ success: false, error: "Requires admin.read permission", code: ErrorCodes.PERMISSION_DENIED });
       }
 
       return reply.send(serialize({
@@ -406,7 +410,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         metadata: { context: 'api_key_usage' },
       }).catch(() => {});
       request.log.error(error, "Failed to get API key usage");
-      return reply.status(500).send({ success: false, error: "Failed to get API key usage" });
+      return reply.status(500).send({ success: false, error: "Failed to get API key usage", code: ErrorCodes.INTERNAL_ERROR });
     }
   });
 }

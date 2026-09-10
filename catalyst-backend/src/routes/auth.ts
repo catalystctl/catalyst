@@ -18,6 +18,7 @@ import {
   passwordSchema,
   userRegistrationSchema,
   userLoginSchema,
+  formatZodIssues,
 } from "../lib/validation";
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
@@ -93,12 +94,8 @@ export async function authRoutes(app: FastifyInstance) {
       // Validate all registration fields using the pre-built schema
       const regValidation = userRegistrationSchema.safeParse(request.body);
       if (!regValidation.success) {
-        return reply.status(400).send({
-          error: 'Validation failed',
-          details: regValidation.error.issues.map(err => ({
-            field: err.path.join('.'),
-            message: err.message,
-          })),
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Validation failed', {
+          details: formatZodIssues(regValidation.error.issues),
         });
       }
       const { email, username, password } = regValidation.data;
@@ -122,7 +119,7 @@ export async function authRoutes(app: FastifyInstance) {
         const data = extractResponseData(response);
         const user = data?.user;
         if (!user) {
-          return reply.status(400).send({ error: "Registration failed" });
+          return apiError(reply, 400, ErrorCodes.AUTH_REGISTRATION_FAILED, "Registration failed");
         }
 
         const tokenHeader = forwardAuthHeaders(response, reply);
@@ -180,7 +177,7 @@ export async function authRoutes(app: FastifyInstance) {
         const isDuplicate = err?.code === 'P2002' || (err?.message || '').includes('Unique constraint') || (err?.message || '').includes('already exists');
         if (isDuplicate) {
           await new Promise((r) => setTimeout(r, 100 + Math.floor(Math.random() * 150)));
-          return reply.status(400).send({ error: 'Registration failed' });
+          return apiError(reply, 400, ErrorCodes.AUTH_REGISTRATION_FAILED, 'Registration failed');
         }
         throw err;
       }
@@ -196,12 +193,8 @@ export async function authRoutes(app: FastifyInstance) {
       // Validate login fields using the pre-built schema
       const loginValidation = userLoginSchema.safeParse(request.body);
       if (!loginValidation.success) {
-        return reply.status(400).send({
-          error: 'Validation failed',
-          details: loginValidation.error.issues.map(err => ({
-            field: err.path.join('.'),
-            message: err.message,
-          })),
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Validation failed', {
+          details: formatZodIssues(loginValidation.error.issues),
         });
       }
       const { email, password } = loginValidation.data;
@@ -212,7 +205,7 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         await bruteForceProtection(prisma, normalizedEmail, request);
       } catch (bfErr: any) {
-        return reply.status(429).send({ error: "Too many requests" });
+        return apiError(reply, 429, ErrorCodes.RATE_LIMITED, "Too many requests");
       }
 
       // Resolve the actual email (case-insensitive lookup)
@@ -223,7 +216,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!userRecord) {
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
         await new Promise((r) => setTimeout(r, 150 + Math.floor(Math.random() * 150)));
-        return reply.status(401).send({ error: "Invalid credentials" });
+        return apiError(reply, 401, ErrorCodes.AUTH_INVALID_CREDENTIALS, "Invalid credentials");
       }
 
       // Reject banned or locked accounts before password verification
@@ -314,7 +307,7 @@ export async function authRoutes(app: FastifyInstance) {
           await handleFailedLogin(prisma, request);
           await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
           await new Promise((r) => setTimeout(r, 150 + Math.floor(Math.random() * 150)));
-          return reply.status(401).send({ error: "Invalid credentials" });
+          return apiError(reply, 401, ErrorCodes.AUTH_INVALID_CREDENTIALS, "Invalid credentials");
         }
         
         // Log unexpected errors and return 500
@@ -326,7 +319,7 @@ export async function authRoutes(app: FastifyInstance) {
           stack: err?.stack,
           metadata: { email: normalizedEmail, code: err?.code },
         }).catch(() => {});
-        return reply.status(500).send({ error: "An error occurred during login. Please try again." });
+        return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "An error occurred during login. Please try again.");
       }
     }
   );
@@ -347,7 +340,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({ error: "User not found" });
+        return apiError(reply, 404, ErrorCodes.AUTH_USER_NOT_FOUND, "User not found");
       }
 
       reply.send({
@@ -382,7 +375,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
 
       if (!userRecord) {
-        return reply.status(404).send({ error: "User not found" });
+        return apiError(reply, 404, ErrorCodes.AUTH_USER_NOT_FOUND, "User not found");
       }
 
       reply.send({
@@ -410,7 +403,7 @@ export async function authRoutes(app: FastifyInstance) {
         providerId: string; accountId?: string;
       };
       if (!providerId) {
-        return reply.status(400).send({ error: "Missing providerId" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing providerId");
       }
       const userRecord = await prisma.user.findUnique({
         where: { id: request.user.userId },
@@ -421,7 +414,7 @@ export async function authRoutes(app: FastifyInstance) {
       const remainingProviders = userRecord?.accounts.filter(a => a.providerId !== providerId && a.providerId !== 'credential') ?? [];
       const hasPassword = userRecord?.accounts.some(a => a.providerId === 'credential');
       if (!hasPassword && remainingProviders.length === 0) {
-        return reply.status(409).send({ error: 'You cannot unlink your only sign-in method. Set a password first.' });
+        return apiError(reply, 409, ErrorCodes.AUTH_ONLY_SIGN_IN_METHOD, 'You cannot unlink your only sign-in method. Set a password first.');
       }
       try {
         const response = await getAuth().api.unlinkAccount({
@@ -434,6 +427,7 @@ export async function authRoutes(app: FastifyInstance) {
         reply.status(500).send({
           success: false,
           error: err?.message || 'Failed to unlink SSO account',
+          code: ErrorCodes.INTERNAL_ERROR,
         });
       }
     }
@@ -452,25 +446,25 @@ export async function authRoutes(app: FastifyInstance) {
       const data: Record<string, string> = {};
       if (firstName !== undefined) {
         if (firstName.length > 100) {
-          return reply.status(400).send({ error: 'First name must be at most 100 characters' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'First name must be at most 100 characters');
         }
         data.firstName = firstName;
       }
       if (lastName !== undefined) {
         if (lastName.length > 100) {
-          return reply.status(400).send({ error: 'Last name must be at most 100 characters' });
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Last name must be at most 100 characters');
         }
         data.lastName = lastName;
       }
       if (username !== undefined) {
         if (!username || username.length < 3 || username.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(username)) {
-          return reply.status(400).send({ error: 'Username must be 3-32 characters and contain only letters, numbers, hyphens, and underscores' });
+          return apiError(reply, 400, ErrorCodes.AUTH_INVALID_USERNAME, 'Username must be 3-32 characters and contain only letters, numbers, hyphens, and underscores');
         }
         data.username = username;
       }
 
       if (Object.keys(data).length === 0) {
-        return reply.status(400).send({ error: 'No fields to update' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'No fields to update');
       }
 
       try {
@@ -482,7 +476,7 @@ export async function authRoutes(app: FastifyInstance) {
         reply.send(serialize({ success: true, data: user }));
       } catch (err: any) {
         if (err.code === 'P2002' && err.meta?.target?.includes('username')) {
-          return reply.status(409).send({ error: 'Username already taken' });
+          return apiError(reply, 409, ErrorCodes.AUTH_USERNAME_TAKEN, 'Username already taken');
         }
         throw err;
       }
@@ -522,20 +516,20 @@ export async function authRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = await request.file();
       if (!data) {
-        return reply.status(400).send({ error: 'No file uploaded' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'No file uploaded');
       }
 
       // Validate file type
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
       if (!allowedTypes.includes(data.mimetype)) {
-        return reply.status(400).send({ error: 'Only JPEG, PNG, GIF, and WebP images are allowed' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Only JPEG, PNG, GIF, and WebP images are allowed');
       }
 
       // Validate file size (max 2MB)
       const MAX_SIZE = 2 * 1024 * 1024;
       const buffer = await data.toBuffer();
       if (buffer.length > MAX_SIZE) {
-        return reply.status(400).send({ error: 'Image must be under 2MB' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Image must be under 2MB');
       }
 
       const magic = buffer.slice(0, 4).toString('hex');
@@ -544,7 +538,7 @@ export async function authRoutes(app: FastifyInstance) {
       const isGif = magic.startsWith('474946');
       const isWebp = buffer.slice(0, 12).toString('hex').startsWith('52494646');
       if (!isJpeg && !isPng && !isGif && !isWebp) {
-        return reply.status(400).send({ error: 'Invalid image format' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid image format');
       }
 
       // Store as data URI in the user record
@@ -672,7 +666,7 @@ export async function authRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { email } = request.body as { email: string };
       if (!email || !email.trim()) {
-        return reply.status(400).send({ error: "Email is required" });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Email is required");
       }
 
       const normalizedEmail = email.trim().toLowerCase();
@@ -700,7 +694,7 @@ export async function authRoutes(app: FastifyInstance) {
       const { token } = request.body as { token?: string };
       if (!token) {
         await new Promise((r) => setTimeout(r, 100 + Math.floor(Math.random() * 100)));
-        return reply.status(400).send({ error: "Invalid request", valid: false });
+        return reply.status(400).send({ error: "Invalid request", code: ErrorCodes.VALIDATION_ERROR, valid: false });
       }
 
       try {
@@ -708,10 +702,10 @@ export async function authRoutes(app: FastifyInstance) {
           where: { value: token, expiresAt: { gt: new Date() }, identifier: { startsWith: 'reset-password' } },
         });
         await new Promise((r) => setTimeout(r, 100 + Math.floor(Math.random() * 100)));
-        reply.send({ success: Boolean(verification), valid: Boolean(verification), ...(verification ? {} : { error: "Invalid or expired token" }) });
+        reply.send({ success: Boolean(verification), valid: Boolean(verification), ...(verification ? {} : { error: "Invalid or expired token", code: ErrorCodes.AUTH_INVALID_RESET_TOKEN }) });
       } catch {
         await new Promise((r) => setTimeout(r, 100 + Math.floor(Math.random() * 100)));
-        reply.send({ success: false, valid: false, error: "Invalid or expired token" });
+        reply.send({ success: false, valid: false, error: "Invalid or expired token", code: ErrorCodes.AUTH_INVALID_RESET_TOKEN });
       }
     }
   );
@@ -727,13 +721,11 @@ export async function authRoutes(app: FastifyInstance) {
       const { confirm, currentPassword } = request.body as { confirm?: string; currentPassword?: string };
 
       if (confirm !== "DELETE") {
-        return reply.status(400).send({
-          error: 'Confirmation required. Send { "confirm": "DELETE" } to proceed.',
-        });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Confirmation required. Send { "confirm": "DELETE" } to proceed.');
       }
 
       if (!currentPassword) {
-        return reply.status(400).send({ error: 'Current password is required' });
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Current password is required');
       }
 
       // Verify current password
@@ -743,7 +735,7 @@ export async function authRoutes(app: FastifyInstance) {
           body: { email: request.user.email || '', password: currentPassword },
         });
       } catch {
-        return reply.status(401).send({ error: 'Invalid password' });
+        return apiError(reply, 401, ErrorCodes.AUTH_INVALID_CREDENTIALS, 'Invalid password');
       }
 
       // Check for owned servers
@@ -755,6 +747,8 @@ export async function authRoutes(app: FastifyInstance) {
       if (ownedServers.length > 0) {
         return reply.status(409).send({
           error: `You own ${ownedServers.length} server(s). Transfer or delete them before deleting your account.`,
+          code: ErrorCodes.AUTH_ACCOUNT_OWNS_SERVERS,
+          params: { serverCount: ownedServers.length },
           ownedServers: ownedServers.map((s) => ({ id: s.id, name: s.name })),
         });
       }

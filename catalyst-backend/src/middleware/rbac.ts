@@ -14,6 +14,8 @@ import {
   isAdminUser,
   permissionMatches,
 } from "../lib/permissions";
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 function requestPermissions(request: FastifyRequest): string[] | null {
   const perms = (request as unknown as { user?: { permissions?: unknown } }).user?.permissions;
@@ -44,7 +46,7 @@ export function createRbacMiddleware(prisma: PrismaClient) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.userId;
       if (!userId) {
-        return reply.status(401).send({ error: "Unauthorized" });
+        return apiError(reply, 401, ErrorCodes.AUTH_INVALID_TOKEN, "Unauthorized");
       }
 
       // Get resource ID from params if specified
@@ -58,7 +60,7 @@ export function createRbacMiddleware(prisma: PrismaClient) {
           ? matchesAny(cached, permission, resourceId)
           : await hasPermission(prisma, userId, permission, resourceId);
       if (!hasPerm) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       return; // Permission granted
@@ -78,7 +80,7 @@ export function createRbacMiddleware(prisma: PrismaClient) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.userId;
       if (!userId) {
-        return reply.status(401).send({ error: "Unauthorized" });
+        return apiError(reply, 401, ErrorCodes.AUTH_INVALID_TOKEN, "Unauthorized");
       }
 
       const resourceId = resourceIdFromParam
@@ -91,7 +93,7 @@ export function createRbacMiddleware(prisma: PrismaClient) {
           ? permissions.some((p) => matchesAny(cachedAny, p, resourceId))
           : await hasAnyPermission(prisma, userId, permissions, resourceId);
       if (!hasPerm) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       return; // Permission granted
@@ -111,7 +113,7 @@ export function createRbacMiddleware(prisma: PrismaClient) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.userId;
       if (!userId) {
-        return reply.status(401).send({ error: "Unauthorized" });
+        return apiError(reply, 401, ErrorCodes.AUTH_INVALID_TOKEN, "Unauthorized");
       }
 
       const resourceId = resourceIdFromParam
@@ -124,7 +126,7 @@ export function createRbacMiddleware(prisma: PrismaClient) {
           ? permissions.every((p) => matchesAny(cachedAll, p, resourceId))
           : await hasAllPermissions(prisma, userId, permissions, resourceId);
       if (!hasPerm) {
-        return reply.status(403).send({ error: "Forbidden" });
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
       return; // Permission granted

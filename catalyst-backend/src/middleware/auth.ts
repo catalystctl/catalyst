@@ -9,6 +9,8 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { createRbacMiddleware } from "./rbac";
+import { apiError } from "../lib/http-error";
+import { ErrorCodes } from "../shared-types";
 
 /**
  * Composite middleware ensuring authentication + authorization
@@ -31,7 +33,7 @@ export const requireAuthAndPermission = (
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.userId;
       if (!userId) {
-        return reply.status(401).send({ error: "Unauthorized" });
+        return apiError(reply, 401, ErrorCodes.AUTH_INVALID_TOKEN, "Unauthorized");
       }
     },
     // Then check authorization
@@ -59,7 +61,7 @@ export const requireAuthAndAnyPermission = (
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.userId;
       if (!userId) {
-        return reply.status(401).send({ error: "Unauthorized" });
+        return apiError(reply, 401, ErrorCodes.AUTH_INVALID_TOKEN, "Unauthorized");
       }
     },
     // Then check authorization
@@ -87,7 +89,7 @@ export const requireAuthAndAllPermissions = (
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.userId;
       if (!userId) {
-        return reply.status(401).send({ error: "Unauthorized" });
+        return apiError(reply, 401, ErrorCodes.AUTH_INVALID_TOKEN, "Unauthorized");
       }
     },
     // Then check authorization
