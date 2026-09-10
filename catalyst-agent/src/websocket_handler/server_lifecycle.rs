@@ -215,6 +215,12 @@ impl WebSocketHandler {
                         }
                     }
                     let _ = installer.cleanup().await;
+                    // Installers now carry CNI state (private netns attached
+                    // to the bridge); release the lease file with it.
+                    let _ = self
+                        .runtime
+                        .teardown_cni_network(&installer.container_id)
+                        .await;
                     {
                         self.active_installs.write().await.remove(server_id);
                     }
@@ -222,6 +228,10 @@ impl WebSocketHandler {
                 }
                 Ok(Err(e)) => {
                     let _ = installer.cleanup().await;
+                    let _ = self
+                        .runtime
+                        .teardown_cni_network(&installer.container_id)
+                        .await;
                     {
                         self.active_installs.write().await.remove(server_id);
                     }
@@ -283,7 +293,10 @@ impl WebSocketHandler {
             }
         }
 
-        let disk_mb = msg["allocatedDiskMb"].as_u64().unwrap_or(10240);
+        let disk_mb = msg["allocatedDiskMb"]
+            .as_u64()
+            .unwrap_or(10240)
+            .clamp(1, 1_048_576);
         let server_dir_path = PathBuf::from(&host_server_dir);
         self.storage_manager
             .ensure_mounted(server_uuid, &server_dir_path, disk_mb)
@@ -828,29 +841,30 @@ impl WebSocketHandler {
             let memory_mb = msg["allocatedMemoryMb"].as_u64().ok_or_else(|| {
                 AgentError::InvalidRequest("Missing allocatedMemoryMb".to_string())
             })?;
+            // Clamp panel-driven allocations so u64->i64 casts and MB->bytes
+            // multiplications in the OCI builders cannot overflow.
+            let memory_mb = memory_mb.clamp(1, crate::runtime_manager::MAX_MEMORY_MB);
 
             let cpu_cores = msg["allocatedCpuCores"].as_u64().ok_or_else(|| {
                 AgentError::InvalidRequest("Missing allocatedCpuCores".to_string())
             })?;
+            let cpu_cores = cpu_cores.clamp(1, crate::runtime_manager::MAX_CPU_CORES);
 
-            let swap_mb = msg["allocatedSwapMb"].as_u64().unwrap_or(0);
-            let io_weight = msg["ioWeight"].as_u64().unwrap_or(500);
-            let disk_mb = msg["allocatedDiskMb"].as_u64().unwrap_or(10240);
-
-            let primary_port = msg["primaryPort"]
+            let swap_mb = msg["allocatedSwapMb"]
                 .as_u64()
-                .ok_or_else(|| AgentError::InvalidRequest("Missing primaryPort".to_string()))?
-                as u16;
-            if primary_port == 0 {
-                return Err(AgentError::InvalidRequest(
-                    "Invalid primaryPort".to_string(),
-                ));
-            }
-            if primary_port == 0 {
-                return Err(AgentError::InvalidRequest(
-                    "Invalid primaryPort".to_string(),
-                ));
-            }
+                .unwrap_or(0)
+                .min(crate::runtime_manager::MAX_MEMORY_MB);
+            let io_weight = msg["ioWeight"].as_u64().unwrap_or(500).clamp(10, 1000);
+            let disk_mb = msg["allocatedDiskMb"].as_u64().unwrap_or(10240).clamp(1, 1_048_576);
+
+            // Validated 1..=65535 before the narrowing cast: a bare `as u16`
+            // silently truncates (65536 -> 0, 70000 -> 4464).
+            let primary_port = crate::net_utils::parse_port_value(
+                msg["primaryPort"].as_u64().ok_or_else(|| {
+                    AgentError::InvalidRequest("Missing primaryPort".to_string())
+                })?,
+            )
+            .map_err(|_| AgentError::InvalidRequest("Invalid primaryPort".to_string()))?;
 
             let network_mode = msg.get("networkMode").and_then(|v| v.as_str());
             let port_bindings_value = msg.get("portBindings");
@@ -1169,26 +1183,29 @@ impl WebSocketHandler {
             let network_ip = env_map
                 .get("CATALYST_NETWORK_IP")
                 .or_else(|| env_map.get("AERO_NETWORK_IP"))
-                .map(|value| value.as_str());
+                .map(|value| value.as_str())
+                .and_then(|raw| {
+                    match crate::net_utils::validate_static_ip_in_subnet(
+                        raw,
+                        &self.config.containerd.cni_bridge_subnet,
+                    ) {
+                        Ok(valid) => Some(valid),
+                        Err(reason) => {
+                            // Fall back to DHCP instead of failing the start:
+                            // a bad static IP must not wedge the server.
+                            warn!(
+                                "Ignoring invalid CATALYST_NETWORK_IP '{}' for {}: {}; using DHCP",
+                                raw, server_id, reason
+                            );
+                            None
+                        }
+                    }
+                });
+            let network_ip_ref = network_ip.as_deref();
 
             let mut port_bindings = HashMap::new();
             if let Some(map) = port_bindings_value.and_then(|value| value.as_object()) {
-                for (container_port, host_port) in map {
-                    let container_port = container_port.parse::<u16>().map_err(|_| {
-                        AgentError::InvalidRequest(
-                            "Invalid portBindings container port".to_string(),
-                        )
-                    })?;
-                    let host_port = host_port.as_u64().ok_or_else(|| {
-                        AgentError::InvalidRequest("Invalid portBindings host port".to_string())
-                    })?;
-                    if host_port == 0 || host_port > u16::MAX as u64 {
-                        return Err(AgentError::InvalidRequest(
-                            "Invalid portBindings host port".to_string(),
-                        ));
-                    }
-                    port_bindings.insert(container_port, host_port as u16);
-                }
+                port_bindings = crate::net_utils::parse_port_bindings(map)?;
             }
 
             self.cleanup_all_server_containers(server_id, server_uuid)
@@ -1215,7 +1232,7 @@ impl WebSocketHandler {
                     port: primary_port,
                     port_bindings: &port_bindings,
                     network_mode,
-                    network_ip,
+                    network_ip: network_ip_ref,
                 })
                 .await?;
 
@@ -1264,7 +1281,11 @@ impl WebSocketHandler {
                 self.spawn_exit_monitor(server_id, &container_id);
 
                 // Store auto-restart config, start message, and port for this server
-                let ar_config = parse_auto_restart_config(msg);
+                // Clamp panel-driven auto-restart knobs: unbounded delay
+                // wedges restart loops, unbounded windows defeat rate
+                // limiting, unbounded maxRestarts is an infinite crash loop.
+                let mut ar_config = parse_auto_restart_config(msg);
+                clamp_auto_restart_config(&mut ar_config);
                 self.auto_restart_configs
                     .write()
                     .await
@@ -1635,5 +1656,59 @@ impl WebSocketHandler {
 
         info!("Server {} deleted successfully", server_id);
         Ok(())
+    }
+}
+
+/// Clamp panel-driven auto-restart knobs to safe ranges: delay 1..=3600s,
+/// window 1..=86400s, maxRestarts 0..=100.
+pub(crate) fn clamp_auto_restart_config(config: &mut AutoRestartConfig) {
+    config.delay_secs = config.delay_secs.clamp(1, 3600);
+    config.window_secs = config.window_secs.clamp(1, 86400);
+    config.max_restarts = config.max_restarts.min(100);
+}
+
+#[cfg(test)]
+mod server_lifecycle_security_tests {
+    use super::*;
+
+    #[test]
+    fn auto_restart_clamps_absurd_values() {
+        let mut config = AutoRestartConfig {
+            enabled: true,
+            delay_secs: 0,
+            max_restarts: 999_999,
+            window_secs: 1_000_000,
+        };
+        clamp_auto_restart_config(&mut config);
+        assert_eq!(config.delay_secs, 1);
+        assert_eq!(config.max_restarts, 100);
+        assert_eq!(config.window_secs, 86400);
+    }
+
+    #[test]
+    fn auto_restart_preserves_sane_values() {
+        let mut config = AutoRestartConfig {
+            enabled: true,
+            delay_secs: 30,
+            max_restarts: 5,
+            window_secs: 300,
+        };
+        clamp_auto_restart_config(&mut config);
+        assert_eq!(config.delay_secs, 30);
+        assert_eq!(config.max_restarts, 5);
+        assert_eq!(config.window_secs, 300);
+    }
+
+    #[test]
+    fn auto_restart_allows_zero_max_restarts() {
+        // 0 = never auto-restart; must survive the clamp.
+        let mut config = AutoRestartConfig {
+            enabled: true,
+            delay_secs: 10,
+            max_restarts: 0,
+            window_secs: 60,
+        };
+        clamp_auto_restart_config(&mut config);
+        assert_eq!(config.max_restarts, 0);
     }
 }
