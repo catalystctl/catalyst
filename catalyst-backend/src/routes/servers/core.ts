@@ -205,7 +205,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             `Catalyst uses a loop-mounted quota, unlike Pterodactyl. ` +
             `CS2 needs about 40 GB.`,
           code: ErrorCodes.SERVER_TEMPLATE_MINIMUM_DISK,
-          minimumDiskMb,
+          params: { minDiskMb: minimumDiskMb },
         });
       }
       const templateDefaults = templateVariables.reduce((acc, variable) => {
@@ -229,7 +229,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           return "name" in option && option.name === resolvedEnvironment.IMAGE_VARIANT;
         });
         if (resolvedEnvironment.IMAGE_VARIANT && !hasVariant) {
-          return apiError(reply, 400, ErrorCodes.SERVER_IMAGE_VARIANT_INVALID, "Invalid image variant selected");
+          return apiError(reply, 400, ErrorCodes.SERVER_IMAGE_VARIANT_INVALID, "Invalid image variant selected", {
+            params: { variant: resolvedEnvironment.IMAGE_VARIANT },
+          });
         }
       }
 
@@ -518,7 +520,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               Object.values(resolvedPortBindings)
             );
             if (txConflictPort) {
-              throw new Error("PORT_CONFLICT");
+              throw new Error(`PORT_CONFLICT:${txConflictPort}`);
             }
           }
 
@@ -605,8 +607,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         if (error?.message === "ALLOCATION_TAKEN") {
           return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, "Allocation is no longer available");
         }
-        if (error?.message === "PORT_CONFLICT") {
-          return apiError(reply, 409, ErrorCodes.PORT_ALREADY_IN_USE, "One of the requested ports is already in use on this node");
+        if (typeof error?.message === "string" && error.message.startsWith("PORT_CONFLICT")) {
+          const conflictPort = Number(error.message.split(":")[1]);
+          if (Number.isFinite(conflictPort)) {
+            return apiError(reply, 409, ErrorCodes.PORT_ALREADY_IN_USE, `Port ${conflictPort} is already in use on this node`, {
+              params: { port: conflictPort },
+            });
+          }
+          return apiError(reply, 409, ErrorCodes.SERVER_CREATE_FAILED, "One of the requested ports is already in use on this node");
         }
         return apiError(reply, 400, ErrorCodes.SERVER_CREATE_FAILED, error.message);
       }
@@ -1788,7 +1796,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           hasAllocationUpdate) &&
         server.status !== "stopped"
       ) {
-        return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, "Server must be stopped to update resource allocation");
+        return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, "Server must be stopped to update resource allocation", {
+          params: { status: server.status },
+        });
       }
 
       // Validate resource changes if provided
@@ -2179,7 +2189,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       const isShrink = allocatedDiskMb < server.allocatedDiskMb;
       if (isShrink && server.status !== "stopped") {
-        return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, "Server must be stopped to shrink disk");
+        return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, "Server must be stopped to shrink disk", {
+          params: { status: server.status },
+        });
       }
 
       const gateway = (app as any).wsGateway;

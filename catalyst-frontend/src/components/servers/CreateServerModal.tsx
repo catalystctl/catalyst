@@ -19,7 +19,7 @@ import { serversApi } from '../../services/api/servers';
 import { useTemplates } from '../../hooks/useTemplates';
 import { useNodes, useAccessibleNodes } from '../../hooks/useNodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { getLocalizedErrorMessage } from '../../i18n/api-errors';
+import { getLocalizedErrorMessage, getLocalizedFieldErrors } from '../../i18n/api-errors';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 import Combobox from '@/components/ui/combobox';
@@ -351,13 +351,10 @@ function CreateServerModal() {
  },
  onError: (error: any) => {
  console.error('Server creation error:', error?.response?.data || error);
- const data = error?.response?.data;
- const firstDetail = Array.isArray(data?.details)
- ? data.details.find((d: any) => d?.message)?.message
- : typeof data?.details === 'string'
- ? data.details
- : null;
- notifyError(firstDetail || error);
+ // Field-level details are translated through their validation rule codes;
+ // otherwise the error's own code drives the message.
+ const fieldErrors = getLocalizedFieldErrors(error);
+ notifyError(fieldErrors[0]?.message ?? getLocalizedErrorMessage(error));
  },
  });
 

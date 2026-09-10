@@ -24,13 +24,15 @@ export function renderResetPasswordEmail(args: {
   url: string;
 }): RenderedEmail {
   const t = translatorFor(args.locale ?? DEFAULT_LOCALE);
-  const panelName = escapeHtml(args.panelName);
-  const userName = escapeHtml(args.userName);
-  const url = escapeHtml(args.url);
+  // Only the HTML body needs escaping; subjects and the text part carry the
+  // raw values so links and names stay copy-pasteable.
   return {
-    subject: t('resetPassword.subject', { panelName }),
-    html: `<p>${t('resetPassword.greeting', { name: userName })}</p><p>${t('resetPassword.instruction')}</p><p><a href="${url}">${t('resetPassword.linkLabel')}</a></p>`,
-    text: t('resetPassword.text', { url }),
+    subject: t('resetPassword.subject', { panelName: args.panelName }),
+    html:
+      `<p>${escapeHtml(t('resetPassword.greeting', { name: args.userName }))}</p>` +
+      `<p>${escapeHtml(t('resetPassword.instruction'))}</p>` +
+      `<p><a href="${escapeHtml(args.url)}">${escapeHtml(t('resetPassword.linkLabel'))}</a></p>`,
+    text: t('resetPassword.text', { url: args.url }),
   };
 }
 
@@ -42,13 +44,13 @@ export function renderVerifyEmail(args: {
   url: string;
 }): RenderedEmail {
   const t = translatorFor(args.locale ?? DEFAULT_LOCALE);
-  const panelName = escapeHtml(args.panelName);
-  const userName = escapeHtml(args.userName);
-  const url = escapeHtml(args.url);
   return {
-    subject: t('verifyEmail.subject', { panelName }),
-    html: `<p>${t('verifyEmail.greeting', { name: userName })}</p><p>${t('verifyEmail.instruction')}</p><p><a href="${url}">${t('verifyEmail.linkLabel')}</a></p>`,
-    text: t('verifyEmail.text', { url }),
+    subject: t('verifyEmail.subject', { panelName: args.panelName }),
+    html:
+      `<p>${escapeHtml(t('verifyEmail.greeting', { name: args.userName }))}</p>` +
+      `<p>${escapeHtml(t('verifyEmail.instruction'))}</p>` +
+      `<p><a href="${escapeHtml(args.url)}">${escapeHtml(t('verifyEmail.linkLabel'))}</a></p>`,
+    text: t('verifyEmail.text', { url: args.url }),
   };
 }
 
@@ -59,11 +61,12 @@ export function renderWelcomeEmail(args: {
   username: string;
 }): RenderedEmail {
   const t = translatorFor(args.locale ?? DEFAULT_LOCALE);
-  const panelName = escapeHtml(args.panelName);
-  const username = escapeHtml(args.username);
   return {
-    subject: t('welcome.subject', { panelName }),
-    html: `<p>${t('welcome.greeting', { panelName, username })}</p><p>${t('welcome.created')}</p><p>${t('welcome.next')}</p>`,
-    text: t('welcome.text', { panelName, username }),
+    subject: t('welcome.subject', { panelName: args.panelName }),
+    html:
+      `<p>${escapeHtml(t('welcome.greeting', { panelName: args.panelName, username: args.username }))}</p>` +
+      `<p>${escapeHtml(t('welcome.created'))}</p>` +
+      `<p>${escapeHtml(t('welcome.next'))}</p>`,
+    text: t('welcome.text', { panelName: args.panelName, username: args.username }),
   };
 }

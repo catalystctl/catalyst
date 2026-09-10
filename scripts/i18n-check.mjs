@@ -155,7 +155,61 @@ if (untranslatedCodes.length > 0) {
   else warnings.push(message);
 }
 
+// Backend codes whose catalog text interpolates values, but where no call site
+// sends `params`: the client would render the literal "{{...}}" placeholder.
+// Codes emitted outside `apiError` (WebSocket payloads, Prisma mapping) are
+// checked too, since they travel through the same resolver.
+const PARAMETERIZED = /^\s*([A-Z][A-Z0-9_]*)\s*:\s*"(?:[^"\\]|\\.)*\{\{[a-zA-Z_]/gm;
+const backendSrcDir = path.join(repoRoot, 'catalyst-backend/src');
+
+function backendSources(dir, out = []) {
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      // The registry itself defines the codes; only emit sites matter here.
+      if (entry === 'error-codes') continue;
+      backendSources(full, out);
+    } else if (entry.endsWith('.ts') && !entry.endsWith('.test.ts')) out.push(full);
+  }
+  return out;
+}
+
+const missingParams = [];
+try {
+  for (const [code, value] of errorsCatalog) {
+    if (typeof value !== 'string') continue;
+    if (!/\{\{[a-zA-Z_]/.test(value)) continue;
+    // Every statement that emits the code must supply the interpolated values,
+    // otherwise the client renders the literal "{{...}}" placeholder.
+    const occurrence = new RegExp(`(ErrorCodes\\.${code}\\b|["']${code}["'])`, 'g');
+    const offenders = [];
+    for (const file of backendSources(backendSrcDir)) {
+      const source = readFileSync(file, 'utf8');
+      for (const match of source.matchAll(occurrence)) {
+        const lineStart = source.lastIndexOf('\n', match.index) + 1;
+        const line = source.slice(lineStart, source.indexOf('\n', match.index));
+        if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue; // comment, not a call site
+        const statement = source.slice(match.index, source.indexOf(';', match.index) + 1 || undefined);
+        if (!/\bparams\s*:/.test(statement)) {
+          const lineNumber = source.slice(0, match.index).split('\n').length;
+          offenders.push(`${path.relative(repoRoot, file)}:${lineNumber}`);
+        }
+      }
+    }
+    if (offenders.length > 0) missingParams.push(`${code} (${offenders.join(', ')})`);
+  }
+} catch (error) {
+  warnings.push(`could not scan backend sources for error params: ${error.message}`);
+}
+
+if (missingParams.length > 0) {
+  problems.push(
+    `backend error messages interpolate values but these call sites send no "params": ${missingParams.join('; ')}`,
+  );
+}
+
 for (const warning of warnings) console.warn(`i18n: warning: ${warning}`);
+
 
 if (problems.length > 0) {
   console.error(`i18n: ${problems.length} problem(s) found:`);

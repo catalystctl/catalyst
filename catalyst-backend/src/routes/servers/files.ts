@@ -234,8 +234,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.FILE_INVALID_PATH, pathErr?.message || "Invalid path");
       }
 
+      let maxUploadMb: number | undefined;
       try {
         const settings = await getSecuritySettings();
+        maxUploadMb = settings.fileTunnelMaxUploadMb;
         const maxBytes = maxUploadBytesFromMb(settings.fileTunnelMaxUploadMb);
         const stagedPath = fileTunnel.createStagingPath();
         let size = 0;
@@ -275,7 +277,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           return replyTunnelError(reply, error);
         }
         if (error?.message?.includes("exceeds limit")) {
-          return apiError(reply, 413, ErrorCodes.FILE_TOO_LARGE, error.message);
+          return apiError(reply, 413, ErrorCodes.FILE_TOO_LARGE, error.message, {
+            params: maxUploadMb === undefined ? undefined : { maxMb: maxUploadMb },
+          });
         }
         return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, error?.message || "Failed to upload file");
       }

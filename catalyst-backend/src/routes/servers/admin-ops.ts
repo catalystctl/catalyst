@@ -443,7 +443,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         return reply.status(400).send({
           error: "Server must be stopped before transfer",
           code: ErrorCodes.SERVER_NOT_STOPPED,
-          currentStatus: server.status,
+          params: { status: server.status },
         });
       }
       const claimed = await prisma.server.updateMany({

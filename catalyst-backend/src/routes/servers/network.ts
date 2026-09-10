@@ -189,7 +189,9 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
 
       const bindings = parseStoredPortBindings(server.portBindings);
       if (bindings[parsedContainerPort]) {
-        return apiError(reply, 409, ErrorCodes.PORT_ALREADY_IN_USE, "Allocation already exists for container port");
+        return apiError(reply, 409, ErrorCodes.PORT_ALREADY_IN_USE, "Allocation already exists for container port", {
+          params: { port: parsedContainerPort },
+        });
       }
 
       const usedHostPorts = new Set(Object.values(bindings));
@@ -202,7 +204,9 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       const isPrimaryBinding =
         parsedContainerPort === server.primaryPort && parsedHostPort === server.primaryPort;
       if (!isPrimaryBinding && usedHostPorts.has(parsedHostPort)) {
-        return apiError(reply, 409, ErrorCodes.PORT_ALREADY_IN_USE, "Host port already assigned to allocation");
+        return apiError(reply, 409, ErrorCodes.PORT_ALREADY_IN_USE, "Host port already assigned to allocation", {
+          params: { port: parsedHostPort },
+        });
       }
 
       // When claiming a NodeAllocation, host-port ownership is already tracked there.

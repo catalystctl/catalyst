@@ -83,6 +83,32 @@ describe('localized account emails', () => {
     expect(fallback.subject).toBe('Welcome to Catalyst');
   });
 
+  it('keeps URLs raw in the text part and escapes them in HTML', () => {
+    const url = 'https://panel.example/reset?token=abc&callbackURL=/dashboard?a=1&b=2';
+    const rendered = renderResetPasswordEmail({
+      locale: 'en',
+      panelName: 'Catalyst',
+      userName: 'Ada',
+      url,
+    });
+    // The plain-text part is copy-pasted into a browser, so it must stay raw.
+    expect(rendered.text).toContain(url);
+    expect(rendered.text).not.toContain('&amp;');
+    expect(rendered.html).toContain('&amp;callbackURL');
+  });
+
+  it('keeps names raw in subject and text, escaping only the HTML body', () => {
+    const rendered = renderWelcomeEmail({
+      locale: 'en',
+      panelName: 'R&D Panel',
+      username: "Ada O'Hara",
+    });
+    expect(rendered.subject).toBe('Welcome to R&D Panel');
+    expect(rendered.text).toContain("Ada O'Hara");
+    expect(rendered.html).toContain('R&amp;D Panel');
+    expect(rendered.html).toContain('Ada O&#39;Hara');
+  });
+
   it('escapes user-controlled values in HTML bodies', () => {
     const rendered = renderWelcomeEmail({
       locale: 'en',

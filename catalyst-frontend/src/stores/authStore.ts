@@ -4,7 +4,7 @@ import type { StateCreator } from 'zustand/vanilla';
 import { authApi } from '../services/api/auth';
 import { reportSystemError } from '../services/api/systemErrors';
 import { describeError } from '../utils/errors';
-import i18n from '../i18n';
+import { getLocalizedErrorMessage } from '../i18n/api-errors';
 import type { User } from '../types/user';
 import type { LoginSchema, RegisterSchema } from '../validators/auth';
 
@@ -114,9 +114,10 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           });
           throw err;
         }
-        const rawError = error.response?.data?.error;
-        const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || i18n.t('login.failed', { ns: 'auth' });
-        (set as AuthSet)({ isLoading: false, error: message as string });
+        // Translated through the backend error code, so the sign-in banner
+        // follows the panel language; the raw message stays the fallback.
+        const message = getLocalizedErrorMessage(err);
+        (set as AuthSet)({ isLoading: false, error: message });
         loginGuard.exit();
         reportSystemError({
           level: 'error',
@@ -136,10 +137,10 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         // Cookie-based authentication - tokens stored in HttpOnly cookies
         (set as AuthSet)({ user: { ...user, image: sanitizeImageUrl(user.image) }, token: null, isAuthenticated: true, isLoading: false, isReady: true, error: null });
       } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: unknown } }; message?: string };
-        const rawError = error.response?.data?.error;
-        const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || i18n.t('register.failed', { ns: 'auth' });
-        (set as AuthSet)({ isLoading: false, error: message as string });
+        // Translated through the backend error code so the banner follows the
+        // panel language; the server message stays the fallback.
+        const message = getLocalizedErrorMessage(err);
+        (set as AuthSet)({ isLoading: false, error: message });
         loginGuard.exit();
         reportSystemError({
           level: 'error',
@@ -285,10 +286,8 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           error: null,
         });
       } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: unknown } }; message?: string };
-        const rawError = error.response?.data?.error;
-        const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || i18n.t('twoFactor.failed', { ns: 'auth' });
-        (set as AuthSet)({ isLoading: false, error: message as string });
+        const message = getLocalizedErrorMessage(err);
+        (set as AuthSet)({ isLoading: false, error: message });
         loginGuard.exit();
         reportSystemError({
           level: 'error',

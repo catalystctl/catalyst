@@ -3422,7 +3422,7 @@ export class WebSocketGateway {
             JSON.stringify({
                 type: "error",
                 error: "SERVER_SUSPENDED",
-                code: "SERVER_SUSPENDED",
+                code: ErrorCodes.SERVER_SUSPENDED,
                 serverId: server.id,
               })
             );
@@ -3575,7 +3575,7 @@ export class WebSocketGateway {
               JSON.stringify({
                 type: "error",
                 error: "SERVER_SUSPENDED",
-                code: "SERVER_SUSPENDED",
+                code: ErrorCodes.SERVER_SUSPENDED,
                 serverId: server.id,
               })
             );

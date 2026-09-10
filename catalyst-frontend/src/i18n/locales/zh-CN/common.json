@@ -38,12 +38,6 @@
     "revoked": "API 密钥撤销成功",
     "updated": "API 密钥更新成功"
   },
-  "backupStatus": {
-    "completed": "已完成",
-    "failed": "失败",
-    "inProgress": "进行中",
-    "restored": "已恢复"
-  },
   "combobox": {
     "noMatches": "未找到匹配项。",
     "placeholder": "请选择…"

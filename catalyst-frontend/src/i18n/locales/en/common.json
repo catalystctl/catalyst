@@ -38,12 +38,6 @@
     "revoked": "API key revoked successfully",
     "updated": "API key updated successfully"
   },
-  "backupStatus": {
-    "completed": "Completed",
-    "failed": "Failed",
-    "inProgress": "In progress",
-    "restored": "Restored"
-  },
   "combobox": {
     "noMatches": "No matches found.",
     "placeholder": "Select..."

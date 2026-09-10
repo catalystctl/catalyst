@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 
 import i18n from '../index';
 import { matchLocaleTag, isSupportedLocale, LOCALE_STORAGE_KEY, detectDeviceLocale } from '../config';
-import { getLocalizedErrorMessage, getApiErrorCode } from '../api-errors';
+import { getLocalizedErrorMessage, getApiErrorCode, getApiErrorParams, getLocalizedFieldErrors } from '../api-errors';
 import { formatDate, formatTime, formatRelativeTime } from '../format';
 import { consoleStreamLabel, roleDescriptionLabel, roleLabel } from '../../utils/constants';
 
@@ -44,13 +44,31 @@ describe('device locale detection', () => {
 });
 
 describe('api error translation', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
   it('extracts the backend error code from the response body', () => {
     const error = { response: { data: { code: 'SERVER_NOT_FOUND', error: 'Server not found' } } };
     expect(getApiErrorCode(error)).toBe('SERVER_NOT_FOUND');
   });
 
-  it('prefers a known code translation', () => {
+  it('keeps the specific server message for English readers', () => {
+    // One code covers many messages (VALIDATION_ERROR alone spans over a
+    // hundred), so English keeps the server's wording rather than the generic
+    // catalog text.
+    const error = { response: { data: { code: 'VALIDATION_ERROR', error: 'Password must be at least 8 characters' } } };
+    expect(getLocalizedErrorMessage(error)).toBe('Password must be at least 8 characters');
+  });
+
+  it('translates a coded error for other locales', async () => {
+    await i18n.changeLanguage('zh-CN');
     const error = { response: { data: { code: 'SERVER_NOT_FOUND', error: 'Server not found' } } };
+    expect(getLocalizedErrorMessage(error)).toBe('找不到请求的服务器。');
+  });
+
+  it('falls back to the catalog text when the server sent no message', () => {
+    const error = { response: { data: { code: 'SERVER_NOT_FOUND' } } };
     expect(getLocalizedErrorMessage(error)).toBe('The requested server could not be found.');
   });
 
@@ -59,18 +77,38 @@ describe('api error translation', () => {
     expect(getLocalizedErrorMessage(error)).toBe('Fresh server message');
   });
 
-  it('interpolates params and checks the validation namespace', () => {
-    i18n.addResourceBundle(
-      'en',
-      'validation',
-      { VALIDATION_TOO_SMALL: 'Must be at least {{min}} characters' },
-      true,
-      true,
-    );
+  it('interpolates params from the shipped catalog', async () => {
+    // No server message, so the catalog text is what the user sees.
+    const error = { response: { data: { code: 'FILE_TOO_LARGE', params: { maxMb: 512 } } } };
+    expect(getLocalizedErrorMessage(error)).toBe('Upload exceeds the maximum size of 512MB.');
+    await i18n.changeLanguage('zh-CN');
+    expect(getLocalizedErrorMessage(error)).toBe('上传大小超过 512MB 的上限。');
+  });
+
+  it('reads params attached directly to the thrown error', () => {
+    const error = Object.assign(new Error('invalid'), { code: 'FILE_TOO_LARGE', params: { maxMb: 8 } });
+    expect(getApiErrorParams(error)).toEqual({ maxMb: 8 });
+  });
+
+  it('translates field-level validation codes and keeps unknown fields as sent', async () => {
     const error = {
-      response: { data: { code: 'VALIDATION_TOO_SMALL', error: 'Too short', params: { min: 12 } } },
+      response: {
+        data: {
+          code: 'VALIDATION_ERROR',
+          error: 'Invalid request parameters',
+          details: [
+            { field: 'password', message: 'Too short', code: 'VALIDATION_TOO_SMALL', params: { min: 12 } },
+            { field: 'engine', message: 'engine must be one of: java, bedrock' },
+          ],
+        },
+      },
     };
-    expect(getLocalizedErrorMessage(error)).toBe('Must be at least 12 characters');
+    expect(getLocalizedFieldErrors(error)).toEqual([
+      { field: 'password', message: 'Must be at least 12 characters' },
+      { field: 'engine', message: 'engine must be one of: java, bedrock' },
+    ]);
+    await i18n.changeLanguage('zh-CN');
+    expect(getLocalizedFieldErrors(error)[0].message).toBe('至少 12 个字符');
   });
 });
 
