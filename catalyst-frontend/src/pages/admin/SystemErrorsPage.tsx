@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
  Bug,
  Search,
@@ -28,6 +30,8 @@ import {
  SelectValue,
 } from '../../components/ui/select';
 import { useSystemErrors, useResolveSystemError, useResolveAllSystemErrors } from '../../hooks/useAdmin';
+import { getLocalizedErrorMessage } from '../../i18n/api-errors';
+import { formatDateTime } from '../../i18n/format';
 import { adminApi } from '../../services/api/admin';
 import type { SystemError } from '../../types/admin';
 import Pagination from '../../components/shared/Pagination';
@@ -73,6 +77,19 @@ function levelLabel(level: string) {
  if (level === 'error') return 'Error';
  if (level === 'warn') return 'Warning';
  return level;
+}
+/** Localized level badge; the copyable diagnostics report keeps the raw level names. */
+function LevelBadge({ level, className }: { level: string; className: string }) {
+ const { t } = useTranslation('admin-system');
+ const label =
+ level === 'critical'
+ ? t('systemErrors.levelCritical')
+ : level === 'error'
+ ? t('systemErrors.levelError')
+ : level === 'warn'
+ ? t('systemErrors.levelWarning')
+ : level;
+ return <Badge variant="outline" className={className}>{label}</Badge>;
 }
 
 // ── Copy Helper ──
@@ -173,6 +190,7 @@ function ErrorDetailModal({
  error: SystemError;
  onClose: () => void;
 }) {
+ const { t } = useTranslation('admin-system');
  const metadata = error.metadata || {};
  const metadataEntries = Object.entries(metadata);
  const hasMetadata = metadataEntries.length > 0;
@@ -193,38 +211,36 @@ return (
  <DialogBody className="space-y-5">
  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Level</span>
- <Badge variant="outline" className={`text-[11px] ${levelColor(error.level)}`}>
- {levelLabel(error.level)}
- </Badge>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.level')}</span>
+ <LevelBadge level={error.level} className={`text-[11px] ${levelColor(error.level)}`} />
  </div>
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</span>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.status')}</span>
  <Badge variant={error.resolved ? 'outline' : 'secondary'} className={`text-[11px] ${error.resolved ? 'border-success/40 text-success' : ''}`}>
- {error.resolved ? 'Resolved' : 'Unresolved'}
+ {error.resolved ? t('systemErrors.resolved') : t('systemErrors.unresolved')}
  </Badge>
  </div>
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Node ID</span>
- <span className="block truncate font-mono text-[11px]" title={error.nodeId ?? 'n/a'}>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.nodeId')}</span>
+ <span className="block truncate font-mono text-[11px]" title={error.nodeId ?? t('systemErrors.notAvailable')}>
  {error.nodeId ? (
  <span className="flex items-center gap-1 text-primary">
  <Server className="h-3 w-3" />
  {error.nodeId}
  </span>
  ) : (
- <span className="text-muted-foreground">n/a</span>
+ <span className="text-muted-foreground">{t('systemErrors.notAvailable')}</span>
  )}
  </span>
  </div>
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Request ID</span>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.requestId')}</span>
  <span className="block truncate font-mono text-[11px] text-muted-foreground" title={error.requestId ?? 'n/a'}>
  {error.requestId ?? 'n/a'}
  </span>
  </div>
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">User ID</span>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.userId')}</span>
  <span className="block truncate font-mono text-[11px] text-muted-foreground" title={error.userId ?? 'n/a'}>
  {error.userId ?? 'n/a'}
  </span>
@@ -232,15 +248,15 @@ return (
  </div>
 
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Timestamp</span>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.timestamp')}</span>
  <div className="flex items-center gap-2 text-sm text-foreground">
  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
- {new Date(error.createdAt).toLocaleString()}
+ {formatDateTime(error.createdAt)}
  </div>
  </div>
 
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Message</span>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.tableMessage')}</span>
  <div className="rounded-lg border border-border/30 bg-surface-2/40 px-3 py-2 text-sm text-foreground">
  {error.message}
  </div>
@@ -248,7 +264,7 @@ return (
 
  {error.stack && (
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Stack Trace</span>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.stackTrace')}</span>
  <pre className="max-h-64 overflow-auto rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground">
  {error.stack}
  </pre>
@@ -258,14 +274,14 @@ return (
  {hasMetadata && (
  <div className="space-y-2">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
- Metadata ({metadataEntries.length} field{metadataEntries.length === 1 ? '' : 's'})
+ {t('systemErrors.metadataCount', { count: metadataEntries.length })}
  </span>
  <div className="overflow-hidden rounded-lg border border-border/30 bg-surface-2/40">
  <table className="w-full text-xs">
  <thead>
  <tr className="border-b border-border/30 text-left">
- <th className="px-3 py-2 font-semibold text-muted-foreground">Key</th>
- <th className="px-3 py-2 font-semibold text-muted-foreground">Value</th>
+ <th className="px-3 py-2 font-semibold text-muted-foreground">{t('systemErrors.metadataKey')}</th>
+ <th className="px-3 py-2 font-semibold text-muted-foreground">{t('systemErrors.metadataValue')}</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-border/30">
@@ -285,7 +301,7 @@ return (
 
  {!hasMetadata && (
  <div className="rounded-lg border border-dashed border-border/30 bg-surface-2/20 px-4 py-3 text-center text-xs text-muted-foreground">
- No metadata recorded for this error.
+ {t('systemErrors.noMetadata')}
  </div>
  )}
  </DialogBody>
@@ -298,10 +314,10 @@ return (
  onClick={() => copy(formatErrorForCopy(error), error.id)}
  >
  {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
- {isCopied ? 'Copied!' : 'Copy for AI'}
+ {isCopied ? t('systemErrors.copied') : t('systemErrors.copyForAi')}
  </Button>
  <Button variant="outline" size="sm" onClick={onClose}>
- Close
+ {t('common:actions.close')}
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -322,6 +338,7 @@ function ErrorRow({
  onResolve: () => void;
  isResolving: boolean;
 }) {
+ const { t } = useTranslation('admin-system');
  const { copiedId, copy } = useCopyToClipboard();
  const isCopied = copiedId === error.id;
  return (
@@ -329,16 +346,14 @@ function ErrorRow({
  {/* Desktop: grid */}
  <div className="hidden grid-cols-12 items-center gap-3 md:grid">
  <div className="col-span-2 min-w-0">
- <Badge variant="outline" className={`text-[11px] ${levelColor(error.level)}`}>
- {levelLabel(error.level)}
- </Badge>
+ <LevelBadge level={error.level} className={`text-[11px] ${levelColor(error.level)}`} />
  </div>
  <div className="col-span-2 truncate font-medium text-foreground">
  {error.component}
  </div>
  <div className="col-span-1 truncate font-mono text-[10px] text-muted-foreground">
  {error.nodeId ? (
- <span className="inline-flex items-center gap-1" title={`Node: ${error.nodeId}`}>
+ <span className="inline-flex items-center gap-1" title={t('systemErrors.nodeTitle', { nodeId: error.nodeId })}>
  <Server className="h-3 w-3 shrink-0" />
  <span className="truncate">{error.nodeId}</span>
  </span>
@@ -350,7 +365,7 @@ function ErrorRow({
  {error.message}
  </div>
  <div className="col-span-2 truncate font-mono text-xs text-muted-foreground">
- {new Date(error.createdAt).toLocaleString()}
+ {formatDateTime(error.createdAt)}
  </div>
  <div className="col-span-2 flex items-center justify-end gap-2">
  {!error.resolved && (
@@ -365,7 +380,7 @@ function ErrorRow({
  disabled={isResolving}
  >
  <CheckCircle2 className="h-3.5 w-3.5" />
- Resolve
+ {t('systemErrors.resolve')}
  </Button>
  )}
  <button
@@ -374,14 +389,14 @@ function ErrorRow({
  e.stopPropagation();
  copy(formatErrorForCopy(error), error.id);
  }}
- title={isCopied ? 'Copied!' : 'Copy for AI'}
+ title={isCopied ? t('systemErrors.copied') : t('systemErrors.copyForAi')}
  >
  {isCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
  </button>
  <button
  className="rounded-md p-1 text-muted-foreground opacity-0 transition-colors hover:bg-primary/5 hover:text-primary sm:group-hover:opacity-100"
  onClick={onView}
- title="View details"
+ title={t('systemErrors.viewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
@@ -393,9 +408,7 @@ function ErrorRow({
  <div className="flex items-center justify-between gap-2">
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
- <Badge variant="outline" className={`text-[10px] ${levelColor(error.level)}`}>
- {levelLabel(error.level)}
- </Badge>
+ <LevelBadge level={error.level} className={`text-[10px] ${levelColor(error.level)}`} />
  <span className="truncate font-medium text-foreground">
  {error.component}
  </span>
@@ -406,7 +419,7 @@ function ErrorRow({
  </div>
  <div className="flex items-center gap-2">
  <span className="text-[11px] text-muted-foreground">
- {new Date(error.createdAt).toLocaleString()}
+ {formatDateTime(error.createdAt)}
  </span>
  <button
  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
@@ -414,14 +427,14 @@ function ErrorRow({
  e.stopPropagation();
  copy(formatErrorForCopy(error), error.id);
  }}
- title={isCopied ? 'Copied!' : 'Copy for AI'}
+ title={isCopied ? t('systemErrors.copied') : t('systemErrors.copyForAi')}
  >
  {isCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
  </button>
  <button
  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
  onClick={onView}
- title="View details"
+ title={t('systemErrors.viewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
@@ -440,7 +453,7 @@ function ErrorRow({
  disabled={isResolving}
  >
  <CheckCircle2 className="h-3.5 w-3.5" />
- Resolve
+ {t('systemErrors.resolve')}
  </Button>
  </div>
  )}
@@ -451,13 +464,26 @@ function ErrorRow({
 
 // ── Export Modal ──
 const EXPORT_RANGES = [
- { value: '1h', label: 'Last 1 hour', hours: 1 },
- { value: '6h', label: 'Last 6 hours', hours: 6 },
- { value: '24h', label: 'Last 24 hours', hours: 24 },
- { value: '7d', label: 'Last 7 days', hours: 24 * 7 },
- { value: '30d', label: 'Last 30 days', hours: 24 * 30 },
- { value: 'all', label: 'All time', hours: null },
+ { value: '1h', hours: 1 },
+ { value: '6h', hours: 6 },
+ { value: '24h', hours: 24 },
+ { value: '7d', hours: 24 * 7 },
+ { value: '30d', hours: 24 * 30 },
+ { value: 'all', hours: null },
 ] as const;
+
+/** Display label for an export time range. */
+function exportRangeLabel(t: TFunction<'admin-system'>, value: string): string {
+ switch (value) {
+ case '1h': return t('systemErrors.exportRange1h');
+ case '6h': return t('systemErrors.exportRange6h');
+ case '24h': return t('systemErrors.exportRange24h');
+ case '7d': return t('systemErrors.exportRange7d');
+ case '30d': return t('systemErrors.exportRange30d');
+ case 'all': return t('systemErrors.exportRangeAll');
+ default: return value;
+ }
+}
 
 type ExportRangeValue = (typeof EXPORT_RANGES)[number]['value'];
 
@@ -468,6 +494,7 @@ function ExportErrorsModal({
  filters: { level?: string; component?: string; nodeId?: string; resolved?: boolean };
  onClose: () => void;
 }) {
+ const { t } = useTranslation('admin-system');
  const [range, setExportRange] = useState<ExportRangeValue>('24h');
  const [format, setFormat] = useState<'markdown' | 'json'>('markdown');
  const [isExporting, setIsExporting] = useState(false);
@@ -502,17 +529,20 @@ function ExportErrorsModal({
    URL.revokeObjectURL(url);
    onClose();
   } catch (err) {
-   setError(err instanceof Error ? err.message : 'Export failed');
+   setError(getLocalizedErrorMessage(err));
   } finally {
    setIsExporting(false);
   }
  };
-
  const activeFilterChips = [
-  filters.level ? `level: ${filters.level}` : null,
-  filters.component ? `component: ${filters.component}` : null,
-  filters.nodeId ? `node: ${filters.nodeId}` : null,
-  filters.resolved !== undefined ? `status: ${filters.resolved ? 'resolved' : 'unresolved'}` : null,
+  filters.level ? t('systemErrors.chipLevel', { value: filters.level }) : null,
+  filters.component ? t('systemErrors.chipComponent', { value: filters.component }) : null,
+  filters.nodeId ? t('systemErrors.chipNode', { value: filters.nodeId }) : null,
+  filters.resolved !== undefined
+   ? t('systemErrors.chipStatus', {
+      value: filters.resolved ? t('systemErrors.statusResolvedLower') : t('systemErrors.statusUnresolvedLower'),
+     })
+   : null,
  ].filter(Boolean) as string[];
 
  return (
@@ -521,15 +551,15 @@ function ExportErrorsModal({
     <DialogHeader
      icon={<Download className="h-4 w-4" />}
     >
-     <DialogTitle>Export system errors</DialogTitle>
+     <DialogTitle>{t('systemErrors.exportTitle')}</DialogTitle>
      <DialogDescription>
-      Download a file you can upload to an agent for analysis. Up to 5,000 most recent errors are included.
+      {t('systemErrors.exportDescription')}
      </DialogDescription>
     </DialogHeader>
 
     <DialogBody className="space-y-5">
      <div className="space-y-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Time range</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.timeRange')}</span>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
        {EXPORT_RANGES.map((option) => (
         <Button
@@ -538,34 +568,34 @@ function ExportErrorsModal({
          size="sm"
          onClick={() => setExportRange(option.value)}
         >
-         {option.label}
+         {exportRangeLabel(t, option.value)}
         </Button>
        ))}
       </div>
      </div>
 
      <div className="space-y-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Format</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.format')}</span>
       <Select value={format} onValueChange={(next) => setFormat(next as 'markdown' | 'json')}>
        <SelectTrigger className="w-full border-border/40">
         <SelectValue />
        </SelectTrigger>
        <SelectContent>
-        <SelectItem value="markdown">Markdown — best for AI agents</SelectItem>
-        <SelectItem value="json">JSON — raw data</SelectItem>
+        <SelectItem value="markdown">{t('systemErrors.formatMarkdown')}</SelectItem>
+        <SelectItem value="json">{t('systemErrors.formatJson')}</SelectItem>
        </SelectContent>
       </Select>
      </div>
 
      {activeFilterChips.length > 0 ? (
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/30 bg-surface-2/40 px-3 py-2">
-       <span className="text-[11px] text-muted-foreground">Current list filters apply:</span>
+       <span className="text-[11px] text-muted-foreground">{t('systemErrors.currentFilters')}</span>
        {activeFilterChips.map((chip) => (
         <Badge key={chip} variant="outline" className="text-[10px]">{chip}</Badge>
        ))}
       </div>
      ) : (
-      <p className="text-xs text-muted-foreground">No list filters active — the full range will be exported.</p>
+      <p className="text-xs text-muted-foreground">{t('systemErrors.noFilters')}</p>
      )}
 
      {error && (
@@ -575,11 +605,11 @@ function ExportErrorsModal({
 
     <DialogFooter>
      <Button variant="outline" size="sm" onClick={onClose} disabled={isExporting}>
-      Cancel
+      {t('common:actions.cancel')}
      </Button>
      <Button size="sm" onClick={handleExport} disabled={isExporting} className="gap-1.5">
       {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-      {isExporting ? 'Exporting…' : 'Export'}
+      {isExporting ? t('systemErrors.exporting') : t('systemErrors.export')}
      </Button>
     </DialogFooter>
    </DialogContent>
@@ -603,42 +633,43 @@ function ResolveAllModal({
  onConfirm: () => void;
  onClose: () => void;
 }) {
+ const { t } = useTranslation('admin-system');
  return (
   <Dialog open onOpenChange={(open) => { if (!open && !isPending) onClose(); }}>
    <DialogContent size="sm">
     <DialogHeader
      icon={<CheckCheck className="h-4 w-4" />}
     >
-     <DialogTitle>Resolve all errors?</DialogTitle>
+     <DialogTitle>{t('systemErrors.resolveAllTitle')}</DialogTitle>
      <DialogDescription>
       {unresolvedCount !== null
-       ? `This will mark ${unresolvedCount} unresolved error${unresolvedCount === 1 ? '' : 's'} as resolved.`
-       : 'This will mark all unresolved errors as resolved.'}
+       ? t('systemErrors.resolveAllConfirm', { count: unresolvedCount })
+       : t('systemErrors.resolveAllConfirmAll')}
      </DialogDescription>
     </DialogHeader>
 
     <DialogBody className="space-y-3">
      {filtersSummary.length > 0 ? (
       <div className="flex flex-wrap items-center gap-2">
-       <span className="text-[11px] text-muted-foreground">Matching filters:</span>
+       <span className="text-[11px] text-muted-foreground">{t('systemErrors.matchingFilters')}</span>
        {filtersSummary.map((chip) => (
         <Badge key={chip} variant="outline" className="text-[10px]">{chip}</Badge>
        ))}
       </div>
      ) : (
-      <p className="text-xs text-muted-foreground">No filters active — every unresolved error will be resolved.</p>
+      <p className="text-xs text-muted-foreground">{t('systemErrors.noFiltersAll')}</p>
      )}
-     <p className="text-xs text-muted-foreground">This cannot be undone.</p>
+     <p className="text-xs text-muted-foreground">{t('systemErrors.cannotUndo')}</p>
      {error && <p className="text-xs text-destructive">{error}</p>}
     </DialogBody>
 
     <DialogFooter>
      <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>
-      Cancel
+      {t('common:actions.cancel')}
      </Button>
      <Button size="sm" onClick={onConfirm} disabled={isPending} className="gap-1.5">
       {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
-      {isPending ? 'Resolving…' : 'Resolve all'}
+      {isPending ? t('systemErrors.resolving') : t('systemErrors.resolveAll')}
      </Button>
     </DialogFooter>
    </DialogContent>
@@ -648,6 +679,7 @@ function ResolveAllModal({
 
 // ── Main Page ──
 function SystemErrorsPage() {
+ const { t } = useTranslation('admin-system');
  const [page, setPage] = useState(1);
  const [level, setLevel] = useState('');
  const [component, setComponent] = useState('');
@@ -705,11 +737,11 @@ function SystemErrorsPage() {
  );
 
  const resolveAllFiltersSummary = [
-  level ? `level: ${level}` : null,
-  component ? `component: ${component}` : null,
-  nodeId ? `node: ${nodeId}` : null,
-  resolved === 'false' ? 'status: unresolved' : null,
-  range ? `range: ${range}` : null,
+ level ? t('systemErrors.chipLevel', { value: level }) : null,
+ component ? t('systemErrors.chipComponent', { value: component }) : null,
+ nodeId ? t('systemErrors.chipNode', { value: nodeId }) : null,
+ resolved === 'false' ? t('systemErrors.chipStatus', { value: t('systemErrors.statusUnresolvedLower') }) : null,
+ range ? t('systemErrors.chipRange', { value: range }) : null,
  ].filter(Boolean) as string[];
  const resolveAllUnresolvedCount = resolved === 'false' ? (pagination?.total ?? null) : null;
  const isResolveAllDisabled = resolved === 'true';
@@ -730,7 +762,7 @@ function SystemErrorsPage() {
      setShowResolveAll(false);
     },
     onError: (err) => {
-     setResolveAllError(err instanceof Error ? err.message : 'Resolve all failed');
+     setResolveAllError(getLocalizedErrorMessage(err));
     },
    },
   );
@@ -740,8 +772,8 @@ function SystemErrorsPage() {
  <div className="space-y-5">
  <TabHeader
  icon={Bug}
- title="System Errors"
- description="Real-time system error monitoring and resolution."
+ title={t('systemErrors.title')}
+ description={t('systemErrors.description')}
  actions={
  <div className="flex flex-wrap items-center gap-2">
  {isLive && (
@@ -750,21 +782,21 @@ function SystemErrorsPage() {
  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
  <span className="relative inline-flex h-2 w-2 rounded-full bg-success/50" />
  </span>
- Live
+ {t('systemErrors.live')}
  </Badge>
  )}
  {!isLive && (
  <Badge variant="outline" className="gap-1.5 text-xs text-muted-foreground">
  <Radio className="h-3 w-3" />
- Offline
+ {t('systemErrors.offline')}
  </Badge>
  )}
  <Badge variant="outline" className="text-xs">
- {data?.pagination?.total ?? errors.length} errors
+ {t('systemErrors.errorCount', { count: data?.pagination?.total ?? errors.length })}
  </Badge>
  <Button variant="outline" size="sm" onClick={() => setShowExport(true)} className="gap-1.5">
  <Download className="h-3.5 w-3.5" />
- Export
+ {t('systemErrors.export')}
  </Button>
  <Button
   variant="outline"
@@ -772,14 +804,14 @@ function SystemErrorsPage() {
   onClick={() => { setResolveAllError(null); setShowResolveAll(true); }}
   disabled={isResolveAllDisabled}
   className="gap-1.5"
-  title={isResolveAllDisabled ? 'Nothing to resolve while filtering to resolved errors' : 'Resolve all matching errors'}
+  title={isResolveAllDisabled ? t('systemErrors.resolveAllDisabledTitle') : t('systemErrors.resolveAllTooltip')}
  >
  <CheckCheck className="h-3.5 w-3.5" />
- Resolve all
+ {t('systemErrors.resolveAll')}
  </Button>
  <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1.5">
  <RotateCcw className="h-3.5 w-3.5" />
- Clear
+ {t('systemErrors.clear')}
  </Button>
  </div>
  }
@@ -790,11 +822,11 @@ function SystemErrorsPage() {
  <div className="overflow-hidden rounded-xl border border-border/30 bg-card/60 p-4">
  <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
  <Search className="h-3.5 w-3.5" />
- Filters
+ {t('systemErrors.filters')}
  </div>
  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Level</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.level')}</span>
  <Select
  value={level || 'all'}
  onValueChange={(next) => {
@@ -803,26 +835,26 @@ function SystemErrorsPage() {
  }}
  >
  <SelectTrigger className="w-full border-border/40">
- <SelectValue placeholder="All levels" />
+ <SelectValue placeholder={t('systemErrors.allLevels')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All levels</SelectItem>
- <SelectItem value="error">Error</SelectItem>
- <SelectItem value="warn">Warning</SelectItem>
- <SelectItem value="critical">Critical</SelectItem>
+ <SelectItem value="all">{t('systemErrors.allLevels')}</SelectItem>
+ <SelectItem value="error">{t('systemErrors.levelError')}</SelectItem>
+ <SelectItem value="warn">{t('systemErrors.levelWarning')}</SelectItem>
+ <SelectItem value="critical">{t('systemErrors.levelCritical')}</SelectItem>
  </SelectContent>
  </Select>
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Component</span>
- <Input value={component} onChange={(e) => { setComponent(e.target.value); setPage(1); }} placeholder="auth, server..." className="border-border/40" />
+ <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.component')}</span>
+ <Input value={component} onChange={(e) => { setComponent(e.target.value); setPage(1); }} placeholder={t('systemErrors.componentPlaceholder')} className="border-border/40" />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Node</span>
- <Input value={nodeId} onChange={(e) => { setNodeId(e.target.value); setPage(1); }} placeholder="node_..." className="border-border/40" />
+ <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.node')}</span>
+ <Input value={nodeId} onChange={(e) => { setNodeId(e.target.value); setPage(1); }} placeholder={t('systemErrors.nodePlaceholder')} className="border-border/40" />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Status</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.status')}</span>
  <Select
  value={resolved === '' ? 'all' : resolved === 'true' ? 'resolved' : 'unresolved'}
  onValueChange={(next) => {
@@ -833,17 +865,17 @@ function SystemErrorsPage() {
  }}
  >
  <SelectTrigger className="w-full border-border/40">
- <SelectValue placeholder="All" />
+ <SelectValue placeholder={t('systemErrors.all')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All</SelectItem>
- <SelectItem value="resolved">Resolved</SelectItem>
- <SelectItem value="unresolved">Unresolved</SelectItem>
+ <SelectItem value="all">{t('systemErrors.all')}</SelectItem>
+ <SelectItem value="resolved">{t('systemErrors.resolved')}</SelectItem>
+ <SelectItem value="unresolved">{t('systemErrors.unresolved')}</SelectItem>
  </SelectContent>
  </Select>
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">From</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.from')}</span>
  <Input
  type="datetime-local"
  value={from}
@@ -852,7 +884,7 @@ function SystemErrorsPage() {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">To</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.to')}</span>
  <Input
  type="datetime-local"
  value={to}
@@ -861,7 +893,7 @@ function SystemErrorsPage() {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">Quick range</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.quickRange')}</span>
  <Select
  value={range || 'custom'}
  onValueChange={(next) => {
@@ -880,14 +912,14 @@ function SystemErrorsPage() {
  }}
  >
  <SelectTrigger className="w-full border-border/40">
- <SelectValue placeholder="Custom" />
+ <SelectValue placeholder={t('systemErrors.custom')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="custom">Custom</SelectItem>
- <SelectItem value="1h">Last 1h</SelectItem>
- <SelectItem value="6h">Last 6h</SelectItem>
- <SelectItem value="24h">Last 24h</SelectItem>
- <SelectItem value="7d">Last 7d</SelectItem>
+ <SelectItem value="custom">{t('systemErrors.custom')}</SelectItem>
+ <SelectItem value="1h">{t('systemErrors.range1h')}</SelectItem>
+ <SelectItem value="6h">{t('systemErrors.range6h')}</SelectItem>
+ <SelectItem value="24h">{t('systemErrors.range24h')}</SelectItem>
+ <SelectItem value="7d">{t('systemErrors.range7d')}</SelectItem>
  </SelectContent>
  </Select>
  </label>
@@ -896,12 +928,12 @@ function SystemErrorsPage() {
  {/* Active filter chips */}
  {hasFilters && (
  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/30 pt-3">
- <span className="text-[11px] text-muted-foreground">Active:</span>
- {level && <Badge variant="outline" className="text-[10px]">level: {level}</Badge>}
- {component && <Badge variant="outline" className="text-[10px]">component: {component}</Badge>}
- {nodeId && <Badge variant="outline" className="text-[10px]">node: {nodeId}</Badge>}
- {resolved && <Badge variant="outline" className="text-[10px]">status: {resolved === 'true' ? 'resolved' : 'unresolved'}</Badge>}
- {range && <Badge variant="outline" className="text-[10px]">range: {range}</Badge>}
+ <span className="text-[11px] text-muted-foreground">{t('activeLabel')}</span>
+ {level && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipLevel', { value: level })}</Badge>}
+ {component && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipComponent', { value: component })}</Badge>}
+ {nodeId && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipNode', { value: nodeId })}</Badge>}
+ {resolved && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipStatus', { value: resolved === 'true' ? t('systemErrors.statusResolvedLower') : t('systemErrors.statusUnresolvedLower') })}</Badge>}
+ {range && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipRange', { value: range })}</Badge>}
  </div>
  )}
  </div>
@@ -911,12 +943,12 @@ function SystemErrorsPage() {
  <div className="overflow-hidden rounded-xl border border-border/30 bg-card/80 p-4">
  {/* Desktop header */}
  <div className="hidden border-b border-border/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
- <div className="col-span-2">Level</div>
- <div className="col-span-2">Component</div>
- <div className="col-span-1">Node</div>
- <div className="col-span-3">Message</div>
- <div className="col-span-2">Timestamp</div>
- <div className="col-span-2 text-right">Actions</div>
+ <div className="col-span-2">{t('systemErrors.tableLevel')}</div>
+ <div className="col-span-2">{t('systemErrors.tableComponent')}</div>
+ <div className="col-span-1">{t('systemErrors.tableNode')}</div>
+ <div className="col-span-3">{t('systemErrors.tableMessage')}</div>
+ <div className="col-span-2">{t('systemErrors.tableTimestamp')}</div>
+ <div className="col-span-2 text-right">{t('systemErrors.tableActions')}</div>
  </div>
  <TabLoadingState rows={8} />
  </div>
@@ -924,12 +956,12 @@ function SystemErrorsPage() {
  <div className="overflow-hidden rounded-xl border border-border/30 bg-card/80">
  {/* Desktop header */}
  <div className="hidden border-b border-border/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
- <div className="col-span-2">Level</div>
- <div className="col-span-2">Component</div>
- <div className="col-span-1">Node</div>
- <div className="col-span-3">Message</div>
- <div className="col-span-2">Timestamp</div>
- <div className="col-span-2 text-right">Actions</div>
+ <div className="col-span-2">{t('systemErrors.tableLevel')}</div>
+ <div className="col-span-2">{t('systemErrors.tableComponent')}</div>
+ <div className="col-span-1">{t('systemErrors.tableNode')}</div>
+ <div className="col-span-3">{t('systemErrors.tableMessage')}</div>
+ <div className="col-span-2">{t('systemErrors.tableTimestamp')}</div>
+ <div className="col-span-2 text-right">{t('systemErrors.tableActions')}</div>
  </div>
  <div className="divide-y divide-border/30">
  {errors.map((error) => (
@@ -954,8 +986,8 @@ function SystemErrorsPage() {
  </div>
  ) : (
  <TabEmptyState
- title="No system errors"
- description={hasFilters ? 'Try adjusting your filters.' : 'System errors will appear here when they occur.'}
+ title={t('systemErrors.emptyTitle')}
+ description={hasFilters ? t('systemErrors.emptyFilteredDescription') : t('systemErrors.emptyDescription')}
  />
  )}
 

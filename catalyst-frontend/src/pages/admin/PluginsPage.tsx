@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useQuery, useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -20,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fetchPlugins, fetchMarketplace, togglePlugin, reloadPlugin, updatePluginConfig, fetchPluginDetails, uninstallPlugin, type SafetyConsentRequiredError } from '../../plugins/api';
 import { toast } from 'sonner';
+import { notifyError } from '../../utils/notify';
 import { usePluginContext } from '../../plugins/usePluginContext';
 import type { CapabilitySummary, PluginManifest } from '../../plugins/types';
 import {
@@ -55,12 +58,16 @@ function statusBadgeVariant(status: string, error?: string): 'destructive' | 'ou
   return 'secondary';
 }
 
-function statusText(status: string) {
-  const map: Record<string, string> = {
-    enabled: 'Enabled', disabled: 'Disabled', loaded: 'Loaded',
-    loading: 'Loading', error: 'Error', unloaded: 'Unloaded',
-  };
-  return map[status] || status;
+function statusText(t: TFunction<'admin-system'>, status: string) {
+ switch (status) {
+ case 'enabled': return t('pluginsAdmin.stateEnabled');
+ case 'disabled': return t('pluginsAdmin.stateDisabled');
+ case 'loaded': return t('pluginsAdmin.stateLoaded');
+ case 'loading': return t('pluginsAdmin.stateLoading');
+ case 'error': return t('pluginsAdmin.stateError');
+ case 'unloaded': return t('pluginsAdmin.stateUnloaded');
+ default: return status;
+ }
 }
 
 // ── Plugin Row ───────────────────────────────────────────────────────────────
@@ -82,9 +89,10 @@ function PluginRow({
   onReload: () => void;
   onSettings: () => void;
   onDetails: () => void;
-  onUninstall: () => void;
+ onUninstall: () => void;
 }) {
-  const revoked = plugin.revokedPermissions?.length ?? 0;
+ const { t } = useTranslation('admin-system');
+ const revoked = plugin.revokedPermissions?.length ?? 0;
   const declaredCount = plugin.declaredPermissions?.length ?? 0;
   const caps = plugin.capabilityCounts;
   const updateAvailable = Boolean(latestMarketplaceVersion && latestMarketplaceVersion !== plugin.version);
@@ -104,24 +112,24 @@ function PluginRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">{plugin.displayName}</span>
           <Badge variant={statusBadgeVariant(plugin.status, plugin.error)} className="text-[10px]">
-            {statusText(plugin.status)}
+            {statusText(t, plugin.status)}
           </Badge>
           {updateAvailable && (
             <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
-              Update {plugin.version} → {latestMarketplaceVersion}
-            </Badge>
+              {t('pluginsAdmin.updateAvailable', { from: plugin.version, to: latestMarketplaceVersion })}
+ </Badge>
           )}
           {plugin.legacyAcceptance && (
             <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
-              <CircleAlert className="h-3 w-3" />
-              Review access
-            </Badge>
+ <CircleAlert className="h-3 w-3" />
+              {t('pluginsAdmin.reviewAccess')}
+ </Badge>
           )}
           {!plugin.enabled && revoked > 0 && (
-            <span className="flex items-center gap-1 text-[11px] text-muted-foreground" title="Permissions currently granted after revocations">
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground" title={t('pluginsAdmin.permissionsGrantedTitle')}>
               <ShieldCheck className="h-3 w-3" />
-              {declaredCount - revoked}/{declaredCount} permissions
-            </span>
+              {t('pluginsAdmin.permissionsGranted', { granted: declaredCount - revoked, declared: declaredCount })}
+ </span>
           )}
         </div>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -130,8 +138,8 @@ function PluginRow({
           <span className="font-mono">{plugin.name}@{plugin.version}</span>
           {caps && (caps.routes > 0 || caps.tasks > 0) && (
             <> · {[
-              caps.routes > 0 && `${caps.routes} route${caps.routes === 1 ? '' : 's'}`,
-              caps.tasks > 0 && `${caps.tasks} task${caps.tasks === 1 ? '' : 's'}`,
+              caps.routes > 0 && t('pluginsAdmin.routeCount', { count: caps.routes }),
+              caps.tasks > 0 && t('pluginsAdmin.taskCount', { count: caps.tasks }),
             ].filter(Boolean).join(', ')}</>
           )}
         </p>
@@ -146,18 +154,18 @@ function PluginRow({
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
           disabled={isProcessing || plugin.status === 'error'}
         >
-          {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : plugin.enabled ? 'Disable' : 'Enable'}
+          {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : plugin.enabled ? t('common:actions.disable') : t('common:actions.enable')}
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onReload(); }} disabled={isProcessing} aria-label="Reload">
+        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onReload(); }} disabled={isProcessing} aria-label={t('pluginsAdmin.reloadAria')}>
           <RefreshCw className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onSettings(); }} aria-label="Settings">
+        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onSettings(); }} aria-label={t('pluginsAdmin.settingsAria')}>
           <Settings className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onUninstall(); }} disabled={isProcessing} aria-label={`Uninstall ${plugin.name}`}>
+        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onUninstall(); }} disabled={isProcessing} aria-label={t('pluginsAdmin.uninstallAria', { name: plugin.name })}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={onDetails} aria-label="Details">
+        <Button variant="ghost" size="icon-sm" onClick={onDetails} aria-label={t('pluginsAdmin.detailsAria')}>
           <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
         </Button>
       </div>
@@ -176,7 +184,8 @@ function PluginSettingsModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [localConfig, setLocalConfig] = useState<PluginConfig | null>(null);
+ const { t } = useTranslation('admin-system');
+ const [localConfig, setLocalConfig] = useState<PluginConfig | null>(null);
 
   const { data: pluginDetails, isLoading } = useQuery({
     queryKey: qk.adminPlugin(pluginName),
@@ -203,14 +212,14 @@ function PluginSettingsModal({
   const updateMutation = useMutation({
     mutationFn: (newConfig: PluginConfig) => updatePluginConfig(pluginName, newConfig),
     onSuccess: () => {
-      toast.success('Plugin configuration updated');
+      toast.success(t('pluginsAdmin.toastConfigUpdated'));
       onOpenChange(false);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
       queryClient.invalidateQueries({ queryKey: qk.adminPlugin(pluginName) });
     },
-    onError: (error: any) => toast.error(error.message || 'Failed to update configuration'),
+    onError: (error: any) => notifyError(error),
   });
 
   type ConfigSchemaEntry = {
@@ -261,9 +270,9 @@ function PluginSettingsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg">
         <DialogHeader icon={<Settings className="h-4 w-4" />}>
-          <DialogTitle>Plugin settings</DialogTitle>
+          <DialogTitle>{t('pluginsAdmin.settingsTitle')}</DialogTitle>
           <DialogDescription>
-            Configure {pluginDetails?.displayName || pluginName}.
+            {t('pluginsAdmin.configure', { name: pluginDetails?.displayName || pluginName })}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
@@ -273,7 +282,7 @@ function PluginSettingsModal({
             </div>
           ) : Object.keys(config).length === 0 ? (
             <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-              <p className="text-sm text-muted-foreground">No configuration options available.</p>
+              <p className="text-sm text-muted-foreground">{t('pluginsAdmin.noConfigOptions')}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -308,7 +317,7 @@ function PluginSettingsModal({
                           className="h-4 w-4 rounded border-border bg-card text-primary"
                         />
                         <span className="text-sm text-muted-foreground">
-                          {effectiveValue ? 'Enabled' : 'Disabled'}
+                          {effectiveValue ? t('common:actions.enabled') : t('common:actions.disabled')}
                         </span>
                       </label>
                     ) : fieldType === 'number' ? (
@@ -337,7 +346,7 @@ function PluginSettingsModal({
                         {/* Empty placeholder only if current value is not in the list */}
                         {!selectOptions.some((o) => o.value === String(effectiveValue ?? '')) && (
                           <option value={String(effectiveValue ?? '')} disabled>
-                            {effectiveValue == null || effectiveValue === '' ? 'Select…' : String(effectiveValue)}
+                            {effectiveValue == null || effectiveValue === '' ? t('pluginsAdmin.selectPlaceholder') : String(effectiveValue)}
                           </option>
                         )}
                         {selectOptions.map((opt) => (
@@ -385,14 +394,14 @@ function PluginSettingsModal({
           )}
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t('common:actions.cancel')}</Button>
           <Button
             size="sm"
             onClick={() => updateMutation.mutate(buildSaveConfig())}
             disabled={updateMutation.isPending}
           >
             {updateMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            Save changes
+            {t('pluginsAdmin.saveChanges')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -401,8 +410,8 @@ function PluginSettingsModal({
 }
 
 // ── Main Page ────────────────────────────────────────────────────────────────
-
 export default function PluginsPage() {
+  const { t } = useTranslation('admin-system');
   const { reloadPlugins } = usePluginContext();
   const [processingPlugin, setProcessingPlugin] = useState<string | null>(null);
   const [settingsPlugin, setSettingsPlugin] = useState<string | null>(null);
@@ -460,7 +469,7 @@ export default function PluginsPage() {
     try {
       await togglePlugin(plugin.name, !plugin.enabled);
       reloadPlugins();
-      toast.success(`Plugin ${plugin.enabled ? 'disabled' : 'enabled'} successfully`);
+      toast.success(plugin.enabled ? t('pluginsAdmin.toastPluginDisabled') : t('pluginsAdmin.toastPluginEnabled'));
       invalidate();
     } catch (error: any) {
       if (error?.code === 'SAFETY_CONSENT_REQUIRED') {
@@ -474,7 +483,7 @@ export default function PluginsPage() {
           requestedCapabilities: err.payload?.requestedCapabilities,
         });
       } else {
-        toast.error(error?.message || 'Failed to toggle plugin');
+        notifyError(error);
       }
     } finally {
       setProcessingPlugin(null);
@@ -490,11 +499,11 @@ export default function PluginsPage() {
         acceptSafetyVersion: PLUGIN_DISCLAIMER_VERSION,
       });
       reloadPlugins();
-      toast.success(`Plugin enabled successfully`);
+      toast.success(t('pluginsAdmin.toastPluginEnabled'));
       invalidate();
       setConsentRequest(null);
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to enable plugin');
+      notifyError(error);
     } finally {
       setConsentBusy(false);
     }
@@ -505,13 +514,13 @@ export default function PluginsPage() {
     onMutate: (name) => setProcessingPlugin(name),
     onSuccess: () => {
       reloadPlugins();
-      toast.success('Plugin reloaded successfully');
+      toast.success(t('pluginsAdmin.toastPluginReloaded'));
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
       setProcessingPlugin(null);
     },
-    onError: (error: any) => toast.error(error.message || 'Failed to reload plugin'),
+    onError: (error: any) => notifyError(error),
   });
 
   const confirmUninstall = async (purgeData: boolean) => {
@@ -520,14 +529,18 @@ export default function PluginsPage() {
     setProcessingPlugin(uninstallTarget.name);
     try {
       await uninstallPlugin(uninstallTarget.name, purgeData);
-      toast.success(`Plugin ${uninstallTarget.name} uninstalled${purgeData ? ' and data purged' : ''}`);
+      toast.success(
+        purgeData
+          ? t('pluginsAdmin.toastPluginUninstalledPurged', { name: uninstallTarget.name })
+          : t('pluginsAdmin.toastPluginUninstalled', { name: uninstallTarget.name }),
+      );
       if (detailsPlugin === uninstallTarget.name) setDetailsPlugin(null);
       setUninstallTarget(null);
       reloadPlugins();
       queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
       queryClient.invalidateQueries({ queryKey: ['plugins', 'marketplace'] });
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to uninstall plugin');
+      notifyError(error);
     } finally {
       setUninstallBusy(false);
       setProcessingPlugin(null);
@@ -554,11 +567,11 @@ export default function PluginsPage() {
     });
   }, [plugins, searchQuery, statusFilter]);
 
-  const filterOptions: Array<{ key: StatusFilter; label: string; count: number }> = [
-    { key: 'all', label: 'All', count: totalCount },
-    { key: 'enabled', label: 'Enabled', count: enabledCount },
-    { key: 'disabled', label: 'Disabled', count: totalCount - enabledCount },
-    { key: 'error', label: 'Errors', count: errorCount },
+    const filterOptions: Array<{ key: StatusFilter; label: string; count: number }> = [
+    { key: 'all', label: t('pluginsAdmin.filterAll'), count: totalCount },
+    { key: 'enabled', label: t('pluginsAdmin.filterEnabled'), count: enabledCount },
+    { key: 'disabled', label: t('pluginsAdmin.filterDisabled'), count: totalCount - enabledCount },
+    { key: 'error', label: t('pluginsAdmin.filterErrors'), count: errorCount },
   ];
 
   // Consent-dialog inputs resolved from freshest list data
@@ -574,19 +587,19 @@ export default function PluginsPage() {
       {/* ── Header ── */}
       <TabHeader
         icon={Puzzle}
-        title="Plugins"
-        description="Manage, configure and audit installed plugins"
+        title={t('pluginsAdmin.pluginsTitle')}
+        description={t('pluginsAdmin.pluginsDescription')}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setMarketplaceOpen(true)}>
               <Store className="h-3.5 w-3.5" />
-              Marketplace
+              {t('pluginsAdmin.marketplace')}
             </Button>
             <Badge variant="outline" className="text-[11px]">
-              {totalCount} installed
+              {t('pluginsAdmin.installedCount', { count: totalCount })}
             </Badge>
             <Badge variant="secondary" className="text-[11px]">
-              {enabledCount} enabled
+              {t('pluginsAdmin.enabledCount', { count: enabledCount })}
             </Badge>
           </div>
         }
@@ -601,12 +614,12 @@ export default function PluginsPage() {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search plugins…"
+                placeholder={t('pluginsAdmin.searchPluginsPlaceholder')}
                 className="pl-8"
-                aria-label="Search plugins"
+                aria-label={t('pluginsAdmin.searchPluginsAria')}
               />
             </div>
-            <div className="flex items-center gap-1" role="tablist" aria-label="Filter by status">
+            <div className="flex items-center gap-1" role="tablist" aria-label={t('pluginsAdmin.filterAria')}>
               {filterOptions.map(({ key, label, count }) => (
                 <button
                   key={key}
@@ -639,13 +652,13 @@ export default function PluginsPage() {
         </ServerTabCard>
       ) : !plugins || plugins.length === 0 ? (
         <TabEmptyState
-          title="No plugins installed"
-          description="Add a plugin under catalyst-plugins/ with a plugin.json manifest, then use the Marketplace install or Reload action to discover it — no panel reboot required."
+          title={t('pluginsAdmin.noPluginsTitle')}
+          description={t('pluginsAdmin.noPluginsDescription')}
         />
       ) : filteredPlugins.length === 0 ? (
         <TabEmptyState
-          title="No matches"
-          description={`No plugins match "${searchQuery}" with the current filter.`}
+          title={t('pluginsAdmin.noMatchesTitle')}
+          description={t('pluginsAdmin.noMatchesDescription', { query: searchQuery })}
         />
       ) : (
         <ServerTabCard>

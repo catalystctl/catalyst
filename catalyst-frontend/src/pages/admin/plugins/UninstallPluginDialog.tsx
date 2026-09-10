@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 
 import {
@@ -40,6 +41,7 @@ export function UninstallPluginDialog({
   onConfirm,
   onOpenChange,
 }: UninstallPluginDialogProps) {
+  const { t } = useTranslation('admin-system');
   const [purgeData, setPurgeData] = useState(false);
 
   const [wasOpen, setWasOpen] = useState(open);
@@ -52,10 +54,11 @@ export function UninstallPluginDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="md" data-testid="plugin-uninstall-confirm">
         <DialogHeader icon={<Trash2 className="h-4 w-4 text-danger" />}>
-          <DialogTitle>Uninstall {displayName}</DialogTitle>
+          <DialogTitle>{t('pluginsAdmin.uninstallTitle', { name: displayName })}</DialogTitle>
           <DialogDescription>
             <span className="font-mono">{pluginName}</span>
-            {version ? ` v${version}` : ''} will be removed from this panel.
+            {version ? ` v${version}` : ''}{' '}
+            {t('pluginsAdmin.uninstallDescription')}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
@@ -63,17 +66,16 @@ export function UninstallPluginDialog({
             <div className="flex flex-wrap items-center gap-2">
               {enabled && (
                 <Badge variant="outline" className="text-[11px]">
-                  Currently enabled — it will be disabled first
+                  {t('pluginsAdmin.currentlyEnabledBadge')}
                 </Badge>
               )}
               <Badge variant="secondary" className="text-[11px]">
-                Code on disk will be deleted
+                {t('pluginsAdmin.codeDeletedBadge')}
               </Badge>
             </div>
 
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Uninstalling removes the plugin code and unloads it from the running panel.
-              Its routes, tasks and event handlers stop immediately.
+              {t('pluginsAdmin.uninstallBody')}
             </p>
 
             <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/60 bg-surface-2/20 px-4 py-3">
@@ -85,11 +87,10 @@ export function UninstallPluginDialog({
               />
               <span className="min-w-0">
                 <span className="block text-sm font-medium text-foreground">
-                  Also delete stored data
+                  {t('pluginsAdmin.uninstallPurgeLabel')}
                 </span>
                 <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-                  Removes config values, key-value storage, collections, and consent history.
-                  Keep this off to preserve settings for a later reinstall.
+                  {t('pluginsAdmin.uninstallPurgeDescription')}
                 </span>
               </span>
             </label>
@@ -97,14 +98,14 @@ export function UninstallPluginDialog({
             {purgeData && (
               <p className="flex items-start gap-1.5 text-xs leading-relaxed text-danger">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Stored data cannot be recovered after purging.
+                {t('pluginsAdmin.uninstallPurgeWarning')}
               </p>
             )}
           </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             size="sm"
@@ -113,7 +114,7 @@ export function UninstallPluginDialog({
             disabled={busy}
             data-testid="plugin-uninstall-confirm-button"
           >
-            {busy ? 'Uninstalling…' : 'Uninstall'}
+            {busy ? t('pluginsAdmin.uninstalling') : t('pluginsAdmin.uninstall')}
           </Button>
         </DialogFooter>
       </DialogContent>

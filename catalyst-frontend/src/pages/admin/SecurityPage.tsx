@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -31,27 +33,21 @@ import {
 } from '../../components/ui/select';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import { formatDateTime } from '../../i18n/format';
 
 // ── Time Window Constants ──
-const TIME_WINDOWS = [
- { value: '1000', label: 'second' },
- { value: '60000', label: 'minute' },
- { value: '3600000', label: 'hour' },
- { value: '86400000', label: 'day' },
- { value: '2592000000', label: 'month' },
-] as const;
-function getApiErrorMessage(error: unknown, fallback: string): string {
-  if (error !== null && typeof error === 'object' && 'response' in error) {
-    const response = error.response;
-    if (response !== null && typeof response === 'object' && 'data' in response) {
-      const data = response.data;
-      if (data !== null && typeof data === 'object' && 'error' in data) {
-        const candidate = data.error;
-        if (typeof candidate === 'string' && candidate.length > 0) return candidate;
-      }
-    }
-  }
-  return fallback;
+const TIME_WINDOWS = ['1000', '60000', '3600000', '86400000', '2592000000'] as const;
+
+/** Display label for a rate-limit time window value (milliseconds). */
+function timeWindowLabel(t: TFunction<'admin-access'>, value: string): string {
+ switch (value) {
+ case '1000': return t('security.timeUnitSecond');
+ case '60000': return t('security.timeUnitMinute');
+ case '3600000': return t('security.timeUnitHour');
+ case '86400000': return t('security.timeUnitDay');
+ case '2592000000': return t('security.timeUnitMonth');
+ default: return value;
+ }
 }
 
 
@@ -120,6 +116,7 @@ function RateLimitField({
  min?: string;
  max?: string;
 }) {
+ const { t } = useTranslation('admin-access');
  return (
  <label className="block space-y-1">
  <span className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
@@ -135,15 +132,15 @@ function RateLimitField({
  max={max}
  className="flex-1"
  />
- <span className="text-xs text-muted-foreground shrink-0">per</span>
+ <span className="text-xs text-muted-foreground shrink-0">{t('security.per')}</span>
  <Select value={windowValue} onValueChange={onWindowChange}>
  <SelectTrigger className="w-[100px] shrink-0">
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
- {TIME_WINDOWS.map((w) => (
- <SelectItem key={w.value} value={w.value}>
- {w.label}
+ {TIME_WINDOWS.map((value) => (
+ <SelectItem key={value} value={value}>
+ {timeWindowLabel(t, value)}
  </SelectItem>
  ))}
  </SelectContent>
@@ -185,9 +182,10 @@ function LockoutRow({
  onClear: () => void;
  isClearing: boolean;
 }) {
+ const { t } = useTranslation('admin-access');
  const isActive = !lockout.lockedUntil;
  const isIpLockout = lockout.email.startsWith('__ip__:');
- const displayEmail = isIpLockout ? 'IP rate limit' : lockout.email;
+ const displayEmail = isIpLockout ? t('security.ipRateLimit') : lockout.email;
  return (
  <div className="group flex flex-wrap items-center gap-4 border-b border-border/30 px-5 py-3.5 last:border-b-0 transition-colors hover:bg-surface-2/30">
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -203,27 +201,27 @@ function LockoutRow({
  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
  <span className="font-mono">{lockout.ipAddress}</span>
  <span>·</span>
- <span>{lockout.failureCount} attempts</span>
+ <span>{t('security.attempts', { count: lockout.failureCount })}</span>
  <span>·</span>
- <span>Last: {new Date(lockout.lastFailedAt).toLocaleString()}</span>
+ <span>{t('security.lastFailedAt', { date: formatDateTime(lockout.lastFailedAt) })}</span>
  </div>
  </div>
  </div>
 
  <div className="flex items-center gap-3">
  <Badge variant={isActive ? 'destructive' : 'secondary'} className="text-[10px] shrink-0">
- {isActive ? 'Locked' : 'Expired'}
+ {isActive ? t('security.locked') : t('security.expired')}
  </Badge>
  {lockout.lockedUntil && (
  <span className="hidden text-[11px] text-muted-foreground sm:block">
- Until {new Date(lockout.lockedUntil).toLocaleString()}
+ {t('security.until', { date: formatDateTime(lockout.lockedUntil) })}
  </span>
  )}
  <button
  className="rounded-md p-1.5 text-muted-foreground opacity-100 transition-colors hover:bg-primary/5 hover:text-primary sm:opacity-0 sm:group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-30"
  onClick={onClear}
  disabled={isClearing}
- title="Clear lockout"
+ title={t('security.clearLockout')}
  >
  <Unlock className="h-3.5 w-3.5" />
  </button>
@@ -238,6 +236,7 @@ const MAX_CONSOLE_OUTPUT_BYTES_PER_SECOND = 10 * 1024 * 1024;
 
 // ── Main Page ──
 function SecurityPage() {
+ const { t } = useTranslation('admin-access');
  const { data: settings } = useSecuritySettings();
  const [search, setSearch] = useState('');
  const [lockoutPage, setLockoutPage] = useState(1);
@@ -314,7 +313,7 @@ function SecurityPage() {
  }
 
  // ── Validate time window values ──
- const validTimeWindows = useMemo(() => new Set(TIME_WINDOWS.map((w) => Number(w.value))), []);
+ const validTimeWindows = useMemo(() => new Set(TIME_WINDOWS.map((value) => Number(value))), []);
 
  const canSubmit = useMemo(
  () =>
@@ -382,20 +381,20 @@ function SecurityPage() {
  fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
  requireEmailVerification,
  }),
- onSuccess: () => notifySuccess('Security settings updated'),
+ onSuccess: () => notifySuccess(t('security.toastUpdated')),
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminSecuritySettings() });
  },
- onError: (error: unknown) => notifyError(getApiErrorMessage(error, 'Failed to update security settings')),
+ onError: (error: unknown) => notifyError(error),
  });
 
  const clearMutation = useMutation({
  mutationFn: (lockoutId: string) => adminApi.clearAuthLockout(lockoutId),
- onSuccess: () => notifySuccess('Lockout cleared'),
+ onSuccess: () => notifySuccess(t('security.toastLockoutCleared')),
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminAuthLockouts() });
  },
- onError: (error: unknown) => notifyError(getApiErrorMessage(error, 'Failed to clear lockout')),
+ onError: (error: unknown) => notifyError(error),
  });
 
  const lockouts = lockoutResponse?.lockouts ?? [];
@@ -406,11 +405,11 @@ function SecurityPage() {
  {/* ── Header ── */}
     <TabHeader
       icon={ShieldCheck}
-      title="Security"
-      description="Rate limits, lockouts, and audit retention."
+      title={t('security.title')}
+      description={t('security.description')}
       actions={
         <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
-          {updateMutation.isPending ? 'Saving…' : 'Save'}
+          {updateMutation.isPending ? t('saving') : t('common:actions.save')}
         </Button>
       }
     />
@@ -418,74 +417,74 @@ function SecurityPage() {
 
  {/* ── Rate Limits Section ── */}
  <Section
- title="Rate Limits"
- subtitle="Adjust request counts and time windows to prevent abuse while allowing normal usage."
+ title={t('security.rateLimits')}
+ subtitle={t('security.rateLimitsDescription')}
  icon={<Zap className="h-4 w-4 text-warning" />}
  >
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
  <RateLimitField
- label="Auth requests"
+ label={t('security.authRequests')}
  countValue={authRateLimitMax}
  onCountChange={setAuthRateLimitMax}
  windowValue={authRateLimitWindowMs}
  onWindowChange={setAuthRateLimitWindowMs}
- tooltip="Maximum authentication API requests (login, register, etc.) per time window."
+ tooltip={t('security.authRequestsTooltip')}
  />
  <RateLimitField
- label="File operations"
+ label={t('security.fileOperations')}
  countValue={fileRateLimitMax}
  onCountChange={setFileRateLimitMax}
  windowValue={fileRateLimitWindowMs}
  onWindowChange={setFileRateLimitWindowMs}
- tooltip="Maximum file and mod/plugin API requests per time window. Applies to list, read, write, upload, compress, decompress, download, and delete operations."
+ tooltip={t('security.fileOperationsTooltip')}
  />
  <RateLimitField
- label="Console input"
+ label={t('security.consoleInput')}
  countValue={consoleRateLimitMax}
  onCountChange={setConsoleRateLimitMax}
  windowValue={consoleRateLimitWindowMs}
  onWindowChange={setConsoleRateLimitWindowMs}
- tooltip="Maximum console command submissions per time window via WebSocket."
+ tooltip={t('security.consoleInputTooltip')}
  />
  <NumberField
- label="Console output lines / sec"
+ label={t('security.consoleOutputLines')}
  value={consoleOutputLinesMax}
  onChange={setConsoleOutputLinesMax}
- tooltip="Maximum lines per second from server console output. Increase for servers with large startup logs."
+ tooltip={t('security.consoleOutputLinesTooltip')}
  />
  <NumberField
- label="Console output bytes / sec"
+ label={t('security.consoleOutputBytes')}
  value={consoleOutputByteLimitBytes}
  onChange={setConsoleOutputByteLimitBytes}
  min={String(MIN_CONSOLE_OUTPUT_BYTES_PER_SECOND)}
  max={String(MAX_CONSOLE_OUTPUT_BYTES_PER_SECOND)}
- tooltip="Per-server websocket console output cap. Allowed range is 65,536 to 10,485,760 bytes per second."
+ tooltip={t('security.consoleOutputBytesTooltip')}
  />
  <NumberField
- label="Agent messages / sec"
+ label={t('security.agentMessages')}
  value={agentMessageMax}
  onChange={setAgentMessageMax}
- tooltip="Maximum WebSocket messages per second from each agent node."
+ tooltip={t('security.agentMessagesTooltip')}
  />
  <NumberField
- label="Agent metrics / sec"
+ label={t('security.agentMetrics')}
  value={agentMetricsMax}
  onChange={setAgentMetricsMax}
- tooltip="Maximum agent-level metric messages per second from each agent node."
+ tooltip={t('security.agentMetricsTooltip')}
  />
  <NumberField
- label="Server metrics / sec"
+ label={t('security.serverMetrics')}
  value={serverMetricsMax}
  onChange={setServerMetricsMax}
- tooltip="Maximum server-level metric messages per second per server."
+ tooltip={t('security.serverMetricsTooltip')}
  />
  <NumberField
- label="Max buffer (MB)"
+ label={t('security.maxBuffer')}
  value={maxBufferMb}
  onChange={setMaxBufferMb}
  min="1"
- tooltip="Maximum output buffer for file operations (compress, decompress, archive browsing). Increase if large archives fail with buffer errors."
+ tooltip={t('security.maxBufferTooltip')}
  />
  </div>
  </div>
@@ -493,16 +492,16 @@ function SecurityPage() {
 
  {/* ── Email Verification Section ── */}
  <Section
- title="Email Verification"
- subtitle="Control whether new users must verify their email before signing in."
+ title={t('security.emailVerification')}
+ subtitle={t('security.emailVerificationDescription')}
  icon={<MailCheck className="h-4 w-4 text-success" />}
  >
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-foreground">Require verified email before sign-in</p>
+        <p className="text-sm text-foreground">{t('security.requireEmailVerification')}</p>
         <Switch
           checked={requireEmailVerification}
           onCheckedChange={setRequireEmailVerification}
-          aria-label="Require email verification"
+          aria-label={t('security.requireEmailVerificationAria')}
         />
       </div>
 
@@ -510,28 +509,28 @@ function SecurityPage() {
 
  {/* ── Lockout Policy ── */}
  <Section
- title="Lockout Policy"
- subtitle="Failed login attempts trigger temporary lockouts per email + IP combination."
+ title={t('security.lockoutPolicy')}
+ subtitle={t('security.lockoutPolicyDescription')}
  icon={<Lock className="h-4 w-4 text-destructive" />}
  >
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
  <NumberField
- label="Max attempts"
+ label={t('security.maxAttempts')}
  value={lockoutMaxAttempts}
  onChange={setLockoutMaxAttempts}
  />
  <NumberField
- label="Window (minutes)"
+ label={t('security.windowMinutes')}
  value={lockoutWindowMinutes}
  onChange={setLockoutWindowMinutes}
  />
  <NumberField
- label="Duration (minutes)"
+ label={t('security.durationMinutes')}
  value={lockoutDurationMinutes}
  onChange={setLockoutDurationMinutes}
  />
  <NumberField
- label="Audit retention (days)"
+ label={t('security.auditRetention')}
  value={auditRetentionDays}
  onChange={setAuditRetentionDays}
  />
@@ -539,37 +538,37 @@ function SecurityPage() {
  </Section>
 
  <Section
- title="File uploads"
- subtitle="One max size for the file browser and SFTP on every agent."
+ title={t('security.fileUploads')}
+ subtitle={t('security.fileUploadsDescription')}
  icon={<FolderSync className="h-4 w-4 text-info" />}
  >
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <RateLimitField
- label="Tunnel requests"
+ label={t('security.tunnelRequests')}
  countValue={fileTunnelRateLimitMax}
  onCountChange={setFileTunnelRateLimitMax}
  windowValue={fileTunnelRateLimitWindowMs}
  onWindowChange={setFileTunnelRateLimitWindowMs}
- tooltip="Maximum file tunnel requests per time window per agent node."
+ tooltip={t('security.tunnelRequestsTooltip')}
  />
  <NumberField
- label="Max upload size (MB)"
+ label={t('security.maxUploadSize')}
  value={fileTunnelMaxUploadMb}
  onChange={setFileTunnelMaxUploadMb}
- tooltip="Maximum single-file size for the file browser on every agent (up to 102400 MB). SFTP is limited by the server's remaining disk only."
+ tooltip={t('security.maxUploadSizeTooltip')}
  max="102400"
  />
  <NumberField
- label="Max pending per node"
+ label={t('security.maxPendingPerNode')}
  value={fileTunnelMaxPendingPerNode}
  onChange={setFileTunnelMaxPendingPerNode}
- tooltip="Maximum pending file operations queued per agent node."
+ tooltip={t('security.maxPendingPerNodeTooltip')}
  />
  <NumberField
- label="Max concurrent (agent)"
+ label={t('security.maxConcurrent')}
  value={fileTunnelConcurrentMax}
  onChange={setFileTunnelConcurrentMax}
- tooltip="Maximum concurrent file operations processed by each agent. Requires agent restart to take effect."
+ tooltip={t('security.maxConcurrentTooltip')}
  />
  </div>
  </Section>
@@ -582,8 +581,8 @@ function SecurityPage() {
  <Lock className="h-4 w-4 text-destructive" />
  </div>
  <div>
- <h2 className="text-sm font-semibold text-foreground">Auth Lockouts</h2>
- <p className="text-[11px] text-muted-foreground">Track recent lockout entries.</p>
+ <h2 className="text-sm font-semibold text-foreground">{t('security.authLockouts')}</h2>
+ <p className="text-[11px] text-muted-foreground">{t('security.authLockoutsDescription')}</p>
  </div>
  </div>
  <div className="relative min-w-[180px] max-w-xs">
@@ -591,7 +590,7 @@ function SecurityPage() {
  <Input
  value={search}
  onChange={(e) => { setSearch(e.target.value); setLockoutPage(1); }}
- placeholder="Search lockouts…"
+ placeholder={t('security.searchLockouts')}
  className="pl-9"
  />
  </div>
@@ -635,8 +634,8 @@ function SecurityPage() {
  ) : (
  <div className="px-5 py-8">
  <EmptyState
- title="No lockouts"
- description="Failed login attempts will show here."
+ title={t('security.emptyTitle')}
+ description={t('security.emptyDescription')}
  />
  </div>
  )}

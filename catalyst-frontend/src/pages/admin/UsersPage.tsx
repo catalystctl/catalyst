@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState, useCallback } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -57,6 +59,7 @@ import {
 import { useAdminRoles, useAdminServers, useAdminUsers } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { formatDate, formatDateTime, formatTime } from '../../i18n/format';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 import type { AdminUser } from '../../types/admin';
@@ -164,25 +167,13 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  onUnlink: (accountId: string, providerId: string) => void;
  loading: boolean;
 }) {
+ const { t } = useTranslation('admin-access');
  const passkeys = user.passkeys ?? [];
  const accounts = user.accounts ?? [];
  const has2fa = !!(user.twoFactor?.length);
  const twoFactorEnabled = user.twoFactorEnabled ?? false;
  const lastLogin = user.lastSuccessfulLogin;
  const lastIp = user.lastSignInIp;
-
- const providerLabel = (id: string) => {
- const labels: Record<string, string> = {
- credential: 'Email & Password',
- whmcs: 'WHMCS',
- paymenter: 'Paymenter',
- google: 'Google',
- github: 'GitHub',
- discord: 'Discord',
- };
- return labels[id] ?? id;
- };
-
  return (
  <div className="space-y-4">
  {/* Sign-in info */}
@@ -191,15 +182,15 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  {lastIp && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-surface-2 px-2.5 py-1.5 text-xs">
  <Globe className="h-3 w-3 text-muted-foreground" />
- <span className="text-muted-foreground">Last IP:</span>
+ <span className="text-muted-foreground">{t('users.lastIpLabel')}</span>
  <span className="font-mono text-foreground">{lastIp}</span>
  </div>
  )}
  {lastLogin && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-surface-2 px-2.5 py-1.5 text-xs">
  <Clock className="h-3 w-3 text-muted-foreground" />
- <span className="text-muted-foreground">Last sign-in:</span>
- <span className="text-foreground">{new Date(lastLogin).toLocaleString()}</span>
+ <span className="text-muted-foreground">{t('users.lastSignIn')}</span>
+ <span className="text-foreground">{formatDateTime(lastLogin)}</span>
  </div>
  )}
  </div>
@@ -213,26 +204,26 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  <ShieldCheck className={`h-4 w-4 ${twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
  </div>
  <div>
- <div className="text-sm font-medium text-foreground">Two-Factor Authentication</div>
+ <div className="text-sm font-medium text-foreground">{t('users.twoFactorAuth')}</div>
  <div className="text-[11px] text-muted-foreground">
- {has2fa ? (twoFactorEnabled ? 'Enabled and enforced' : 'Set up but not enforced') : 'Not set up'}
+ {has2fa ? (twoFactorEnabled ? t('users.enabledAndEnforced') : t('users.setUpNotEnforced')) : t('users.notSetUp')}
  </div>
  </div>
  </div>
  <div className="flex items-center gap-1.5">
  {has2fa && !twoFactorEnabled && (
  <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={loading} onClick={() => onEnforce2fa(true)}>
- <ShieldCheck className="h-3 w-3" /> Enforce
+ <ShieldCheck className="h-3 w-3" /> {t('users.enforce')}
  </Button>
  )}
  {twoFactorEnabled && has2fa && (
  <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={loading} onClick={() => onEnforce2fa(false)}>
- Unenforce
+ {t('users.unenforce')}
  </Button>
  )}
  {has2fa && (
  <Button variant="outline" size="sm" className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20" disabled={loading} onClick={onWipe2fa}>
- <Trash2 className="h-3 w-3" /> Wipe 2FA
+ <Trash2 className="h-3 w-3" /> {t('users.wipeTwoFactor')}
  </Button>
  )}
  </div>
@@ -247,15 +238,15 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  <Fingerprint className={`h-4 w-4 ${passkeys.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
  </div>
  <div>
- <div className="text-sm font-medium text-foreground">Passkeys</div>
+ <div className="text-sm font-medium text-foreground">{t('users.passkeys')}</div>
  <div className="text-[11px] text-muted-foreground">
- {passkeys.length ? `${passkeys.length} passkey${passkeys.length === 1 ? '' : 's'} registered` : 'No passkeys registered'}
+ {passkeys.length ? t('users.passkeysRegistered', { count: passkeys.length }) : t('users.noPasskeys')}
  </div>
  </div>
  </div>
  {passkeys.length > 0 && (
  <Button variant="outline" size="sm" className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20" disabled={loading} onClick={onWipePasskeys}>
- <Trash2 className="h-3 w-3" /> Wipe all
+ <Trash2 className="h-3 w-3" /> {t('users.wipeAll')}
  </Button>
  )}
  </div>
@@ -263,8 +254,8 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  <div className="mt-3 space-y-1.5">
  {passkeys.map((pk) => (
  <div key={pk.id} className="flex items-center justify-between rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
- <span className="text-muted-foreground">{pk.name || 'Unnamed passkey'}</span>
- <span className="text-[10px] text-muted-foreground/60">{new Date(pk.createdAt).toLocaleDateString()}</span>
+ <span className="text-muted-foreground">{pk.name || t('users.unnamedPasskey')}</span>
+ <span className="text-[10px] text-muted-foreground/60">{formatDate(pk.createdAt)}</span>
  </div>
  ))}
  </div>
@@ -275,10 +266,10 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  <div className="rounded-xl border border-border/30 bg-card p-4">
  <div className="flex items-center gap-2 mb-3">
  <Link2 className="h-4 w-4 text-muted-foreground" />
- <span className="text-sm font-medium text-foreground">Linked Accounts</span>
+ <span className="text-sm font-medium text-foreground">{t('users.linkedAccounts')}</span>
  </div>
  {accounts.length === 0 ? (
- <p className="text-xs text-muted-foreground">No linked accounts</p>
+ <p className="text-xs text-muted-foreground">{t('users.noLinkedAccounts')}</p>
  ) : (
  <div className="space-y-2">
  {accounts.map((account) => {
@@ -287,7 +278,7 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  <div key={account.id} className="flex items-center justify-between rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
  <div className="flex items-center gap-2">
  <KeyRound className={`h-3.5 w-3.5 ${isSSO ? 'text-primary' : 'text-muted-foreground'}`} />
- <span className="text-foreground">{providerLabel(account.providerId)}</span>
+ <span className="text-foreground">{providerLabel(t, account.providerId)}</span>
  {isSSO && (
  <span className="text-[10px] font-mono text-muted-foreground/60">
  {account.accountId.slice(0, 12)}…
@@ -296,7 +287,7 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  </div>
  {isSSO && (
  <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-[11px] text-destructive hover:bg-destructive/5 hover:text-destructive" disabled={loading} onClick={() => onUnlink(account.id, account.providerId)}>
- <Unlink className="h-3 w-3" /> Unlink
+ <Unlink className="h-3 w-3" /> {t('users.unlink')}
  </Button>
  )}
  </div>
@@ -308,9 +299,24 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  </div>
  );
 }
+/** SSO provider labels. Brand names are product names and stay untranslated. */
+const SSO_PROVIDER_NAMES: Record<string, string> = {
+ whmcs: 'WHMCS',
+ paymenter: 'Paymenter',
+ google: 'Google',
+ github: 'GitHub',
+ discord: 'Discord',
+};
+
+/** Resolve the display label for an SSO provider id. */
+function providerLabel(t: TFunction<'admin-access'>, providerId: string): string {
+ if (providerId === 'credential') return t('users.providerCredential');
+ return SSO_PROVIDER_NAMES[providerId] ?? providerId;
+}
 
 // ── Main Component ──
 function UsersPage() {
+ const { t } = useTranslation('admin-access');
 
  const [page, setPage] = useState(1);
  const [search, setSearch] = useState('');
@@ -507,7 +513,7 @@ function UsersPage() {
  serverIds: createServerIds,
  }),
  onSuccess: () => {
- notifySuccess('User created');
+ notifySuccess(t('users.toasts.created'));
  resetCreateForm();
  setIsCreateOpen(false);
  },
@@ -515,12 +521,7 @@ function UsersPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
- const rawError = error?.response?.data?.error;
- const message =
- (typeof rawError === 'string'
- ? rawError
- : rawError?.message || rawError?.error) || 'Failed to create user';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -534,7 +535,7 @@ function UsersPage() {
  serverIds: editServerIds,
  }),
  onSuccess: () => {
- notifySuccess('User updated');
+ notifySuccess(t('users.toasts.updated'));
  setEditingUserId(null);
  setEditRoleSearch('');
  setEditServerSearch('');
@@ -544,31 +545,21 @@ function UsersPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => {
- const rawError = error?.response?.data?.error;
- const message =
- (typeof rawError === 'string'
- ? rawError
- : rawError?.message || rawError?.error) || 'Failed to update user';
- notifyError(message);
+ notifyError(error);
  },
  });
 
  const deleteMutation = useMutation({
  mutationFn: (userId: string) => adminApi.deleteUser(userId),
  onSuccess: () => {
- notifySuccess('User deleted');
+ notifySuccess(t('users.toasts.deleted'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => {
- const rawError = error?.response?.data?.error;
- const message =
- (typeof rawError === 'string'
- ? rawError
- : rawError?.message || rawError?.error) || 'Failed to delete user';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -583,7 +574,7 @@ function UsersPage() {
  },
  onSuccess: (_data, variables) => {
  notifySuccess(
- `${variables.userIds.length} user${variables.userIds.length === 1 ? '' : 's'} banned`,
+ t('users.toasts.usersBanned', { count: variables.userIds.length }),
  );
  setSelectedIds([]);
  setBanTargets(null);
@@ -593,9 +584,7 @@ function UsersPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
- const message =
- error?.response?.data?.error || 'Failed to ban user(s)';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -606,7 +595,7 @@ function UsersPage() {
  },
  onSuccess: (_data, userIds) => {
  notifySuccess(
- `${userIds.length} user${userIds.length === 1 ? '' : 's'} unbanned`,
+ t('users.toasts.usersUnbanned', { count: userIds.length }),
  );
  setSelectedIds([]);
  setUnbanTargets(null);
@@ -615,16 +604,14 @@ function UsersPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
- const message =
- error?.response?.data?.error || 'Failed to unban user(s)';
- notifyError(message);
+ notifyError(error);
  },
  });
 
  const wipePasskeysMutation = useMutation({
  mutationFn: (userId: string) => adminApi.wipePasskeys(userId),
  onSuccess: (_data, userId) => {
- notifySuccess('Passkeys wiped');
+ notifySuccess(t('users.toasts.passkeysWiped'));
  setWipePasskeyTarget(null);
  const updatedUser = users.find((u) => u.id === userId);
  if (updatedUser) handleEditUser(updatedUser);
@@ -633,14 +620,14 @@ function UsersPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
- notifyError(error?.response?.data?.error || 'Failed to wipe passkeys');
+ notifyError(error);
  },
  });
 
  const wipe2faMutation = useMutation({
  mutationFn: (userId: string) => adminApi.wipeTwoFactor(userId),
  onSuccess: (_data, userId) => {
- notifySuccess('2FA wiped');
+ notifySuccess(t('users.toasts.twoFactorWiped'));
  setWipe2faTarget(null);
  const updatedUser = users.find((u) => u.id === userId);
  if (updatedUser) handleEditUser(updatedUser);
@@ -649,7 +636,7 @@ function UsersPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
- notifyError(error?.response?.data?.error || 'Failed to wipe 2FA');
+ notifyError(error);
  },
  });
 
@@ -657,7 +644,7 @@ function UsersPage() {
  mutationFn: ({ userId, enforce }: { userId: string; enforce: boolean }) =>
  adminApi.enforceTwoFactor(userId, enforce),
  onSuccess: (_data, variables) => {
- notifySuccess(variables.enforce ? '2FA enforcement enabled' : '2FA enforcement disabled');
+ notifySuccess(variables.enforce ? t('users.toasts.twoFactorEnforcementEnabled') : t('users.toasts.twoFactorEnforcementDisabled'));
  setEnforce2faTarget(null);
  const updatedUser = users.find((u) => u.id === variables.userId);
  if (updatedUser) handleEditUser(updatedUser);
@@ -666,7 +653,7 @@ function UsersPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
- notifyError(error?.response?.data?.error || 'Failed to update 2FA enforcement');
+ notifyError(error);
  },
  });
 
@@ -674,7 +661,7 @@ function UsersPage() {
  mutationFn: ({ userId, accountId }: { userId: string; accountId: string }) =>
  adminApi.unlinkAccount(userId, accountId),
  onSuccess: (_data, variables) => {
- notifySuccess('SSO account unlinked');
+ notifySuccess(t('users.toasts.ssoUnlinked'));
  setUnlinkTarget(null);
  const updatedUser = users.find((u) => u.id === variables.userId);
  if (updatedUser) handleEditUser(updatedUser);
@@ -683,20 +670,20 @@ function UsersPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
- notifyError(error?.response?.data?.error || 'Failed to unlink SSO account');
+ notifyError(error);
  },
  });
 
  const verifyEmailMutation = useMutation({
  mutationFn: (userId: string) => adminApi.verifyUserEmail(userId),
  onSuccess: () => {
- notifySuccess('Email verified');
+ notifySuccess(t('users.toasts.emailVerified'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
- notifyError(error?.response?.data?.error || 'Failed to verify email');
+ notifyError(error);
  },
  });
 
@@ -706,7 +693,7 @@ function UsersPage() {
  },
  onSuccess: (_data, userIds) => {
  notifySuccess(
- `${userIds.length} user${userIds.length === 1 ? '' : 's'} deleted`,
+ t('users.toasts.usersDeleted', { count: userIds.length }),
  );
  setSelectedIds([]);
  setDeletingUser(null);
@@ -716,9 +703,7 @@ function UsersPage() {
  queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => {
- const message =
- error?.response?.data?.error || 'Failed to delete user(s)';
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -785,8 +770,8 @@ function UsersPage() {
  setEditServerIds(serverSelection);
  }
  })
- .catch(() => {
- notifyError('Failed to load user servers');
+ .catch((error: unknown) => {
+ notifyError(error);
  });
 
  try {
@@ -837,26 +822,25 @@ function UsersPage() {
  if (unverifiedIds.length === 0) return;
  Promise.all(unverifiedIds.map((id) => adminApi.verifyUserEmail(id)))
  .then(() => {
- notifySuccess(`Verified ${unverifiedIds.length} email${unverifiedIds.length !== 1 ? 's' : ''}`);
+ notifySuccess(t('users.toasts.emailsVerified', { count: unverifiedIds.length }));
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  })
  .catch((err: any) => {
- notifyError(err?.response?.data?.error || 'Failed to verify emails');
+ notifyError(err);
  });
  };
 
  // ── Wizard logic ──
  const createSteps = [
- { label: 'Account', icon: User },
- { label: 'Roles & Servers', icon: Shield },
- { label: 'Node Access', icon: Server },
+ { label: t('wizard.account'), icon: User },
+ { label: t('wizard.rolesServers'), icon: Shield },
+ { label: t('wizard.nodeAccess'), icon: Server },
  ];
-
  const editSteps = [
- { label: 'Account', icon: User },
- { label: 'Roles & Servers', icon: Shield },
- { label: 'Node Access', icon: Server },
- { label: 'Security', icon: Lock },
+ { label: t('wizard.account'), icon: User },
+ { label: t('wizard.rolesServers'), icon: Shield },
+ { label: t('wizard.nodeAccess'), icon: Server },
+ { label: t('wizard.security'), icon: Lock },
  ];
 
  const currentSteps = editingUserId ? editSteps : createSteps;
@@ -890,8 +874,8 @@ function UsersPage() {
  <div className="space-y-5">
  <TabHeader
  icon={Users}
- title="User Management"
- description="Create and manage accounts with role-based access."
+ title={t('users.title')}
+ description={t('users.description')}
  actions={
  <div className="flex flex-wrap gap-2">
  {isLoading ? (
@@ -903,24 +887,24 @@ function UsersPage() {
  <>
  <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
  <span className="h-2 w-2 rounded-full bg-surface-3" />
- {data?.pagination?.total ?? 0} users
+ {t('users.count', { count: data?.pagination?.total ?? 0 })}
  </Badge>
  {roles.length > 0 && (
  <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
  <Shield className="h-2.5 w-2.5" />
- {roles.length} role{roles.length === 1 ? '' : 's'}
+ {t('users.roleCount', { count: roles.length })}
  </Badge>
  )}
  {bannedCount > 0 && (
  <Badge variant="destructive" className="h-8 gap-1.5 px-3 text-xs">
  <Ban className="h-2.5 w-2.5" />
- {bannedCount} banned
+ {t('users.bannedCount', { count: bannedCount })}
  </Badge>
  )}
  {unverifiedCount > 0 && (
  <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs text-warning border-warning/30">
  <MailCheck className="h-2.5 w-2.5" />
- {unverifiedCount} unverified
+ {t('users.unverifiedCount', { count: unverifiedCount })}
  </Badge>
  )}
  </>
@@ -934,7 +918,7 @@ function UsersPage() {
  className="gap-1.5"
  >
  <UserPlus className="h-3.5 w-3.5" />
- Create user
+ {t('users.createTitle')}
  </Button>
  </div>
  }
@@ -953,7 +937,7 @@ function UsersPage() {
  setSearch(event.target.value);
  setPage(1);
  }}
- placeholder="Search users by name, email, or ID…"
+ placeholder={t('users.searchPlaceholder')}
  className="pl-9"
  />
  </div>
@@ -966,7 +950,7 @@ function UsersPage() {
  className="gap-2"
  >
  <Filter className="h-3.5 w-3.5" />
- Filters
+ {t('filters')}
  {hasActiveFilters && (
  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground/20 text-[10px] font-bold">
  {[roleFilter, statusFilter].filter(Boolean).length}
@@ -981,18 +965,18 @@ function UsersPage() {
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="username-asc">Username A→Z</SelectItem>
- <SelectItem value="username-desc">Username Z→A</SelectItem>
- <SelectItem value="email-asc">Email A→Z</SelectItem>
- <SelectItem value="email-desc">Email Z→A</SelectItem>
- <SelectItem value="created">Newest first</SelectItem>
- <SelectItem value="roles">Most roles</SelectItem>
+ <SelectItem value="username-asc">{t('users.sortUsernameAsc')}</SelectItem>
+ <SelectItem value="username-desc">{t('users.sortUsernameDesc')}</SelectItem>
+ <SelectItem value="email-asc">{t('users.sortEmailAsc')}</SelectItem>
+ <SelectItem value="email-desc">{t('users.sortEmailDesc')}</SelectItem>
+ <SelectItem value="created">{t('users.sortNewest')}</SelectItem>
+ <SelectItem value="roles">{t('users.sortMostRoles')}</SelectItem>
  </SelectContent>
  </Select>
 
  {/* Results count */}
  <span className="text-xs text-muted-foreground">
- {filteredUsers.length} of {data?.pagination?.total ?? users.length}
+ {t('users.showing', { shown: filteredUsers.length, total: data?.pagination?.total ?? users.length })}
  </span>
  </div>
 
@@ -1004,7 +988,7 @@ function UsersPage() {
  <div className="rounded-xl border border-border/30 bg-card/80 p-4 backdrop-blur-sm">
  <div className="flex flex-wrap items-end gap-4">
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">Role</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('users.roleLabel')}</span>
  <Select
  value={roleFilter || 'all'}
  onValueChange={(value) => {
@@ -1013,10 +997,10 @@ function UsersPage() {
  }}
  >
  <SelectTrigger className="w-44">
- <SelectValue placeholder="All roles" />
+ <SelectValue placeholder={t('users.allRoles')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All roles</SelectItem>
+ <SelectItem value="all">{t('users.allRoles')}</SelectItem>
  {sortedRoles.map((role) => (
  <SelectItem key={role.id} value={role.id}>
  {role.name}
@@ -1027,7 +1011,7 @@ function UsersPage() {
  </Select>
  </label>
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">Status</span>
+ <span className="text-xs font-medium text-muted-foreground">{t('users.statusLabel')}</span>
  <Select
  value={statusFilter || 'all'}
  onValueChange={(value) => {
@@ -1036,19 +1020,19 @@ function UsersPage() {
  }}
  >
  <SelectTrigger className="w-44">
- <SelectValue placeholder="All statuses" />
+ <SelectValue placeholder={t('users.allStatuses')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">All statuses</SelectItem>
+ <SelectItem value="all">{t('users.allStatuses')}</SelectItem>
  <SelectItem value="active">
- Active
+ {t('users.statusActive')}
  {bannedCount > 0 ? ` (${users.length - bannedCount})` : ''}
  </SelectItem>
  <SelectItem value="banned">
- Banned{bannedCount > 0 ? ` (${bannedCount})` : ''}
+ {t('users.statusBanned')}{bannedCount > 0 ? ` (${bannedCount})` : ''}
  </SelectItem>
  <SelectItem value="unverified">
- Unverified{unverifiedCount > 0 ? ` (${unverifiedCount})` : ''}
+ {t('users.statusUnverified')}{unverifiedCount > 0 ? ` (${unverifiedCount})` : ''}
  </SelectItem>
  </SelectContent>
  </Select>
@@ -1056,7 +1040,7 @@ function UsersPage() {
  {hasActiveFilters && (
  <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 text-xs">
  <X className="h-3 w-3" />
- Clear all
+ {t('users.clearAll')}
  </Button>
  )}
  </div>
@@ -1072,30 +1056,30 @@ function UsersPage() {
  <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
  <div className="flex items-center gap-3">
  <span className="text-sm font-medium text-foreground">
- {selectedIds.length} selected
+ {t('users.selectedCount', { count: selectedIds.length })}
  </span>
  <button
  onClick={() => setSelectedIds([])}
  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
  >
- Clear
+ {t('users.clearSelection')}
  </button>
  </div>
  <div className="flex items-center gap-1.5">
- <Button variant="outline" size="sm" onClick={() => handleBulkBan(selectedIds, `${selectedIds.length} users`)} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20">
- <Ban className="h-3 w-3" /> Ban
+ <Button variant="outline" size="sm" onClick={() => handleBulkBan(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20">
+ <Ban className="h-3 w-3" /> {t('users.ban')}
  </Button>
- <Button variant="outline" size="sm" onClick={() => handleBulkUnban(selectedIds, `${selectedIds.length} users`)} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20">
- <CheckCircle className="h-3 w-3" /> Unban
+ <Button variant="outline" size="sm" onClick={() => handleBulkUnban(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20">
+ <CheckCircle className="h-3 w-3" /> {t('users.unban')}
  </Button>
  {selectedIds.some((id) => !users.find((u) => u.id === id)?.emailVerified) && (
  <Button variant="outline" size="sm" onClick={() => handleBulkVerifyEmails(selectedIds)} disabled={verifyEmailMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20">
- <MailCheck className="h-3 w-3" /> Verify Emails
+ <MailCheck className="h-3 w-3" /> {t('users.verifyEmails')}
  </Button>
  )}
  <div className="mx-1 h-4 w-px bg-border" />
- <Button variant="destructive" size="sm" onClick={() => handleBulkDelete(selectedIds, `${selectedIds.length} users`)} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs">
- <Trash2 className="h-3 w-3" /> Delete
+ <Button variant="destructive" size="sm" onClick={() => handleBulkDelete(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs">
+ <Trash2 className="h-3 w-3" /> {t('common:actions.delete')}
  </Button>
  </div>
  </div>
@@ -1128,7 +1112,7 @@ function UsersPage() {
  className="h-4 w-4 rounded border-border/40 bg-card text-primary-600"
  />
  <span className="text-xs font-medium text-muted-foreground">
- Select all
+ {t('users.selectAll')}
  </span>
  </label>
  </div>
@@ -1174,7 +1158,7 @@ function UsersPage() {
  {user.banned ? (
  <Badge variant="destructive" className="gap-1 text-[11px]">
  <Ban className="h-2.5 w-2.5" />
- Banned
+ {t('users.statusBanned')}
  </Badge>
  ) : (
  <Badge variant="success" className="gap-1 text-[11px]">
@@ -1182,7 +1166,7 @@ function UsersPage() {
  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
  </span>
- Active
+ {t('users.statusActive')}
  </Badge>
  )}
  </div>
@@ -1201,24 +1185,24 @@ function UsersPage() {
  </span>
  )}
  <span className="hidden md:inline">
- Created {new Date(user.createdAt).toLocaleDateString()}
+ {t('users.createdOn', { date: formatDate(user.createdAt) })}
  </span>
  {user.twoFactorEnabled && (
  <span className="hidden items-center gap-1 lg:flex">
  <ShieldCheck className="h-3 w-3 text-success" />
- 2FA
+ {t('users.twoFactorShort')}
  </span>
  )}
  {!user.emailVerified && (
  <span className="hidden items-center gap-1 lg:flex text-warning">
  <MailCheck className="h-3 w-3" />
- Unverified
+ {t('users.statusUnverified')}
  </span>
  )}
  {(user.passkeys?.length ?? 0) > 0 && (
  <span className="hidden items-center gap-1 lg:flex">
  <Fingerprint className="h-3 w-3 text-success" />
- {(user.passkeys?.length ?? 0)} key{(user.passkeys?.length ?? 0) !== 1 ? 's' : ''}
+ {t('users.keyCount', { count: user.passkeys?.length ?? 0 })}
  </span>
  )}
  </div>
@@ -1231,7 +1215,7 @@ function UsersPage() {
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30"
  onClick={() => handleBulkUnban([user.id], user.username)}
  disabled={banMutation.isPending || unbanMutation.isPending}
- title="Unban"
+ title={t('users.unban')}
  >
  <CheckCircle className="h-3.5 w-3.5" />
  </button>
@@ -1240,7 +1224,7 @@ function UsersPage() {
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={() => handleBulkBan([user.id], user.username)}
  disabled={banMutation.isPending || unbanMutation.isPending}
- title="Ban"
+ title={t('users.ban')}
  >
  <Ban className="h-3.5 w-3.5" />
  </button>
@@ -1250,7 +1234,7 @@ function UsersPage() {
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30"
  onClick={() => verifyEmailMutation.mutate(user.id)}
  disabled={verifyEmailMutation.isPending}
- title="Verify email"
+ title={t('users.verifyEmailAction')}
  >
  <MailCheck className="h-3.5 w-3.5" />
  </button>
@@ -1259,7 +1243,7 @@ function UsersPage() {
  <button
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
  onClick={(e) => { e.stopPropagation(); startView(user); }}
- title="View details"
+ title={t('users.viewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
@@ -1267,7 +1251,7 @@ function UsersPage() {
  <DropdownMenuTrigger asChild>
  <button
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
- title="More"
+ title={t('users.more')}
  onClick={(e) => e.stopPropagation()}
  >
  <MoreHorizontal className="h-3.5 w-3.5" />
@@ -1279,7 +1263,7 @@ function UsersPage() {
  className="gap-2 text-xs"
  >
  <Eye className="h-3.5 w-3.5" />
- View
+ {t('users.view')}
  </DropdownMenuItem>
  <DropdownMenuItem
  onClick={() => handleEditUser(user)}
@@ -1287,7 +1271,7 @@ function UsersPage() {
  className="gap-2 text-xs"
  >
  <Pencil className="h-3.5 w-3.5" />
- Edit
+ {t('common:actions.edit')}
  </DropdownMenuItem>
  <DropdownMenuSeparator />
  {user.banned ? (
@@ -1297,7 +1281,7 @@ function UsersPage() {
  className="gap-2 text-xs text-success"
  >
  <CheckCircle className="h-3.5 w-3.5" />
- Unban
+ {t('users.unban')}
  </DropdownMenuItem>
  ) : (
  <DropdownMenuItem
@@ -1306,7 +1290,7 @@ function UsersPage() {
  className="gap-2 text-xs text-destructive"
  >
  <Ban className="h-3.5 w-3.5" />
- Ban
+ {t('users.ban')}
  </DropdownMenuItem>
  )}
  {!user.emailVerified && (
@@ -1316,7 +1300,7 @@ function UsersPage() {
  className="gap-2 text-xs text-success"
  >
  <MailCheck className="h-3.5 w-3.5" />
- Verify Email
+ {t('users.verifyEmailMenuItem')}
  </DropdownMenuItem>
  )}
  <DropdownMenuSeparator />
@@ -1326,7 +1310,7 @@ function UsersPage() {
  className="gap-2 text-xs text-destructive"
  >
  <Trash2 className="h-3.5 w-3.5" />
- Delete
+ {t('common:actions.delete')}
  </DropdownMenuItem>
  </DropdownMenuContent>
  </DropdownMenu>
@@ -1350,18 +1334,18 @@ function UsersPage() {
  ) : (
  <div className="p-6">
  <TabEmptyState
- title={search.trim() || hasActiveFilters ? 'No users found' : 'No users'}
- description={search.trim() || hasActiveFilters ? 'Try adjusting your search or filters.' : 'Create a user account to grant dashboard access.'}
+ title={search.trim() || hasActiveFilters ? t('users.emptyFilteredTitle') : t('users.emptyTitle')}
+ description={search.trim() || hasActiveFilters ? t('users.emptyFilteredDescription') : t('users.emptyDescription')}
  action={
  hasActiveFilters ? (
  <Button variant="outline" size="sm" onClick={clearFilters}>
  <X className="mr-1.5 h-3.5 w-3.5" />
- Clear filters
+ {t('users.clearFilters')}
  </Button>
  ) : (
  <Button size="sm" onClick={() => { resetCreateForm(); setIsCreateOpen(true); }} className="gap-1.5">
  <UserPlus className="h-3.5 w-3.5" />
- Create user
+ {t('users.createTitle')}
  </Button>
  )
  }
@@ -1389,11 +1373,11 @@ function UsersPage() {
  ? 'border-warning/20 bg-warning/10 text-warning'
  : 'border-primary/20 bg-primary/10 text-primary'}
  >
- <DialogTitle>{editingUserId ? 'Edit user' : 'Create user'}</DialogTitle>
+ <DialogTitle>{editingUserId ? t('users.editTitle') : t('users.createTitle')}</DialogTitle>
  <DialogDescription>
  {editingUserId
- ? editingUser ? `${editingUser.username} · ${editingUser.email}` : 'Update user details and access.'
- : 'Set up a new account with roles and server access.'}
+ ? editingUser ? `${editingUser.username} · ${editingUser.email}` : t('users.editDescription')
+ : t('users.createDescription')}
  </DialogDescription>
  </DialogHeader>
 
@@ -1414,12 +1398,12 @@ function UsersPage() {
  className="space-y-5"
  >
  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
- Account credentials
+ {t('users.accountCredentials')}
  </div>
  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
  <label className="block space-y-1.5">
  <span className="text-xs font-medium text-muted-foreground">
- Email <span className="text-destructive">*</span>
+ {t('users.emailLabel')} <span className="text-destructive">*</span>
  </span>
  <Input
  type="email"
@@ -1430,7 +1414,7 @@ function UsersPage() {
  </label>
  <label className="block space-y-1.5">
  <span className="text-xs font-medium text-muted-foreground">
- Username <span className="text-destructive">*</span>
+ {t('users.usernameLabel')} <span className="text-destructive">*</span>
  </span>
  <Input
  value={editingUserId ? editUsername : createUsername}
@@ -1440,7 +1424,7 @@ function UsersPage() {
  </label>
  <label className="block space-y-1.5">
  <span className="text-xs font-medium text-muted-foreground">
- {editingUserId ? 'New password (leave blank to keep)' : 'Password (min 8 chars)'}
+ {editingUserId ? t('users.newPasswordLabel') : t('users.passwordLabel')}
  {!editingUserId && <span className="text-destructive"> *</span>}
  </span>
  <Input
@@ -1448,7 +1432,7 @@ function UsersPage() {
  autoComplete={editingUserId ? 'current-password' : 'new-password'}
  value={editingUserId ? editPassword : createPassword}
  onChange={(e) => editingUserId ? setEditPassword(e.target.value) : setCreatePassword(e.target.value)}
- placeholder={editingUserId ? 'Leave blank to keep current' : '********'}
+ placeholder={editingUserId ? t('users.leaveBlankPlaceholder') : '********'}
  />
  </label>
  </div>
@@ -1458,15 +1442,15 @@ function UsersPage() {
  <div className="flex flex-wrap gap-2">
  <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${createEmail.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
  {createEmail.trim() ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
- Email set
+ {t('users.emailSet')}
  </div>
  <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${createUsername.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
  {createUsername.trim() ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
- Username set
+ {t('users.usernameSet')}
  </div>
  <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${createPassword.trim().length >= 8 ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
  {createPassword.trim().length >= 8 ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
- 8+ characters
+ {t('users.characters8')}
  </div>
  </div>
  )}
@@ -1484,7 +1468,7 @@ function UsersPage() {
  <div className="flex items-center justify-between mb-3">
  <div className="flex items-center gap-2">
  <Shield className="h-4 w-4 text-primary" />
- <span className="text-sm font-semibold text-foreground">Roles</span>
+ <span className="text-sm font-semibold text-foreground">{t('users.rolesHeading')}</span>
  {(editingUserId ? editRoleIds : createRoleIds).length > 0 && (
  <Badge variant="default" className="tabular-nums text-[10px]">
  {(editingUserId ? editRoleIds : createRoleIds).length}
@@ -1496,7 +1480,7 @@ function UsersPage() {
  <Input
  value={editingUserId ? editRoleSearch : roleSearch}
  onChange={(e) => editingUserId ? setEditRoleSearch(e.target.value) : setRoleSearch(e.target.value)}
- placeholder="Search roles…"
+ placeholder={t('users.searchRoles')}
  className="h-8 pl-8 text-xs"
  />
  </div>
@@ -1514,7 +1498,7 @@ function UsersPage() {
  />
  ))}
  {(editingUserId ? filteredEditRoles : filteredModalRoles).length === 0 && (
- <span className="text-xs text-muted-foreground italic">No roles match</span>
+ <span className="text-xs text-muted-foreground italic">{t('users.noRolesMatch')}</span>
  )}
  </div>
  </div>
@@ -1524,7 +1508,7 @@ function UsersPage() {
  <div className="flex items-center justify-between mb-3">
  <div className="flex items-center gap-2">
  <Server className="h-4 w-4 text-primary" />
- <span className="text-sm font-semibold text-foreground">Server Access</span>
+ <span className="text-sm font-semibold text-foreground">{t('users.serverAccess')}</span>
  {(editingUserId ? editServerIds : createServerIds).length > 0 && (
  <Badge className="tabular-nums text-[10px] border-primary/30 bg-primary/10 text-primary">
  {(editingUserId ? editServerIds : createServerIds).length}
@@ -1536,7 +1520,7 @@ function UsersPage() {
  <Input
  value={editingUserId ? editServerSearch : serverSearch}
  onChange={(e) => editingUserId ? setEditServerSearch(e.target.value) : setServerSearch(e.target.value)}
- placeholder="Search servers…"
+ placeholder={t('users.searchServers')}
  className="h-8 pl-8 text-xs"
  />
  </div>
@@ -1554,7 +1538,7 @@ function UsersPage() {
  />
  ))}
  {(editingUserId ? filteredEditServers : filteredModalServers).length === 0 && (
- <span className="text-xs text-muted-foreground italic">No servers match</span>
+ <span className="text-xs text-muted-foreground italic">{t('users.noServersMatch')}</span>
  )}
  </div>
  </div>
@@ -1594,14 +1578,14 @@ function UsersPage() {
 
  <DialogFooter className="sm:justify-between">
  <div className="text-xs text-muted-foreground">
- {wizardStep === 0 && !editingUserId && 'All fields are required'}
- {wizardStep === 0 && editingUserId && 'Leave password blank to keep current'}
+ {wizardStep === 0 && !editingUserId && t('users.allFieldsRequired')}
+ {wizardStep === 0 && editingUserId && t('users.leavePasswordBlank')}
  </div>
  <div className="flex items-center gap-2">
  {wizardStep > 0 && (
  <Button variant="outline" size="sm" onClick={() => goToStep(wizardStep - 1)} className="gap-1">
  <ChevronLeft className="h-3.5 w-3.5" />
- Back
+ {t('common:actions.back')}
  </Button>
  )}
  {wizardStep < currentSteps.length - 1 && (
@@ -1611,7 +1595,7 @@ function UsersPage() {
  disabled={!canNavigateStep[wizardStep + 1]}
  className="gap-1"
  >
- Next
+ {t('common:actions.next')}
  <ChevronRight className="h-3.5 w-3.5" />
  </Button>
  )}
@@ -1629,14 +1613,14 @@ function UsersPage() {
  className="gap-1"
  >
  {createMutation.isPending || updateMutation.isPending
- ? 'Saving…'
+ ? t('saving')
  : editingUserId
- ? 'Save changes'
- : 'Create user'}
+ ? t('saveChanges')
+ : t('users.createTitle')}
  </Button>
  )}
  <Button variant="ghost" size="sm" onClick={() => { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); }}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  </div>
  </DialogFooter>
@@ -1657,8 +1641,8 @@ function UsersPage() {
  ? 'border-destructive/20 bg-destructive/10 text-destructive'
  : 'border-primary/20 bg-primary/10 text-primary'}
  >
- <DialogTitle>{viewingUser?.username ?? 'User details'}</DialogTitle>
- <DialogDescription>{viewingUser?.email ?? 'Account details and access.'}</DialogDescription>
+ <DialogTitle>{viewingUser?.username ?? t('users.viewTitle')}</DialogTitle>
+ <DialogDescription>{viewingUser?.email ?? t('users.viewDescription')}</DialogDescription>
  </DialogHeader>
 
  <DialogBody className="space-y-4">
@@ -1667,11 +1651,12 @@ function UsersPage() {
  <div className="flex flex-wrap items-center gap-2">
  {viewingUser.banned ? (
  <Badge variant="destructive" className="gap-1 text-[11px]">
- <Ban className="h-2.5 w-2.5" /> Banned
+ <Ban className="h-2.5 w-2.5" />
+ {t('users.statusBanned')}
  </Badge>
  ) : (
  <Badge variant="success" className="gap-1 text-[11px]">
- <CheckCircle className="h-2.5 w-2.5" /> Active
+ <CheckCircle className="h-2.5 w-2.5" /> {t('users.statusActive')}
  </Badge>
  )}
  </div>
@@ -1679,38 +1664,38 @@ function UsersPage() {
  <div className="flex flex-wrap gap-2 md:gap-3">
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
  <Shield className="h-3 w-3 text-primary" />
- <span className="text-muted-foreground">Roles</span>
+ <span className="text-muted-foreground">{t('users.rolesHeading')}</span>
  <span className="font-semibold tabular-nums text-foreground">{viewingUser.roles.length}</span>
  </div>
  {viewingUser.twoFactorEnabled && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
  <ShieldCheck className="h-3 w-3 text-success" />
- <span className="text-success">2FA Enabled</span>
+ <span className="text-success">{t('users.twoFactorEnabled')}</span>
  </div>
  )}
  {(viewingUser.passkeys?.length ?? 0) > 0 && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
  <Fingerprint className="h-3 w-3 text-primary" />
- <span className="text-muted-foreground">Passkeys</span>
+ <span className="text-muted-foreground">{t('users.passkeys')}</span>
  <span className="font-semibold tabular-nums text-foreground">{viewingUser.passkeys?.length ?? 0}</span>
  </div>
  )}
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
  <Clock className="h-3 w-3 text-muted-foreground" />
- <span className="text-muted-foreground">Created</span>
- <span className="font-medium text-foreground">{new Date(viewingUser.createdAt).toLocaleDateString()}</span>
+ <span className="text-muted-foreground">{t('created')}</span>
+ <span className="font-medium text-foreground">{formatDate(viewingUser.createdAt)}</span>
  </div>
  {viewingUser.lastSuccessfulLogin && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
  <Clock className="h-3 w-3 text-muted-foreground" />
- <span className="text-muted-foreground">Last login</span>
- <span className="font-medium text-foreground">{new Date(viewingUser.lastSuccessfulLogin).toLocaleDateString()}</span>
+ <span className="text-muted-foreground">{t('users.lastLogin')}</span>
+ <span className="font-medium text-foreground">{formatDate(viewingUser.lastSuccessfulLogin)}</span>
  </div>
  )}
  {viewingUser.lastSignInIp && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
  <Globe className="h-3 w-3 text-muted-foreground" />
- <span className="text-muted-foreground">Last IP</span>
+ <span className="text-muted-foreground">{t('users.lastIp')}</span>
  <span className="font-mono font-medium text-foreground">{viewingUser.lastSignInIp}</span>
  </div>
  )}
@@ -1720,7 +1705,7 @@ function UsersPage() {
  <div className="rounded-xl border border-border/30 p-4">
  <div className="flex items-center gap-2 mb-3">
  <Shield className="h-4 w-4 text-primary" />
- <span className="text-sm font-semibold text-foreground">Roles</span>
+ <span className="text-sm font-semibold text-foreground">{t('users.rolesHeading')}</span>
  </div>
  <div className="flex flex-wrap gap-2">
  {viewingUser.roles.map((role) => (
@@ -1739,32 +1724,19 @@ function UsersPage() {
  const has2fa = !!(viewingUser.twoFactor?.length);
  const hasContent = accounts.length > 0 || passkeys.length > 0 || has2fa;
  if (!hasContent) return null;
-
- const providerLabel = (id: string) => {
- const labels: Record<string, string> = {
- credential: 'Email & Password',
- whmcs: 'WHMCS',
- paymenter: 'Paymenter',
- google: 'Google',
- github: 'GitHub',
- discord: 'Discord',
- };
- return labels[id] ?? id;
- };
-
  return (
  <div className="rounded-xl border border-border/30 p-4 space-y-3">
  <div className="flex items-center gap-2 mb-1">
  <Lock className="h-4 w-4 text-muted-foreground" />
- <span className="text-sm font-semibold text-foreground">Authentication</span>
+ <span className="text-sm font-semibold text-foreground">{t('users.authentication')}</span>
  </div>
 
  {has2fa && (
  <div className="flex items-center gap-2 rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
  <ShieldCheck className={`h-4 w-4 ${viewingUser.twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
- <span className="text-foreground">Two-Factor Authentication</span>
+ <span className="text-foreground">{t('users.twoFactorAuth')}</span>
  <Badge variant={viewingUser.twoFactorEnabled ? 'success' : 'outline'} className="text-[10px] ml-auto">
- {viewingUser.twoFactorEnabled ? 'Enforced' : 'Configured'}
+ {viewingUser.twoFactorEnabled ? t('users.enforced') : t('users.configured')}
  </Badge>
  </div>
  )}
@@ -1773,13 +1745,13 @@ function UsersPage() {
  <div className="rounded-lg bg-surface-2/50 px-3 py-2">
  <div className="flex items-center gap-2 text-xs mb-2">
  <Fingerprint className="h-4 w-4 text-primary" />
- <span className="text-foreground">{passkeys.length} passkey{passkeys.length === 1 ? '' : 's'}</span>
+ <span className="text-foreground">{t('users.passkeyCount', { count: passkeys.length })}</span>
  </div>
  <div className="space-y-1">
  {passkeys.map((pk) => (
  <div key={pk.id} className="flex items-center justify-between text-[11px] text-muted-foreground pl-6">
- <span>{pk.name || 'Unnamed passkey'}</span>
- <span className="text-muted-foreground/60">{new Date(pk.createdAt).toLocaleDateString()}</span>
+ <span>{pk.name || t('users.unnamedPasskey')}</span>
+ <span className="text-muted-foreground/60">{formatDate(pk.createdAt)}</span>
  </div>
  ))}
  </div>
@@ -1790,7 +1762,7 @@ function UsersPage() {
  <div className="rounded-lg bg-surface-2/50 px-3 py-2">
  <div className="flex items-center gap-2 text-xs mb-2">
  <Link2 className="h-4 w-4 text-muted-foreground" />
- <span className="text-foreground">Linked accounts</span>
+ <span className="text-foreground">{t('users.linkedAccountsView')}</span>
  </div>
  <div className="space-y-1">
  {accounts.map((account) => {
@@ -1798,7 +1770,7 @@ function UsersPage() {
  return (
  <div key={account.id} className="flex items-center gap-2 text-[11px] pl-6">
  <KeyRound className={`h-3 w-3 ${isSSO ? 'text-primary' : 'text-muted-foreground'}`} />
- <span className="text-foreground">{providerLabel(account.providerId)}</span>
+ <span className="text-foreground">{providerLabel(t, account.providerId)}</span>
  {isSSO && (
  <span className="font-mono text-muted-foreground/60">{account.accountId.slice(0, 12)}…</span>
  )}
@@ -1813,9 +1785,9 @@ function UsersPage() {
  })()}
 
  <div className="space-y-1 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
- <div>User ID: <span className="font-mono">{viewingUser.id}</span></div>
+ <div>{t('users.userId')} <span className="font-mono">{viewingUser.id}</span></div>
  {viewingUser.updatedAt !== viewingUser.createdAt && (
- <div>Updated: {new Date(viewingUser.updatedAt).toLocaleDateString()} at {new Date(viewingUser.updatedAt).toLocaleTimeString()}</div>
+ <div>{t('updatedAt', { date: formatDate(viewingUser.updatedAt), time: formatTime(viewingUser.updatedAt) })}</div>
  )}
  </div>
  </>
@@ -1828,25 +1800,25 @@ function UsersPage() {
  <>
  <Button variant="outline" size="sm" onClick={() => { startView(viewingUser); handleEditUser(viewingUser); }} className="gap-1.5">
  <Pencil className="h-3.5 w-3.5" />
- Edit user
+ {t('users.editUser')}
  </Button>
  {!viewingUser.banned ? (
  <Button variant="outline" size="sm" onClick={() => setBanTargets({ userIds: [viewingUser.id], label: viewingUser.username })} disabled={banMutation.isPending} className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20">
- <Ban className="h-3.5 w-3.5" /> Ban
+ <Ban className="h-3.5 w-3.5" /> {t('users.ban')}
  </Button>
  ) : (
  <Button variant="outline" size="sm" onClick={() => handleBulkUnban([viewingUser.id], viewingUser.username)} disabled={unbanMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20">
- <CheckCircle className="h-3.5 w-3.5" /> Unban
+ <CheckCircle className="h-3.5 w-3.5" /> {t('users.unban')}
  </Button>
  )}
  <Button variant="destructive" size="sm" onClick={() => setDeletingUser({ id: viewingUser.id, username: viewingUser.username })} disabled={deleteMutation.isPending} className="gap-1.5">
- <Trash2 className="h-3.5 w-3.5" /> Delete
+ <Trash2 className="h-3.5 w-3.5" /> {t('common:actions.delete')}
  </Button>
  </>
  )}
  </div>
  <Button variant="ghost" size="sm" onClick={() => setViewingUser(null)}>
- Close
+ {t('common:actions.close')}
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -1855,29 +1827,35 @@ function UsersPage() {
  {/* ── Ban Confirmation Dialog ── */}
  <ConfirmDialog
  open={!!banTargets}
- title="Ban Users"
+ title={t('users.dialogs.banTitle')}
  message={
  <div className="space-y-3">
  <p>
- You are about to ban{' '}
- <span className="font-semibold">{banTargets?.label}</span>.
+ <Trans
+ i18nKey="users.dialogs.banMessage"
+ ns="admin-access"
+ values={{ label: banTargets?.label }}
+ components={{ bold: <span className="font-semibold" /> }}
+ >
+ You are about to ban {'{{label}}'}.
+ </Trans>
  </p>
  <label className="block space-y-1">
  <span className="text-sm text-muted-foreground">
- Reason (optional)
+ {t('users.dialogs.reasonLabel')}
  </span>
  <input
  className="w-full rounded-lg border border-border/30 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
  value={banReason}
  onChange={(event) => setBanReason(event.target.value)}
- placeholder="e.g., Terms of service violation"
+ placeholder={t('users.dialogs.reasonPlaceholder')}
  onClick={(e) => e.stopPropagation()}
  />
  </label>
  </div>
  }
- confirmText="Ban"
- cancelText="Cancel"
+ confirmText={t('users.ban')}
+ cancelText={t('common:actions.cancel')}
  onConfirm={() =>
  banTargets &&
  banMutation.mutate({
@@ -1896,15 +1874,21 @@ function UsersPage() {
  {/* ── Unban Confirmation Dialog ── */}
  <ConfirmDialog
  open={!!unbanTargets}
- title="Unban Users"
+ title={t('users.dialogs.unbanTitle')}
  message={
  <p>
- You are about to unban{' '}
- <span className="font-semibold">{unbanTargets?.label}</span>.
+ <Trans
+ i18nKey="users.dialogs.unbanMessage"
+ ns="admin-access"
+ values={{ label: unbanTargets?.label }}
+ components={{ bold: <span className="font-semibold" /> }}
+ >
+ You are about to unban {'{{label}}'}.
+ </Trans>
  </p>
  }
- confirmText="Unban"
- cancelText="Cancel"
+ confirmText={t('users.unban')}
+ cancelText={t('common:actions.cancel')}
  onConfirm={() =>
  unbanTargets && unbanMutation.mutate(unbanTargets.userIds)
  }
@@ -1916,19 +1900,23 @@ function UsersPage() {
  {/* ── Delete Confirmation Dialog ── */}
  <ConfirmDialog
  open={!!deletingUser}
- title="Delete user?"
+ title={t('users.dialogs.deleteTitle')}
  message={
  <div className="space-y-2">
  <p>
- Are you sure you want to delete{' '}
- <span className="font-semibold">"{deletingUser?.username}"</span>?
- This action cannot be undone and all associated data will be
- removed.
+ <Trans
+ i18nKey="users.dialogs.deleteMessage"
+ ns="admin-access"
+ values={{ username: deletingUser?.username }}
+ components={{ bold: <span className="font-semibold" /> }}
+ >
+ Are you sure you want to delete {'"{{username}}"'}? This action cannot be undone and all associated data will be removed.
+ </Trans>
  </p>
  </div>
  }
- confirmText="Delete"
- cancelText="Cancel"
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={deleteMutation.isPending || bulkDeleteMutation.isPending}
  onConfirm={() => {
@@ -1951,20 +1939,27 @@ function UsersPage() {
  {/* ── Wipe Passkeys Confirmation Dialog ── */}
  <ConfirmDialog
  open={!!wipePasskeyTarget}
- title="Wipe passkeys?"
+ title={t('users.dialogs.wipePasskeysTitle')}
  message={
  <div className="space-y-2">
  <p>
- Remove all <span className="font-semibold">{wipePasskeyTarget?.count} passkey{wipePasskeyTarget?.count === 1 ? '' : 's'}</span> from{' '}
- <span className="font-semibold">{wipePasskeyTarget?.username}</span>?
+ <Trans
+ i18nKey="users.dialogs.wipePasskeysMessage"
+ ns="admin-access"
+ count={wipePasskeyTarget?.count ?? 0}
+ values={{ username: wipePasskeyTarget?.username }}
+ components={{ bold: <span className="font-semibold" /> }}
+ >
+ Remove all {'{{count}}'} passkeys from {'{{username}}'}?
+ </Trans>
  </p>
  <p className="text-xs text-muted-foreground">
- The user will no longer be able to sign in with passkeys. This cannot be undone.
+ {t('users.dialogs.wipePasskeysWarning')}
  </p>
  </div>
  }
- confirmText="Wipe passkeys"
- cancelText="Cancel"
+ confirmText={t('users.dialogs.wipePasskeysConfirm')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={wipePasskeysMutation.isPending}
  onConfirm={() => wipePasskeyTarget && wipePasskeysMutation.mutate(wipePasskeyTarget.id)}
@@ -1974,20 +1969,26 @@ function UsersPage() {
  {/* ── Wipe 2FA Confirmation Dialog ── */}
  <ConfirmDialog
  open={!!wipe2faTarget}
- title="Wipe 2FA?"
+ title={t('users.dialogs.wipeTwoFactorTitle')}
  message={
  <div className="space-y-2">
  <p>
- Remove two-factor authentication from{' '}
- <span className="font-semibold">{wipe2faTarget?.username}</span>?
+ <Trans
+ i18nKey="users.dialogs.wipeTwoFactorMessage"
+ ns="admin-access"
+ values={{ username: wipe2faTarget?.username }}
+ components={{ bold: <span className="font-semibold" /> }}
+ >
+ Remove two-factor authentication from {'{{username}}'}?
+ </Trans>
  </p>
  <p className="text-xs text-muted-foreground">
- The user's authenticator app and backup codes will be removed. 2FA enforcement will also be disabled.
+ {t('users.dialogs.wipeTwoFactorWarning')}
  </p>
  </div>
  }
- confirmText="Wipe 2FA"
- cancelText="Cancel"
+ confirmText={t('users.dialogs.wipeTwoFactorConfirm')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={wipe2faMutation.isPending}
  onConfirm={() => wipe2faTarget && wipe2faMutation.mutate(wipe2faTarget.id)}
@@ -1997,23 +1998,37 @@ function UsersPage() {
  {/* ── Enforce/Unenforce 2FA Confirmation Dialog ── */}
  <ConfirmDialog
  open={!!enforce2faTarget}
- title={enforce2faTarget?.enforce ? 'Enforce 2FA?' : 'Disable 2FA enforcement?'}
+ title={enforce2faTarget?.enforce ? t('users.dialogs.enforceTitle') : t('users.dialogs.disableEnforcementTitle')}
  message={
  <div className="space-y-2">
  <p>
  {enforce2faTarget?.enforce
- ? <>Enforce 2FA for <span className="font-semibold">{enforce2faTarget?.username}</span>?</>
- : <>Disable 2FA enforcement for <span className="font-semibold">{enforce2faTarget?.username}</span>?</>}
+ ? <Trans
+ i18nKey="users.dialogs.enforceMessage"
+ ns="admin-access"
+ values={{ username: enforce2faTarget?.username }}
+ components={{ bold: <span className="font-semibold" /> }}
+ >
+ Enforce 2FA for {'{{username}}'}?
+ </Trans>
+ : <Trans
+ i18nKey="users.dialogs.disableEnforcementMessage"
+ ns="admin-access"
+ values={{ username: enforce2faTarget?.username }}
+ components={{ bold: <span className="font-semibold" /> }}
+ >
+ Disable 2FA enforcement for {'{{username}}'}?
+ </Trans>}
  </p>
  <p className="text-xs text-muted-foreground">
  {enforce2faTarget?.enforce
- ? 'The user will be required to use 2FA on every sign-in.'
- : 'The user will no longer be required to use 2FA, but their authenticator will remain configured.'}
+ ? t('users.dialogs.enforceWarning')
+ : t('users.dialogs.disableEnforcementWarning')}
  </p>
  </div>
  }
- confirmText={enforce2faTarget?.enforce ? 'Enforce' : 'Disable'}
- cancelText="Cancel"
+ confirmText={enforce2faTarget?.enforce ? t('users.dialogs.enforceConfirm') : t('users.dialogs.disableConfirm')}
+ cancelText={t('common:actions.cancel')}
  variant="warning"
  loading={enforce2faMutation.isPending}
  onConfirm={() =>
@@ -2029,20 +2044,26 @@ function UsersPage() {
  {/* ── Unlink SSO Confirmation Dialog ── */}
  <ConfirmDialog
  open={!!unlinkTarget}
- title="Unlink SSO account?"
+ title={t('users.dialogs.unlinkTitle')}
  message={
  <div className="space-y-2">
  <p>
- Unlink <span className="font-semibold">{unlinkTarget?.providerId}</span> from{' '}
- <span className="font-semibold">{unlinkTarget?.username}</span>?
+ <Trans
+ i18nKey="users.dialogs.unlinkMessage"
+ ns="admin-access"
+ values={{ provider: unlinkTarget?.providerId, username: unlinkTarget?.username }}
+ components={{ bold: <span className="font-semibold" /> }}
+ >
+ Unlink {'{{provider}}'} from {'{{username}}'}?
+ </Trans>
  </p>
  <p className="text-xs text-muted-foreground">
- The user will no longer be able to sign in with this provider. Make sure they have another way to log in.
+ {t('users.dialogs.unlinkWarning')}
  </p>
  </div>
  }
- confirmText="Unlink"
- cancelText="Cancel"
+ confirmText={t('users.dialogs.unlinkConfirm')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={unlinkAccountMutation.isPending}
  onConfirm={() =>

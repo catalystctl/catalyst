@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -8,6 +10,8 @@ import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generat
 import { THEME_PRESETS } from '../../utils/themePresets';
 import { buildSharedTheme, parseSharedTheme, contrastRatio } from '../../utils/themeSharing';
 import { adminApi } from '../../services/api/admin';
+import { notifyError } from '../../utils/notify';
+import { formatNumber } from '../../i18n/format';
 import { useThemeStore, defaultThemeColors } from '../../stores/themeStore';
 import type { ThemeColors } from '../../services/api/theme';
 import TabHeader from '../../components/servers/tabs/TabHeader';
@@ -48,20 +52,33 @@ type TabId = 'presets' | 'brand' | 'palette' | 'colors' | 'surfaces' | 'layout' 
 
 interface Tab {
  id: TabId;
- label: string;
  icon: React.ComponentType<{ className?: string }>;
 }
 
 const TABS: Tab[] = [
- { id: 'presets', label: 'Presets', icon: Sparkles },
- { id: 'brand', label: 'Brand', icon: Globe },
- { id: 'palette', label: 'Palette', icon: Wand2 },
- { id: 'colors', label: 'Colors', icon: Palette },
- { id: 'surfaces', label: 'Surfaces', icon: Layers },
- { id: 'layout', label: 'Layout', icon: Layout },
- { id: 'manage', label: 'Share', icon: Copy },
- { id: 'advanced', label: 'Advanced', icon: Code2 },
+ { id: 'presets', icon: Sparkles },
+ { id: 'brand', icon: Globe },
+ { id: 'palette', icon: Wand2 },
+ { id: 'colors', icon: Palette },
+ { id: 'surfaces', icon: Layers },
+ { id: 'layout', icon: Layout },
+ { id: 'manage', icon: Copy },
+ { id: 'advanced', icon: Code2 },
 ];
+
+/** Tab label for a settings section. */
+function tabLabel(t: TFunction<'admin-system'>, id: TabId): string {
+ switch (id) {
+ case 'presets': return t('theme.presets');
+ case 'brand': return t('theme.brand');
+ case 'palette': return t('theme.palette');
+ case 'colors': return t('theme.colors');
+ case 'surfaces': return t('theme.surfaces');
+ case 'layout': return t('theme.layout');
+ case 'manage': return t('theme.manage');
+ case 'advanced': return t('theme.advanced');
+ }
+}
 
 // ─── Color Picker ───
 
@@ -182,8 +199,8 @@ const EMPTY_OIDC_CONFIGS: Record<
  string,
  { clientId: string; clientSecret: string; discoveryUrl: string; source: string }
 > = {};
-
 function OidcProviderSection() {
+ const { t } = useTranslation('admin-system');
  const { data: serverConfigs = EMPTY_OIDC_CONFIGS, isLoading } = useOidcConfig();
  const [configs, setConfigs] = useState<
  Record<string, { clientId: string; clientSecret: string; discoveryUrl: string; source: string }>
@@ -209,14 +226,14 @@ function OidcProviderSection() {
  const oidcMutation = useMutation({
  mutationFn: (localConfigs: typeof configs) => adminApi.updateOidcConfig(localConfigs),
  onSuccess: () => {
- toast.success('OAuth configuration saved. A server restart may be required.');
+ toast.success(t('theme.toastOauthSaved'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminThemeSettings() });
  queryClient.invalidateQueries({ queryKey: qk.adminOidcConfig() });
  },
  onError: (err: any) => {
- toast.error(err.response?.data?.error || 'Failed to save OAuth configuration');
+ notifyError(err);
  },
  });
 
@@ -224,7 +241,7 @@ function OidcProviderSection() {
  return (
  <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
  <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-transparent" />
- Loading OAuth configuration…
+ {t('theme.oauthLoading')}
  </div>
  );
  }
@@ -253,37 +270,37 @@ function OidcProviderSection() {
  : 'border-border/60 bg-surface-2 text-foreground/80'
  }`}
  >
- {isConfigured ? `Configured (${cfg.source})` : 'Not configured'}
+ {isConfigured ? t('theme.configured', { source: cfg.source }) : t('theme.notConfigured')}
  </span>
  </div>
 
  <div className="grid gap-3 sm:grid-cols-3">
  <InputField
- label="Client ID"
+ label={t('theme.clientId')}
  value={cfg.clientId}
  onChange={(v) => updateField(provider, 'clientId', v)}
  placeholder={`${provider.toUpperCase()}_OIDC_CLIENT_ID`}
  />
  <div>
  <InputField
- label="Client Secret"
+ label={t('theme.clientSecret')}
  type="password"
  value={cfg.clientSecret}
  onChange={(v) => updateField(provider, 'clientSecret', v)}
  placeholder={
  cfg.clientSecret
- ? 'Leave unchanged to keep current secret'
+ ? t('theme.clientSecretPlaceholder')
  : `${provider.toUpperCase()}_OIDC_CLIENT_SECRET`
  }
  />
  {cfg.source === 'database' && cfg.clientSecret && (
  <p className="mt-1 text-[10px] text-muted-foreground">
- Secret is masked. Enter a new value to update.
+ {t('theme.clientSecretMasked')}
  </p>
  )}
  </div>
  <InputField
- label="Discovery URL"
+ label={t('theme.discoveryUrl')}
  type="url"
  value={cfg.discoveryUrl}
  onChange={(v) => updateField(provider, 'discoveryUrl', v)}
@@ -304,17 +321,17 @@ function OidcProviderSection() {
  {oidcMutation.isPending ? (
  <>
  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
- Saving…
+ {t('saving')}
  </>
  ) : (
  <>
  <Save className="h-3.5 w-3.5" />
- Save OAuth Config
+ {t('theme.saveOAuthConfig')}
  </>
  )}
  </button>
  <p className="text-[11px] text-muted-foreground">
- Values stored in the database override environment variables. May require server restart.
+ {t('theme.oauthEnvOverride')}
  </p>
  </div>
  </div>
@@ -359,6 +376,7 @@ function PanelSectionHeader({
  description: string;
  onReset?: () => void;
 }) {
+ const { t } = useTranslation('admin-system');
  return (
  <div className="mb-5 flex items-start justify-between">
  <div>
@@ -372,7 +390,7 @@ function PanelSectionHeader({
  className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <RotateCcw className="h-3 w-3" />
- Reset
+ {t('common:actions.reset')}
  </button>
  )}
  </div>
@@ -417,8 +435,8 @@ function ElevationPreview({
 }
 
 // ─── Main Page ───
-
 function ThemeSettingsPage() {
+ const { t } = useTranslation('admin-system');
  const { data: settings, isLoading } = useThemeSettings();
  const applyThemeSettings = useThemeStore((s) => s.setThemeSettings);
  const applyTheme = useThemeStore((s) => s.applyTheme);
@@ -491,7 +509,7 @@ function ThemeSettingsPage() {
  setAccentColor(acc);
  setThemeColors(tc);
  pushPreview({ primaryColor: p, accentColor: acc, themeColors: tc });
- toast.success('Palette applied — review and save when ready');
+ toast.success(t('theme.toastPaletteApplied'));
  };
 
  const handleApplyPreset = (presetId: string) => {
@@ -513,16 +531,16 @@ function ThemeSettingsPage() {
  accentColor: preset.accentColor,
  themeColors: merged,
  });
- toast.success(`Preset "${preset.name}" applied — review and save when ready`);
+ toast.success(t('theme.toastPresetApplied', { name: preset.name }));
  };
 
  const handleExportCopy = async () => {
  const payload = buildSharedTheme({ primaryColor, secondaryColor, accentColor, themeColors, customCss });
  try {
  await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
- toast.success('Theme JSON copied to clipboard');
+ toast.success(t('theme.toastThemeJsonCopied'));
  } catch {
- toast.error('Could not copy — your browser blocked clipboard access');
+ toast.error(t('theme.toastCopyFailed'));
  }
  };
 
@@ -543,7 +561,7 @@ function ThemeSettingsPage() {
  try {
  parsed = JSON.parse(importText);
  } catch {
- setImportError('That is not valid JSON.');
+ setImportError(t('theme.invalidJson'));
  return;
  }
  const result = parseSharedTheme(parsed);
@@ -566,7 +584,7 @@ function ThemeSettingsPage() {
  accentColor: data.accentColor,
  themeColors: merged,
  });
- toast.success(data.name ? `Theme "${data.name}" imported — review and save` : 'Theme imported — review and save');
+ toast.success(data.name ? t('theme.toastThemeImportedNamed', { name: data.name }) : t('theme.toastThemeImported'));
  };
 
  // Contrast helpers for the accessibility strip (dark + light text on background).
@@ -638,7 +656,7 @@ function ThemeSettingsPage() {
  if (enabledThemes.length > 1) {
  setEnabledThemes(enabledThemes.filter((t) => t !== theme));
  } else {
- toast.error('At least one theme must be enabled');
+ toast.error(t('theme.toastAtLeastOneTheme'));
  }
  } else {
  setEnabledThemes([...enabledThemes, theme]);
@@ -664,13 +682,13 @@ function ThemeSettingsPage() {
  },
  data.customCss,
  );
- toast.success('Theme settings updated');
+ toast.success(t('theme.toastThemeUpdated'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminThemeSettings() });
  },
  onError: (error: any) => {
- toast.error(error.response?.data?.error || 'Failed to update theme settings');
+ notifyError(error);
  },
  });
 
@@ -803,31 +821,31 @@ function ThemeSettingsPage() {
 
  // ── Surface definitions ──
  const darkSurfaces: { key: keyof ThemeColors; label: string; desc: string }[] = [
- { key: 'darkBackground', label: 'Background', desc: 'Main page background' },
- { key: 'darkCard', label: 'Card', desc: 'Card & panel backgrounds' },
- { key: 'darkSurface1', label: 'Surface 1', desc: 'Elevated base layer' },
- { key: 'darkSurface2', label: 'Surface 2', desc: 'Secondary elevation' },
- { key: 'darkSurface3', label: 'Surface 3', desc: 'Tertiary elevation' },
- { key: 'darkBorder', label: 'Border', desc: 'Borders & dividers' },
- { key: 'darkInput', label: 'Input', desc: 'Input borders' },
- { key: 'darkPopover', label: 'Popover', desc: 'Menus & popovers' },
- { key: 'darkMutedBackground', label: 'Muted bg', desc: 'Muted badges & wells' },
- { key: 'darkForeground', label: 'Foreground', desc: 'Primary text' },
- { key: 'darkMuted', label: 'Muted text', desc: 'Secondary text' },
+ { key: 'darkBackground', label: t('theme.background'), desc: t('theme.backgroundDescription') },
+ { key: 'darkCard', label: t('theme.card'), desc: t('theme.cardDescription') },
+ { key: 'darkSurface1', label: t('theme.surface1'), desc: t('theme.surface1Description') },
+ { key: 'darkSurface2', label: t('theme.surface2'), desc: t('theme.surface2Description') },
+ { key: 'darkSurface3', label: t('theme.surface3'), desc: t('theme.surface3Description') },
+ { key: 'darkBorder', label: t('theme.border'), desc: t('theme.borderDescription') },
+ { key: 'darkInput', label: t('theme.input'), desc: t('theme.inputDescription') },
+ { key: 'darkPopover', label: t('theme.popover'), desc: t('theme.popoverDescription') },
+ { key: 'darkMutedBackground', label: t('theme.mutedBg'), desc: t('theme.mutedBgDescription') },
+ { key: 'darkForeground', label: t('theme.foreground'), desc: t('theme.foregroundDescription') },
+ { key: 'darkMuted', label: t('theme.mutedText'), desc: t('theme.mutedTextDescription') },
  ];
 
  const lightSurfaces: { key: keyof ThemeColors; label: string; desc: string }[] = [
- { key: 'lightBackground', label: 'Background', desc: 'Main page background' },
- { key: 'lightCard', label: 'Card', desc: 'Card & panel backgrounds' },
- { key: 'lightSurface1', label: 'Surface 1', desc: 'Elevated base layer' },
- { key: 'lightSurface2', label: 'Surface 2', desc: 'Secondary elevation' },
- { key: 'lightSurface3', label: 'Surface 3', desc: 'Tertiary elevation' },
- { key: 'lightBorder', label: 'Border', desc: 'Borders & dividers' },
- { key: 'lightInput', label: 'Input', desc: 'Input borders' },
- { key: 'lightPopover', label: 'Popover', desc: 'Menus & popovers' },
- { key: 'lightMutedBackground', label: 'Muted bg', desc: 'Muted badges & wells' },
- { key: 'lightForeground', label: 'Foreground', desc: 'Primary text' },
- { key: 'lightMuted', label: 'Muted text', desc: 'Secondary text' },
+ { key: 'lightBackground', label: t('theme.background'), desc: t('theme.backgroundDescription') },
+ { key: 'lightCard', label: t('theme.card'), desc: t('theme.cardDescription') },
+ { key: 'lightSurface1', label: t('theme.surface1'), desc: t('theme.surface1Description') },
+ { key: 'lightSurface2', label: t('theme.surface2'), desc: t('theme.surface2Description') },
+ { key: 'lightSurface3', label: t('theme.surface3'), desc: t('theme.surface3Description') },
+ { key: 'lightBorder', label: t('theme.border'), desc: t('theme.borderDescription') },
+ { key: 'lightInput', label: t('theme.input'), desc: t('theme.inputDescription') },
+ { key: 'lightPopover', label: t('theme.popover'), desc: t('theme.popoverDescription') },
+ { key: 'lightMutedBackground', label: t('theme.mutedBg'), desc: t('theme.mutedBgDescription') },
+ { key: 'lightForeground', label: t('theme.foreground'), desc: t('theme.foregroundDescription') },
+ { key: 'lightMuted', label: t('theme.mutedText'), desc: t('theme.mutedTextDescription') },
  ];
 
  // ── Loading state ──
@@ -836,7 +854,7 @@ function ThemeSettingsPage() {
  <div className="flex h-64 items-center justify-center">
  <div className="flex items-center gap-3 text-sm text-muted-foreground">
  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
- Loading theme settings…
+ {t('theme.loading')}
  </div>
  </div>
  );
@@ -846,12 +864,12 @@ function ThemeSettingsPage() {
  const renderBrandPanel = () => (
  <div className="space-y-6">
  <PanelSectionHeader
- title="Panel Identity"
- description="Customize your panel name and branding assets"
+ title={t('theme.panelIdentity')}
+ description={t('theme.panelIdentityDescription')}
  />
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
- <label className="mb-1.5 block text-xs font-medium text-foreground">Panel Name</label>
+ <label className="mb-1.5 block text-xs font-medium text-foreground">{t('theme.panelName')}</label>
  <input
  type="text"
  value={panelName}
@@ -862,7 +880,7 @@ function ThemeSettingsPage() {
  </div>
  <div />
  <div>
- <label className="mb-1.5 block text-xs font-medium text-foreground">Logo URL</label>
+ <label className="mb-1.5 block text-xs font-medium text-foreground">{t('theme.logoUrl')}</label>
  <input
  type="text"
  value={logoUrl}
@@ -871,11 +889,11 @@ function ThemeSettingsPage() {
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
  <p className="mt-1 text-[10px] text-muted-foreground">
- Leave empty for default. Recommended: 24×24px, SVG or PNG.
+ {t('theme.logoHint')}
  </p>
  </div>
  <div>
- <label className="mb-1.5 block text-xs font-medium text-foreground">Favicon URL</label>
+ <label className="mb-1.5 block text-xs font-medium text-foreground">{t('theme.faviconUrl')}</label>
  <input
  type="text"
  value={faviconUrl}
@@ -884,30 +902,30 @@ function ThemeSettingsPage() {
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
  <p className="mt-1 text-[10px] text-muted-foreground">
- Leave empty for default favicon.
+ {t('theme.faviconHint')}
  </p>
  </div>
  </div>
 
  <hr className="border-border/30" />
 
- <PanelSectionHeader title="Theme Mode" description="Default theme and which modes are available" />
+ <PanelSectionHeader title={t('theme.themeMode')} description={t('theme.themeModeDescription')} />
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
- <label className="mb-1.5 block text-xs font-medium text-foreground">Default Theme</label>
+ <label className="mb-1.5 block text-xs font-medium text-foreground">{t('theme.defaultTheme')}</label>
  <select
  value={defaultTheme}
  onChange={(e) => setDefaultTheme(e.target.value)}
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  >
- <option value="light">Light</option>
- <option value="dark">Dark</option>
- <option value="system">System</option>
+ <option value="light">{t('theme.light')}</option>
+ <option value="dark">{t('theme.dark')}</option>
+ <option value="system">{t('theme.system')}</option>
  </select>
  </div>
  <div>
  <label className="mb-1.5 block text-xs font-medium text-foreground">
- Available Themes
+ {t('theme.availableThemes')}
  </label>
  <div className="flex gap-2">
  {[
@@ -930,7 +948,7 @@ function ThemeSettingsPage() {
  className="sr-only"
  />
  <Icon className={`h-4 w-4 ${color}`} />
- {id.charAt(0).toUpperCase() + id.slice(1)}
+ {id === 'dark' ? t('theme.dark') : t('theme.light')}
  </label>
  ))}
  </div>
@@ -945,8 +963,8 @@ function ThemeSettingsPage() {
  return (
  <div className="space-y-6">
  <PanelSectionHeader
- title="Palette Studio"
- description="Pick one color and we'll generate a complete theme"
+ title={t('theme.paletteTitle')}
+ description={t('theme.paletteDescription')}
  />
 
  {/* Seed color */}
@@ -970,7 +988,7 @@ function ThemeSettingsPage() {
  </div>
  <div className="flex-1 space-y-3">
  <div>
- <label className="mb-1 block text-xs font-medium text-foreground">Seed Color</label>
+ <label className="mb-1 block text-xs font-medium text-foreground">{t('theme.seedColor')}</label>
  <div className="flex items-center gap-2">
  <input
  type="text"
@@ -994,13 +1012,13 @@ function ThemeSettingsPage() {
  )
  }
  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/30 bg-card text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
- title="Random color"
+ title={t('theme.randomColor')}
  >
  <Shuffle className="h-4 w-4" />
  </button>
  {hsl && (
  <span className="text-xs tabular-nums text-muted-foreground">
- HSL({hsl.h}°, {hsl.s}%, {hsl.l}%)
+ {t('theme.hslLabel', { h: hsl.h, s: hsl.s, l: hsl.l })}
  </span>
  )}
  </div>
@@ -1009,21 +1027,21 @@ function ThemeSettingsPage() {
  {/* Harmony modes */}
  <div>
  <label className="mb-2 block text-xs font-medium text-foreground">
- Color Harmony
+ {t('theme.colorHarmony')}
  </label>
  <div className="flex flex-wrap gap-1.5">
  {(
  [
- { id: 'auto' as const, label: 'Auto' },
- { id: 'monochromatic' as const, label: 'Mono' },
- { id: 'analogous' as const, label: 'Analogous' },
- { id: 'complementary' as const, label: 'Complementary' },
- { id: 'split-complementary' as const, label: 'Split Comp.' },
- { id: 'triadic' as const, label: 'Triadic' },
- { id: 'tetradic' as const, label: 'Tetradic' },
- { id: 'tetradic-rectangle' as const, label: 'Rectangle' },
- { id: 'diadic' as const, label: 'Diadic' },
- { id: 'neutral' as const, label: 'Neutral' },
+ { id: 'auto' as const, label: t('theme.harmonyAuto') },
+ { id: 'monochromatic' as const, label: t('theme.harmonyMono') },
+ { id: 'analogous' as const, label: t('theme.harmonyAnalogous') },
+ { id: 'complementary' as const, label: t('theme.harmonyComplementary') },
+ { id: 'split-complementary' as const, label: t('theme.harmonySplitComplementary') },
+ { id: 'triadic' as const, label: t('theme.harmonyTriadic') },
+ { id: 'tetradic' as const, label: t('theme.harmonyTetradic') },
+ { id: 'tetradic-rectangle' as const, label: t('theme.harmonyRectangle') },
+ { id: 'diadic' as const, label: t('theme.harmonyDiadic') },
+ { id: 'neutral' as const, label: t('theme.harmonyNeutral') },
  ] as const
  ).map((m) => (
  <button
@@ -1050,13 +1068,13 @@ function ThemeSettingsPage() {
  {/* Brand */}
  <div>
  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
- Brand
+ {t('theme.brand')}
  </p>
  <div className="grid grid-cols-3 gap-3">
  {[
- { label: 'Primary', color: generatedPalette.primaryColor },
- { label: 'Secondary', color: generatedPalette.secondaryColor },
- { label: 'Accent', color: generatedPalette.accentColor },
+ { label: t('theme.primary'), color: generatedPalette.primaryColor },
+ { label: t('theme.secondary'), color: generatedPalette.secondaryColor },
+ { label: t('theme.accent'), color: generatedPalette.accentColor },
  ].map(({ label, color }) => (
  <div key={label}>
  <Swatch color={color} />
@@ -1074,15 +1092,15 @@ function ThemeSettingsPage() {
  {/* Semantic */}
  <div>
  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
- Semantic
+ {t('theme.semantic')}
  </p>
  <div className="flex flex-wrap gap-2">
  {(
  [
- { label: 'Success', key: 'successColor' as const },
- { label: 'Warning', key: 'warningColor' as const },
- { label: 'Danger', key: 'dangerColor' as const },
- { label: 'Info', key: 'infoColor' as const },
+ { label: t('theme.success'), key: 'successColor' as const },
+ { label: t('theme.warning'), key: 'warningColor' as const },
+ { label: t('theme.danger'), key: 'dangerColor' as const },
+ { label: t('theme.info'), key: 'infoColor' as const },
  ] as const
  ).map(({ label, key }) => (
  <span
@@ -1106,7 +1124,7 @@ function ThemeSettingsPage() {
  {/* Dark surfaces */}
  <div>
  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
- Dark Surfaces
+ {t('theme.darkSurfaces')}
  </p>
  <div className="rounded-lg bg-surface-0 p-3">
  <div className="flex gap-1">
@@ -1131,7 +1149,7 @@ function ThemeSettingsPage() {
  {/* Light surfaces */}
  <div>
  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
- Light Surfaces
+ {t('theme.lightSurfaces')}
  </p>
  <div className="rounded-lg border border-border/30 p-3">
  <div className="flex gap-1">
@@ -1159,7 +1177,7 @@ function ThemeSettingsPage() {
  className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90"
  >
  <Wand2 className="h-4 w-4" />
- Apply Palette to Theme
+ {t('theme.applyPalette')}
  </button>
  </div>
  )}
@@ -1171,8 +1189,8 @@ function ThemeSettingsPage() {
  const renderPresetsPanel = () => (
  <div className="space-y-6">
  <PanelSectionHeader
- title="Preset Gallery"
- description="One-click starting points. Applying fills every color — review and save when ready."
+ title={t('theme.presetsTitle')}
+ description={t('theme.presetsDescription')}
  />
  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
  {THEME_PRESETS.map((preset) => (
@@ -1180,7 +1198,7 @@ function ThemeSettingsPage() {
  <div className="mb-1 flex items-center justify-between">
  <p className="text-sm font-semibold text-foreground">{preset.name}</p>
  {preset.customCss ? (
- <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">+ CSS</span>
+ <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t('theme.plusCss')}</span>
  ) : null}
  </div>
  <p className="mb-3 min-h-8 text-[11px] leading-relaxed text-muted-foreground">{preset.description}</p>
@@ -1200,15 +1218,14 @@ function ThemeSettingsPage() {
  className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-border/30 bg-surface-1 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-surface-2"
  >
  <Wand2 className="h-3.5 w-3.5" />
- Apply {preset.name}
+ {t('theme.applyPreset', { name: preset.name })}
  </button>
  </div>
  ))}
  </div>
  <div className="rounded-xl border border-border/30 bg-surface-1/50 p-4 text-[11px] leading-relaxed text-muted-foreground">
- <p className="mb-1 font-semibold text-foreground">How presets work</p>
- Presets fill the Brand, Colors, Surfaces, Layout, and Custom CSS fields below. Nothing is saved until you press
- Save Changes, so you can preview freely and mix a preset with the Palette Studio.
+ <p className="mb-1 font-semibold text-foreground">{t('theme.howPresetsWork')}</p>
+ {t('theme.howPresetsWorkDescription')}
  </div>
  </div>
  );
@@ -1223,7 +1240,7 @@ function ThemeSettingsPage() {
  return (
  <div className="space-y-8">
  <div>
- <PanelSectionHeader title="Export Theme" description="Share this theme as JSON — colors, surfaces, radius, and custom CSS" />
+ <PanelSectionHeader title={t('theme.exportTheme')} description={t('theme.exportThemeDescription')} />
  <div className="flex flex-wrap gap-2">
  <button
  type="button"
@@ -1231,7 +1248,7 @@ function ThemeSettingsPage() {
  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
  >
  <Copy className="h-3.5 w-3.5" />
- Copy JSON
+ {t('theme.copyJson')}
  </button>
  <button
  type="button"
@@ -1239,7 +1256,7 @@ function ThemeSettingsPage() {
  className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <Download className="h-3.5 w-3.5" />
- Download .json
+ {t('theme.downloadJson')}
  </button>
  </div>
  <pre className="mt-3 max-h-64 overflow-auto rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[10px] leading-relaxed text-muted-foreground">
@@ -1250,7 +1267,7 @@ function ThemeSettingsPage() {
  <hr className="border-border/30" />
 
  <div>
- <PanelSectionHeader title="Import Theme" description="Paste a previously exported theme JSON file to preview it" />
+ <PanelSectionHeader title={t('theme.importTheme')} description={t('theme.importThemeDescription')} />
  <div className="space-y-3">
  <textarea
  value={importText}
@@ -1274,11 +1291,11 @@ function ThemeSettingsPage() {
  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  >
  <Upload className="h-3.5 w-3.5" />
- Preview Import
+ {t('theme.previewImport')}
  </button>
  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2">
  <Upload className="h-3.5 w-3.5" />
- Choose .json file
+ {t('theme.chooseJsonFile')}
  <input
  type="file"
  accept="application/json,.json"
@@ -1294,7 +1311,7 @@ function ThemeSettingsPage() {
  />
  </label>
  </div>
- <p className="text-[11px] text-muted-foreground">Import only previews — press Save Changes to keep it.</p>
+ <p className="text-[11px] text-muted-foreground">{t('theme.importHint')}</p>
  </div>
  </div>
  </div>
@@ -1306,26 +1323,26 @@ function ThemeSettingsPage() {
  <div className="space-y-8">
  <div>
  <PanelSectionHeader
- title="Brand Colors"
- description="Primary, secondary, and accent palette"
+ title={t('theme.brandColors')}
+ description={t('theme.brandColorsDescription')}
  onReset={() => handleResetSection('brand')}
  />
  <div className="grid gap-5 sm:grid-cols-3">
  <ColorPicker
- label="Primary Color"
- description="Main brand — buttons, links, active states"
+ label={t('theme.primaryColor')}
+ description={t('theme.primaryColorDescription')}
  value={primaryColor}
  onChange={handlePrimaryColorChange}
  />
  <ColorPicker
- label="Secondary Color"
- description="Supporting brand color — maps to bg-secondary"
+ label={t('theme.secondaryColor')}
+ description={t('theme.secondaryColorDescription')}
  value={secondaryColor}
  onChange={handleSecondaryColorChange}
  />
  <ColorPicker
- label="Accent Color"
- description="Highlight for focus rings & accents"
+ label={t('theme.accentColor')}
+ description={t('theme.accentColorDescription')}
  value={accentColor}
  onChange={handleAccentColorChange}
  />
@@ -1336,7 +1353,7 @@ function ThemeSettingsPage() {
  key={i}
  className="h-10 flex-1 rounded-md ring-1 ring-black/5"
  style={{ backgroundColor: color }}
- title={['Primary', 'Secondary', 'Accent'][i]}
+ title={[t('theme.primaryTooltip'), t('theme.secondaryTooltip'), t('theme.accentTooltip')][i]}
  />
  ))}
  </div>
@@ -1346,35 +1363,35 @@ function ThemeSettingsPage() {
 
  <div>
  <PanelSectionHeader
- title="Semantic Colors"
- description="Status indicators, alerts, and feedback"
+ title={t('theme.semanticColors')}
+ description={t('theme.semanticColorsDescription')}
  onReset={() => handleResetSection('semantic')}
  />
  <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
  <ColorPicker
- label="Success"
- description="Positive states, confirmations"
+ label={t('theme.success')}
+ description={t('theme.successDescription')}
  value={themeColors.successColor || ''}
  onChange={(v) => updateThemeColor('successColor', v)}
  icon={Check}
  />
  <ColorPicker
- label="Warning"
- description="Caution states, attention needed"
+ label={t('theme.warning')}
+ description={t('theme.warningDescription')}
  value={themeColors.warningColor || ''}
  onChange={(v) => updateThemeColor('warningColor', v)}
  icon={AlertTriangle}
  />
  <ColorPicker
- label="Danger"
- description="Errors, destructive actions"
+ label={t('theme.danger')}
+ description={t('theme.dangerDescription')}
  value={themeColors.dangerColor || ''}
  onChange={(v) => updateThemeColor('dangerColor', v)}
  icon={Shield}
  />
  <ColorPicker
- label="Info"
- description="Informational messages, tips"
+ label={t('theme.info')}
+ description={t('theme.infoDescription')}
  value={themeColors.infoColor || ''}
  onChange={(v) => updateThemeColor('infoColor', v)}
  icon={Info}
@@ -1382,10 +1399,10 @@ function ThemeSettingsPage() {
  </div>
  <div className="mt-4 flex flex-wrap gap-2 rounded-lg border border-border/30 p-3">
  {[
- { color: themeColors.successColor, label: 'Success' },
- { color: themeColors.warningColor, label: 'Warning' },
- { color: themeColors.dangerColor, label: 'Danger' },
- { color: themeColors.infoColor, label: 'Info' },
+ { color: themeColors.successColor, label: t('theme.success') },
+ { color: themeColors.warningColor, label: t('theme.warning') },
+ { color: themeColors.dangerColor, label: t('theme.danger') },
+ { color: themeColors.infoColor, label: t('theme.info') },
  ].map(({ color, label }) => (
  <span
  key={label}
@@ -1403,14 +1420,14 @@ function ThemeSettingsPage() {
 
  <div>
  <PanelSectionHeader
- title="Focus Ring"
- description="Keyboard focus outline. Defaults to the primary color when cleared."
+ title={t('theme.focusRing')}
+ description={t('theme.focusRingDescription')}
  onReset={() => handleResetSection('focus')}
  />
  <div className="max-w-sm">
  <ColorPicker
- label="Ring Color"
- description="Focus-visible outline for inputs and buttons"
+ label={t('theme.ringColor')}
+ description={t('theme.ringColorDescription')}
  value={themeColors.ringColor || ''}
  onChange={(v) => updateThemeColor('ringColor', v)}
  />
@@ -1424,8 +1441,8 @@ function ThemeSettingsPage() {
  <div className="space-y-8">
  <div>
  <PanelSectionHeader
- title="Dark Mode Surfaces"
- description="Background, elevation, and text colors for dark theme"
+ title={t('theme.darkModeSurfaces')}
+ description={t('theme.darkModeSurfacesDescription')}
  onReset={() => handleResetSection('dark')}
  />
  <div className="mb-5">
@@ -1454,8 +1471,8 @@ function ThemeSettingsPage() {
 
  <div>
  <PanelSectionHeader
- title="Light Mode Surfaces"
- description="Background, elevation, and text colors for light theme"
+ title={t('theme.lightModeSurfaces')}
+ description={t('theme.lightModeSurfacesDescription')}
  onReset={() => handleResetSection('light')}
  />
  <div className="mb-5">
@@ -1486,8 +1503,8 @@ function ThemeSettingsPage() {
  const renderLayoutPanel = () => (
  <div className="space-y-6">
  <PanelSectionHeader
- title="Border Radius"
- description="Control the roundness of cards, buttons, and inputs"
+ title={t('theme.borderRadius')}
+ description={t('theme.borderRadiusDescription')}
  onReset={() => handleResetSection('layout')}
  />
  <div className="max-w-md space-y-4">
@@ -1506,7 +1523,7 @@ function ThemeSettingsPage() {
  </span>
  </div>
  <p className="text-[11px] text-muted-foreground">
- 0 = sharp corners, 1.5rem = pill shape.
+ {t('theme.borderRadiusHint')}
  </p>
  <div className="flex items-end gap-3 pt-2">
  <div
@@ -1519,13 +1536,13 @@ function ThemeSettingsPage() {
  className="flex h-10 w-24 items-center justify-center bg-primary text-xs font-semibold text-primary-foreground"
  style={{ borderRadius: themeColors.borderRadius || '0.5rem' }}
  >
- Button
+ {t('theme.buttonPreview')}
  </div>
  <div
  className="flex h-14 flex-1 items-center bg-primary/10 px-4 text-sm font-medium text-primary"
  style={{ borderRadius: themeColors.borderRadius || '0.5rem' }}
  >
- Card preview
+ {t('theme.cardPreview')}
  </div>
  </div>
  </div>
@@ -1537,8 +1554,8 @@ function ThemeSettingsPage() {
  <div className="space-y-8">
  <div>
  <PanelSectionHeader
- title="Custom CSS"
- description="Advanced styling injected into every page (max 100 KB)"
+ title={t('theme.customCss')}
+ description={t('theme.customCssDescription')}
  />
  <div className="space-y-3">
  <textarea
@@ -1549,7 +1566,7 @@ function ThemeSettingsPage() {
  spellCheck={false}
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
- <p className="text-[11px] text-muted-foreground">{customCss.length.toLocaleString()} / 100,000 characters</p>
+ <p className="text-[11px] text-muted-foreground">{t('theme.customCssCounter', { used: formatNumber(customCss.length) })}</p>
  <div className="flex items-center gap-2">
  <button
  type="button"
@@ -1557,7 +1574,7 @@ function ThemeSettingsPage() {
  className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <Eye className="h-3.5 w-3.5" />
- Preview
+ {t('theme.preview')}
  </button>
  <button
  type="button"
@@ -1565,7 +1582,7 @@ function ThemeSettingsPage() {
  className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <RotateCcw className="h-3.5 w-3.5" />
- Reset to Saved
+ {t('theme.resetToSaved')}
  </button>
  </div>
  </div>
@@ -1575,8 +1592,8 @@ function ThemeSettingsPage() {
 
  <div>
  <PanelSectionHeader
- title="OAuth Providers"
- description="Configure OIDC/SSO login for WHMCS and Paymenter"
+ title={t('theme.oauthProviders')}
+ description={t('theme.oauthProvidersDescription')}
  />
  <OidcProviderSection />
  </div>
@@ -1588,20 +1605,20 @@ function ThemeSettingsPage() {
  <div className="rounded-xl border border-border/30 bg-card p-4">
  <div className="mb-3 flex items-center justify-between">
  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
- Live Preview
+ {t('theme.livePreview')}
  </span>
  <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
  <span
  className="h-2 w-2 rounded-full"
  style={{ backgroundColor: primaryColor }}
  />
- {currentTheme === 'dark' ? 'Dark' : 'Light'} mode
+ {t('theme.themeModeStatus', { mode: currentTheme === 'dark' ? t('theme.dark') : t('theme.light') })}
  </span>
  </div>
  <div className="flex gap-1.5">
  <div className="flex-1 space-y-1">
  <div className="flex h-5 items-center gap-1">
- <span className="text-[9px] font-medium text-muted-foreground">Brand</span>
+ <span className="text-[9px] font-medium text-muted-foreground">{t('theme.brand')}</span>
  </div>
  <div className="flex gap-1">
  {[primaryColor, secondaryColor, accentColor].map((c, i) => (
@@ -1609,14 +1626,14 @@ function ThemeSettingsPage() {
  key={i}
  className="h-5 flex-1 rounded-sm"
  style={{ backgroundColor: c }}
- title={['Primary', 'Secondary', 'Accent'][i]}
+ title={[t('theme.primaryTooltip'), t('theme.secondaryTooltip'), t('theme.accentTooltip')][i]}
  />
  ))}
  </div>
  </div>
  <div className="flex-1 space-y-1">
  <div className="flex h-5 items-center gap-1">
- <span className="text-[9px] font-medium text-muted-foreground">Semantic</span>
+ <span className="text-[9px] font-medium text-muted-foreground">{t('theme.semantic')}</span>
  </div>
  <div className="flex gap-1">
  {[
@@ -1635,7 +1652,7 @@ function ThemeSettingsPage() {
  </div>
  <div className="flex-[2] space-y-1">
  <div className="flex h-5 items-center gap-1">
- <span className="text-[9px] font-medium text-muted-foreground">Surface Elevation</span>
+ <span className="text-[9px] font-medium text-muted-foreground">{t('theme.surfacesTitle')}</span>
  </div>
  <div className="flex gap-[2px]">
  {(currentTheme === 'dark'
@@ -1656,7 +1673,7 @@ function ThemeSettingsPage() {
  key={i}
  className="h-5 flex-1 rounded-sm ring-1 ring-black/10"
  style={{ backgroundColor: c || 'hsl(var(--muted-foreground))' }}
- title={`Level ${i}`}
+ title={t('theme.elevationLevel', { level: i })}
  />
  ))}
  </div>
@@ -1684,19 +1701,19 @@ function ThemeSettingsPage() {
  <div className="flex items-start gap-2.5">
  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
  <div>
- <p className="text-xs font-semibold text-foreground">Personal appearance override is active in this browser</p>
+ <p className="text-xs font-semibold text-foreground">{t('theme.personalOverrideTitle')}</p>
  <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
- You are previewing your own Profile appearance, not the panel default. Reset it to judge the global theme accurately.
+ {t('theme.personalOverrideDescription')}
  </p>
  </div>
  </div>
  <button
  type="button"
- onClick={() => { clearPersonalTheme(); toast.success('Personal theme cleared — showing panel default'); }}
+ onClick={() => { clearPersonalTheme(); toast.success(t('theme.toastPersonalThemeCleared')); }}
  className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <RotateCcw className="h-3.5 w-3.5" />
- Show panel default
+ {t('theme.showPanelDefault')}
  </button>
  </div>
  )}
@@ -1704,8 +1721,8 @@ function ThemeSettingsPage() {
  {/* ── Page Header ── */}
  <TabHeader
  icon={Palette}
- title="Theme Settings"
- description="Customize the look and feel of your panel"
+ title={t('theme.title')}
+ description={t('theme.description')}
  actions={
  <div className="flex items-center gap-2">
  <button
@@ -1714,7 +1731,7 @@ function ThemeSettingsPage() {
  className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <RotateCcw className="h-3.5 w-3.5" />
- Reset All
+ {t('theme.resetAll')}
  </button>
  <button
  type="button"
@@ -1725,12 +1742,12 @@ function ThemeSettingsPage() {
  {updateMutation.isPending ? (
  <>
  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
- Saving…
+ {t('saving')}
  </>
  ) : (
  <>
  <Save className="h-3.5 w-3.5" />
- Save Changes
+ {t('theme.saveChanges')}
  </>
  )}
  </button>
@@ -1745,7 +1762,7 @@ function ThemeSettingsPage() {
  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/30 bg-card px-4 py-3">
  <div className="flex items-center gap-2 text-xs text-muted-foreground">
  <Eye className="h-3.5 w-3.5" />
- Previewing {currentTheme === 'dark' ? 'dark' : 'light'} mode — edits apply live to this mode only for surfaces
+ {t('theme.previewingMode', { mode: currentTheme === 'dark' ? t('theme.dark').toLowerCase() : t('theme.light').toLowerCase() })}
  </div>
  <div className="flex items-center gap-2">
  <div className="flex gap-1 rounded-lg bg-surface-1 p-1">
@@ -1761,17 +1778,17 @@ function ThemeSettingsPage() {
  }`}
  >
  {m === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
- {m === 'dark' ? 'Dark' : 'Light'}
+ {m === 'dark' ? t('theme.dark') : t('theme.light')}
  </button>
  ))}
  </div>
  {(contrastInfo.dark !== null || contrastInfo.light !== null) && (
  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
  {contrastInfo.dark !== null && (
- <span title="Dark background vs foreground contrast">Dark {contrastInfo.dark.toFixed(1)}:1</span>
+ <span title={t('theme.darkContrastTitle')}>{t('theme.contrastValue', { mode: t('theme.dark'), ratio: contrastInfo.dark.toFixed(1) })}</span>
  )}
  {contrastInfo.light !== null && (
- <span title="Light background vs foreground contrast">Light {contrastInfo.light.toFixed(1)}:1</span>
+ <span title={t('theme.lightContrastTitle')}>{t('theme.contrastValue', { mode: t('theme.light'), ratio: contrastInfo.light.toFixed(1) })}</span>
  )}
  </div>
  )}
@@ -1795,7 +1812,7 @@ function ThemeSettingsPage() {
  }`}
  >
  <Icon className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{tab.label}</span>
+ <span className="hidden sm:inline">{tabLabel(t, tab.id)}</span>
  </button>
  );
  })}

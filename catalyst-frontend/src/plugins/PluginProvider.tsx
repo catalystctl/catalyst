@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { usePluginStore } from './store';
 import { fetchPlugins } from './api';
 import { loadPluginFrontend, unmountPluginFrontend } from './loader';
@@ -6,8 +7,8 @@ import { useAuthStore } from '../stores/authStore';
 import { PluginContext, type PluginContextValue } from './PluginContext';
 import { createAdminEventsStream } from '../services/api/admin-events';
 import type { LoadedPlugin } from './types';
-
 export function PluginProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation('plugins');
   const plugins = usePluginStore((s) => s.plugins);
   const loading = usePluginStore((s) => s.loading);
   const error = usePluginStore((s) => s.error);
@@ -57,11 +58,11 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
       setInitialized(true);
     } catch (err: unknown) {
       console.error('Failed to load plugins:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load plugins');
+      setError(err instanceof Error ? err.message : t('provider.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setError, setPlugins, setInitialized]);
+  }, [setLoading, setError, setPlugins, setInitialized, t]);
 
   useEffect(() => {
     if (initialized || !isAuthenticated) return;
@@ -94,7 +95,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
       } catch (err: unknown) {
         if (!active) return;
         console.error('Failed to load plugins:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load plugins');
+        setError(err instanceof Error ? err.message : t('provider.loadFailed'));
       } finally {
         if (active) setLoading(false);
       }
@@ -103,7 +104,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [initialized, isAuthenticated, setLoading, setError, setPlugins, setInitialized]);
+    }, [initialized, isAuthenticated, setLoading, setError, setPlugins, setInitialized, t]);
 
   // Live hot reload: backend pushes plugin_updated on install/upgrade/reload/
   // enable/disable. Re-fetch manifests and swap frontend bundles in place so

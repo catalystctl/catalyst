@@ -3,6 +3,7 @@
 // Listens for messages with type `plugin:{pluginName}:{eventType}` and auto-reconnects.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import i18n from '../i18n';
 
 interface UsePluginWebSocketOptions {
   /** Whether the WebSocket connection is active (default: true) */
@@ -107,7 +108,7 @@ export function usePluginWebSocket(
       // If we never successfully connected, give up after 2 attempts
       // to avoid spamming reconnect attempts to a non-existent endpoint
       if (reconnectAttemptsRef.current >= 2) {
-        setError('WebSocket unavailable');
+        setError(i18n.t('webSocket.unavailable', { ns: 'plugins' }));
         return;
       }
 
@@ -121,7 +122,7 @@ export function usePluginWebSocket(
 
     ws.onerror = () => {
       if (wsRef.current !== ws) return;
-      setError('WebSocket connection error');
+      setError(i18n.t('webSocket.connectionError', { ns: 'plugins' }));
     };
 
     ws.onmessage = (event) => {

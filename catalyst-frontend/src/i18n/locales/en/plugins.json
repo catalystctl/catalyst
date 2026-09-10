@@ -1,0 +1,20 @@
+{
+  "errorBoundary": {
+    "message": "An unexpected error occurred in this plugin.",
+    "title": "⚠️ Plugin Error: {{name}}",
+    "tryAgain": "Try Again",
+    "widgetFailed": "Plugin widget failed to render"
+  },
+  "provider": {
+    "loadFailed": "Failed to load plugins"
+  },
+  "tabNotFound": {
+    "description": "The requested plugin tab could not be found or is not enabled.",
+    "title": "Plugin tab not found",
+    "unavailable": "This plugin tab is unavailable."
+  },
+  "webSocket": {
+    "connectionError": "WebSocket connection error",
+    "unavailable": "WebSocket unavailable"
+  }
+}

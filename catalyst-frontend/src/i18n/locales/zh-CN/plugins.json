@@ -1,0 +1,20 @@
+{
+  "errorBoundary": {
+    "message": "",
+    "title": "",
+    "tryAgain": "",
+    "widgetFailed": ""
+  },
+  "provider": {
+    "loadFailed": ""
+  },
+  "tabNotFound": {
+    "description": "",
+    "title": "",
+    "unavailable": ""
+  },
+  "webSocket": {
+    "connectionError": "",
+    "unavailable": ""
+  }
+}

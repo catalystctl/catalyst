@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Puzzle } from 'lucide-react';
 import { usePluginTabs } from '../plugins/hooks';
 import { usePluginContext } from '../plugins/usePluginContext';
@@ -14,8 +15,8 @@ interface PluginTabPageProps {
   location: 'admin' | 'server';
   serverId?: string;
 }
-
 export default function PluginTabPage({ location, serverId }: PluginTabPageProps) {
+  const { t } = useTranslation('plugins');
   const { pluginTabId } = useParams<{ pluginTabId: string }>();
   const { reloadPlugins, initialized, loading } = usePluginContext();
   const pluginTabs = usePluginTabs(location);
@@ -38,10 +39,10 @@ export default function PluginTabPage({ location, serverId }: PluginTabPageProps
       <div className="space-y-3">
         <TabHeader
           icon={Puzzle}
-          title="Plugin tab not found"
-          description="The requested plugin tab could not be found or is not enabled."
+          title={t('tabNotFound.title')}
+          description={t('tabNotFound.description')}
         />
-        <TabEmptyState title="This plugin tab is unavailable." />
+        <TabEmptyState title={t('tabNotFound.unavailable')} />
       </div>
     );
   }

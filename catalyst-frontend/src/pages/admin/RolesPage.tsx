@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -36,6 +38,7 @@ import {
 } from '../../lib/serverPermissions';
 import type { RoleScope, RoleScopeMode } from '../../types/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { formatDate, formatTime } from '../../i18n/format';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
@@ -58,7 +61,7 @@ import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 // ── Permission categories ──────────────────────────────────────────────
 const PERMISSION_CATEGORIES = [
  {
- label: 'Server',
+ key: 'server',
  icon: Server,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -70,7 +73,7 @@ const PERMISSION_CATEGORIES = [
  ],
  },
  {
- label: 'Node',
+ key: 'node',
  icon: Zap,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -82,7 +85,7 @@ const PERMISSION_CATEGORIES = [
  ],
  },
  {
- label: 'Location',
+ key: 'location',
  icon: Globe,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -91,7 +94,7 @@ const PERMISSION_CATEGORIES = [
  permissions: ['location.read', 'location.create', 'location.update', 'location.delete'],
  },
  {
- label: 'Template',
+ key: 'template',
  icon: Info,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -100,7 +103,7 @@ const PERMISSION_CATEGORIES = [
  permissions: ['template.read', 'template.create', 'template.update', 'template.delete'],
  },
  {
- label: 'User Management',
+ key: 'userManagement',
  icon: Users,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -109,7 +112,7 @@ const PERMISSION_CATEGORIES = [
  permissions: ['user.read', 'user.create', 'user.update', 'user.delete', 'user.ban', 'user.unban', 'user.set_roles'],
  },
  {
- label: 'Role Management',
+ key: 'roleManagement',
  icon: Shield,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -118,7 +121,7 @@ const PERMISSION_CATEGORIES = [
  permissions: ['role.read', 'role.create', 'role.update', 'role.delete'],
  },
  {
- label: 'Backup',
+ key: 'backup',
  icon: Shield,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -127,7 +130,7 @@ const PERMISSION_CATEGORIES = [
  permissions: ['backup.read', 'backup.create', 'backup.delete', 'backup.restore'],
  },
  {
- label: 'File Management',
+ key: 'fileManagement',
  icon: Info,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -136,7 +139,7 @@ const PERMISSION_CATEGORIES = [
  permissions: ['file.read', 'file.write'],
  },
  {
- label: 'Console',
+ key: 'console',
  icon: Info,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -145,7 +148,7 @@ const PERMISSION_CATEGORIES = [
  permissions: ['console.read', 'console.write'],
  },
  {
- label: 'Database',
+ key: 'database',
  icon: Info,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -154,7 +157,7 @@ const PERMISSION_CATEGORIES = [
  permissions: ['database.create', 'database.read', 'database.delete', 'database.rotate'],
  },
  {
- label: 'Alerts',
+ key: 'alerts',
  icon: Info,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -163,7 +166,7 @@ const PERMISSION_CATEGORIES = [
  permissions: ['alert.read', 'alert.create', 'alert.update', 'alert.delete'],
  },
  {
- label: 'System Administration',
+ key: 'systemAdministration',
  icon: Lock,
  color: 'bg-primary/10',
  accent: 'text-primary',
@@ -176,12 +179,12 @@ const PERMISSION_CATEGORIES = [
 // Permission presets
 const PERMISSION_PRESETS = [
  {
- key: 'administrator', label: 'Administrator', description: 'Full unrestricted system access',
+ key: 'administrator',
  icon: KeyRound, color: 'bg-primary/10',
  permissions: ['*'],
  },
  {
- key: 'moderator', label: 'Moderator', description: 'Manage servers, files, console — not users/roles',
+ key: 'moderator',
  icon: Shield, color: 'bg-primary/10',
  permissions: [
  'node.read', 'node.update', 'node.view_stats', 'node.assign',
@@ -192,12 +195,12 @@ const PERMISSION_PRESETS = [
  ],
  },
  {
- key: 'user', label: 'User', description: 'Basic access to own servers',
+ key: 'user',
  icon: Users, color: 'bg-primary/10',
  permissions: ['server.read'],
  },
  {
- key: 'support', label: 'Support', description: 'Read-only access for support staff',
+ key: 'support',
  icon: Eye, color: 'bg-primary/10',
  permissions: [
  'node.read', 'node.view_stats', 'location.read', 'template.read',
@@ -206,46 +209,113 @@ const PERMISSION_PRESETS = [
  },
 ];
 
-const PERMISSION_LABELS: Record<string, string> = {
- 'server.read': 'View servers', 'server.create': 'Create servers', 'server.start': 'Start servers',
- 'server.stop': 'Stop servers', 'server.delete': 'Delete servers', 'server.suspend': 'Suspend servers',
- 'server.transfer': 'Transfer servers', 'server.schedule': 'Manage schedules',
- 'node.read': 'View nodes', 'node.create': 'Create nodes', 'node.update': 'Edit nodes',
- 'node.delete': 'Delete nodes', 'node.view_stats': 'View stats',
- 'node.manage_allocation': 'Manage allocations', 'node.assign': 'Assign nodes',
- 'location.read': 'View locations', 'location.create': 'Create locations',
- 'location.update': 'Edit locations', 'location.delete': 'Delete locations',
- 'template.read': 'View templates', 'template.create': 'Create templates',
- 'template.update': 'Edit templates', 'template.delete': 'Delete templates',
- 'user.read': 'View users', 'user.create': 'Create users', 'user.update': 'Edit users',
- 'user.delete': 'Delete users', 'user.ban': 'Ban users', 'user.unban': 'Unban users',
- 'user.set_roles': 'Assign roles',
- 'role.read': 'View roles', 'role.create': 'Create roles', 'role.update': 'Edit roles',
- 'role.delete': 'Delete roles',
- 'backup.read': 'View backups', 'backup.create': 'Create backups', 'backup.delete': 'Delete backups',
- 'backup.restore': 'Restore backups',
- 'file.read': 'Read files', 'file.write': 'Write files',
- 'console.read': 'View console', 'console.write': 'Send commands',
- 'database.create': 'Create databases', 'database.read': 'View databases',
- 'database.delete': 'Delete databases', 'database.rotate': 'Rotate passwords',
- 'alert.read': 'View alerts', 'alert.create': 'Create alerts',
- 'alert.update': 'Edit alerts', 'alert.delete': 'Delete alerts',
- 'admin.read': 'View admin panel', 'admin.write': 'Modify admin settings',
- 'apikey.manage': 'Manage API keys',
-};
-
-function formatPermission(perm: string): string {
- if (perm === '*') return 'All Permissions';
- return PERMISSION_LABELS[perm] || perm.split('.').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' › ');
+/** Display label for a backend permission key. Unknown keys keep their identifier. */
+function formatPermission(t: TFunction<'admin-access'>, perm: string): string {
+  switch (perm) {
+    case 'server.read': return t('roles.permissionLabels.serverRead');
+    case 'server.create': return t('roles.permissionLabels.serverCreate');
+    case 'server.start': return t('roles.permissionLabels.serverStart');
+    case 'server.stop': return t('roles.permissionLabels.serverStop');
+    case 'server.delete': return t('roles.permissionLabels.serverDelete');
+    case 'server.suspend': return t('roles.permissionLabels.serverSuspend');
+    case 'server.transfer': return t('roles.permissionLabels.serverTransfer');
+    case 'server.schedule': return t('roles.permissionLabels.serverSchedule');
+    case 'node.read': return t('roles.permissionLabels.nodeRead');
+    case 'node.create': return t('roles.permissionLabels.nodeCreate');
+    case 'node.update': return t('roles.permissionLabels.nodeUpdate');
+    case 'node.delete': return t('roles.permissionLabels.nodeDelete');
+    case 'node.view_stats': return t('roles.permissionLabels.nodeViewStats');
+    case 'node.manage_allocation': return t('roles.permissionLabels.nodeManageAllocation');
+    case 'node.assign': return t('roles.permissionLabels.nodeAssign');
+    case 'location.read': return t('roles.permissionLabels.locationRead');
+    case 'location.create': return t('roles.permissionLabels.locationCreate');
+    case 'location.update': return t('roles.permissionLabels.locationUpdate');
+    case 'location.delete': return t('roles.permissionLabels.locationDelete');
+    case 'template.read': return t('roles.permissionLabels.templateRead');
+    case 'template.create': return t('roles.permissionLabels.templateCreate');
+    case 'template.update': return t('roles.permissionLabels.templateUpdate');
+    case 'template.delete': return t('roles.permissionLabels.templateDelete');
+    case 'user.read': return t('roles.permissionLabels.userRead');
+    case 'user.create': return t('roles.permissionLabels.userCreate');
+    case 'user.update': return t('roles.permissionLabels.userUpdate');
+    case 'user.delete': return t('roles.permissionLabels.userDelete');
+    case 'user.ban': return t('roles.permissionLabels.userBan');
+    case 'user.unban': return t('roles.permissionLabels.userUnban');
+    case 'user.set_roles': return t('roles.permissionLabels.userSetRoles');
+    case 'role.read': return t('roles.permissionLabels.roleRead');
+    case 'role.create': return t('roles.permissionLabels.roleCreate');
+    case 'role.update': return t('roles.permissionLabels.roleUpdate');
+    case 'role.delete': return t('roles.permissionLabels.roleDelete');
+    case 'backup.read': return t('roles.permissionLabels.backupRead');
+    case 'backup.create': return t('roles.permissionLabels.backupCreate');
+    case 'backup.delete': return t('roles.permissionLabels.backupDelete');
+    case 'backup.restore': return t('roles.permissionLabels.backupRestore');
+    case 'file.read': return t('roles.permissionLabels.fileRead');
+    case 'file.write': return t('roles.permissionLabels.fileWrite');
+    case 'console.read': return t('roles.permissionLabels.consoleRead');
+    case 'console.write': return t('roles.permissionLabels.consoleWrite');
+    case 'database.create': return t('roles.permissionLabels.databaseCreate');
+    case 'database.read': return t('roles.permissionLabels.databaseRead');
+    case 'database.delete': return t('roles.permissionLabels.databaseDelete');
+    case 'database.rotate': return t('roles.permissionLabels.databaseRotate');
+    case 'alert.read': return t('roles.permissionLabels.alertRead');
+    case 'alert.create': return t('roles.permissionLabels.alertCreate');
+    case 'alert.update': return t('roles.permissionLabels.alertUpdate');
+    case 'alert.delete': return t('roles.permissionLabels.alertDelete');
+    case 'admin.read': return t('roles.permissionLabels.adminRead');
+    case 'admin.write': return t('roles.permissionLabels.adminWrite');
+    case 'apikey.manage': return t('roles.permissionLabels.apikeyManage');
+    default: return perm.split('.').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' › ');
+  }
+}
+/** Display label for a built-in permission preset. */
+function presetLabel(t: TFunction<'admin-access'>, key: string): string {
+ switch (key) {
+ case 'administrator': return t('roles.presets.administrator');
+ case 'moderator': return t('roles.presets.moderator');
+ case 'user': return t('roles.presets.user');
+ case 'support': return t('roles.presets.support');
+ default: return key;
+ }
 }
 
-function getPermissionCategories(permissions: string[]) {
- if (permissions.includes('*')) return [{ category: 'All Permissions', count: 1, icon: KeyRound, color: 'bg-primary/10', accent: 'text-primary', border: 'border-primary/20' }];
+/** Display description for a built-in permission preset. */
+function presetDescription(t: TFunction<'admin-access'>, key: string): string {
+ switch (key) {
+ case 'administrator': return t('roles.presets.administratorDescription');
+ case 'moderator': return t('roles.presets.moderatorDescription');
+ case 'user': return t('roles.presets.userDescription');
+ case 'support': return t('roles.presets.supportDescription');
+ default: return key;
+ }
+}
+
+/** Display label for a permission category group. */
+function permissionCategoryLabel(t: TFunction<'admin-access'>, key: string): string {
+  switch (key) {
+    case 'server': return t('roles.permissionCategories.server');
+    case 'node': return t('roles.permissionCategories.node');
+    case 'location': return t('roles.permissionCategories.location');
+    case 'template': return t('roles.permissionCategories.template');
+    case 'userManagement': return t('roles.permissionCategories.userManagement');
+    case 'roleManagement': return t('roles.permissionCategories.roleManagement');
+    case 'backup': return t('roles.permissionCategories.backup');
+    case 'fileManagement': return t('roles.permissionCategories.fileManagement');
+    case 'console': return t('roles.permissionCategories.console');
+    case 'database': return t('roles.permissionCategories.database');
+    case 'alerts': return t('roles.permissionCategories.alerts');
+    case 'systemAdministration': return t('roles.permissionCategories.systemAdministration');
+    default: return key;
+  }
+}
+
+function getPermissionCategories(t: TFunction<'admin-access'>, permissions: string[]) {
+ if (permissions.includes('*')) return [{ category: t('roles.permissionLabels.all'), count: 1, icon: KeyRound, color: 'bg-primary/10', accent: 'text-primary', border: 'border-primary/20' }];
  const categoryMap = new Map<string, { count: number; icon: typeof Shield; color: string; accent: string; border: string }>();
  for (const perm of permissions) {
  const prefix = perm.split('.')[0];
  const cat = PERMISSION_CATEGORIES.find((c) => c.permissions.some((p) => p.startsWith(prefix)));
- const label = cat?.label || prefix.charAt(0).toUpperCase() + prefix.slice(1);
+ const label = cat ? permissionCategoryLabel(t, cat.key) : prefix.charAt(0).toUpperCase() + prefix.slice(1);
  if (!categoryMap.has(label)) {
  categoryMap.set(label, {
  count: 0,
@@ -280,8 +350,9 @@ function RoleCard({
  canDelete: boolean;
  isDeleting: boolean;
 }) {
+ const { t } = useTranslation('admin-access');
  const isWildcard = role.permissions?.includes('*');
- const permCats = getPermissionCategories(role.permissions || []);
+ const permCats = getPermissionCategories(t, role.permissions || []);
 
  return (
  <div
@@ -313,14 +384,14 @@ function RoleCard({
  <button
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
  onClick={(e) => { e.stopPropagation(); onView(); }}
- title="View details"
+ title={t('roles.actionViewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
  <button
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
  onClick={(e) => { e.stopPropagation(); onEdit(); }}
- title="Edit"
+ title={t('common:actions.edit')}
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
@@ -329,7 +400,7 @@ function RoleCard({
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={(e) => { e.stopPropagation(); onDelete(); }}
  disabled={isDeleting}
- title="Delete"
+ title={t('common:actions.delete')}
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
@@ -341,7 +412,7 @@ function RoleCard({
  <div className="mt-4 flex flex-wrap gap-1.5">
  {isWildcard ? (
  <Badge className="gap-1 border-warning/30 bg-warning/10 text-warning">
- <Zap className="h-3 w-3" /> Full Admin
+ <Zap className="h-3 w-3" /> {t('roles.cardFullAdmin')}
  </Badge>
  ) : (
  permCats.slice(0, 4).map((cat) => {
@@ -354,7 +425,7 @@ function RoleCard({
  })
  )}
  {!isWildcard && permCats.length > 4 && (
- <Badge variant="secondary" className="text-[10px]">+{permCats.length - 4} more</Badge>
+ <Badge variant="secondary" className="text-[10px]">{t('roles.cardMore', { count: permCats.length - 4 })}</Badge>
  )}
  </div>
 
@@ -363,12 +434,12 @@ function RoleCard({
  <div className="mt-1.5 flex flex-wrap gap-1.5">
  {role.nodeGrantCount > 0 && (
  <Badge variant="outline" className="gap-1 text-[10px]">
- <Globe className="h-2.5 w-2.5" /> {role.nodeGrantCount} node{role.nodeGrantCount > 1 ? 's' : ''} scoped
+ <Globe className="h-2.5 w-2.5" /> {t('roles.nodeGrantCount', { count: role.nodeGrantCount })}
  </Badge>
  )}
  {role.serverGrantCount > 0 && (
  <Badge variant="outline" className="gap-1 text-[10px]">
- <Server className="h-2.5 w-2.5" /> {role.serverGrantCount} server{role.serverGrantCount > 1 ? 's' : ''} scoped
+ <Server className="h-2.5 w-2.5" /> {t('roles.serverGrantCount', { count: role.serverGrantCount })}
  </Badge>
  )}
  </div>
@@ -377,7 +448,7 @@ function RoleCard({
  {/* Footer */}
  <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
  <Badge variant="outline" className="text-[10px]">
- {role.permissions?.length || 0} perm{role.permissions?.length === 1 ? '' : 's'}
+ {t('roles.permissionCount', { count: role.permissions?.length || 0 })}
  </Badge>
  {role.userCount > 0 ? (
  <Badge variant="secondary" className="gap-1 text-[10px]">
@@ -423,10 +494,11 @@ function ScopedAccessStep({
  permissionSearch: string;
  onPermissionSearchChange: (value: string) => void;
 }) {
+ const { t } = useTranslation('admin-access');
  const modeCards: Array<{ mode: RoleScopeMode; title: string; description: string }> = [
- { mode: 'none', title: 'No scoped access', description: 'Members only get the global permissions above.' },
- { mode: 'nodes', title: 'By node', description: 'Grant the selected permissions on every server hosted on the chosen nodes.' },
- { mode: 'servers', title: 'By server', description: 'Grant the selected permissions on specific servers, on any node.' },
+ { mode: 'none', title: t('roles.scopeNoAccess'), description: t('roles.scopeNoAccessDescription') },
+ { mode: 'nodes', title: t('roles.scopeByNode'), description: t('roles.scopeByNodeDescription') },
+ { mode: 'servers', title: t('roles.scopeByServer'), description: t('roles.scopeByServerDescription') },
  ];
 
  const filteredNodes = nodes.filter((n) =>
@@ -469,13 +541,13 @@ function ScopedAccessStep({
  {scopeMode === 'nodes' && (
  <div>
  <div className="mb-2 flex items-center justify-between gap-3">
- <span className="text-sm font-semibold text-foreground">Nodes</span>
+ <span className="text-sm font-semibold text-foreground">{t('roles.nodesHeading')}</span>
  <div className="relative w-56">
  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
  <Input
  value={search}
  onChange={(e) => onSearchChange(e.target.value)}
- placeholder="Search nodes…"
+ placeholder={t('roles.searchNodes')}
  className="h-8 pl-8 text-xs"
  />
  </div>
@@ -490,8 +562,8 @@ function ScopedAccessStep({
  onChange={() => onToggleNode('*')}
  />
  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
- <span className="text-xs font-semibold text-foreground">All nodes</span>
- <span className="text-[11px] text-muted-foreground">Every server in the panel</span>
+ <span className="text-xs font-semibold text-foreground">{t('roles.allNodes')}</span>
+ <span className="text-[11px] text-muted-foreground">{t('roles.allNodesDescription')}</span>
  </label>
 
  <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border bg-card p-2">
@@ -511,7 +583,7 @@ function ScopedAccessStep({
  </label>
  ))}
  {filteredNodes.length === 0 && (
- <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">No nodes match</div>
+ <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">{t('roles.noNodesMatch')}</div>
  )}
  </div>
  </div>
@@ -520,13 +592,13 @@ function ScopedAccessStep({
  {scopeMode === 'servers' && (
  <div>
  <div className="mb-2 flex items-center justify-between gap-3">
- <span className="text-sm font-semibold text-foreground">Servers</span>
+ <span className="text-sm font-semibold text-foreground">{t('roles.serversHeading')}</span>
  <div className="relative w-56">
  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
  <Input
  value={search}
  onChange={(e) => onSearchChange(e.target.value)}
- placeholder="Search servers…"
+ placeholder={t('roles.searchServers')}
  className="h-8 pl-8 text-xs"
  />
  </div>
@@ -550,7 +622,7 @@ function ScopedAccessStep({
  </label>
  ))}
  {filteredServers.length === 0 && (
- <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">No servers match</div>
+ <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">{t('roles.noServersMatch')}</div>
  )}
  </div>
  </div>
@@ -561,9 +633,9 @@ function ScopedAccessStep({
  <div>
  <div className="mb-2 flex items-center justify-between gap-3">
  <div className="flex items-center gap-2">
- <span className="text-sm font-semibold text-foreground">Permissions</span>
+ <span className="text-sm font-semibold text-foreground">{t('roles.permissionsHeading')}</span>
  <Badge variant={selectedPermissions.size > 0 ? 'default' : 'outline'} className="tabular-nums text-[10px]">
- {selectedPermissions.size} selected
+ {t('roles.selectedCount', { count: selectedPermissions.size })}
  </Badge>
  </div>
  <div className="relative w-56">
@@ -571,7 +643,7 @@ function ScopedAccessStep({
  <Input
  value={permissionSearch}
  onChange={(e) => onPermissionSearchChange(e.target.value)}
- placeholder="Search permissions…"
+ placeholder={t('roles.searchPermissions')}
  className="h-8 pl-8 text-xs"
  />
  </div>
@@ -590,12 +662,11 @@ function ScopedAccessStep({
  </label>
  ))}
  {filteredPerms.length === 0 && (
- <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">No permissions match</div>
+ <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">{t('roles.noPermissionsMatch')}</div>
  )}
  </div>
  <div className="mt-2 text-[11px] text-muted-foreground">
- Members of this role get exactly these permissions on the selected{' '}
- {scopeMode === 'nodes' ? 'nodes’ servers' : 'servers'} — like adding a subuser, in bulk.
+ {t('roles.scopedHint', { target: scopeMode === 'nodes' ? t('roles.scopedTargetNodes') : t('roles.scopedTargetServers') })}
  </div>
  </div>
  )}
@@ -659,6 +730,7 @@ function PermissionChip({
  onToggle: () => void;
  compact?: boolean;
 }) {
+ const { t } = useTranslation('admin-access');
  return (
  <button
  type="button"
@@ -672,7 +744,7 @@ function PermissionChip({
  }`}
  >
  {selected && <Check className={`h-2.5 w-2.5 ${compact ? 'h-2 w-2' : ''}`} />}
- {formatPermission(permission)}
+ {formatPermission(t, permission)}
  </button>
  );
 }
@@ -691,6 +763,7 @@ function PermissionCategoryCard({
  onToggleCategory: (perms: string[], select: boolean) => void;
  searchQuery: string;
 }) {
+ const { t } = useTranslation('admin-access');
  const Icon = category.icon;
  const allSelected = category.permissions.every((p) => selectedPermissions.has(p));
  const someSelected = category.permissions.some((p) => selectedPermissions.has(p));
@@ -699,7 +772,7 @@ function PermissionCategoryCard({
  const filteredPerms = searchQuery
  ? category.permissions.filter((p) =>
  p.toLowerCase().includes(searchQuery.toLowerCase()) ||
- (PERMISSION_LABELS[p] || '').toLowerCase().includes(searchQuery.toLowerCase())
+ formatPermission(t, p).toLowerCase().includes(searchQuery.toLowerCase())
  )
  : category.permissions;
 
@@ -716,7 +789,7 @@ function PermissionCategoryCard({
  <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${category.color}`}>
  <Icon className={`h-3.5 w-3.5 ${category.accent}`} />
  </div>
- <span className="text-sm font-semibold text-foreground">{category.label}</span>
+ <span className="text-sm font-semibold text-foreground">{permissionCategoryLabel(t, category.key)}</span>
  </div>
 
  <div className="flex items-center gap-2">
@@ -756,8 +829,9 @@ function PermissionCategoryReadCard({
  permissions,
 }: {
  category: { category: string; count: number; icon: typeof Shield; color: string; accent: string; border: string };
- permissions: string[];
+  permissions: string[];
 }) {
+ const { t } = useTranslation('admin-access');
  const Icon = category.icon;
  return (
  <div className={`rounded-xl border ${category.border}`}>
@@ -775,7 +849,7 @@ function PermissionCategoryReadCard({
  {permissions.map((perm) => (
  <span key={perm} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] text-foreground">
  <Check className="h-2.5 w-2.5 text-primary" />
- {formatPermission(perm)}
+ {formatPermission(t, perm)}
  </span>
  ))}
  </div>
@@ -794,6 +868,7 @@ function PresetCard({
  onApply: () => void;
  isActive: boolean;
 }) {
+ const { t } = useTranslation('admin-access');
  const Icon = preset.icon;
  const isWildcard = preset.permissions.includes('*');
  return (
@@ -811,20 +886,20 @@ function PresetCard({
  <Icon className="h-4 w-4 text-foreground/80" />
  </div>
  <div className="min-w-0 flex-1">
- <div className="text-sm font-semibold text-foreground">{preset.label}</div>
- <div className="text-[11px] text-muted-foreground">{preset.description}</div>
+ <div className="text-sm font-semibold text-foreground">{presetLabel(t, preset.key)}</div>
+ <div className="text-[11px] text-muted-foreground">{presetDescription(t, preset.key)}</div>
  </div>
  </div>
  <div className="flex flex-wrap gap-1">
  {isWildcard ? (
  <Badge className="gap-1 border-warning/30 bg-warning/10 text-warning text-[9px]">
- <Zap className="h-2.5 w-2.5" /> All Permissions
+ <Zap className="h-2.5 w-2.5" /> {t('roles.permissionLabels.all')}
  </Badge>
  ) : (
  <>
  {preset.permissions.slice(0, 3).map((p) => (
  <Badge key={p} variant="outline" className="text-[9px]">
- {formatPermission(p)}
+ {formatPermission(t, p)}
  </Badge>
  ))}
  {preset.permissions.length > 3 && (
@@ -836,9 +911,9 @@ function PresetCard({
  </button>
  );
 }
-
 // ── Main Page ──
 function RolesPage() {
+ const { t } = useTranslation('admin-access');
  const [search, setSearch] = useState('');
  const [isCreateOpen, setIsCreateOpen] = useState(false);
  const [editingRole, setEditingRole] = useState<any>(null);
@@ -891,40 +966,40 @@ function RolesPage() {
  const createMutation = useMutation({
  mutationFn: (data: { name: string; description?: string; permissions: string[]; scope?: RoleScope }) => rolesApi.create(data),
  onSuccess: () => {
- notifySuccess('Role created');
+ notifySuccess(t('roles.toasts.created'));
  resetForm();
  setIsCreateOpen(false);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to create role'),
+ onError: (error: any) => notifyError(error),
  });
 
  const updateMutation = useMutation({
  mutationFn: ({ roleId, data }: { roleId: string; data: Partial<{ name: string; description?: string; permissions: string[]; scope?: RoleScope }> }) =>
  rolesApi.update(roleId, data),
  onSuccess: () => {
- notifySuccess('Role updated');
+ notifySuccess(t('roles.toasts.updated'));
  resetForm();
  setEditingRole(null);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update role'),
+ onError: (error: any) => notifyError(error),
  });
 
  const deleteMutation = useMutation({
  mutationFn: (roleId: string) => rolesApi.delete(roleId),
  onSuccess: () => {
- notifySuccess('Role deleted');
+ notifySuccess(t('roles.toasts.deleted'));
  setViewingRole(null);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
- onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete role'),
+ onError: (error: any) => notifyError(error),
  });
 
  const togglePermission = useCallback((permission: string) => {
@@ -947,8 +1022,8 @@ function RolesPage() {
  }, []);
 
  const applyPreset = useCallback((preset: typeof PERMISSION_PRESETS[0]) => {
- setName(preset.label);
- setDescription(preset.description);
+ setName(presetLabel(t, preset.key));
+ setDescription(presetDescription(t, preset.key));
  setSelectedPermissions(new Set(preset.permissions));
  setActivePreset(preset.key);
  }, []);
@@ -1030,12 +1105,11 @@ function RolesPage() {
  const canSubmit =
  name.trim().length > 0 && selectedPermissions.size > 0 && scopeSelectionValid;
  const isModalOpen = isCreateOpen || !!editingRole;
-
  const wizardSteps = [
- { label: 'Details', icon: Info },
- { label: 'Permissions', icon: Shield },
- { label: 'Node Access', icon: Server },
- { label: 'Scoped Access', icon: Layers },
+ { label: t('wizard.details'), icon: Info },
+ { label: t('wizard.permissions'), icon: Shield },
+ { label: t('wizard.nodeAccess'), icon: Server },
+ { label: t('wizard.scopedAccess'), icon: Layers },
  ];
 
  const canNavigateStep = [
@@ -1079,12 +1153,12 @@ function RolesPage() {
  {/* ── Header ── */}
  <TabHeader
  icon={Shield}
- title="Roles"
- description="Manage user roles and their permissions"
+ title={t('roles.title')}
+ description={t('roles.description')}
  actions={
  <Button size="sm" onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }} className="gap-1.5">
  <Plus className="h-3.5 w-3.5" />
- Create role
+ {t('roles.createTitle')}
  </Button>
  }
  />
@@ -1096,17 +1170,17 @@ function RolesPage() {
  <Input
  value={search}
  onChange={(e) => setSearch(e.target.value)}
- placeholder="Search roles…"
+ placeholder={t('roles.searchPlaceholder')}
  className="pl-9"
  />
  </div>
  <div className="flex items-center gap-2">
  <Badge variant="outline" className="text-xs">
- {roles.length} roles
+ {t('roles.roleCount', { count: roles.length })}
  </Badge>
  {presets.length > 0 && (
  <Badge variant="secondary" className="text-xs">
- {presets.length} presets
+ {t('roles.presetCount', { count: presets.length })}
  </Badge>
  )}
  </div>
@@ -1133,12 +1207,12 @@ function RolesPage() {
  </div>
  ) : filteredRoles.length === 0 ? (
  <TabEmptyState
- title={search.trim() ? 'No roles found' : 'No roles'}
- description={search.trim() ? 'Try a different role name or description.' : 'Create a role to define permissions for users.'}
+ title={search.trim() ? t('roles.emptyFilteredTitle') : t('roles.emptyTitle')}
+ description={search.trim() ? t('roles.emptyFilteredDescription') : t('roles.emptyDescription')}
  action={
  <Button size="sm" onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }} className="gap-1.5">
  <Plus className="h-3.5 w-3.5" />
- Create role
+ {t('roles.createTitle')}
  </Button>
  }
  />
@@ -1172,9 +1246,9 @@ function RolesPage() {
 >
  <DialogContent size="2xl">
  <DialogHeader icon={<Shield className="h-4 w-4" />}>
- <DialogTitle>{editingRole ? 'Edit role' : 'Create role'}</DialogTitle>
+ <DialogTitle>{editingRole ? t('roles.editTitle') : t('roles.createTitle')}</DialogTitle>
  <DialogDescription>
- {editingRole ? 'Update role name, description, and permissions.' : 'Define a new role with specific permissions.'}
+ {editingRole ? t('roles.editDescription') : t('roles.createDescription')}
  </DialogDescription>
  </DialogHeader>
 
@@ -1196,7 +1270,7 @@ function RolesPage() {
  <div>
  <div className="flex items-center gap-2 mb-3">
  <Sparkles className="h-4 w-4 text-warning" />
- <span className="text-sm font-semibold text-foreground">Quick start from a preset</span>
+ <span className="text-sm font-semibold text-foreground">{t('roles.presetsHeading')}</span>
  </div>
  <div className="grid grid-cols-2 gap-3">
  {PERMISSION_PRESETS.map((preset) => (
@@ -1213,15 +1287,15 @@ function RolesPage() {
 
  {/* Basic Info */}
  <div>
- <SectionHeader icon={Info} title="Role details" />
+ <SectionHeader icon={Info} title={t('roles.roleDetails')} />
  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Name <span className="text-destructive">*</span></span>
- <Input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Moderator" />
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('roles.nameLabel')} <span className="text-destructive">*</span></span>
+ <Input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('roles.namePlaceholder')} />
  </label>
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Description</span>
- <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what this role can do…" />
+ <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('roles.descriptionLabel')}</span>
+ <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('roles.descriptionPlaceholder')} />
  </label>
  </div>
  </div>
@@ -1233,9 +1307,9 @@ function RolesPage() {
  <div className="space-y-4">
  <div className="flex items-center justify-between gap-3">
  <div className="flex items-center gap-2">
- <span className="text-sm font-semibold text-foreground">Permissions</span>
+ <span className="text-sm font-semibold text-foreground">{t('roles.permissionsHeading')}</span>
  <Badge variant={selectedPermissions.size > 0 ? 'default' : 'outline'} className="tabular-nums text-[10px]">
- {selectedPermissions.size} selected
+ {t('roles.selectedCount', { count: selectedPermissions.size })}
  </Badge>
  </div>
  <div className="relative w-56">
@@ -1243,7 +1317,7 @@ function RolesPage() {
  <Input
  value={permissionSearch}
  onChange={(e) => setPermissionSearch(e.target.value)}
- placeholder="Search permissions…"
+ placeholder={t('roles.searchPermissions')}
  className="h-8 pl-8 text-xs"
  />
  </div>
@@ -1263,8 +1337,8 @@ function RolesPage() {
  <Zap className="h-4 w-4 text-warning" />
  </div>
  <div className="text-left flex-1">
- <div className="text-sm font-semibold text-warning">Wildcard — All Permissions</div>
- <div className="text-[11px] text-muted-foreground">Grants unrestricted access to every system permission</div>
+ <div className="text-sm font-semibold text-warning">{t('roles.wildcard')}</div>
+ <div className="text-[11px] text-muted-foreground">{t('roles.wildcardDescription')}</div>
  </div>
  <div className={`flex h-6 w-11 items-center rounded-full transition-all duration-200 ${
  selectedPermissions.has('*') ? 'bg-warning' : 'bg-surface-3'
@@ -1280,7 +1354,7 @@ function RolesPage() {
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  {PERMISSION_CATEGORIES.map((category) => (
  <PermissionCategoryCard
- key={category.label}
+ key={category.key}
  category={category}
  selectedPermissions={selectedPermissions}
  onTogglePermission={togglePermission}
@@ -1345,14 +1419,14 @@ function RolesPage() {
  <DialogFooter className="sm:justify-between">
  <div className="text-xs text-muted-foreground">
  {selectedPermissions.size > 0 && (
- <span>{selectedPermissions.size} permission{selectedPermissions.size === 1 ? '' : 's'} selected</span>
+ <span>{t('roles.permissionCountSelected', { count: selectedPermissions.size })}</span>
  )}
  </div>
  <div className="flex items-center gap-2">
  {wizardStep > 0 && (
  <Button variant="outline" size="sm" onClick={() => goToStep(wizardStep - 1)} className="gap-1">
  <ChevronLeft className="h-3.5 w-3.5" />
- Back
+ {t('common:actions.back')}
  </Button>
  )}
  {wizardStep < wizardSteps.length - 1 && (
@@ -1362,7 +1436,7 @@ function RolesPage() {
  disabled={!canNavigateStep[wizardStep + 1]}
  className="gap-1"
  >
- Next
+ {t('common:actions.next')}
  <ChevronRight className="h-3.5 w-3.5" />
  </Button>
  )}
@@ -1374,14 +1448,14 @@ function RolesPage() {
  className="gap-1"
  >
  {createMutation.isPending || updateMutation.isPending
- ? 'Saving…'
+ ? t('saving')
  : editingRole
- ? 'Save changes'
- : 'Create role'}
+ ? t('roles.saveChanges')
+ : t('roles.createTitle')}
  </Button>
  )}
  <Button variant="ghost" size="sm" onClick={() => { resetForm(); setIsCreateOpen(false); setEditingRole(null); }}>
- Cancel
+ {t('common:actions.cancel')}
  </Button>
  </div>
  </DialogFooter>
@@ -1402,9 +1476,9 @@ function RolesPage() {
  ? 'border-warning/20 bg-warning/10 text-warning'
  : 'border-primary/20 bg-primary/10 text-primary'}
  >
- <DialogTitle>{viewingRole?.name ?? 'Role details'}</DialogTitle>
+ <DialogTitle>{viewingRole?.name ?? t('roles.viewTitleFallback')}</DialogTitle>
  <DialogDescription>
- {viewingRole?.description || 'Role permissions and metadata.'}
+ {viewingRole?.description || t('roles.viewDescriptionFallback')}
  </DialogDescription>
  </DialogHeader>
 
@@ -1414,20 +1488,20 @@ function RolesPage() {
  <div className="flex flex-wrap gap-2 md:gap-3">
  <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
  <Shield className="h-3 w-3 text-primary" />
- <span className="text-muted-foreground">Permissions</span>
+ <span className="text-muted-foreground">{t('roles.permissionsHeading')}</span>
  <span className="font-semibold tabular-nums text-foreground">{viewingRole.permissions?.length || 0}</span>
  </div>
  {(viewingRole.userCount ?? 0) > 0 && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
  <Users className="h-3 w-3 text-primary" />
- <span className="text-muted-foreground">Users</span>
+ <span className="text-muted-foreground">{t('roles.usersLabel')}</span>
  <span className="font-semibold tabular-nums text-foreground">{viewingRole.userCount}</span>
  </div>
  )}
  <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
  <Clock className="h-3 w-3 text-muted-foreground" />
- <span className="text-muted-foreground">Created</span>
- <span className="font-medium text-foreground">{viewingRole.createdAt ? new Date(viewingRole.createdAt).toLocaleDateString() : '—'}</span>
+ <span className="text-muted-foreground">{t('created')}</span>
+ <span className="font-medium text-foreground">{viewingRole.createdAt ? formatDate(viewingRole.createdAt) : '—'}</span>
  </div>
  </div>
 
@@ -1437,15 +1511,15 @@ function RolesPage() {
  <Zap className="h-6 w-6 text-warning" />
  </div>
  <div>
- <div className="text-base font-semibold text-warning">Full Administrator Access</div>
- <div className="text-xs text-warning/70">This role has unrestricted access to all system permissions.</div>
+ <div className="text-base font-semibold text-warning">{t('roles.fullAccessTitle')}</div>
+ <div className="text-xs text-warning/70">{t('roles.fullAccessDescription')}</div>
  </div>
  </div>
  ) : (
  <div className="grid grid-cols-1 gap-3">
- {getPermissionCategories(viewingRole.permissions || []).map((cat) => {
+ {getPermissionCategories(t, viewingRole.permissions || []).map((cat) => {
  const catPerms = (viewingRole.permissions || []).filter((p: string) => {
- const catData = PERMISSION_CATEGORIES.find((c) => c.label === cat.category);
+ const catData = PERMISSION_CATEGORIES.find((c) => permissionCategoryLabel(t, c.key) === cat.category);
  return catData ? catData.permissions.includes(p) : p.split('.')[0] === cat.category.toLowerCase().split(' ')[0];
  });
  return (
@@ -1460,9 +1534,9 @@ function RolesPage() {
  )}
 
  <div className="space-y-1 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
- <div>Role ID: <span className="font-mono">{viewingRole.id}</span></div>
+ <div>{t('roles.roleId')} <span className="font-mono">{viewingRole.id}</span></div>
  {viewingRole.updatedAt !== viewingRole.createdAt && (
- <div>Updated: {new Date(viewingRole.updatedAt).toLocaleDateString()} at {new Date(viewingRole.updatedAt).toLocaleTimeString()}</div>
+ <div>{t('updatedAt', { date: formatDate(viewingRole.updatedAt), time: formatTime(viewingRole.updatedAt) })}</div>
  )}
  </div>
  </>
@@ -1474,18 +1548,18 @@ function RolesPage() {
  {viewingRole && (
  <Button variant="outline" size="sm" onClick={() => startEdit(viewingRole)} className="gap-1.5">
  <Pencil className="h-3.5 w-3.5" />
- Edit role
+ {t('roles.editRole')}
  </Button>
  )}
  {viewingRole && viewingRole.userCount === 0 && (
  <Button variant="destructive" size="sm" onClick={() => setDeletingRole(viewingRole)} disabled={deleteMutation.isPending} className="gap-1.5">
  <Trash2 className="h-3.5 w-3.5" />
- {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+ {deleteMutation.isPending ? t('roles.deleting') : t('common:actions.delete')}
  </Button>
  )}
  </div>
  <Button variant="ghost" size="sm" onClick={() => setViewingRole(null)}>
- Close
+ {t('common:actions.close')}
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -1494,10 +1568,10 @@ function RolesPage() {
  {/* ── Delete Confirmation ── */}
  <ConfirmDialog
  open={!!deletingRole}
- title="Delete role?"
- message={`Are you sure you want to delete "${deletingRole?.name}"? This action cannot be undone.`}
- confirmText="Delete"
- cancelText="Cancel"
+ title={t('roles.deleteTitle')}
+ message={t('roles.deleteConfirm', { name: deletingRole?.name })}
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
  variant="danger"
  loading={deleteMutation.isPending}
  onConfirm={() => {

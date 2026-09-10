@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { reportSystemError } from '../services/api/systemErrors';
 
 interface Props {
@@ -11,6 +12,34 @@ interface Props {
 interface State {
  hasError: boolean;
  error: Error | null;
+}
+
+function PluginErrorFallback({
+ pluginName,
+ message,
+ onRetry,
+}: {
+ pluginName: string;
+ message?: string;
+ onRetry: () => void;
+}) {
+ const { t } = useTranslation('plugins');
+ return (
+ <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center">
+ <h3 className="mb-2 text-lg font-semibold text-destructive">
+ {t('errorBoundary.title', { name: pluginName })}
+ </h3>
+ <p className="mb-4 text-sm text-muted-foreground">
+ {message || t('errorBoundary.message')}
+ </p>
+ <button
+ onClick={onRetry}
+ className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+ >
+ {t('errorBoundary.tryAgain')}
+ </button>
+ </div>
+ );
 }
 
 /**
@@ -59,21 +88,12 @@ class PluginErrorBoundary extends Component<Props, State> {
  return this.props.fallback;
  }
 
- return (
- <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center">
- <h3 className="mb-2 text-lg font-semibold text-destructive">
- ⚠️ Plugin Error: {this.props.pluginName}
- </h3>
- <p className="mb-4 text-sm text-muted-foreground">
- {this.state.error?.message || 'An unexpected error occurred in this plugin.'}
- </p>
- <button
- onClick={() => this.setState({ hasError: false, error: null })}
- className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
- >
- Try Again
- </button>
- </div>
+  return (
+ <PluginErrorFallback
+ pluginName={this.props.pluginName}
+ message={this.state.error?.message}
+ onRetry={() => this.setState({ hasError: false, error: null })}
+ />
  );
  }
 

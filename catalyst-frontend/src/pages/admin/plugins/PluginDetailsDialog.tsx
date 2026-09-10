@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -32,6 +33,8 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { fetchPluginDetails, updatePluginPermissions } from '../../../plugins/api';
 import { toast } from 'sonner';
+import { notifyError } from '../../../utils/notify';
+import { formatDateTime } from '../../../i18n/format';
 import { permissionLabel } from './permissionMeta';
 import type { PluginDetails } from '../../../plugins/types';
 
@@ -85,6 +88,7 @@ export function PluginDetailsDialog({
   onOpenChange: (open: boolean) => void;
   onUninstallRequest?: (name: string) => void;
 }) {
+  const { t } = useTranslation('admin-system');
   const { data, isLoading } = useQuery({
     queryKey: qk.adminPlugin(pluginName),
     queryFn: () => fetchPluginDetails(pluginName),
@@ -116,11 +120,11 @@ export function PluginDetailsDialog({
   const saveMutation = useMutation({
     mutationFn: (granted: string[]) => updatePluginPermissions(pluginName, granted),
     onSuccess: () => {
-      toast.success('Plugin permissions updated — revocations apply immediately');
+      toast.success(t('pluginsAdmin.toastPermissionsUpdated'));
       queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
       queryClient.invalidateQueries({ queryKey: qk.adminPlugin(pluginName) });
     },
-    onError: (error: any) => toast.error(error.message || 'Failed to update permissions'),
+    onError: (error: any) => notifyError(error),
   });
 
   const toggle = (perm: string, next: boolean) => {
@@ -145,17 +149,17 @@ export function PluginDetailsDialog({
   const statusText = useMemo(() => {
     switch (details?.status) {
       case 'enabled':
-        return { text: 'Enabled', variant: 'outline' as const };
+        return { text: t('pluginsAdmin.stateEnabled'), variant: 'outline' as const };
       case 'error':
-        return { text: 'Error', variant: 'destructive' as const };
+        return { text: t('pluginsAdmin.stateError'), variant: 'destructive' as const };
       case 'disabled':
-        return { text: 'Disabled', variant: 'secondary' as const };
+        return { text: t('pluginsAdmin.stateDisabled'), variant: 'secondary' as const };
       case 'loaded':
-        return { text: 'Loaded', variant: 'secondary' as const };
+        return { text: t('pluginsAdmin.stateLoaded'), variant: 'secondary' as const };
       default:
         return { text: details?.status ?? '—', variant: 'secondary' as const };
     }
-  }, [details?.status]);
+  }, [details?.status, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -163,7 +167,7 @@ export function PluginDetailsDialog({
         <DialogHeader icon={<Puzzle className="h-4 w-4" />}>
           <DialogTitle>{details?.displayName ?? pluginName}</DialogTitle>
           <DialogDescription>
-            {details?.author || 'Unknown author'} · v{details?.version ?? '?'} ·{' '}
+            {details?.author || t('pluginsAdmin.unknownAuthor')} · v{details?.version ?? '?'} ·{' '}
             {details?.name}
           </DialogDescription>
         </DialogHeader>
@@ -175,9 +179,9 @@ export function PluginDetailsDialog({
           ) : (
             <Tabs defaultValue="overview">
               <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="permissions">Permissions</TabsTrigger>
-                <TabsTrigger value="capabilities">Capabilities</TabsTrigger>
+                <TabsTrigger value="overview">{t('pluginsAdmin.detailsTabOverview')}</TabsTrigger>
+                <TabsTrigger value="permissions">{t('pluginsAdmin.detailsTabPermissions')}</TabsTrigger>
+                <TabsTrigger value="capabilities">{t('pluginsAdmin.detailsTabCapabilities')}</TabsTrigger>
               </TabsList>
 
               {/* ── Overview ── */}
@@ -186,8 +190,7 @@ export function PluginDetailsDialog({
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
-                      This plugin was grandfathered from before safety disclaimers existed.
-                      Review its permissions below and revoke anything you don't recognize.
+                      {t('pluginsAdmin.legacyNotice')}
                     </AlertDescription>
                   </Alert>
                 )}
@@ -198,33 +201,36 @@ export function PluginDetailsDialog({
                   </Alert>
                 )}
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  {details?.description || 'No description provided.'}
+                  {details?.description || t('pluginsAdmin.noDescription')}
                 </p>
                 <div className="divide-y divide-border/40 rounded-lg border border-border/60 bg-surface-2/20 px-4 py-1">
-                  <MetaRow label="Status" value={<Badge variant={statusText.variant}>{statusText.text}</Badge>} />
-                  <MetaRow label="Version" value={details?.version} />
-                  <MetaRow label="Requires Catalyst" value={details?.catalystVersion ?? '—'} />
+                  <MetaRow label={t('pluginsAdmin.statusLabel')} value={<Badge variant={statusText.variant}>{statusText.text}</Badge>} />
+                  <MetaRow label={t('pluginsAdmin.versionLabel')} value={details?.version} />
+                  <MetaRow label={t('pluginsAdmin.requiresCatalyst')} value={details?.catalystVersion ?? '—'} />
                   <MetaRow
-                    label="Frontend / Backend"
-                    value={`${details?.hasFrontend ? 'UI' : 'No UI'} · ${details?.hasBackend ? 'API' : 'No API'}`}
+                    label={t('pluginsAdmin.frontendBackend')}
+                    value={t('pluginsAdmin.frontendBackendValue', {
+                      ui: details?.hasFrontend ? t('pluginsAdmin.uiYes') : t('pluginsAdmin.uiNo'),
+                      api: details?.hasBackend ? t('pluginsAdmin.apiYes') : t('pluginsAdmin.apiNo'),
+                    })}
                   />
                   <MetaRow
-                    label="Installed"
-                    value={details?.loadedAt ? new Date(details.loadedAt).toLocaleString() : '—'}
+                    label={t('pluginsAdmin.installedLabel')}
+                    value={details?.loadedAt ? formatDateTime(details.loadedAt) : '—'}
                   />
                   <MetaRow
-                    label="Safety accepted"
+                    label={t('pluginsAdmin.safetyAccepted')}
                     value={
                       details?.safetyAcceptedAt
-                        ? `${new Date(details.safetyAcceptedAt).toLocaleString()}${details.legacyAcceptance ? ' (legacy)' : ''}`
-                        : 'Not yet'
+                        ? `${formatDateTime(details.safetyAcceptedAt)}${details.legacyAcceptance ? t('pluginsAdmin.safetyLegacySuffix') : ''}`
+                        : t('pluginsAdmin.notYet')
                     }
                   />
                 </div>
                 {(details?.dependencies?.length ?? 0) > 0 && (
                   <div>
                     <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">
-                      Depends on
+                      {t('pluginsAdmin.dependsOn')}
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {(details?.dependencies ?? []).map((dep) => (
@@ -242,17 +248,15 @@ export function PluginDetailsDialog({
                 <Alert>
                   <Settings2 className="h-4 w-4" />
                   <AlertDescription>
-                    Revoking a permission stops the plugin's access to that data immediately — no
-                    restart needed. Mounted routes, scheduled tasks and event listeners stay until
-                    you disable the plugin.
+                    {t('pluginsAdmin.revokeNotice')}
                   </AlertDescription>
                 </Alert>
 
                 {declared.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
                     <p className="text-sm text-muted-foreground">
-                      This plugin declares no data permissions. It can still run code and serve
-                      routes under <code className="font-mono text-xs">/api/plugins/{pluginName}/</code>.
+                      {t('pluginsAdmin.noPermissionsDeclared')}{' '}
+                      <code className="font-mono text-xs">/api/plugins/{pluginName}/</code>.
                     </p>
                   </div>
                 ) : (
@@ -272,7 +276,7 @@ export function PluginDetailsDialog({
                               </span>
                               {!isGranted && (
                                 <Badge variant="secondary" className="text-[10px]">
-                                  Revoked
+                                  {t('pluginsAdmin.revoked')}
                                 </Badge>
                               )}
                             </span>
@@ -288,7 +292,7 @@ export function PluginDetailsDialog({
                           <Switch
                             checked={isGranted}
                             onCheckedChange={(v) => toggle(perm, v === true)}
-                            aria-label={`Toggle ${perm}`}
+                            aria-label={t('pluginsAdmin.grantToggleAria', { permission: perm })}
                           />
                         </label>
                       );
@@ -299,7 +303,7 @@ export function PluginDetailsDialog({
                 {declared.length > 0 && (
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-muted-foreground">
-                      {draftGrants.length}/{declared.length} permissions granted
+                      {t('pluginsAdmin.permissionsGrantedCount', { granted: draftGrants.length, total: declared.length })}
                     </p>
                     <Button
                       size="sm"
@@ -308,7 +312,7 @@ export function PluginDetailsDialog({
                       data-testid="plugin-permissions-save"
                     >
                       {saveMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      Save permissions
+                      {t('pluginsAdmin.savePermissions')}
                     </Button>
                   </div>
                 )}
@@ -320,7 +324,7 @@ export function PluginDetailsDialog({
                   <TabEmpty />
                 ) : (
                   <>
-                    <CapabilitySection icon={Globe} title="API routes" count={capabilities!.routes.length}>
+                    <CapabilitySection icon={Globe} title={t('pluginsAdmin.capabilityApiRoutes')} count={capabilities!.routes.length}>
                       <ul className="space-y-1">
                         {capabilities!.routes.map((r) => (
                           <li key={`${r.method}:${r.url}`} className="flex items-center gap-2">
@@ -333,7 +337,7 @@ export function PluginDetailsDialog({
                       </ul>
                     </CapabilitySection>
 
-                    <CapabilitySection icon={CalendarClock} title="Scheduled tasks" count={capabilities!.tasks.length}>
+                    <CapabilitySection icon={CalendarClock} title={t('pluginsAdmin.capabilityScheduledTasks')} count={capabilities!.tasks.length}>
                       <ul className="space-y-1">
                         {capabilities!.tasks.map((t, i) => (
                           <li key={`${t.cron}-${i}`} className="flex items-center gap-2 text-sm text-foreground">
@@ -344,7 +348,7 @@ export function PluginDetailsDialog({
                       </ul>
                     </CapabilitySection>
 
-                    <CapabilitySection icon={MessageSquare} title="WebSocket handlers" count={capabilities!.wsHandlers.length}>
+                    <CapabilitySection icon={MessageSquare} title={t('pluginsAdmin.capabilityWsHandlers')} count={capabilities!.wsHandlers.length}>
                       <ul className="flex flex-wrap gap-1.5">
                         {capabilities!.wsHandlers.map((h) => (
                           <li key={h}>
@@ -358,7 +362,7 @@ export function PluginDetailsDialog({
 
                     <CapabilitySection
                       icon={Boxes}
-                      title="Declared events"
+                      title={t('pluginsAdmin.capabilityDeclaredEvents')}
                       count={Object.keys(capabilities!.events ?? {}).length}
                     >
                       <ul className="space-y-1">
@@ -375,7 +379,7 @@ export function PluginDetailsDialog({
                       </ul>
                     </CapabilitySection>
 
-                    <CapabilitySection icon={Users} title="Exposed RPC APIs" count={capabilities!.exposedApis.length}>
+                    <CapabilitySection icon={Users} title={t('pluginsAdmin.capabilityExposedApis')} count={capabilities!.exposedApis.length}>
                       <ul className="flex flex-wrap gap-1.5">
                         {capabilities!.exposedApis.map((api) => (
                           <li key={api}>
@@ -400,26 +404,26 @@ export function PluginDetailsDialog({
               className="text-danger hover:text-danger"
               onClick={() => onUninstallRequest(pluginName)}
             >
-              Uninstall…
+            {t('pluginsAdmin.uninstallEllipsis')}
             </Button>
           ) : (
             <span />
           )}
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            Close
+            {t('common:actions.close')}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
 function TabEmpty() {
+  const { t } = useTranslation('admin-system');
   return (
     <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
       <Database className="mx-auto mb-2 h-5 w-5 text-muted-foreground/50" />
       <p className="text-sm text-muted-foreground">
-        No routes, tasks, events or RPC APIs registered by this plugin.
+        {t('pluginsAdmin.capabilityEmpty')}
       </p>
     </div>
   );

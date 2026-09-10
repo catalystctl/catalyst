@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
 
 import {
@@ -54,6 +55,7 @@ export function SafetyConsentDialog({
   onAccept,
   onOpenChange,
 }: SafetyConsentDialogProps) {
+  const { t } = useTranslation('admin-system');
   const [acknowledged, setAcknowledged] = useState(false);
 
   // Reset the acknowledgment whenever the dialog is opened for a plugin
@@ -67,23 +69,22 @@ export function SafetyConsentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg" data-testid="plugin-safety-consent">
         <DialogHeader icon={<ShieldAlert className="h-4 w-4 text-warning" />}>
-          <DialogTitle>Enable {displayName}</DialogTitle>
+          <DialogTitle>{t('pluginsAdmin.consentTitle', { name: displayName })}</DialogTitle>
           <DialogDescription>
-            You are about to enable third-party code{author ? ` by ${author}` : ''}
-            {version ? ` (v${version})` : ''}.
+            {t('pluginsAdmin.consentIntro')}
+            {author ? t('pluginsAdmin.consentByAuthor', { author }) : ''}
+            {version ? t('pluginsAdmin.consentVersion', { version }) : ''}.
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
           <div className="space-y-4">
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Plugins run inside the panel backend with the same network and host access as
-              Catalyst itself. They are not sandboxed from the panel process. Before enabling,
-              make sure you trust this plugin and its author.
+              {t('pluginsAdmin.consentBody')}
             </p>
 
             <div className="rounded-lg border border-border/60 bg-surface-2/30 p-4">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">
-                This plugin will be able to
+                {t('pluginsAdmin.consentWillBeAbleTo')}
               </p>
               {requestedCapabilities && requestedCapabilities.length > 0 ? (
                 <ul className="space-y-2">
@@ -110,16 +111,13 @@ export function SafetyConsentDialog({
                 </ul>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No data permissions declared. It may still run scheduled code and serve API
-                  routes under its namespace.
+                  {t('pluginsAdmin.consentNoPermissions')}
                 </p>
               )}
             </div>
 
             <p className="text-xs leading-relaxed text-muted-foreground">
-              A plugin can contact external services, read any server or user data permitted
-              above, and keep running until you disable it. Granting fewer permissions after
-              enabling limits its data access, but does not unload its code.
+              {t('pluginsAdmin.consentRisk')}
             </p>
 
             <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-danger/30 bg-danger/5 px-4 py-3">
@@ -130,22 +128,21 @@ export function SafetyConsentDialog({
                 data-testid="plugin-safety-checkbox"
               />
               <span className="text-sm leading-snug text-foreground">
-                I understand the risks of enabling this plugin and I accept responsibility for
-                the access it will have to this panel.
+                {t('pluginsAdmin.consentAcknowledge')}
               </span>
             </label>
 
             {!acknowledged && (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <AlertTriangle className="h-3 w-3 text-warning" />
-                Tick the box above to continue.
+                {t('pluginsAdmin.consentTickToContinue')}
               </p>
             )}
           </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             size="sm"
@@ -154,7 +151,7 @@ export function SafetyConsentDialog({
             disabled={!acknowledged || busy}
             data-testid="plugin-safety-accept"
           >
-            Accept &amp; Enable
+            {t('pluginsAdmin.consentAccept')}
           </Button>
         </DialogFooter>
       </DialogContent>

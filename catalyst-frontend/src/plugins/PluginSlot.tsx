@@ -2,6 +2,7 @@
 // Component that renders all components registered for a given plugin slot.
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { usePluginSlots } from './usePluginSlots';
 import PluginErrorBoundary from './PluginErrorBoundary';
 
@@ -35,6 +36,7 @@ export function PluginSlot({
   as: Wrapper = 'div',
   className,
 }: PluginSlotProps) {
+  const { t } = useTranslation('plugins');
   const components = usePluginSlots(name);
 
   if (components.length === 0) {
@@ -49,7 +51,7 @@ export function PluginSlot({
           pluginName={name}
           fallback={
             <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-muted-foreground">
-              Plugin widget failed to render
+              {t('errorBoundary.widgetFailed')}
             </div>
           }
         >

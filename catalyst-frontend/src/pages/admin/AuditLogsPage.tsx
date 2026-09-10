@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
  Search,
  Download,
@@ -46,6 +48,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Link } from 'react-router-dom';
+import { formatDateTime } from '../../i18n/format';
 
 const pageSize = 50;
 
@@ -103,13 +106,12 @@ function toneDot(tone: 'success' | 'warning' | 'danger' | 'neutral') {
  case 'neutral': return 'bg-muted-foreground/30';
  }
 }
-
-function formatTimeAgo(date: string): string {
+function formatTimeAgo(t: TFunction<'admin-access'>, date: string): string {
  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
- if (seconds < 60) return `${seconds}s`;
- if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
- if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
- return `${Math.floor(seconds / 86400)}d`;
+ if (seconds < 60) return t('audit.timeAgoSeconds', { count: seconds });
+ if (seconds < 3600) return t('audit.timeAgoMinutes', { count: Math.floor(seconds / 60) });
+ if (seconds < 86400) return t('audit.timeAgoHours', { count: Math.floor(seconds / 3600) });
+ return t('audit.timeAgoDays', { count: Math.floor(seconds / 86400) });
 }
 
 function isToday(date: string): boolean {
@@ -124,15 +126,15 @@ function isYesterday(date: string): boolean {
  yesterday.setDate(yesterday.getDate() - 1);
  return d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate();
 }
-
-function getDateLabel(date: string): string {
- if (isToday(date)) return 'Today';
- if (isYesterday(date)) return 'Yesterday';
- return new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+function getDateLabel(t: TFunction<'admin-access'>, date: string): string {
+ if (isToday(date)) return t('audit.today');
+ if (isYesterday(date)) return t('audit.yesterday');
+ return formatDateTime(date, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
 // ── Log Detail Modal ──
 function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => void }) {
+ const { t } = useTranslation('admin-access');
  const rawDetails = (log.details ?? log.metadata ?? {}) as Record<string, any>;
  const details = rawDetails && typeof rawDetails === 'object' && !Array.isArray(rawDetails) ? rawDetails : { value: rawDetails };
 
@@ -258,27 +260,27 @@ return (
 
  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
  <div className="space-y-1.5">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actor</span>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('audit.detailActor')}</span>
  <div className="flex items-center gap-2.5">
  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
  <User className="h-4 w-4 text-primary" />
  </div>
  <div>
- <div className="text-sm font-medium text-foreground">{actorUsername ?? 'System'}</div>
- <div className="text-[11px] text-muted-foreground">{actorEmail ?? log.userId ?? 'n/a'}</div>
+ <div className="text-sm font-medium text-foreground">{actorUsername ?? t('audit.detailSystem')}</div>
+ <div className="text-[11px] text-muted-foreground">{actorEmail ?? log.userId ?? t('notAvailable')}</div>
  </div>
  </div>
  </div>
  <div className="space-y-1.5">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">When</span>
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('audit.detailWhen')}</span>
  <div className="flex items-center gap-2">
  <Clock className="h-4 w-4 text-muted-foreground" />
  <div>
  <div className="text-sm font-medium text-foreground tabular-nums">
- {new Date(log.timestamp).toLocaleString()}
+ {formatDateTime(log.timestamp)}
  </div>
  <div className="text-[11px] text-muted-foreground">
- {formatTimeAgo(log.timestamp)} ago
+ {formatTimeAgo(t, log.timestamp)}
  </div>
  </div>
  </div>
@@ -313,7 +315,7 @@ return (
  {hasDetails ? (
  <div className="space-y-2">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
- Details ({publicEntries.length})
+ {t('audit.detailDetailsCount', { count: publicEntries.length })}
  </span>
  <div className="space-y-2">
  {publicEntries.map(([key, value]) => (
@@ -332,13 +334,13 @@ return (
  </div>
  ) : (
  <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4 text-center text-xs text-muted-foreground">
- No details recorded for this event.
+ {t('audit.detailNoDetails')}
  </div>
  )}
  </DialogBody>
 
  <DialogFooter>
- <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+ <Button variant="outline" size="sm" onClick={onClose}>{t('common:actions.close')}</Button>
  </DialogFooter>
  </DialogContent>
  </Dialog>
@@ -348,6 +350,7 @@ return (
 
 // ── Main Page ──
 function AuditLogsPage() {
+ const { t } = useTranslation('admin-access');
  const [page, setPage] = useState(1);
  const [action, setAction] = useState('');
  const [resource, setResource] = useState('');
@@ -397,7 +400,7 @@ function AuditLogsPage() {
  const grouped = useMemo(() => {
  const groups = new Map<string, AuditLogEntry[]>();
  for (const log of filteredLogs) {
- const label = getDateLabel(log.timestamp);
+ const label = getDateLabel(t, log.timestamp);
  if (!groups.has(label)) groups.set(label, []);
  groups.get(label)!.push(log);
  }
@@ -441,8 +444,8 @@ function AuditLogsPage() {
  {/* ── Header ── */}
  <TabHeader
  icon={Activity}
- title="Audit Logs"
- description="Track admin and user actions across the platform."
+ title={t('audit.title')}
+ description={t('audit.description')}
  actions={
  <div className="flex items-center gap-2">
  {livePoll && (
@@ -451,23 +454,23 @@ function AuditLogsPage() {
  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
  </span>
- Live
+ {t('audit.live')}
  </Badge>
  )}
  <Badge variant="outline" className="text-xs">
- {pagination?.total ?? 0} events
+ {t('audit.eventCount', { count: pagination?.total ?? 0 })}
  </Badge>
  <Button variant="outline" size="sm" onClick={() => setLivePoll(!livePoll)} className="gap-1.5">
  <RefreshCw className={`h-3.5 w-3.5 ${livePoll && isFetching ? 'animate-spin' : ''}`} />
- {livePoll ? 'Auto' : 'Poll'}
+ {livePoll ? t('audit.auto') : t('audit.poll')}
  </Button>
  <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1.5">
  <RotateCcw className="h-3.5 w-3.5" />
- Clear
+ {t('audit.clear')}
  </Button>
  <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5">
  <Download className="h-3.5 w-3.5" />
- Export CSV
+ {t('audit.exportCsv')}
  </Button>
  </div>
  }
@@ -477,7 +480,7 @@ function AuditLogsPage() {
  <ServerTabCard>
  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
  <Search className="h-3.5 w-3.5" />
- Filters
+ {t('filters')}
  </div>
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
  <div className="relative">
@@ -485,26 +488,26 @@ function AuditLogsPage() {
  <Input
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
- placeholder="Search actions, users, IP…"
+ placeholder={t('audit.searchPlaceholder')}
  className="border-border/40 bg-card pl-9"
  />
  </div>
  <Input
  value={action}
  onChange={(e) => { setAction(e.target.value); setPage(1); }}
- placeholder="Action contains…"
+ placeholder={t('audit.actionContains')}
  className="border-border/40 bg-card"
  />
  <Input
  value={resource}
  onChange={(e) => { setResource(e.target.value); setPage(1); }}
- placeholder="Resource type…"
+ placeholder={t('audit.resourceType')}
  className="border-border/40 bg-card"
  />
  <Input
  value={userId}
  onChange={(e) => { setUserId(e.target.value); setPage(1); }}
- placeholder="User ID…"
+ placeholder={t('audit.userIdPlaceholder')}
  className="border-border/40 bg-card"
  />
  </div>
@@ -539,25 +542,25 @@ function AuditLogsPage() {
  }}
  >
  <SelectTrigger className="border-border/40 bg-card">
- <SelectValue placeholder="Quick range" />
+ <SelectValue placeholder={t('audit.quickRange')} />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="custom">Custom</SelectItem>
- <SelectItem value="1h">Last 1 hour</SelectItem>
- <SelectItem value="6h">Last 6 hours</SelectItem>
- <SelectItem value="24h">Last 24 hours</SelectItem>
- <SelectItem value="7d">Last 7 days</SelectItem>
+ <SelectItem value="custom">{t('audit.custom')}</SelectItem>
+ <SelectItem value="1h">{t('audit.range1h')}</SelectItem>
+ <SelectItem value="6h">{t('audit.range6h')}</SelectItem>
+ <SelectItem value="24h">{t('audit.range24h')}</SelectItem>
+ <SelectItem value="7d">{t('audit.range7d')}</SelectItem>
  </SelectContent>
  </Select>
  </div>
 
  {hasFilters && (
  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
- <span className="text-[11px] text-muted-foreground">Active:</span>
- {action && <Badge variant="outline" className="text-[10px]">action: {action}</Badge>}
- {resource && <Badge variant="outline" className="text-[10px]">resource: {resource}</Badge>}
- {userId && <Badge variant="outline" className="text-[10px]">user: {userId}</Badge>}
- {range && <Badge variant="outline" className="text-[10px]">range: {range}</Badge>}
+ <span className="text-[11px] text-muted-foreground">{t('activeLabel')}</span>
+ {action && <Badge variant="outline" className="text-[10px]">{t('audit.chipAction', { value: action })}</Badge>}
+ {resource && <Badge variant="outline" className="text-[10px]">{t('audit.chipResource', { value: resource })}</Badge>}
+ {userId && <Badge variant="outline" className="text-[10px]">{t('audit.chipUser', { value: userId })}</Badge>}
+ {range && <Badge variant="outline" className="text-[10px]">{t('audit.chipRange', { value: range })}</Badge>}
  </div>
  )}
  </ServerTabCard>
@@ -617,13 +620,13 @@ function AuditLogsPage() {
  </div>
 
  <div className="flex shrink-0 flex-col items-end gap-1">
- <span className="text-[11px] text-muted-foreground" title={new Date(log.timestamp).toLocaleString()}>
- {formatTimeAgo(log.timestamp)}
+ <span className="text-[11px] text-muted-foreground" title={formatDateTime(log.timestamp)}>
+ {formatTimeAgo(t, log.timestamp)}
  </span>
  <button
  className="rounded-md p-1 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-primary/10 hover:text-primary"
  onClick={() => setSelectedLog(log)}
- title="View details"
+ title={t('audit.viewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
@@ -637,8 +640,8 @@ function AuditLogsPage() {
  </div>
  ) : (
  <TabEmptyState
- title="No audit logs"
- description={hasFilters || searchQuery ? 'Try adjusting your filters.' : 'Audit events will appear once user actions are recorded.'}
+ title={t('audit.emptyTitle')}
+ description={hasFilters || searchQuery ? t('audit.emptyFilteredDescription') : t('audit.emptyDescription')}
  />
  )}
 

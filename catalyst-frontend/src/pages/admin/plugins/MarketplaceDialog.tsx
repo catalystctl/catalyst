@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation } from '@/csync';
 import {
   ExternalLink,
@@ -37,6 +38,8 @@ import {
 } from '../../../plugins/api';
 import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
+import { notifyError } from '../../../utils/notify';
+import { formatDateTime, formatTime } from '../../../i18n/format';
 
 /** Host label for a marketplace URL that never throws on malformed input. */
 function sourceHostLabel(url: string): string {
@@ -78,6 +81,7 @@ export function MarketplaceDialog({
   /** Installed plugin name → version, used to flag updates even if the API omits it. */
   installedVersions?: Record<string, string>;
 }) {
+  const { t } = useTranslation('admin-system');
   const [searchQuery, setSearchQuery] = useState('');
   const [installingName, setInstallingName] = useState<string | null>(null);
   const [newSourceUrl, setNewSourceUrl] = useState('');
@@ -128,11 +132,11 @@ export function MarketplaceDialog({
       }).length;
       toast.success(
         updates > 0
-          ? `Marketplace refreshed — ${updates} update${updates === 1 ? '' : 's'} available`
-          : 'Marketplace refreshed — up to date',
+          ? t('pluginsAdmin.toastMarketplaceRefreshed', { count: updates })
+          : t('pluginsAdmin.toastMarketplaceUpToDate'),
       );
     } catch (error: any) {
-      if (!opts.silent) toast.error(error?.message || 'Could not refresh marketplace');
+      if (!opts.silent) notifyError(error);
     } finally {
       setRefreshing(false);
     }
@@ -142,13 +146,13 @@ export function MarketplaceDialog({
     mutationFn: ({ url, label }: { url: string; label?: string }) => addMarketplaceSource(url, label),
     onMutate: () => setPendingSourceId('new'),
     onSuccess: (source: MarketplaceSource) => {
-      toast.success(`Marketplace added — browsing ${sourceHostLabel(source.url)} together with the others`);
+      toast.success(t('pluginsAdmin.toastMarketplaceAdded', { host: sourceHostLabel(source.url) }));
       setNewSourceUrl('');
       setNewSourceLabel('');
       refreshMarketplace();
     },
     onSettled: () => setPendingSourceId(null),
-    onError: (error: any) => toast.error(error?.message || 'Could not add marketplace'),
+    onError: (error: any) => notifyError(error),
   });
 
   const toggleSourceMutation = useMutation({
@@ -157,18 +161,18 @@ export function MarketplaceDialog({
     onMutate: ({ id }) => setPendingSourceId(id),
     onSuccess: () => refreshMarketplace(),
     onSettled: () => setPendingSourceId(null),
-    onError: (error: any) => toast.error(error?.message || 'Could not update marketplace'),
+    onError: (error: any) => notifyError(error),
   });
 
   const deleteSourceMutation = useMutation({
     mutationFn: ({ id }: { id: string }) => deleteMarketplaceSource(id),
     onMutate: ({ id }) => setPendingSourceId(id),
     onSuccess: () => {
-      toast.success('Marketplace removed');
+      toast.success(t('pluginsAdmin.toastMarketplaceRemoved'));
       refreshMarketplace();
     },
     onSettled: () => setPendingSourceId(null),
-    onError: (error: any) => toast.error(error?.message || 'Could not remove marketplace'),
+    onError: (error: any) => notifyError(error),
   });
 
   const installMutation = useMutation({
@@ -177,14 +181,16 @@ export function MarketplaceDialog({
     onMutate: ({ entry }) => setInstallingName(entry.name),
     onSuccess: (result) => {
       toast.success(
-        `${result.name}@${result.version} ${result.upgraded ? 'upgraded' : 'installed'} — accept the safety disclaimer to enable it`,
+        result.upgraded
+          ? t('pluginsAdmin.toastPluginUpgraded', { name: result.name, version: result.version })
+          : t('pluginsAdmin.toastPluginInstalled', { name: result.name, version: result.version }),
         { duration: 6000 },
       );
       onInstalled();
       void refreshMarketplace({ silent: true });
     },
     onSettled: () => setInstallingName(null),
-    onError: (error: any) => toast.error(error?.message || 'Install failed'),
+    onError: (error: any) => notifyError(error),
   });
 
   const filteredEntries = useMemo(() => {
@@ -212,43 +218,42 @@ export function MarketplaceDialog({
     return map;
   }, [data?.sources]);
 
-  const originLabel: Record<MarketplaceSource['origin'], string> = {
-    official: 'Official',
-    env: 'Env',
-    custom: 'Added',
+    const originLabel = (origin: MarketplaceSource['origin']): string => {
+    if (origin === 'official') return t('pluginsAdmin.originOfficial');
+    if (origin === 'env') return t('pluginsAdmin.originEnv');
+    return t('pluginsAdmin.originAdded');
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg" data-testid="plugin-marketplace">
         <DialogHeader icon={<Store className="h-4 w-4" />}>
-          <DialogTitle>Plugin marketplace</DialogTitle>
+          <DialogTitle>{t('pluginsAdmin.marketplaceTitle')}</DialogTitle>
           <DialogDescription>
-            Discover and install community plugins. Installed code stays disabled until you
-            review its permissions and accept the safety disclaimer.
+            {t('pluginsAdmin.marketplaceDescription')}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
           <div className="space-y-4">
             {/* In-panel source manager: add more marketplaces without env edits. */}
             <section
-              aria-label="Marketplaces"
+              aria-label={t('pluginsAdmin.marketplaces')}
               className="rounded-lg border border-border/60 bg-surface-2/20 px-4 py-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium text-foreground">
-                  Marketplaces
+                  {t('pluginsAdmin.marketplaces')}
                   {sources && sources.length > 0 && (
                     <span className="ml-2 font-mono text-[11px] text-muted-foreground">
                       {sources.length}
                     </span>
                   )}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Browsed together</p>
+                <p className="text-[11px] text-muted-foreground">{t('pluginsAdmin.browsedTogether')}</p>
               </div>
               {sourcesLoading ? (
                 <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading marketplaces…
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('pluginsAdmin.loadingMarketplaces')}
                 </div>
               ) : sources && sources.length > 0 ? (
                 <ul className="mt-2 divide-y divide-border/40">
@@ -263,18 +268,18 @@ export function MarketplaceDialog({
                               {source.label?.trim() || sourceHostLabel(source.url)}
                             </span>
                             <Badge variant="outline" className="text-[10px]">
-                              {originLabel[source.origin]}
+                              {originLabel(source.origin)}
                             </Badge>
                             {!source.enabled ? (
                               <Badge variant="secondary" className="text-[10px]">
-                                Disabled
+                                {t('common:actions.disabled')}
                               </Badge>
                             ) : health ? (
                               <span
                                 className="font-mono text-[10px] text-muted-foreground"
                                 title={health.error ?? source.url}
                               >
-                                {health.ok ? `${health.entryCount} plugins` : health.error}
+                                {health.ok ? t('pluginsAdmin.pluginCount', { count: health.entryCount }) : health.error}
                               </span>
                             ) : null}
                           </div>
@@ -290,7 +295,10 @@ export function MarketplaceDialog({
                             <Switch
                               checked={source.enabled}
                               disabled={busy}
-                              aria-label={`${source.enabled ? 'Disable' : 'Enable'} ${source.url}`}
+                              aria-label={t('pluginsAdmin.toggleSourceAria', {
+                                action: source.enabled ? t('common:actions.disable') : t('common:actions.enable'),
+                                url: source.url,
+                              })}
                               onCheckedChange={(checked) =>
                                 toggleSourceMutation.mutate({ id: source.id, enabled: checked })
                               }
@@ -298,7 +306,7 @@ export function MarketplaceDialog({
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              aria-label={`Remove ${source.url}`}
+                              aria-label={t('pluginsAdmin.removeSourceAria', { url: source.url })}
                               disabled={busy}
                               onClick={() => deleteSourceMutation.mutate({ id: source.id })}
                             >
@@ -311,7 +319,7 @@ export function MarketplaceDialog({
                           </>
                         ) : (
                           <Badge variant="secondary" className="shrink-0 text-[10px]">
-                            Always on
+                            {t('pluginsAdmin.alwaysOn')}
                           </Badge>
                         )}
                       </li>
@@ -320,7 +328,7 @@ export function MarketplaceDialog({
                 </ul>
               ) : (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  No marketplace configured. Add one below to start browsing.
+                  {t('pluginsAdmin.noMarketplaceConfigured')}
                 </p>
               )}
               <form
@@ -338,15 +346,15 @@ export function MarketplaceDialog({
                   value={newSourceUrl}
                   onChange={(e) => setNewSourceUrl(e.target.value)}
                   placeholder="https://example.com/index.json"
-                  aria-label="New marketplace URL"
+                  aria-label={t('pluginsAdmin.newSourceUrlAria')}
                   inputMode="url"
                   className="flex-1 font-mono text-xs"
                 />
                 <Input
                   value={newSourceLabel}
                   onChange={(e) => setNewSourceLabel(e.target.value)}
-                  placeholder="Label (optional)"
-                  aria-label="New marketplace label"
+                  placeholder={t('pluginsAdmin.labelOptionalPlaceholder')}
+                  aria-label={t('pluginsAdmin.newSourceLabelAria')}
                   className="sm:w-36"
                 />
                 <Button
@@ -359,7 +367,7 @@ export function MarketplaceDialog({
                   ) : (
                     <Plus className="h-3.5 w-3.5" />
                   )}
-                  Add
+                  {t('pluginsAdmin.add')}
                 </Button>
               </form>
             </section>
@@ -370,16 +378,16 @@ export function MarketplaceDialog({
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search marketplace…"
+                  placeholder={t('pluginsAdmin.searchPlaceholder')}
                   className="pl-8"
-                  aria-label="Search marketplace"
+                  aria-label={t('pluginsAdmin.searchAria')}
                 />
               </div>
               <Button
                 variant="outline"
                 size="icon-sm"
-                aria-label="Refresh marketplace"
-                title="Re-check the marketplace repo for new versions"
+                aria-label={t('pluginsAdmin.refreshAria')}
+                title={t('pluginsAdmin.refreshTitle')}
                 onClick={() => refreshMarketplace()}
                 disabled={refreshing}
               >
@@ -390,8 +398,8 @@ export function MarketplaceDialog({
                 )}
               </Button>
               {lastChecked && (
-                <span className="shrink-0 text-[11px] text-muted-foreground" title={lastChecked.toLocaleString()}>
-                  Checked {lastChecked.toLocaleTimeString()}
+                <span className="shrink-0 text-[11px] text-muted-foreground" title={formatDateTime(lastChecked)}>
+                  {t('pluginsAdmin.checkedAt', { time: formatTime(lastChecked) })}
                 </span>
               )}
             </div>
@@ -402,15 +410,14 @@ export function MarketplaceDialog({
               </div>
             ) : !data || data.sources.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-                <p className="text-sm font-medium text-foreground">No marketplace configured</p>
+                <p className="text-sm font-medium text-foreground">{t('pluginsAdmin.emptyMarketplaceTitle')}</p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Add your first index URL in the Marketplaces section above — it is browsed
-                  together with the official source. See docs/plugins.md for the index schema.
+                  {t('pluginsAdmin.emptyDescription')}
                 </p>
               </div>
             ) : filteredEntries.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-                <p className="text-sm text-muted-foreground">No plugins match your search.</p>
+                <p className="text-sm text-muted-foreground">{t('pluginsAdmin.noSearchResults')}</p>
               </div>
             ) : (
               <ul className="divide-y divide-border/40 rounded-lg border border-border/60">
@@ -428,12 +435,14 @@ export function MarketplaceDialog({
                         )}
                         {entry.updateAvailable ? (
                           <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
-                            Update {entry.installedVersion ? `${entry.installedVersion} → ${entry.version}` : `v${entry.version}`}
+                            {entry.installedVersion
+                              ? t('pluginsAdmin.updateAvailable', { from: entry.installedVersion, to: entry.version })
+                              : t('pluginsAdmin.updateTo', { version: entry.version })}
                           </Badge>
                         ) : entry.installed ? (
                           <Badge variant="secondary" className="gap-1 text-[10px]">
                             <PackageCheck className="h-3 w-3" />
-                            Installed
+                            {t('pluginsAdmin.installed')}
                           </Badge>
                         ) : null}
                       </div>
@@ -449,7 +458,7 @@ export function MarketplaceDialog({
                             className="max-w-full truncate font-mono text-[10px] text-muted-foreground/60"
                             title={entry.sourceUrl}
                           >
-                            via {sourceHostLabel(entry.sourceUrl)}
+                            {t('pluginsAdmin.viaHost', { host: sourceHostLabel(entry.sourceUrl) })}
                           </span>
                         )}
                         {(entry.tags ?? []).slice(0, 4).map((tag) => (
@@ -464,7 +473,7 @@ export function MarketplaceDialog({
                             rel="noreferrer noopener"
                             className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:underline"
                           >
-                            Homepage
+                            {t('pluginsAdmin.homepage')}
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
@@ -477,16 +486,19 @@ export function MarketplaceDialog({
                       disabled={installingName === entry.name || (entry.installed && !entry.updateAvailable)}
                       title={
                         entry.updateAvailable
-                          ? `Update ${entry.name} to ${entry.version}`
+                          ? t('pluginsAdmin.updateTitle', { name: entry.name, version: entry.version })
                           : entry.installed
-                            ? `${entry.name} is already ${entry.installedVersion ?? entry.version}`
-                            : `Install ${entry.name}`
+                            ? t('pluginsAdmin.alreadyInstalledTitle', {
+                                name: entry.name,
+                                version: entry.installedVersion ?? entry.version,
+                              })
+                            : t('pluginsAdmin.installTitle', { name: entry.name })
                       }
                     >
                       {installingName === entry.name && (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       )}
-                      {entry.updateAvailable ? 'Update' : entry.installed ? 'Installed' : 'Install'}
+                      {entry.updateAvailable ? t('pluginsAdmin.update') : entry.installed ? t('pluginsAdmin.installed') : t('pluginsAdmin.install')}
                     </Button>
                   </li>
                 ))}
@@ -496,7 +508,7 @@ export function MarketplaceDialog({
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            Close
+            {t('common:actions.close')}
           </Button>
         </DialogFooter>
       </DialogContent>
