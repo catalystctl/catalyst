@@ -92,26 +92,78 @@ pub async fn ensure_container_owned(stop_at: &Path, path: &Path) {
 /// Recursively hand `dir` and everything below it to the container user.
 /// Used after bulk operations (archive extraction, restore, clone) that
 /// create whole trees. Best-effort; no-op when not running as root.
+///
+/// SEC-H-08: pure-Rust walk that NEVER follows symlinks — every entry is
+/// inspected with `symlink_metadata`, links themselves are lchown'd (never
+/// their targets), and links whose targets escape the canonical base are
+/// skipped so root never touches host paths.
 pub async fn chown_tree(dir: &Path) -> std::io::Result<()> {
     if !can_chown() {
         return Ok(());
     }
-    let status = tokio::process::Command::new("chown")
-        .arg("-R")
-        .arg(format!("{}:{}", CONTAINER_UID, CONTAINER_GID))
-        .arg(dir)
-        .status()
-        .await?;
-    if !status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            format!(
-                "chown -R {}:{} failed with exit code {:?}",
-                CONTAINER_UID,
-                CONTAINER_GID,
-                status.code()
-            ),
-        ));
+    let base = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        let meta = match std::fs::symlink_metadata(&current) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.file_type().is_symlink() {
+            // Lchown the link itself only when it stays inside the base;
+            // never follow it to a host target.
+            let target = std::fs::read_link(&current).unwrap_or_default();
+            let parent = current.parent().unwrap_or(&base);
+            let resolved = parent.join(&target);
+            let inside = resolved
+                .canonicalize()
+                .map(|c| c.starts_with(&base))
+                .unwrap_or_else(|_| {
+                    // Dangling: lexical normalize (`..` pops) and require the
+                    // result to stay under the base.
+                    let mut norm = PathBuf::new();
+                    for comp in resolved.components() {
+                        match comp {
+                            std::path::Component::ParentDir => {
+                                norm.pop();
+                            }
+                            std::path::Component::CurDir => {}
+                            c => norm.push(c.as_os_str()),
+                        }
+                    }
+                    norm.starts_with(&base)
+                });
+            if !inside {
+                warn!("chown_tree: skipping link escaping base: {:?}", current);
+                continue;
+            }
+            if let Err(e) =
+                std::os::unix::fs::lchown(&current, Some(CONTAINER_UID), Some(CONTAINER_GID))
+            {
+                warn!("chown_tree: lchown link {:?} failed: {}", current, e);
+            }
+            continue;
+        }
+        if meta.is_dir() {
+            // Never descend through a dir that canonicalizes outside base.
+            if let Ok(c) = current.canonicalize() {
+                if !c.starts_with(&base) {
+                    warn!("chown_tree: skipping dir outside base: {:?}", current);
+                    continue;
+                }
+            }
+            let entries = match std::fs::read_dir(&current) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            for entry in entries.flatten() {
+                stack.push(entry.path());
+            }
+        }
+        if let Err(e) =
+            std::os::unix::fs::lchown(&current, Some(CONTAINER_UID), Some(CONTAINER_GID))
+        {
+            warn!("chown_tree: lchown {:?} failed: {}", current, e);
+        }
     }
     Ok(())
 }
@@ -245,6 +297,38 @@ mod tests {
         let meta = std::fs::metadata(tree.join("a").join("f.bin")).unwrap();
         assert_eq!(meta.uid(), CONTAINER_UID);
         assert_eq!(meta.gid(), CONTAINER_GID);
+    }
+
+    #[tokio::test]
+    async fn chown_tree_never_follows_escaping_symlink() {
+        use std::os::unix::fs::MetadataExt;
+        let dir = tempfile::tempdir().unwrap();
+        let tree = dir.path().join("srv1");
+        std::fs::create_dir_all(&tree).unwrap();
+        std::fs::write(tree.join("ok.txt"), b"x").unwrap();
+        // Outside file with a distinct owner marker (mtime) — chown must not
+        // touch it even though a link inside the tree points at it.
+        let outside = dir.path().join("outside.txt");
+        std::fs::write(&outside, b"secret").unwrap();
+        let outside_before = std::fs::metadata(&outside).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, tree.join("evil-link")).unwrap();
+
+        chown_tree(&tree).await.unwrap();
+
+        // Link target untouched: size + content identical.
+        let outside_after = std::fs::metadata(&outside).unwrap();
+        assert_eq!(outside_after.len(), outside_before.len());
+        assert_eq!(std::fs::read(&outside).unwrap(), b"secret");
+        // The link itself still exists (lchown'd or skipped, never followed).
+        assert!(std::fs::symlink_metadata(tree.join("evil-link"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        if ownership_observable() {
+            let meta = std::fs::metadata(tree.join("ok.txt")).unwrap();
+            assert_eq!(meta.uid(), CONTAINER_UID);
+        }
     }
 
     #[tokio::test]
