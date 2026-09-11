@@ -509,6 +509,11 @@ impl WebSocketHandler {
                     "SteamCMD 0x202: disk write failed. Catalyst gives each server a loop-mounted quota (default 10 GB). CS2 needs about 40 GB. Resize the server disk and reinstall. ({reason})"
                 );
             }
+            if exit_code == 137 {
+                reason = format!(
+                    "Install container was killed (exit 137, likely out of memory). Installs are capped at 2 GiB RAM with a 1 GiB /tmp. ({reason})"
+                );
+            }
             info!(
                 "[DEBUG] install_server FAILED: exit_code={}, stdout_len={}, stderr_len={}, reason='{}'",
                 exit_code, stdout_buffer.len(), stderr_buffer.len(), reason
