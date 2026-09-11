@@ -15,7 +15,10 @@ jobs:
   notify:
     permissions:
       contents: read
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # GitHub-hosted on purpose: this job polls the CI run for up to ~30min per
+    # push and must not occupy a self-hosted build slot. It checks out nothing.
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

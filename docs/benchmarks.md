@@ -131,7 +131,7 @@ node scripts/benchmark/compare.mjs \
 
 | Trigger | What runs | Where |
 |---|---|---|
-| `push` to `main` touching `scripts/benchmark/**` or `lab.sh` | `validate` only: syntax check, `scenarios.json` validation, `--help` smoke, mock comparison + artifact `benchmark-mock-report` | `blacksmith-2vcpu-ubuntu-2404` (always) |
+| `push` to `main` touching `scripts/benchmark/**` or `lab.sh` | `validate` only: syntax check, `scenarios.json` validation, `--help` smoke, mock comparison + artifact `benchmark-mock-report` | `ubuntu-latest` (always) |
 | `workflow_dispatch` (manual) | `validate` + `live` (full `run.sh` on the LXC host) | `live` needs self-hosted runner `[self-hosted, benchmark]` with `state.env` present; skipped otherwise |
 | `schedule` Mondays 03:00 UTC | `validate` + `live` (smoke) | same as dispatch |
 

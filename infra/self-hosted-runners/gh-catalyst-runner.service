@@ -1,0 +1,26 @@
+[Unit]
+Description=GitHub Actions self-hosted runner pool for catalystctl/catalyst (ephemeral rootless Podman)
+Documentation=file://%h/catalyst/infra/self-hosted-runners/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/catalyst/infra/self-hosted-runners/supervisor.sh
+Restart=always
+RestartSec=10
+# Config (override via systemctl --user edit gh-catalyst-runner).
+Environment=REPO=catalystctl/catalyst
+Environment=CONCURRENCY=2
+Environment=IMAGE=localhost/gh-runner-catalyst:latest
+Environment=LABELS=self-hosted,Linux,X64,catalyst-ci
+Environment=RUNNER_PREFIX=catalyst-ci
+Environment=CACHE_BASE=gh-catalyst-cache
+Environment=MEM_LIMIT=5g
+Environment=CPU_LIMIT=4
+# gh + podman live in /usr/bin; ensure they're on PATH for the user service.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:%h/.local/bin
+Environment=HOME=%h
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,93 @@
+# Secure self-hosted GitHub Actions runner image for catalystctl/catalyst.
+# Ephemeral rootless Podman containers: each registers with --ephemeral, runs
+# ONE job, self-deregisters, and is --rm'd by the supervisor. Only /cache
+# (pure toolchain caches) persists across jobs.
+#
+# Rootless Podman maps container "root" to the unprivileged host user via the
+# user namespace, so jobs have no real host privileges.
+#
+# Base = ubuntu:24.04 to match GitHub's ubuntu-latest action compatibility
+# (actions/checkout, setup-node, dtolnay/rust-toolchain all expect Ubuntu).
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# System packages: build tools + buildah (nested OCI image builds via chroot
+# isolation, works rootless-in-rootless) + postgres-16 (per-job test database
+# started by scripts/ci/ci-postgres.sh) + cross linkers for agent-release.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential pkg-config libssl-dev ca-certificates \
+      git curl wget jq zip unzip file tzdata \
+      python3 python3-pip \
+      sudo \
+      buildah \
+      postgresql-16 \
+      musl-tools musl-dev \
+      gcc-aarch64-linux-gnu \
+      xz-utils binutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Node.js 22 (matches ci.yml setup-node "22") via NodeSource ---
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable && corepack prepare pnpm@latest --activate
+
+# --- Rust stable + clippy + rustfmt. Homes live IN the image, NOT under
+#     /cache, so the toolchain survives the cache-volume mount. ---
+ENV RUSTUP_HOME=/opt/rustup
+ENV CARGO_HOME=/opt/cargo
+ENV PATH=/opt/cargo/bin:/usr/local/bin:/usr/bin:/bin
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --profile minimal --component clippy --component rustfmt
+
+# --- protoc 25.1 (matches ci.yml PROTOC_VERSION; sha pinned in ci.yml) ---
+ENV PROTOC_VERSION=25.1
+RUN curl -fsSL -o /tmp/protoc.zip \
+      "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip" \
+    && echo "ed8fca87a11c888fed329d6a59c34c7d436165f662a2c875246ddb1ac2b6dd50  /tmp/protoc.zip" | sha256sum -c - \
+    && unzip /tmp/protoc.zip -d /usr/local \
+    && rm -f /tmp/protoc.zip \
+    && chmod +x /usr/local/bin/protoc
+
+# --- aarch64 musl cross toolchain (agent-release aarch64-musl target) ---
+RUN curl -fsSL -o /tmp/aarch64-musl.tgz https://musl.cc/aarch64-linux-musl-cross.tgz \
+    && echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/aarch64-musl.tgz" | sha256sum -c - \
+    && tar -C /opt -xzf /tmp/aarch64-musl.tgz \
+    && rm -f /tmp/aarch64-musl.tgz
+ENV PATH=/opt/aarch64-linux-musl-cross/bin:${PATH}
+
+# --- Cache dirs (mounted as a named volume at runtime -> warm across runs).
+#     Only PURE caches live here, never toolchain binaries, so the volume
+#     overlay never hides installed tools. ---
+ENV GOMODCACHE=/cache/go-mod
+ENV GOCACHE=/cache/go-build
+ENV RUNNER_TOOL_CACHE=/cache/toolcache
+ENV AGENT_TOOLSDIRECTORY=/cache/toolcache
+ENV PIP_CACHE_DIR=/cache/pip
+ENV npm_config_cache=/cache/npm
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+RUN mkdir -p /cache/go-mod /cache/go-build /cache/toolcache /cache/pip /cache/npm \
+    && chmod -R a+rwX /cache
+
+# --- GitHub Actions runner 2.331.0 (pinned; sha matches local tarball) ---
+RUN curl -fsSL -o /tmp/runner.tgz \
+      https://github.com/actions/runner/releases/download/v2.331.0/actions-runner-linux-x64-2.331.0.tar.gz \
+    && echo "5fcc01bd546ba5c3f1291c2803658ebd3cedb3836489eda3be357d41bfcf28a7  /tmp/runner.tgz" | sha256sum -c - \
+    && mkdir -p /runner && tar -C /runner -xzf /tmp/runner.tgz \
+    && rm -f /tmp/runner.tgz \
+    && chmod -R a+rwX /runner
+# .NET listener native deps (without libicu the listener crashes, exit 134).
+RUN cd /runner && ./bin/installdependencies.sh
+# Let buildah resolve short-name images (node:22-alpine, etc.) -> docker.io.
+RUN mkdir -p /etc/containers && \
+    printf 'unqualified-search-registries = ["docker.io"]\n' > /etc/containers/registries.conf
+
+COPY entrypoint.sh /runner/entrypoint.sh
+RUN chmod +x /runner/entrypoint.sh
+
+WORKDIR /runner
+ENTRYPOINT ["/runner/entrypoint.sh"]
+ENV RUNNER_ALLOW_RUNASROOT=1

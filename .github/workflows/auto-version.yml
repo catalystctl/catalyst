@@ -322,12 +322,12 @@ jobs:
       attestations: write
     needs: version
     if: needs.version.outputs.bump != 'none'
-    # 8 vCPU: release + cross-compile is the slowest part of shipping a release.
-    # Minutes cost 4× 2vCPU, but wall-clock usually drops more than that on Rust.
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-
-    container:
-      image: rust:1.93-bookworm
+    # Push-to-main only (trusted), so self-hosted directly. Runs natively on
+    # the runner image (Rust + cross linkers + protoc preinstalled) instead of
+    # a rust container — self-hosted runners have no Docker daemon for
+    # container: jobs.
+    runs-on: [self-hosted, Linux, X64, catalyst-ci]
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
@@ -503,7 +503,8 @@ jobs:
     name: Publish ${{ matrix.image }} Image
     needs: version
     if: needs.version.outputs.bump != 'none'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: [self-hosted, Linux, X64, catalyst-ci]
+    timeout-minutes: 40
     permissions:
       contents: read
       packages: write
@@ -533,15 +534,8 @@ jobs:
           ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
           path: catalyst-plugins
 
-      - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@e4c1c000c95f9cc255f72940e9c56bcbd1239436 # v1
-
       - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        run: buildah login -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}" "${{ env.REGISTRY }}"
 
       - name: Extract metadata
         id: meta
@@ -556,13 +550,37 @@ jobs:
 
       - name: Build and push
         id: build-push
-        uses: useblacksmith/build-push-action@9b0579bbec7a6cad2f171596c57e7ac1e7658850 # v2
-        with:
-          context: .
-          file: ${{ matrix.file }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+        run: |
+          set -euo pipefail
+          TAG_ARGS=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            TAG_ARGS+=(-t "$tag")
+          done <<< "${{ steps.meta.outputs.tags }}"
+          LABEL_ARGS=()
+          while IFS= read -r label; do
+            [ -n "$label" ] || continue
+            LABEL_ARGS+=(--label "$label")
+          done <<< "${{ steps.meta.outputs.labels }}"
+          IIDFILE="$(mktemp)"
+          buildah build --isolation chroot \
+            "${TAG_ARGS[@]}" "${LABEL_ARGS[@]}" \
+            --iidfile "$IIDFILE" \
+            -f "${{ matrix.file }}" .
+          IID="$(cat "$IIDFILE")"
+          FIRST_TAG="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | grep -v '^$' | head -1)"
+          DIGEST_FILE="$(mktemp)"
+          buildah push --digestfile "$DIGEST_FILE" "$IID" "docker://$FIRST_TAG"
+          RAW_DIGEST="$(cat "$DIGEST_FILE")"
+          RAW_DIGEST="${RAW_DIGEST#sha256:}"
+          DIGEST="sha256:$RAW_DIGEST"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            [ "$tag" = "$FIRST_TAG" ] && continue
+            buildah push "$IID" "docker://$tag"
+          done <<< "${{ steps.meta.outputs.tags }}"
+          buildah rmi "$IID" || true
 
       - name: Attest image provenance (SLSA/Sigstore)
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2

@@ -837,7 +837,7 @@ step_agent_release() {
 #
 # NOTE: This step is mocked locally because:
 #   - It needs GITHUB_TOKEN for GHCR authentication
-#   - It needs useblacksmith/setup-docker-builder (Blacksmith-specific)
+#   - The real workflow builds via buildah on self-hosted runners
 #   - The real workflow only publishes when relevant paths changed
 # Locally we simulate the change-detection and show what would be pushed.
 step_docker_publish() {
@@ -914,7 +914,7 @@ step_docker_publish() {
     fi
   else
     # Real run — attempt local docker build (no push without GHCR credentials)
-    # This is a limited approximation: GHA uses Blacksmith builder + GHCR push.
+    # This is a limited approximation: GHA builds via buildah + GHCR push.
     # Locally we just verify the Dockerfile builds.
 
     if [[ "$HAS_DOCKER" -eq 0 ]]; then
@@ -932,7 +932,7 @@ step_docker_publish() {
         fi
       else
         echo -e "  ${C_YELLOW}[backend] Skipped — no Dockerfile or docker runtime${C_RESET}"
-        echo -e "  ${C_YELLOW}  In GHA: useblacksmith/build-push-action pushes to ghcr.io/<owner>/catalyst-backend${C_RESET}"
+        echo -e "  ${C_YELLOW}  In GHA: buildah builds and pushes to ghcr.io/<owner>/catalyst-backend${C_RESET}"
       fi
     fi
 
@@ -946,7 +946,7 @@ step_docker_publish() {
         fi
       else
         echo -e "  ${C_YELLOW}[frontend] Skipped — no Dockerfile or docker runtime${C_RESET}"
-        echo -e "  ${C_YELLOW}  In GHA: useblacksmith/build-push-action pushes to ghcr.io/<owner>/catalyst-frontend${C_RESET}"
+        echo -e "  ${C_YELLOW}  In GHA: buildah builds and pushes to ghcr.io/<owner>/catalyst-frontend${C_RESET}"
       fi
     fi
   fi

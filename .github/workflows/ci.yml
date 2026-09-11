@@ -64,8 +64,10 @@ jobs:
     name: Lint & Static Analysis
     permissions:
       contents: read
-    # 2 vCPU is enough for eslint + clippy; keep free-tier-friendly.
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # Self-hosted ephemeral runners. Fork PRs (attacker-controlled) stay on
+    # GitHub-hosted ubuntu-latest and never touch our hardware.
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -239,22 +241,15 @@ jobs:
     name: Unit & Integration Tests
     permissions:
       contents: read
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # Self-hosted ephemeral runners. Fork PRs (attacker-controlled) stay on
+    # GitHub-hosted ubuntu-latest and never touch our hardware.
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
+    timeout-minutes: 30
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: catalyst
-          POSTGRES_PASSWORD: catalyst_dev_password
-          POSTGRES_DB: catalyst_db
-        options: >-
-          --health-cmd "pg_isready -U catalyst -d catalyst_db"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+    # No services: block here on purpose. Self-hosted runners have no Docker
+    # daemon for service containers, so the test job starts its own throwaway
+    # Postgres cluster (scripts/ci/ci-postgres.sh) — one fresh cluster per job,
+    # no shared state. Works identically on GitHub-hosted fallback runners.
 
     env:
       # localhost is correct when NOT using container: (services bind to host)
@@ -341,6 +336,9 @@ jobs:
         working-directory: catalyst-backend
         run: npx prisma generate
 
+      - name: Start Postgres (ephemeral per-job cluster)
+        run: bash scripts/ci/ci-postgres.sh
+
       - name: Push database schema
         working-directory: catalyst-backend
         run: pnpm run db:push
@@ -375,8 +373,9 @@ jobs:
     permissions:
       contents: read
     needs: [lint, test]
-    # 4 vCPU: agent debug cargo build is the bottleneck (~75s on 2 vCPU).
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Push-only (forks never trigger push on this repo), so self-hosted directly.
+    runs-on: [self-hosted, Linux, X64, catalyst-ci]
+    timeout-minutes: 25
     if: github.event_name == 'push'
 
     steps:
@@ -511,7 +510,8 @@ jobs:
     # Only needs lint+test green; run in parallel with Build Verification so
     # Docker publish can start as soon as both finish (not after build alone).
     needs: [lint, test]
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: [self-hosted, Linux, X64, catalyst-ci]
+    timeout-minutes: 10
     if: github.event_name == 'push'
     outputs:
       release: ${{ steps.filter.outputs.release }}
@@ -552,8 +552,11 @@ jobs:
     # Docker build is independent of the TypeScript/cargo verify job — only wait
     # for gates + path detect. Overlaps with Build Verification wall-clock.
     needs: [lint, test, detect-changes]
-    # 4 vCPU helps native module compile (ssh2/cpu-features) inside the image.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Push-only (forks never trigger push on this repo), so self-hosted directly.
+    # Images build via buildah chroot isolation — no Docker daemon socket is
+    # ever exposed to jobs.
+    runs-on: [self-hosted, Linux, X64, catalyst-ci]
+    timeout-minutes: 40
     if: >-
       github.event_name == 'push' &&
       github.ref != 'refs/heads/main' &&
@@ -562,15 +565,8 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@e4c1c000c95f9cc255f72940e9c56bcbd1239436 # v1
-
       - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        run: buildah login -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}" "${{ env.REGISTRY }}"
 
       - name: Extract metadata
         id: meta
@@ -585,13 +581,37 @@ jobs:
 
       - name: Build and push
         id: build-push
-        uses: useblacksmith/build-push-action@9b0579bbec7a6cad2f171596c57e7ac1e7658850 # v2
-        with:
-          context: .
-          file: catalyst-backend/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+        run: |
+          set -euo pipefail
+          TAG_ARGS=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            TAG_ARGS+=(-t "$tag")
+          done <<< "${{ steps.meta.outputs.tags }}"
+          LABEL_ARGS=()
+          while IFS= read -r label; do
+            [ -n "$label" ] || continue
+            LABEL_ARGS+=(--label "$label")
+          done <<< "${{ steps.meta.outputs.labels }}"
+          IIDFILE="$(mktemp)"
+          buildah build --isolation chroot \
+            "${TAG_ARGS[@]}" "${LABEL_ARGS[@]}" \
+            --iidfile "$IIDFILE" \
+            -f catalyst-backend/Dockerfile .
+          IID="$(cat "$IIDFILE")"
+          FIRST_TAG="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | grep -v '^$' | head -1)"
+          DIGEST_FILE="$(mktemp)"
+          buildah push --digestfile "$DIGEST_FILE" "$IID" "docker://$FIRST_TAG"
+          RAW_DIGEST="$(cat "$DIGEST_FILE")"
+          RAW_DIGEST="${RAW_DIGEST#sha256:}"
+          DIGEST="sha256:$RAW_DIGEST"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            [ "$tag" = "$FIRST_TAG" ] && continue
+            buildah push "$IID" "docker://$tag"
+          done <<< "${{ steps.meta.outputs.tags }}"
+          buildah rmi "$IID" || true
 
       - name: Attest image provenance (SLSA/Sigstore)
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
@@ -614,7 +634,8 @@ jobs:
       id-token: write # SLSA provenance via attest-build-provenance
       attestations: write
     needs: [lint, test, detect-changes]
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: [self-hosted, Linux, X64, catalyst-ci]
+    timeout-minutes: 40
     if: >-
       github.event_name == 'push' &&
       github.ref != 'refs/heads/main' &&
@@ -630,15 +651,8 @@ jobs:
           ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
           path: catalyst-plugins
 
-      - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@e4c1c000c95f9cc255f72940e9c56bcbd1239436 # v1
-
       - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        run: buildah login -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}" "${{ env.REGISTRY }}"
 
       - name: Extract metadata
         id: meta
@@ -653,13 +667,37 @@ jobs:
 
       - name: Build and push
         id: build-push
-        uses: useblacksmith/build-push-action@9b0579bbec7a6cad2f171596c57e7ac1e7658850 # v2
-        with:
-          context: .
-          file: catalyst-frontend/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+        run: |
+          set -euo pipefail
+          TAG_ARGS=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            TAG_ARGS+=(-t "$tag")
+          done <<< "${{ steps.meta.outputs.tags }}"
+          LABEL_ARGS=()
+          while IFS= read -r label; do
+            [ -n "$label" ] || continue
+            LABEL_ARGS+=(--label "$label")
+          done <<< "${{ steps.meta.outputs.labels }}"
+          IIDFILE="$(mktemp)"
+          buildah build --isolation chroot \
+            "${TAG_ARGS[@]}" "${LABEL_ARGS[@]}" \
+            --iidfile "$IIDFILE" \
+            -f catalyst-frontend/Dockerfile .
+          IID="$(cat "$IIDFILE")"
+          FIRST_TAG="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | grep -v '^$' | head -1)"
+          DIGEST_FILE="$(mktemp)"
+          buildah push --digestfile "$DIGEST_FILE" "$IID" "docker://$FIRST_TAG"
+          RAW_DIGEST="$(cat "$DIGEST_FILE")"
+          RAW_DIGEST="${RAW_DIGEST#sha256:}"
+          DIGEST="sha256:$RAW_DIGEST"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            [ "$tag" = "$FIRST_TAG" ] && continue
+            buildah push "$IID" "docker://$tag"
+          done <<< "${{ steps.meta.outputs.tags }}"
+          buildah rmi "$IID" || true
 
       - name: Attest image provenance (SLSA/Sigstore)
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
