@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   hashApiKey,
+  hashApiKeyPreviousSecret,
   resolveApiKeySecret,
 } from "../services/api-key-service";
 
@@ -59,5 +60,30 @@ describe("resolveApiKeySecret", () => {
     const b = hashApiKey("catalyst_testkey_abcdefghijklmnop");
     expect(a).toBe(b);
     expect(a).toMatch(/^[a-f0-9]{64}$/);
+  });
+});
+
+describe("hashApiKeyPreviousSecret", () => {
+  it("reproduces a hash minted under the pre-rotation auth secret", () => {
+    // Key minted before the dedicated secret existed (HMAC under auth secret).
+    delete process.env.API_KEY_SECRET;
+    process.env.BETTER_AUTH_SECRET = "old-shared-secret";
+    const oldHash = hashApiKey("catalyst_testkey_abcdefghijklmnop");
+
+    // Reconfigure mints the dedicated secret; current hash no longer matches.
+    process.env.API_KEY_SECRET = "new-dedicated-secret";
+    expect(hashApiKey("catalyst_testkey_abcdefghijklmnop")).not.toBe(oldHash);
+
+    // The rotation grace path reproduces the stored hash.
+    expect(hashApiKeyPreviousSecret("catalyst_testkey_abcdefghijklmnop")).toBe(oldHash);
+  });
+
+  it("returns null when there is no distinct previous secret", () => {
+    process.env.API_KEY_SECRET = "same-secret";
+    process.env.BETTER_AUTH_SECRET = "same-secret";
+    expect(hashApiKeyPreviousSecret("catalyst_testkey_abcdefghijklmnop")).toBeNull();
+
+    delete process.env.BETTER_AUTH_SECRET;
+    expect(hashApiKeyPreviousSecret("catalyst_testkey_abcdefghijklmnop")).toBeNull();
   });
 });

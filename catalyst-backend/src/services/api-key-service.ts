@@ -89,6 +89,35 @@ export function hashApiKeyLegacyUnsalted(key: string): string {
   return createHmac("sha256", secret).update(key).digest("hex");
 }
 
+let warnedAboutApiKeySecretRotation = false;
+
+/**
+ * Rotation grace: keys minted before a dedicated API_KEY_SECRET existed
+ * were HMAC'd under BETTER_AUTH_SECRET. When a reconfigure mints the
+ * dedicated secret those stored hashes stop matching — retry verification
+ * under the auth secret so existing keys keep working until re-issued.
+ * Returns null when there is no distinct previous secret to try.
+ */
+export function hashApiKeyPreviousSecret(key: string, salt?: string): string | null {
+  const current = process.env.API_KEY_SECRET?.trim();
+  const authSecret = process.env.BETTER_AUTH_SECRET?.trim();
+  if (!current || !authSecret || authSecret === current) {
+    return null;
+  }
+  const effectiveSalt = salt ?? key.slice(0, 16);
+  return createHmac("sha256", authSecret).update(key + effectiveSalt).digest("hex");
+}
+
+export function warnApiKeySecretRotationNeeded(): void {
+  if (!warnedAboutApiKeySecretRotation && process.env.NODE_ENV !== "test") {
+    warnedAboutApiKeySecretRotation = true;
+    console.warn(
+      "[api-key-service] An API key verified under the pre-rotation secret. " +
+        "Re-issue API keys from the panel so they hash under the dedicated API_KEY_SECRET.",
+    );
+  }
+}
+
 export function isLegacyHashAllowed(): boolean {
   return process.env.ALLOW_LEGACY_API_KEY_HASH === "1";
 }
@@ -289,11 +318,20 @@ export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | nu
     const deterministicHash = hashApiKey(fullKey);
     const legacyAllowed = isLegacyHashAllowed();
     const legacyHash = legacyAllowed ? hashApiKeyLegacyUnsalted(fullKey) : null;
-    if (
+    // Secret-rotation grace: keys minted before the dedicated secret existed.
+    const prevSaltedHash = meta?.salt ? hashApiKeyPreviousSecret(fullKey, meta.salt) : null;
+    const prevDeterministicHash = hashApiKeyPreviousSecret(fullKey);
+    const matchedCurrent =
       (saltedHash && timingSafeCompare(candidate.key, saltedHash)) ||
       timingSafeCompare(candidate.key, deterministicHash) ||
-      (legacyHash && timingSafeCompare(candidate.key, legacyHash))
-    ) {
+      (legacyHash && timingSafeCompare(candidate.key, legacyHash));
+    const matchedPrevious =
+      (prevSaltedHash && timingSafeCompare(candidate.key, prevSaltedHash)) ||
+      (prevDeterministicHash !== null && timingSafeCompare(candidate.key, prevDeterministicHash));
+    if (matchedCurrent || matchedPrevious) {
+      if (matchedPrevious && !matchedCurrent) {
+        warnApiKeySecretRotationNeeded();
+      }
       apiKeyRecord = candidate;
       break;
     }

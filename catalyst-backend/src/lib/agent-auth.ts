@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
-import { hashApiKey as hashApiKeyHmac, hashApiKeyLegacyUnsalted, isLegacyHashAllowed, parseApiKeyRecordMetadata, timingSafeCompare } from "../services/api-key-service";
+import { hashApiKey as hashApiKeyHmac, hashApiKeyLegacyUnsalted, hashApiKeyPreviousSecret, isLegacyHashAllowed, parseApiKeyRecordMetadata, timingSafeCompare, warnApiKeySecretRotationNeeded } from "../services/api-key-service";
 import { broadcastCacheInvalidate, onCacheInvalidate } from "./cache-bus";
 
 function parseApiKeyMetadata(rawMetadata: unknown): Record<string, unknown> | null {
@@ -106,11 +106,20 @@ export async function verifyAgentApiKey(
       const salted = meta?.salt ? hashApiKeyHmac(apiKey, meta.salt) : null;
       const deterministic = hashApiKeyHmac(apiKey);
       const legacyUnsalted = isLegacyHashAllowed() ? hashApiKeyLegacyUnsalted(apiKey) : null;
-      if (
+      // Secret-rotation grace: keys minted before the dedicated secret existed.
+      const prevSalted = meta?.salt ? hashApiKeyPreviousSecret(apiKey, meta.salt) : null;
+      const prevDeterministic = hashApiKeyPreviousSecret(apiKey);
+      const matchedCurrent =
         (salted && timingSafeCompare(candidate.key, salted)) ||
         timingSafeCompare(candidate.key, deterministic) ||
-        (legacyUnsalted && timingSafeCompare(candidate.key, legacyUnsalted))
-      ) {
+        (legacyUnsalted && timingSafeCompare(candidate.key, legacyUnsalted));
+      const matchedPrevious =
+        (prevSalted && timingSafeCompare(candidate.key, prevSalted)) ||
+        (prevDeterministic !== null && timingSafeCompare(candidate.key, prevDeterministic));
+      if (matchedCurrent || matchedPrevious) {
+        if (matchedPrevious && !matchedCurrent) {
+          warnApiKeySecretRotationNeeded();
+        }
         apiKeyRecord = candidate;
         break;
       }

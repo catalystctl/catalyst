@@ -906,6 +906,13 @@ phase_configure() {
     else
         ok "Generated POSTGRES_PASSWORD, BETTER_AUTH_SECRET, REDIS_PASSWORD, API_KEY_SECRET, BACKUP_CREDENTIALS_ENCRYPTION_KEY"
     fi
+    # A fresh API_KEY_SECRET over an existing stack changes the HMAC secret
+    # that panel/agent API keys were hashed under. The backend keeps those
+    # keys working via a one-time fallback — re-issue them from the panel
+    # when convenient so they hash under the dedicated secret.
+    if [[ -n "$previous_env" && -f "$previous_env" ]] && ! $reused_api; then
+        warn "New API_KEY_SECRET generated for an existing stack: pre-existing panel/agent API keys keep working, but re-issue them from the panel."
+    fi
 
     # ── Detect default PUBLIC_URL ─────────────────────────────────────────
     DETECTED_IP=""
