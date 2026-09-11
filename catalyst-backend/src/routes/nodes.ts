@@ -474,7 +474,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 			);
 			const nodeManageAllowed =
 				(await hasNodeAccess(prisma, request.user.userId, nodeId)) &&
-				(rolePerms.includes("node.update") || rolePerms.includes("*"));
+				(rolePerms.includes("node.update") ||
+					rolePerms.includes("*") ||
+					// admin.write is the documented admin path; without this an
+					// admin.write role (no wildcard) was 403'd even though the
+					// panel shows it the Deploy / Generate Key buttons.
+					rolePerms.includes("admin.write"));
 			if (!nodeManageAllowed) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Node management access required");
 			}
@@ -644,7 +649,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 			);
 			const nodeManageAllowed =
 				(await hasNodeAccess(prisma, request.user.userId, nodeId)) &&
-				(rolePerms.includes("node.update") || rolePerms.includes("*"));
+				(rolePerms.includes("node.update") ||
+					rolePerms.includes("*") ||
+					// admin.write is the documented admin path; without this an
+					// admin.write role (no wildcard) was 403'd even though the
+					// panel shows it the Deploy / Generate Key buttons.
+					rolePerms.includes("admin.write"));
 			if (!nodeManageAllowed) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Node management access required");
 			}
