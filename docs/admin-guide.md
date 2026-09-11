@@ -878,7 +878,7 @@ Navigate to **Admin → Security** to configure security policies.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `fileTunnelRateLimitMax` | 100 | Max file tunnel requests per window |
-| `fileTunnelMaxUploadMb` | 500 | Single max file size (MB) for the file browser and SFTP on every agent |
+| `fileTunnelMaxUploadMb` | 500 | Single max file size (MB) for the file browser on every agent (capped at 10240 by the agent) |
 | `fileTunnelMaxPendingPerNode` | 50 | Max pending file operations per node |
 | `fileTunnelConcurrentMax` | 10 | Max concurrent file transfers per node |
 
