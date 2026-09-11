@@ -2212,7 +2212,7 @@ Download a backup file directly. For local storage, returns the file as `applica
 | `DELETE` | `/api/nodes/:id` | `node.delete` | Delete a node |
 | `GET` | `/api/nodes/:id/stats` | `node.view_stats` | Get node resource statistics |
 | `POST` | `/api/nodes/:id/heartbeat` | Agent | Node heartbeat (agent) |
-| `POST` | `/api/nodes/:id/deployment-token` | `node.create` | Generate deployment token |
+| `POST` | `/api/nodes/:id/deployment-token` | `node.create` + node-manage (admin, or node assignment + `node.update`) | Generate deployment token |
 | `GET` | `/api/nodes/:id/api-key` | `node.read` | Check node API key exists |
 | `POST` | `/api/nodes/:id/api-key` | `node.create` | Generate/regenerate API key |
 | `GET` | `/api/nodes/:id/allocations` | `node.manage_allocation` | List node allocations (`?serverId`, `?search`) |
@@ -4711,7 +4711,7 @@ No content — the upload was sent as part of the poll request.
 | `GET` | `/api/agent/download` | No | Download agent binary |
 | `GET` | `/api/agent/download-checksum` | No | SHA-256 sidecar for the agent binary |
 | `GET` | `/api/agent/deploy-script` | No | Get deployment script |
-| `GET` | `/api/deploy/:token` | No | Get deployment script for token |
+| `GET` | `/api/deploy/:token` | Node API key (`Authorization: Bearer`) | Get deployment script for token |
 | `GET` | `/api/nodes/:nodeId/agent/logs/stream` | `node.read` | SSE stream of agent logs |
 | `GET` | `/api/nodes/:nodeId/agent/update-status` | `node.read` | Agent update status |
 | `POST` | `/api/client-errors` | No | Client-side error ingest (companion to `/api/system-errors/report`) |

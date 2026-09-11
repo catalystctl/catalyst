@@ -426,7 +426,7 @@ You only need to override these individually for split internal/external setups 
 | `PUBLIC_URL` | `.env` file | **Required.** The exact URL users type into their browser. No trailing slash. |
 | `POSTGRES_PASSWORD` | `.env` file | **Required.** Strong password. No default. |
 | `BETTER_AUTH_SECRET` | `.env` file | **Required.** Generate with `openssl rand -base64 32`. |
-| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | `.env` file | Required for S3 backups. Generate with `openssl rand -hex 32`. |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | `.env` file | Required for S3 backups. Generate with `openssl rand -base64 32` (the backend requires 32 base64-decoded bytes). |
 
 ### Generating Secrets
 
@@ -435,7 +435,7 @@ You only need to override these individually for split internal/external setups 
 openssl rand -base64 32
 
 # Backup encryption key
-openssl rand -hex 32
+openssl rand -base64 32
 
 # Webhook signing secret
 openssl rand -hex 32

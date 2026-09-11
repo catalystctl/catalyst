@@ -591,7 +591,7 @@ Before exposing Catalyst to the internet, complete this checklist:
 - [ ] Restrict `BACKEND_PORT` to `127.0.0.1:3000` (localhost only)
 - [ ] Disable external PostgreSQL access (keep `POSTGRES_PORT=127.0.0.1:5432`)
 - [ ] Keep Redis localhost-only (`REDIS_PORT=127.0.0.1:6379`); never publish `0.0.0.0:6379`
-- [ ] Generate a backup encryption key: `openssl rand -hex 32`
+- [ ] Generate a backup encryption key: `openssl rand -base64 32`
 - [ ] Configure SMTP for password resets and notifications
 - [ ] Set up automated database backups
 - [ ] Review and adjust rate limits in Admin → Security

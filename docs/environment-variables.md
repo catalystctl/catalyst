@@ -602,8 +602,8 @@ Before deploying to production, **generate secrets** for the following variables
 # Better Auth secret (required)
 openssl rand -base64 32
 
-# Backup credentials encryption key (required for S3 backups)
-openssl rand -hex 32
+# Backup credentials encryption key (required for S3 backups; must decode to 32 bytes)
+openssl rand -base64 32
 
 # Webhook signing secret (recommended)
 openssl rand -hex 32

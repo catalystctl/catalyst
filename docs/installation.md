@@ -268,7 +268,7 @@ File size is the panel Admin → Security **Max upload size**.
 | Variable | Default | Description |
 |---|---|---|
 | `BACKUP_STORAGE_MODE` | `local` | `local`, `s3`, or `stream` |
-| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | Required for S3. Generate: `openssl rand -hex 32`. **If lost, credentials are unrecoverable.** |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | Required for S3. Generate: `openssl rand -base64 32` (must decode to 32 bytes). **If lost, credentials are unrecoverable.** |
 
 When `BACKUP_STORAGE_MODE=s3`, also set `BACKUP_S3_BUCKET`, `BACKUP_S3_REGION`, `BACKUP_S3_ACCESS_KEY`, `BACKUP_S3_SECRET_KEY`, and optionally `BACKUP_S3_ENDPOINT` and `BACKUP_S3_PATH_STYLE` (set `true` for MinIO).
 
