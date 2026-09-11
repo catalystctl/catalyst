@@ -427,7 +427,7 @@ You only need to override these individually for split internal/external setups 
 | `POSTGRES_PASSWORD` | `.env` file | **Required.** Strong password. No default. |
 | `REDIS_PASSWORD` | `.env` file | **Required.** Redis auth password (the stack starts Redis with `--requirepass`). Generate with `openssl rand -base64 24 \| tr -d '/+='`. |
 | `BETTER_AUTH_SECRET` | `.env` file | **Required.** Generate with `openssl rand -base64 32`. |
-| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | `.env` file | Required to save S3/SFTP backup credentials (the backend refuses to store them unencrypted). Generate with `openssl rand -base64 32` (the backend requires 32 base64-decoded bytes). |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | `.env` file | Required to save S3/SFTP backup credentials, database passwords, and migration keys (the backend refuses to store them unencrypted). Generate with `openssl rand -base64 32` (the backend requires 32 base64-decoded bytes). |
 
 ### Generating Secrets
 

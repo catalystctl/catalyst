@@ -57,6 +57,7 @@
   "CONSOLE_VIEWER_LIMIT_REACHED": "控制台观看人数过多，请稍后重试。",
   "CONSTRAINT_FAILED": "数据约束校验失败。",
   "CONTAINER_ERROR": "容器运行时报告了错误。",
+  "CREDENTIAL_ENCRYPTION_KEY_MISSING": "此服务器未配置凭据加密。请要求管理员设置 BACKUP_CREDENTIALS_ENCRYPTION_KEY。",
   "DATABASE_ALLOCATION_DISABLED": "该服务器已禁用数据库分配。",
   "DATABASE_CREDENTIALS_INVALID": "生成的数据库凭据无效。",
   "DATABASE_DELETE_FAILED": "数据库删除失败。",

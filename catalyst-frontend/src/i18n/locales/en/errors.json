@@ -57,6 +57,7 @@
   "CONSOLE_VIEWER_LIMIT_REACHED": "Too many console viewers. Please try again later.",
   "CONSTRAINT_FAILED": "A data constraint was violated.",
   "CONTAINER_ERROR": "The container runtime reported an error.",
+  "CREDENTIAL_ENCRYPTION_KEY_MISSING": "Credential encryption is not configured on this server. Ask your administrator to set BACKUP_CREDENTIALS_ENCRYPTION_KEY.",
   "DATABASE_ALLOCATION_DISABLED": "Database allocation is disabled for this server.",
   "DATABASE_CREDENTIALS_INVALID": "The generated database credentials are invalid.",
   "DATABASE_DELETE_FAILED": "Failed to delete the database.",

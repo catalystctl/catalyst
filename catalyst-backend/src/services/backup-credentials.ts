@@ -43,6 +43,22 @@ const decryptValue = (value: string) => {
 };
 
 /**
+ * Whether stored credentials can be encrypted right now: the key must be
+ * present and decode to 32 bytes. Routes check this BEFORE provisioning or
+ * rotating anything, so a missing key fails fast with 400 instead of
+ * leaving a provisioned-but-unstorable credential behind.
+ */
+export const isCredentialEncryptionConfigured = (): boolean => {
+  const raw = process.env[KEY_ENV];
+  if (!raw) return false;
+  try {
+    return Buffer.from(raw, "base64").length === KEY_LENGTH;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Encrypt a single secret string with the backup-credentials AES key.
  *
  * Fail-closed in every environment: a missing or invalid key is a hard error

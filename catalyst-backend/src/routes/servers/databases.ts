@@ -184,7 +184,13 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
       const shortServer = serverId.replace(/[^a-z0-9]/gi, "").slice(0, 6).toLowerCase() || "srv";
       const databaseUsername = generateSafeIdentifier(`srv_${shortServer}_`, 8);
       const databasePassword = generateSafeIdentifier("p", 24);
-      const { encryptSecretValue } = await import("../../services/backup-credentials.js");
+      const { encryptSecretValue, isCredentialEncryptionConfigured } = await import("../../services/backup-credentials.js");
+
+      // Fail fast before provisioning: without the encryption key the
+      // password could not be stored afterwards, orphaning the database user.
+      if (!isCredentialEncryptionConfigured()) {
+        return apiError(reply, 400, ErrorCodes.CREDENTIAL_ENCRYPTION_KEY_MISSING, "Database passwords cannot be stored: BACKUP_CREDENTIALS_ENCRYPTION_KEY is not configured");
+      }
 
       if (!isValidDatabaseIdentifier(databaseUsername)) {
         return apiError(reply, 500, ErrorCodes.DATABASE_CREDENTIALS_INVALID, "Generated database username is invalid");
@@ -297,7 +303,13 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
       }
 
       const nextPassword = generateSafeIdentifier("p", 24);
-      const { encryptSecretValue: encryptRotatedSecret } = await import("../../services/backup-credentials.js");
+      const { encryptSecretValue: encryptRotatedSecret, isCredentialEncryptionConfigured } = await import("../../services/backup-credentials.js");
+
+      // Fail fast before rotating: without the encryption key the new
+      // password could not be stored, locking everyone out of the database.
+      if (!isCredentialEncryptionConfigured()) {
+        return apiError(reply, 400, ErrorCodes.CREDENTIAL_ENCRYPTION_KEY_MISSING, "Database passwords cannot be stored: BACKUP_CREDENTIALS_ENCRYPTION_KEY is not configured");
+      }
 
       try {
         await rotateDatabasePassword(database.host, database.username, nextPassword);

@@ -229,9 +229,15 @@ export async function migrationRoutes(app: FastifyInstance) {
 
       // Create migration job with a bypass token for file-tunnel size limits
       const bypassToken = randomUUID();
-      // Encrypt source API key at rest when BACKUP_CREDENTIALS_ENCRYPTION_KEY is set;
-      // always redact in list/status API responses (see MigrationService redaction).
-      const { encryptSecretValue } = await import("../services/backup-credentials.js");
+      // Source API keys are encrypted at rest; without the encryption key
+      // the job could not be stored, so fail fast with 400 instead of 500.
+      const { encryptSecretValue, isCredentialEncryptionConfigured } = await import("../services/backup-credentials.js");
+      if (!isCredentialEncryptionConfigured()) {
+        apiError(reply, 400, ErrorCodes.CREDENTIAL_ENCRYPTION_KEY_MISSING, "Migration credentials cannot be stored: BACKUP_CREDENTIALS_ENCRYPTION_KEY is not configured");
+        return;
+      }
+      // Encrypt source API key at rest; always redact in list/status API
+      // responses (see MigrationService redaction).
       const storedSourceKey = (encryptSecretValue(key) as string) || key;
       const storedClientKey = clientApiKey
         ? ((encryptSecretValue(clientApiKey) as string) || clientApiKey)

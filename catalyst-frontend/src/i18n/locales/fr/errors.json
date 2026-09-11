@@ -57,6 +57,7 @@
   "CONSOLE_VIEWER_LIMIT_REACHED": "Trop de spectateurs de la console. Veuillez réessayer plus tard.",
   "CONSTRAINT_FAILED": "Une contrainte de données a été violée.",
   "CONTAINER_ERROR": "Le moteur de conteneurs a signalé une erreur.",
+  "CREDENTIAL_ENCRYPTION_KEY_MISSING": "Le chiffrement des identifiants n’est pas configuré sur ce serveur. Demandez à votre administrateur de définir BACKUP_CREDENTIALS_ENCRYPTION_KEY.",
   "DATABASE_ALLOCATION_DISABLED": "L’allocation de base de données est désactivée pour ce serveur.",
   "DATABASE_CREDENTIALS_INVALID": "Les identifiants de base de données générés ne sont pas valides.",
   "DATABASE_DELETE_FAILED": "Échec de la suppression de la base de données.",
