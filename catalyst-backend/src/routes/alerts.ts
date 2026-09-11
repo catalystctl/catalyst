@@ -11,11 +11,13 @@ export async function alertRoutes(app: FastifyInstance) {
   const authenticate = (app as any).authenticate;
   const isAdminUser = async (userId: string) => {
     // Consume the shared 30s permission cache (lib/permissions-catalog)
-    // instead of an uncached role query per request. Kept permission-bit-only
-    // semantics: '*' or 'admin.read' (admin.write alone does NOT pass).
+    // instead of an uncached role query per request. Mirrors the canonical
+    // isAdminUser (lib/permissions): '*' or 'admin.write' is full admin,
+    // 'admin.read' is read-only admin — all three may manage global/node
+    // alert targets, matching the admin alerts page gating.
     const { getUserPermissions } = await import('../lib/permissions.js');
     const permissions = await getUserPermissions(prisma, userId);
-    return permissions.has('*') || permissions.has('admin.read');
+    return permissions.has('*') || permissions.has('admin.write') || permissions.has('admin.read');
   };
   const ensureServerAccess = async ({
     userId,

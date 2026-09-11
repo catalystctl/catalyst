@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useApiKeys, useDeleteApiKey, usePermissionsCatalog } from '../hooks/useApiKeys';
 import { useNodes } from '../hooks/useNodes';
+import { useAuthStore } from '../stores/authStore';
 import { ApiKey, PermissionCategory, getPermissionLabel } from '../services/apiKeys';
 import i18n from '@/i18n';
 import { formatDateTime } from '@/i18n/format';
@@ -136,12 +137,14 @@ function ApiKeyRow({
  onEdit,
  catalog,
  getNodeName,
+ canManage,
 }: {
  apiKey: ApiKey;
  onDelete: () => void;
  onEdit: () => void;
  catalog: PermissionCategory[];
  getNodeName: (nodeId: string) => string | undefined;
+ canManage: boolean;
 }) {
  const { t } = useTranslation('profile');
  const agent = isAgentKey(apiKey);
@@ -266,6 +269,8 @@ function ApiKeyRow({
  </div>
 
  <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+ {canManage && (
+ <>
  <button
  onClick={onEdit}
  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -280,6 +285,8 @@ function ApiKeyRow({
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
+ </>
+ )}
  </div>
  </div>
  </div>
@@ -292,6 +299,10 @@ export function ApiKeysPage() {
  const { data: apiKeys, isLoading, isError, refetch } = useApiKeys();
  const { data: catalog = [] } = usePermissionsCatalog();
  const { data: nodes = [] } = useNodes();
+ // Mutating API keys requires apikey.manage; read-only admins (admin.read)
+ // get a working list view with the mutation UI hidden.
+ const userPerms = useAuthStore((s) => s.user?.permissions) ?? [];
+ const canManage = userPerms.includes('*') || userPerms.includes('apikey.manage');
  const deleteApiKey = useDeleteApiKey();
  const [createDialogOpen, setCreateDialogOpen] = useState(false);
  const [editKey, setEditKey] = useState<ApiKey | null>(null);
@@ -365,10 +376,12 @@ export function ApiKeysPage() {
  title={t('apiKeys.title')}
  description={t('apiKeys.description')}
  actions={
+ canManage ? (
  <Button size="sm" onClick={() => setCreateDialogOpen(true)} className="gap-1.5">
  <Plus className="h-3.5 w-3.5" />
  {t('apiKeys.create')}
  </Button>
+ ) : undefined
  }
  />
 
@@ -471,6 +484,7 @@ export function ApiKeysPage() {
  key={apiKey.id}
  apiKey={apiKey}
  catalog={catalog}
+ canManage={canManage}
  onDelete={() => { setDeleteKey(apiKey); setConfirmAgentDelete(false); }}
  onEdit={() => setEditKey(apiKey)}
  getNodeName={getNodeName}
@@ -486,7 +500,7 @@ export function ApiKeysPage() {
  : t('apiKeys.emptyDescription')
  }
  action={
- !search && statusFilter === 'all' ? (
+ !search && statusFilter === 'all' && canManage ? (
  <Button size="sm" onClick={() => setCreateDialogOpen(true)} className="gap-1.5">
  <Plus className="h-3.5 w-3.5" />
  {t('apiKeys.create')}

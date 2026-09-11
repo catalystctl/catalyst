@@ -39,11 +39,21 @@ export async function apiKeyRoutes(app: FastifyInstance) {
     }
   };
 
+  // Read gate for the admin API-keys page: apikey.manage holders plus
+  // read-only admins (admin.read, matched by the route and the list
+  // comment). Mutating routes stay behind requireApiKeyManage; the list
+  // handler still scopes non-admins to their own keys.
+  const requireApiKeyRead = async (request: any, reply: any) => {
+    if (!hasPermission(request, 'apikey.manage') && !isAdmin(request)) {
+      return reply.status(403).send({ success: false, error: "Requires apikey.manage permission", code: ErrorCodes.PERMISSION_DENIED });
+    }
+  };
+
   // ── GET /permissions-catalog ──
   // Returns the full list of permission categories + individual permissions.
   // Used by the frontend to render the permission selector.
   app.get("/api/admin/api-keys/permissions-catalog", {
-    preHandler: [authenticate, requireApiKeyManage],
+    preHandler: [authenticate, requireApiKeyRead],
   }, async (_request, reply) => {
     return reply.send({ success: true, data: PERMISSION_CATEGORIES });
   });
@@ -52,7 +62,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // Returns the current user's effective permissions (resolved from roles).
   // Used by the frontend to cap what permissions can be granted to an API key.
   app.get("/api/admin/api-keys/my-permissions", {
-    preHandler: [authenticate, requireApiKeyManage],
+    preHandler: [authenticate, requireApiKeyRead],
   }, async (request: any, reply) => {
     const permissions: string[] = request.user.permissions ?? [];
     return reply.send({ success: true, data: permissions });
@@ -151,7 +161,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // apikey.manage are scoped to their own keys to prevent enumeration of
   // other users' keys.
   app.get("/api/admin/api-keys", {
-    preHandler: [authenticate, requireApiKeyManage],
+    preHandler: [authenticate, requireApiKeyRead],
   }, async (request: any, reply) => {
     try {
       const canListAll = isAdmin(request);
@@ -198,7 +208,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
   // ── GET /:id ──
   app.get<{ Params: { id: string } }>("/api/admin/api-keys/:id", {
-    preHandler: [authenticate, requireApiKeyManage],
+    preHandler: [authenticate, requireApiKeyRead],
   }, async (request: any, reply) => {
     try {
       const { id } = request.params;
