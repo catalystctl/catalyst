@@ -234,10 +234,57 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       );
       if (!canUpdate) return;
 
+      // The panel shows masked secrets ("********") and sends them back on the
+      // next save. Treat the mask as "keep the stored value": storing it would
+      // replace the real S3/SFTP credentials, and sending it unchanged must not
+      // count as a credential change (that 403'd retention-only saves).
+      const SECRET_FIELDS = [
+        "secretAccessKey",
+        "password",
+        "privateKey",
+        "privateKeyPassphrase",
+      ] as const;
+      const REDACTION_MASK = "********";
+      const withoutMaskedSecrets = (
+        config: Record<string, any> | null | undefined,
+      ): Record<string, any> | null | undefined => {
+        if (!config) return config;
+        const out: Record<string, any> = { ...config };
+        for (const field of SECRET_FIELDS) {
+          if (out[field] === REDACTION_MASK) delete out[field];
+        }
+        return out;
+      };
+      const existingS3Config =
+        decryptBackupConfig(server.backupS3Config as any) ?? null;
+      const existingSftpConfig =
+        decryptBackupConfig(server.backupSftpConfig as any) ?? null;
+      const hasNewSecret = (config: Record<string, any> | null | undefined) =>
+        !!config &&
+        SECRET_FIELDS.some(
+          (field) =>
+            typeof config[field] === "string" &&
+            config[field].length > 0 &&
+            config[field] !== REDACTION_MASK,
+        );
+      const differsFromExisting = (
+        config: Record<string, any> | null | undefined,
+        existing: Record<string, any> | null,
+      ) => {
+        if (!config) return false;
+        const stripped = withoutMaskedSecrets(config) ?? {};
+        return Object.entries(stripped).some(([key, value]) => {
+          if ((SECRET_FIELDS as readonly string[]).includes(key)) return false;
+          return String(value ?? "") !== String(existing?.[key] ?? "");
+        });
+      };
+
       const credentialChange =
         (storageMode !== undefined && storageMode !== server.backupStorageMode) ||
-        s3Config !== undefined ||
-        sftpConfig !== undefined;
+        differsFromExisting(s3Config, existingS3Config) ||
+        differsFromExisting(sftpConfig, existingSftpConfig) ||
+        hasNewSecret(s3Config) ||
+        hasNewSecret(sftpConfig);
       if (credentialChange) {
         const credServer = await prisma.server.findUnique({
           where: { id },
@@ -278,8 +325,20 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         }
       }
 
-      const encryptedS3Config = s3Config ? encryptBackupConfig(s3Config) : undefined;
-      const encryptedSftpConfig = sftpConfig ? encryptBackupConfig(sftpConfig) : undefined;
+      // Merge over the stored values so a masked (unchanged) secret survives
+      // the round-trip instead of being replaced by the mask itself.
+      const mergedS3Config = s3Config
+        ? { ...(existingS3Config ?? {}), ...(withoutMaskedSecrets(s3Config) ?? {}) }
+        : undefined;
+      const mergedSftpConfig = sftpConfig
+        ? { ...(existingSftpConfig ?? {}), ...(withoutMaskedSecrets(sftpConfig) ?? {}) }
+        : undefined;
+      const encryptedS3Config = mergedS3Config
+        ? encryptBackupConfig(mergedS3Config)
+        : undefined;
+      const encryptedSftpConfig = mergedSftpConfig
+        ? encryptBackupConfig(mergedSftpConfig)
+        : undefined;
       const updated = await prisma.server.update({
         where: { id },
         data: {
