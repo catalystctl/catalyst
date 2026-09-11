@@ -31,6 +31,9 @@ echo "[entrypoint] registering ephemeral runner '${RUNNER_NAME}' for ${REPO}"
   --work _work
 
 echo "[entrypoint] registered; waiting for a job..."
-# Runs the listener. With --ephemeral, it exits after exactly one job completes.
-./run.sh
+# --disableupdate is required for ephemeral runners: a self-update restarts
+# the listener, which consumes the one-shot ephemeral registration, so the
+# restarted listener can never reconnect (update loop, jobs stay queued).
+# Runner version upgrades happen by rebuilding this image instead.
+./run.sh --disableupdate
 echo "[entrypoint] job done; exiting (supervisor will respawn)"

@@ -72,10 +72,10 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 RUN mkdir -p /cache/go-mod /cache/go-build /cache/toolcache /cache/pip /cache/npm \
     && chmod -R a+rwX /cache
 
-# --- GitHub Actions runner 2.331.0 (pinned; sha matches local tarball) ---
+# --- GitHub Actions runner 2.337.0 (pinned; bump + rebuild to upgrade) ---
 RUN curl -fsSL -o /tmp/runner.tgz \
-      https://github.com/actions/runner/releases/download/v2.331.0/actions-runner-linux-x64-2.331.0.tar.gz \
-    && echo "5fcc01bd546ba5c3f1291c2803658ebd3cedb3836489eda3be357d41bfcf28a7  /tmp/runner.tgz" | sha256sum -c - \
+      https://github.com/actions/runner/releases/download/v2.337.0/actions-runner-linux-x64-2.337.0.tar.gz \
+    && echo "70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613  /tmp/runner.tgz" | sha256sum -c - \
     && mkdir -p /runner && tar -C /runner -xzf /tmp/runner.tgz \
     && rm -f /tmp/runner.tgz \
     && chmod -R a+rwX /runner
