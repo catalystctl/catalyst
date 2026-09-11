@@ -1125,7 +1125,7 @@ mod tests {
             cni_bin_dir: PathBuf::from("/tmp"),
             cni_bridge_name: "catalyst0".to_string(),
             cni_bridge_subnet: "10.42.0.0/16".to_string(),
-            allow_host_network: false,
+            allow_host_network: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             error_sink: Arc::new(std::sync::RwLock::new(None)),
         }
     }

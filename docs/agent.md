@@ -511,6 +511,12 @@ In host mode, the container shares the host's network namespace. The server bind
 - Set via `CATALYST_NETWORK_IP` environment variable (defaults to node's public address)
 - Best for when you need the server to use the node's IP directly
 - Port conflicts must be managed manually
+- Denied by default: host mode is only permitted when the node opts in via
+  `containerd.allow_host_network = true` in `config.toml` (or `CATALYST_ALLOW_HOST_NETWORK=1`;
+  the env var wins when both are set). A start that hits the gate fails with
+  `networkMode "host" is disabled on this node` and the panel offers a one-click
+  enable, which sends `set_host_network` — the agent applies it to the running
+  process immediately and persists it to `config.toml`.
 
 ### Bridge Networking
 
@@ -1126,6 +1132,7 @@ The HTTP file tunnel supports 12 operations: `list`, `read`, `write`, `delete`, 
 | `create_network` | Create a CNI network |
 | `update_network` | Update an existing CNI network |
 | `delete_network` | Delete a CNI network |
+| `set_host_network` | Allow or deny `networkMode: "host"`; applied live and persisted to `config.toml` |
 
 ### Background Tasks
 

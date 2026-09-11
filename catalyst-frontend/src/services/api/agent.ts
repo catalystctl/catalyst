@@ -107,4 +107,19 @@ export const agentApi = {
     );
     return data.data ?? null;
   },
+
+  /**
+   * Enable or disable host networking on the node. The agent applies it live
+   * and persists it to config.toml, so networkMode "host" servers can start
+   * without an agent restart.
+   */
+  setHostNetwork: async (
+    nodeId: string,
+    enabled: boolean,
+  ): Promise<{ allowHostNetwork: boolean; persisted: boolean }> => {
+    const data = await apiClient.post<
+      ApiResponse<{ allowHostNetwork: boolean; persisted: boolean }>
+    >(`/api/nodes/${nodeId}/host-network`, { enabled });
+    return data.data ?? { allowHostNetwork: enabled, persisted: false };
+  },
 };

@@ -84,6 +84,7 @@
   "FRAMEWORK_NOT_FOUND": "找不到该框架。",
   "FRAMEWORK_RELEASES_FETCH_FAILED": "获取版本列表失败：{{reason}}",
   "GATEWAY_NOT_AVAILABLE": "WebSocket 网关不可用。",
+  "HOST_NETWORK_DISABLED": "此节点未启用主机网络。",
   "generic": "出错了，请重试。",
   "IMPORT_CONVERSION_FAILED": "导入内容转换失败。",
   "IMPORT_FETCH_FAILED": "从 GitHub 获取 egg 列表失败：{{message}}",

@@ -84,6 +84,7 @@
   "FRAMEWORK_NOT_FOUND": "Framework not found.",
   "FRAMEWORK_RELEASES_FETCH_FAILED": "Failed to fetch releases: {{reason}}",
   "GATEWAY_NOT_AVAILABLE": "The WebSocket gateway is not available.",
+  "HOST_NETWORK_DISABLED": "Host networking is disabled on this node.",
   "generic": "Something went wrong. Please try again.",
   "IMPORT_CONVERSION_FAILED": "The import could not be converted.",
   "IMPORT_FETCH_FAILED": "Failed to fetch the egg list from GitHub: {{message}}",

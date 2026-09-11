@@ -175,6 +175,15 @@ export const normalizePortBindings = (value: unknown, primaryPort: number) => {
 
 export const WILDCARD_HOST = "*";
 
+/**
+ * Agent rejection text for a server whose node denies networkMode "host"
+ * (containerd.allow_host_network). The power route maps this to
+ * ErrorCodes.HOST_NETWORK_DISABLED so the panel can offer the one-click
+ * enable instead of a dead-end error.
+ */
+export const isHostNetworkDisabledAgentError = (message: string): boolean =>
+  /networkMode "host" is disabled on this node/i.test(message);
+
 export const collectUsedHostPortsByIp = (
   servers: Array<{
     id: string;

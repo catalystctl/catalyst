@@ -6,6 +6,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use containerd_client::services::v1::container::Runtime;
@@ -410,7 +411,9 @@ pub struct ContainerdRuntime {
     /// Subnet for the default bridge NAT network.
     cni_bridge_subnet: String,
     /// Whether panel-requested `networkMode: "host"` is permitted.
-    allow_host_network: bool,
+    /// Shared so the panel can flip the node policy at runtime
+    /// (set_host_network) without an agent restart.
+    allow_host_network: Arc<AtomicBool>,
     /// Error reporting sink installed by main.rs so non-fatal runtime errors
     /// (e.g. firewall rule failures) reach the panel's System Errors page.
     error_sink: Arc<std::sync::RwLock<Option<crate::error_reporter::ErrorSink>>>,
@@ -488,7 +491,7 @@ impl ContainerdRuntime {
             cni_bin_dir: config.cni_bin_dir,
             cni_bridge_name: config.cni_bridge_name,
             cni_bridge_subnet: config.cni_bridge_subnet,
-            allow_host_network: config.allow_host_network,
+            allow_host_network: Arc::new(AtomicBool::new(config.allow_host_network)),
             error_sink: Arc::new(std::sync::RwLock::new(None)),
         })
     }
@@ -498,6 +501,17 @@ impl ContainerdRuntime {
     /// logged locally.
     pub fn set_error_sink(&self, sink: crate::error_reporter::ErrorSink) {
         *self.error_sink.write().unwrap() = Some(sink);
+    }
+
+    /// Whether panel-requested `networkMode: "host"` is currently permitted.
+    pub fn allow_host_network(&self) -> bool {
+        self.allow_host_network.load(Ordering::Relaxed)
+    }
+
+    /// Flip the host-networking policy for the running agent. Persistence to
+    /// config.toml is handled by the caller; this only changes live behaviour.
+    pub fn set_allow_host_network(&self, allowed: bool) {
+        self.allow_host_network.store(allowed, Ordering::Relaxed);
     }
 
     /// Report a non-fatal runtime error through the sink (if installed).

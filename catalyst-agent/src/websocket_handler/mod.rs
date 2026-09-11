@@ -231,6 +231,60 @@ pub(crate) fn validate_agent_config_update(
     }
     Ok(())
 }
+
+/// Patch `containerd.allow_host_network` in a config.toml document while
+/// preserving comments and formatting: replace the key inside [containerd]
+/// when present, otherwise insert it into that section, otherwise append the
+/// section. The panel drives this via `set_host_network`.
+pub(crate) fn apply_host_network_setting(content: &str, enabled: bool) -> String {
+    let value = if enabled { "true" } else { "false" };
+    let mut out: Vec<String> = Vec::new();
+    let mut in_containerd = false;
+    let mut seen_containerd = false;
+    let mut done = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            // Leaving [containerd] without the key: append it before the next
+            // section header so it stays inside the right table.
+            if in_containerd && !done {
+                out.push(format!("allow_host_network = {}", value));
+                done = true;
+            }
+            in_containerd = trimmed == "[containerd]";
+            seen_containerd |= in_containerd;
+            out.push(line.to_string());
+            continue;
+        }
+        if in_containerd
+            && !done
+            && !trimmed.starts_with('#')
+            && trimmed.split('=').next().map(str::trim) == Some("allow_host_network")
+        {
+            out.push(format!("allow_host_network = {}", value));
+            done = true;
+            continue;
+        }
+        out.push(line.to_string());
+    }
+
+    if !done {
+        if in_containerd {
+            out.push(format!("allow_host_network = {}", value));
+        } else if !seen_containerd {
+            out.push(String::new());
+            out.push("[containerd]".to_string());
+            out.push(format!("allow_host_network = {}", value));
+        }
+    }
+
+    let mut patched = out.join("\n");
+    if content.ends_with('\n') {
+        patched.push('\n');
+    }
+    patched
+}
 pub(crate) const OOM_KILL_REASON: &str = "Killed by system OOM killer (cgroup memory limit exceeded). JVM off-heap (direct buffers, metaspace, threads) counts toward the limit — increase Memory allocation.";
 pub(crate) const OOM_KILL_CONSOLE_HINT: &str = "[Catalyst] Killed by system OOM killer — container exceeded its memory allocation. Increase the server Memory allocation. JVM heap is auto-capped below the allocation so off-heap (direct memory, metaspace, threads) fits.\n";
 
@@ -2940,6 +2994,7 @@ impl WebSocketHandler {
                     let _ = send_ws_with_timeout(&write, Message::Text(response.to_string().into())).await;
                 });
             }
+            Some("set_host_network") => self.handle_set_host_network(&msg, write).await?,
             Some("update_network") => self.handle_update_network(&msg, write).await?,
             Some("delete_network") => self.handle_delete_network(&msg, write).await?,
             Some("allocation_added") => self.handle_allocation_added(&msg).await?,
@@ -3558,6 +3613,83 @@ impl WebSocketHandler {
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
         result?;
+
+        Ok(())
+    }
+
+    /// Panel-driven node policy: permit or deny `networkMode: "host"`.
+    /// Applies to the live runtime immediately and persists the value to
+    /// config.toml so it survives agent restarts. Narrowly scoped on purpose:
+    /// unlike agent_config_update it never rewrites the whole file (which
+    /// would need the redacted secrets).
+    async fn handle_set_host_network(
+        &self,
+        msg: &Value,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let request_id = msg.get("requestId").cloned().unwrap_or(Value::Null);
+        let enabled = match msg.get("enabled").and_then(|v| v.as_bool()) {
+            Some(v) => v,
+            None => {
+                let response = json!({
+                    "type": "set_host_network_response",
+                    "requestId": request_id,
+                    "success": false,
+                    "error": "enabled (boolean) is required",
+                });
+                send_ws_with_timeout(write, Message::Text(response.to_string().into()))
+                    .await
+                    .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+                return Ok(());
+            }
+        };
+
+        self.runtime.set_allow_host_network(enabled);
+
+        let config_path = self.config.agent.config_path.clone();
+        let path = if config_path.as_os_str().is_empty() {
+            PathBuf::from("/opt/catalyst-agent/config.toml")
+        } else {
+            config_path
+        };
+        let mut persisted = false;
+        let mut persist_error: Option<String> = None;
+        match tokio::fs::read_to_string(&path).await {
+            Ok(raw) => {
+                let patched = apply_host_network_setting(&raw, enabled);
+                match atomic_write::atomic_write(&path, &patched).await {
+                    Ok(_) => persisted = true,
+                    Err(e) => persist_error = Some(e.to_string()),
+                }
+            }
+            Err(e) => persist_error = Some(e.to_string()),
+        }
+
+        if persisted {
+            info!(
+                "Host networking {} by panel request (persisted to {})",
+                if enabled { "enabled" } else { "disabled" },
+                path.display()
+            );
+        } else {
+            warn!(
+                "Host networking {} live but not persisted: {}",
+                if enabled { "enabled" } else { "disabled" },
+                persist_error.as_deref().unwrap_or("unknown error")
+            );
+        }
+
+        let response = json!({
+            "type": "set_host_network_response",
+            "requestId": request_id,
+            "success": true,
+            "allowHostNetwork": enabled,
+            "persisted": persisted,
+            "error": persist_error,
+        });
+        send_ws_with_timeout(write, Message::Text(response.to_string().into()))
+            .await
+            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
         Ok(())
     }
@@ -4336,6 +4468,51 @@ async fn send_ws_with_timeout(
 #[cfg(test)]
 mod security_hardening_tests {
     use super::*;
+
+    #[test]
+    fn host_network_setting_inserts_into_containerd_section() {
+        let cfg = "[server]\nnode_id = \"n1\"\n\n[containerd]\nsocket_path = \"/run/containerd/containerd.sock\"\n\n[logging]\nlevel = \"info\"\n";
+        let out = apply_host_network_setting(cfg, true);
+        let containerd_part = out.split("[containerd]").nth(1).unwrap();
+        let before_next = containerd_part.split("[logging]").next().unwrap();
+        assert!(before_next.contains("allow_host_network = true"));
+        let after_next = containerd_part.split("[logging]").nth(1).unwrap();
+        assert!(!after_next.contains("allow_host_network"));
+    }
+
+    #[test]
+    fn host_network_setting_replaces_existing_value() {
+        let cfg = "[containerd]\nallow_host_network = false\nnamespace = \"catalyst\"\n";
+        let out = apply_host_network_setting(cfg, true);
+        assert_eq!(out.matches("allow_host_network").count(), 1);
+        assert!(out.contains("allow_host_network = true"));
+        assert!(!out.contains("allow_host_network = false"));
+    }
+
+    #[test]
+    fn host_network_setting_appends_key_when_section_is_last() {
+        let cfg = "[logging]\nlevel = \"info\"\n\n[containerd]\nsocket_path = \"/run/containerd/containerd.sock\"";
+        let out = apply_host_network_setting(cfg, true);
+        assert!(out.trim_end().ends_with("allow_host_network = true"));
+        assert!(out.contains("[containerd]\nsocket_path"));
+    }
+
+    #[test]
+    fn host_network_setting_appends_section_when_missing() {
+        let cfg = "[server]\nnode_id = \"n1\"\n";
+        let out = apply_host_network_setting(cfg, false);
+        assert!(out.starts_with("[server]\nnode_id = \"n1\"\n"));
+        assert!(out.contains("[containerd]"));
+        assert!(out.contains("allow_host_network = false"));
+    }
+
+    #[test]
+    fn host_network_setting_ignores_commented_key() {
+        let cfg = "[containerd]\n# allow_host_network = true\nnamespace = \"catalyst\"\n";
+        let out = apply_host_network_setting(cfg, false);
+        assert!(out.contains("# allow_host_network = true"));
+        assert!(out.contains("allow_host_network = false"));
+    }
 
     #[test]
     fn handshake_nonce_echo_and_tag_verify() {

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { describeError } from "../../utils/describe-error.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
-import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
+import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, isHostNetworkDisabledAgentError, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { emitServerStatusEvent } from "../../plugins/host-events.js";
 import { apiError } from "../../lib/http-error";
@@ -889,8 +889,21 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       );
 
       if (powerResult.mode === "failed") {
+        const agentMessage = powerResult.error.message || "";
+        // Nodes deny networkMode "host" unless the operator opted in
+        // (containerd.allow_host_network). Surface it as a coded error so the
+        // panel can offer the one-click enable instead of a raw agent string.
+        if (isHostNetworkDisabledAgentError(agentMessage)) {
+          return apiError(
+            reply,
+            409,
+            ErrorCodes.HOST_NETWORK_DISABLED,
+            `Host networking is disabled on node ${server.node.name ?? server.nodeId}. Enable it on the node and try again.`,
+            { params: { nodeId: server.nodeId, nodeName: server.node.name } },
+          );
+        }
         return apiError(reply, powerFailureStatus(powerResult), ErrorCodes.AGENT_COMMAND_FAILED,
-          powerResult.error.message || "Failed to send command to agent");
+          agentMessage || "Failed to send command to agent");
       }
 
       // Update server status optimistically; final state via server_state_update

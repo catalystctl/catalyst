@@ -8,6 +8,8 @@ import { optimisticInvalidate, patchServerListStatus } from '../../lib/queryUtil
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
+import { agentApi } from '../../services/api/agent';
+import { getApiErrorCode } from '../../i18n/api-errors';
 import type { Server, ServerStatus } from '../../types/server';
 
 type Props = {
@@ -33,6 +35,8 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const queryClient = useQueryClient();
   const [showKillConfirm, setShowKillConfirm] = useState(false);
   const [showCancelInstallConfirm, setShowCancelInstallConfirm] = useState(false);
+  // Node whose host networking must be enabled before this server can start.
+  const [hostNetworkNodeId, setHostNetworkNodeId] = useState<string | null>(null);
 
   // Fail CLOSED: missing/empty permissions hide all power controls.
   const p = new Set(permissions ?? []);
@@ -64,12 +68,36 @@ function ServerControls({ serverId, status, permissions }: Props) {
     onError: (err, _vars, prev) => {
       if (prev) queryClient.setQueryData(qk.server(serverId), prev);
       optimisticInvalidate(queryClient, qk.servers());
+      // The node denies host networking: offer to enable it instead of a
+      // dead-end error. Requires node.update; the API answers 403 otherwise.
+      if (getApiErrorCode(err) === 'HOST_NETWORK_DISABLED') {
+        const srv = queryClient.getQueryData<Server>(qk.server(serverId));
+        if (srv?.nodeId) {
+          setHostNetworkNodeId(srv.nodeId);
+          return;
+        }
+      }
       notifyError(err);
     },
     onSettled: () => {
       optimisticInvalidate(queryClient, qk.server(serverId));
       optimisticInvalidate(queryClient, qk.servers());
       optimisticInvalidate(queryClient, qk.adminServers());
+    },
+  });
+
+  const enableHostNetwork = useMutation({
+    mutationFn: (nodeId: string) => agentApi.setHostNetwork(nodeId, true),
+    onSuccess: (_result, nodeId) => {
+      setHostNetworkNodeId(null);
+      notifySuccess(t('hostNetwork.enabled'));
+      optimisticInvalidate(queryClient, qk.node(nodeId));
+      // Retry the start now that the node accepts host networking.
+      start.mutate();
+    },
+    onError: (err) => {
+      setHostNetworkNodeId(null);
+      notifyError(err);
     },
   });
 
@@ -152,7 +180,8 @@ function ServerControls({ serverId, status, permissions }: Props) {
     stop.isPending ||
     restart.isPending ||
     kill.isPending ||
-    cancelInstall.isPending;
+    cancelInstall.isPending ||
+    enableHostNetwork.isPending;
 
   return (
     <>
@@ -235,6 +264,17 @@ function ServerControls({ serverId, status, permissions }: Props) {
         loading={cancelInstall.isPending}
         onConfirm={() => cancelInstall.mutate()}
         onCancel={() => setShowCancelInstallConfirm(false)}
+      />
+      <ConfirmDialog
+        open={hostNetworkNodeId !== null}
+        title={t('hostNetwork.title')}
+        message={t('hostNetwork.message')}
+        confirmText={t('hostNetwork.confirm')}
+        cancelText={t('common:actions.cancel')}
+        variant="warning"
+        loading={enableHostNetwork.isPending}
+        onConfirm={() => hostNetworkNodeId && enableHostNetwork.mutate(hostNetworkNodeId)}
+        onCancel={() => setHostNetworkNodeId(null)}
       />
     </>
   );

@@ -2819,4 +2819,74 @@ export async function nodeRoutes(app: FastifyInstance) {
 			apiError(reply, 503, ErrorCodes.NODE_AGENT_UNREACHABLE, "Failed to update agent config");
 		},
 	);
+
+	// Enable/disable host networking on the node (agent network policy).
+	// The agent applies it live and persists it to config.toml, so servers
+	// using networkMode "host" can start without an agent restart.
+	app.post(
+		"/:nodeId/host-network",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.update")) return;
+			const { nodeId } = request.params as { nodeId: string };
+			const body = request.body as { enabled?: unknown } | undefined;
+
+			if (typeof body?.enabled !== "boolean") {
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "enabled (boolean) is required");
+			}
+			const enabled = body.enabled;
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
+			}
+
+			if (!node.isOnline) {
+				return apiError(reply, 409, ErrorCodes.NODE_OFFLINE, "Agent is offline");
+			}
+
+			const gateway = (app as any).wsGateway;
+			if (!gateway) {
+				return apiError(reply, 503, ErrorCodes.WEBSOCKET_GATEWAY_UNAVAILABLE, "WebSocket gateway unavailable");
+			}
+
+			try {
+				const response = await gateway.requestFromAgent(nodeId, {
+					type: "set_host_network",
+					enabled,
+				});
+
+				if (response?.success) {
+					await createAuditLog(request.user.userId, {
+						action: "node.host_network.update",
+						resource: "node",
+						resourceId: nodeId,
+						request,
+						details: {
+							nodeName: node.name,
+							enabled,
+							persisted: response.persisted ?? false,
+						},
+					});
+
+					return reply.send({
+						success: true,
+						data: {
+							allowHostNetwork: response.allowHostNetwork ?? enabled,
+							persisted: response.persisted ?? false,
+						},
+					});
+				}
+
+				if (response && response.success === false) {
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR,
+						typeof response.error === "string" ? response.error : "Agent rejected the request");
+				}
+			} catch {
+				// Older agents do not know this command.
+			}
+
+			apiError(reply, 503, ErrorCodes.NODE_AGENT_UNREACHABLE, "Agent did not respond to the host-network update");
+		},
+	);
 }

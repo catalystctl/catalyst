@@ -223,6 +223,12 @@
     "clear": "Clear",
     "searchPlaceholder": "Search by name or node..."
   },
+  "hostNetwork": {
+    "title": "Host networking is disabled on this node",
+    "message": "This server uses host networking, which the node denies by default. Enable host networking on the node and start the server now?",
+    "confirm": "Enable and start",
+    "enabled": "Host networking enabled on the node."
+  },
   "inviteLink": {
     "copyLink": "Copy invite link",
     "description": "Email delivery is not available (SMTP not configured). Share this link with the user directly.",
