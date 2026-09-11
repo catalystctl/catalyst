@@ -57,6 +57,9 @@ fail() { printf '[deploy-agent] ERROR: %s\n' "$*" >&2; exit 1; }
 if [ -n "${CATALYST_API_KEY_FILE:-}" ]; then
     if [ -r "$CATALYST_API_KEY_FILE" ]; then
         NODE_API_KEY="$(cat "$CATALYST_API_KEY_FILE")"
+        # Key file holds the bare key; strip CRs and surrounding whitespace
+        # from manual edits so config.toml never inherits them.
+        NODE_API_KEY="$(printf '%s' "$NODE_API_KEY" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
         NODE_HOSTNAME="${3:-$(hostname -f 2>/dev/null || hostname)}"
     else
         fail "CATALYST_API_KEY_FILE is set but not readable: $CATALYST_API_KEY_FILE"

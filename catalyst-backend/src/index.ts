@@ -2261,7 +2261,10 @@ TMP_SCRIPT="$(mktemp /tmp/catalyst-deploy-agent.XXXXXX.sh)"
 # file and the deploy script reads it from CATALYST_API_KEY_FILE.
 KEY_FILE="$(mktemp /tmp/catalyst-agent-key.XXXXXX)"
 chmod 600 "$KEY_FILE"
-printf '%s' "${shellEscape(apiKey)}" > "$KEY_FILE"
+# shellEscape already returns a single-quoted word — do NOT wrap it in double
+# quotes. Doing so makes the single quotes literal, so the key file would
+# contain 'catalyst_...' and config.toml would end up with api_key = "'...'".
+printf '%s' ${shellEscape(apiKey)} > "$KEY_FILE"
 
 cleanup() {
   rm -f "$TMP_SCRIPT" "$KEY_FILE"
