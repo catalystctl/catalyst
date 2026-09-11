@@ -545,14 +545,13 @@ stage_agent() {
   api_key="$(printf '%s' "$tok" | jq -r '.data.apiKey')"
   [[ -n "$deploy_url" && "$deploy_url" != "null" ]] || fail "no deployUrl: $tok"
   [[ -n "$api_key" && "$api_key" != "null" ]] || fail "no apiKey: $tok"
-  deploy_url="${deploy_url}?apiKey=$(jq -nr --arg k "$api_key" '$k|@uri')"
   save_state DEPLOY_URL "$deploy_url"
-  log "Deploy URL: ${deploy_url%%\?*}?apiKey=***"
+  log "Deploy URL: ${deploy_url} (key sent via Authorization header)"
 
   # The token is single-use. Fetch and run it on this host (containerd node).
   local script
   script="$(mktemp /tmp/catalyst-panel-deploy.XXXXXX.sh)"
-  curl -fsSL "$deploy_url" -o "$script"
+  curl -fsSL -H "Authorization: Bearer ${api_key}" "$deploy_url" -o "$script"
   chmod +x "$script"
   log "Running panel deploy script on host"
   sudo bash "$script" | tee "$LOG_DIR/agent-deploy.log"

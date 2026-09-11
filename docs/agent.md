@@ -229,7 +229,7 @@ The recommended method for production deployments:
    - An agent API key
 4. On the node machine, run:
    ```bash
-   curl -fsSL https://your-panel.com/api/deploy/YOUR_TOKEN | sudo bash
+   curl -fsSL -H 'Authorization: Bearer YOUR_API_KEY' https://your-panel.com/api/deploy/YOUR_TOKEN | sudo bash
    ```
 
 The script queries the panel for its version (`GET /api/agent/version`), downloads the matching **static musl** binary from GitHub Releases (`catalyst-agent-{x86_64|aarch64}-linux-musl` at tag `v<panel>`), verifies the `.sha256` sidecar, writes `/opt/catalyst-agent/config.toml`, creates a systemd (or OpenRC) service, and starts the agent. It never builds from source on the node.

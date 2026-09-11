@@ -1404,12 +1404,12 @@ volumes:
 Catalyst provides a one-click node deployment system:
 
 1. **Admin generates a deployment token** via `POST /api/nodes/:nodeId/deployment-token`
-2. **Admin gets a deploy URL** — `GET /api/deploy/:token?apiKey=...`
+2. **Admin gets a deploy URL and an agent API key** — `GET /api/deploy/:token` authenticates with `Authorization: Bearer <apiKey>`; the panel's deploy command sends the key that way. `?apiKey=` is rejected so the long-lived key never lands in proxy logs.
 3. **Script runs on the node** — installs containerd, downloads the agent, and configures it
 
 ```bash
 # On the node, run the deploy script
-curl -sSL "http://your-catalyst-panel:3000/api/deploy/TOKEN?apiKey=KEY" | bash
+curl -fsSL -H "Authorization: Bearer KEY" "http://your-catalyst-panel:3000/api/deploy/TOKEN" | bash
 ```
 
 The deploy script automatically:

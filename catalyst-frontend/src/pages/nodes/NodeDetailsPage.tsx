@@ -4,6 +4,7 @@ import { formatDateTime } from '@/i18n/format';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
+import { buildDeployCommand } from '../../lib/deploy-command';
 import {
   Server,
   ArrowLeft,
@@ -457,7 +458,7 @@ function NodeDetailsPage() {
         <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
           <code className="block max-w-full break-all whitespace-pre-wrap">
             {deployInfo
-              ? `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`
+              ? buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey)
               : ''}
           </code>
         </div>
@@ -472,7 +473,7 @@ function NodeDetailsPage() {
             onClick={() => {
               if (!deployInfo) return;
               navigator.clipboard.writeText(
-                `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`,
+                buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey),
               );
               notifySuccess(t('deploy.copied'));
             }}

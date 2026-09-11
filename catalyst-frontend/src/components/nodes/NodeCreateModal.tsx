@@ -8,6 +8,7 @@ import { locationsApi } from '../../services/api/locations';
 
 import { qk } from '../../lib/queryKeys';
 import { queryClient } from '../../lib/queryClient';
+import { buildDeployCommand } from '../../lib/deploy-command';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import {
  Select,
@@ -628,7 +629,7 @@ function NodeCreateModal(_props: Props) {
  <div className="mt-6 w-full min-w-0 space-y-3 text-left">
  <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
  <code className="block max-w-full break-all whitespace-pre-wrap">
-{`curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`}
+{buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey)}
  </code>
  </div>
  <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -637,7 +638,7 @@ function NodeCreateModal(_props: Props) {
  className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80"
  onClick={() => {
  navigator.clipboard.writeText(
- `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`
+ buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey)
  );
  notifySuccess(t('deploy.copied'));
  }}

@@ -283,10 +283,11 @@ The easiest way to deploy the agent:
 1. In the panel, open the node details page and click **Deploy**
 2. Click **Generate Deployment Token** if needed
 3. This creates a one-time deployment URL (valid for 24 hours) and an API key
-4. On the node machine, run the deployment command shown in the dialog (form: `curl -s 'deployUrl?apiKey=...' | sudo bash -x`; use **Copy** to grab it exactly), for example:
+4. On the node machine, run the deployment command shown in the dialog (form: `curl -fsSL -H 'Authorization: Bearer ...' 'deployUrl' | sudo bash -x`; use **Copy** to grab it exactly), for example:
    ```bash
-   curl -s 'https://your-panel.com/api/deploy/YOUR_TOKEN?apiKey=...' | sudo bash -x
+   curl -fsSL -H 'Authorization: Bearer YOUR_API_KEY' 'https://your-panel.com/api/deploy/YOUR_TOKEN' | sudo bash -x
    ```
+   The API key must travel in the `Authorization` header — the endpoint rejects `?apiKey=` so the long-lived key never lands in reverse-proxy logs.
 
 The deployment script will:
 - Install the agent binary

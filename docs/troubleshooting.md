@@ -493,7 +493,7 @@ curl -v https://panel.example.com/health
 ```bash
 # In the panel UI: Admin → Nodes → [Your Node] → Agent tab → Generate Deployment Token
 # Then run:
-curl -fsSL https://panel.example.com/api/deploy/YOUR_NEW_TOKEN | sudo bash
+curl -fsSL -H 'Authorization: Bearer YOUR_API_KEY' https://panel.example.com/api/deploy/YOUR_NEW_TOKEN | sudo bash
 ```
 
 ### WebSocket Connection Drops Repeatedly

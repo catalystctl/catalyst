@@ -4733,10 +4733,12 @@ Returns a **static musl** Linux binary (`catalyst-agent-{arch}-linux-musl`) for 
 
 #### GET `/api/deploy/:token`
 
-Get the canonical deployment script for a deployment token.
+Get the canonical deployment script for a deployment token. Single-use; expires 24 hours after issue.
 
-**Query params:**
-- `apiKey` — required, the node's API key
+**Headers:**
+- `Authorization: Bearer <apiKey>` — required, the node's agent API key
+
+The API key must not be sent as `?apiKey=`: the endpoint rejects it (401) so the long-lived key never appears in reverse-proxy logs.
 
 ---
 
