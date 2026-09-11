@@ -153,7 +153,7 @@ preflight() {
     if curl -fsSL --max-time 10 "https://github.com/${AGENT_RELEASE_REPO}/releases/latest" -o /dev/null 2>&1; then
         github_reachable=true
     fi
-    if curl -fsSL --max-time 10 "${BACKEND_HTTP_URL}/api/agent/version" -o /dev/null 2>&1; then
+    if curl -fsSL --max-time 10 -H "Authorization: Bearer ${NODE_API_KEY}" "${BACKEND_HTTP_URL}/api/agent/version" -o /dev/null 2>&1; then
         backend_reachable=true
     elif curl -fsSL --max-time 10 "${BACKEND_HTTP_URL}/api/agent/download?arch=x86_64" -o /dev/null 2>&1; then
         backend_reachable=true
@@ -593,7 +593,9 @@ resolve_agent_version() {
     fi
 
     log "Querying panel version from ${BACKEND_HTTP_URL}/api/agent/version ..."
-    body="$(curl -fsSL --max-time 15 "${BACKEND_HTTP_URL}/api/agent/version" 2>/dev/null || true)"
+    # The endpoint is authenticated (no public version oracle); the node API
+    # key from the deploy one-liner is valid for it.
+    body="$(curl -fsSL --max-time 15 -H "Authorization: Bearer ${NODE_API_KEY}" "${BACKEND_HTTP_URL}/api/agent/version" 2>/dev/null || true)"
     extracted="$(printf '%s' "$body" | sed -n 's/.*"agentVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
     if [ -z "$extracted" ]; then
         extracted="$(printf '%s' "$body" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
