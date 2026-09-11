@@ -1,6 +1,6 @@
 [package]
 name = "catalyst-agent"
-version = "1.47.0"
+version = "1.48.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
