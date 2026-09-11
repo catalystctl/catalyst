@@ -1,0 +1,48 @@
+{
+  "accountFallback": "votre compte",
+  "activity": {
+    "emptyDescription": "Aucune action enregistrée dans cette période.",
+    "emptyTitle": "Aucune activité récente",
+    "errorDescription": "Impossible de charger l’activité récente.",
+    "errorTitle": "Impossible de charger l’activité",
+    "title": "Activité récente",
+    "viewAll": "Voir tout"
+  },
+  "description": "Vue d’ensemble de l’infrastructure pour {{name}}.",
+  "overview": {
+    "account": "Compte",
+    "accountDescription": "Gérer votre profil",
+    "alertsUnacknowledged": "{{alerts}} non acquittées",
+    "allResolved": "Toutes résolues",
+    "errorDescription": "Impossible de charger les statistiques du tableau de bord.",
+    "errorTitle": "Impossible de charger la vue d’ensemble",
+    "nodesConnected": "{{nodes}} connectés",
+    "serversRunning": "{{servers}} en cours d’exécution",
+    "title": "Vue d’ensemble"
+  },
+  "pendingAlerts_one": "{{count}} alerte non acquittée",
+  "pendingAlerts_many": "{{count}} alertes non acquittées",
+  "pendingAlerts_other": "{{count}} alertes non acquittées",
+  "quickActions": {
+    "createServer": "Créer un serveur",
+    "createServerDescription": "Déployer un nouveau serveur de jeu",
+    "profileSettings": "Paramètres du profil",
+    "profileSettingsDescription": "Gérer votre compte",
+    "registerNode": "Enregistrer un nœud",
+    "registerNodeDescription": "Ajouter une infrastructure",
+    "viewAlerts": "Consulter les alertes",
+    "viewAlertsAllClear": "Tout est normal",
+    "viewAlertsAttention": "{{alerts}} nécessitent votre attention",
+    "viewServers": "Consulter les serveurs",
+    "viewServersDescription": "Gérer vos serveurs"
+  },
+  "resources": {
+    "cpu": "CPU",
+    "description": "Dernières métriques de tous les nœuds",
+    "errorDescription": "L’utilisation des ressources est actuellement indisponible.",
+    "errorTitle": "Impossible de charger les ressources",
+    "memory": "Mémoire",
+    "title": "Utilisation des ressources"
+  },
+  "title": "Tableau de bord"
+}

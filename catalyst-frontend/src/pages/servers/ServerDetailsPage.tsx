@@ -152,7 +152,7 @@ function ServerDetailsPage() {
  const [metricsTimeRange, setMetricsTimeRange] = useState<MetricsTimeRange>({
  hours: 1,
  limit: 60,
- label: '1 hour',
+ label: t('timeRange.presets.hour1'),
  });
  const { data: metricsHistory } = useServerMetricsHistory(
  serverId,

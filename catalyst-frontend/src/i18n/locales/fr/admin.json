@@ -1,0 +1,133 @@
+{
+  "chart": {
+    "avg": "Moyenne : {{value}} %",
+    "dataPoints": "{{value}} points de données · actualisation toutes les 60 s",
+    "empty": {
+      "historical": "Aucune donnée historique pour cette période",
+      "live": "Collecte des métriques…"
+    },
+    "metric": {
+      "cpu": "CPU",
+      "memory": "Mémoire",
+      "network": "Réseau"
+    },
+    "metricLabel": {
+      "cpu": "Utilisation du CPU (%)",
+      "memory": "Utilisation de la mémoire (%)",
+      "network": "E/S réseau (MB/s)"
+    },
+    "mode": {
+      "historical": "Historique",
+      "live": "En direct"
+    },
+    "networkThroughput": "RX : {{rx}} MB/s | TX : {{tx}} MB/s",
+    "nodesOnline": "{{online}} nœuds en ligne sur {{total}}",
+    "subtitle": {
+      "historical": "Métriques historiques sur {{range}}",
+      "live": "Métriques en temps réel"
+    },
+    "title": "Ressources du cluster",
+    "updatesEvery": "Actualisation toutes les 5 s"
+  },
+  "dashboard": {
+    "description": "{{servers}} serveurs · {{nodes}} nœuds · {{users}} utilisateurs",
+    "health": {
+      "checking": "Vérification…",
+      "clusterNodes": "Nœuds du cluster",
+      "database": "Base de données",
+      "down": "Indisponible",
+      "lastChecked": "Dernière vérification",
+      "ok": "OK",
+      "title": "État du système"
+    },
+    "nav": {
+      "nodes": "Nœuds",
+      "settings": "Paramètres"
+    },
+    "nodes": {
+      "addNode": "Ajouter un nœud",
+      "emptyDescription": "Ajoutez un nœud pour déployer des serveurs.",
+      "emptyTitle": "Aucun nœud",
+      "manage": "Gérer",
+      "serverCount": "{{value}} serveurs",
+      "title": "Nœuds"
+    },
+    "title": "Administration"
+  },
+  "nodeAssignments": {
+    "allNodes": "Tous les nœuds (*)",
+    "allNodesDescription": "Accès à tous les nœuds actuels et futurs",
+    "defaultLabel": "Accès aux nœuds",
+    "dialog": {
+      "description": "Choisissez quand l’accès à {{name}} expire.",
+      "expiresAt": "Expire le",
+      "title": "Définir l’expiration"
+    },
+    "expires": "Expiration : {{date}}",
+    "header": "{{label}} ({{value}})",
+    "inheritedFromRoles": "Hérité des rôles",
+    "loading": "Chargement des nœuds…",
+    "noExpiration": "Aucune expiration",
+    "noNodesFound": "Aucun nœud trouvé",
+    "searchPlaceholder": "Rechercher des nœuds…",
+    "selectIndividualNodes": "Sélectionner des nœuds individuellement",
+    "setExpiration": "Définir l’expiration",
+    "toast": {
+      "expirationUpdated": "Expiration mise à jour",
+      "nodeAssigned": "Nœud attribué",
+      "nodeUnassigned": "Attribution du nœud retirée",
+      "wildcardAssigned": "Tous les nœuds attribués (caractère générique)",
+      "wildcardRemoved": "Attribution générique retirée"
+    },
+    "viaRole": "via {{role}}",
+    "wildcardDisablesIndividualSelection": "La sélection individuelle des nœuds est désactivée lorsque le caractère générique est actif"
+  },
+  "update": {
+    "actionRequired": "Action requise",
+    "available": "Mise à jour disponible",
+    "container": "Conteneur",
+    "currentVersion": "Version actuelle",
+    "environment": "Environnement",
+    "lastChecked": "Dernière vérification",
+    "latest": "Dernière",
+    "latestVersion": "Dernière version",
+    "logs": {
+      "live": "en direct",
+      "title": "Journaux de mise à jour",
+      "waiting": "En attente de sortie — les journaux de téléchargement apparaîtront ici…"
+    },
+    "never": "Jamais",
+    "new": "Nouvelle",
+    "ok": "OK",
+    "progress": {
+      "complete": "Mise à jour terminée",
+      "completeDescription": "Le panneau est de nouveau en ligne. Rechargement vers la nouvelle version…",
+      "description": "Progression en direct de la mise à jour du panneau — la sortie du téléchargement et l’état du redémarrage apparaissent ci-dessous.",
+      "done": "Terminé",
+      "failed": "Échec de la mise à jour",
+      "failedDescription": "La mise à jour n’a pas pu être terminée. Consultez la page Erreurs système pour plus de détails.",
+      "inProgress": "Mise à jour en cours…",
+      "pulling": {
+        "description": "Téléchargement des dernières images depuis le registre. Selon votre connexion, cela peut prendre plusieurs minutes.",
+        "label": "Téléchargement de la mise à jour"
+      },
+      "restarting": {
+        "description": "Images téléchargées. Les conteneurs sont recréés — le panneau sera brièvement indisponible puis reviendra automatiquement.",
+        "label": "Redémarrage des services"
+      },
+      "restartingNotice": "Les conteneurs redémarrent. Cette page se rechargera automatiquement dès que le panneau sera de nouveau en ligne (vérification toutes les quelques secondes).",
+      "started": "Démarré {{time}}",
+      "starting": "Démarrage de la mise à jour — ouverture du flux de journaux…",
+      "title": "Mise à jour du panneau"
+    },
+    "standalone": "Autonome",
+    "standaloneNotice": "La mise à jour automatique n’est disponible que lorsque Catalyst tourne dans Docker. Veuillez mettre à jour Catalyst manuellement.",
+    "toast": {
+      "failed": "Échec de la mise à jour"
+    },
+    "trigger": "Lancer la mise à jour",
+    "triggering": "Lancement…",
+    "updateStatus": "État de la mise à jour",
+    "upToDate": "À jour"
+  }
+}

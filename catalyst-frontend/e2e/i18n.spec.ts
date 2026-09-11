@@ -41,4 +41,19 @@ test.describe('interface language', () => {
 
     await context.close();
   });
+
+  test('switches to French, persists it and restores it on reload', async ({ page }) => {
+    await page.goto('/login');
+
+    await page.getByRole('button', { name: 'Language' }).click();
+    await page.getByRole('menuitem', { name: 'Français' }).click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+
+    const stored = await page.evaluate((key) => window.localStorage.getItem(key), LOCALE_STORAGE_KEY);
+    expect(stored).toBe('fr');
+
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+    await expect(page.getByRole('button', { name: 'Langue' })).toBeVisible();
+  });
 });

@@ -1,0 +1,330 @@
+{
+  "breadcrumbs": {
+    "activity": "Activité",
+    "backups": "Sauvegardes",
+    "console": "Console",
+    "files": "Fichiers",
+    "invites": "Invitations",
+    "metrics": "Métriques",
+    "nav": "Fil d’Ariane",
+    "network": "Réseau",
+    "plugin": "Plugin",
+    "settings": "Paramètres",
+    "sftp": "SFTP",
+    "tasks": "Tâches"
+  },
+  "nav": {
+    "admin": "Administration",
+    "alerts": "Alertes",
+    "allServers": "Tous les serveurs",
+    "apiKeys": "Clés API",
+    "auditLogs": "Journaux d’audit",
+    "dashboard": "Tableau de bord",
+    "databases": "Bases de données",
+    "migration": "Migration",
+    "nodes": "Nœuds",
+    "overview": "Vue d’ensemble",
+    "plugins": "Plugins",
+    "profile": "Profil",
+    "roles": "Rôles",
+    "security": "Sécurité",
+    "servers": "Serveurs",
+    "system": "Système",
+    "systemErrors": "Erreurs système",
+    "templates": "Modèles",
+    "theme": "Thème",
+    "tickets": "Tickets",
+    "users": "Utilisateurs"
+  },
+  "search": {
+    "all": "Tout",
+    "categories": {
+      "account": "Compte",
+      "actions": "Actions rapides",
+      "admin": "Administration",
+      "nodes": "Nœuds",
+      "pages": "Pages",
+      "servers": "Serveurs",
+      "serverTabs": "Onglets de serveur",
+      "settings": "Paramètres et configuration",
+      "templates": "Modèles"
+    },
+    "close": "Fermer la recherche",
+    "hints": {
+      "close": "fermer",
+      "navigate": "naviguer",
+      "open": "ouvrir",
+      "select": "sélectionner"
+    },
+    "hostWithServers": "{{host}} · {{servers}} serveurs",
+    "items": {
+      "adminAlerts": {
+        "description": "Configurer les règles d’alerte et consulter les alertes déclenchées"
+      },
+      "adminApiKeys": {
+        "description": "Gérer les clés API et les jetons de la plateforme"
+      },
+      "adminAuditLogs": {
+        "description": "Journal d’audit détaillé de toutes les actions"
+      },
+      "adminDatabases": {
+        "description": "Gestion des hôtes MySQL et PostgreSQL",
+        "label": "Hôtes de bases de données"
+      },
+      "adminMigration": {
+        "description": "Importer des serveurs depuis Pterodactyl"
+      },
+      "adminNodes": {
+        "description": "Gérer les nœuds de calcul et les ressources"
+      },
+      "adminOverview": {
+        "description": "Tableau de bord et statistiques de toute la plateforme",
+        "label": "Vue d’ensemble de l’administration"
+      },
+      "adminPlugins": {
+        "description": "Installer et gérer les extensions du panneau"
+      },
+      "adminRoles": {
+        "description": "Configurer les rôles et les groupes d’autorisations",
+        "label": "Rôles et autorisations"
+      },
+      "adminSecurity": {
+        "description": "Limites de débit, politique de verrouillage et paramètres du tunnel de fichiers"
+      },
+      "adminServers": {
+        "description": "Consulter tous les serveurs de la plateforme"
+      },
+      "adminSystem": {
+        "description": "Configuration de la santé du système, de SMTP et du gestionnaire de mods"
+      },
+      "adminSystemErrors": {
+        "description": "Erreurs capturées du panneau, de l’agent et de l’interface"
+      },
+      "adminTemplates": {
+        "description": "Modèles de serveur et configurations de nids"
+      },
+      "adminUsers": {
+        "description": "Gérer les comptes utilisateurs et les accès"
+      },
+      "navDashboard": {
+        "description": "Vue d’ensemble de vos serveurs et de votre activité"
+      },
+      "navProfile": {
+        "description": "Paramètres et sécurité du compte"
+      },
+      "navServers": {
+        "description": "Consulter et gérer vos serveurs de jeu"
+      },
+      "profile2fa": {
+        "description": "Activer une application d’authentification TOTP pour votre compte",
+        "label": "Authentification à deux facteurs"
+      },
+      "profileApiKeys": {
+        "description": "Gérer vos jetons API personnels",
+        "label": "Clés API personnelles"
+      },
+      "profileAuditLog": {
+        "description": "Votre activité et vos actions récentes",
+        "label": "Journal d’audit personnel"
+      },
+      "profilePasskeys": {
+        "description": "Connexion sans mot de passe par biométrie ou clé de sécurité",
+        "label": "Clés d’accès / WebAuthn"
+      },
+      "profileSessions": {
+        "description": "Consulter et révoquer les sessions de connexion actives",
+        "label": "Sessions actives"
+      },
+      "profileSso": {
+        "description": "Consulter et gérer les fournisseurs de connexion liés à OAuth",
+        "label": "Comptes liés SSO"
+      },
+      "settingsAuditRetention": {
+        "description": "Durée de conservation des journaux d’audit",
+        "label": "Conservation de l’audit"
+      },
+      "settingsAuthLockouts": {
+        "description": "Consulter et gérer les comptes verrouillés",
+        "label": "Verrouillages d’authentification"
+      },
+      "settingsBrandColors": {
+        "description": "Configuration des couleurs primaire, secondaire et d’accentuation",
+        "label": "Couleurs de la marque"
+      },
+      "settingsBranding": {
+        "description": "Nom du panneau, logo et favicon",
+        "label": "Image de marque et identité"
+      },
+      "settingsCustomCss": {
+        "description": "Injecter du CSS personnalisé dans chaque page",
+        "label": "CSS personnalisé"
+      },
+      "settingsDarkSurfaces": {
+        "description": "Arrière-plan, carte, bordure et élévation du thème sombre",
+        "label": "Surfaces du mode sombre"
+      },
+      "settingsFileTunnel": {
+        "description": "Limites de débit de transfert et tailles de téléversement",
+        "label": "Paramètres du tunnel de fichiers"
+      },
+      "settingsHealth": {
+        "description": "État du système, santé des nœuds et état des bases de données",
+        "label": "Santé de la plateforme"
+      },
+      "settingsLayout": {
+        "description": "Ajuster globalement le rayon des bordures et les espacements",
+        "label": "Disposition et rayon des bordures"
+      },
+      "settingsLightSurfaces": {
+        "description": "Arrière-plan, carte, bordure et élévation du thème clair",
+        "label": "Surfaces du mode clair"
+      },
+      "settingsLockoutPolicy": {
+        "description": "Règles de verrouillage en cas de tentatives de connexion échouées",
+        "label": "Politique de verrouillage"
+      },
+      "settingsModManager": {
+        "description": "Clés API CurseForge et Modrinth pour le téléchargement de mods",
+        "label": "Clés API du gestionnaire de mods"
+      },
+      "settingsNodeAllocations": {
+        "description": "Gérer les adresses IP, les ports et les pools CIDR par nœud",
+        "label": "Allocations de nœuds et pools IP"
+      },
+      "settingsPaletteGenerator": {
+        "description": "Générer automatiquement un thème complet à partir d’une couleur de base",
+        "label": "Générateur de palette de couleurs"
+      },
+      "settingsRateLimits": {
+        "description": "Limites de requêtes pour l’authentification, les fichiers, la console et l’agent",
+        "label": "Limites de débit"
+      },
+      "settingsSemanticColors": {
+        "description": "Couleurs de retour pour succès, avertissement, danger et information",
+        "label": "Couleurs sémantiques"
+      },
+      "settingsSmtp": {
+        "description": "Configuration des e-mails sortants pour les alertes et les invitations",
+        "label": "SMTP / E-mail"
+      },
+      "settingsSso": {
+        "description": "Configurer la connexion OIDC de WHMCS et Paymenter",
+        "label": "Fournisseurs SSO / OAuth"
+      },
+      "settingsThemeMode": {
+        "description": "Thème par défaut et modes disponibles (clair/sombre)",
+        "label": "Mode de thème"
+      },
+      "settingsThemeOverview": {
+        "description": "Image de marque, couleurs, palette et apparence",
+        "label": "Paramètres du thème"
+      }
+    },
+    "nodeAllocations": "{{name}} — Allocations",
+    "nodeAllocationsDescription": "Gestion des pools IP, des ports et du CIDR",
+    "noResults": "Aucun résultat trouvé",
+    "noResultsHint": "Essayez d’autres mots-clés ou effacez le filtre",
+    "placeholder": "Rechercher des pages, des paramètres, des serveurs, des nœuds…",
+    "quickActions": {
+      "createServer": {
+        "description": "Déployer un nouveau serveur de jeu à partir d’un modèle",
+        "label": "Créer un nouveau serveur"
+      }
+    },
+    "resultCount_one": "{{count}} résultat",
+    "resultCount_many": "{{count}} résultats",
+    "resultCount_other": "{{count}} résultats",
+    "serverTabs": {
+      "admin": {
+        "description": "Transfert de propriété, suspension et actions d’administration",
+        "label": "Administration du serveur"
+      },
+      "alerts": {
+        "description": "Règles d’alerte et historique propres au serveur",
+        "label": "Alertes"
+      },
+      "backups": {
+        "description": "Gestion et restauration des sauvegardes du serveur",
+        "label": "Sauvegardes"
+      },
+      "configuration": {
+        "description": "Options de démarrage du serveur et paramètres JVM",
+        "label": "Configuration"
+      },
+      "console": {
+        "description": "Sortie du terminal du serveur en direct",
+        "label": "Console"
+      },
+      "databases": {
+        "description": "Gestion des bases de données du serveur",
+        "label": "Bases de données"
+      },
+      "files": {
+        "description": "Parcourir et modifier les fichiers du serveur",
+        "label": "Gestionnaire de fichiers"
+      },
+      "metrics": {
+        "description": "Graphiques du CPU, de la mémoire, du disque et du réseau",
+        "label": "Métriques"
+      },
+      "modManager": {
+        "description": "Parcourir et installer des mods depuis CurseForge/Modrinth",
+        "label": "Gestionnaire de mods"
+      },
+      "pluginManager": {
+        "description": "Installer et gérer les plugins du serveur",
+        "label": "Gestionnaire de plugins"
+      },
+      "settings": {
+        "description": "Renommer, réinstaller et préférences du serveur",
+        "label": "Paramètres du serveur"
+      },
+      "sftp": {
+        "description": "Détails de connexion SFTP et identifiants",
+        "label": "Accès SFTP"
+      },
+      "tasks": {
+        "description": "Automatisation de type Cron pour les opérations du serveur",
+        "label": "Tâches planifiées"
+      },
+      "users": {
+        "description": "Gérer les accès et les autorisations du serveur",
+        "label": "Sous-utilisateurs"
+      }
+    },
+    "serverTabTitle": "{{server}} — {{tab}}",
+    "serverTemplate": "Modèle de serveur",
+    "unknownNode": "Nœud inconnu"
+  },
+  "sections": {
+    "accessControl": "Contrôle d’accès",
+    "administration": "Administration",
+    "configuration": "Configuration",
+    "extensions": "Extensions",
+    "infrastructure": "Infrastructure",
+    "monitoring": "Surveillance",
+    "plugins": "Plugins"
+  },
+  "shell": {
+    "closeMenu": "Fermer le menu",
+    "openMenu": "Ouvrir le menu",
+    "openSearch": "Ouvrir la recherche ({{shortcut}})",
+    "searchButton": "Rechercher…",
+    "skipToContent": "Aller au contenu"
+  },
+  "sidebar": {
+    "collapse": "Réduire la barre latérale",
+    "dark": "Sombre",
+    "darkMode": "Mode sombre",
+    "expand": "Développer la barre latérale",
+    "fallbackRole": "Membre",
+    "fallbackUser": "Utilisateur",
+    "light": "Clair",
+    "lightMode": "Mode clair",
+    "logoAlt": "Logo {{panelName}}",
+    "logout": "Se déconnecter",
+    "outOfDate": "(non à jour)",
+    "updateTooltip": "v{{current}} - non à jour (dernière version : v{{latest}})",
+    "versionTooltip": "Panneau Catalyst v{{version}}"
+  }
+}

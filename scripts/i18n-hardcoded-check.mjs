@@ -137,7 +137,7 @@ console.error(
     '',
     'User-visible text must go through t() (or <Trans>) so it can be translated:',
     '  1. wrap the string, then run `pnpm --filter catalyst-frontend run i18n:extract`',
-    '  2. translate the new key in src/i18n/locales/zh-CN/<namespace>.json',
+    '  2. translate the new key in src/i18n/locales/<locale>/<namespace>.json for every supported locale',
     '',
     'If the string must stay literal (technical token, product name, unit symbol,',
     'keyboard hint, code sample), record it with a reason:',

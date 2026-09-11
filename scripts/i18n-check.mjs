@@ -56,7 +56,14 @@ function localeValue(entries, key) {
 
 /** Whether the English catalog declares a locale key (directly or as a plural variant). */
 function isKnownKey(primaryEntries, key) {
-  return primaryEntries.has(key) || (PLURAL_SUFFIX.test(key) && primaryEntries.has(baseKey(key)));
+  if (primaryEntries.has(key)) return true;
+  const match = PLURAL_SUFFIX.exec(key);
+  if (!match) return false;
+  const base = key.slice(0, -match[0].length);
+  if (primaryEntries.has(base)) return true;
+  // A locale may carry plural categories English does not: French uses `_many`
+  // for exact millions. Any variant of an English plural base counts as known.
+  return PLURAL_VARIANTS.some((variant) => primaryEntries.has(`${base}_${variant}`));
 }
 
 /** Flatten a catalog into dot-separated leaf keys. */

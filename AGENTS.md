@@ -39,17 +39,17 @@ non-trivial, all of them:
 ## i18n rules
 
 - English (`en`) is the source language; every user-visible string goes through `t()`.
-- Catalogs: `catalyst-frontend/src/i18n/locales/{en,zh-CN}/<namespace>.json` and `catalyst-backend/src/i18n/locales/{en,zh-CN}/email.json` (account emails and alerts).
+- Catalogs: `catalyst-frontend/src/i18n/locales/{en,fr,zh-CN}/<namespace>.json` and `catalyst-backend/src/i18n/locales/{en,fr,zh-CN}/email.json` (account emails and alerts).
 - Add the string in code first, then run `pnpm --filter catalyst-frontend run i18n:extract`. The extractor owns key order — never hand-reorder or invent keys; `i18n:verify` fails when the catalogs drift from the code.
-- Add every new key to `en` and `zh-CN` in the same change: `pnpm i18n:check` requires zh-CN to stay 100% translated (`--strict` also fails on empty values).
+- Add every new key to `en`, `fr` and `zh-CN` in the same change: `pnpm i18n:check` requires every translated locale to stay 100% translated (`--strict` also fails on empty values).
 - Backend errors carry stable codes from `catalyst-backend/src/lib/error-codes/*.ts`; the frontend translates them (`errors.json`, `src/i18n/api-errors.ts`). Emit with `apiError(reply, status, code, message, { params })` and pass `params` for every `{{placeholder}}` in the message.
 - `pnpm i18n:hardcoded` enforces that: CI fails on any literal string the linter
   finds that is neither translated nor listed in `scripts/i18n-hardcoded-baseline.json`
   (each entry there carries a reason). Wrap new copy in `t()`; for text that must
   stay literal, record it with `node scripts/i18n-hardcoded-check.mjs --update`
   and explain why.
-- `docs/i18n.md` lists what is deliberately left in English (stored data, console output, product names, third-party plugin UI). Chinese uses the formal 您 form.
-- The zh-CN catalogs were produced by machine translation; wording fixes from native speakers are wanted (issue #251).
+- `docs/i18n.md` lists what is deliberately left in English (stored data, console output, product names, third-party plugin UI). Chinese uses the formal 您 form, French the formal vous form.
+- The zh-CN and fr catalogs were produced by machine translation; wording fixes from native speakers are wanted (issue #251).
 
 ## Conventions
 
@@ -58,6 +58,12 @@ non-trivial, all of them:
 - When behaviour changes, update the matching doc (`docs/i18n.md`, `docs/admin-guide.md`, `docs/api-reference.md`).
 - Comments stay short and factual; explain non-obvious constraints only.
 - When a change alters anything a user sees in the panel, verify it in the browser (sign-in and admin flows) before reporting it as done.
+
+## Database migrations
+
+- Any change to `catalyst-backend/prisma/schema.prisma` (new column, table, index or enum) must ship with a committed migration under `catalyst-backend/prisma/migrations/` in the same change, generated with `pnpm --filter catalyst-backend run db:migrate`.
+- Containers only run `prisma migrate deploy` at startup (`catalyst-backend/docker-entrypoint.sh`); it applies committed migration files and never diffs `schema.prisma`. A schema change without a migration is invisible to customers' databases, and their backend fails at runtime (a missing `SystemSetting.defaultLocale` column once broke login with HTTP 500).
+- Never edit or delete an already-applied migration; add a new one instead.
 
 ## Local environment
 

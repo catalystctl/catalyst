@@ -10,6 +10,9 @@ describe('locale matching', () => {
   it('accepts exact and regional tags', () => {
     expect(matchLocaleTag('en')).toBe('en');
     expect(matchLocaleTag('en-US')).toBe('en');
+    expect(matchLocaleTag('fr')).toBe('fr');
+    expect(matchLocaleTag('fr-FR')).toBe('fr');
+    expect(matchLocaleTag('fr-CA')).toBe('fr');
     expect(matchLocaleTag('zh-CN')).toBe('zh-CN');
     expect(matchLocaleTag('zh-Hans-CN')).toBe('zh-CN');
     expect(matchLocaleTag('zh')).toBe('zh-CN');
@@ -22,7 +25,8 @@ describe('locale matching', () => {
 
   it('validates supported codes', () => {
     expect(isSupportedLocale('zh-CN')).toBe(true);
-    expect(isSupportedLocale('fr')).toBe(false);
+    expect(isSupportedLocale('fr')).toBe(true);
+    expect(isSupportedLocale('de')).toBe(false);
     expect(isSupportedLocale(undefined)).toBe(false);
   });
 });
@@ -35,6 +39,9 @@ describe('device locale detection', () => {
   it('prefers the stored selection', () => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, 'zh-CN');
     expect(detectDeviceLocale()).toBe('zh-CN');
+
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'fr');
+    expect(detectDeviceLocale()).toBe('fr');
   });
 
   it('falls back to the browser languages', () => {
@@ -65,6 +72,9 @@ describe('api error translation', () => {
     await i18n.changeLanguage('zh-CN');
     const error = { response: { data: { code: 'SERVER_NOT_FOUND', error: 'Server not found' } } };
     expect(getLocalizedErrorMessage(error)).toBe('找不到请求的服务器。');
+
+    await i18n.changeLanguage('fr');
+    expect(getLocalizedErrorMessage(error)).toBe('Le serveur demandé est introuvable.');
   });
 
   it('prefers the catalog text when the server message looks internal', () => {
@@ -85,6 +95,10 @@ describe('api error translation', () => {
     );
     await i18n.changeLanguage('zh-CN');
     expect(getLocalizedErrorMessage(new TypeError('Failed to fetch'))).toBe('网络错误，请检查网络连接后重试。');
+    await i18n.changeLanguage('fr');
+    expect(getLocalizedErrorMessage(new TypeError('Failed to fetch'))).toBe(
+      'Une erreur réseau est survenue. Vérifiez votre connexion et réessayez.',
+    );
   });
 
   it('falls back to the catalog text when the server sent no message', () => {
@@ -103,6 +117,8 @@ describe('api error translation', () => {
     expect(getLocalizedErrorMessage(error)).toBe('Upload exceeds the maximum size of 512MB.');
     await i18n.changeLanguage('zh-CN');
     expect(getLocalizedErrorMessage(error)).toBe('上传大小超过 512MB 的上限。');
+    await i18n.changeLanguage('fr');
+    expect(getLocalizedErrorMessage(error)).toBe('Le téléversement dépasse la taille maximale de 512 MB.');
   });
 
   it('reads params attached directly to the thrown error', () => {
@@ -149,6 +165,8 @@ describe('catalog loading', () => {
 
   it('renders strings in the active locale', async () => {
     expect(i18n.t('language.label')).toBe('Language');
+    await i18n.changeLanguage('fr');
+    expect(i18n.t('language.label')).toBe('Langue');
     await i18n.changeLanguage('zh-CN');
     expect(i18n.t('language.label')).toBe('语言');
     expect(document.documentElement.lang).toBe('zh-CN');

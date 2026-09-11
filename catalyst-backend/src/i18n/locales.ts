@@ -3,7 +3,7 @@
  * alerts) and for validating stored user preferences. Keep in sync with
  * `catalyst-frontend/src/i18n/config.ts`.
  */
-export const SUPPORTED_LOCALES = ['en', 'zh-CN'] as const;
+export const SUPPORTED_LOCALES = ['en', 'fr', 'zh-CN'] as const;
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 

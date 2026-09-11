@@ -1,0 +1,41 @@
+{
+  "alert": {
+    "footer": "Cette alerte a été générée par {{panelName}}. Vous pouvez ajuster les règles d’alerte dans la page Alertes.",
+    "severity": "Gravité :",
+    "subject": "Alerte {{panelName}} : {{title}}",
+    "time": "Heure :",
+    "type": "Type :",
+    "view": "Voir l’alerte"
+  },
+  "invite": {
+    "accept": "Accepter l’invitation",
+    "action": "Cliquez ci-dessous pour accepter votre invitation et commencer à gérer le serveur.",
+    "body": "Vous avez été invité à accéder à {{serverName}}.",
+    "expires": "Cette invitation expire le {{date}}.",
+    "footer": "Si vous n’attendiez pas cet e-mail, vous pouvez l’ignorer.",
+    "heading": "Vous avez une nouvelle invitation de serveur",
+    "subject": "Vous êtes invité à rejoindre {{serverName}} sur {{panelName}}",
+    "text": "Invitation {{panelName}} : vous avez été invité à accéder à {{serverName}}. Accepter : {{url}}. Expiration : {{date}}"
+  },
+  "resetPassword": {
+    "greeting": "Bonjour {{name}},",
+    "instruction": "Cliquez sur le lien ci-dessous pour réinitialiser votre mot de passe :",
+    "linkLabel": "Réinitialiser le mot de passe",
+    "subject": "Réinitialisez votre mot de passe {{panelName}}",
+    "text": "Réinitialisez votre mot de passe {{panelName}} : {{url}}"
+  },
+  "verifyEmail": {
+    "greeting": "Bonjour {{name}},",
+    "instruction": "Veuillez vérifier votre adresse e-mail en cliquant sur le lien ci-dessous :",
+    "linkLabel": "Vérifier l’adresse e-mail",
+    "subject": "Vérifiez votre adresse e-mail {{panelName}}",
+    "text": "Vérifiez votre adresse e-mail {{panelName}} : {{url}}"
+  },
+  "welcome": {
+    "created": "Votre compte a été créé avec succès.",
+    "greeting": "Bienvenue sur {{panelName}}, {{username}} !",
+    "next": "Vous pouvez désormais vous connecter et commencer à gérer vos serveurs.",
+    "subject": "Bienvenue sur {{panelName}}",
+    "text": "Bienvenue sur {{panelName}}, {{username}} ! Votre compte a été créé avec succès."
+  }
+}

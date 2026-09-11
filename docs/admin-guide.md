@@ -929,7 +929,7 @@ addresses without a language preference.
 
 | Field | Description |
 |-------|-------------|
-| `defaultLocale` | Supported locale (`en`, `zh-CN`), or `null` for the built-in default (English) |
+| `defaultLocale` | Supported locale (`en`, `fr`, `zh-CN`), or `null` for the built-in default (English) |
 
 Users keep their own choice: the language picker in their profile overrides the
 instance setting for their account, and a device that has already picked a

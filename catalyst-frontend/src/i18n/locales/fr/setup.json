@@ -1,0 +1,82 @@
+{
+  "admin": {
+    "confirmPassword": "Confirmer le mot de passe",
+    "description": "Ce sera votre compte administrateur principal.",
+    "email": "E-mail",
+    "emailPlaceholder": "admin@example.com",
+    "password": "Mot de passe",
+    "passwordMismatch": "Les mots de passe ne correspondent pas",
+    "title": "Créer le compte administrateur",
+    "username": "Nom d’utilisateur",
+    "usernamePlaceholder": "admin"
+  },
+  "appearance": {
+    "accentButton": "Bouton d’accent",
+    "colorHarmony": "Harmonie des couleurs",
+    "dark": "Sombre",
+    "darkSurfaces": "Surfaces sombres",
+    "defaultTheme": "Thème par défaut",
+    "description": "Choisissez une couleur et nous générerons un thème complet.",
+    "light": "Clair",
+    "lightSurfaces": "Surfaces claires",
+    "livePreview": "Aperçu en direct",
+    "primaryButton": "Bouton principal",
+    "randomColor": "Couleur aléatoire",
+    "seedColor": "Couleur source",
+    "title": "Apparence"
+  },
+  "errors": {
+    "emailInvalid": "Adresse e-mail invalide",
+    "emailRequired": "L’adresse e-mail est requise",
+    "logoTooLarge": "Le logo doit être inférieur à 512KB",
+    "passwordRequired": "Le mot de passe est requis",
+    "passwordTooShort": "Le mot de passe doit contenir au moins {{min}} caractères",
+    "usernameRequired": "Le nom d’utilisateur est requis",
+    "usernameTooShort": "Le nom d’utilisateur doit contenir au moins {{min}} caractères"
+  },
+  "harmony": {
+    "analogous": "Analogue",
+    "auto": "Automatique",
+    "complement": "Complémentaire",
+    "diadic": "Diadique",
+    "mono": "Monochrome",
+    "neutral": "Neutre",
+    "splitComplement": "Compl. divisée",
+    "tetradic": "Tétradique",
+    "triadic": "Triadique"
+  },
+  "palette": {
+    "accent": "Accent",
+    "brand": "Marque",
+    "danger": "Danger",
+    "info": "Info",
+    "primary": "Primaire",
+    "secondary": "Secondaire",
+    "semantic": "Sémantique",
+    "success": "Succès",
+    "warning": "Avertissement"
+  },
+  "steps": {
+    "adminAccount": "Compte administrateur",
+    "appearance": "Apparence",
+    "progress": "Étape {{current}} sur {{total}}",
+    "welcome": "Bienvenue"
+  },
+  "submit": {
+    "complete": "Terminer la configuration",
+    "completing": "Configuration…"
+  },
+  "welcome": {
+    "chooseFile": "Choisir un fichier",
+    "description": "Configurons votre panneau. Cela ne prend qu’une minute.",
+    "logoAlt": "Logo",
+    "logoHint": "Recommandé : image carrée, au moins 128x128px. Maximum 512KB.",
+    "logoPreviewAlt": "Aperçu du logo",
+    "panelLogo": "Logo du panneau (facultatif)",
+    "panelName": "Nom du panneau",
+    "panelPreview": "Panneau {{panelName}}",
+    "preview": "Aperçu",
+    "productTagline": "Gestion de serveurs de jeux",
+    "title": "Bienvenue dans Catalyst"
+  }
+}

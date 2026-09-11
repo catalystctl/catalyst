@@ -1,0 +1,20 @@
+{
+  "errorBoundary": {
+    "message": "Une erreur inattendue s’est produite dans ce plugin.",
+    "title": "⚠️ Erreur du plugin : {{name}}",
+    "tryAgain": "Réessayer",
+    "widgetFailed": "Échec de l’affichage du widget du plugin"
+  },
+  "provider": {
+    "loadFailed": "Échec du chargement des plugins"
+  },
+  "tabNotFound": {
+    "description": "L’onglet de plugin demandé est introuvable ou n’est pas activé.",
+    "title": "Onglet de plugin introuvable",
+    "unavailable": "Cet onglet de plugin n’est pas disponible."
+  },
+  "webSocket": {
+    "connectionError": "Erreur de connexion WebSocket",
+    "unavailable": "WebSocket indisponible"
+  }
+}

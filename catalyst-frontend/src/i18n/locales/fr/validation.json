@@ -1,0 +1,15 @@
+{
+  "password": {
+    "lowercase": "Le mot de passe doit contenir au moins une lettre minuscule",
+    "number": "Le mot de passe doit contenir au moins un chiffre",
+    "special": "Le mot de passe doit contenir au moins un caractère spécial",
+    "uppercase": "Le mot de passe doit contenir au moins une lettre majuscule"
+  },
+  "VALIDATION_CUSTOM": "Valeur non valide",
+  "VALIDATION_INVALID_FORMAT": "{{format}} non valide",
+  "VALIDATION_INVALID_TYPE": "Valeur non valide",
+  "VALIDATION_TOO_BIG": "Doit être au maximum de {{max}}",
+  "VALIDATION_TOO_LONG": "Doit contenir au maximum {{max}} caractères",
+  "VALIDATION_TOO_SHORT": "Doit contenir au moins {{min}} caractères",
+  "VALIDATION_TOO_SMALL": "Doit être au minimum de {{min}}"
+}

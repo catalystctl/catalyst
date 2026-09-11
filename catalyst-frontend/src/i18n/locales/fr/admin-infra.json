@@ -1,0 +1,504 @@
+{
+  "allocations": {
+    "assigned": "Attribuée",
+    "assignedIps": "IP attribuées ({{value}})",
+    "available": "Disponible",
+    "createAllocations": "Créer des allocations",
+    "createPool": {
+      "autofill": "Pré-remplir le /24",
+      "cidr": "CIDR",
+      "cidrPlaceholder": "192.168.50.0/24 ou 2001:db8::/64",
+      "creating": "Création…",
+      "description": "Configurer un réseau MACVLAN avec IPAM automatique.",
+      "endIp": "IP de fin (facultatif)",
+      "gateway": "Passerelle",
+      "intro": "Les pools d’IP permettent aux serveurs d’obtenir des adresses IP dédiées sur le réseau via MACVLAN. Chaque serveur reçoit automatiquement une IP du pool.",
+      "networkName": "Nom du réseau",
+      "quickSetupIp": "IP de configuration rapide",
+      "reservedIps": "IP réservées (facultatif, séparées par des virgules)",
+      "startIp": "IP de début (facultatif)",
+      "submit": "Créer le pool",
+      "title": "Créer un pool d’IP"
+    },
+    "createPoolButton": "Créer un pool d’IP",
+    "createPort": {
+      "aliasLabel": "Alias (facultatif)",
+      "aliasPlaceholder": "ex. : réseau principal",
+      "creating": "Création…",
+      "description": "Créer en masse des allocations IP:Port pour ce nœud.",
+      "ipFormat": "<strong>Format d’IP :</strong> IP unique (192.168.1.100), plusieurs IP (192.168.1.100, 192.168.1.101) ou CIDR (192.168.1.0/24)",
+      "ipLabel": "Adresse(s) IP",
+      "ipPlaceholder": "192.168.1.100, 2001:db8::1 ou 192.168.1.0/24",
+      "portFormat": "<strong>Format de port :</strong> port unique (25565), plage (25565-25664) ou plusieurs ports (25565, 25566, 25567)",
+      "portsLabel": "Port(s)",
+      "portsPlaceholder": "25565-25664 ou 25565, 25566",
+      "quickFill": "Remplissage rapide : utiliser l’IP du nœud + les ports 25565-25664",
+      "submit": "Créer les allocations",
+      "title": "Créer des allocations de ports"
+    },
+    "description": "Gérer les liaisons de ports et les pools d’IP pour {{node}}",
+    "empty": {
+      "createFirst": "Créez vos premières allocations",
+      "createFirstPool": "Créez votre premier pool d’IP",
+      "noMatches": "Aucune allocation de port ne correspond à votre recherche",
+      "noPools": "Aucun pool d’IP pour ce nœud",
+      "noPoolsDescription": "Créez un pool d’IP pour activer le réseau MACVLAN avec IPAM automatique.",
+      "noPorts": "Aucune allocation de port pour le moment",
+      "noPortsDescription": "Créez des allocations pour attribuer des combinaisons IP:Port aux serveurs."
+    },
+    "field": {
+      "ip": "IP",
+      "port": "Port"
+    },
+    "info": {
+      "ipPools": "<strong>Pools d’IP</strong> — Réseau MACVLAN automatique avec des IP dédiées par serveur (avancé)",
+      "portAllocations": "<strong>Allocations de ports</strong> — Suivre les combinaisons IP:Port pour les configurations proxy/NAT (comme Pterodactyl)",
+      "title": "Deux types d’allocation :"
+    },
+    "poolCount": "{{value}} pools",
+    "poolTotals": "Total : {{total}} · Passerelle : {{gateway}}",
+    "portCount": "{{value}} ports",
+    "searchPlaceholder": "Rechercher par IP, port, alias…",
+    "stats": {
+      "assigned": "Attribuées",
+      "available": "Disponibles",
+      "reserved": "Réservées",
+      "totalIps": "Total des IP",
+      "totalPorts": "Total des ports",
+      "uniqueIps": "IP uniques",
+      "used": "Utilisées"
+    },
+    "tabs": {
+      "ips": "Pools d’IP",
+      "ports": "Allocations de ports"
+    },
+    "thisNode": "ce nœud",
+    "title": "Allocations réseau",
+    "toast": {
+      "poolCreated": "Pool d’IP créé",
+      "poolDeleted": "Pool d’IP supprimé",
+      "portDeleted": "Allocation de port supprimée",
+      "portsCreated_one": "{{count}} allocation de port créée",
+      "portsCreated_many": "{{count}} allocations de ports créées",
+      "portsCreated_other": "{{count}} allocations de ports créées"
+    }
+  },
+  "database": {
+    "addHost": "Ajouter un hôte",
+    "catalystDatabase": "Base de données Catalyst",
+    "createDialog": {
+      "submit": "Créer l’hôte",
+      "subtitle": "Enregistrez un hôte MySQL utilisé pour provisionner les bases de données de chaque serveur.",
+      "title": "Ajouter un hôte de base de données"
+    },
+    "creating": "Création…",
+    "deleteDialog": {
+      "message": "Voulez-vous vraiment retirer « {{name}} » ? Les serveurs qui utilisent cet hôte pour le provisionnement de leurs bases de données pourraient être affectés.",
+      "title": "Supprimer l’hôte de base de données ?"
+    },
+    "description": "Surveiller l’état des bases de données et gérer les hôtes pour le provisionnement des serveurs.",
+    "editDialog": {
+      "submit": "Enregistrer les modifications",
+      "subtitle": "Mettez à jour les détails de connexion de cet hôte de base de données.",
+      "title": "Modifier l’hôte de base de données"
+    },
+    "empty": {
+      "description": "Créez un hôte pour provisionner les bases de données des serveurs.",
+      "title": "Aucun hôte de base de données pour le moment"
+    },
+    "form": {
+      "database": "Base de données",
+      "databaseHint": "La base de données à laquelle se connecter pour les contrôles d’état et le provisionnement.",
+      "engine": "Moteur",
+      "host": "Hôte",
+      "name": "Nom",
+      "password": "Mot de passe",
+      "passwordEditHint": " (laisser vide pour conserver)",
+      "port": "Port",
+      "username": "Nom d’utilisateur"
+    },
+    "host": {
+      "checking": "Vérification",
+      "connected": "Connecté",
+      "databaseCount_one": "{{count}} BDD",
+      "databaseCount_many": "{{count}} BDD",
+      "databaseCount_other": "{{count}} BDD",
+      "disconnected": "Déconnecté",
+      "pingCounts": "{{databases}} BDD, {{tables}} tables",
+      "port": "Port {{port}}",
+      "testConnection": "Tester la connexion"
+    },
+    "hostCount": "{{value}} hôtes",
+    "recordsValue": "{{users}} utilisateurs, {{servers}} serveurs",
+    "saving": "Enregistrement…",
+    "stats": {
+      "connections": "Connexions",
+      "records": "Enregistrements",
+      "size": "Taille",
+      "tables": "Tables"
+    },
+    "title": "Base de données",
+    "toast": {
+      "created": "Hôte de base de données créé",
+      "removed": "Hôte de base de données retiré",
+      "updated": "Hôte de base de données mis à jour"
+    }
+  },
+  "migration": {
+    "actions": {
+      "pause": "Mettre en pause",
+      "resume": "Reprendre"
+    },
+    "alwaysImported": {
+      "configFileEditor": "Éditeur de fichier de configuration",
+      "dockerImageOverride": "Remplacement de l’image Docker",
+      "portAllocations": "Allocations de ports",
+      "serverConfig": "Configuration du serveur et variables d’environnement",
+      "startupCommand": "Commande de démarrage",
+      "swapIoWeight": "Swap et poids d’E/S"
+    },
+    "assigned": "attribuée",
+    "backupWarnings": {
+      "noSlots_one": "{{count}} serveur n’a aucun emplacement de sauvegarde",
+      "noSlots_many": "{{count}} serveurs n’ont aucun emplacement de sauvegarde",
+      "noSlots_other": "{{count}} serveurs n’ont aucun emplacement de sauvegarde",
+      "noSlotsDescription": "La migration définira automatiquement la limite de sauvegardes à 1 sur ces serveurs afin de créer une sauvegarde de migration.",
+      "slotsFull_one": "{{count}} serveur utilise tous ses emplacements de sauvegarde",
+      "slotsFull_many": "{{count}} serveurs utilisent tous leurs emplacements de sauvegarde",
+      "slotsFull_other": "{{count}} serveurs utilisent tous leurs emplacements de sauvegarde",
+      "slotsFullDescription": "La migration augmentera automatiquement la limite de sauvegardes de 1 afin de faire de la place à une sauvegarde de migration."
+    },
+    "connect": {
+      "apiKey": "Clé API d’application",
+      "clientApiKey": "Clé API client",
+      "clientApiKeyHint": "(pour la migration des fichiers)",
+      "clientApiKeyNote": "Nécessaire pour la création des sauvegardes et la migration des fichiers. À créer dans Pterodactyl → API Credentials → Client API.",
+      "description": "URL du panneau et clé API d’application. À associer aux nœuds Catalyst en ligne existants.",
+      "panelUrl": "URL du panneau",
+      "title": "Connexion"
+    },
+    "description": "Migrer des serveurs de Pterodactyl vers Catalyst",
+    "empty": {
+      "noActive": "Aucune migration active",
+      "noActiveDescription": "Démarrez une nouvelle migration pour suivre sa progression ici.",
+      "noJobs": "Aucun processus de migration pour le moment",
+      "noJobsDescription": "Démarrez une nouvelle migration pour la voir apparaître ici."
+    },
+    "free": "libre",
+    "history": {
+      "jobSteps": "{{completed}}/{{total}} étapes",
+      "title": "Historique des migrations"
+    },
+    "imports": {
+      "databases": "Bases de données",
+      "noBackupSlots": "Aucun emplacement de sauvegarde",
+      "schedules": "Planifications",
+      "serverFiles": "Fichiers du serveur",
+      "subusers": "Sous-utilisateurs"
+    },
+    "moreCount": "+{{value}} autres",
+    "noAllocations": "Aucun détail d’allocation renvoyé par Pterodactyl",
+    "noBackups": "aucune sauvegarde",
+    "nodeConfig": {
+      "allocations": "Allocations du nœud ({{value}})",
+      "behindProxy": "Derrière un proxy",
+      "dataDirectory": "Répertoire de données :",
+      "direct": "Direct",
+      "disk": "Disque :",
+      "diskValue": "{{disk}} MB ({{overallocation}} % de surallocation)",
+      "endpoint": "Point de terminaison :",
+      "location": "Emplacement :",
+      "maintenance": "Maintenance :",
+      "memory": "Mémoire :",
+      "memoryValue": "{{memory}} MB ({{overallocation}} % de surallocation)",
+      "proxy": "Proxy :",
+      "sftpPort": "Port SFTP :",
+      "uploadLimit": "Limite de téléversement :",
+      "uploadLimitValue": "{{value}} MB"
+    },
+    "nodeMapping": {
+      "configuration": "Configuration du nœud",
+      "helpFull": "Tous les nœuds Pterodactyl doivent être associés. Cliquez sur un nœud pour voir ce qui sera importé.",
+      "helpSelect": "Sélectionnez les nœuds Pterodactyl à associer. Cliquez pour voir les détails de l’import des serveurs.",
+      "noServers": "Aucun serveur sur ce nœud.",
+      "serversOnNode": "Serveurs sur ce nœud ({{value}})",
+      "title": "Associer les nœuds Pterodactyl aux nœuds Catalyst"
+    },
+    "nodeServerCount": "{{value}} serveurs",
+    "noOnlineNodes": "Aucun nœud Catalyst en ligne détecté. La migration nécessite qu’au moins un nœud Catalyst soit en ligne. Démarrez d’abord l’agent sur vos nœuds.",
+    "phases": {
+      "backups": "Sauvegardes",
+      "current": "EN COURS",
+      "databases": "Bases de données",
+      "files": "Fichiers du serveur",
+      "locations": "Emplacements",
+      "moreErrors": "+{{value}} autres erreurs",
+      "schedules": "Planifications",
+      "servers": "Serveurs",
+      "steps": "{{value}} étapes",
+      "templates": "Modèles (nids et œufs)",
+      "title": "Phases de migration",
+      "users": "Utilisateurs",
+      "validate": "Validation",
+      "waiting": "En attente…"
+    },
+    "primary": "principale",
+    "progress": {
+      "completed": "{{value}} terminées",
+      "duration": "Durée : {{duration}}",
+      "elapsed": "Temps écoulé : {{duration}}",
+      "failed": "{{value}} en échec",
+      "phase": "Phase :",
+      "skipped": "{{value}} ignorées",
+      "started": "Début : {{date}}",
+      "title": "Progression de la migration"
+    },
+    "scope": {
+      "full": "Migration complète",
+      "fullDescription": "Associer tous les nœuds Ptero aux nœuds Catalyst",
+      "node": "Nœud par nœud",
+      "nodeDescription": "Sélectionner les nœuds Ptero à migrer",
+      "server": "Serveur par serveur",
+      "serverDescription": "Associer chaque serveur individuellement aux nœuds Catalyst",
+      "title": "Portée de la migration"
+    },
+    "sections": {
+      "allocations": "Allocations",
+      "imports": "Imports"
+    },
+    "selectTargetNode": "Sélectionner le nœud cible",
+    "serverMapping": {
+      "help": "Cliquez sur un serveur pour voir ce qui sera importé automatiquement.",
+      "title": "Associer les serveurs Pterodactyl aux nœuds Catalyst"
+    },
+    "serverResources": {
+      "cpu": "CPU",
+      "disk": "Disque",
+      "memory": "Mémoire"
+    },
+    "skipReasons": {
+      "alreadyExists": "Déjà existant",
+      "noBackupSlots": "Aucun emplacement de sauvegarde",
+      "noClientApiKey": "Aucune clé API client",
+      "noSchedules": "Aucune planification",
+      "notApplicable": "Non applicable",
+      "notAvailable": "Non disponible",
+      "skipped": "Ignoré"
+    },
+    "slotsFull": "emplacements pleins",
+    "startMigration": "Démarrer la migration",
+    "status": {
+      "cancelled": "Annulée",
+      "completed": "Terminée",
+      "failed": "Échouée",
+      "paused": "En pause",
+      "pending": "En attente",
+      "running": "En cours",
+      "validating": "Validation en cours"
+    },
+    "steps": {
+      "downloadFiles": "Télécharger les fichiers",
+      "importBackup": "Importer la sauvegarde",
+      "importDatabase": "Importer la base de données",
+      "importDatabaseHost": "Importer l’hôte de base de données",
+      "importLocation": "Importer l’emplacement",
+      "importNest": "Importer le nid",
+      "importSchedule": "Importer la planification",
+      "importServer": "Importer le serveur",
+      "importTemplate": "Importer le modèle",
+      "importUser": "Importer l’utilisateur",
+      "more": "{{value}} autres…",
+      "showLess": "Afficher moins",
+      "toggleErrorDetails": "Afficher ou masquer les détails de l’erreur",
+      "validateConnection": "Tester la connexion"
+    },
+    "stepStatus": {
+      "completed": "Terminée",
+      "failed": "Échouée",
+      "pending": "En attente",
+      "running": "En cours",
+      "skipped": "Ignorée"
+    },
+    "summary": {
+      "nodesMapped": "{{mapped}} nœuds associés sur {{total}}",
+      "selected": "les nœuds sélectionnés",
+      "serversMapped": "{{mapped}} serveurs associés sur {{total}}"
+    },
+    "suspendedParen": "(suspendu)",
+    "tabs": {
+      "active": "Migration active",
+      "history": "Historique",
+      "new": "Nouvelle migration"
+    },
+    "test": {
+      "connected": "Connecté (v{{version}})",
+      "failed": "Échec de la connexion",
+      "locations": "Emplacements",
+      "nests": "Nids",
+      "nodes": "Nœuds",
+      "servers": "Serveurs",
+      "users": "Utilisateurs"
+    },
+    "testConnection": "Tester la connexion",
+    "title": "Migration",
+    "toast": {
+      "cancelled": "Migration annulée",
+      "completed": "Migration terminée avec succès !",
+      "connected": "Connecté au panneau Pterodactyl",
+      "connectionFailed": "Échec de la connexion",
+      "connectionTestFailed": "Échec du test de connexion",
+      "failed": "Échec de la migration : {{error}}",
+      "paused": "Migration mise en pause",
+      "resumed": "Migration reprise",
+      "started": "Migration démarrée",
+      "stepQueued": "Étape mise en file d’attente pour une nouvelle tentative"
+    },
+    "unknownError": "Erreur inconnue"
+  },
+  "nodes": {
+    "agentVersionShort": "Agent v{{version}}",
+    "allLocations": "Tous",
+    "clearAll": "Tout effacer",
+    "clearFilters": "Effacer les filtres",
+    "clearSelection": "Effacer",
+    "deleteDialog": {
+      "message": "Vous êtes sur le point de supprimer <1>{{label}}</1>.",
+      "title": "Supprimer des nœuds",
+      "warning": "Les nœuds hébergeant des serveurs en cours d’exécution ne peuvent pas être supprimés. Arrêtez tous les serveurs d’un nœud avant de le supprimer. Cette action est irréversible."
+    },
+    "description": "Gérer les nœuds d’infrastructure et surveiller leur disponibilité",
+    "empty": {
+      "adjustFilters": "Essayez de modifier votre recherche ou vos filtres.",
+      "installAgent": "Installez l’agent Catalyst et enregistrez des nœuds pour commencer.",
+      "none": "Aucun nœud détecté",
+      "notFound": "Aucun nœud trouvé"
+    },
+    "filter": {
+      "allLocations": "Tous les emplacements",
+      "allStatuses": "Tous les états",
+      "location": "Emplacement",
+      "offlineCount": "Hors ligne ({{value}})",
+      "onlineCount": "En ligne ({{value}})",
+      "status": "État",
+      "unassignedCount": "Non attribué ({{value}})"
+    },
+    "filters": "Filtres",
+    "hostnameUnavailable": "nom d’hôte indisponible",
+    "lastSeen": "Vu pour la dernière fois {{time}}",
+    "locationNodeCount_one": "{{count}} nœud",
+    "locationNodeCount_many": "{{count}} nœuds",
+    "locationNodeCount_other": "{{count}} nœuds",
+    "locations": "Emplacements",
+    "manage": "Gérer",
+    "resultCount": "{{shown}} sur {{total}}",
+    "searchPlaceholder": "Rechercher des nœuds par nom ou nom d’hôte…",
+    "selectAll": "Tout sélectionner",
+    "selectAllInSection": "Tout sélectionner dans la section",
+    "selectedCount": "{{value}} sélectionnés",
+    "selectedLabel": "{{value}} nœuds",
+    "sort": {
+      "cpuCores": "Cœurs CPU",
+      "memory": "Mémoire",
+      "mostServers": "Plus de serveurs",
+      "nameAsc": "Nom A→Z",
+      "nameDesc": "Nom Z→A",
+      "status": "État"
+    },
+    "stat": {
+      "cores": "cœurs",
+      "memory": "mémoire",
+      "servers": "serveurs"
+    },
+    "stats": {
+      "cpuCores": "Cœurs CPU",
+      "memory": "Mémoire",
+      "nodes": "Nœuds",
+      "offline": "Hors ligne",
+      "online": "En ligne",
+      "totalServers": "Total des serveurs"
+    },
+    "title": "Nœuds",
+    "toast": {
+      "deleted_one": "{{count}} nœud supprimé",
+      "deleted_many": "{{count}} nœuds supprimés",
+      "deleted_other": "{{count}} nœuds supprimés"
+    },
+    "unassigned": "Non attribué"
+  },
+  "servers": {
+    "actions": {
+      "console": "Console",
+      "restart": "Redémarrer",
+      "start": "Démarrer",
+      "stop": "Arrêter",
+      "suspend": "Suspendre",
+      "unsuspend": "Réactiver",
+      "update": "Mettre à jour"
+    },
+    "actionVerb": {
+      "delete": "Suppression",
+      "restart": "Redémarrage",
+      "start": "Démarrage",
+      "stop": "Arrêt",
+      "suspend": "Suspension",
+      "unsuspend": "Réactivation"
+    },
+    "clearAll": "Tout effacer",
+    "clearFilters": "Effacer les filtres",
+    "clearSelection": "Effacer",
+    "deleteDialog": {
+      "message": "Vous êtes sur le point de supprimer <1>{{label}}</1>.",
+      "title": "Supprimer des serveurs",
+      "warning": "Les serveurs doivent être arrêtés avant d’être supprimés. Cette action est irréversible."
+    },
+    "description": "Surveiller et gérer tous les serveurs de l’ensemble des nœuds",
+    "empty": {
+      "adjustFilters": "Essayez de modifier votre recherche ou vos filtres.",
+      "createServer": "Créez un serveur pour commencer à le gérer depuis cette liste.",
+      "none": "Aucun serveur pour le moment",
+      "notFound": "Aucun serveur trouvé"
+    },
+    "filter": {
+      "allNodes": "Tous les nœuds",
+      "allStatuses": "Tous les états",
+      "allTemplates": "Tous les modèles",
+      "node": "Nœud",
+      "owner": "Propriétaire",
+      "ownerPlaceholder": "Rechercher des propriétaires…",
+      "status": "État",
+      "template": "Modèle"
+    },
+    "filters": "Filtres",
+    "resultCount": "{{shown}} sur {{total}}",
+    "runningCount": "{{value}} en cours d’exécution",
+    "searchPlaceholder": "Rechercher des serveurs par nom ou ID…",
+    "selectAll": "Tout sélectionner",
+    "selectedCount": "{{value}} sélectionnés",
+    "selectedLabel": "{{value}} serveurs",
+    "sort": {
+      "nameAsc": "Nom A→Z",
+      "nameDesc": "Nom Z→A",
+      "node": "Nœud",
+      "status": "État",
+      "template": "Modèle"
+    },
+    "stoppedCount": "{{value}} arrêtés",
+    "suspendDialog": {
+      "message": "Vous êtes sur le point de suspendre <1>{{label}}</1>.",
+      "reasonLabel": "Motif (facultatif)",
+      "reasonPlaceholder": "ex. : problème de facturation",
+      "title": "Suspendre des serveurs"
+    },
+    "suspendedCount": "{{value}} suspendus",
+    "title": "Tous les serveurs",
+    "toast": {
+      "failed_one": "{{action}} en échec pour {{count}} serveur.",
+      "failed_many": "{{action}} en échec pour {{count}} serveurs.",
+      "failed_other": "{{action}} en échec pour {{count}} serveurs.",
+      "queued_one": "{{action}} en file d’attente pour {{count}} serveur.",
+      "queued_many": "{{action}} en file d’attente pour {{count}} serveurs.",
+      "queued_other": "{{action}} en file d’attente pour {{count}} serveurs."
+    },
+    "totalCount": "{{value}} au total"
+  }
+}

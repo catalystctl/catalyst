@@ -1,0 +1,360 @@
+{
+  "card": {
+    "console": "Console",
+    "manage": "Gérer"
+  },
+  "cloneServer": {
+    "clone": "Cloner",
+    "cloned": "Serveur cloné avec succès",
+    "cloning": "Clonage…",
+    "copyFiles": "Copier les fichiers",
+    "copyFilesHint": "Copier tous les fichiers du serveur source au lieu de lancer une nouvelle installation",
+    "copyFilesStatusWarning": "Le serveur cloné sera à l’état « Clonage des fichiers » pendant le transfert. Il ne pourra pas être démarré avant la fin de la copie.",
+    "description": "Créer un nouveau serveur avec la même configuration que {{name}}.",
+    "namePlaceholder": "Nom du serveur",
+    "networkAllocation": "Allocation réseau",
+    "ownerHint": "L’utilisateur qui possédera ce serveur. Si aucun n’est défini, vous serez le propriétaire.",
+    "ownerPlaceholder": "Sélectionner un propriétaire…",
+    "ownerSearchPlaceholder": "Rechercher par nom d’utilisateur, e-mail ou ID…",
+    "serverOwner": "Propriétaire du serveur",
+    "startedCopyingFiles": "Clonage du serveur lancé — copie des fichiers…",
+    "submit": "Cloner le serveur",
+    "title": "Cloner le serveur",
+    "warningCopyFiles": "Les fichiers seront copiés depuis le serveur source. Le nouveau serveur sera indisponible jusqu’à la fin de la copie.",
+    "warningFreshInstall": "Un nouveau serveur avec la même configuration sera créé. Une nouvelle installation sera exécutée sur le nouveau serveur."
+  },
+  "console": {
+    "autoScroll": "Défilement automatique",
+    "clear": "Effacer",
+    "connection": {
+      "connecting": "Connexion…",
+      "disconnected": "Déconnecté",
+      "live": "En direct",
+      "reconnecting": "Reconnexion…"
+    },
+    "filterPlaceholder": "Filtrer la sortie…",
+    "lines_one": "{{count}} ligne",
+    "lines_many": "{{count}} lignes",
+    "lines_other": "{{count}} lignes",
+    "pageDescription": "Sortie en temps réel et saisie de commandes",
+    "pageTitle": "Console",
+    "placeholderConnectToSend": "Connectez-vous pour envoyer des commandes",
+    "placeholderReconnecting": "Reconnexion…",
+    "placeholderSuspended": "Serveur suspendu",
+    "placeholderTypeCommand": "Saisissez une commande…",
+    "placeholderTypeCommandHistory": "Saisissez une commande… (↑↓ pour l’historique)",
+    "send": "Envoyer",
+    "streams": {
+      "stderr": "Sortie d’erreur",
+      "stdin": "Entrée standard",
+      "stdout": "Sortie standard",
+      "system": "Système"
+    },
+    "suspendedNotice": "Serveur suspendu — saisie de la console désactivée.",
+    "tab": {
+      "bufferSize": "Taille du tampon",
+      "clearConsole": "Effacer la console",
+      "closeFind": "Fermer la recherche",
+      "commandInput": "Commande de console",
+      "copyOutput": "Copier la sortie",
+      "downloadOutput": "Télécharger la sortie",
+      "findAriaLabel": "Rechercher dans la console",
+      "findPlaceholder": "Rechercher…",
+      "findTitle": "Rechercher (Ctrl+F)",
+      "follow": "Suivre",
+      "followOff": "Suivi de la sortie désactivé",
+      "followOn": "Suivi de la sortie activé"
+    },
+    "xterm": {
+      "ariaLabel": "Sortie de la console du serveur",
+      "empty": "Aucune sortie de console pour le moment.",
+      "loadError": "Impossible de charger les journaux historiques.",
+      "loadingLogs": "Chargement des journaux récents…",
+      "newOutput": "Nouvelle sortie"
+    }
+  },
+  "controls": {
+    "cancelInstall": "Annuler l’installation",
+    "cancelInstallConfirmMessage": "Cette action arrêtera de force le conteneur d’installation bloqué et remettra le serveur à l’état arrêté pour permettre une réinstallation. Les fichiers d’installation partiels sont conservés. Êtes-vous sûr ?",
+    "cancelInstallConfirmTitle": "Annuler l’installation ?",
+    "cancelling": "Annulation…",
+    "installCancelled": "Installation annulée",
+    "keepInstalling": "Poursuivre l’installation",
+    "kill": "Arrêter de force",
+    "killConfirmMessage": "Le processus du serveur sera arrêté de force immédiatement et sans sauvegarde. Des données peuvent être perdues. Êtes-vous sûr ?",
+    "killConfirmTitle": "Arrêter le serveur de force ?",
+    "restart": "Redémarrer",
+    "restarting": "Redémarrage…",
+    "serverKilled": "Serveur arrêté de force",
+    "start": "Démarrer",
+    "starting": "Démarrage…",
+    "stop": "Arrêter",
+    "stopping": "Arrêt en cours…"
+  },
+  "createServer": {
+    "created": "Serveur créé et installation lancée",
+    "creating": "Création…",
+    "description": "Déployez un nouveau serveur de jeu en quelques étapes.",
+    "fields": {
+      "description": "Description",
+      "descriptionPlaceholder": "Ajoutez des notes ou une description pour ce serveur…",
+      "imageVariant": "Variante d’image",
+      "name": "Nom du serveur",
+      "node": "Nœud",
+      "nodePlaceholder": "Sélectionner un nœud…",
+      "nodeSearchPlaceholder": "Rechercher des nœuds…",
+      "optional": "(facultatif)",
+      "template": "Modèle",
+      "templatePlaceholder": "Sélectionner un modèle…",
+      "templateSearchPlaceholder": "Rechercher des modèles…",
+      "useDefaultImage": "Utiliser l’image par défaut"
+    },
+    "network": {
+      "addBinding": "+ Ajouter une liaison",
+      "additionalBindings": "Liaisons de ports supplémentaires",
+      "additionalBindingsHint": "Associez des allocations supplémentaires à des ports du conteneur.",
+      "allocation": "Allocation",
+      "createAllocationsHint": "Créer des allocations — actualisation au retour",
+      "interface": "Interface",
+      "interfaceOption_one": "{{network}} — {{cidr}} ({{count}} disponible)",
+      "interfaceOption_many": "{{network}} — {{cidr}} ({{count}} disponibles)",
+      "interfaceOption_other": "{{network}} — {{cidr}} ({{count}} disponibles)",
+      "ipAllocation": "Allocation IP",
+      "macvlanTitle": "Configuration Macvlan",
+      "newAllocation": "Nouvelle",
+      "noInterfaces": "Aucune interface macvlan configurée pour ce nœud.",
+      "portPlaceholder": "Port",
+      "primaryAllocation": "Allocation principale",
+      "primaryAllocationHint": "Choisissez une allocation du nœud pour l’IP et le port par défaut.",
+      "primaryPort": "Port principal",
+      "primaryPortFromAllocation": "Rempli automatiquement à partir de l’allocation principale ci-dessous.",
+      "primaryPortHint": "Port sur lequel le serveur écoutera.",
+      "selectInterface": "Sélectionner une interface"
+    },
+    "newServer": "Nouveau serveur",
+    "resources": {
+      "title": "Allocation des ressources"
+    },
+    "startup": {
+      "environmentVariables": "Variables d’environnement",
+      "noVariables": "Aucune variable de démarrage pour ce modèle."
+    },
+    "steps": {
+      "details": "Détails",
+      "network": "Réseau",
+      "resources": "Ressources",
+      "startup": "Démarrage"
+    },
+    "submit": "Créer le serveur",
+    "title": "Créer un nouveau serveur"
+  },
+  "deleteServer": {
+    "confirm": "Voulez-vous vraiment supprimer <strong>{{name}}</strong> ? Cette action est irréversible.",
+    "deleted": "Serveur supprimé",
+    "title": "Supprimer le serveur"
+  },
+  "details": {
+    "accessRemoved": "Accès retiré",
+    "allocationAdded": "Allocation ajoutée",
+    "allocationRemoved": "Allocation retirée",
+    "cloningNotice": "Impossible de démarrer avant la fin de la copie.",
+    "copiedAddress": "Adresse copiée",
+    "copyFailed": "Échec de la copie",
+    "crashCountReset": "Compteur de plantages réinitialisé",
+    "databaseCreated": "Base de données créée",
+    "databaseDeleted": "Base de données supprimée",
+    "databasePasswordRotated": "Mot de passe de la base de données régénéré",
+    "inviteCancelled": "Invitation annulée",
+    "inviteRegeneratedCopyBelow": "Lien d’invitation régénéré — copiez le nouveau lien ci-dessous",
+    "inviteRegeneratedResent": "Lien d’invitation régénéré et renvoyé",
+    "inviteSent": "Invitation envoyée",
+    "permissionsUpdated": "Autorisations mises à jour",
+    "pluginTabNotFoundDescription": "L’onglet de plugin demandé est introuvable ou n’est pas activé.",
+    "pluginTabNotFoundTitle": "Onglet de plugin introuvable",
+    "primaryAllocationUpdated": "Allocation principale mise à jour",
+    "resetToTemplateDefault": "Réinitialiser à la valeur par défaut du modèle",
+    "restartPolicyUpdated": "Politique de redémarrage mise à jour",
+    "serverNameUpdated": "Nom du serveur mis à jour",
+    "serverSuspended": "Serveur suspendu",
+    "serverUnsuspended": "Serveur réactivé",
+    "startupCommandUpdated": "Commande de démarrage mise à jour",
+    "tabErrorDescription": "Changez d’onglet ou réessayez. Le reste de la page du serveur reste utilisable.",
+    "tabErrorTitle": "Cet onglet a rencontré une erreur",
+    "taskDeleted": "Tâche supprimée",
+    "taskUpdated": "Tâche mise à jour",
+    "untitledServer": "Serveur"
+  },
+  "errors": {
+    "serverSuspended": "Le serveur est suspendu",
+    "unableToLoadServerDetails": "Impossible de charger les détails du serveur."
+  },
+  "eula": {
+    "accept": "J’accepte",
+    "decline": "Refuser",
+    "description": "Acceptez le contrat de licence utilisateur final de Minecraft avant que le serveur puisse démarrer.",
+    "scrollHint": "Faites défiler jusqu’en bas pour activer le bouton d’acceptation.",
+    "submitting": "Envoi…",
+    "textUnavailable": "Le texte du contrat de licence n’a pas pu être chargé depuis les fichiers du serveur.",
+    "title": "Contrat de licence Minecraft"
+  },
+  "fields": {
+    "autoAssign": "Attribution automatique",
+    "backupMb": "Sauvegarde (MB)",
+    "cpuCores": "Cœurs CPU",
+    "createOne": "En créer une →",
+    "databaseAllocation": "Allocation de base de données",
+    "diskMb": "Disque (MB)",
+    "leaveBlankDefaults": "Laissez vide pour utiliser les valeurs par défaut du fournisseur.",
+    "memoryMb": "Mémoire (MB)",
+    "name": "Nom",
+    "networkMode": "Mode réseau",
+    "noAllocations": "Aucune allocation disponible.",
+    "node": "Nœud",
+    "noIps": "Aucune IP disponible.",
+    "selectAllocation": "Sélectionner une allocation",
+    "swapMb": "Swap (MB)"
+  },
+  "files": {
+    "description": "{{name}} · Téléversez, modifiez et gérez les fichiers du serveur.",
+    "noServerDescription": "Sélectionnez un serveur pour gérer ses fichiers.",
+    "noServerTitle": "Aucun serveur sélectionné",
+    "title": "Fichiers"
+  },
+  "filters": {
+    "allStatuses": "Tous les états",
+    "clear": "Effacer",
+    "searchPlaceholder": "Rechercher par nom ou par nœud…"
+  },
+  "hostNetwork": {
+    "confirm": "Activer et démarrer",
+    "enabled": "Réseau hôte activé sur le nœud.",
+    "message": "Ce serveur utilise le réseau hôte, que le nœud refuse par défaut. Activer le réseau hôte sur le nœud et démarrer le serveur maintenant ?",
+    "title": "Le réseau hôte est désactivé sur ce nœud"
+  },
+  "inviteLink": {
+    "copyLink": "Copier le lien d’invitation",
+    "description": "L’envoi d’e-mails n’est pas disponible (SMTP non configuré). Partagez ce lien directement avec l’utilisateur.",
+    "done": "Terminé",
+    "inviteFor": "Invitation pour <strong>{{email}}</strong>",
+    "regenerate": "Lien perdu ? Régénérer",
+    "regeneratedDescription": "L’ancien lien n’est plus valide. Partagez le nouveau.",
+    "regeneratedTitle": "Nouveau lien d’invitation",
+    "title": "Lien d’invitation",
+    "warning": "Toute personne disposant de ce lien peut accepter l’invitation et rejoindre le serveur avec les autorisations attribuées. Gardez-le privé."
+  },
+  "list": {
+    "emptyDescription": "Créez un serveur pour commencer.",
+    "emptyTitle": "Aucun serveur"
+  },
+  "metrics": {
+    "labels": {
+      "cpu": "CPU",
+      "disk": "Disque",
+      "diskIo": "E/S disque",
+      "diskUsage": "Utilisation du disque",
+      "memory": "Mémoire",
+      "network": "Réseau",
+      "ram": "RAM"
+    },
+    "last60Min": "60 dernières min",
+    "live": "En direct",
+    "resourceUsage": "Utilisation des ressources"
+  },
+  "networkModes": {
+    "bridge": "Pont",
+    "host": "Hôte (mappage de ports)",
+    "macvlan": "Macvlan",
+    "mcLanDynamic": "MC LAN dynamique",
+    "mcLanStatic": "MC LAN statique"
+  },
+  "page": {
+    "access": {
+      "all": "Tous",
+      "other": "Autres",
+      "owned": "Possédés"
+    },
+    "description": "Gérez vos serveurs de jeu, surveillez les ressources et contrôlez les états d’alimentation.",
+    "overview": "Vue d’ensemble",
+    "stats": {
+      "issues": "Problèmes",
+      "total": "Total"
+    },
+    "title": "Serveurs",
+    "view": {
+      "cards": "Cartes",
+      "list": "Liste"
+    }
+  },
+  "tabBar": {
+    "moreTabs": "Autres pages du serveur"
+  },
+  "tabs": {
+    "activity": "Activité",
+    "admin": "Administration",
+    "alerts": "Alertes",
+    "backups": "Sauvegardes",
+    "configuration": "Configuration",
+    "console": "Console",
+    "databases": "Bases de données",
+    "files": "Fichiers",
+    "metrics": "Métriques",
+    "modManager": "Gestionnaire de mods",
+    "pluginManager": "Gestionnaire de plugins",
+    "settings": "Paramètres",
+    "sftp": "SFTP",
+    "tasks": "Tâches",
+    "users": "Utilisateurs"
+  },
+  "timeRange": {
+    "customLabel": "{{hours}} h ({{limit}} points)",
+    "customRange": "Plage personnalisée",
+    "dataPoints": "Points de données",
+    "hours": "Heures",
+    "hoursRangeError": "Les heures doivent être comprises entre 1 et 8760 (1 an)",
+    "limitRangeError": "La limite doit être comprise entre 1 et 1000 points de données",
+    "presets": {
+      "days30": "30 jours",
+      "days7": "7 jours",
+      "hour1": "1 heure",
+      "hours24": "24 heures",
+      "hours6": "6 heures"
+    }
+  },
+  "transferServer": {
+    "description": "Le transfert replanifiera les charges de travail sur le nœud sélectionné.",
+    "modeLocal": "Système de fichiers partagé",
+    "modeStream": "Flux",
+    "noNodes": "Aucun nœud disponible",
+    "selectNode": "Sélectionner un nœud",
+    "started": "Transfert lancé",
+    "storage": "Stockage du transfert",
+    "targetNode": "Nœud cible",
+    "title": "Transférer le serveur",
+    "transfer": "Transférer"
+  },
+  "unknownServer": "Serveur inconnu",
+  "updateServer": {
+    "backupAllocation": "Allocation de sauvegarde (MB)",
+    "backupAllocationHint": "Définissez 0 pour désactiver les sauvegardes. Les modes « Système de fichiers partagé » et « Flux » nécessitent une allocation.",
+    "backupRetention": "Rétention des sauvegardes",
+    "backupRetentionHint": "Conserver au maximum ce nombre de sauvegardes (0 = illimité).",
+    "backupRetentionUpdated": "Rétention des sauvegardes mise à jour",
+    "cpuCores": "Cœurs CPU",
+    "currentIp": "{{ip}} (actuelle)",
+    "databaseAllocation": "Allocation de base de données",
+    "databaseAllocationHint": "Définissez 0 pour désactiver le provisionnement des bases de données.",
+    "description": "Modifiez le nom de ce serveur, ses ressources, ses allocations de sauvegarde et de base de données, ainsi que son allocation réseau.",
+    "noAllocations": "Aucune allocation trouvée.",
+    "primaryAllocation": "Allocation principale",
+    "primaryAllocationHint": "Choisissez l’allocation principale (IP:port) de ce serveur.",
+    "primaryIp": "Allocation IP principale",
+    "primaryIpHint": "Choisissez une IP principale ou laissez l’attribution automatique sélectionnée.",
+    "resizeInitiated": "Redimensionnement du stockage lancé",
+    "resizeTimeout": "Le redimensionnement du stockage a expiré — l’agent du nœud est peut-être hors ligne. Réessayez.",
+    "save": "Enregistrer les modifications",
+    "shrinkWarning": "La réduction nécessite que le serveur soit arrêté.",
+    "title": "Mettre à jour le serveur",
+    "trigger": "Mettre à jour",
+    "updated": "Serveur mis à jour"
+  }
+}

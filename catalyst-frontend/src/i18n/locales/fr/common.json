@@ -1,0 +1,191 @@
+{
+  "actions": {
+    "apply": "Appliquer",
+    "back": "Retour",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "confirm": "Confirmer",
+    "copied": "Copié",
+    "copy": "Copier",
+    "create": "Créer",
+    "delete": "Supprimer",
+    "disable": "Désactiver",
+    "disabled": "Désactivé",
+    "download": "Télécharger",
+    "edit": "Modifier",
+    "enable": "Activer",
+    "enabled": "Activé",
+    "loading": "Chargement…",
+    "more": "Plus",
+    "next": "Suivant",
+    "no": "Non",
+    "none": "Aucun",
+    "previous": "Précédent",
+    "refresh": "Actualiser",
+    "remove": "Retirer",
+    "reset": "Réinitialiser",
+    "retry": "Réessayer",
+    "save": "Enregistrer",
+    "search": "Rechercher",
+    "unknown": "Inconnu",
+    "update": "Mettre à jour",
+    "upload": "Téléverser",
+    "working": "En cours…",
+    "yes": "Oui"
+  },
+  "apiKeys": {
+    "created": "Clé API créée avec succès",
+    "revoked": "Clé API révoquée avec succès",
+    "updated": "Clé API mise à jour avec succès"
+  },
+  "combobox": {
+    "noMatches": "Aucun résultat.",
+    "placeholder": "Sélectionner…"
+  },
+  "configFormats": {
+    "jsonMustBeObject": "La configuration JSON doit être un objet"
+  },
+  "errorBoundary": {
+    "message": "Une erreur inattendue s’est produite.",
+    "retry": "Réessayer",
+    "title": "Une erreur est survenue"
+  },
+  "language": {
+    "description": "Choisissez la langue de l’interface du panneau.",
+    "label": "Langue"
+  },
+  "metricsHistory": {
+    "oneHour": "1 heure"
+  },
+  "nodeAgent": {
+    "updateFailed": "Échec de la mise à jour"
+  },
+  "operationStage": {
+    "cloning": "Clonage des fichiers",
+    "installing": "Installation du serveur",
+    "transferring": "Transfert du serveur"
+  },
+  "pagination": {
+    "pageOf": "Page {{page}} sur {{totalPages}}"
+  },
+  "passwordStrength": {
+    "fair": "Moyen",
+    "good": "Bon",
+    "strong": "Fort",
+    "title": "Force du mot de passe",
+    "veryStrong": "Très fort",
+    "weak": "Faible"
+  },
+  "relativeTime": {
+    "daysAgo": "il y a {{value}} j",
+    "hoursAgo": "il y a {{value}} h",
+    "justNow": "à l’instant",
+    "minutesAgo": "il y a {{value}} min",
+    "monthsAgo": "il y a {{value}} mois",
+    "yearsAgo": "il y a {{value}} ans"
+  },
+  "roles": {
+    "administrator": "Administrateur",
+    "description": {
+      "administrator": "Accès complet au système",
+      "moderator": "Autorisations de gestion limitées",
+      "user": "Accès utilisateur standard"
+    },
+    "moderator": "Modérateur",
+    "user": "Utilisateur"
+  },
+  "serverPermissions": {
+    "alertCreate": "Créer des alertes",
+    "alertDelete": "Supprimer des alertes",
+    "alertRead": "Consulter les alertes",
+    "alertUpdate": "Mettre à jour les alertes",
+    "backupCreate": "Créer des sauvegardes",
+    "backupDelete": "Supprimer des sauvegardes",
+    "backupRead": "Consulter les sauvegardes",
+    "backupRestore": "Restaurer des sauvegardes",
+    "consoleRead": "Consulter la console",
+    "consoleWrite": "Envoyer des commandes à la console",
+    "databaseCreate": "Créer des bases de données",
+    "databaseDelete": "Supprimer des bases de données",
+    "databaseRead": "Consulter les bases de données",
+    "databaseRotate": "Régénérer les mots de passe des bases de données",
+    "delete": "Supprimer le serveur",
+    "fileRead": "Parcourir les fichiers",
+    "fileWrite": "Modifier et téléverser des fichiers",
+    "install": "Installer le serveur",
+    "read": "Consulter les détails du serveur",
+    "rebuild": "Reconstruire le serveur et les variables",
+    "reinstall": "Réinstaller le serveur",
+    "schedule": "Gérer les planifications et les tâches",
+    "start": "Démarrer le serveur",
+    "stop": "Arrêter ou forcer l’arrêt du serveur",
+    "transfer": "Transférer le serveur"
+  },
+  "setupStatus": {
+    "checkFailed": "Échec de la vérification de l’état de la configuration",
+    "timedOut": "La vérification de la configuration a expiré après {{ms}} ms"
+  },
+  "status": {
+    "archived": "Archivé",
+    "cloning": "Clonage des fichiers",
+    "crashed": "Planté",
+    "creatingBackup": "Création d’une sauvegarde",
+    "error": "Erreur",
+    "installing": "Installation",
+    "offline": "Hors ligne",
+    "online": "En ligne",
+    "restoring": "Restauration",
+    "running": "En cours d’exécution",
+    "starting": "Démarrage",
+    "stopped": "Arrêté",
+    "stopping": "Arrêt en cours",
+    "suspended": "Suspendu",
+    "transferring": "Transfert"
+  },
+  "statusBadge": {
+    "title": "État du serveur : {{label}}"
+  },
+  "storageResize": {
+    "failed": "Échec du redimensionnement du stockage",
+    "succeeded": "Stockage redimensionné"
+  },
+  "templateImport": {
+    "builtinIp": "Adresse IP du serveur (0.0.0.0 pour toutes les interfaces)",
+    "builtinMemory": "Mémoire allouée en MB",
+    "builtinPort": "Port principal du serveur",
+    "builtinTimezone": "Fuseau horaire du serveur",
+    "importedEgg": "Œuf importé",
+    "importedFromPelican": "Importé depuis Pelican",
+    "importedFromPterodactyl": "Importé depuis Pterodactyl",
+    "missingField": "Champ requis manquant : {{field}}",
+    "missingStopCommand": "Champ requis manquant : stopCommand (ou sendSignalTo pour un arrêt par signal)",
+    "variableMissingDefault": "Valeur par défaut manquante pour la variable {{name}}",
+    "variableMissingName": "Nom manquant pour la variable à l’index {{index}}"
+  },
+  "themeImport": {
+    "customCssTooLarge": "Le CSS personnalisé dépasse 100 KB.",
+    "invalidBorderRadius": "borderRadius non valide — attendu par exemple « 0.625rem ».",
+    "invalidColor": "{{field}} non valide — couleur hexadécimale #rrggbb attendue.",
+    "invalidCustomCss": "customCss non valide — une chaîne de caractères est attendue.",
+    "jsonMustBeObject": "Le JSON du thème doit être un objet.",
+    "missingThemeColors": "Objet themeColors manquant."
+  },
+  "updateNotification": {
+    "available": "Mise à jour disponible : v{{version}}",
+    "completeToast": "Mise à jour du panneau terminée — vous utilisez désormais la dernière version.",
+    "currentVersion": "Vous utilisez la version v{{version}}.",
+    "dismissDescription": "Choisissez comment gérer la bannière de mise à jour pour la version {{version}}.",
+    "dismissForNow": "Ignorer pour le moment",
+    "dismissGlobalDescription": "Masquer définitivement toutes les notifications de mise à jour. Réactivez-les en effaçant les données du site / localStorage.",
+    "dismissGlobalTitle": "Ne plus me le rappeler",
+    "dismissOptions": "Options de masquage",
+    "dismissSessionDescription": "Masquer pour le moment. La bannière réapparaîtra au prochain rechargement de la page ou à la prochaine connexion.",
+    "dismissSessionTitle": "Ignorer",
+    "dismissTitle": "Ignorer la notification de mise à jour",
+    "dismissVersionDescription": "Mémoriser mon choix pour {{version}}. Vous serez de nouveau notifié lors de la sortie de la prochaine version.",
+    "dismissVersionTitle": "Ignorer cette mise à jour",
+    "openDismissOptions": "Ouvrir les options de masquage",
+    "starting": "Démarrage…",
+    "triggerFailed": "Échec du déclenchement de la mise à jour"
+  }
+}
