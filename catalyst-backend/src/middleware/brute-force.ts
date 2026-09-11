@@ -67,12 +67,12 @@ function setLocalIpCache(ip: string, count: number, resetAt: number): void {
 }
 
 /**
- * Check and enforce IP-based rate limiting for non-existent users.
+ * Record one failed login for an unknown email against the caller's IP.
  * Persists counters in AuthLockout so multi-worker deployments share state.
  * Uses a synthetic email key `__ip__:<ip>` so rows are unique per IP without
  * colliding with real email lockout rows (unique on [email, ipAddress]).
  */
-async function checkIpRateLimit(
+export async function recordIpAttempt(
   prisma: PrismaClient,
   request: FastifyRequest,
 ): Promise<void> {
@@ -221,6 +221,58 @@ async function checkIpRateLimit(
 }
 
 /**
+ * Enforce the IP limit without consuming a slot. Only failed logins for unknown
+ * emails call recordIpAttempt, so successful sign-ins never push a shared IP
+ * (NAT, CGNAT, or one reverse proxy) toward a lockout.
+ */
+export async function checkIpRateLimit(
+  prisma: PrismaClient,
+  request: FastifyRequest,
+): Promise<void> {
+  const ip = getClientIp(request);
+  const now = Date.now();
+  const syntheticEmail = `__ip__:${ip}`;
+
+  const local = ipAttemptLocalCache.get(ip);
+  if (local && now <= local.resetAt) {
+    if (local.count >= IP_RATE_LIMIT_MAX_ATTEMPTS) {
+      const minutesRemaining = Math.ceil((local.resetAt - now) / 60000);
+      throw new Error(
+        `Too many login attempts. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+      );
+    }
+    return;
+  }
+  if (local && now > local.resetAt) {
+    ipAttemptLocalCache.delete(ip);
+  }
+
+  const existing = await prisma.authLockout.findUnique({
+    where: {
+      email_ipAddress: {
+        email: syntheticEmail,
+        ipAddress: ip,
+      },
+    },
+  });
+  if (!existing) return;
+
+  const windowStart = existing.firstFailedAt.getTime();
+  const windowExpired = now - windowStart > IP_RATE_LIMIT_WINDOW_MS;
+  if (windowExpired) return;
+
+  const lockedUntilDate = existing.lockedUntil;
+  if (lockedUntilDate && lockedUntilDate.getTime() > now) {
+    setLocalIpCache(ip, existing.failureCount, lockedUntilDate.getTime());
+    const minutesRemaining = Math.ceil((lockedUntilDate.getTime() - now) / 60000);
+    throw new Error(
+      `Too many login attempts. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+    );
+  }
+  setLocalIpCache(ip, existing.failureCount, windowStart + IP_RATE_LIMIT_WINDOW_MS);
+}
+
+/**
  * Opportunistic cleanup of expired synthetic IP lockout rows.
  * Runs infrequently; not critical for correctness.
  */
@@ -295,8 +347,9 @@ export const handleFailedLogin = async (
 ): Promise<void> => {
   const user = request.userForLockout as User | undefined;
   if (!user) {
-    // Failed login for non-existent user - the IP rate limit in bruteForceProtection
-    // will handle this, but we don't need to do anything else here
+    // Failed login for a non-existent user — count it against the IP bucket,
+    // which bruteForceProtection enforces on the next attempt.
+    await recordIpAttempt(prisma, request);
     return;
   }
 

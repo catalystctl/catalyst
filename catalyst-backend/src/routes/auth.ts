@@ -13,6 +13,7 @@ import {
   bruteForceProtection,
   handleFailedLogin,
   handleSuccessfulLogin,
+  recordIpAttempt,
 } from "../middleware/brute-force";
 import {
   passwordSchema,
@@ -207,6 +208,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
 
       if (!userRecord) {
+        await recordIpAttempt(prisma, request);
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
         await new Promise((r) => setTimeout(r, 150 + Math.floor(Math.random() * 150)));
         return apiError(reply, 401, ErrorCodes.AUTH_INVALID_CREDENTIALS, "Invalid credentials");
@@ -297,6 +299,7 @@ export async function authRoutes(app: FastifyInstance) {
           err?.code === 'INVALID_PASSWORD';
 
         if (isCredentialError && userRecord) {
+          await recordIpAttempt(prisma, request);
           await handleFailedLogin(prisma, request);
           await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
           await new Promise((r) => setTimeout(r, 150 + Math.floor(Math.random() * 150)));
