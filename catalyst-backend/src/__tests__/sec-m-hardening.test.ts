@@ -203,6 +203,18 @@ describe("SEC-M contracts (static)", () => {
     expect(src).toContain("chmod 600");
   });
 
+  it("SEC-M-03b deploy script consumes the bootstrap's 0600 key file", async () => {
+    const script = await readSrc("../../scripts/deploy-agent.sh");
+    // The bootstrap passes the key out-of-band as $3=hostname; a script that
+    // only reads argv[3] writes the hostname into config.toml as the api_key
+    // and the node never comes online.
+    expect(script).toContain("CATALYST_API_KEY_FILE");
+    expect(script).toContain('NODE_API_KEY="$(cat "$CATALYST_API_KEY_FILE")"');
+    expect(script).toContain("--preserve-env=CATALYST_API_KEY_FILE");
+    const bootstrap = await readSrc("index.ts");
+    expect(bootstrap).toContain('CATALYST_API_KEY_FILE="$KEY_FILE" "$TMP_SCRIPT"');
+  });
+
   it("SEC-M-04 ws query ?token= deprecated, TRUST_PROXY defaults false, WS caps", async () => {
     const indexSrc = await readSrc("index.ts");
     expect(indexSrc).toContain("TRUST_PROXY");

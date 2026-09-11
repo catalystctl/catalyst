@@ -14,6 +14,8 @@
 #
 # Usage (normally called by the bootstrap wrapper):
 #   deploy-agent.sh <backend_url> <node_id> <node_api_key> [node_hostname]
+#   OR, as the panel bootstrap calls it (key kept out of argv):
+#   CATALYST_API_KEY_FILE=/path/to/key deploy-agent.sh <backend_url> <node_id> <node_hostname>
 # ---------------------------------------------------------------------------
 
 set -euo pipefail
@@ -47,11 +49,25 @@ log()  { printf '[deploy-agent] %s\n' "$*"; }
 warn() { printf '[deploy-agent] WARNING: %s\n' "$*" >&2; }
 fail() { printf '[deploy-agent] ERROR: %s\n' "$*" >&2; exit 1; }
 
+# --- Agent API key -------------------------------------------------------------
+# The panel bootstrap writes the key to a 0600 file and passes it via
+# CATALYST_API_KEY_FILE so it never shows up in the process list; with that form
+# $3 carries the hostname. Direct callers keep passing the key as $3 and the
+# hostname as $4.
+if [ -n "${CATALYST_API_KEY_FILE:-}" ]; then
+    if [ -r "$CATALYST_API_KEY_FILE" ]; then
+        NODE_API_KEY="$(cat "$CATALYST_API_KEY_FILE")"
+        NODE_HOSTNAME="${3:-$(hostname -f 2>/dev/null || hostname)}"
+    else
+        fail "CATALYST_API_KEY_FILE is set but not readable: $CATALYST_API_KEY_FILE"
+    fi
+fi
+
 # --- Auto-elevate to root if needed -------------------------------------------
 if [ "$EUID" -ne 0 ]; then
     if command -v sudo >/dev/null 2>&1; then
         log "Not running as root — re-executing with sudo ..."
-        exec sudo --preserve-env=AGENT_VERSION,AGENT_RELEASE_REPO,DATA_DIR,CONSOLE_LOG_DIR,CNI_DIR,CNI_BIN_DIR,CNI_DATA_DIR,CNI_RESULTS_DIR,CNI_BRIDGE_NAME,CNI_BRIDGE_SUBNET,SYSTEMD_OVERRIDE_DIR,CATALYST_CONFIG_PATH,SFTP_PORT,SFTP_HOST_KEY -- "$(command -v bash || command -v sh)" "$0" "$@"
+        exec sudo --preserve-env=CATALYST_API_KEY_FILE,AGENT_VERSION,AGENT_RELEASE_REPO,DATA_DIR,CONSOLE_LOG_DIR,CNI_DIR,CNI_BIN_DIR,CNI_DATA_DIR,CNI_RESULTS_DIR,CNI_BRIDGE_NAME,CNI_BRIDGE_SUBNET,SYSTEMD_OVERRIDE_DIR,CATALYST_CONFIG_PATH,SFTP_PORT,SFTP_HOST_KEY -- "$(command -v bash || command -v sh)" "$0" "$@"
     else
         fail "This script must be run as root and sudo is not available."
     fi

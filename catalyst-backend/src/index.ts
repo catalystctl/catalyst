@@ -2257,8 +2257,8 @@ NODE_HOSTNAME=${shellEscape(hostName)}
 ${pathExports}
 DEPLOY_SCRIPT_URL="\${BACKEND_HTTP_URL}/api/agent/deploy-script"
 TMP_SCRIPT="$(mktemp /tmp/catalyst-deploy-agent.XXXXXX.sh)"
-# Agent API key: prefer the Authorization header (never the URL — proxies log
-# query strings). Fall back to a 0600 file when CATALYST_API_KEY is exported.
+# Agent API key: kept out of argv and URLs — the bootstrap writes it to a 0600
+# file and the deploy script reads it from CATALYST_API_KEY_FILE.
 KEY_FILE="$(mktemp /tmp/catalyst-agent-key.XXXXXX)"
 chmod 600 "$KEY_FILE"
 printf '%s' "${shellEscape(apiKey)}" > "$KEY_FILE"
