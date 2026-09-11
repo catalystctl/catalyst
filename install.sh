@@ -846,15 +846,12 @@ phase_configure() {
         NEW_AUTH_SECRET=$(openssl rand -base64 32)
     fi
 
-    # Redis password may legitimately be empty (no auth). Only treat CHANGE_ME*
-    # as a placeholder; empty is preserved as empty.
-    if [[ -n "$previous_env" && -f "$previous_env" ]] && grep -q "^REDIS_PASSWORD=" "$previous_env" 2>/dev/null; then
-        if [[ "$prev_redis" == CHANGE_ME* ]]; then
-            NEW_REDIS_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 24)
-        else
-            NEW_REDIS_PASS="$prev_redis"
-            reused_redis=true
-        fi
+    # Redis auth is required by the bundled compose file (${REDIS_PASSWORD:?}).
+    # Older .env files could leave this empty for a no-auth Redis; empty is no
+    # longer valid, so only a real value is reused.
+    if [[ -n "$previous_env" && -f "$previous_env" ]] && ! is_placeholder_secret "$prev_redis"; then
+        NEW_REDIS_PASS="$prev_redis"
+        reused_redis=true
     else
         NEW_REDIS_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 24)
     fi

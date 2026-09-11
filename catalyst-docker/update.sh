@@ -301,6 +301,24 @@ else
     warn "No .env.example in the new tree — skipping .env merge"
 fi
 
+# ── Upgrade empty required secrets left by older installs ────────────────────
+# The hardened compose file requires a non-empty REDIS_PASSWORD
+# (${REDIS_PASSWORD:?}); pre-hardening .env files could leave it empty for a
+# no-auth Redis, which now makes compose refuse to render at all. Redis does
+# not persist its requirepass, so generating one with the stack stopped is safe.
+if [[ -f "$LOCAL_ENV" ]]; then
+    REDIS_VALUE="$(grep -E '^REDIS_PASSWORD=' "$LOCAL_ENV" | head -1 | cut -d= -f2-)"
+    if [[ -z "$REDIS_VALUE" || "$REDIS_VALUE" == CHANGE_ME* ]]; then
+        REDIS_VALUE="$(openssl rand -base64 48 | tr -d '/+=' | head -c 32)"
+        if grep -qE '^REDIS_PASSWORD=' "$LOCAL_ENV"; then
+            sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${REDIS_VALUE}|" "$LOCAL_ENV"
+        else
+            printf '\n# Required since the security hardening — redis starts with --requirepass\nREDIS_PASSWORD=%s\n' "$REDIS_VALUE" >> "$LOCAL_ENV"
+        fi
+        ok "Generated REDIS_PASSWORD (Redis auth is now required; Redis data does not store the password)"
+    fi
+fi
+
 # ── Validate the rendered compose config ─────────────────────────────────────
 step "Validating compose config"
 COMPOSE_CMD=""
