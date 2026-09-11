@@ -1,0 +1,355 @@
+{
+  "note": "Literal strings the i18next linter reports that are deliberately not translated. Every entry needs a reason: reviewers use them to tell reviewed text apart from text nobody has looked at yet. Add translated copy to the catalogs instead of this file. Regenerate with: node scripts/i18n-hardcoded-check.mjs --update",
+  "entries": [
+    {
+      "file": "src/components/backups/BackupSection.tsx",
+      "type": "hardcoded",
+      "text": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "count": 1,
+      "reason": "Code sample: the header used to detect a pasted private key."
+    },
+    {
+      "file": "src/components/backups/DeleteBackupDialog.tsx",
+      "type": "concatenation",
+      "text": "Avoid splitting text across multiple translations (<Trans> or t()). Use a single translation with placeholders instead.",
+      "count": 1,
+      "reason": "Concatenated translation segments: reviewed as translated text; listed here so the linter output stays actionable. Fix by using one key with placeholders."
+    },
+    {
+      "file": "src/components/backups/RestoreBackupDialog.tsx",
+      "type": "concatenation",
+      "text": "Avoid splitting text across multiple translations (<Trans> or t()). Use a single translation with placeholders instead.",
+      "count": 1,
+      "reason": "Concatenated translation segments: reviewed as translated text; listed here so the linter output stays actionable. Fix by using one key with placeholders."
+    },
+    {
+      "file": "src/components/files/FileContextMenu.tsx",
+      "type": "hardcoded",
+      "text": "Del",
+      "count": 1,
+      "reason": "Keyboard shortcut hint."
+    },
+    {
+      "file": "src/components/files/FileContextMenu.tsx",
+      "type": "hardcoded",
+      "text": "F2",
+      "count": 1,
+      "reason": "Keyboard shortcut hint."
+    },
+    {
+      "file": "src/components/files/FileManager.tsx",
+      "type": "concatenation",
+      "text": "Avoid splitting text across multiple translations (<Trans> or t()). Use a single translation with placeholders instead.",
+      "count": 2,
+      "reason": "Concatenated translation segments: reviewed as translated text; listed here so the linter output stays actionable. Fix by using one key with placeholders."
+    },
+    {
+      "file": "src/components/files/FileManager.tsx",
+      "type": "hardcoded",
+      "text": "# New file",
+      "count": 1,
+      "reason": "Code sample: default contents seeded into a new file."
+    },
+    {
+      "file": "src/components/files/FileManager.tsx",
+      "type": "hardcoded",
+      "text": "MB",
+      "count": 2,
+      "reason": "Unit symbol rendered next to a number."
+    },
+    {
+      "file": "src/components/nodes/NodeCard.tsx",
+      "type": "hardcoded",
+      "text": "GB",
+      "count": 1,
+      "reason": "Unit symbol rendered next to a number."
+    },
+    {
+      "file": "src/components/nodes/NodeCard.tsx",
+      "type": "hardcoded",
+      "text": "→ v",
+      "count": 1,
+      "reason": "Symbol separating an arrow from a version number."
+    },
+    {
+      "file": "src/components/nodes/NodeCreateModal.tsx",
+      "type": "concatenation",
+      "text": "Avoid splitting text across multiple translations (<Trans> or t()). Use a single translation with placeholders instead.",
+      "count": 2,
+      "reason": "Concatenated translation segments: reviewed as translated text; listed here so the linter output stays actionable. Fix by using one key with placeholders."
+    },
+    {
+      "file": "src/components/search/SearchPalette.tsx",
+      "type": "hardcoded",
+      "text": "esc",
+      "count": 1,
+      "reason": "Keyboard shortcut hint."
+    },
+    {
+      "file": "src/components/search/SearchPalette.tsx",
+      "type": "hardcoded",
+      "text": "↑↓",
+      "count": 1,
+      "reason": "Keyboard shortcut hint."
+    },
+    {
+      "file": "src/components/servers/tabs/ServerActivityLogTab.tsx",
+      "type": "hardcoded",
+      "text": "null",
+      "count": 1,
+      "reason": "Literal shown for a value that has no content."
+    },
+    {
+      "file": "src/components/servers/tabs/ServerConfigurationTab.tsx",
+      "type": "concatenation",
+      "text": "Avoid splitting text across multiple translations (<Trans> or t()). Use a single translation with placeholders instead.",
+      "count": 1,
+      "reason": "Concatenated translation segments: reviewed as translated text; listed here so the linter output stays actionable. Fix by using one key with placeholders."
+    },
+    {
+      "file": "src/components/servers/tabs/ServerModManagerTab.tsx",
+      "type": "hardcoded",
+      "text": "Fabric",
+      "count": 1,
+      "reason": "Mod loader product name."
+    },
+    {
+      "file": "src/components/servers/tabs/ServerModManagerTab.tsx",
+      "type": "hardcoded",
+      "text": "Forge",
+      "count": 1,
+      "reason": "Mod loader product name."
+    },
+    {
+      "file": "src/components/servers/tabs/ServerModManagerTab.tsx",
+      "type": "hardcoded",
+      "text": "NeoForge",
+      "count": 1,
+      "reason": "Mod loader product name."
+    },
+    {
+      "file": "src/components/servers/tabs/ServerModManagerTab.tsx",
+      "type": "hardcoded",
+      "text": "Quilt",
+      "count": 1,
+      "reason": "Mod loader product name."
+    },
+    {
+      "file": "src/components/shared/BrandFooter.tsx",
+      "type": "hardcoded",
+      "text": "Catalyst",
+      "count": 1,
+      "reason": "Product name."
+    },
+    {
+      "file": "src/components/templates/TemplateCard.tsx",
+      "type": "hardcoded",
+      "text": "CPU ·",
+      "count": 1,
+      "reason": "Unit symbol combined with a value in a compact stat."
+    },
+    {
+      "file": "src/components/templates/TemplateCard.tsx",
+      "type": "hardcoded",
+      "text": "MB",
+      "count": 1,
+      "reason": "Unit symbol rendered next to a number."
+    },
+    {
+      "file": "src/components/templates/TemplateCreateModal.tsx",
+      "type": "concatenation",
+      "text": "Avoid splitting text across multiple translations (<Trans> or t()). Use a single translation with placeholders instead.",
+      "count": 1,
+      "reason": "Concatenated translation segments: reviewed as translated text; listed here so the linter output stays actionable. Fix by using one key with placeholders."
+    },
+    {
+      "file": "src/components/templates/TemplateCreateModal.tsx",
+      "type": "hardcoded",
+      "text": "#!/bin/sh",
+      "count": 1,
+      "reason": "Code sample: shebang shown in the startup-script editor."
+    },
+    {
+      "file": "src/components/templates/TemplateCreateModal.tsx",
+      "type": "hardcoded",
+      "text": "(.json, .yaml, .yml)",
+      "count": 1,
+      "reason": "File extension list, identical in every language."
+    },
+    {
+      "file": "src/components/templates/TemplateCreateModal.tsx",
+      "type": "hardcoded",
+      "text": "SIGINT",
+      "count": 1,
+      "reason": "Process signal name."
+    },
+    {
+      "file": "src/components/templates/TemplateCreateModal.tsx",
+      "type": "hardcoded",
+      "text": "SIGKILL",
+      "count": 1,
+      "reason": "Process signal name."
+    },
+    {
+      "file": "src/components/templates/TemplateCreateModal.tsx",
+      "type": "hardcoded",
+      "text": "SIGTERM",
+      "count": 1,
+      "reason": "Process signal name."
+    },
+    {
+      "file": "src/components/templates/TemplateCreateModal.tsx",
+      "type": "hardcoded",
+      "text": "java -Xmx{{MEMORY}}M -jar server.jar",
+      "count": 1,
+      "reason": "Code sample: example startup command."
+    },
+    {
+      "file": "src/components/templates/TemplateEditModal.tsx",
+      "type": "concatenation",
+      "text": "Avoid splitting text across multiple translations (<Trans> or t()). Use a single translation with placeholders instead.",
+      "count": 1,
+      "reason": "Concatenated translation segments: reviewed as translated text; listed here so the linter output stays actionable. Fix by using one key with placeholders."
+    },
+    {
+      "file": "src/components/templates/TemplateEditModal.tsx",
+      "type": "hardcoded",
+      "text": "SIGINT",
+      "count": 1,
+      "reason": "Process signal name."
+    },
+    {
+      "file": "src/components/templates/TemplateEditModal.tsx",
+      "type": "hardcoded",
+      "text": "SIGKILL",
+      "count": 1,
+      "reason": "Process signal name."
+    },
+    {
+      "file": "src/components/templates/TemplateEditModal.tsx",
+      "type": "hardcoded",
+      "text": "SIGTERM",
+      "count": 1,
+      "reason": "Process signal name."
+    },
+    {
+      "file": "src/pages/admin/AuditLogsPage.tsx",
+      "type": "hardcoded",
+      "text": "null",
+      "count": 1,
+      "reason": "Literal shown for a value that has no content."
+    },
+    {
+      "file": "src/pages/admin/DatabasePage.tsx",
+      "type": "hardcoded",
+      "text": "MySQL",
+      "count": 1,
+      "reason": "Database product name."
+    },
+    {
+      "file": "src/pages/admin/DatabasePage.tsx",
+      "type": "hardcoded",
+      "text": "PostgreSQL",
+      "count": 1,
+      "reason": "Database product name."
+    },
+    {
+      "file": "src/pages/admin/DatabasePage.tsx",
+      "type": "hardcoded",
+      "text": "ms",
+      "count": 2,
+      "reason": "Unit symbol rendered next to a number."
+    },
+    {
+      "file": "src/pages/admin/MigrationPage.tsx",
+      "type": "hardcoded",
+      "text": "% CPU",
+      "count": 1,
+      "reason": "Unit symbol combined with a value in a compact stat."
+    },
+    {
+      "file": "src/pages/admin/MigrationPage.tsx",
+      "type": "hardcoded",
+      "text": "://",
+      "count": 1,
+      "reason": "URL fragment: part of a placeholder around a user-typed URL."
+    },
+    {
+      "file": "src/pages/admin/MigrationPage.tsx",
+      "type": "hardcoded",
+      "text": "MB",
+      "count": 1,
+      "reason": "Unit symbol rendered next to a number."
+    },
+    {
+      "file": "src/pages/admin/MigrationPage.tsx",
+      "type": "hardcoded",
+      "text": "MB ·",
+      "count": 2,
+      "reason": "Unit symbol combined with a value in a compact stat."
+    },
+    {
+      "file": "src/pages/admin/NodeAllocationsPage.tsx",
+      "type": "hardcoded",
+      "text": "192.168.50.20, 192.168.50.21",
+      "count": 1,
+      "reason": "Example IP addresses in an input placeholder."
+    },
+    {
+      "file": "src/pages/admin/NodesPage.tsx",
+      "type": "hardcoded",
+      "text": "GB",
+      "count": 1,
+      "reason": "Unit symbol rendered next to a number."
+    },
+    {
+      "file": "src/pages/admin/ThemeSettingsPage.tsx",
+      "type": "hardcoded",
+      "text": "Aa",
+      "count": 1,
+      "reason": "Font preview glyph."
+    },
+    {
+      "file": "src/pages/admin/ThemeSettingsPage.tsx",
+      "type": "hardcoded",
+      "text": "{\"version\": 1, \"primaryColor\": \"#0d9488\", ...}",
+      "count": 1,
+      "reason": "Code sample: theme JSON snippet."
+    },
+    {
+      "file": "src/pages/setup/SetupPage.tsx",
+      "type": "hardcoded",
+      "text": "%)",
+      "count": 1,
+      "reason": "CSS colour syntax in a hint."
+    },
+    {
+      "file": "src/pages/setup/SetupPage.tsx",
+      "type": "hardcoded",
+      "text": "%,",
+      "count": 1,
+      "reason": "CSS colour syntax in a hint."
+    },
+    {
+      "file": "src/pages/setup/SetupPage.tsx",
+      "type": "hardcoded",
+      "text": "HSL(",
+      "count": 1,
+      "reason": "CSS colour syntax in a hint."
+    },
+    {
+      "file": "src/pages/setup/SetupPage.tsx",
+      "type": "hardcoded",
+      "text": "°,",
+      "count": 1,
+      "reason": "CSS colour syntax in a hint."
+    },
+    {
+      "file": "src/utils/logLabels.ts",
+      "type": "concatenation",
+      "text": "Avoid string concatenation in translations. Use a single string with placeholders instead.",
+      "count": 4,
+      "reason": "Concatenated catalog value: the suffix is appended to a translated label on purpose (agent part names)."
+    }
+  ]
+}

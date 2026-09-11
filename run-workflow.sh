@@ -539,6 +539,22 @@ step_lint() {
       overall_exit=1
     fi
 
+    # Translation gates (maps to: pnpm i18n:check + i18n:verify + i18n:hardcoded in ci.yml lint: job)
+    echo -e "  ${C_BOLD}[pnpm] Checking translation catalogs...${C_RESET}"
+    if ! run_step "${step_name}_i18n_check" bash -c "pnpm i18n:check"; then
+      overall_exit=1
+    fi
+
+    echo -e "  ${C_BOLD}[pnpm] Verifying translation extraction...${C_RESET}"
+    if ! run_step "${step_name}_i18n_verify" bash -c "pnpm --filter catalyst-frontend run i18n:verify"; then
+      overall_exit=1
+    fi
+
+    echo -e "  ${C_BOLD}[pnpm] Checking for new hardcoded strings...${C_RESET}"
+    if ! run_step "${step_name}_i18n_hardcoded" bash -c "pnpm i18n:hardcoded"; then
+      overall_exit=1
+    fi
+
     # Security audit (non-blocking — maps to: continue-on-error: true in ci.yml)
     if [[ "$overall_exit" -eq 0 ]]; then
       echo -e "  ${C_BOLD}[pnpm] Security audit...${C_RESET}"

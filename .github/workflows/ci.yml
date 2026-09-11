@@ -177,6 +177,9 @@ jobs:
       - name: Verify translation extraction is up to date
         run: pnpm --filter catalyst-frontend run i18n:verify
 
+      - name: Check for new hardcoded strings
+        run: pnpm i18n:hardcoded
+
       - name: Security audit
         run: pnpm audit --audit-level=high
         continue-on-error: false

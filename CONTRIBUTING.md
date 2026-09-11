@@ -729,6 +729,11 @@ See **[docs/i18n.md](docs/i18n.md)** for the namespace layout, key conventions,
 and the exact workflow (including the `pnpm i18n:status` command that lists the
 keys still awaiting translation).
 
+When you add UI code, wrap user-visible text in `t()`. CI runs
+`pnpm i18n:hardcoded`, which fails on literal strings that are neither
+translated nor listed with a reason in
+`scripts/i18n-hardcoded-baseline.json`.
+
 ### Documentation Style
 
 - Use **clear, simple language**

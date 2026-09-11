@@ -33,6 +33,7 @@
 		"test": "pnpm -r run test",
 		"test:e2e": "pnpm --filter catalyst-frontend run test:e2e",
 		"i18n:check": "node scripts/i18n-check.mjs",
+		"i18n:hardcoded": "node scripts/i18n-hardcoded-check.mjs",
 		"i18n:extract": "pnpm --filter catalyst-frontend run i18n:extract",
 		"i18n:status": "pnpm --filter catalyst-frontend run i18n:status",
 		"test:screenshots": "pnpm --filter catalyst-frontend run test:screenshots",

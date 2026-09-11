@@ -24,7 +24,7 @@ non-trivial, all of them:
 | Tests | `pnpm --filter catalyst-backend run test`, `pnpm --filter catalyst-frontend run test` |
 | Rust | `cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check`, `cargo clippy --manifest-path catalyst-agent/Cargo.toml -- -D warnings`, `cargo test --manifest-path catalyst-agent/Cargo.toml` |
 | Builds | `pnpm run build:backend`, `pnpm run build:frontend` |
-| Translations | `pnpm i18n:check`, `pnpm --filter catalyst-frontend run i18n:verify` |
+| Translations | `pnpm i18n:check`, `pnpm i18n:hardcoded`, `pnpm --filter catalyst-frontend run i18n:verify` |
 
 `./run-workflow.sh` emulates the whole pipeline locally (`EVENT=push TARGET=all ./run-workflow.sh`); keep it in sync with `.github/workflows/ci.yml`.
 
@@ -43,6 +43,11 @@ non-trivial, all of them:
 - Add the string in code first, then run `pnpm --filter catalyst-frontend run i18n:extract`. The extractor owns key order — never hand-reorder or invent keys; `i18n:verify` fails when the catalogs drift from the code.
 - Add every new key to `en` and `zh-CN` in the same change: `pnpm i18n:check` requires zh-CN to stay 100% translated (`--strict` also fails on empty values).
 - Backend errors carry stable codes from `catalyst-backend/src/lib/error-codes/*.ts`; the frontend translates them (`errors.json`, `src/i18n/api-errors.ts`). Emit with `apiError(reply, status, code, message, { params })` and pass `params` for every `{{placeholder}}` in the message.
+- `pnpm i18n:hardcoded` enforces that: CI fails on any literal string the linter
+  finds that is neither translated nor listed in `scripts/i18n-hardcoded-baseline.json`
+  (each entry there carries a reason). Wrap new copy in `t()`; for text that must
+  stay literal, record it with `node scripts/i18n-hardcoded-check.mjs --update`
+  and explain why.
 - `docs/i18n.md` lists what is deliberately left in English (stored data, console output, product names, third-party plugin UI). Chinese uses the formal 您 form.
 - The zh-CN catalogs were produced by machine translation; wording fixes from native speakers are wanted (issue #251).
 
