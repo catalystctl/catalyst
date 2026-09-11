@@ -24,6 +24,7 @@
   "ADMIN_USER_OWNS_SERVERS": "This user owns {{count}} server(s). Transfer ownership first.",
   "AGENT_AUTH_MISSING": "Missing agent authentication headers.",
   "AGENT_COMMAND_FAILED": "Failed to send the command to the agent.",
+  "AGENT_CONFIG_REJECTED": "The agent rejected the config: {{reason}}",
   "AGENT_INVALID_CREDENTIALS": "Invalid agent credentials.",
   "AGENT_TIMEOUT": "The agent did not respond in time.",
   "ALERT_NOT_FOUND": "Alert not found.",

@@ -2771,7 +2771,10 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.update")) return;
 			const { nodeId } = request.params as { nodeId: string };
-			const { content } = request.body as { content: string };
+			const { content, allowUnsafe } = request.body as {
+				content: string;
+				allowUnsafe?: boolean;
+			};
 
 			if (!content || typeof content !== 'string') {
 				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Config content is required");
@@ -2795,6 +2798,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 				const response = await gateway.requestFromAgent(nodeId, {
 					type: "agent_config_update",
 					content,
+					// The editor round-trips the whole file, which always contains
+					// security-sensitive keys (release_repo, sftp, cni_*, systemd,
+					// config_path). The agent accepts those only with this explicit
+					// opt-in, which also makes it back up the current config.
+					allowUnsafe: allowUnsafe === true,
 				});
 
 				if (response?.saved) {
@@ -2807,10 +2815,21 @@ export async function nodeRoutes(app: FastifyInstance) {
 							nodeName: node.name,
 							publicAddress: node.publicAddress,
 							configBytes: content.length,
+							allowUnsafe: allowUnsafe === true,
 						},
 					});
 
 					return reply.send({ success: true, data: { saved: true } });
+				}
+
+				if (typeof response?.error === 'string' && response.error) {
+					return apiError(
+						reply,
+						400,
+						ErrorCodes.AGENT_CONFIG_REJECTED,
+						`Agent rejected the config: ${response.error}`,
+						{ params: { reason: response.error } },
+					);
 				}
 			} catch {
 				// fall through

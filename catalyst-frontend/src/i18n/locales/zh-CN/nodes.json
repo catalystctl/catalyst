@@ -10,6 +10,7 @@
       "restart": "重启代理",
       "restartDescription": "优雅地关闭并重启代理进程。运行中的服务器不受影响。"
     },
+    "applyAllowUnsafe": "允许修改安全敏感设置（发布仓库、SFTP、CNI、systemd、配置路径）。代理会先备份当前配置；保存时必须将已脱敏的 API 密钥替换为真实密钥。",
     "applyMessage": "保存配置文件将覆盖代理的 config.toml。更改需要重启代理后才能生效。",
     "applyTitle": "应用配置更改？",
     "autoScroll": "自动滚动",

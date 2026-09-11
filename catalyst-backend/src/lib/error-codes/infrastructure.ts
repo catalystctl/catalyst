@@ -3,6 +3,7 @@
  * codes. Values are part of the public API — the frontend translates them.
  */
 export const InfrastructureErrorCodes = {
+  AGENT_CONFIG_REJECTED: "AGENT_CONFIG_REJECTED",
   ALERT_NOT_FOUND: "ALERT_NOT_FOUND",
   ALERT_RULE_NOT_FOUND: "ALERT_RULE_NOT_FOUND",
   ALLOCATION_IN_USE: "ALLOCATION_IN_USE",

@@ -723,6 +723,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
   const queryClient = useQueryClient();
   const [editContent, setEditContent] = useState<string | null>(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [allowUnsafe, setAllowUnsafe] = useState(false);
 
   const { data: config, isLoading } = useQuery({
     queryKey: qk.agentConfig(nodeId),
@@ -739,7 +740,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
   }
 
   const saveMutation = useMutation({
-    mutationFn: () => agentApi.updateConfig(nodeId, editContent!),
+    mutationFn: () => agentApi.updateConfig(nodeId, editContent!, allowUnsafe),
     onSuccess: (saved) => {
       if (saved) {
         notifySuccess(t('agent.configSaved'));
@@ -819,7 +820,20 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
       <ConfirmDialog
         open={showSaveConfirm}
         title={t('agent.applyTitle')}
-        message={t('agent.applyMessage')}
+        message={
+          <div className="space-y-3">
+            <p>{t('agent.applyMessage')}</p>
+            <label className="flex items-start gap-2 text-left">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={allowUnsafe}
+                onChange={(e) => setAllowUnsafe(e.target.checked)}
+              />
+              <span>{t('agent.applyAllowUnsafe')}</span>
+            </label>
+          </div>
+        }
         confirmText={t('agent.saveConfig')}
         variant="warning"
         loading={saveMutation.isPending}

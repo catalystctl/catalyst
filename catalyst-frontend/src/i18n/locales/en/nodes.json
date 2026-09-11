@@ -10,6 +10,7 @@
       "restart": "Restart Agent",
       "restartDescription": "Gracefully shut down and restart the agent process. Running servers will not be affected."
     },
+    "applyAllowUnsafe": "Allow changes to security-sensitive settings (release repo, SFTP, CNI, systemd, config path). The agent backs up the current config first; the redacted API key must be replaced with a real key to save.",
     "applyMessage": "Saving the config file will overwrite the agent's config.toml. The agent must be restarted for changes to take effect.",
     "applyTitle": "Apply config changes?",
     "autoScroll": "Auto-scroll",

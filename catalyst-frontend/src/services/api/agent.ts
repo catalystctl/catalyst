@@ -85,15 +85,18 @@ export const agentApi = {
   },
 
   /**
-   * Update agent configuration file.
+   * Update agent configuration file. `allowUnsafe` opts in to changes in
+   * security-sensitive keys (release repo, SFTP, CNI, systemd, config path);
+   * the agent backs up the current config before applying them.
    */
   updateConfig: async (
     nodeId: string,
     content: string,
+    allowUnsafe = false,
   ): Promise<boolean> => {
     const data = await apiClient.put<ApiResponse<{ saved: boolean }>>(
       `/api/nodes/${nodeId}/agent/config`,
-      { content },
+      { content, allowUnsafe },
     );
     return data.data?.saved ?? false;
   },

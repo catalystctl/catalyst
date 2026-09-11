@@ -24,6 +24,7 @@
   "ADMIN_USER_OWNS_SERVERS": "该用户拥有 {{count}} 台服务器，请先转移所有权。",
   "AGENT_AUTH_MISSING": "缺少节点代理身份验证标头。",
   "AGENT_COMMAND_FAILED": "无法向节点代理发送命令。",
+  "AGENT_CONFIG_REJECTED": "节点代理拒绝该配置：{{reason}}",
   "AGENT_INVALID_CREDENTIALS": "节点代理凭据无效。",
   "AGENT_TIMEOUT": "节点代理未及时响应。",
   "ALERT_NOT_FOUND": "找不到该告警。",
