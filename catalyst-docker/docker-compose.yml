@@ -132,7 +132,8 @@ services:
 
       # Redis (optional shared cache/coordination; backend degrades to
       # Postgres + process-local state when REDIS_URL is unset/unreachable).
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      # Honors a REDIS_URL override for external/managed Redis instances.
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379}
 
       # Auth / Security
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
@@ -211,6 +212,9 @@ services:
       PLUGIN_MARKETPLACE_URLS: ${PLUGIN_MARKETPLACE_URLS:-}
       # Set to true to browse only PLUGIN_MARKETPLACE_URLS (no official index).
       # PLUGIN_MARKETPLACE_DISABLE_OFFICIAL: ${PLUGIN_MARKETPLACE_DISABLE_OFFICIAL:-false}
+      # Allow plugin downloads from local/private hosts other than the
+      # configured index hosts (SSRF guard escape hatch; default false).
+      PLUGIN_MARKETPLACE_ALLOW_LOCAL: ${PLUGIN_MARKETPLACE_ALLOW_LOCAL:-false}
 
       # OAuth (optional — leave empty to disable)
       WHMCS_OIDC_CLIENT_ID: ${WHMCS_OIDC_CLIENT_ID:-}

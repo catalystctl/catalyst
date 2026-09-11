@@ -64,8 +64,9 @@ function isPrivateIp(ip: string): boolean {
 
 /**
  * Validate an install URL against SSRF basics. Resolve every DNS result and
- * refuse loopback/private/link-local targets. `allowLocal` exists purely for
- * tests and local dev tooling.
+ * refuse loopback/private/link-local targets. `allowLocal` permits local
+ * targets for explicitly trusted cases (tests, dev tooling, downloads from
+ * a configured marketplace index host, PLUGIN_MARKETPLACE_ALLOW_LOCAL).
  */
 export async function assertInstallableUrl(rawUrl: string, allowLocal = false): Promise<URL> {
   let url: URL;

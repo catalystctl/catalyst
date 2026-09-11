@@ -911,7 +911,7 @@ npx @catalyst/plugin-sdk pack            # → ./name-version.catpkg.zip + .sha2
 
 ### Marketplace index schema
 
-Configure one or more marketplace indexes together via comma-separated `PLUGIN_MARKETPLACE_URLS`. The official catalyst-plugins index is always browsed first; custom URLs are fetched together with it and merged into a single listing (the newest semver wins when several sources list the same plugin name). Set `PLUGIN_MARKETPLACE_DISABLE_OFFICIAL=true` for air-gapped deployments that should browse only custom sources. Any host publishes a catalog by serving this JSON (cached 5 minutes per source; one failing source never blocks the others):
+Configure one or more marketplace indexes together via comma-separated `PLUGIN_MARKETPLACE_URLS`. The official catalyst-plugins index is always browsed first; custom URLs are fetched together with it and merged into a single listing (the newest semver wins when several sources list the same plugin name). Set `PLUGIN_MARKETPLACE_DISABLE_OFFICIAL=true` for air-gapped deployments that should browse only custom sources. Installing a package hosted on a configured index host (including LAN addresses) is allowed; downloads from any other local/private host need `PLUGIN_MARKETPLACE_ALLOW_LOCAL=true`. Any host publishes a catalog by serving this JSON (cached 5 minutes per source; one failing source never blocks the others):
 
 ```json
 {

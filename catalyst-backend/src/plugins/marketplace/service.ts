@@ -254,6 +254,32 @@ export async function getEffectiveMarketplaceUrls(prisma?: MarketplaceSourceClie
 }
 
 /**
+ * Hosts of the enabled marketplace indexes (env URLs + enabled panel-added
+ * sources). Downloads from these hosts skip the local/private SSRF refusal:
+ * the admin already trusts the host by configuring its index, which browse
+ * fetches without a host guard. Anything else still needs
+ * PLUGIN_MARKETPLACE_ALLOW_LOCAL=true.
+ */
+export async function getTrustedMarketplaceHosts(
+  prisma?: MarketplaceSourceClient,
+): Promise<Set<string>> {
+  const hosts = new Set<string>();
+  try {
+    for (const raw of await getEffectiveMarketplaceUrls(prisma)) {
+      try {
+        const host = new URL(raw).hostname.toLowerCase().replace(/\.$/, "");
+        if (host) hosts.add(host);
+      } catch {
+        // Malformed index URL — browse reports it per-source; ignore here.
+      }
+    }
+  } catch {
+    // DB down — fail closed to the default (no trusted hosts).
+  }
+  return hosts;
+}
+
+/**
  * Panel-facing source list: official + env (read-only) plus DB rows added
  * from the panel (editable). Never throws — DB issues yield env-only rows.
  */
@@ -344,7 +370,9 @@ export async function browseMarketplaces(
         return { url, ok: true as const, entryCount: cached.entries.length, entries: cached.entries };
       }
       try {
-        // Indexes are small JSON documents — plain https GET with SSRF guard
+        // Index URLs are admin-configured (env or panel source manager), so
+        // indexes are fetched as-is, including LAN hosts. Download-side SSRF
+        // protection still applies except for configured index hosts.
         const res = await fetch(url, {
           signal: AbortSignal.timeout(15_000),
           cache: 'no-store',
@@ -403,9 +431,20 @@ export class PluginMarketplaceService {
   ) {}
 
   async installFromUrl(downloadUrl: string, expectedSha256?: string): Promise<InstalledPluginResult> {
+    // LAN/air-gapped indexes: the download host matches a configured index
+    // host, so it is already admin-trusted (see getTrustedMarketplaceHosts).
+    let allowLocal = this.opts.allowLocalDownloads ?? false;
+    if (!allowLocal) {
+      try {
+        const host = new URL(downloadUrl).hostname.toLowerCase().replace(/\.$/, "");
+        allowLocal = (await getTrustedMarketplaceHosts(this.prisma)).has(host);
+      } catch {
+        // Malformed URL — downloadPackage validation reports it.
+      }
+    }
     const { tmpPath, sha256 } = await downloadPackage(downloadUrl, {
       expectedSha256: expectedSha256 ?? null,
-      allowLocal: this.opts.allowLocalDownloads ?? false,
+      allowLocal,
     });
 
     // Extract onto the plugins volume (hidden `.staging`) so the final

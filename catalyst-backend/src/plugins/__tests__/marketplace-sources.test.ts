@@ -8,6 +8,7 @@ import {
   clearMarketplaceCache,
   getEffectiveMarketplaceUrls,
   getMarketplaceIndexUrls,
+  getTrustedMarketplaceHosts,
   isOfficialMarketplaceDisabled,
   listMarketplaceSources,
   normalizeMarketplaceUrl,
@@ -76,9 +77,33 @@ describe('getMarketplaceIndexUrls', () => {
   });
 });
 
+describe('getTrustedMarketplaceHosts', () => {
+  it('trusts hosts of configured env index URLs, including LAN addresses', async () => {
+    delete process.env[DISABLE_KEY];
+    process.env[ENV_KEY] = 'http://192.168.1.10/index.json, https://plugins.example.com/index.json';
+    const hosts = await getTrustedMarketplaceHosts(undefined);
+    expect(hosts.has('192.168.1.10')).toBe(true);
+    expect(hosts.has('plugins.example.com')).toBe(true);
+    expect(hosts.has('raw.githubusercontent.com')).toBe(true);
+    expect(hosts.has('evil.example')).toBe(false);
+  });
+
+  it('trusts hosts of enabled panel-added sources', async () => {
+    delete process.env[ENV_KEY];
+    delete process.env[DISABLE_KEY];
+    const prisma = {
+      marketplaceSource: {
+        findMany: async () => [{ url: 'http://nas.local:8080/index.json' }],
+      },
+    } as any;
+    const hosts = await getTrustedMarketplaceHosts(prisma);
+    expect(hosts.has('nas.local')).toBe(true);
+    expect(hosts.has('evil.example')).toBe(false);
+  });
+});
+
 describe('isPluginUpdateAvailable', () => {
-  it('detects a newer marketplace patch as an update', () => {
-    expect(isPluginUpdateAvailable('1.0.0', '1.0.1')).toBe(true);
+  it('detects a newer marketplace patch as an update', () => {    expect(isPluginUpdateAvailable('1.0.0', '1.0.1')).toBe(true);
   });
 
   it('is false when versions match', () => {
