@@ -466,7 +466,7 @@
     "maxPendingPerNode": "Max pending per node",
     "maxPendingPerNodeTooltip": "Maximum pending file operations queued per agent node.",
     "maxUploadSize": "Max upload size (MB)",
-    "maxUploadSizeTooltip": "Maximum single-file size for the file browser on every agent (up to 102400 MB). SFTP is limited by the server's remaining disk only.",
+    "maxUploadSizeTooltip": "Maximum single-file size for the file browser on every agent (up to 10240 MB). SFTP is limited by the server's remaining disk only.",
     "per": "per",
     "rateLimits": "Rate Limits",
     "rateLimitsDescription": "Adjust request counts and time windows to prevent abuse while allowing normal usage.",

@@ -233,7 +233,7 @@ export const filesApi = {
           formData.append('file', file);
 
           const xhr = new XMLHttpRequest();
-          xhr.timeout = 8 * 60 * 60 * 1000; // 8 hours — matches 100GB transfer budget
+          xhr.timeout = 8 * 60 * 60 * 1000; // 8 hours — matches the upload transfer budget
 
           xhr.upload.addEventListener('progress', (e) => {
             if (e.lengthComputable && onProgress) {

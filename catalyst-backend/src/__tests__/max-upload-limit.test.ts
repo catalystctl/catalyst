@@ -14,14 +14,14 @@ describe("sanitizeMaxUploadMb", () => {
     expect(sanitizeMaxUploadMb(-10)).toBe(DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb);
   });
 
-  it("clamps to the 100GB implementation ceiling", () => {
-    expect(MAX_UPLOAD_MB_CEILING).toBe(100 * 1024);
+  it("clamps to the agent's 10GiB operator ceiling", () => {
+    expect(MAX_UPLOAD_MB_CEILING).toBe(10 * 1024);
     expect(sanitizeMaxUploadMb(MAX_UPLOAD_MB_CEILING + 100)).toBe(MAX_UPLOAD_MB_CEILING);
-    expect(maxUploadBytesFromMb(MAX_UPLOAD_MB_CEILING)).toBe(100 * 1024 * 1024 * 1024);
+    expect(maxUploadBytesFromMb(MAX_UPLOAD_MB_CEILING)).toBe(10 * 1024 * 1024 * 1024);
   });
 
-  it("accepts a 100GB panel setting", () => {
-    expect(sanitizeMaxUploadMb(102400)).toBe(102400);
+  it("accepts a 10GiB panel setting", () => {
+    expect(sanitizeMaxUploadMb(10240)).toBe(10240);
   });
 });
 
@@ -31,7 +31,13 @@ describe("uploadTransferTimeoutMs", () => {
     expect(uploadTransferTimeoutMs(1024)).toBeLessThan(120_000);
   });
 
-  it("caps a 100GB transfer at 8 hours", () => {
-    expect(uploadTransferTimeoutMs(100 * 1024 * 1024 * 1024)).toBe(MAX_UPLOAD_TRANSFER_MS);
+  it("keeps the largest allowed upload under the 8h cap", () => {
+    const timeout = uploadTransferTimeoutMs(MAX_UPLOAD_MB_CEILING * 1024 * 1024);
+    expect(timeout).toBeGreaterThan(60_000);
+    expect(timeout).toBeLessThan(MAX_UPLOAD_TRANSFER_MS);
+  });
+
+  it("clamps oversized inputs to the 8h cap", () => {
+    expect(uploadTransferTimeoutMs(MAX_UPLOAD_MB_CEILING * 8 * 1024 * 1024)).toBe(MAX_UPLOAD_TRANSFER_MS);
   });
 });

@@ -451,7 +451,7 @@
     "maxPendingPerNode": "每节点最大待处理数",
     "maxPendingPerNodeTooltip": "每个 Agent 节点排队的待处理文件操作上限。",
     "maxUploadSize": "最大上传大小（MB）",
-    "maxUploadSizeTooltip": "每个 Agent 上文件浏览器允许的单文件大小上限（最大 102400 MB）。SFTP 仅受服务器剩余磁盘空间限制。",
+    "maxUploadSizeTooltip": "每个 Agent 上文件浏览器允许的单文件大小上限（最大 10240 MB）。SFTP 仅受服务器剩余磁盘空间限制。",
     "per": "/",
     "rateLimits": "速率限制",
     "rateLimitsDescription": "调整请求次数和时间窗口，在防止滥用的同时保持正常使用。",

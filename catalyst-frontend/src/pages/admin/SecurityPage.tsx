@@ -556,7 +556,7 @@ function SecurityPage() {
  value={fileTunnelMaxUploadMb}
  onChange={setFileTunnelMaxUploadMb}
  tooltip={t('security.maxUploadSizeTooltip')}
- max="102400"
+ max="10240"
  />
  <NumberField
  label={t('security.maxPendingPerNode')}

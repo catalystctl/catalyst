@@ -48,7 +48,7 @@ export const MAX_UPLOAD_TRANSFER_MS = 8 * 60 * 60 * 1000;
 const MAX_QUEUE_PER_NODE = 100;
 const MAX_POLLERS_PER_NODE = 10;
 
-/** Worst-case transfer budget so a 100GB pull does not die at 60s. */
+/** Worst-case transfer budget so a multi-GB transfer does not die at 60s. */
 export function uploadTransferTimeoutMs(sizeBytes: number): number {
   const assumedBps = 1 * 1024 * 1024;
   return Math.min(

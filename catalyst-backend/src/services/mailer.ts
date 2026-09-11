@@ -70,8 +70,8 @@ export const DEFAULT_CONSOLE_OUTPUT_BYTE_LIMIT = 256 * 1024; // 256KB/s per serv
 export const MIN_CONSOLE_OUTPUT_BYTE_LIMIT = 64 * 1024;
 export const MAX_CONSOLE_OUTPUT_BYTE_LIMIT = 2 * 1024 * 1024;
 
-/** Hard ceiling: 100 GiB. Panel setting is the product limit. */
-export const MAX_UPLOAD_MB_CEILING = 100 * 1024;
+/** Hard ceiling: 10 GiB, matching the agent's operator cap (SEC-H-04). */
+export const MAX_UPLOAD_MB_CEILING = 10 * 1024;
 
 export const sanitizeMaxUploadMb = (value: number | null | undefined): number => {
   if (!Number.isFinite(value) || Number(value) <= 0) {
