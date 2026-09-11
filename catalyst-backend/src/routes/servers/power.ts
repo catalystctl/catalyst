@@ -26,6 +26,55 @@ type PowerSendResult =
   | { mode: "failed"; error: Error };
 
 /**
+ * Power/lifecycle gates previously accepted only the owner, admin.write, or a
+ * ServerAccess row. Node managers (node assignment + node.update) and global
+ * roles holding the matching server permission are advertised through
+ * effectivePermissions and rendered as controls by the panel, but those clicks
+ * 403'd. Delegate to the canonical decision helper, mirroring
+ * ensureServerAccess so UI and backend stay consistent.
+ */
+async function ensurePowerAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  server: { id: string; nodeId: string; ownerId: string },
+  permissions: string[],
+  requireAll = false,
+): Promise<boolean> {
+  const userId = request.user.userId;
+  if (server.ownerId === userId) return true;
+  if (checkIsAdmin(request, "admin.write")) return true;
+
+  const { decideServerAccess } = await import("../../lib/server-access.js");
+  const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+  const { hasNodeAccess } = await import("../../lib/permissions.js");
+  const rolePermissions = await resolveServerPermissions(userId, server.id, server.nodeId);
+  const nodeAccess = await hasNodeAccess(prisma, userId, server.nodeId);
+
+  const decisions: boolean[] = [];
+  for (const permission of permissions) {
+    const explicit = await prisma.serverAccess.findFirst({
+      where: { userId, serverId: server.id, permissions: { has: permission } },
+      select: { userId: true },
+    });
+    decisions.push(
+      decideServerAccess({
+        isOwner: false,
+        hasExplicitServerAccess: Boolean(explicit),
+        rolePermissions,
+        hasNodeAccess: nodeAccess,
+        requiredPermission: permission,
+      }).allowed,
+    );
+  }
+
+  const allowed = requireAll ? decisions.every(Boolean) : decisions.some(Boolean);
+  if (!allowed) {
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+  }
+  return allowed;
+}
+
+/**
  * Send a power command to the agent.
  *
  * Prefers requestFromAgent (agent echoes power_command_ack with the same
@@ -122,18 +171,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.install" },
-          },
-        });
-        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
-        if (!access) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-        }
+      if (!(await ensurePowerAccess(request, reply, server, ["server.install"]))) {
+        return;
       }
 
       // Validate state transition
@@ -283,18 +322,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.reinstall" },
-          },
-        });
-        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
-        if (!access) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-        }
+      if (!(await ensurePowerAccess(request, reply, server, ["server.reinstall"]))) {
+        return;
       }
 
       // Validate state transition
@@ -442,20 +471,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Install and reinstall both land in `installing`; either permission can cancel.
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            OR: [
-              { permissions: { has: "server.install" } },
-              { permissions: { has: "server.reinstall" } },
-            ],
-          },
-        });
-        if (!access) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-        }
+      if (!(await ensurePowerAccess(request, reply, server, ["server.install", "server.reinstall"]))) {
+        return;
       }
 
       if (server.status !== ServerState.INSTALLING) {
@@ -622,18 +639,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.rebuild" },
-          },
-        });
-        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
-        if (!access) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-        }
+      if (!(await ensurePowerAccess(request, reply, server, ["server.rebuild"]))) {
+        return;
       }
 
       // Rebuild can work from STOPPED, RUNNING, ERROR, CRASHED states
@@ -771,18 +778,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.start" },
-          },
-        });
-        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
-        if (!access) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-        }
+      if (!(await ensurePowerAccess(request, reply, server, ["server.start"]))) {
+        return;
       }
 
       // Validate state transition
@@ -981,18 +978,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.stop" },
-          },
-        });
-        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
-        if (!access) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-        }
+      if (!(await ensurePowerAccess(request, reply, server, ["server.stop"]))) {
+        return;
       }
 
       // Validate state transition
@@ -1123,18 +1110,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return;
       }
 
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.stop" },
-          },
-        });
-        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
-        if (!access) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-        }
+      if (!(await ensurePowerAccess(request, reply, server, ["server.stop"]))) {
+        return;
       }
 
       const currentState = server.status as ServerState;
@@ -1262,19 +1239,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions - restart requires BOTH server.start AND server.stop
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
-        const [startAccess, stopAccess] = await Promise.all([
-          prisma.serverAccess.findFirst({
-            where: { userId, serverId, permissions: { has: "server.start" } },
-          }),
-          prisma.serverAccess.findFirst({
-            where: { userId, serverId, permissions: { has: "server.stop" } },
-          }),
-        ]);
-        // Require both start and stop; node assignment alone is not enough
-        if (!startAccess || !stopAccess) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-        }
+      if (!(await ensurePowerAccess(request, reply, server, ["server.start", "server.stop"], true))) {
+        return;
       }
 
       // Validate state
