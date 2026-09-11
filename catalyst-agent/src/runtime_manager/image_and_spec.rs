@@ -381,11 +381,21 @@ pub fn installer_namespaces() -> Vec<serde_json::Value> {
 /// Capabilities for installer containers. Installers stay uid 0 because egg
 /// scripts call chown/chmod/useradd and the wrapper's exit trap does a final
 /// `chown -R 1000:1000 /data`; noNewPrivileges + seccomp still apply.
-/// CAP_SETUID/CAP_SETGID/CAP_DAC_OVERRIDE are dropped: with noNewPrivileges
-/// setuid binaries cannot escalate, and install scripts operate on files
-/// they own under /data.
+/// SETUID/SETGID are required: Debian apt drops to the `_apt` user for
+/// downloads, and useradd/su need them. DAC_OVERRIDE is required: the
+/// server data dir is owned by the runtime user (uid 1000) and apt's
+/// partial dir by `_apt`, so uid 0 without it gets EACCES on writes.
+/// Bounded because the process is already uid 0 (nothing higher to gain)
+/// and noNewPrivileges blocks setuid-exec escalation.
 pub fn installer_capabilities() -> Vec<&'static str> {
-    vec!["CAP_CHOWN", "CAP_FOWNER", "CAP_NET_BIND_SERVICE"]
+    vec![
+        "CAP_CHOWN",
+        "CAP_FOWNER",
+        "CAP_DAC_OVERRIDE",
+        "CAP_SETUID",
+        "CAP_SETGID",
+        "CAP_NET_BIND_SERVICE",
+    ]
 }
 
 use super::ContainerdRuntime;
@@ -1097,16 +1107,29 @@ mod tests {
     }
 
     #[test]
-    fn installer_capabilities_drop_privilege_escalation() {
+    fn installer_capabilities_keep_install_essentials_drop_admin() {
         let caps = installer_capabilities();
-        assert!(caps.contains(&"CAP_CHOWN"));
-        assert!(caps.contains(&"CAP_FOWNER"));
-        assert!(!caps.contains(&"CAP_SETUID"), "SETUID must be dropped");
-        assert!(!caps.contains(&"CAP_SETGID"), "SETGID must be dropped");
-        assert!(
-            !caps.contains(&"CAP_DAC_OVERRIDE"),
-            "DAC_OVERRIDE must be dropped"
-        );
+        // Egg installs need these: apt drops to _apt, scripts fix
+        // ownership on the uid-1000-owned data dir.
+        for required in [
+            "CAP_CHOWN",
+            "CAP_FOWNER",
+            "CAP_DAC_OVERRIDE",
+            "CAP_SETUID",
+            "CAP_SETGID",
+        ] {
+            assert!(caps.contains(&required), "{} must be kept", required);
+        }
+        // Host-admin primitives must stay dropped.
+        for dropped in [
+            "CAP_SYS_ADMIN",
+            "CAP_NET_ADMIN",
+            "CAP_SYS_PTRACE",
+            "CAP_SYS_MODULE",
+            "CAP_MKNOD",
+        ] {
+            assert!(!caps.contains(&dropped), "{} must be dropped", dropped);
+        }
     }
 
     fn test_runtime() -> ContainerdRuntime {

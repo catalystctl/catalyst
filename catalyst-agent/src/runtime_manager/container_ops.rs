@@ -319,7 +319,7 @@ impl ContainerdRuntime {
         // install scripts commonly fix file ownership/permissions for the runtime user.
         // They stay uid 0 (egg scripts call chown/chmod/useradd and the wrapper's
         // exit trap does a final `chown -R 1000:1000 /data`, which needs root);
-        // see installer_capabilities() for the dropped-caps rationale.
+        // see installer_capabilities() for why SETUID/SETGID/DAC_OVERRIDE stay.
         let caps = installer_capabilities();
 
         // Build mounts including DNS resolv.conf and a writable /tmp tmpfs.
