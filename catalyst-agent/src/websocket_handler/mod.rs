@@ -199,6 +199,71 @@ pub(crate) fn config_update_denied_markers() -> &'static [&'static str] {
     &["release_repo", "config_path", "cni_", "systemd", "sftp"]
 }
 
+/// Panel round-trip: the read view redacts server.api_key, so a save that
+/// changes only other keys sends "[REDACTED]" back. Substitute the live key
+/// from the on-disk config (line-preserving, so comments survive); when no
+/// live key exists the content is untouched and the validator still rejects
+/// the placeholder.
+pub(crate) fn restore_redacted_api_key(content: &str, live_config: &str) -> String {
+    // NOTE: str::parse::<toml::Value>() only parses a single TOML value, not
+    // a document — document parsing needs toml::from_str.
+    let needs_restore = toml::from_str::<toml::Value>(content)
+        .ok()
+        .and_then(|v| {
+            v.get("server")?
+                .get("api_key")?
+                .as_str()?
+                .to_string()
+                .into()
+        })
+        .is_some_and(|k: String| k.trim() == "[REDACTED]");
+    if !needs_restore {
+        return content.to_string();
+    }
+    let live_key: Option<String> = toml::from_str::<toml::Value>(live_config)
+        .ok()
+        .and_then(|v| {
+            v.get("server")?
+                .get("api_key")?
+                .as_str()?
+                .to_string()
+                .into()
+        })
+        .filter(|k: &String| !k.trim().is_empty() && k.trim() != "[REDACTED]");
+    let live_key = match live_key {
+        Some(k) => k,
+        None => return content.to_string(),
+    };
+    let escaped = live_key.replace('\\', "\\\\").replace('"', "\\\"");
+    let mut out = Vec::new();
+    let mut in_server = false;
+    let mut done = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            in_server = trimmed == "[server]";
+            out.push(line.to_string());
+            continue;
+        }
+        if in_server
+            && !done
+            && !trimmed.starts_with('#')
+            && trimmed.split('=').next().map(str::trim) == Some("api_key")
+        {
+            out.push(format!("api_key = \"{}\"", escaped));
+            done = true;
+            continue;
+        }
+        out.push(line.to_string());
+    }
+    // Preserve the trailing newline state of the input.
+    let mut restored = out.join("\n");
+    if content.ends_with('\n') {
+        restored.push('\n');
+    }
+    restored
+}
+
 pub(crate) fn validate_agent_config_update(
     content: &str,
     allow_unsafe: bool,
@@ -2883,6 +2948,11 @@ impl WebSocketHandler {
                     };
                     let response = match content {
                         Some(c) => {
+                            // Panel round-trips the redacted read view: keep
+                            // the live api_key when the placeholder comes
+                            // back so benign edits save.
+                            let live = tokio::fs::read_to_string(&path).await.unwrap_or_default();
+                            let c = restore_redacted_api_key(&c, &live);
                             // SEC-H-04 allowlist gate runs before TOML parse.
                             if let Err(gate_err) = validate_agent_config_update(&c, allow_unsafe) {
                                 warn!("agent_config_update denied: {}", gate_err);
@@ -2902,8 +2972,10 @@ impl WebSocketHandler {
                                     "error": gate_err,
                                 })
                             // Validate parseable TOML + required fields, then atomic write + 0600.
+                            // NOTE: str::parse::<toml::Value>() only parses a
+                            // single value — documents need toml::from_str.
                             } else {
-                                match c.parse::<toml::Value>() {
+                                match toml::from_str::<toml::Value>(&c) {
                                     Ok(parsed) => {
                                     let validation_err = (|| -> Option<String> {
                                         let table = parsed.as_table()?;
@@ -4617,6 +4689,24 @@ mod security_hardening_tests {
         assert!(validate_agent_config_update(&redacted, true).is_err());
         let good = "[server]\nbackend_url=\"x\"\nnode_id=\"y\"\napi_key=\"z\"\nhostname=\"h\"\ndata_dir=\"/d\"\n";
         assert!(validate_agent_config_update(good, false).is_ok());
+    }
+
+    #[test]
+    fn config_update_restores_redacted_key_from_live_config() {
+        let live = "# node config\n[server]\napi_key = \"live-key-123\"\n";
+        let incoming = "# node config\n[server]\nbackend_url=\"x\"\napi_key=\"[REDACTED]\"\n";
+        let restored = restore_redacted_api_key(incoming, live);
+        assert!(!restored.contains("[REDACTED]"));
+        assert!(restored.contains("api_key = \"live-key-123\""));
+        assert!(restored.contains("# node config"));
+        assert!(validate_agent_config_update(&restored, true).is_ok());
+        // No live key: content untouched, validator still rejects.
+        let unrestored = restore_redacted_api_key(incoming, "");
+        assert!(unrestored.contains("[REDACTED]"));
+        assert!(validate_agent_config_update(&unrestored, true).is_err());
+        // Real key in content: never touched.
+        let real = "[server]\nbackend_url=\"x\"\napi_key=\"operator-key\"\n";
+        assert_eq!(restore_redacted_api_key(real, live), real);
     }
 
     #[test]
