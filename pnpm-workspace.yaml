@@ -4,6 +4,10 @@ packages:
   - packages/*
 allowBuilds:
   '@prisma/engines': true
+  # i18next-cli's native parser. Its postinstall only verifies that the platform
+  # binary loads (it falls back to @swc/wasm otherwise); pnpm 12 fails the
+  # install outright when a dependency has an unapproved build script.
+  '@swc/core': true
   cpu-features: true
   esbuild: true
   prisma: true
