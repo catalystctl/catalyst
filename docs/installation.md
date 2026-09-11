@@ -250,7 +250,7 @@ All config lives in `.env` inside `catalyst-docker/`. Copy `.env.example` as a s
 | `POSTGRES_USER` | `catalyst` | PostgreSQL username |
 | `POSTGRES_DB` | `catalyst_db` | Database name |
 | `POSTGRES_PORT` | `127.0.0.1:5432` | Host port binding. Not exposed to the network by default. |
-| `REDIS_PASSWORD` | *(empty)* | Redis auth password |
+| `REDIS_PASSWORD` | — (required) | Redis auth password. The compose stack starts Redis with `--requirepass`; `install.sh`/`update.sh` generate one when the value is empty. |
 | `REDIS_PORT` | `127.0.0.1:6379` | Host port binding |
 | `FRONTEND_PORT` | `0.0.0.0:8080` | Web panel port |
 | `BACKEND_PORT` | `127.0.0.1:3000` | Backend API port |
@@ -268,7 +268,7 @@ File size is the panel Admin → Security **Max upload size**.
 | Variable | Default | Description |
 |---|---|---|
 | `BACKUP_STORAGE_MODE` | `local` | `local`, `s3`, or `stream` |
-| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | Required for S3. Generate: `openssl rand -base64 32` (must decode to 32 bytes). **If lost, credentials are unrecoverable.** |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | Required to save S3/SFTP backup credentials — the backend refuses to store them unencrypted. Generate: `openssl rand -base64 32` (must decode to 32 bytes). **If lost, credentials are unrecoverable.** |
 
 When `BACKUP_STORAGE_MODE=s3`, also set `BACKUP_S3_BUCKET`, `BACKUP_S3_REGION`, `BACKUP_S3_ACCESS_KEY`, `BACKUP_S3_SECRET_KEY`, and optionally `BACKUP_S3_ENDPOINT` and `BACKUP_S3_PATH_STYLE` (set `true` for MinIO).
 

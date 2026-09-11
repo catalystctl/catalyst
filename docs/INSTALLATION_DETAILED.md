@@ -168,7 +168,7 @@ The `install.sh` script performs these operations in order:
 
 **Step 6 — Generate Secrets**
 - Generates all five secrets with `openssl rand`: 32-char `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `REDIS_PASSWORD`, `API_KEY_SECRET`, `BACKUP_CREDENTIALS_ENCRYPTION_KEY`
-- Reuses existing non-placeholder values; regenerates `CHANGE_ME*` placeholders and preserves an intentionally empty `REDIS_PASSWORD`
+- Reuses existing non-placeholder values; regenerates `CHANGE_ME*` placeholders and replaces an empty `REDIS_PASSWORD` (the compose stack requires one)
 - Writes atomically via a staging file (`.env.staging.$$`, `chmod 600`), preserving any existing `.env` as `.env.backup.$$`
 - Prompts `PUBLIC_URL` (defaults to the host LAN IP port 8080, scheme-forced, trailing `/` stripped), derives `PASSKEY_RP_ID`, sets `NODE_ENV=production` automatically for `https://` URLs, and offers a TLS overlay (`DOMAIN`/`ACME_EMAIL`) for `http://` URLs
 
@@ -1268,7 +1268,7 @@ File size is the panel Admin → Security **Max upload size**.
 | `BACKUP_S3_SECRET_KEY` | *(commented out)* | For S3 | S3 secret access key. |
 | `BACKUP_S3_ENDPOINT` | *(commented out)* | For S3 | Custom endpoint (e.g., MinIO). |
 | `BACKUP_S3_PATH_STYLE` | `true` | For S3 | `true` for MinIO; `false` for AWS S3. |
-| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | For S3 | Encrypts S3 credentials in DB. `install.sh` generates base64 (`openssl rand -base64 32`). |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | For S3/SFTP | Encrypts stored backup credentials in DB (the backend refuses to save them unencrypted). `install.sh` generates base64 (`openssl rand -base64 32`). |
 
 ### Webhooks
 

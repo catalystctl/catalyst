@@ -49,12 +49,13 @@
 | `BETTER_AUTH_SECRET` | ✅ Required | — | ✅ Yes | Backend |
 | `PUBLIC_URL` | Recommended | — | — | All |
 | `POSTGRES_PASSWORD` | ✅ Required | — | ✅ Yes | Docker |
-| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | For S3 backups | — | ✅ Yes | Backend |
+| `REDIS_PASSWORD` | ✅ Required | — | ✅ Yes | Docker |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | For S3/SFTP backups | — | ✅ Yes | Backend |
 | `NODE_ID` | ✅ Required for nodes | — | ✅ Yes | Agent |
 | `NODE_API_KEY` | ✅ Required for nodes | — | ✅ Yes | Agent |
 
 ::: warning Critical
-`DATABASE_URL`, `BETTER_AUTH_SECRET`, and `POSTGRES_PASSWORD` **must** be set before starting the backend. The application will refuse to start without them.
+`DATABASE_URL`, `BETTER_AUTH_SECRET`, and `POSTGRES_PASSWORD` **must** be set before starting the backend. The application will refuse to start without them. The bundled compose file additionally requires a non-empty `REDIS_PASSWORD` (Redis runs with `--requirepass`); `install.sh`/`update.sh` fill it in when empty.
 :::
 
 ---
@@ -223,7 +224,7 @@ SFTP file size is the panel Admin → Security **Max upload size**, not an envir
 | `BACKUP_STORAGE_MODE` | `local` \| `s3` \| `stream` | `local` | Default backup storage backend. Change to `s3` for S3-compatible storage. |
 | `BACKUP_STREAM_DIR` | Temp path | `/tmp/catalyst-backup-stream` | Temporary directory for streaming backup operations. |
 | `BACKUP_TRANSFER_DIR` | Temp path | `/tmp/catalyst-backup-transfer` | Temporary directory for backup file transfers. |
-| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | 32-byte key | **Required for S3** | Key used to encrypt backup credentials stored in the database. `install.sh` generates base64 (`openssl rand -base64 32`). Note: `routes/backups.ts` also reads a legacy `BACKUP_ENCRYPTION_KEY` — use `BACKUP_CREDENTIALS_ENCRYPTION_KEY`. |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | 32-byte key | **Required for S3/SFTP backups** | Key used to encrypt backup credentials stored in the database. `install.sh` generates base64 (`openssl rand -base64 32`). Note: `routes/backups.ts` also reads a legacy `BACKUP_ENCRYPTION_KEY` — use `BACKUP_CREDENTIALS_ENCRYPTION_KEY`. |
 
 #### S3 Backup Variables (when `BACKUP_STORAGE_MODE=s3`)
 

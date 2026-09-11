@@ -96,6 +96,8 @@ nano .env
 | `PUBLIC_URL` | ✅ Yes | Your browser URL | `http://localhost:8080` or `http://192.168.1.78:8080` |
 | `POSTGRES_PASSWORD` | ✅ Yes | Strong password | Database password (≥16 chars recommended) |
 | `BETTER_AUTH_SECRET` | ✅ Yes | `openssl rand -base64 32` | Session encryption key |
+| `REDIS_PASSWORD` | ✅ Yes | `openssl rand -base64 24 \| tr -d '/+='` | Redis auth password — the stack starts Redis with `--requirepass` |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | ✅ Yes (backups) | `openssl rand -base64 32` | Encrypts stored S3/SFTP backup credentials; the backend refuses to save them unencrypted |
 
 #### Recommended Variables
 
