@@ -22,14 +22,15 @@ This guide covers all administrative features in Catalyst, from user management 
 14. [Plugin Management](#plugin-management)
 15. [Security Settings](#security-settings)
 16. [SMTP & Email Configuration](#smtp--email-configuration)
-17. [Theme & Branding](#theme--branding)
-18. [IPAM (IP Address Management)](#ipam-ip-address-management)
-19. [Database Host Management](#database-host-management)
-20. [Audit Logs](#audit-logs)
-21. [Pterodactyl Migration](#pterodactyl-migration)
-22. [Auth Lockouts](#auth-lockouts)
-23. [OIDC / OAuth Provider Configuration](#oidc--oauth-provider-configuration)
-24. [Mod Manager Settings](#mod-manager-settings)
+17. [Interface Language](#interface-language)
+18. [Theme & Branding](#theme--branding)
+19. [IPAM (IP Address Management)](#ipam-ip-address-management)
+20. [Database Host Management](#database-host-management)
+21. [Audit Logs](#audit-logs)
+22. [Pterodactyl Migration](#pterodactyl-migration)
+23. [Auth Lockouts](#auth-lockouts)
+24. [OIDC / OAuth Provider Configuration](#oidc--oauth-provider-configuration)
+25. [Mod Manager Settings](#mod-manager-settings)
 
 ---
 
@@ -916,6 +917,23 @@ Navigate to **Admin → System → SMTP** to configure email delivery.
 | `maxMessages` | Max messages per connection |
 
 Fields cannot be empty strings — to clear a value, set it to `null`.
+
+---
+
+## Interface Language
+
+**Admin → System → Interface language** sets the language the panel and
+notification emails use for everyone who has not chosen one. It also applies to
+the sign-in, registration and setup screens, and to emails and alerts sent to
+addresses without a language preference.
+
+| Field | Description |
+|-------|-------------|
+| `defaultLocale` | Supported locale (`en`, `zh-CN`), or `null` for the built-in default (English) |
+
+Users keep their own choice: the language picker in their profile overrides the
+instance setting for their account, and a device that has already picked a
+language keeps it. See [i18n.md](i18n.md) for the full resolution order.
 
 ---
 

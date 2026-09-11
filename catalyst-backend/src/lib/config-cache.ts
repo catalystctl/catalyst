@@ -58,7 +58,7 @@ async function ensureRemoteSubscription(): Promise<void> {
   }
 }
 
-export async function cachedConfig<T>(kind: 'security' | 'smtp' | 'mod_manager' | 'theme_default', fetcher: () => Promise<T>): Promise<T> {
+export async function cachedConfig<T>(kind: 'security' | 'smtp' | 'mod_manager' | 'theme_default' | 'localization', fetcher: () => Promise<T>): Promise<T> {
   void ensureRemoteSubscription();
   const localKey = `config:${kind}`;
   const hit = localGet<T>(localKey);
@@ -94,7 +94,7 @@ export async function cachedConfig<T>(kind: 'security' | 'smtp' | 'mod_manager' 
   return fresh;
 }
 
-export async function invalidateConfig(kind?: 'security' | 'smtp' | 'mod_manager' | 'theme_default'): Promise<void> {
+export async function invalidateConfig(kind?: 'security' | 'smtp' | 'mod_manager' | 'theme_default' | 'localization'): Promise<void> {
   if (kind) {
     localDelete(`config:${kind}`);
     const redis = getRedis();

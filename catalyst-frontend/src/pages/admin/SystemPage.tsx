@@ -13,17 +13,20 @@ import {
  Hash,
  User,
  ArrowUpCircle,
+ Languages,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
 
-import { useAdminHealth, useAdminStats, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
+import { useAdminHealth, useAdminStats, useLocalizationSettings, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
 import UpdateSettings from '../../components/admin/UpdateSettings';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Input } from '../../components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { DEFAULT_LOCALE, isSupportedLocale, SUPPORTED_LOCALES, type SupportedLocale } from '../../i18n/config';
 
 
 // ── Section Wrapper ──
@@ -68,6 +71,7 @@ function SystemPage() {
  const { data: health } = useAdminHealth();
  const { data: smtpSettings } = useSmtpSettings();
  const { data: modManagerSettings } = useModManagerSettings();
+ const { data: localizationSettings } = useLocalizationSettings();
 
  const [smtpHost, setSmtpHost] = useState('');
  const [smtpPort, setSmtpPort] = useState('587');
@@ -82,6 +86,7 @@ function SystemPage() {
  const [smtpMaxMessages, setSmtpMaxMessages] = useState('');
  const [curseforgeApiKey, setCurseforgeApiKey] = useState('');
  const [modrinthApiKey, setModrinthApiKey] = useState('');
+  const [defaultLocale, setDefaultLocale] = useState<SupportedLocale>(DEFAULT_LOCALE);
 
  const updateSmtpMutation = useMutation({
  mutationFn: () =>
@@ -118,6 +123,15 @@ function SystemPage() {
  onError: (error: any) => notifyError(error),
  });
 
+ const updateLocalizationMutation = useMutation({
+ mutationFn: () => adminApi.updateLocalizationSettings({ defaultLocale }),
+ onSuccess: () => notifySuccess(t('system.toastLanguageUpdated')),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminLocalizationSettings() });
+ },
+ onError: (error: any) => notifyError(error),
+ });
+
  const [prevSmtpSettings, setPrevSmtpSettings] = useState(smtpSettings);
  if (smtpSettings !== prevSmtpSettings) {
  setPrevSmtpSettings(smtpSettings);
@@ -148,6 +162,19 @@ function SystemPage() {
  if (modManagerSettings) {
  setCurseforgeApiKey(modManagerSettings.curseforgeApiKey ?? '');
  setModrinthApiKey(modManagerSettings.modrinthApiKey ?? '');
+ }
+ }
+
+ const [prevLocalizationSettings, setPrevLocalizationSettings] = useState(localizationSettings);
+ if (localizationSettings !== prevLocalizationSettings) {
+ setPrevLocalizationSettings(localizationSettings);
+ // null means the instance was never configured; show what it renders today.
+ if (localizationSettings) {
+ setDefaultLocale(
+ isSupportedLocale(localizationSettings.defaultLocale)
+ ? localizationSettings.defaultLocale
+ : DEFAULT_LOCALE,
+ );
  }
  }
 
@@ -287,6 +314,40 @@ function SystemPage() {
  </span>
  <Input type="password" autoComplete="off" value={modrinthApiKey} onChange={(e) => setModrinthApiKey(e.target.value)} placeholder="••••••••" className="border-border/40" />
  </label>
+ </div>
+ </Section>
+
+ {/* ── Interface Language ── */}
+ <Section
+ title={t('system.language')}
+ subtitle={t('system.languageDescription')}
+ icon={<Languages className="h-4 w-4 text-primary" />}
+ iconColor="bg-primary/10"
+ footer={
+ <Button size="sm" disabled={updateLocalizationMutation.isPending} onClick={() => updateLocalizationMutation.mutate()}>
+ {updateLocalizationMutation.isPending ? t('saving') : t('system.saveLanguage')}
+ </Button>
+ }
+ >
+ <div className="space-y-3">
+ <label className="block space-y-1">
+ <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+ <Languages className="h-3 w-3" /> {t('system.defaultLanguage')}
+ </span>
+ <Select value={defaultLocale} onValueChange={(next) => setDefaultLocale(next as SupportedLocale)}>
+ <SelectTrigger className="border-border/40">
+ <SelectValue />
+ </SelectTrigger>
+ <SelectContent>
+ {SUPPORTED_LOCALES.map((option) => (
+ <SelectItem key={option.code} value={option.code}>
+ {option.nativeName}
+ </SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ </label>
+ <p className="text-xs text-muted-foreground">{t('system.languageHint')}</p>
  </div>
  </Section>
 

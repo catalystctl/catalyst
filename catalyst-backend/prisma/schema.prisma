@@ -342,6 +342,10 @@ model SystemSetting {
   // Defaults false (invite/admin-created users only). Admins may enable via security settings.
   // First setup also forces false after complete.
   registrationEnabled          Boolean  @default(false)
+  // Instance-wide default language (row id "localization"). Applies to the
+  // panel and to emails/alerts for anyone who has not chosen a language;
+  // NULL means the built-in default (English).
+  defaultLocale                String?
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }

@@ -33,7 +33,7 @@ export function cacheKey(...parts: string[]): string {
 }
 
 export const RedisKeys = {
-  config: (kind: 'security' | 'smtp' | 'mod_manager' | 'theme_default'): string =>
+  config: (kind: 'security' | 'smtp' | 'mod_manager' | 'theme_default' | 'localization'): string =>
     cacheKey('config', kind),
   templateList: (hash: string): string => cacheKey('cache', 'templates', `list_${safeKeyPart(hash)}`),
   template: (id: string): string => cacheKey('cache', 'template', id),

@@ -144,6 +144,15 @@ export function useModManagerSettings() {
   });
 }
 
+export function useLocalizationSettings() {
+  return useQuery({
+    queryKey: qk.adminLocalizationSettings(),
+    queryFn: adminApi.getLocalizationSettings,
+    staleTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useAuthLockouts(params?: { page?: number; limit?: number; search?: string }) {
   return useQuery({
     queryKey: qk.adminAuthLockouts(params as Record<string, unknown> | undefined),

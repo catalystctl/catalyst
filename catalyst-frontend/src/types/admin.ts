@@ -256,6 +256,11 @@ export interface SmtpSettings {
   maxMessages: number | null;
 }
 
+export interface LocalizationSettings {
+  /** Admin-chosen instance language; null means the built-in default. */
+  defaultLocale: string | null;
+}
+
 export interface SecuritySettings {
   authRateLimitMax: number;
   authRateLimitWindowMs: number;

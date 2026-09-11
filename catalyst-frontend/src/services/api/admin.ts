@@ -15,6 +15,7 @@ import type {
   ModManagerSettings,
   SmtpSettings,
   SecuritySettings,
+  LocalizationSettings,
   AuthLockoutsResponse,
   Role,
   RolePreset,
@@ -218,6 +219,14 @@ export const adminApi = {
   },
   updateSecuritySettings: async (payload: SecuritySettings) => {
     const data = await apiClient.put<ApiResponse<void>>('/api/admin/security-settings', payload);
+    return data;
+  },
+  getLocalizationSettings: async () => {
+    const data = await apiClient.get<ApiResponse<LocalizationSettings>>('/api/admin/localization-settings');
+    return data.data;
+  },
+  updateLocalizationSettings: async (payload: LocalizationSettings) => {
+    const data = await apiClient.put<ApiResponse<LocalizationSettings>>('/api/admin/localization-settings', payload);
     return data;
   },
   getModManagerSettings: async () => {

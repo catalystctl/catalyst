@@ -13,11 +13,16 @@ export function isSupportedLocale(value: unknown): value is SupportedLocale {
   return typeof value === 'string' && (SUPPORTED_LOCALES as readonly string[]).includes(value);
 }
 
-/** Locale saved in a user's preferences, falling back to the default. */
-export function resolveUserLocale(preferences: unknown): SupportedLocale {
+/** Locale a user picked for themselves, if any. */
+export function readUserLocale(preferences: unknown): SupportedLocale | undefined {
   if (preferences && typeof preferences === 'object') {
     const locale = (preferences as { locale?: unknown }).locale;
     if (isSupportedLocale(locale)) return locale;
   }
-  return DEFAULT_LOCALE;
+  return undefined;
+}
+
+/** Locale saved in a user's preferences, falling back to the built-in default. */
+export function resolveUserLocale(preferences: unknown): SupportedLocale {
+  return readUserLocale(preferences) ?? DEFAULT_LOCALE;
 }

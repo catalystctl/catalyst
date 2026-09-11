@@ -23,6 +23,7 @@ describe('audit labels', () => {
     expect(auditActionLabel(i18n.t, 'server.start')).toBe('已启动服务器');
     expect(auditActionLabel(i18n.t, 'login_failed')).toBe('登录失败');
     expect(auditActionLabel(i18n.t, 'theme_settings.update')).toBe('已更新主题设置');
+    expect(auditActionLabel(i18n.t, 'localization.settings.update')).toBe('已更改默认语言');
     // Plugin-supplied actions have no catalog entry.
     expect(auditActionLabel(i18n.t, 'acme.widget_toggle')).toBe('Acme Widget Toggle');
   });
@@ -46,6 +47,7 @@ describe('audit labels', () => {
     expect(auditDetailLabel(i18n.t, 'primaryColor')).toBe('主色');
     expect(auditDetailLabel(i18n.t, 'allocatedMemoryMb')).toBe('分配的内存（MB）');
     expect(auditDetailLabel(i18n.t, 'suspensionReason')).toBe('暂停原因');
+    expect(auditDetailLabel(i18n.t, 'defaultLocale')).toBe('默认语言');
     expect(auditDetailLabel(i18n.t, 'unknownField')).toBe('unknownField');
   });
 

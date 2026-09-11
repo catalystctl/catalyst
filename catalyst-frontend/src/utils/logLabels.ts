@@ -67,6 +67,8 @@ export function auditActionLabel(t: TFunction, action: string): string {
       return t('admin-access:audit.actions.loginFailed');
     case 'login_success':
       return t('admin-access:audit.actions.loginSuccess');
+    case 'localization.settings.update':
+      return t('admin-access:audit.actions.localizationSettingsUpdate');
     case 'mod_manager.install':
       return t('admin-access:audit.actions.modManagerInstall');
     case 'mod_manager.settings.update':
@@ -289,6 +291,8 @@ export function auditDetailLabel(t: TFunction, key: string): string {
       return t('admin-access:audit.detailLabels.curseforgeConfigured');
     case 'customCss':
       return t('admin-access:audit.detailLabels.customCss');
+    case 'defaultLocale':
+      return t('admin-access:audit.detailLabels.defaultLocale');
     case 'defaultTheme':
       return t('admin-access:audit.detailLabels.defaultTheme');
     case 'email':

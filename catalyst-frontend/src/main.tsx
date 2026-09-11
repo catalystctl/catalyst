@@ -11,9 +11,11 @@ import './styles/globals.css';
 
 // Initialize i18n before React mounts so the first render already uses the
 // detected language. `user-locale` follows the signed-in user's saved
-// preference once the session is restored.
+// preference once the session is restored; `system-locale` reads the
+// instance-wide default an admin configured.
 import './i18n';
 import './i18n/user-locale';
+import { bootstrapSystemLocale } from './i18n/system-locale';
 
 // Replay the last saved palette + custom CSS before React mounts.
 // The index.html boot script already did this pre-paint; this covers
@@ -43,21 +45,29 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 initErrorReporter();
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        {/* Fallback while a translation catalog chunk loads. */}
-        <Suspense
-          fallback={
-            <div className="flex h-screen items-center justify-center bg-background">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            </div>
-          }
-        >
-          <App />
-        </Suspense>
-      </BrowserRouter>
-    </QueryClientProvider>
-  </React.StrictMode>,
-);
+function renderApp(): void {
+  ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          {/* Fallback while a translation catalog chunk loads. */}
+          <Suspense
+            fallback={
+              <div className="flex h-screen items-center justify-center bg-background">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              </div>
+            }
+          >
+            <App />
+          </Suspense>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </React.StrictMode>,
+  );
+}
+
+// Resolve the instance default language first: rendering before it lands
+// would show a first-time visitor one frame of the wrong language. The
+// helper never rejects — an unreachable backend just renders with the
+// device language.
+void bootstrapSystemLocale().finally(renderApp);

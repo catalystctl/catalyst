@@ -35,6 +35,8 @@ import {
   sanitizeMaxUploadMb,
   maxUploadBytesFromMb,
 } from '../services/mailer';
+import { getLocalizationSettings, updateLocalizationSettings } from '../services/localization';
+import { isSupportedLocale } from '../i18n/locales.js';
 import { serialize } from '../utils/serialize';
 import { withRegistrationBypass } from '../lib/registration-gate.js';
 
@@ -2655,6 +2657,52 @@ export async function adminRoutes(app: FastifyInstance) {
         wsGateway?.pushToAdminSubscribers('security_settings_updated', { updatedBy: user.userId });
       } catch { /* ignore — WS push is best-effort */ }
       reply.send({ success: true });
+    }
+  );
+
+  // Instance language (admin only). The panel reads the public twin of this
+  // (`GET /api/settings/locale`) before anyone signs in.
+  app.get(
+    '/localization-settings',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(checkPerm(request, 'admin.read'))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
+      }
+
+      reply.send(serialize({ success: true, data: await getLocalizationSettings() }));
+    }
+  );
+
+  app.put(
+    '/localization-settings',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.user;
+
+      if (!(checkPerm(request, 'admin.write'))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
+      }
+
+      // null clears the choice and puts the instance back on the built-in
+      // default; anything else has to be a language the panel can render.
+      const requested = (request.body as { defaultLocale?: unknown } | null)?.defaultLocale ?? null;
+      if (requested !== null && !isSupportedLocale(requested)) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Unsupported language', {
+          details: { field: 'defaultLocale', value: String(requested) },
+        });
+      }
+
+      await updateLocalizationSettings({ defaultLocale: requested });
+
+      await createAuditLog(user.userId, {
+        request,
+        action: 'localization.settings.update',
+        resource: 'system',
+        details: { defaultLocale: requested },
+      });
+
+      reply.send({ success: true, data: { defaultLocale: requested } });
     }
   );
 

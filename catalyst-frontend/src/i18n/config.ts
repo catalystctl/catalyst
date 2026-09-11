@@ -90,6 +90,22 @@ export function readStoredLocale(): SupportedLocale | undefined {
   }
 }
 
+/**
+ * Language an admin set for the whole instance (`GET /api/settings/locale`).
+ *
+ * Kept in memory only: it is the instance's setting, not this browser's, so
+ * it is re-read on every load. `null` clears it.
+ */
+let systemDefaultLocale: SupportedLocale | undefined;
+
+export function setSystemDefaultLocale(locale: SupportedLocale | null): void {
+  systemDefaultLocale = locale ?? undefined;
+}
+
+export function getSystemDefaultLocale(): SupportedLocale | undefined {
+  return systemDefaultLocale;
+}
+
 export function storeLocale(locale: SupportedLocale): void {
   if (typeof window === 'undefined') return;
   try {
@@ -100,12 +116,19 @@ export function storeLocale(locale: SupportedLocale): void {
 }
 
 /**
- * Device-local language choice: explicit selection first, then the browser's
- * preference list, then English.
+ * Language for this device: an explicit choice first, then the admin-set
+ * instance default, then the browser's preference list, then English.
+ *
+ * The instance default deliberately outranks the browser: an admin who sets
+ * the panel's language means it for every visitor who has not picked one, and
+ * a browser list almost always ends in a supported language (`en`), so it
+ * would otherwise always win and the setting would never do anything.
  */
 export function detectDeviceLocale(): SupportedLocale {
   const stored = readStoredLocale();
   if (stored) return stored;
+
+  if (systemDefaultLocale) return systemDefaultLocale;
 
   const candidates = [
     typeof navigator !== 'undefined' ? navigator.language : undefined,
