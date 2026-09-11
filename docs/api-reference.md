@@ -2214,7 +2214,7 @@ Download a backup file directly. For local storage, returns the file as `applica
 | `POST` | `/api/nodes/:id/heartbeat` | Agent | Node heartbeat (agent) |
 | `POST` | `/api/nodes/:id/deployment-token` | `node.create` + node-manage (admin, or node assignment + `node.update`) | Generate deployment token |
 | `GET` | `/api/nodes/:id/api-key` | `node.read` | Check node API key exists |
-| `POST` | `/api/nodes/:id/api-key` | `node.create` | Generate/regenerate API key |
+| `POST` | `/api/nodes/:id/api-key` | `node.create` + node-manage (admin, or node assignment + `node.update`) | Generate/regenerate API key |
 | `GET` | `/api/nodes/:id/allocations` | `node.manage_allocation` | List node allocations (`?serverId`, `?search`) |
 | `POST` | `/api/nodes/:id/allocations` | `node.manage_allocation` | Create allocations (`alias`, `notes`) |
 | `PATCH` | `/api/nodes/:id/allocations/:allocId` | `node.manage_allocation` | Update allocation alias/notes |
@@ -2309,7 +2309,7 @@ Check if an API key exists for this node.
 
 Generate or regenerate the API key for a node. Regenerating invalidates the previous key.
 
-**Auth:** `node.create`  
+**Auth:** `node.create` + node-manage (admin, or node assignment + `node.update`)  
 **Body (optional):**
 ```json
 {
