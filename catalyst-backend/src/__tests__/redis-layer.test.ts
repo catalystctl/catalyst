@@ -132,6 +132,22 @@ describe('Distributed lock semantics (live Redis)', () => {
     const result = await withDistributedLock('test:degraded2', 1000, async () => 'ok');
     expect(result).toBe('ok');
   });
+
+  it('runs in degraded mode when Redis is configured but unreachable', async () => {
+    // A rejected SET is an outage, not contention: reporting "already held"
+    // here made alert evaluation stop silently while Redis was down.
+    process.env.REDIS_URL = `redis://${REDIS_HOST}:1`;
+    const { withDistributedLock } = await import('../lib/distributed-lock');
+    const { closeRedis } = await import('../lib/redis');
+    try {
+      await expect(
+        withDistributedLock('test:unreachable', 5000, async () => 'degraded-ok'),
+      ).resolves.toBe('degraded-ok');
+    } finally {
+      await closeRedis();
+      delete process.env.REDIS_URL;
+    }
+  });
 });
 
 describe('Distributed rate limiter', () => {
