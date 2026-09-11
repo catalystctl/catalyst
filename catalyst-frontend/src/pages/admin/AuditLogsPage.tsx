@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/dialog';
 import { Link } from 'react-router-dom';
 import { formatDateTime } from '../../i18n/format';
+import { auditActionLabel, auditDetailLabel, auditResourceLabel } from '../../utils/logLabels';
 
 const pageSize = 50;
 
@@ -63,13 +64,6 @@ const buildDefaultRange = () => {
 };
 
 // ── Helpers ──
-function formatAction(action: string): string {
- return action
- .split(/[._]/g)
- .filter(Boolean)
- .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
- .join(' ');
-}
 
 const RESOURCE_ICONS: Record<string, React.ElementType> = {
   server: Server,
@@ -210,7 +204,7 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  <div className={`rounded-lg border border-border/50 bg-muted/20 p-2 space-y-1.5 ${depth > 0 ? 'ml-2' : ''}`}>
  {entries.map(([k, v]) => (
  <div key={k} className="flex items-start gap-2 text-xs">
- <span className="shrink-0 font-medium text-muted-foreground">{k}</span>
+ <span className="shrink-0 font-medium text-muted-foreground">{auditDetailLabel(t, k)}</span>
  <span className="flex-1">{renderValue(v, depth + 1)}</span>
  </div>
  ))}
@@ -230,9 +224,9 @@ return (
  icon={<ResourceIcon resource={log.resource} className="h-4 w-4" />}
  iconClassName={`${ts.bg} ${ts.text} ${ts.border}`}
  >
- <DialogTitle>{formatAction(log.action)}</DialogTitle>
+ <DialogTitle>{auditActionLabel(t, log.action)}</DialogTitle>
  <DialogDescription>
- {log.resource}{log.resourceId ? ` · ${log.resourceId.slice(0, 12)}…` : ''}
+ {auditResourceLabel(t, log.resource)}{log.resourceId ? ` · ${log.resourceId.slice(0, 12)}…` : ''}
  </DialogDescription>
  </DialogHeader>
 
@@ -244,7 +238,7 @@ return (
  </Badge>
  <Badge variant="secondary" className="gap-1 text-[10px]">
  <ResourceIcon resource={log.resource} className="h-2.5 w-2.5" />
- {log.resource}
+ {auditResourceLabel(t, log.resource)}
  </Badge>
  {log.resourceId && (
  resourceLink ? (
@@ -322,7 +316,7 @@ return (
  <div key={key} className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
  <div className="flex items-start gap-3">
  <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground pt-0.5 min-w-[80px]">
- {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}
+ {auditDetailLabel(t, key)}
  </span>
  <div className="flex-1 text-xs min-w-0">
  {renderValue(value)}
@@ -597,10 +591,10 @@ function AuditLogsPage() {
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
  <span className="text-sm font-medium text-foreground">
- {formatAction(log.action)}
+ {auditActionLabel(t, log.action)}
  </span>
  <span className={`h-1.5 w-1.5 rounded-full ${toneDot(tone)}`} />
- <Badge variant="secondary" className="text-[10px]">{log.resource}</Badge>
+ <Badge variant="secondary" className="text-[10px]">{auditResourceLabel(t, log.resource)}</Badge>
  </div>
 
  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
@@ -609,11 +603,11 @@ function AuditLogsPage() {
  )}
  {resourceLink ? (
  <Link to={resourceLink} className="inline-flex items-center gap-1 text-primary transition-colors hover:underline">
- {log.resource}:{log.resourceId?.slice(0, 8)}
+ {auditResourceLabel(t, log.resource)}:{log.resourceId?.slice(0, 8)}
  <ExternalLink className="h-2.5 w-2.5" />
  </Link>
  ) : log.resourceId ? (
- <span>{log.resource}:{log.resourceId.slice(0, 8)}</span>
+ <span>{auditResourceLabel(t, log.resource)}:{log.resourceId.slice(0, 8)}</span>
  ) : null}
  {log.ipAddress && <span className="opacity-60">{log.ipAddress}</span>}
  </div>

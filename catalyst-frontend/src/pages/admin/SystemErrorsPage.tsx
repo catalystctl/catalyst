@@ -32,6 +32,7 @@ import {
 import { useSystemErrors, useResolveSystemError, useResolveAllSystemErrors } from '../../hooks/useAdmin';
 import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { formatDateTime } from '../../i18n/format';
+import { systemErrorComponentLabel, systemErrorMessage, systemErrorMetadataLabel } from '../../utils/logLabels';
 import { adminApi } from '../../services/api/admin';
 import type { SystemError } from '../../types/admin';
 import Pagination from '../../components/shared/Pagination';
@@ -204,7 +205,7 @@ return (
  icon={<Bug className="h-4 w-4" />}
  iconClassName={levelBg(error.level)}
  >
- <DialogTitle>{error.component}</DialogTitle>
+ <DialogTitle>{systemErrorComponentLabel(t, error.component)}</DialogTitle>
  <DialogDescription>{error.id}</DialogDescription>
  </DialogHeader>
 
@@ -258,7 +259,7 @@ return (
  <div className="space-y-1">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.tableMessage')}</span>
  <div className="rounded-lg border border-border/30 bg-surface-2/40 px-3 py-2 text-sm text-foreground">
- {error.message}
+ {systemErrorMessage(t, error.message)}
  </div>
  </div>
 
@@ -287,7 +288,7 @@ return (
  <tbody className="divide-y divide-border/30">
  {metadataEntries.map(([key, value]) => (
  <tr key={key} className="transition-colors hover:bg-surface-2/60">
- <td className="px-3 py-2 font-mono text-foreground">{key}</td>
+ <td className="px-3 py-2 font-mono text-foreground">{systemErrorMetadataLabel(t, key)}</td>
  <td className="max-w-xs truncate px-3 py-2 text-muted-foreground" title={JSON.stringify(value)}>
  {typeof value === 'object' ? JSON.stringify(value) : String(value)}
  </td>
@@ -349,7 +350,7 @@ function ErrorRow({
  <LevelBadge level={error.level} className={`text-[11px] ${levelColor(error.level)}`} />
  </div>
  <div className="col-span-2 truncate font-medium text-foreground">
- {error.component}
+ {systemErrorComponentLabel(t, error.component)}
  </div>
  <div className="col-span-1 truncate font-mono text-[10px] text-muted-foreground">
  {error.nodeId ? (
@@ -362,7 +363,7 @@ function ErrorRow({
  )}
  </div>
  <div className="col-span-3 truncate text-muted-foreground">
- {error.message}
+ {systemErrorMessage(t, error.message)}
  </div>
  <div className="col-span-2 truncate font-mono text-xs text-muted-foreground">
  {formatDateTime(error.createdAt)}
@@ -410,11 +411,11 @@ function ErrorRow({
  <div className="flex items-center gap-2">
  <LevelBadge level={error.level} className={`text-[10px] ${levelColor(error.level)}`} />
  <span className="truncate font-medium text-foreground">
- {error.component}
+ {systemErrorComponentLabel(t, error.component)}
  </span>
  </div>
  <div className="mt-0.5 truncate text-xs text-muted-foreground">
- {error.message}
+ {systemErrorMessage(t, error.message)}
  </div>
  </div>
  <div className="flex items-center gap-2">
