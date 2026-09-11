@@ -51,11 +51,16 @@ export async function alertRoutes(app: FastifyInstance) {
     if (access) {
       return server;
     }
-    // SECURITY: bare node assignment must not grant alert management for
-    // every server on the node — require the node.update pairing
-    // (decideServerAccess node-manage contract).
+    // SECURITY: a role that grants the required alert permission counts the
+    // same as a per-server grant on every server (decideServerAccess
+    // role_permission contract; mirrored by getEffectiveServerPermissions).
     const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
     const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+    if (requiredPermissions.some((permission) => rolePerms.includes(permission))) {
+      return server;
+    }
+    // Bare node assignment must not grant alert management for every server
+    // on the node — require the node.update pairing (node_manage contract).
     const hasNodeAccessToServer =
       (await hasNodeAccess(prisma, userId, server.nodeId)) &&
       rolePerms.includes('node.update');
