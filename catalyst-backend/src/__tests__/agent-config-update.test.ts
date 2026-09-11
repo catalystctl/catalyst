@@ -16,6 +16,7 @@ let testRoleId: string;
 let testLocationId: string;
 let testNodeId: string;
 let lastAgentMessage: Record<string, unknown> | null = null;
+let lastSentMessage: Record<string, unknown> | null = null;
 let agentResponse: Record<string, unknown> = { saved: true };
 
 function buildApp() {
@@ -35,7 +36,10 @@ function buildApp() {
       lastAgentMessage = message;
       return agentResponse;
     },
-    sendToAgent: async () => true,
+    sendToAgent: async (_nodeId: string, message: Record<string, unknown>) => {
+      lastSentMessage = message;
+      return true;
+    },
     pushToAdminSubscribers: () => {},
     pushToGlobalSubscribers: () => {},
   } as any);
@@ -135,6 +139,32 @@ describe('PUT /api/nodes/:nodeId/agent/config', () => {
     const body = JSON.parse(res.body);
     expect(body.code).toBe('AGENT_CONFIG_REJECTED');
     expect(body.params?.reason).toContain("denies 'sftp'");
+
+    await app.close();
+  });
+});
+
+describe('POST /api/nodes/:nodeId/agent/update', () => {
+  it('normalizes the v-prefixed GitHub tag the panel sends', async () => {
+    const app = buildApp();
+
+    lastSentMessage = null;
+    const ok = await app.inject({
+      method: 'POST',
+      url: `/api/nodes/${testNodeId}/agent/update`,
+      payload: { targetVersion: 'v1.50.3' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(lastSentMessage).toMatchObject({ type: 'update_agent', targetVersion: '1.50.3' });
+
+    lastSentMessage = null;
+    const bad = await app.inject({
+      method: 'POST',
+      url: `/api/nodes/${testNodeId}/agent/update`,
+      payload: { targetVersion: 'not-a-version' },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(lastSentMessage).toBeNull();
 
     await app.close();
   });

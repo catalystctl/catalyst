@@ -2590,8 +2590,22 @@ export async function nodeRoutes(app: FastifyInstance) {
 			}
 
 			const currentPanel = getCurrentVersion();
+			// GitHub tags are v-prefixed ("v1.50.3"); the agent's updater only
+			// accepts digits and dots, so normalize before forwarding. The
+			// panel's latestVersion field is a raw tag_name.
+			const requested = typeof targetVersion === "string"
+				? targetVersion.trim().replace(/^v/i, "")
+				: "";
+			if (requested && !/^\d+(\.\d+)+$/.test(requested)) {
+				return apiError(
+					reply,
+					400,
+					ErrorCodes.VALIDATION_ERROR,
+					"targetVersion must be a version like 1.50.3",
+				);
+			}
 			const version =
-				targetVersion ||
+				requested ||
 				(currentPanel === "unknown" ? undefined : currentPanel);
 			const sent = await gateway.sendToAgent(nodeId, {
 				type: "update_agent",
