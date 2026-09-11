@@ -106,7 +106,7 @@ fi
 step "Catalyst stack updater ($COMPOSE_DIR)"
 
 # Dependencies
-for cmd in curl tar diff; do
+for cmd in curl tar diff openssl; do
     command -v "$cmd" &>/dev/null || { err "$cmd is required but not installed"; exit 1; }
 done
 
@@ -258,10 +258,25 @@ if [[ -f "$NEW_ENV" ]]; then
     while IFS= read -r KEY; do
         [[ -z "$KEY" ]] && continue
         if ! grep -qE "^${KEY}=" "$LOCAL_ENV"; then
+            LINE="$(grep -E "^${KEY}=" "$NEW_ENV" | head -1 || true)"
+            VALUE="${LINE#*=}"
+            if [[ "$VALUE" == CHANGE_ME* ]]; then
+                # .env.example ships placeholders for secrets the backend now
+                # validates (a CHANGE_ME backup key fails closed at runtime).
+                # Generate a real value instead of copying the placeholder.
+                case "$KEY" in
+                    # URL-safe: embedded in DATABASE_URL / REDIS_URL
+                    POSTGRES_PASSWORD|REDIS_PASSWORD)
+                        VALUE="$(openssl rand -base64 48 | tr -d '/+=' | head -c 32)" ;;
+                    *)
+                        VALUE="$(openssl rand -base64 32)" ;;
+                esac
+                ok "Generated a value for new secret ${KEY}"
+            fi
             {
                 echo ""
                 echo "# Added by update.sh on $(date +%Y-%m-%d) — new upstream variable"
-                grep -E "^${KEY}=" "$NEW_ENV" | head -1 || echo "${KEY}="
+                echo "${KEY}=${VALUE}"
             } >> "$LOCAL_ENV"
             ADDED_KEYS+=("$KEY")
         fi
