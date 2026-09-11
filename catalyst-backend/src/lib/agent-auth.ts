@@ -31,6 +31,16 @@ function hashApiKeyLegacy(key: string): string {
   return hash.toString("base64url");
 }
 
+/**
+ * SEC-C-01: proof the agent expects in node_handshake_response — lowercase
+ * hex SHA-256 over api_key || nonce || node_id. Agents since v1.46.0 drop
+ * every frame until this verifies, so it must match the agent's
+ * compute_handshake_tag() byte for byte.
+ */
+export function computeAgentHandshakeTag(apiKey: string, nonce: string, nodeId: string): string {
+  return createHash("sha256").update(`${apiKey}${nonce}${nodeId}`).digest("hex");
+}
+
 // In-memory cache for verified agent API keys: "nodeId:hashedKey" → expiry timestamp
 const verifiedKeyCache = new Map<string, number>();
 const CACHE_TTL_MS = 30_000; // 30 seconds

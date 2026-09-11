@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll, vi } from "vitest";
 import { WebSocketGateway } from "../websocket/gateway.js";
+import { computeAgentHandshakeTag } from "../lib/agent-auth.js";
 
 /**
  * Regression tests for confirmed WebSocket gateway security & reliability bugs
@@ -364,6 +365,85 @@ describe("Gateway security & reliability regressions", () => {
     expect(gw.agents.has(preAuthKey)).toBe(false);
     expect(gw.agents.has("real-node")).toBe(true);
     expect(gw.agents.get("real-node").authenticated).toBe(true);
+    gw.destroy();
+  });
+
+  it("C1c: handshake response echoes the nonce with the sha256(api_key+nonce+node_id) tag", async () => {
+    // Regression: agents since v1.46.0 only accept frames after verifying the
+    // panel's nonce echo + keyed tag; without it the file tunnel, commands and
+    // agent updates are all dropped as pre-handshake traffic.
+    const gw: any = new WebSocketGateway(prismaStub, loggerStub);
+    gw.authenticateAgentToken = async () => ({
+      node: { id: "real-node", hostname: "h" },
+      authType: "api_key",
+    });
+
+    const socket = makeFakeSocket();
+    await gw.handleAgentConnection(socket, "real-node", null);
+    const preAuthKey = [...gw.agents.keys()].find((k) => k.startsWith("__preauth:real-node:"))!;
+
+    const nonce = "0123456789abcdef0123456789abcdef";
+    gw.handleAgentMessage(
+      preAuthKey,
+      socket,
+      JSON.stringify({ type: "node_handshake", token: "tok", protocolVersion: "1.0", nonce }),
+      false,
+    );
+    await new Promise((r) => setTimeout(r, 25));
+
+    const response = socket.sent
+      .map((raw: any) => {
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      })
+      .find((msg: any) => msg && msg.type === "node_handshake_response");
+    expect(response).toBeTruthy();
+    expect(response.nonce).toBe(nonce);
+    // Must match the agent's compute_handshake_tag (Rust test:
+    // handshake_nonce_echo_and_tag_verify).
+    expect(response.authTag).toBe(
+      "b5164a7216acf2a9e6459bf53fe876656421bc1137b92b8a805231b51f6b5f23",
+    );
+    expect(computeAgentHandshakeTag("tok", nonce, "real-node")).toBe(
+      "b5164a7216acf2a9e6459bf53fe876656421bc1137b92b8a805231b51f6b5f23",
+    );
+    gw.destroy();
+  });
+
+  it("C1d: legacy agents that send no nonce get the previous response shape", async () => {
+    const gw: any = new WebSocketGateway(prismaStub, loggerStub);
+    gw.authenticateAgentToken = async () => ({
+      node: { id: "real-node", hostname: "h" },
+      authType: "api_key",
+    });
+
+    const socket = makeFakeSocket();
+    await gw.handleAgentConnection(socket, "real-node", null);
+    const preAuthKey = [...gw.agents.keys()].find((k) => k.startsWith("__preauth:real-node:"))!;
+
+    gw.handleAgentMessage(
+      preAuthKey,
+      socket,
+      JSON.stringify({ type: "node_handshake", token: "tok", protocolVersion: "1.0" }),
+      false,
+    );
+    await new Promise((r) => setTimeout(r, 25));
+
+    const response = socket.sent
+      .map((raw: any) => {
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      })
+      .find((msg: any) => msg && msg.type === "node_handshake_response");
+    expect(response).toBeTruthy();
+    expect(response.nonce).toBeUndefined();
+    expect(response.authTag).toBeUndefined();
     gw.destroy();
   });
 });

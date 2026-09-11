@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
 import { auth } from "../auth";
-import { verifyAgentApiKey } from "../lib/agent-auth";
+import { verifyAgentApiKey, computeAgentHandshakeTag } from "../lib/agent-auth";
 import type {
   WsEvent} from "../shared-types";
 import {
@@ -104,6 +104,9 @@ interface ConnectedAgent {
   lastHeartbeat: number;
   /** Set while the socket is registered under a temporary pre-auth key. */
   preAuthNodeId?: string;
+  /** SEC-C-01: nonce echo + tag to send in node_handshake_response. */
+  handshakeNonce?: string;
+  handshakeAuthTag?: string;
 }
 
 // Message types considered control-plane critical: always delivered when a
@@ -1111,14 +1114,23 @@ export class WebSocketGateway {
     });
     this.logger.info(`Agent connected: ${node.id} (${node.hostname})`);
     const security = await getSecuritySettings();
+    // SEC-C-01: echo the agent's nonce with the keyed tag when it asked for
+    // proof; legacy agents (no nonce) keep the previous response shape.
+    const handshakeProof =
+      agent.handshakeNonce && agent.handshakeAuthTag
+        ? { nonce: agent.handshakeNonce, authTag: agent.handshakeAuthTag }
+        : {};
     agent.socket.send(
       JSON.stringify({
         type: "node_handshake_response",
         success: true,
+        ...handshakeProof,
         backendAddress: process.env.BACKEND_EXTERNAL_ADDRESS || "http://localhost:3000",
         maxUploadBytes: maxUploadBytesFromMb(security.fileTunnelMaxUploadMb),
       })
     );
+    delete agent.handshakeNonce;
+    delete agent.handshakeAuthTag;
     // Replay any commands queued while this agent was reconnecting.
     this.drainOutbox(node.id, agent).catch((err) => {
       this.logger.error({ err, nodeId: node.id }, "Failed to drain agent command outbox");
@@ -1563,6 +1575,17 @@ export class WebSocketGateway {
           // Terminate: a replaced socket may be half-open, and close() would
           // wait forever for its close-frame handshake.
           this.terminateSocket(existing.socket);
+        }
+        // SEC-C-01: agents that sent a nonce require the panel to prove the
+        // api_key by echoing it with a keyed tag, or they drop every frame
+        // after the handshake (file tunnel, commands, agent updates).
+        if (typeof message.nonce === "string" && message.nonce.length > 0) {
+          agent.handshakeNonce = message.nonce;
+          agent.handshakeAuthTag = computeAgentHandshakeTag(
+            tokenValue.trim(),
+            message.nonce,
+            bindNodeId,
+          );
         }
         agent.nodeId = bindNodeId;
         delete agent.preAuthNodeId;
