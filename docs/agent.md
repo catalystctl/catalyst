@@ -1323,6 +1323,12 @@ sudo systemctl stop catalyst-agent
 
 ## Updating the Agent
 
+> **Update the panel before the agents.** Agents from v1.49.2 onward prove the
+> handshake with a panel-echoed nonce. An agent newer than the panel fails that
+> check, logs `Handshake response failed nonce/tag verification`, stays
+> connected, and ignores every panel command while the panel still shows the
+> node as online, until the panel is updated or the agent is downgraded.
+
 ### Binary Update
 
 ```bash
