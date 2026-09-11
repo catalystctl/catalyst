@@ -146,6 +146,13 @@ services:
       # an extra prompt; override independently for key-rotation isolation.
       API_KEY_SECRET: ${API_KEY_SECRET:-${BETTER_AUTH_SECRET}}
 
+      # The bundled nginx overwrites X-Forwarded-For/X-Real-IP with the real
+      # client address before proxying, so the backend must trust them —
+      # otherwise every user shares the proxy's IP for login lockouts and
+      # audit logs. Set TRUST_PROXY=false only when the backend port is
+      # exposed directly (it is loopback-bound by default).
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+
       # CORS — PUBLIC_URL by default. Set CORS_ORIGIN to a comma-separated
       # list to allow extra panel hosts (LAN IP + domain).
       CORS_ORIGIN: ${CORS_ORIGIN:-${PUBLIC_URL:-http://localhost}}

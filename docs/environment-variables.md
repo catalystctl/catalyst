@@ -77,7 +77,7 @@ cp catalyst-backend/.env.example catalyst-backend/.env
 | `ENABLE_COMPRESSION` | `true` \| `false` | Enabled unless `false` | HTTP response compression (gzip/br/deflate). The backend registers compression unless `ENABLE_COMPRESSION=false`; the Docker stack sets `false` because nginx handles compression instead. |
 | `TZ` | IANA timezone | `UTC` | Timezone for scheduled tasks and log timestamps. Use values like `America/New_York`, `Europe/London`, `Asia/Tokyo`. |
 | `LOG_LEVEL` | `trace` \| `debug` \| `info` \| `warn` \| `error` | `info` | Pino log level. `trace` includes all HTTP request details; `error` only shows errors. Note: stock `catalyst-docker/docker-compose.yml` hardcodes `LOG_LEVEL: info`; editing `.env` alone does not change it without a Compose edit. |
-| `TRUST_PROXY` | `true` \| `false` | `true` | Trust `X-Forwarded-*` headers from nginx/reverse proxy. Set to `false` only on direct exposure. |
+| `TRUST_PROXY` | `true` \| `false` | `true` in the bundled Docker stack (set in `docker-compose.yml`); backend default `false` when unset | Trust `X-Forwarded-*` headers from nginx/reverse proxy. The bundled nginx overwrites the headers with the real client address. Set to `false` only on direct exposure — behind a proxy it makes every user share one client IP (login lockouts, audit logs). |
 | `DOCS_ENABLED` | `true` \| `false` | `404` in production unless `true` | Enables runtime Swagger UI at `GET /docs`. |
 | `ALLOW_DATA_LOSS` | `0` \| `1` | `0` | Entrypoint only: `1` permits destructive `prisma db push`. Never set in normal operation. |
 | `APP_NAME` | String | `Catalyst` | Panel name shown in emails, auth issuer claims, and UI. |
