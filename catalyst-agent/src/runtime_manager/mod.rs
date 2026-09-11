@@ -5,8 +5,8 @@ use std::net::Ipv4Addr;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use containerd_client::services::v1::container::Runtime;
