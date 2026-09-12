@@ -11,13 +11,16 @@ Restart=always
 RestartSec=10
 # Config (override via systemctl --user edit gh-catalyst-runner).
 Environment=REPO=catalystctl/catalyst
-Environment=CONCURRENCY=2
+Environment=CONCURRENCY=4
 Environment=IMAGE=localhost/gh-runner-catalyst:latest
 Environment=LABELS=self-hosted,Linux,X64,catalyst-ci
 Environment=RUNNER_PREFIX=catalyst-ci
 Environment=CACHE_BASE=gh-catalyst-cache
-Environment=MEM_LIMIT=5g
-Environment=CPU_LIMIT=4
+# 4 slots x 4g/3cpu: worst-case caps 16g/12cpu against ~17g available RAM,
+# leaving headroom for the production panel and the second pool on this host.
+# Caps are ceilings, not reservations — typical jobs use far less.
+Environment=MEM_LIMIT=4g
+Environment=CPU_LIMIT=3
 # gh + podman live in /usr/bin; ensure they're on PATH for the user service.
 Environment=PATH=/usr/local/bin:/usr/bin:/bin:%h/.local/bin
 Environment=HOME=%h

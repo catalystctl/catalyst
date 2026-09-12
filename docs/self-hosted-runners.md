@@ -1,6 +1,6 @@
 # Self-hosted CI runners
 
-CI runs on two ephemeral rootless Podman runners on our own hardware
+CI runs on four ephemeral rootless Podman runners on our own hardware
 (labels `[self-hosted, Linux, X64, catalyst-ci]`). Each job gets a fresh
 container that is destroyed afterwards. No Blacksmith runners remain.
 

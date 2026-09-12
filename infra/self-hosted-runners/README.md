@@ -57,7 +57,7 @@ journalctl --user -u gh-catalyst-runner -f
 gh api repos/catalystctl/catalyst/actions/runners --jq '.runners[]|{name,status,busy}'
 podman logs -f catalyst-ci-$(hostname -s)-0
 systemctl --user restart gh-catalyst-runner
-podman volume rm gh-catalyst-cache-0 gh-catalyst-cache-1  # full cache reset
+podman volume rm gh-catalyst-cache-0 gh-catalyst-cache-1 gh-catalyst-cache-2 gh-catalyst-cache-3  # full cache reset
 ```
 
 ## Rebuild the image
