@@ -24,9 +24,10 @@ is hardened for that threat:
   container and its GitHub registration are gone. No persistence for backdoors.
 - **Rootless**: container root maps to the unprivileged host user. Jobs cannot
   read the host home directory, other services, or host secrets.
-- **Fork routing**: pull-request jobs from forks run on GitHub-hosted
-  `ubuntu-latest`, never here. Only same-repo pushes and internal PRs reach
-  these runners (see `runs-on` expressions in `ci.yml`).
+- **Fork and Dependabot routing**: pull-request jobs from forks and
+  `dependabot/*` branches run on GitHub-hosted `ubuntu-latest`, never here.
+  Only same-repo pushes and internal non-Dependabot PRs reach these runners
+  (see `runs-on` expressions in `ci.yml`).
 - **Token hygiene**: the supervisor mints a fresh 1-hour registration token per
   spawn. The `gh` credential lives only in the supervisor process on the host.
 - **Least capability**: containers drop all capabilities except the file-ownership
@@ -44,7 +45,7 @@ is hardened for that threat:
 
 Residual risk: the per-slot `/cache` volume is shared across that slot's runs,
 so a malicious job could poison cached modules for the next job on the same
-slot. Acceptable because only trusted (same-repo) code reaches these runners;
+slot. Acceptable because only trusted (same-repo, non-Dependabot) code reaches these runners;
 to fully reset, drop the volumes and restart the pool.
 
 ## Manage (host)

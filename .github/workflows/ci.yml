@@ -67,9 +67,9 @@ jobs:
     name: Lint & Static Analysis
     permissions:
       contents: read
-    # Self-hosted ephemeral runners. Fork PRs (attacker-controlled) stay on
+    # Self-hosted ephemeral runners. Fork and Dependabot PRs stay on
     # GitHub-hosted ubuntu-latest and never touch our hardware.
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
+    runs-on: ${{ (github.event_name == 'pull_request' && (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/'))) && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
     timeout-minutes: 25
 
     steps:
@@ -258,9 +258,9 @@ jobs:
     name: Unit & Integration Tests
     permissions:
       contents: read
-    # Self-hosted ephemeral runners. Fork PRs (attacker-controlled) stay on
+    # Self-hosted ephemeral runners. Fork and Dependabot PRs stay on
     # GitHub-hosted ubuntu-latest and never touch our hardware.
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
+    runs-on: ${{ (github.event_name == 'pull_request' && (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/'))) && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
     timeout-minutes: 30
 
     # No services: block here on purpose. Self-hosted runners have no Docker
