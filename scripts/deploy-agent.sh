@@ -898,6 +898,18 @@ ReadWritePaths=${rw_paths}
 [Install]
 WantedBy=multi-user.target
 EOF
+    # Self-heal a stale node-tuning override. Curl-pipe installs skip
+    # node-tuning.sh (dirname $0 is "bash"), so limits.conf can still carry
+    # the pre-@mount filter after a reinstall. Patch it in place so the
+    # effective unit allows loop mounts via nsenter (fsopen/fsmount).
+    override_file="/etc/systemd/system/catalyst-agent.service.d/limits.conf"
+    if [ -f "${override_file}" ]; then
+        if grep -q "SystemCallFilter=.*@system-service" "${override_file}" \
+            && ! grep -q "SystemCallFilter=.*@mount" "${override_file}"; then
+            log "Patching stale ${override_file} to allow @mount ..."
+            sed -i 's/^SystemCallFilter=.*/SystemCallFilter=@system-service @mount/' "${override_file}"
+        fi
+    fi
 }
 
 start_services_systemd() {

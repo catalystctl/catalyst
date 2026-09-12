@@ -447,16 +447,29 @@ If the two listings disagree, you are on the broken build.
 
 **Symptoms:** Starting any server fails. The console shows `[Catalyst] Start failed: File system error: nsenter failed with status signal: 31 (SIGSYS)`.
 
-**Cause:** The agent mounts per-server disk images in the host mount namespace (`nsenter -t 1 -m -- mount -o loop,...`). Units with `SystemCallFilter=@system-service` block `mount(2)`/`umount2(2)` (they live in `@mount`, not `@system-service`), so systemd kills the mount with `SIGSYS`.
+**Cause:** The agent mounts per-server disk images in the host mount namespace (`nsenter -t 1 -m -- mount -o loop,...`). Modern `mount` uses the new mount API (`fsopen(430)`/`fsmount`/`move_mount`), which lives in `@mount`, not `@system-service`. Units with `SystemCallFilter=@system-service` let `nsenter`/`setns` through but kill the mount with `SIGSYS`.
 
-**Fix:** Update the unit and override to `SystemCallFilter=@system-service @mount`, then reload and restart:
+**Fix:** Both the main unit and the `limits.conf` override must allow `@mount`. A reinstall only heals the override when `node-tuning.sh` runs (curl-pipe installs skip it), so check both files live on the node:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl restart catalyst-agent
+systemctl cat catalyst-agent | grep SystemCallFilter
+cat /etc/systemd/system/catalyst-agent.service.d/limits.conf | grep SystemCallFilter
+# Both lines must read: SystemCallFilter=@system-service @mount
+curl -fsSL https://panel.example.com/api/agent/deploy-script | grep "^SystemCallFilter="
 ```
 
-New installs get the fixed unit from `deploy-agent.sh` and `node-tuning.sh`.
+If either live file lacks `@mount`, patch it (current `deploy-agent.sh` does this automatically on reinstall):
+
+```bash
+sudo sed -i 's/^SystemCallFilter=.*/SystemCallFilter=@system-service @mount/' \
+  /etc/systemd/system/catalyst-agent.service \
+  /etc/systemd/system/catalyst-agent.service.d/limits.conf
+sudo systemctl daemon-reload
+sudo systemctl restart catalyst-agent
+systemctl cat catalyst-agent | grep SystemCallFilter
+```
+
+Then retry Start in the panel. If the deploy-script URL still serves the old filter, update the panel first — reinstalls pull the script from the running panel.
 
 ### Game servers unreachable / no NAT after systemd agent install
 
