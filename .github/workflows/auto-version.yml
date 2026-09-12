@@ -429,21 +429,17 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # Prefer Swatinem/rust-cache over raw actions/cache for target/: it only
-      # persists dependency artifacts (not the final binary), shares better
-      # across runs, and sets CARGO_INCREMENTAL=0 automatically.
-      - name: Cache Rust (release ${{ matrix.target }})
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: catalyst-agent -> target
-          shared-key: agent-release-${{ matrix.target }}
-          cache-on-failure: true
-
-      - name: Enable sccache when available
-        # Guarded (not job env) so the workflow also works on images predating
-        # sccache: without it the build just compiles directly. CI already
-        # disables incremental builds, which sccache requires.
+      # No remote Rust cache here on purpose: restoring multi-hundred-MB
+      # target dirs costs ~20 minutes, about as much as compiling, and any
+      # profile change invalidates it anyway. sccache on the per-slot volume
+      # covers repeat builds with zero network cost.
+      - name: Configure Rust build caching
+        # sccache is guarded (not job env) so the workflow also works on
+        # images predating it: without it the build just compiles directly.
         run: |
+          # Incremental builds are incompatible with sccache; CI never uses
+          # them (the removed cache action used to set this).
+          echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
           if command -v sccache >/dev/null 2>&1; then
             {
               echo "RUSTC_WRAPPER=sccache"
