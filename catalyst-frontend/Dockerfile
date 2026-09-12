@@ -2,8 +2,9 @@
 # Build stage
 FROM node:22-alpine AS build
 
-# Enable pnpm via corepack
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Enable pnpm via corepack. Pinned to v10 to match the backend image and
+# keep image builds deterministic (never float on pnpm@latest).
+RUN corepack enable && corepack prepare pnpm@10.34.5 --activate
 
 WORKDIR /app
 
