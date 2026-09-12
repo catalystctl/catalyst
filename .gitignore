@@ -63,6 +63,7 @@ catalyst-frontend/src/styles/material.css
 eggs/
 progress.md
 packages/plugin-sdk/dist/
+packages/mcp-server/dist/
 .fusion.worktrees/
 .fusion
 .impeccable/
@@ -100,3 +101,6 @@ tests/fixtures/
 
 # Review/handoff scratch notes (untracked working documents)
 BRANCH-STACK.md
+
+# Local agent harness state (workflows, memory, scratch — never commit)
+.grok/

@@ -1,0 +1,37 @@
+{
+  "name": "@catalyst/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for the Catalyst game-server panel. Exposes nodes, servers, users, roles, and more as MCP tools using a panel URL and API key.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "catalyst-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "zod": "^4.4.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "~10.0.1",
+    "@types/node": "~26.2.0",
+    "@typescript-eslint/eslint-plugin": "~8.67.0",
+    "@typescript-eslint/parser": "~8.67.0",
+    "eslint": "~10.8.1",
+    "globals": "~17.9.0",
+    "tsx": "~4.23.12",
+    "typescript": "~6.0.3",
+    "vitest": "~4.1.10"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
