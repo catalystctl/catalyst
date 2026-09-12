@@ -28,12 +28,15 @@ echo "[entrypoint] registering ephemeral runner '${RUNNER_NAME}' for ${REPO}"
   --name "${RUNNER_NAME}" \
   --labels "${LABELS}" \
   --ephemeral \
+  --replace \
+  --disableupdate \
   --work _work
 
 echo "[entrypoint] registered; waiting for a job..."
-# --disableupdate is required for ephemeral runners: a self-update restarts
-# the listener, which consumes the one-shot ephemeral registration, so the
-# restarted listener can never reconnect (update loop, jobs stay queued).
-# Runner version upgrades happen by rebuilding this image instead.
-./run.sh --disableupdate
+# NOTE: --disableupdate belongs on config.sh (persisted at configure time).
+# It must NOT be passed to run.sh (which rejects it). In-place updates are
+# disabled because a self-update restarts the listener, consuming the one-shot
+# ephemeral registration so it can never reconnect. Runner upgrades happen by
+# rebuilding this image instead.
+./run.sh
 echo "[entrypoint] job done; exiting (supervisor will respawn)"
