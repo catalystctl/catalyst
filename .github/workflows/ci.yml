@@ -162,14 +162,22 @@ jobs:
         working-directory: catalyst-backend
         run: npx prisma generate
 
-      # Smart cargo cache (registry + dependency target artifacts).
-      # Replaces separate registry/target caches that rarely hit on the build job.
-      - name: Cache Rust (lint)
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: catalyst-agent -> target
-          shared-key: agent-ci
-          cache-on-failure: true
+      # Local compilation cache on the per-slot volume. Restoring a remote
+      # target-dir cache costs ~20 minutes here, about as much as compiling.
+      - name: Configure Rust build caching
+        run: |
+          if command -v sccache >/dev/null 2>&1; then
+            {
+              echo "RUSTC_WRAPPER=sccache"
+              echo "SCCACHE_DIR=/cache/sccache"
+              echo "SCCACHE_CACHE_SIZE=10G"
+              echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1"
+            } >> "$GITHUB_ENV"
+            mkdir -p /cache/sccache
+            echo "sccache enabled"
+          else
+            echo "sccache not installed, compiling directly"
+          fi
 
       - name: Install cargo dependencies
         run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
@@ -358,12 +366,21 @@ jobs:
         working-directory: catalyst-backend
         run: pnpm run db:push
 
-      - name: Cache Rust (test)
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: catalyst-agent -> target
-          shared-key: agent-ci
-          cache-on-failure: true
+      # Local compilation cache on the per-slot volume (see lint job).
+      - name: Configure Rust build caching
+        run: |
+          if command -v sccache >/dev/null 2>&1; then
+            {
+              echo "RUSTC_WRAPPER=sccache"
+              echo "SCCACHE_DIR=/cache/sccache"
+              echo "SCCACHE_CACHE_SIZE=10G"
+              echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1"
+            } >> "$GITHUB_ENV"
+            mkdir -p /cache/sccache
+            echo "sccache enabled"
+          else
+            echo "sccache not installed, compiling directly"
+          fi
 
       - name: Install cargo dependencies
         run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
@@ -476,15 +493,23 @@ jobs:
         working-directory: catalyst-backend
         run: npx prisma generate
 
-      # Previously this job only cached the cargo registry — not target/ — so
-      # "Build agent (debug)" recompiled everything (~75s). Share the same
-      # rust-cache key as lint/test so dependency objects are reused.
-      - name: Cache Rust (build)
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: catalyst-agent -> target
-          shared-key: agent-ci
-          cache-on-failure: true
+      # Local compilation cache on the per-slot volume (see lint job).
+      # Shares dep objects with lint/test through sccache instead of a
+      # downloaded target dir.
+      - name: Configure Rust build caching
+        run: |
+          if command -v sccache >/dev/null 2>&1; then
+            {
+              echo "RUSTC_WRAPPER=sccache"
+              echo "SCCACHE_DIR=/cache/sccache"
+              echo "SCCACHE_CACHE_SIZE=10G"
+              echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1"
+            } >> "$GITHUB_ENV"
+            mkdir -p /cache/sccache
+            echo "sccache enabled"
+          else
+            echo "sccache not installed, compiling directly"
+          fi
 
       - name: Install cargo dependencies
         run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
