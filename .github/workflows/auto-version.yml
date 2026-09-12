@@ -376,23 +376,47 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apt-get update
+          # Link toolchains are preinstalled in the runner image: only install
+          # what is missing. The linker env exports below run every time.
+          need_install=false
           case "${{ matrix.target }}" in
+            x86_64-unknown-linux-gnu) ;;
             x86_64-unknown-linux-musl)
-              apt-get install -y musl-tools musl-dev
-              ;;
+              if ! command -v musl-gcc >/dev/null 2>&1; then need_install=true; fi ;;
             aarch64-unknown-linux-gnu)
-              apt-get install -y gcc-aarch64-linux-gnu
+              if ! command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then need_install=true; fi ;;
+            aarch64-unknown-linux-musl)
+              if [ ! -x /opt/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc ]; then need_install=true; fi ;;
+            *)
+              echo "Unknown target ${{ matrix.target }}"
+              exit 1
+              ;;
+          esac
+          if [ "$need_install" = "true" ]; then
+            apt-get update
+            case "${{ matrix.target }}" in
+              x86_64-unknown-linux-musl)
+                apt-get install -y musl-tools musl-dev
+                ;;
+              aarch64-unknown-linux-gnu)
+                apt-get install -y gcc-aarch64-linux-gnu
+                ;;
+              aarch64-unknown-linux-musl)
+                # Cross-compile musl aarch64 on the x86_64 builder (deploy + auto-update use this asset).
+                apt-get install -y wget xz-utils
+                curl -fsSL -o /tmp/aarch64-linux-musl-cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
+                echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/aarch64-linux-musl-cross.tgz" | sha256sum -c -
+                tar -C /opt -xzf /tmp/aarch64-linux-musl-cross.tgz
+                rm -f /tmp/aarch64-linux-musl-cross.tgz
+                ;;
+            esac
+          fi
+          case "${{ matrix.target }}" in
+            aarch64-unknown-linux-gnu)
               echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
               echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
               ;;
             aarch64-unknown-linux-musl)
-              # Cross-compile musl aarch64 on the x86_64 builder (deploy + auto-update use this asset).
-              apt-get install -y wget xz-utils
-              curl -fsSL -o /tmp/aarch64-linux-musl-cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
-              echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/aarch64-linux-musl-cross.tgz" | sha256sum -c -
-              tar -C /opt -xzf /tmp/aarch64-linux-musl-cross.tgz
-              rm -f /tmp/aarch64-linux-musl-cross.tgz
               echo "/opt/aarch64-linux-musl-cross/bin" >> "$GITHUB_PATH"
               echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
               echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
@@ -415,10 +439,31 @@ jobs:
           shared-key: agent-release-${{ matrix.target }}
           cache-on-failure: true
 
+      - name: Enable sccache when available
+        # Guarded (not job env) so the workflow also works on images predating
+        # sccache: without it the build just compiles directly. CI already
+        # disables incremental builds, which sccache requires.
+        run: |
+          if command -v sccache >/dev/null 2>&1; then
+            {
+              echo "RUSTC_WRAPPER=sccache"
+              echo "SCCACHE_DIR=/cache/sccache"
+              echo "SCCACHE_CACHE_SIZE=10G"
+              echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1"
+            } >> "$GITHUB_ENV"
+            mkdir -p /cache/sccache
+            echo "sccache enabled"
+          else
+            echo "sccache not installed, compiling directly"
+          fi
+
       - name: Build release
         run: |
           cd catalyst-agent
           cargo build --release --target ${{ matrix.target }}
+
+      - name: Show sccache stats
+        run: sccache --show-stats || true
 
       - name: Rename binary for release asset
         run: |
