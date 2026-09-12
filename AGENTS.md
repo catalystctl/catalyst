@@ -30,7 +30,7 @@ non-trivial, all of them:
 
 ## CI and releases
 
-- Pushing to `main` runs `ci.yml` (lint → test → build), then `auto-version.yml`: conventional commits decide the bump, and it tags, publishes the GHCR images, the agent release and the GitHub release.
+- Pull requests run `ci.yml` gates (lint → test → build verification). Pushing to `main` skips CI and runs `auto-version.yml` only: conventional commits decide the bump, and it tags, publishes the GHCR images, the agent release and the GitHub release. Keep PRs green before pushing — direct pushes to `main` are ungated.
 - CI installs with `pnpm@latest` (12.x) and `--frozen-lockfile`. A dependency whose install script is not approved fails the install *and* the Docker image builds — approve it under `allowBuilds` in `pnpm-workspace.yaml`.
 - pnpm settings that matter (overrides, `minimumReleaseAge`, hoisted linker, `allowBuilds`) live in `pnpm-workspace.yaml`; `.npmrc` only carries auth/registry settings on pnpm 11+.
 - `cargo audit` and `cargo deny` are blocking; the zizmor workflow lint is advisory.

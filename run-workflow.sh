@@ -69,15 +69,15 @@
 # │  HOW TRIGGERS DIFFER                                                         │
 # │                                                                              │
 # │  EVENT=push:                                                                 │
-# │    - Simulates merge to main/develop or a tag push.                          │
-# │    - Runs CI gates + build + agent release + docker publish.                 │
-# │    - Maps to: on.push in .github/workflows/ci.yml                           │
+# │    - Simulates a pre-push local check (GitHub CI no longer runs on push).   │
+# │    - Runs CI gates + build + mocked agent release + docker publish.         │
+# │    - Pushes to main go straight to auto-version.yml release builds there.   │
 # │    - Agent release only runs when current git HEAD is a v* tag.              │
 # │    - Docker publish only runs when relevant paths changed.                   │
 # │                                                                              │
 # │  EVENT=pull_request:                                                         │
 # │    - Simulates a PR check.                                                   │
-# │    - Runs lint + test only (no build/deploy).                                │
+# │    - Runs lint + test + build (no deploy).                                   │
 # │    - Maps to: on.pull_request in .github/workflows/ci.yml                   │
 # │                                                                              │
 # │  The actual GitHub workflow uses path filters to skip CI on irrelevant      │

@@ -15,10 +15,11 @@ jobs:
   notify:
     permissions:
       contents: read
-    # GitHub-hosted on purpose: this job polls the CI run for up to ~30min per
-    # push and must not occupy a self-hosted build slot. It checks out nothing.
+    # GitHub-hosted on purpose: this job polls the Auto Version release run
+    # for up to ~70min per main push and must not occupy a self-hosted
+    # build slot. It checks out nothing.
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 80
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,7 +37,7 @@ jobs:
           REPO="${GITHUB_REPOSITORY}"
           SERVER_URL="${GITHUB_SERVER_URL:-https://github.com}"
 
-          # ── PR events: single fire-and-forget embed (no CI to follow) ──
+          # ── PR events: single fire-and-forget embed (no release run to follow) ──
           if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
             ACTION=$(jq -r '.action' < "$GITHUB_EVENT_PATH")
             PR_NUM=$(jq -r '.pull_request.number' < "$GITHUB_EVENT_PATH")
@@ -85,7 +86,7 @@ jobs:
             exit 0
           fi
 
-          # ── Push: live CI/CD — Catalyst embed (post once, PATCH to final) ──
+          # ── Push: live Auto Version embed (post once, PATCH to final) ──
           BRANCH=$(echo "${GITHUB_REF}" | sed 's|refs/heads/||')
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
           COMMIT_COUNT=$(jq '.commits | length' < "$GITHUB_EVENT_PATH")
@@ -102,14 +103,43 @@ jobs:
           fi
 
           COMMIT_URL="${SERVER_URL}/${REPO}/commit/${GITHUB_SHA}"
+
+          # Auto Version only runs on main: pushes elsewhere get a single
+          # fire-and-forget embed (no release workflow to follow).
+          if [ "${BRANCH}" != "main" ]; then
+            SIMPLE_TITLE="📌 Push to \`${BRANCH}\` — ${COMMIT_COUNT} commit(s)"
+            SIMPLE_DESC="${DESCRIPTION}"$'\n\n'"[View commit](<${COMMIT_URL}>) • \`${SHORT_SHA}\` • by \`${GITHUB_ACTOR}\`"
+            jq -n \
+              --arg username "Catalyst Release" \
+              --arg avatar_url "${ACTOR_AVATAR}" \
+              --arg title "${SIMPLE_TITLE}" \
+              --arg description "${SIMPLE_DESC}" \
+              --arg url "${COMMIT_URL}" \
+              --argjson color 5814783 \
+              --arg repo "${REPO}" \
+              '{
+                username: $username,
+                avatar_url: $avatar_url,
+                embeds: [{
+                  title: $title,
+                  description: $description,
+                  url: $url,
+                  color: $color,
+                  footer: { text: $repo },
+                  timestamp: now | todateiso8601
+                }]
+              }' | curl -sf -H "Content-Type: application/json" -X POST "${DISCORD_WEBHOOK_URL}" -d @- > /dev/null || true
+            echo "✅ Push embed sent (no release workflow on ${BRANCH})"
+            exit 0
+          fi
           # Initial running embed — yellow, patched to green/red on completion.
-          INITIAL_TITLE="🟡 CI/CD — Catalyst • Running — \`${BRANCH}\` — ${COMMIT_COUNT} commit(s)"
-          INITIAL_DESC="${DESCRIPTION}"$'\n\n'"⏳ Workflow queued — waiting for **CI/CD — Catalyst** to start…"$'\n'"[View commit](<${COMMIT_URL}>) • \`${SHORT_SHA}\` • by \`${GITHUB_ACTOR}\`"
+          INITIAL_TITLE="🟡 Auto Version • Running — \`${BRANCH}\` — ${COMMIT_COUNT} commit(s)"
+          INITIAL_DESC="${DESCRIPTION}"$'\n\n'"⏳ Workflow queued — waiting for **Auto Version** to start…"$'\n'"[View commit](<${COMMIT_URL}>) • \`${SHORT_SHA}\` • by \`${GITHUB_ACTOR}\`"
           INITIAL_COLOR=16776960
           FOOTER_LIVE="${REPO} • live — auto-updating"
 
           PAYLOAD=$(jq -n \
-            --arg username "Catalyst CI" \
+            --arg username "Catalyst Release" \
             --arg avatar_url "${ACTOR_AVATAR}" \
             --arg title "${INITIAL_TITLE}" \
             --arg description "${INITIAL_DESC}" \
@@ -150,10 +180,10 @@ jobs:
           echo "✅ Initial embed posted — message id ${MESSAGE_ID}"
           EDIT_URL="${DISCORD_WEBHOOK_URL}/messages/${MESSAGE_ID}"
 
-          # ── Discover the CI/CD — Catalyst run for this SHA ──
+          # ── Discover the Auto Version run for this SHA ──
           API_BASE="${GITHUB_API_URL:-https://api.github.com}"
-          CI_RUN_ID=""
-          echo "→ Searching for CI/CD — Catalyst run for ${SHORT_SHA}…"
+          REL_RUN_ID=""
+          echo "→ Searching for Auto Version run for ${SHORT_SHA}…"
           for attempt in $(seq 1 18); do
             # GH API: list runs for this repo, filter by head_sha + workflow name.
             RUNS_JSON=$(curl -sf \
@@ -162,26 +192,26 @@ jobs:
               "${API_BASE}/repos/${REPO}/actions/runs?per_page=100&event=push&branch=${BRANCH}" || true)
 
             if [ -n "${RUNS_JSON}" ]; then
-              CI_RUN_ID=$(echo "${RUNS_JSON}" | jq -r --arg sha "${GITHUB_SHA}" '
-                .workflow_runs // [] | map(select(.head_sha == $sha and .name == "CI/CD — Catalyst")) | .[0].id // empty
+              REL_RUN_ID=$(echo "${RUNS_JSON}" | jq -r --arg sha "${GITHUB_SHA}" '
+                .workflow_runs // [] | map(select(.head_sha == $sha and .name == "Auto Version")) | .[0].id // empty
               ')
-              if [ -n "${CI_RUN_ID}" ] && [ "${CI_RUN_ID}" != "null" ]; then
-                echo "→ Found CI run ${CI_RUN_ID} (attempt ${attempt})"
+              if [ -n "${REL_RUN_ID}" ] && [ "${REL_RUN_ID}" != "null" ]; then
+                echo "→ Found release run ${REL_RUN_ID} (attempt ${attempt})"
                 break
               fi
             fi
 
             # Also try without branch filter (forks / detached edge)
-            if [ -z "${CI_RUN_ID}" ] && [ $((attempt % 3)) -eq 0 ]; then
+            if [ -z "${REL_RUN_ID}" ] && [ $((attempt % 3)) -eq 0 ]; then
               RUNS_JSON=$(curl -sf \
                 -H "Authorization: Bearer ${GH_TOKEN}" \
                 -H "Accept: application/vnd.github+json" \
                 "${API_BASE}/repos/${REPO}/actions/runs?per_page=100&event=push" || true)
-              CI_RUN_ID=$(echo "${RUNS_JSON}" | jq -r --arg sha "${GITHUB_SHA}" '
-                .workflow_runs // [] | map(select(.head_sha == $sha and .name == "CI/CD — Catalyst")) | .[0].id // empty
+              REL_RUN_ID=$(echo "${RUNS_JSON}" | jq -r --arg sha "${GITHUB_SHA}" '
+                .workflow_runs // [] | map(select(.head_sha == $sha and .name == "Auto Version")) | .[0].id // empty
               ' 2>/dev/null || true)
-              if [ -n "${CI_RUN_ID}" ] && [ "${CI_RUN_ID}" != "null" ]; then
-                echo "→ Found CI run ${CI_RUN_ID} via unfiltered search"
+              if [ -n "${REL_RUN_ID}" ] && [ "${REL_RUN_ID}" != "null" ]; then
+                echo "→ Found release run ${REL_RUN_ID} via unfiltered search"
                 break
               fi
             fi
@@ -190,10 +220,10 @@ jobs:
             sleep 10
           done
 
-          if [ -z "${CI_RUN_ID}" ] || [ "${CI_RUN_ID}" = "null" ]; then
-            echo "⚠️ No CI/CD — Catalyst run found for ${SHORT_SHA} after ~3min — marking embed as unknown"
-            FINAL_TITLE="⚪ CI/CD — Catalyst • Unknown — \`${BRANCH}\`"
-            FINAL_DESC="${DESCRIPTION}"$'\n\n'"⚠️ Could not locate the **CI/CD — Catalyst** run for \`${SHORT_SHA}\`."$'\n'"[View commit](<${COMMIT_URL}>)"
+          if [ -z "${REL_RUN_ID}" ] || [ "${REL_RUN_ID}" = "null" ]; then
+            echo "⚠️ No Auto Version run found for ${SHORT_SHA} after ~3min — marking embed as unknown"
+            FINAL_TITLE="⚪ Auto Version • Unknown — \`${BRANCH}\`"
+            FINAL_DESC="${DESCRIPTION}"$'\n\n'"⚠️ Could not locate the **Auto Version** run for \`${SHORT_SHA}\`."$'\n'"[View commit](<${COMMIT_URL}>)"
             FINAL_COLOR=9807270
             FINAL_URL="${COMMIT_URL}"
             FOOTER_UNKNOWN="${REPO} • $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -216,11 +246,11 @@ jobs:
             exit 0
           fi
 
-          RUN_URL="${SERVER_URL}/${REPO}/actions/runs/${CI_RUN_ID}"
+          RUN_URL="${SERVER_URL}/${REPO}/actions/runs/${REL_RUN_ID}"
 
           # Patch once to “running + linked” so the embed is immediately clickable.
-          RUNNING_TITLE="🟡 CI/CD — Catalyst • Running — \`${BRANCH}\`"
-          RUNNING_DESC="${DESCRIPTION}"$'\n\n'"⏳ **CI/CD — Catalyst** is running…"$'\n'"[View commit](<${COMMIT_URL}>) • [View workflow](<${RUN_URL}>) • \`${SHORT_SHA}\`"
+          RUNNING_TITLE="🟡 Auto Version • Running — \`${BRANCH}\`"
+          RUNNING_DESC="${DESCRIPTION}"$'\n\n'"⏳ **Auto Version** is running…"$'\n'"[View commit](<${COMMIT_URL}>) • [View workflow](<${RUN_URL}>) • \`${SHORT_SHA}\`"
           RUNNING_COLOR=16776960
           jq -n \
             --arg title "${RUNNING_TITLE}" \
@@ -240,22 +270,22 @@ jobs:
             }' | curl -sf -H "Content-Type: application/json" -X PATCH "${EDIT_URL}" -d @- > /dev/null || true
           echo "→ Embed linked to run ${RUN_URL}"
 
-          # ── Poll until completed (max ~30 min) ──
+          # ── Poll until completed (max ~70 min: 4 agent targets + images) ──
           CONCLUSION=""
           STATUS=""
           ELAPSED=0
-          MAX_WAIT=180
+          MAX_WAIT=420
           for _ in $(seq 1 ${MAX_WAIT}); do
             RUN_JSON=$(curl -sf \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
-              "${API_BASE}/repos/${REPO}/actions/runs/${CI_RUN_ID}" || true)
+              "${API_BASE}/repos/${REPO}/actions/runs/${REL_RUN_ID}" || true)
 
             if [ -n "${RUN_JSON}" ]; then
               STATUS=$(echo "${RUN_JSON}" | jq -r '.status // empty')
               CONCLUSION=$(echo "${RUN_JSON}" | jq -r '.conclusion // empty')
               if [ "${STATUS}" = "completed" ]; then
-                echo "→ CI completed — conclusion=${CONCLUSION}"
+                echo "→ Release completed — conclusion=${CONCLUSION}"
                 break
               fi
             fi
@@ -269,7 +299,7 @@ jobs:
           done
 
           if [ "${STATUS}" != "completed" ]; then
-            echo "⚠️ Poll timed out after ~30min (last status=${STATUS})"
+            echo "⚠️ Poll timed out after ~70min (last status=${STATUS})"
             CONCLUSION="timed_out"
           fi
 
@@ -277,7 +307,7 @@ jobs:
           JOBS_JSON=$(curl -sf \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
-            "${API_BASE}/repos/${REPO}/actions/runs/${CI_RUN_ID}/jobs?per_page=100" || echo '{"jobs":[]}')
+            "${API_BASE}/repos/${REPO}/actions/runs/${REL_RUN_ID}/jobs?per_page=100" || echo '{"jobs":[]}')
 
           JOBS_MD=$(echo "${JOBS_JSON}" | jq -r '
             .jobs // [] |
@@ -313,7 +343,7 @@ jobs:
               FINAL_ICON="⚪"; FINAL_LABEL="${CONCLUSION:-unknown}"; FINAL_COLOR=9807270 ;;
           esac
 
-          FINAL_TITLE="${FINAL_ICON} CI/CD — Catalyst • ${FINAL_LABEL} — \`${BRANCH}\`"
+          FINAL_TITLE="${FINAL_ICON} Auto Version • ${FINAL_LABEL} — \`${BRANCH}\`"
           FINAL_DESC="${DESCRIPTION}"$'\n\n'"${FINAL_ICON} **${FINAL_LABEL}** — [View workflow](<${RUN_URL}>) • \`${SHORT_SHA}\`"$'\n'"[View commit](<${COMMIT_URL}>)"$'\n\n'"**Jobs:**"$'\n'"${JOBS_MD}"
 
           # Discord embed description limit is 4096; cap safely.

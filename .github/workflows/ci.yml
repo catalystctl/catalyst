@@ -7,19 +7,16 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  JOB INDEX                                                                    ║
 # ║                                                                              ║
-# ║  CI gates (push + PR):                                                       ║
+# ║  PR gates (pull requests only — no push triggers):                           ║
 # ║    lint          — ESLint, cargo fmt/check/clippy, security audit            ║
-# ║    test          — Vitest, cargo test (with Postgres service)                 ║
+# ║    test          — Vitest, cargo test (throwaway Postgres per job)           ║
 # ║                                                                              ║
-# ║  Build (push only):                                                          ║
+# ║  Build (PRs, after lint+test):                                               ║
 # ║    build        — pnpm build + cargo build verification                       ║
 # ║                                                                              ║
-# ║  Publish (push to develop):                                                  ║
-# ║    detect-changes — any product path → publish BOTH images                   ║
-# ║    publish-backend  — GHCR image (after lint+test+detect, || build)         ║
-# ║    publish-frontend — GHCR image (after lint+test+detect, || build)         ║
-# ║    main image publish lives in auto-version.yml so baked versions match     ║
-# ║    the tag (GITHUB_TOKEN chore(release) commits do not retrigger CI).      ║
+# ║  Pushes to main skip CI and go straight to auto-version.yml, which           ║
+# ║  cuts the tag and builds the release agent binaries AND both GHCR            ║
+# ║  images. Keep PRs green before pushing — direct pushes are ungated.          ║
 # ║                                                                              ║
 # ║  Release (in auto-version.yml, not here):                                    ║
 # ║    agent-release + publish-images — agent binaries AND both GHCR images     ║
@@ -28,8 +25,6 @@
 name: CI/CD — Catalyst
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
@@ -43,19 +38,14 @@ env:
   CARGO_INCREMENTAL: "0"
   PROTOC_VERSION: "25.1"
   PROTOC_ARCH: "linux-x86_64"
-  REGISTRY: ghcr.io
-  IMAGE_OWNER: ${{ github.repository_owner }}
-  # Single credential file shared by buildah (login/push) and the SLSA
-  # attestation action, which only reads the docker default location.
-  REGISTRY_AUTH_FILE: /root/.docker/config.json
 
-# Cancel superseded runs on the same ref (new pushes shouldn't wait on old ones).
+# Cancel superseded runs on the same ref (new PR syncs shouldn't wait on old ones).
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # ────────────────────────────────────────────────────────────────────────────────
-# CI GATES — Lint + Test (run on every push and PR)
+# CI GATES — Lint + Test (run on every PR)
 # ────────────────────────────────────────────────────────────────────────────────
 
 jobs:
@@ -69,7 +59,7 @@ jobs:
       contents: read
     # Self-hosted ephemeral runners. Fork and Dependabot PRs stay on
     # GitHub-hosted ubuntu-latest and never touch our hardware.
-    runs-on: ${{ (github.event_name == 'pull_request' && (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/'))) && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
+    runs-on: ${{ (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/')) && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
     timeout-minutes: 25
 
     steps:
@@ -260,7 +250,7 @@ jobs:
       contents: read
     # Self-hosted ephemeral runners. Fork and Dependabot PRs stay on
     # GitHub-hosted ubuntu-latest and never touch our hardware.
-    runs-on: ${{ (github.event_name == 'pull_request' && (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/'))) && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
+    runs-on: ${{ (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/')) && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
     timeout-minutes: 30
 
     # No services: block here on purpose. Self-hosted runners have no Docker
@@ -397,7 +387,7 @@ jobs:
         run: cargo test --manifest-path catalyst-agent/Cargo.toml
 
   # ──────────────────────────────────────────────────────────────────────────────
-  # Job 3: Build Verification (push to main/develop only)
+  # Job 3: Build Verification (PRs, after lint+test)
   # Maps to: Step "Build Verification" in run-workflow.sh
   # ──────────────────────────────────────────────────────────────────────────────
   build:
@@ -405,10 +395,10 @@ jobs:
     permissions:
       contents: read
     needs: [lint, test]
-    # Push-only (forks never trigger push on this repo), so self-hosted directly.
-    runs-on: [self-hosted, Linux, X64, catalyst-ci]
+    # Same fork/Dependabot routing as lint/test: PRs from forks or
+    # dependabot/* branches build on GitHub-hosted runners.
+    runs-on: ${{ (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/')) && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted", "Linux", "X64", "catalyst-ci"]') }}
     timeout-minutes: 25
-    if: github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -545,216 +535,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 5a: Detect Changes for Docker Publish
-  # Determines which Docker images need rebuilding based on changed paths.
-  # Merged from: docker-publish.yml
-  # ──────────────────────────────────────────────────────────────────────────────
-  detect-changes:
-    name: Detect Changes
-    permissions:
-      contents: read
-    # Needs nothing but a checkout: runs in wave 1 alongside lint/test so
-    # publish jobs can start the moment lint+test go green.
-    runs-on: [self-hosted, Linux, X64, catalyst-ci]
-    timeout-minutes: 10
-    if: github.event_name == 'push'
-    outputs:
-      release: ${{ steps.filter.outputs.release }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
-        id: filter
-        with:
-          # A version bump is lockstep: backend, frontend, and agent all ship
-          # the same semver. Any product-surface change republishes BOTH images
-          # on develop. On main, auto-version.yml publishes both from the tag.
-          filters: |
-            release:
-              - 'catalyst-backend/**'
-              - 'catalyst-frontend/**'
-              - 'catalyst-agent/**'
-              - 'scripts/deploy-agent.sh'
-              - 'catalyst-docker/**'
-              - 'pnpm-lock.yaml'
-              - 'pnpm-workspace.yaml'
-              - 'package.json'
-              - '.npmrc'
-
-  # ──────────────────────────────────────────────────────────────────────────────
-  # Job 5b: Publish Backend Docker Image
-  # Builds and pushes catalyst-backend to GHCR.
-  # Maps to: Step "Docker Publish" (backend) in run-workflow.sh
-  # Merged from: docker-publish.yml
-  # ──────────────────────────────────────────────────────────────────────────────
-  publish-backend:
-    name: Publish Backend Image
-    permissions:
-      contents: read
-      packages: write
-      id-token: write # SLSA provenance via attest-build-provenance
-      attestations: write
-    # Docker build is independent of the TypeScript/cargo verify job — only wait
-    # for gates + path detect. Overlaps with Build Verification wall-clock.
-    needs: [lint, test, detect-changes]
-    # Push-only (forks never trigger push on this repo), so self-hosted directly.
-    # Images build via buildah chroot isolation — no Docker daemon socket is
-    # ever exposed to jobs.
-    runs-on: [self-hosted, Linux, X64, catalyst-ci]
-    timeout-minutes: 40
-    if: >-
-      github.event_name == 'push' &&
-      github.ref != 'refs/heads/main' &&
-      needs.detect-changes.outputs.release == 'true'
-
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-
-      - name: Log in to GHCR
-        run: buildah login -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}" "${{ env.REGISTRY }}"
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-backend
-          tags: |
-            type=sha,prefix=
-            type=ref,event=branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-
-      - name: Build and push
-        id: build-push
-        run: |
-          set -euo pipefail
-          # vfs storage: overlay is unusable nested inside the runner
-          # container (overlayfs backing fs, no fuse mount helper), so every
-          # buildah invocation pins vfs explicitly.
-          STORE_ARGS=(--storage-driver vfs)
-          TAG_ARGS=()
-          while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            TAG_ARGS+=(-t "$tag")
-          done <<< "${{ steps.meta.outputs.tags }}"
-          LABEL_ARGS=()
-          while IFS= read -r label; do
-            [ -n "$label" ] || continue
-            LABEL_ARGS+=(--label "$label")
-          done <<< "${{ steps.meta.outputs.labels }}"
-          IIDFILE="$(mktemp)"
-          buildah "${STORE_ARGS[@]}" build --isolation chroot \
-            "${TAG_ARGS[@]}" "${LABEL_ARGS[@]}" \
-            --iidfile "$IIDFILE" \
-            -f catalyst-backend/Dockerfile .
-          IID="$(cat "$IIDFILE")"
-          FIRST_TAG="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | grep -v '^$' | head -1)"
-          DIGEST_FILE="$(mktemp)"
-          buildah "${STORE_ARGS[@]}" push --digestfile "$DIGEST_FILE" "$IID" "docker://$FIRST_TAG"
-          RAW_DIGEST="$(cat "$DIGEST_FILE")"
-          RAW_DIGEST="${RAW_DIGEST#sha256:}"
-          DIGEST="sha256:$RAW_DIGEST"
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
-          while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            [ "$tag" = "$FIRST_TAG" ] && continue
-            buildah "${STORE_ARGS[@]}" push "$IID" "docker://$tag"
-          done <<< "${{ steps.meta.outputs.tags }}"
-          # No local cleanup: container storage vanishes with the ephemeral runner.
-
-      - name: Attest image provenance (SLSA/Sigstore)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-backend
-          subject-digest: ${{ steps.build-push.outputs.digest }}
-          push-to-registry: true
-
-  # ──────────────────────────────────────────────────────────────────────────────
-  # Job 5c: Publish Frontend Docker Image
-  # Builds and pushes catalyst-frontend to GHCR.
-  # Maps to: Step "Docker Publish" (frontend) in run-workflow.sh
-  # Merged from: docker-publish.yml
-  # ──────────────────────────────────────────────────────────────────────────────
-  publish-frontend:
-    name: Publish Frontend Image
-    permissions:
-      contents: read
-      packages: write
-      id-token: write # SLSA provenance via attest-build-provenance
-      attestations: write
-    needs: [lint, test, detect-changes]
-    runs-on: [self-hosted, Linux, X64, catalyst-ci]
-    timeout-minutes: 40
-    if: >-
-      github.event_name == 'push' &&
-      github.ref != 'refs/heads/main' &&
-      needs.detect-changes.outputs.release == 'true'
-
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-
-      - name: Checkout plugins repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: catalystctl/catalyst-plugins
-          ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
-          path: catalyst-plugins
-
-      - name: Log in to GHCR
-        run: buildah login -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}" "${{ env.REGISTRY }}"
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-frontend
-          tags: |
-            type=sha,prefix=
-            type=ref,event=branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-
-      - name: Build and push
-        id: build-push
-        run: |
-          set -euo pipefail
-          # vfs storage: overlay is unusable nested inside the runner
-          # container (overlayfs backing fs, no fuse mount helper), so every
-          # buildah invocation pins vfs explicitly.
-          STORE_ARGS=(--storage-driver vfs)
-          TAG_ARGS=()
-          while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            TAG_ARGS+=(-t "$tag")
-          done <<< "${{ steps.meta.outputs.tags }}"
-          LABEL_ARGS=()
-          while IFS= read -r label; do
-            [ -n "$label" ] || continue
-            LABEL_ARGS+=(--label "$label")
-          done <<< "${{ steps.meta.outputs.labels }}"
-          IIDFILE="$(mktemp)"
-          buildah "${STORE_ARGS[@]}" build --isolation chroot \
-            "${TAG_ARGS[@]}" "${LABEL_ARGS[@]}" \
-            --iidfile "$IIDFILE" \
-            -f catalyst-frontend/Dockerfile .
-          IID="$(cat "$IIDFILE")"
-          FIRST_TAG="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | grep -v '^$' | head -1)"
-          DIGEST_FILE="$(mktemp)"
-          buildah "${STORE_ARGS[@]}" push --digestfile "$DIGEST_FILE" "$IID" "docker://$FIRST_TAG"
-          RAW_DIGEST="$(cat "$DIGEST_FILE")"
-          RAW_DIGEST="${RAW_DIGEST#sha256:}"
-          DIGEST="sha256:$RAW_DIGEST"
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
-          while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            [ "$tag" = "$FIRST_TAG" ] && continue
-            buildah "${STORE_ARGS[@]}" push "$IID" "docker://$tag"
-          done <<< "${{ steps.meta.outputs.tags }}"
-          # No local cleanup: container storage vanishes with the ephemeral runner.
-
-      - name: Attest image provenance (SLSA/Sigstore)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-frontend
-          subject-digest: ${{ steps.build-push.outputs.digest }}
-          push-to-registry: true
+  # Image publishing and agent releases live in auto-version.yml (push to
+  # main only). CI is PR gates only, so the old push-only detect-changes
+  # and GHCR publish jobs were removed. There is no develop branch.
+  # ──────────────────────────────────────────────────────────────────────────

@@ -8,15 +8,18 @@ container that is destroyed afterwards. No Blacksmith runners remain.
 
 | Job | Runner |
 |-----|--------|
-| Lint, test, build, Docker publish (`ci.yml`) | Self-hosted, except fork and Dependabot PRs |
+| PR gates: lint, test, build verification (`ci.yml`) | Self-hosted, except fork and Dependabot PRs |
 | Agent release, version image publish (`auto-version.yml`) | Self-hosted (push to `main` only) |
-| Fork and Dependabot pull requests (lint, test) | GitHub-hosted `ubuntu-latest` |
+| Fork and Dependabot pull requests (lint, test, build) | GitHub-hosted `ubuntu-latest` |
+| Pushes to `main` | No CI gates — straight to `auto-version.yml` release |
 | Discord notifications, benchmark harness check | GitHub-hosted `ubuntu-latest` |
 | Live benchmark (LXC lab) | None — needs a dedicated host runner, stays skipped |
 
-Fork and Dependabot PRs never touch our hardware: `ci.yml` routes `pull_request` jobs from
-forks and `dependabot/*` branches to `ubuntu-latest`. Same-repo pushes and internal PRs use the
-self-hosted pool. As a second layer, keep **Require approval for fork pull
+Fork and Dependabot PRs never touch our hardware: `ci.yml` runs on pull requests
+only, routing jobs from forks and `dependabot/*` branches to `ubuntu-latest`
+while internal PR jobs use the self-hosted pool. Pushes to `main` skip CI and
+go straight to the `auto-version.yml` release, so keep PRs green before pushing
+— direct pushes are ungated. As a second layer, keep **Require approval for fork pull
 request workflows** enabled in Settings → Actions.
 
 ## Security properties

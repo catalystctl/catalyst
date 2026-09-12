@@ -27,7 +27,8 @@ is hardened for that threat:
 - **Fork and Dependabot routing**: pull-request jobs from forks and
   `dependabot/*` branches run on GitHub-hosted `ubuntu-latest`, never here.
   Only same-repo pushes and internal non-Dependabot PRs reach these runners
-  (see `runs-on` expressions in `ci.yml`).
+  (see `runs-on` expressions in `ci.yml`). `ci.yml` is PR gates only; pushes
+  to `main` go straight to `auto-version.yml` release builds.
 - **Token hygiene**: the supervisor mints a fresh 1-hour registration token per
   spawn. The `gh` credential lives only in the supervisor process on the host.
 - **Least capability**: containers drop all capabilities except the file-ownership
