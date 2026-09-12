@@ -443,6 +443,21 @@ sudo nsenter -t 1 -m -- findmnt /var/lib/catalyst/<server-uuid>
 
 If the two listings disagree, you are on the broken build.
 
+### Start fails: nsenter failed with SIGSYS
+
+**Symptoms:** Starting any server fails. The console shows `[Catalyst] Start failed: File system error: nsenter failed with status signal: 31 (SIGSYS)`.
+
+**Cause:** The agent mounts per-server disk images in the host mount namespace (`nsenter -t 1 -m -- mount -o loop,...`). Units with `SystemCallFilter=@system-service` block `mount(2)`/`umount2(2)` (they live in `@mount`, not `@system-service`), so systemd kills the mount with `SIGSYS`.
+
+**Fix:** Update the unit and override to `SystemCallFilter=@system-service @mount`, then reload and restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart catalyst-agent
+```
+
+New installs get the fixed unit from `deploy-agent.sh` and `node-tuning.sh`.
+
 ### Game servers unreachable / no NAT after systemd agent install
 
 **Symptoms:** The node is online and the server starts, but players cannot connect and the container has no outbound internet. `cargo run` on the same host works.

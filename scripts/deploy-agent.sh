@@ -855,8 +855,9 @@ LimitNOFILE=65536
 # Hardening (compatible with mount/iptables as root):
 # - CapabilityBoundingSet keeps only what the agent needs (net admin/bind,
 #   sys admin for mounts, chown/dac/fowner/setgid/setuid/kill/sys_chroot).
-# - SystemCallFilter=@system-service blocks exotic syscalls; mount/umask are
-#   in the default set so loop mounts keep working.
+# - SystemCallFilter=@system-service @mount blocks exotic syscalls; @mount is
+#   required because mount(2)/umount2(2) are not in @system-service — without
+#   it loop mounts via nsenter die with SIGSYS.
 # - RestrictNamespaces allows only mount/net/uts/ipc (no userns/pid/cgroup
 #   games) — the agent enters namespaces via nsenter, it does not create
 #   hostile ones.
@@ -873,7 +874,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_FSETID CAP_KILL CAP_SETGID CAP_SETUID CAP_SETPCAP CAP_NET_BIND_SERVICE CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_SYS_PTRACE CAP_MKNOD
-SystemCallFilter=@system-service
+SystemCallFilter=@system-service @mount
 SystemCallArchitectures=native
 RestrictNamespaces=mnt net uts ipc
 TasksMax=8192
