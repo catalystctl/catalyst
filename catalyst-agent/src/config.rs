@@ -94,10 +94,10 @@ pub struct ContainerdConfig {
     /// Subnet for the default bridge NAT network (e.g. "10.42.0.0/16").
     #[serde(default = "default_cni_bridge_subnet")]
     pub cni_bridge_subnet: String,
-    /// Allow panel-requested `networkMode: "host"`. Default false: host mode
-    /// shares the node's network namespace (no isolation). Enable only for
-    /// trusted workloads that require host networking.
-    #[serde(default)]
+    /// Allow panel-requested `networkMode: "host"`. Default true: game
+    /// servers commonly need host networking (LAN discovery, host-bound
+    /// ports). Set false to isolate containers behind the bridge network.
+    #[serde(default = "default_allow_host_network")]
     pub allow_host_network: bool,
     /// Systemd override directory for the containerd service unit.
     #[serde(default = "default_systemd_override_dir")]
@@ -183,6 +183,9 @@ fn default_cni_bridge_name() -> String {
 fn default_cni_bridge_subnet() -> String {
     "10.42.0.0/16".to_string()
 }
+fn default_allow_host_network() -> bool {
+    true
+}
 fn default_systemd_override_dir() -> PathBuf {
     PathBuf::from("/etc/systemd/system/containerd.service.d")
 }
@@ -213,7 +216,7 @@ impl Default for ContainerdConfig {
             cni_results_dir: default_cni_results_dir(),
             cni_bridge_name: default_cni_bridge_name(),
             cni_bridge_subnet: default_cni_bridge_subnet(),
-            allow_host_network: false,
+            allow_host_network: true,
             systemd_override_dir: default_systemd_override_dir(),
         }
     }
@@ -454,7 +457,7 @@ impl AgentConfig {
                     .unwrap_or_else(|_| "10.42.0.0/16".to_string()),
                 allow_host_network: std::env::var("CATALYST_ALLOW_HOST_NETWORK")
                     .map(|v| ["1", "true", "yes"].contains(&v.trim().to_ascii_lowercase().as_str()))
-                    .unwrap_or(false),
+                    .unwrap_or(true),
                 systemd_override_dir: PathBuf::from(
                     std::env::var("SYSTEMD_OVERRIDE_DIR")
                         .unwrap_or_else(|_| "/etc/systemd/system/containerd.service.d".to_string()),
@@ -546,7 +549,7 @@ mod config_security_tests {
     use super::*;
 
     #[test]
-    fn host_network_defaults_to_denied() {
-        assert!(!ContainerdConfig::default().allow_host_network);
+    fn host_network_defaults_to_allowed() {
+        assert!(ContainerdConfig::default().allow_host_network);
     }
 }

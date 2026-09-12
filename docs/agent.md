@@ -511,8 +511,8 @@ In host mode, the container shares the host's network namespace. The server bind
 - Set via `CATALYST_NETWORK_IP` environment variable (defaults to node's public address)
 - Best for when you need the server to use the node's IP directly
 - Port conflicts must be managed manually
-- Denied by default: host mode is only permitted when the node opts in via
-  `containerd.allow_host_network = true` in `config.toml` (or `CATALYST_ALLOW_HOST_NETWORK=1`;
+- Allowed by default: host mode works unless the node opts out via
+  `containerd.allow_host_network = false` in `config.toml` (or `CATALYST_ALLOW_HOST_NETWORK=0`;
   the env var wins when both are set). A start that hits the gate fails with
   `networkMode "host" is disabled on this node` and the panel offers a one-click
   enable, which sends `set_host_network` — the agent applies it to the running

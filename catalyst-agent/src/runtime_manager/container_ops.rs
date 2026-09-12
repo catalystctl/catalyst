@@ -54,8 +54,8 @@ impl ContainerdRuntime {
 
         // Build OCI spec
         // Host network mode shares the node's network namespace (no
-        // isolation) and is denied unless the operator explicitly opted in
-        // via containerd.allow_host_network / CATALYST_ALLOW_HOST_NETWORK.
+        // isolation) and is denied only when the operator explicitly opted
+        // out via containerd.allow_host_network / CATALYST_ALLOW_HOST_NETWORK.
         let use_host_network = config.network_mode == Some("host");
         if use_host_network && !self.allow_host_network() {
             warn!(
