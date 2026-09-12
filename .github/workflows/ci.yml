@@ -525,9 +525,8 @@ jobs:
     name: Detect Changes
     permissions:
       contents: read
-    # Only needs lint+test green; run in parallel with Build Verification so
-    # Docker publish can start as soon as both finish (not after build alone).
-    needs: [lint, test]
+    # Needs nothing but a checkout: runs in wave 1 alongside lint/test so
+    # publish jobs can start the moment lint+test go green.
     runs-on: [self-hosted, Linux, X64, catalyst-ci]
     timeout-minutes: 10
     if: github.event_name == 'push'
