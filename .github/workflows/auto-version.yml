@@ -16,6 +16,9 @@ env:
   PROTOC_VERSION: "25.1"
   PROTOC_ARCH: "linux-x86_64"
   REGISTRY: ghcr.io
+  # Single credential file shared by buildah (login/push) and the SLSA
+  # attestation action, which only reads the docker default location.
+  REGISTRY_AUTH_FILE: /root/.docker/config.json
 
 jobs:
   version:
@@ -631,7 +634,7 @@ jobs:
             [ "$tag" = "$FIRST_TAG" ] && continue
             buildah "${STORE_ARGS[@]}" push "$IID" "docker://$tag"
           done <<< "${{ steps.meta.outputs.tags }}"
-          buildah "${STORE_ARGS[@]}" rmi "$IID" || true
+          # No local cleanup: container storage vanishes with the ephemeral runner.
 
       - name: Attest image provenance (SLSA/Sigstore)
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
