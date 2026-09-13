@@ -3,13 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@/csync';
-import {
- Select,
- SelectContent,
- SelectItem,
- SelectTrigger,
- SelectValue,
-} from '../../components/ui/select';
+import Combobox from '../../components/ui/combobox';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import type { Template, TemplateImageOption, TemplateVariable } from '../../types/template';
@@ -536,17 +530,14 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </label>
  <label className="block space-y-1">
  <span className="text-muted-foreground">{t('form.nestOptional')}</span>
- <Select
+ <Combobox
  value={nestId || '__none__'}
- onValueChange={(v) => setNestId(v === '__none__' ? '' : v)}
- >
- <SelectTrigger>
- <SelectValue placeholder={t('edit.none')} />
- </SelectTrigger>
- <SelectContent>
- <SelectItem value="__none__">{t('edit.none')}</SelectItem>
- {nests.map((nest) => (
- <SelectItem key={nest.id} value={nest.id}>
+ onChange={(v) => setNestId(v === '__none__' ? '' : v)}
+ options={[
+ { value: '__none__', label: t('edit.none'), keywords: [t('edit.none')] },
+ ...nests.map((nest) => ({
+ value: nest.id,
+ label: (
  <span className="flex items-center gap-2">
  {nest.icon ? (
  <img
@@ -561,10 +552,14 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  )}
  {nest.name}
  </span>
- </SelectItem>
- ))}
- </SelectContent>
- </Select>
+ ),
+ keywords: [nest.name],
+ })),
+ ]}
+ placeholder={t('edit.none')}
+ searchPlaceholder={t('create.searchNests')}
+ emptyMessage={t('create.noNestsFound')}
+ />
  {nests.length === 0 && (
  <p className="mt-1 text-[11px] text-muted-foreground/70">
  {t('edit.noNests')}{' '}

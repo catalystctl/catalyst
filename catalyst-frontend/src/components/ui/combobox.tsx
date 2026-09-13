@@ -153,7 +153,7 @@ function Combobox({
  className={cn(
  'relative flex w-full cursor-pointer items-center rounded-sm px-3 py-1.5 text-left text-sm outline-none',
  idx === focusIdx
- ? 'bg-accent text-accent-foreground'
+ ? 'bg-primary/10 text-foreground'
  : 'text-foreground hover:bg-muted',
  )}
  onClick={() => select(option.value)}

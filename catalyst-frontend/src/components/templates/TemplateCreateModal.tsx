@@ -14,13 +14,7 @@ import {
  Download,
  CheckCircle,
 } from 'lucide-react';
-import {
- Select,
- SelectContent,
- SelectItem,
- SelectTrigger,
- SelectValue,
-} from '../../components/ui/select';
+import Combobox from '../../components/ui/combobox';
 import type { TemplateImageOption, TemplateVariable } from '../../types/template';
 import { templatesApi, type BatchImportResult } from '../../services/api/templates';
 import { nestsApi } from '../../services/api/nests';
@@ -706,19 +700,16 @@ function TemplateCreateModal() {
  </p>
 
  {nests.length > 0 ? (
- <label className="mt-6 block w-full max-w-xs space-y-1.5">
+ <div className="mt-6 w-full max-w-xs space-y-1.5 text-left">
  <span className="text-xs font-medium text-muted-foreground">{t('create.selectNestLabel')}</span>
- <Select
+ <Combobox
  value={nestId || '__none__'}
- onValueChange={(v) => setNestId(v === '__none__' ? '' : v)}
- >
- <SelectTrigger className="w-full max-w-xs">
- <SelectValue placeholder={t('create.skipNest')} />
- </SelectTrigger>
- <SelectContent>
- <SelectItem value="__none__">{t('create.skipNest')}</SelectItem>
- {nests.map((nest) => (
- <SelectItem key={nest.id} value={nest.id}>
+ onChange={(v) => setNestId(v === '__none__' ? '' : v)}
+ options={[
+ { value: '__none__', label: t('create.skipNest'), keywords: [t('create.skipNest')] },
+ ...nests.map((nest) => ({
+ value: nest.id,
+ label: (
  <span className="flex items-center gap-2">
  {nest.icon ? (
  <img
@@ -733,11 +724,15 @@ function TemplateCreateModal() {
  )}
  {nest.name}
  </span>
- </SelectItem>
- ))}
- </SelectContent>
- </Select>
- </label>
+ ),
+ keywords: [nest.name],
+ })),
+ ]}
+ placeholder={t('create.skipNest')}
+ searchPlaceholder={t('create.searchNests')}
+ emptyMessage={t('create.noNestsFound')}
+ />
+ </div>
  ) : (
  <div className="mt-6 rounded-xl border border-dashed border-border bg-surface-2/50 px-5 py-4">
  <p className="text-sm text-muted-foreground">

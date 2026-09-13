@@ -104,3 +104,10 @@ BRANCH-STACK.md
 
 # Local agent harness state (workflows, memory, scratch — never commit)
 .grok/
+
+# LXC/Incus container artifacts (exports, local state, per-host overrides)
+*.lxc
+.lxc/
+.incus/
+lxc-data/
+scripts/lxc-lab/*.local.env
