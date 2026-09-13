@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { MetricsTimeRange } from '../../hooks/useServerMetricsHistory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronDown } from 'lucide-react';
 
 interface MetricsTimeRangeSelectorProps {
@@ -59,78 +60,78 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
  setCustomLimit('');
  };
 
+ // Portaled so the menu escapes the header card's overflow-hidden.
  return (
- <div className="relative">
- <Button
- variant="outline"
- size="sm"
- onClick={() => setIsOpen(!isOpen)}
- className="gap-2"
- >
- <span>{selectedRange.label}</span>
- <ChevronDown className={`h-4 w-4 transition ${isOpen ? 'rotate-180' : ''}`} />
- </Button>
+  <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <PopoverTrigger asChild>
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-2"
+      >
+        <span>{selectedRange.label}</span>
+        <ChevronDown className={`h-4 w-4 transition ${isOpen ? 'rotate-180' : ''}`} />
+      </Button>
+    </PopoverTrigger>
 
- {isOpen && (
- <div className="absolute right-0 top-full z-10 mt-2 w-48 rounded-lg border border-border bg-card">
- <div className="space-y-1 p-2">
- {presets.map((range) => (
- <button
- key={range.hours}
- type="button"
- className={`w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-all duration-300 ${
- selectedRange.label === range.label
- ? 'bg-primary text-primary-foreground'
- : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
- }`}
- onClick={() => handlePresetClick(range)}
- >
- {range.label}
- </button>
- ))}
- <div className="border-t border-border pt-2">
- <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
- {t('timeRange.customRange')}
- </div>
- <div className="space-y-2 px-3 pb-2">
- <div>
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('timeRange.hours')}</label>
- <Input
- type="number"
- min="1"
- max="8760"
- value={customHours}
- onChange={(e) => setCustomHours(e.target.value)}
- placeholder="24"
- className="mt-1 h-7 text-xs"
- />
- </div>
- <div>
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('timeRange.dataPoints')}</label>
- <Input
- type="number"
- min="1"
- max="1000"
- value={customLimit}
- onChange={(e) => setCustomLimit(e.target.value)}
- placeholder="144"
- className="mt-1 h-7 text-xs"
- />
- </div>
- <Button
- size="sm"
- onClick={handleCustomSubmit}
- disabled={!customHours || !customLimit}
- className="w-full text-xs"
- >
- {t('common:actions.apply')}
- </Button>
- </div>
- </div>
- </div>
- </div>
- )}
- </div>
+    <PopoverContent align="end" className="w-48 p-2">
+      <div className="space-y-1">
+        {presets.map((range) => (
+          <button
+            key={range.hours}
+            type="button"
+            className={`w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-all duration-300 ${
+              selectedRange.label === range.label
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
+            }`}
+            onClick={() => handlePresetClick(range)}
+          >
+            {range.label}
+          </button>
+        ))}
+        <div className="border-t border-border pt-2">
+          <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('timeRange.customRange')}
+          </div>
+          <div className="space-y-2 px-3 pb-2">
+            <div>
+              <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('timeRange.hours')}</label>
+              <Input
+                type="number"
+                min="1"
+                max="8760"
+                value={customHours}
+                onChange={(e) => setCustomHours(e.target.value)}
+                placeholder="24"
+                className="mt-1 h-7 text-xs"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('timeRange.dataPoints')}</label>
+              <Input
+                type="number"
+                min="1"
+                max="1000"
+                value={customLimit}
+                onChange={(e) => setCustomLimit(e.target.value)}
+                placeholder="144"
+                className="mt-1 h-7 text-xs"
+              />
+            </div>
+            <Button
+              size="sm"
+              onClick={handleCustomSubmit}
+              disabled={!customHours || !customLimit}
+              className="w-full text-xs"
+            >
+              {t('common:actions.apply')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </PopoverContent>
+  </Popover>
  );
 }
 
