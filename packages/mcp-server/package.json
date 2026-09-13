@@ -1,6 +1,6 @@
 {
 	"name": "@catalyst/mcp-server",
-	"version": "1.53.1",
+	"version": "1.53.3",
 	"description": "MCP server for the Catalyst game-server panel. Exposes nodes, servers, users, roles, and more as MCP tools using a panel URL and API key.",
 	"type": "module",
 	"main": "dist/index.js",
