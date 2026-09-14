@@ -1,6 +1,6 @@
 {
 	"name": "{{name}}",
-	"version": "1.53.3",
+	"version": "1.54.0",
 	"description": "{{description}}",
 	"type": "module",
 	"main": "dist/index.js",
