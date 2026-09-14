@@ -429,6 +429,7 @@ pub use helpers::{
     load_named_cni_plugin_config, open_fifo_rdwr, parse_ctr_event_line, parse_signal,
     read_block_io, read_cgroup_cpu_throttling, read_cgroup_cpu_usage, read_cgroup_memory,
     read_cgroup_memory_limit, read_network_io, resolve_cni_plugin_path, rotate_logs, set_dir_perms,
+    write_container_bind_file,
 };
 
 pub use image_and_spec::{

@@ -160,6 +160,13 @@ export const nodesApi = {
     );
     return data;
   },
+  bulkDeleteAllocations: async (nodeId: string, allocationIds: string[]) => {
+    const data = await apiClient.post<ApiResponse<{ deleted: number; skippedAssigned: number; notFound: number }>>(
+      `/api/nodes/${nodeId}/allocations/bulk-delete`,
+      { allocationIds },
+    );
+    return data.data;
+  },
   checkApiKey: async (nodeId: string) => {
     const data = await apiClient.get<
       ApiResponse<{

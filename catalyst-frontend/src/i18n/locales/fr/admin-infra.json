@@ -1,8 +1,17 @@
 {
   "allocations": {
     "assigned": "Attribuée",
+    "assignedCannotSelect": "Les allocations attribuées ne peuvent pas être supprimées",
     "assignedIps": "IP attribuées ({{value}})",
     "available": "Disponible",
+    "bulkDelete": {
+      "message_one": "Vous êtes sur le point de supprimer <1>{{count}} allocation</1>.",
+      "message_many": "Vous êtes sur le point de supprimer <1>{{count}} allocations</1>.",
+      "message_other": "Vous êtes sur le point de supprimer <1>{{count}} allocations</1>.",
+      "title": "Supprimer les allocations",
+      "warning": "Les allocations attribuées ne peuvent pas être supprimées et ne sont pas sélectionnables. Cette action est irréversible."
+    },
+    "clearSelection": "Effacer",
     "createAllocations": "Créer des allocations",
     "createPool": {
       "autofill": "Pré-remplir le /24",
@@ -58,7 +67,11 @@
     "poolCount": "{{value}} pools",
     "poolTotals": "Total : {{total}} · Passerelle : {{gateway}}",
     "portCount": "{{value}} ports",
+    "resultCount": "{{shown}} sur {{total}}",
     "searchPlaceholder": "Rechercher par IP, port, alias…",
+    "selectAll": "Tout sélectionner",
+    "selectAllocation": "Sélectionner {{ip}}:{{port}}",
+    "selectedCount": "{{value}} sélectionnés",
     "stats": {
       "assigned": "Attribuées",
       "available": "Disponibles",
@@ -80,7 +93,13 @@
       "portDeleted": "Allocation de port supprimée",
       "portsCreated_one": "{{count}} allocation de port créée",
       "portsCreated_many": "{{count}} allocations de ports créées",
-      "portsCreated_other": "{{count}} allocations de ports créées"
+      "portsCreated_other": "{{count}} allocations de ports créées",
+      "portsDeleted_one": "{{count}} allocation de port supprimée",
+      "portsDeleted_many": "{{count}} allocations de ports supprimées",
+      "portsDeleted_other": "{{count}} allocations de ports supprimées",
+      "portsDeleteSkipped_one": "{{count}} allocation attribuée ignorée",
+      "portsDeleteSkipped_many": "{{count}} allocations attribuées ignorées",
+      "portsDeleteSkipped_other": "{{count}} allocations attribuées ignorées"
     }
   },
   "database": {

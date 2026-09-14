@@ -1,8 +1,15 @@
 {
   "allocations": {
     "assigned": "已分配",
+    "assignedCannotSelect": "已分配的分配无法删除",
     "assignedIps": "已分配 IP（{{value}}）",
     "available": "可用",
+    "bulkDelete": {
+      "message_other": "您即将删除 <1>{{count}} 个分配</1>。",
+      "title": "删除分配",
+      "warning": "已分配的分配无法删除且不可选择。此操作无法撤销。"
+    },
+    "clearSelection": "清除",
     "createAllocations": "创建分配",
     "createPool": {
       "autofill": "自动填充 /24",
@@ -58,7 +65,11 @@
     "poolCount": "{{value}} 个池",
     "poolTotals": "总计：{{total}} · 网关：{{gateway}}",
     "portCount": "{{value}} 个端口",
+    "resultCount": "{{shown}}/{{total}}",
     "searchPlaceholder": "按 IP、端口、别名搜索…",
+    "selectAll": "全选",
+    "selectAllocation": "选择 {{ip}}:{{port}}",
+    "selectedCount": "已选择 {{value}} 项",
     "stats": {
       "assigned": "已分配",
       "available": "可用",
@@ -78,7 +89,9 @@
       "poolCreated": "IP 池已创建",
       "poolDeleted": "IP 池已删除",
       "portDeleted": "端口分配已删除",
-      "portsCreated_other": "已创建 {{count}} 个端口分配"
+      "portsCreated_other": "已创建 {{count}} 个端口分配",
+      "portsDeleted_other": "已删除 {{count}} 个端口分配",
+      "portsDeleteSkipped_other": "已跳过 {{count}} 个已分配的分配"
     }
   },
   "database": {

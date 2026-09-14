@@ -545,6 +545,22 @@ pub fn set_dir_perms(path: &Path, mode: u32) {
     }
 }
 
+/// Write a file bind-mounted into containers (resolv.conf/hosts/machine-id)
+/// world-readable. The parent io_dir is 0700 root-only, so the file mode is
+/// the only thing letting uid 1000 read it; a restrictive umask (027/077)
+/// otherwise leaves DNS broken inside the container.
+pub fn write_container_bind_file(path: &Path, content: &str) {
+    if fs::write(path, content).is_ok() {
+        set_dir_perms(path, 0o644);
+    } else if let Ok(md) = fs::metadata(path) {
+        // Write failed partway (or file predates us with tight perms):
+        // still ensure a stale unreadable file cannot break DNS.
+        let mut p = md.permissions();
+        p.set_mode(0o644);
+        fs::set_permissions(path, p).ok();
+    }
+}
+
 pub fn parse_signal(signal: &str) -> u32 {
     match signal.to_ascii_uppercase().as_str() {
         "SIGTERM" | "15" => 15,
@@ -721,5 +737,19 @@ mod cni_plugin_path_tests {
         let p = resolve_cni_plugin_path(dir.path(), "bridge").unwrap();
         assert!(p.starts_with(dir.path()));
         assert_eq!(p.file_name().unwrap(), "bridge");
+    }
+
+    #[test]
+    fn container_bind_file_is_world_readable() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("resolv.conf");
+        // Simulate a stale restrictive file from a hardened umask run.
+        fs::write(&path, "stale").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        write_container_bind_file(&path, "nameserver 1.1.1.1\n");
+        assert_eq!(fs::read_to_string(&path).unwrap(), "nameserver 1.1.1.1\n");
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o644, "uid 1000 must be able to read resolv.conf");
     }
 }

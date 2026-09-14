@@ -2219,6 +2219,7 @@ Download a backup file directly. For local storage, returns the file as `applica
 | `POST` | `/api/nodes/:id/allocations` | `node.manage_allocation` | Create allocations (`alias`, `notes`) |
 | `PATCH` | `/api/nodes/:id/allocations/:allocId` | `node.manage_allocation` | Update allocation alias/notes |
 | `DELETE` | `/api/nodes/:id/allocations/:allocId` | `node.manage_allocation` | Remove allocation |
+| `POST` | `/api/nodes/:id/allocations/bulk-delete` | `node.manage_allocation` | Remove allocations in bulk (`allocationIds`, max 5000) |
 | `GET` | `/api/nodes/:id/ip-pools` | `node.read` | List IPAM pools |
 | `GET` | `/api/nodes/:id/ip-availability` | `node.read` | List available IPs |
 | `GET` | `/api/nodes/:id/assignments` | `node.assign` | List node assignments |
@@ -2419,6 +2420,30 @@ Create a new port allocation on a node.
     "ip": "192.168.1.100",
     "alias": "Game Server 1",
     "notes": "Primary game server for community"
+  }
+}
+```
+
+#### POST `/api/nodes/:id/allocations/bulk-delete`
+
+Remove port allocations from a node in bulk. Assigned allocations are skipped, unknown ids are reported as not found.
+
+**Auth:** `node.manage_allocation`
+**Body:**
+```json
+{
+  "allocationIds": ["alloc_1", "alloc_2"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "deleted": 2,
+    "skippedAssigned": 0,
+    "notFound": 0
   }
 }
 ```

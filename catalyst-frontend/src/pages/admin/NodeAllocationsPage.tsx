@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
@@ -15,8 +15,10 @@ import {
  Info,
 } from 'lucide-react';
 import apiClient from '../../services/api/client';
-import { notifyError, notifySuccess } from '../../utils/notify';
+import { nodesApi } from '../../services/api/nodes';
+import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import { useNodes } from '../../hooks/useNodes';
+import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import { adminApi } from '../../services/api/admin';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,6 +94,8 @@ function NodeAllocationsPage() {
  const [ipInput, setIpInput] = useState('');
  const [portsInput, setPortsInput] = useState('');
  const [aliasInput, setAliasInput] = useState('');
+ const [selectedIds, setSelectedIds] = useState<string[]>([]);
+ const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
 
  // IP pool state
  const [showCreatePoolModal, setShowCreatePoolModal] = useState(false);
@@ -166,6 +170,30 @@ function NodeAllocationsPage() {
  },
  });
 
+ const bulkDeletePortsMutation = useMutation({
+ mutationFn: async (allocationIds: string[]) => {
+ return nodesApi.bulkDeleteAllocations(nodeId!, allocationIds);
+ },
+ onSuccess: (data) => {
+ const deleted = data?.deleted ?? 0;
+ const skipped = data?.skippedAssigned ?? 0;
+ if (deleted > 0) {
+ notifySuccess(t('allocations.toast.portsDeleted', { count: deleted }));
+ }
+ if (skipped > 0) {
+ notifyInfo(t('allocations.toast.portsDeleteSkipped', { count: skipped }));
+ }
+ setSelectedIds([]);
+ setShowBulkDeleteDialog(false);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId!) });
+ },
+ onError: (error: any) => {
+ notifyError(error);
+ },
+ });
+
  // IP pool mutations
  const createPoolMutation = useMutation({
  mutationFn: () =>
@@ -220,6 +248,43 @@ function NodeAllocationsPage() {
  a.notes?.toLowerCase().includes(query),
  );
  }, [allocations, search]);
+
+ // Bulk selection only covers available (unassigned) allocations.
+ const selectableFilteredIds = useMemo(
+ () => filteredAllocations.filter((a) => !a.serverId).map((a) => a.id),
+ [filteredAllocations],
+ );
+ const allFilteredSelected =
+ selectableFilteredIds.length > 0 &&
+ selectableFilteredIds.every((id) => selectedIds.includes(id));
+ const someFilteredSelected = selectableFilteredIds.some((id) => selectedIds.includes(id));
+
+ // Drop ids that no longer exist or became assigned.
+ useEffect(() => {
+ setSelectedIds((prev) => {
+ if (prev.length === 0) return prev;
+ const valid = new Set(
+ allocations.filter((a) => !a.serverId).map((a) => a.id),
+ );
+ const next = prev.filter((id) => valid.has(id));
+ return next.length === prev.length ? prev : next;
+ });
+ }, [allocations]);
+
+ const toggleAllocationSelected = (allocationId: string) => {
+ setSelectedIds((prev) =>
+ prev.includes(allocationId) ? prev.filter((id) => id !== allocationId) : [...prev, allocationId],
+ );
+ };
+
+ const toggleSelectAllFiltered = () => {
+ setSelectedIds((prev) => {
+ if (selectableFilteredIds.every((id) => prev.includes(id))) {
+ return prev.filter((id) => !selectableFilteredIds.includes(id));
+ }
+ return Array.from(new Set([...prev, ...selectableFilteredIds]));
+ });
+ };
 
  // Port allocation stats
  const portStats = useMemo(() => {
@@ -389,6 +454,32 @@ function NodeAllocationsPage() {
  </button>
  </div>
 
+ {selectedIds.length > 0 && (
+ <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
+ <div className="flex items-center gap-3">
+ <span className="text-sm font-medium text-foreground">
+ {t('allocations.selectedCount', { value: selectedIds.length })}
+ </span>
+ <button
+ onClick={() => setSelectedIds([])}
+ className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+ >
+ {t('allocations.clearSelection')}
+ </button>
+ </div>
+ <Button
+ variant="destructive"
+ size="sm"
+ onClick={() => setShowBulkDeleteDialog(true)}
+ disabled={bulkDeletePortsMutation.isPending}
+ className="gap-1.5 text-xs"
+ >
+ <Trash2 className="h-3 w-3" />
+ {t('common:actions.delete')}
+ </Button>
+ </div>
+ )}
+
  {/* Port Allocations List */}
  {allocationsLoading ? (
  <TabLoadingState rows={5} />
@@ -409,13 +500,61 @@ function NodeAllocationsPage() {
  />
  ) : (
  <div className="space-y-2">
- {filteredAllocations.map((allocation) => (
+ <div className="flex items-center gap-3 px-1">
+ <label className="flex cursor-pointer items-center gap-2">
+ <input
+ type="checkbox"
+ checked={allFilteredSelected}
+ ref={(el) => {
+ if (el) el.indeterminate = !allFilteredSelected && someFilteredSelected;
+ }}
+ onChange={toggleSelectAllFiltered}
+ disabled={selectableFilteredIds.length === 0}
+ className="h-4 w-4 rounded border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
+ />
+ <span className="text-xs font-medium text-muted-foreground">
+ {t('allocations.selectAll')}
+ </span>
+ </label>
+ <span className="text-[11px] text-muted-foreground/60">
+ {t('allocations.resultCount', {
+ shown: filteredAllocations.length,
+ total: allocations.length,
+ })}
+ </span>
+ </div>
+ {filteredAllocations.map((allocation) => {
+ const isSelected = selectedIds.includes(allocation.id);
+ const isAssigned = Boolean(allocation.serverId);
+ return (
  <div
  key={allocation.id}
- className="group relative rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ className={`group relative rounded-lg border px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02] ${
+ isSelected ? 'border-primary/30 bg-primary/[0.04]' : 'border-border/30'
+ }`}
  >
  <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
  <div className="flex items-center justify-between gap-3">
+ <div className="flex items-center gap-3 min-w-0 flex-1">
+ <input
+ type="checkbox"
+ checked={isSelected}
+ onChange={() => toggleAllocationSelected(allocation.id)}
+ disabled={isAssigned}
+ title={
+ isAssigned
+ ? t('allocations.assignedCannotSelect')
+ : t('allocations.selectAllocation', {
+ ip: allocation.ip,
+ port: allocation.port,
+ })
+ }
+ aria-label={t('allocations.selectAllocation', {
+ ip: allocation.ip,
+ port: allocation.port,
+ })}
+ className="h-4 w-4 shrink-0 rounded border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
+ />
  <div className="flex items-center gap-4 min-w-0 flex-1">
  <DataField
  label={t('allocations.field.ip')}
@@ -432,6 +571,7 @@ function NodeAllocationsPage() {
  {allocation.alias}
  </span>
  )}
+ </div>
  </div>
  <div className="flex items-center gap-2 shrink-0">
  {allocation.serverId ? (
@@ -456,7 +596,8 @@ function NodeAllocationsPage() {
  </div>
  </div>
  </div>
- ))}
+ );
+ })}
  </div>
  )}
  </div>
@@ -744,6 +885,32 @@ function NodeAllocationsPage() {
  </DialogFooter>
  </DialogContent>
  </Dialog>
+
+ <ConfirmDialog
+ open={showBulkDeleteDialog}
+ title={t('allocations.bulkDelete.title')}
+ message={
+ <div className="space-y-2">
+ <p>
+ <Trans
+ i18nKey="allocations.bulkDelete.message"
+ ns="admin-infra"
+ count={selectedIds.length}
+ values={{ count: selectedIds.length }}
+ >
+ You are about to delete <span className="font-semibold">{'{{count}} allocations'}</span>.
+ </Trans>
+ </p>
+ <p className="text-xs text-muted-foreground">{t('allocations.bulkDelete.warning')}</p>
+ </div>
+ }
+ confirmText={t('common:actions.delete')}
+ cancelText={t('common:actions.cancel')}
+ onConfirm={() => selectedIds.length > 0 && bulkDeletePortsMutation.mutate(selectedIds)}
+ onCancel={() => setShowBulkDeleteDialog(false)}
+ variant="danger"
+ loading={bulkDeletePortsMutation.isPending}
+ />
  </div>
  );
 }

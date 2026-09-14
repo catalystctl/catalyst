@@ -1515,6 +1515,57 @@ export async function nodeRoutes(app: FastifyInstance) {
 		},
 	);
 
+	app.post(
+		"/:nodeId/allocations/bulk-delete",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.manage_allocation")) return;
+			const { nodeId } = request.params as { nodeId: string };
+			const userId = request.user.userId;
+
+			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
+			if (!hasAccess) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
+			}
+
+			const { allocationIds } = (request.body ?? {}) as { allocationIds?: unknown };
+			if (!Array.isArray(allocationIds) || allocationIds.length === 0) {
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "allocationIds must be a non-empty array");
+			}
+			if (allocationIds.length > 5000) {
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Bulk delete limit is 5000 allocations");
+			}
+			if (!allocationIds.every((id): id is string => typeof id === "string" && id.length > 0)) {
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "allocationIds must be an array of ids");
+			}
+			const uniqueIds = Array.from(new Set(allocationIds));
+
+			const existing = await prisma.nodeAllocation.findMany({
+				where: { id: { in: uniqueIds }, nodeId },
+				select: { id: true, serverId: true },
+			});
+			const deletableIds = existing.filter((a) => !a.serverId).map((a) => a.id);
+			const skippedAssigned = existing.length - deletableIds.length;
+			const notFound = uniqueIds.length - existing.length;
+
+			if (deletableIds.length > 0) {
+				await prisma.nodeAllocation.deleteMany({
+					where: { id: { in: deletableIds }, nodeId, serverId: null },
+				});
+			}
+
+			reply.send({
+				success: true,
+				data: { deleted: deletableIds.length, skippedAssigned, notFound },
+			});
+		},
+	);
+
 	// ============================================================================
 	// NODE ASSIGNMENT ROUTES
 	// ============================================================================

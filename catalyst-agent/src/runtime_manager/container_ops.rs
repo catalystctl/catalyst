@@ -185,8 +185,8 @@ impl ContainerdRuntime {
             let nsenter_output = Command::new("nsenter")
                 .args(["-t", &pid.to_string(), "-m", "--", "sh", "-c"])
                 .arg(format!(
-                    "cat > {} << 'CATALYST_RESOLV_EOF'\n{}\nCATALYST_RESOLV_EOF",
-                    resolv_dest, resolv_content
+                    "cat > {} << 'CATALYST_RESOLV_EOF'\n{}\nCATALYST_RESOLV_EOF\nchmod 644 {}",
+                    resolv_dest, resolv_content, resolv_dest
                 ))
                 .output()
                 .await;
@@ -307,6 +307,9 @@ impl ContainerdRuntime {
         );
         fs::write(&resolv_path, &resolv_content)
             .map_err(|e| AgentError::ContainerError(format!("resolv.conf: {}", e)))?;
+        // Installer io_dir is 0700; the bind-mounted file itself must stay
+        // world-readable or non-root install steps (steamcmd) lose DNS.
+        set_dir_perms(&resolv_path, 0o644);
 
         let mut env_list = vec![
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),

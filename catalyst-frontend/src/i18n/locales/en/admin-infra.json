@@ -1,8 +1,16 @@
 {
   "allocations": {
     "assigned": "Assigned",
+    "assignedCannotSelect": "Assigned allocations cannot be deleted",
     "assignedIps": "Assigned IPs ({{value}})",
     "available": "Available",
+    "bulkDelete": {
+      "message_one": "You are about to delete <1>{{count}} allocations</1>.",
+      "message_other": "You are about to delete <1>{{count}} allocations</1>.",
+      "title": "Delete allocations",
+      "warning": "Assigned allocations cannot be deleted and are not selectable. This cannot be undone."
+    },
+    "clearSelection": "Clear",
     "createAllocations": "Create Allocations",
     "createPool": {
       "autofill": "Autofill /24",
@@ -58,7 +66,11 @@
     "poolCount": "{{value}} pools",
     "poolTotals": "Total: {{total}} · Gateway: {{gateway}}",
     "portCount": "{{value}} ports",
+    "resultCount": "{{shown}} of {{total}}",
     "searchPlaceholder": "Search by IP, port, alias...",
+    "selectAll": "Select all",
+    "selectAllocation": "Select {{ip}}:{{port}}",
+    "selectedCount": "{{value}} selected",
     "stats": {
       "assigned": "Assigned",
       "available": "Available",
@@ -79,7 +91,11 @@
       "poolDeleted": "IP pool deleted",
       "portDeleted": "Port allocation deleted",
       "portsCreated_one": "Created {{count}} port allocation",
-      "portsCreated_other": "Created {{count}} port allocations"
+      "portsCreated_other": "Created {{count}} port allocations",
+      "portsDeleted_one": "Deleted {{count}} port allocation",
+      "portsDeleted_other": "Deleted {{count}} port allocations",
+      "portsDeleteSkipped_one": "Skipped {{count}} assigned allocation",
+      "portsDeleteSkipped_other": "Skipped {{count}} assigned allocations"
     }
   },
   "database": {

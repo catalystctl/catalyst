@@ -770,6 +770,7 @@ impl ContainerdRuntime {
             config.container_id
         );
         fs::write(&hosts_path, &hosts_content).ok();
+        set_dir_perms(&hosts_path, 0o644);
         mounts.push(serde_json::json!({"destination":"/etc/hosts","type":"bind","source":hosts_path.to_string_lossy().to_string(),"options":["rbind","rw"]}));
 
         // Provide /etc/resolv.conf for DNS resolution inside the container
@@ -783,7 +784,7 @@ impl ContainerdRuntime {
             // Add options for better DNS behavior
             resolv.push_str("options attempts:3 timeout:2\n");
             info!("Container {} resolv.conf:\n{}", config.container_id, resolv);
-            fs::write(&resolv_path, &resolv).ok();
+            write_container_bind_file(&resolv_path, &resolv);
         }
         mounts.push(serde_json::json!({"destination":"/etc/resolv.conf","type":"bind","source":resolv_path.to_string_lossy().to_string(),"options":["rbind","rw"]}));
 
@@ -793,7 +794,9 @@ impl ContainerdRuntime {
         let machine_id_path = io_dir.join("machine-id");
         if !machine_id_path.exists() {
             let unique_id = format!("{:032x}", uuid::Uuid::new_v4().as_u128());
-            fs::write(&machine_id_path, &unique_id).ok();
+            write_container_bind_file(&machine_id_path, &unique_id);
+        } else {
+            set_dir_perms(&machine_id_path, 0o644);
         }
         mounts.push(serde_json::json!({"destination":"/etc/machine-id","type":"bind","source":machine_id_path.to_string_lossy(),"options":["rbind","ro"]}));
         mounts.push(serde_json::json!({"destination":"/var/lib/dbus/machine-id","type":"bind","source":machine_id_path.to_string_lossy(),"options":["rbind","ro"]}));
