@@ -51,6 +51,7 @@ import type {
  ServerInvite,
  ServerPermissionsResponse,
 } from '../../types/server';
+import type { ServerDatabase } from '../../types/database';
 
 import ServerControls from '../../components/servers/ServerControls';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
@@ -360,6 +361,10 @@ function ServerDetailsPage() {
  // ── State: Databases ──
  const [databaseHostId, setDatabaseHostId] = useState('');
  const [databaseName, setDatabaseName] = useState('');
+ // One-time credentials from the latest create/rotate response. The list
+ // endpoint never returns passwords, so hold them here for the reveal dialog.
+ const [revealedDatabaseCredentials, setRevealedDatabaseCredentials] =
+ useState<ServerDatabase | null>(null);
 
   useEffect(() => {
     if (!server) return;
@@ -463,8 +468,9 @@ function ServerDetailsPage() {
  name: databaseName.trim() || undefined,
  });
  },
- onSuccess: () => {
+ onSuccess: (created) => {
  setDatabaseName('');
+ if (created?.password) setRevealedDatabaseCredentials(created);
  notifySuccess(t('details.databaseCreated'));
  },
  onSettled: () => {
@@ -485,7 +491,10 @@ function ServerDetailsPage() {
  }
  return databasesApi.rotatePassword(server.id, databaseId);
  },
- onSuccess: () => notifySuccess(t('details.databasePasswordRotated')),
+ onSuccess: (rotated) => {
+ if (rotated?.password) setRevealedDatabaseCredentials(rotated);
+ notifySuccess(t('details.databasePasswordRotated'));
+ },
  onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({
@@ -1211,6 +1220,8 @@ function ServerDetailsPage() {
  onRotate={(id) => rotateDatabaseMutation.mutate(id)}
  deletePending={deleteDatabaseMutation.isPending}
  onDelete={(id) => deleteDatabaseMutation.mutate(id)}
+ revealedCredentials={revealedDatabaseCredentials}
+ onDismissRevealedCredentials={() => setRevealedDatabaseCredentials(null)}
  />
  )}
 

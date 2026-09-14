@@ -8,6 +8,8 @@ import TabLoadingState from './TabLoadingState';
 import TabErrorState from './TabErrorState';
 import DataField from './DataField';
 import { ConfirmDialog } from '../../shared/ConfirmDialog';
+import DatabaseCredentialsDialog from './DatabaseCredentialsDialog';
+import type { ServerDatabase } from '../../../types/database';
 import { Database } from 'lucide-react';
 
 interface DatabaseHost {
@@ -17,19 +19,9 @@ interface DatabaseHost {
  port: number;
 }
 
-interface Database {
- id: string;
- name: string;
- hostName: string;
- host: string;
- port: number;
- username: string;
- password: string;
-}
-
 interface Props {
  isSuspended: boolean;
- databases: Database[];
+ databases: ServerDatabase[];
  databasesLoading: boolean;
  databasesError: boolean;
  databaseHosts: DatabaseHost[];
@@ -45,6 +37,8 @@ interface Props {
  onRotate: (databaseId: string) => void;
  deletePending: boolean;
  onDelete: (databaseId: string) => void;
+ revealedCredentials: ServerDatabase | null;
+ onDismissRevealedCredentials: () => void;
 }
 
 export default function ServerDatabasesTab({
@@ -65,6 +59,8 @@ export default function ServerDatabasesTab({
  onRotate,
  deletePending,
  onDelete,
+ revealedCredentials,
+ onDismissRevealedCredentials,
 }: Props) {
  const { t } = useTranslation('server-tabs');
  const databases = Array.isArray(databasesProp) ? databasesProp : [];
@@ -209,6 +205,13 @@ export default function ServerDatabasesTab({
  }}
  onCancel={() => setPendingDeleteId(null)}
  />
+
+ {revealedCredentials && (
+ <DatabaseCredentialsDialog
+ credentials={revealedCredentials}
+ onClose={onDismissRevealedCredentials}
+ />
+ )}
  </div>
  );
 }

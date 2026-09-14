@@ -567,6 +567,10 @@
     "databases": {
       "allocationDisabled": "Allocation de base de données désactivée",
       "allocationUnavailable": "L’allocation de base de données n’est pas disponible pour ce serveur.",
+      "credentialsDone": "Terminé",
+      "credentialsHost": "Hôte",
+      "credentialsTitle": "Identifiants de la base de données",
+      "credentialsWarning": "Copiez-les maintenant — le mot de passe n'est affiché qu'une seule fois et ne pourra plus être affiché.",
       "deleteConfirm": "Cela supprimera définitivement la base de données « {{name}} » et ses identifiants. Cette action est irréversible.",
       "deleteConfirmFallback": "Cela supprimera définitivement la base de données et ses identifiants. Cette action est irréversible.",
       "deleteTitle": "Supprimer la base de données ?",

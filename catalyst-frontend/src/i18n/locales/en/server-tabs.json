@@ -552,6 +552,10 @@
     "databases": {
       "allocationDisabled": "Database allocation disabled",
       "allocationUnavailable": "Database allocation is not available for this server.",
+      "credentialsDone": "Done",
+      "credentialsHost": "Host",
+      "credentialsTitle": "Database credentials",
+      "credentialsWarning": "Copy these now — the password is shown only once and cannot be displayed again.",
       "deleteConfirm": "This will permanently drop database \"{{name}}\" and its credentials. This cannot be undone.",
       "deleteConfirmFallback": "This will permanently drop the database and its credentials. This cannot be undone.",
       "deleteTitle": "Delete database?",

@@ -537,6 +537,10 @@
     "databases": {
       "allocationDisabled": "数据库分配已禁用",
       "allocationUnavailable": "此服务器无法使用数据库分配。",
+      "credentialsDone": "完成",
+      "credentialsHost": "主机",
+      "credentialsTitle": "数据库凭据",
+      "credentialsWarning": "请立即复制 — 密码仅显示一次，之后将无法再次查看。",
       "deleteConfirm": "这将永久删除数据库“{{name}}”及其凭据。此操作无法撤销。",
       "deleteConfirmFallback": "这将永久删除该数据库及其凭据。此操作无法撤销。",
       "deleteTitle": "删除数据库？",
