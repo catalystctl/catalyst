@@ -3013,7 +3013,10 @@ Update or delete an IPAM pool.
 
 #### GET `/api/admin/database-hosts` / POST `/api/admin/database-hosts`
 
-List or create database hosts for server databases.
+List or create database hosts for server databases. Both `mysql` and
+`postgresql` engines are supported natively: provisioning, password rotation,
+and deletion run MySQL DDL or Postgres `ROLE`/`DATABASE` DDL depending on the
+host's `engine`.
 
 **Auth:** `admin.read` (GET), `admin.write` (POST)  
 **Body (POST):**
@@ -3028,6 +3031,10 @@ List or create database hosts for server databases.
   "maxDatabases": 100
 }
 ```
+
+For a Postgres host set `"engine": "postgresql"` (port defaults to 5432,
+maintenance database defaults to `postgres`); the maintenance database itself
+can never be provisioned or dropped through the API.
 
 #### PUT `/api/admin/database-hosts/:hostId` / DELETE `/api/admin/database-hosts/:hostId`
 

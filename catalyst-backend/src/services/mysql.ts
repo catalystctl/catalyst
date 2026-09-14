@@ -1,14 +1,14 @@
 import mysql from "mysql2/promise";
 import type { DatabaseHost } from "@prisma/client";
+import { DatabaseProvisioningError, getDatabaseHostConnectTimeoutMs } from "./database-errors.js";
+import {
+  dropPostgresDatabase,
+  isPostgresHost,
+  provisionPostgresDatabase,
+  rotatePostgresPassword,
+} from "./postgres.js";
 
-export class DatabaseProvisioningError extends Error {
-  statusCode: number;
-
-  constructor(message: string, statusCode = 500) {
-    super(message);
-    this.statusCode = statusCode;
-  }
-}
+export { DatabaseProvisioningError };
 
 const connectionErrorCodes = new Set([
   "ECONNREFUSED",
@@ -37,10 +37,7 @@ const authPluginErrorCodes = new Set([
   "ER_NOT_SUPPORTED_AUTH_MODE",
 ]);
 
-const getConnectTimeoutMs = () => {
-  const raw = Number(process.env.DATABASE_HOST_CONNECT_TIMEOUT_MS);
-  return Number.isFinite(raw) && raw > 0 ? raw : 5000;
-};
+const getConnectTimeoutMs = getDatabaseHostConnectTimeoutMs;
 
 const mapProvisioningError = (
   error: any,
@@ -96,6 +93,9 @@ export const provisionDatabase = async (
   username: string,
   password: string,
 ) => {
+  if (isPostgresHost(host)) {
+    return provisionPostgresDatabase(host, databaseName, username, password);
+  }
   try {
     await withDatabaseConnection(host, async (connection) => {
       // sphinx:ignore sql-injection - identifiers/values escaped via mysql.escapeId/mysql.escape (no placeholders for DDL)
@@ -153,6 +153,9 @@ export const rotateDatabasePassword = async (
   username: string,
   password: string,
 ) => {
+  if (isPostgresHost(host)) {
+    return rotatePostgresPassword(host, username, password);
+  }
   try {
     await withDatabaseConnection(host, async (connection) => {
       const escapedUser = mysql.escape(username);
@@ -183,6 +186,9 @@ export const dropDatabase = async (
   databaseName: string,
   username: string,
 ) => {
+  if (isPostgresHost(host)) {
+    return dropPostgresDatabase(host, databaseName, username);
+  }
   try {
     await withDatabaseConnection(host, async (connection) => {
       // sphinx:ignore sql-injection - escaped via mysql.escapeId/mysql.escape, DDL cannot use ? placeholders
