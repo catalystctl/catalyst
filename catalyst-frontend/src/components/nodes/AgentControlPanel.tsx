@@ -316,13 +316,19 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
         ]}
       />
 
-      {/* Live Resource Bars */}
+      {/* Live Resource Bars — measured host usage from the agent, not allocations */}
       {res && (
         <div className="space-y-3">
           <SectionHeader icon={MonitorDot} title={t('agent.liveResources')} />
           {[
-            { label: t('card.cpu'), pct: res.cpuUsagePercent, color: 'bg-primary' },
-            { label: t('card.memory'), pct: res.memoryUsagePercent, color: 'bg-success' },
+            { label: t('card.cpu'), pct: res.actualCpuPercent, color: 'bg-primary' },
+            {
+              label: t('card.memory'),
+              pct: res.actualMemoryTotalMb
+                ? (res.actualMemoryUsageMb / res.actualMemoryTotalMb) * 100
+                : 0,
+              color: 'bg-success',
+            },
             { label: t('agent.disk'), pct: res.actualDiskTotalMb ? (res.actualDiskUsageMb / res.actualDiskTotalMb) * 100 : 0, color: 'bg-warning' },
           ].map((m) => (
             <div key={m.label} className="space-y-1">

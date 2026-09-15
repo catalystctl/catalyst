@@ -949,6 +949,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				? Infinity
 				: effectiveMaxCpuCores - totalAllocatedCpu;
 
+			// Allocation ratios, not measured usage: live host percentages come
+			// from the actual* fields below (agent health_report).
 			const memoryUsagePercent = effectiveMaxMemoryMb === Infinity
 				? 0
 				: (totalAllocatedMemory / effectiveMaxMemoryMb) * 100;
