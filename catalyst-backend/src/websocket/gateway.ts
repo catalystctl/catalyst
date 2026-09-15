@@ -1831,22 +1831,25 @@ export class WebSocketGateway {
         // 0-100 (sysinfo aggregate); per-container CPU (>100 on multicore)
         // is clamped later with the server's allocated cores in mind.
         const cpuPercent = sanitizeMetric(message.cpuPercent, 0, 100);
+        // NodeMetrics Mb columns are Int (int4): clamp at the column ceiling
+        // so one poisoned sample cannot void the write. Missing values fall
+        // back to 0 (unknown), never to the node cap (which would read as 100%).
         const memoryUsageMb = sanitizeIntMetric(
           message.memoryUsageMb,
           0,
-          Number.MAX_SAFE_INTEGER,
-          Math.round(node.maxMemoryMb ?? 0),
+          INT4_MAX,
+          0,
         );
         const memoryTotalMb = sanitizeIntMetric(
           message.memoryTotalMb,
           0,
-          Number.MAX_SAFE_INTEGER,
+          INT4_MAX,
           Math.round(node.maxMemoryMb ?? 0),
         );
-        const diskUsageMb = sanitizeIntMetric(message.diskUsageMb, 0, Number.MAX_SAFE_INTEGER);
-        const diskTotalMb = sanitizeIntMetric(message.diskTotalMb, 0, Number.MAX_SAFE_INTEGER);
+        const diskUsageMb = sanitizeIntMetric(message.diskUsageMb, 0, INT4_MAX);
+        const diskTotalMb = sanitizeIntMetric(message.diskTotalMb, 0, INT4_MAX);
         const containerCount = Math.round(sanitizeMetric(message.containerCount, 0, 1_000_000));
-        const uptimeSeconds = Math.round(sanitizeMetric(message.uptimeSeconds, 0, Number.MAX_SAFE_INTEGER));
+        const uptimeSeconds = Math.round(sanitizeMetric(message.uptimeSeconds, 0, INT4_MAX));
         const networkRxBytes = toByteCounterBig(message.networkRxBytes);
         const networkTxBytes = toByteCounterBig(message.networkTxBytes);
         try {
@@ -1895,8 +1898,8 @@ export class WebSocketGateway {
           memoryTotalMb: Math.round(memoryTotalMb),
           diskUsageMb: Math.round(diskUsageMb),
           diskTotalMb: Math.round(diskTotalMb),
-          networkRxBytes: Number(message.networkRxBytes ?? 0),
-          networkTxBytes: Number(message.networkTxBytes ?? 0),
+          networkRxBytes: Number(networkRxBytes),
+          networkTxBytes: Number(networkTxBytes),
           containerCount: Math.max(0, Math.round(containerCount)),
           uptimeSeconds,
           timestamp: new Date().toISOString(),
@@ -2009,9 +2012,16 @@ export class WebSocketGateway {
         // Honor the agent's sample timestamp (same semantics as the batch
         // ingest path): the panel may be delayed in processing, and the
         // ServerMetrics unique constraint is (serverId, timestamp). Fall back
-        // to now for legacy agents that omit it.
-        const tsNumber = Number(message.timestamp);
-        const sampleTs = Number.isFinite(tsNumber) && tsNumber > 0 ? new Date(tsNumber) : new Date();
+        // to now for legacy agents that omit it. Reject out-of-range and
+        // future-skewed (>5min) samples so one bad clock cannot pin "latest".
+        const sampleTs = sanitizeBatchTimestamp(message.timestamp) ?? new Date();
+        if (sampleTs.getTime() > Date.now() + 5 * 60 * 1000) {
+          this.logger.warn(
+            { nodeId, serverId: server.id, timestamp: message.timestamp },
+            "Dropping resource_stats with future timestamp",
+          );
+          return;
+        }
 
         // Persist metrics to DB — fire-and-forget to avoid blocking SSE broadcast
         const metricsData = {
@@ -2132,12 +2142,14 @@ export class WebSocketGateway {
         const serverIds = Array.from(new Set(items.map((i) => i.serverId)));
         const servers = await this.prisma.server.findMany({
           where: { id: { in: serverIds }, nodeId },
-          select: { id: true, allocatedCpuCores: true, allocatedMemoryMb: true },
+          select: { id: true, allocatedCpuCores: true, allocatedMemoryMb: true, allocatedDiskMb: true },
         });
         const coresByServer = new Map<string, number>();
         for (const s of servers) coresByServer.set(s.id, Math.max(1, s.allocatedCpuCores ?? 1));
         const memMbByServer = new Map<string, number>();
         for (const s of servers) memMbByServer.set(s.id, s.allocatedMemoryMb ?? 0);
+        const diskMbByServer = new Map<string, number>();
+        for (const s of servers) diskMbByServer.set(s.id, s.allocatedDiskMb ?? 0);
         const allowed = new Set(coresByServer.keys());
         const filtered = items.filter((item) => {
           if (!allowed.has(item.serverId)) {
@@ -2269,7 +2281,7 @@ export class WebSocketGateway {
               networkTxBytes: latest.networkTxBytes.toString(),
               diskIoMb: latest.diskIoMb ?? 0,
               diskUsageMb: latest.diskUsageMb,
-              diskTotalMb: 0,
+              diskTotalMb: diskMbByServer.get(sid) ?? 0,
               timestamp: latest.timestamp.getTime(),
             };
             this.latestResourceStats.set(sid, payload);

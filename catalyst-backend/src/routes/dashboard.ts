@@ -181,10 +181,12 @@ export async function dashboardRoutes(app: FastifyInstance) {
               cpuPercent: true,
               memoryUsageMb: true,
               memoryTotalMb: true,
+              networkRxBytes: true,
+              networkTxBytes: true,
               timestamp: true,
             },
             orderBy: { timestamp: 'desc' },
-            take: 1,
+            take: 2,
           },
         },
       });
@@ -194,6 +196,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
       let totalCpuLimit = 0;
       let totalMemoryUsed = 0;
       let totalMemoryLimit = 0;
+      // Sum of per-node RX+TX rates (MB/s) derived from the last two
+      // cumulative counters per node. Nodes with <2 samples contribute 0
+      // (unknown, not idle); counter resets clamp at 0.
+      let networkThroughput = 0;
 
       for (const node of nodes) {
         const latestMetrics = node.metrics[0];
@@ -209,15 +215,21 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
         totalMemoryUsed += memoryUsedMb;
         totalMemoryLimit += memoryLimitMb;
+
+        const newest = node.metrics[0];
+        const older = node.metrics[1];
+        if (newest && older) {
+          const elapsedSec = Math.max(1, (newest.timestamp.getTime() - older.timestamp.getTime()) / 1000);
+          const rxDelta = Number(newest.networkRxBytes - older.networkRxBytes) / elapsedSec / (1024 * 1024);
+          const txDelta = Number(newest.networkTxBytes - older.networkTxBytes) / elapsedSec / (1024 * 1024);
+          if (Number.isFinite(rxDelta) && rxDelta > 0) networkThroughput += rxDelta;
+          if (Number.isFinite(txDelta) && txDelta > 0) networkThroughput += txDelta;
+        }
       }
 
       const cpuUtilization = totalCpuLimit > 0 ? clampPercent((totalCpuUsed / totalCpuLimit) * 100) : 0;
       const memoryUtilization = totalMemoryLimit > 0 ? clampPercent((totalMemoryUsed / totalMemoryLimit) * 100) : 0;
-
-      // Network throughput would require real-time metrics from agents
-      // For now, return a placeholder based on running servers
-      const runningServers = await prisma.server.count({ where: { status: 'running' } });
-      const networkThroughput = Math.min(100, runningServers * 5); // Placeholder calculation
+      networkThroughput = Math.round(networkThroughput * 100) / 100;
 
       const payload = {
         cpuUtilization,

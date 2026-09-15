@@ -254,10 +254,16 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
           push('resource_stats', cached);
         } else {
           // Fallback: query the DB for the most recent metric
-          const latest = await prisma.serverMetrics.findFirst({
-            where: { serverId },
-            orderBy: { timestamp: 'desc' },
-          });
+          const [latest, diskOwner] = await Promise.all([
+            prisma.serverMetrics.findFirst({
+              where: { serverId },
+              orderBy: { timestamp: 'desc' },
+            }),
+            prisma.server.findUnique({
+              where: { id: serverId },
+              select: { allocatedDiskMb: true },
+            }),
+          ]);
           if (latest) {
             push('resource_stats', {
               type: 'resource_stats',
@@ -268,7 +274,7 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
               networkTxBytes: latest.networkTxBytes.toString(),
               diskIoMb: latest.diskIoMb ?? 0,
               diskUsageMb: latest.diskUsageMb,
-              diskTotalMb: 0,
+              diskTotalMb: diskOwner?.allocatedDiskMb ?? 0,
               timestamp: latest.timestamp.getTime(),
             });
           }

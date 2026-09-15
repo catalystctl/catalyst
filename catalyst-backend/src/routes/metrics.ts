@@ -7,9 +7,9 @@ import { SimpleCache } from '../lib/cache.js';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 
-// History payloads are polled every 30s per open server tab and each miss
-// scans up to 10k metric rows. TTL matches the poll cadence (time-series
-// data: TTL-only, no invalidation possible).
+// History payloads are polled frequently per open server tab and each miss
+// scans up to 10k metric rows. TTL is short (time-series data: TTL-only,
+// no invalidation possible).
 const metricsHistoryCache = new SimpleCache<string, unknown>(10_000, 500);
 
 export async function metricsRoutes(app: FastifyInstance) {
@@ -32,16 +32,9 @@ export async function metricsRoutes(app: FastifyInstance) {
       const maxRecords = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 1000) : 100;
       const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
 
-      // Cache key is serverId + requested window (authz is checked below the
-      // shared fetch, so a cache hit can never bypass permission checks).
+      // Cache key is serverId + requested window. Authz is checked first
+      // below, so a cache hit can never bypass permission checks.
       const cacheKey = `${serverId}:${hoursBack}h:${maxRecords}`;
-      const cached = metricsHistoryCache.get(cacheKey);
-      if (cached !== undefined) {
-        return reply.send(serialize({
-          success: true,
-          data: cached,
-        }));
-      }
 
       // Run ALL queries in parallel - server, metrics, and access all at once
       const queryStart = Date.now();
@@ -115,6 +108,14 @@ export async function metricsRoutes(app: FastifyInstance) {
         hasNodeAccessToServer;
       if (!canReadMetrics) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+      }
+
+      const cached = metricsHistoryCache.get(cacheKey);
+      if (cached !== undefined) {
+        return reply.send(serialize({
+          success: true,
+          data: cached,
+        }));
       }
 
       // Return early if no metrics
@@ -206,15 +207,18 @@ export async function metricsRoutes(app: FastifyInstance) {
         }
         const cpu = Math.round((b.sumCpu / b.count) * 10) / 10;
         const diskIo = Math.round(b.sumDiskIo / b.count);
-        const rx = b.lastNetRx ?? BigInt(0);
-        const tx = b.lastNetTx ?? BigInt(0);
+        // Newest sample per bucket: metrics arrive newest-first, so firstNet
+        // holds the newest counter in the bucket. Deltas clamp at 0 so a
+        // container restart (counter reset) never reports negative MB/s.
+        const rx = b.firstNetRx ?? BigInt(0);
+        const tx = b.firstNetTx ?? BigInt(0);
         const bTs = b.lastTimestamp ?? (sinceMs + i * bucketSizeMs);
         const elapsedSec = prevSrvTs > 0 ? Math.max(1, (bTs - prevSrvTs) / 1000) : 0;
         const rxRate = elapsedSec > 0 && prevSrvRx > BigInt(0)
-          ? Math.round(Number(rx - prevSrvRx) / elapsedSec / (1024 * 1024) * 100) / 100
+          ? Math.max(0, Math.round(Number(rx - prevSrvRx) / elapsedSec / (1024 * 1024) * 100) / 100)
           : 0;
         const txRate = elapsedSec > 0 && prevSrvTx > BigInt(0)
-          ? Math.round(Number(tx - prevSrvTx) / elapsedSec / (1024 * 1024) * 100) / 100
+          ? Math.max(0, Math.round(Number(tx - prevSrvTx) / elapsedSec / (1024 * 1024) * 100) / 100)
           : 0;
         prevSrvRx = rx;
         prevSrvTx = tx;
@@ -377,7 +381,9 @@ export async function metricsRoutes(app: FastifyInstance) {
           cpuPercent: latest.cpuPercent,
           memoryUsageMb: latest.memoryUsageMb,
           memoryAllocatedMb: server.allocatedMemoryMb,
-          memoryPercentage: (latest.memoryUsageMb / server.allocatedMemoryMb) * 100,
+          memoryPercentage: server.allocatedMemoryMb > 0
+            ? (latest.memoryUsageMb / server.allocatedMemoryMb) * 100
+            : 0,
           diskIoMb: latest.diskIoMb ?? 0,
           diskUsageMb: latest.diskUsageMb,
           networkRxBytes: latest.networkRxBytes.toString(),
@@ -417,9 +423,12 @@ export async function metricsRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
       }
 
-      // Calculate time range
-      const hoursBack = hours ? parseInt(hours) : 1;
-      const maxRecords = limit ? parseInt(limit) : 100;
+      // Calculate time range (clamped like the server route so a bad or
+      // hostile query cannot request an unbounded bucket array).
+      const parsedNodeHours = hours ? parseInt(hours) : 1;
+      const parsedNodeLimit = limit ? parseInt(limit) : 100;
+      const hoursBack = Number.isFinite(parsedNodeHours) ? Math.min(Math.max(parsedNodeHours, 1), 168) : 1;
+      const maxRecords = Number.isFinite(parsedNodeLimit) ? Math.min(Math.max(parsedNodeLimit, 1), 1000) : 100;
       const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
 
       const fetchNodeLimit = Math.min(10000, Math.max(maxRecords * 25, maxRecords));
@@ -444,6 +453,8 @@ export async function metricsRoutes(app: FastifyInstance) {
         sumCpu: number;
         maxMemory: number | null;
         sumDiskUsage: number;
+        sumMemoryTotal: number;
+        sumDiskTotal: number;
         firstNetRx: bigint | null;
         lastNetRx: bigint | null;
         firstNetTx: bigint | null;
@@ -456,6 +467,8 @@ export async function metricsRoutes(app: FastifyInstance) {
         sumCpu: 0,
         maxMemory: null,
         sumDiskUsage: 0,
+        sumMemoryTotal: 0,
+        sumDiskTotal: 0,
         firstNetRx: null,
         lastNetRx: null,
         firstNetTx: null,
@@ -474,6 +487,8 @@ export async function metricsRoutes(app: FastifyInstance) {
         b.sumCpu += m.cpuPercent;
         b.maxMemory = b.maxMemory === null ? m.memoryUsageMb : Math.max(b.maxMemory, m.memoryUsageMb);
         b.sumDiskUsage += m.diskUsageMb;
+        b.sumMemoryTotal += m.memoryTotalMb;
+        b.sumDiskTotal += m.diskTotalMb;
         const rx = BigInt(Math.max(0, Number(m.networkRxBytes ?? 0)));
         const tx = BigInt(Math.max(0, Number(m.networkTxBytes ?? 0)));
         if (b.firstNetRx === null) b.firstNetRx = rx;
@@ -483,7 +498,8 @@ export async function metricsRoutes(app: FastifyInstance) {
         b.lastTimestamp = Math.max(b.lastTimestamp ?? 0, t);
       }
 
-      // Build chronological history with network deltas (bytes/second)
+      // Build chronological history with network deltas (MB/s rates derived
+      // from cumulative byte counters).
       let prevNetRx = BigInt(0);
       let prevNetTx = BigInt(0);
       let prevTimestamp = 0;
@@ -502,14 +518,15 @@ export async function metricsRoutes(app: FastifyInstance) {
           };
         }
         const cpu = Math.round((b.sumCpu / b.count) * 10) / 10;
-        const rx = b.lastNetRx ?? BigInt(0);
-        const tx = b.lastNetTx ?? BigInt(0);
+        // Newest counter per bucket; clamp resets at 0.
+        const rx = b.firstNetRx ?? BigInt(0);
+        const tx = b.firstNetTx ?? BigInt(0);
         const elapsedSec = prevTimestamp > 0 ? Math.max(1, (ts - prevTimestamp) / 1000) : 0;
         const rxRate = elapsedSec > 0 && prevNetRx > BigInt(0)
-          ? Number(rx - prevNetRx) / elapsedSec / (1024 * 1024)
+          ? Math.max(0, Number(rx - prevNetRx) / elapsedSec / (1024 * 1024))
           : 0;
         const txRate = elapsedSec > 0 && prevNetTx > BigInt(0)
-          ? Number(tx - prevNetTx) / elapsedSec / (1024 * 1024)
+          ? Math.max(0, Number(tx - prevNetTx) / elapsedSec / (1024 * 1024))
           : 0;
         prevNetRx = rx;
         prevNetTx = tx;
@@ -517,9 +534,9 @@ export async function metricsRoutes(app: FastifyInstance) {
         return {
           cpuPercent: cpu,
           memoryUsageMb: b.maxMemory as number,
-          memoryTotalMb: node.maxMemoryMb,
+          memoryTotalMb: Math.round(b.sumMemoryTotal / b.count),
           diskUsageMb: Math.round(b.sumDiskUsage / b.count),
-          diskTotalMb: node.maxMemoryMb,
+          diskTotalMb: Math.round(b.sumDiskTotal / b.count),
           networkRxBytes: Math.round(rxRate * 100) / 100,
           networkTxBytes: Math.round(txRate * 100) / 100,
           timestamp: new Date(ts),

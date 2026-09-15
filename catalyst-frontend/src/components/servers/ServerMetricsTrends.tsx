@@ -14,17 +14,19 @@ type TrendCard = {
  value: string;
  color: string;
  stroke: string;
- data: Array<{ index: number; value: number }>;
+ data: Array<{ index: number; value: number | null }>;
  formatTooltip?: (value: number) => string;
 };
 
-const toNumber = (value?: string | number | null) => {
- if (value == null) return 0;
+// Null means "no sample in this bucket" and renders as a chart gap.
+// Never coerce gaps to 0: that would fake idle periods and drag averages.
+const toNullableNumber = (value?: string | number | null) => {
+ if (value == null) return null;
  const parsed = typeof value === 'string' ? Number(value) : value;
- return Number.isFinite(parsed) ? parsed : 0;
+ return Number.isFinite(parsed) ? parsed : null;
 };
 
-const toChartData = (values: number[]) => values.map((value, index) => ({ index, value }));
+const toChartData = (values: Array<number | null>) => values.map((value, index) => ({ index, value }));
 
 function ServerMetricsTrends({
  history,
@@ -42,11 +44,16 @@ function ServerMetricsTrends({
  const cpuHistory = history.map((point) => point.cpuPercent);
  const memoryHistory = history.map((point) => point.memoryUsageMb);
  const diskHistory = history.map((point) => point.diskUsageMb);
- const diskIoHistory = history.map((point) => point.diskIoMb ?? 0);
+ const diskIoHistory = history.map((point) => point.diskIoMb ?? null);
  // Network values from backend are now MB/s delta rates (numeric)
- const netRxHistory = history.map((point) => toNumber(point.networkRxBytes));
- const netTxHistory = history.map((point) => toNumber(point.networkTxBytes));
- const throughput = netRxHistory.map((rx, i) => Math.round((rx + netTxHistory[i]) * 100) / 100);
+ const netRxHistory = history.map((point) => toNullableNumber(point.networkRxBytes));
+ const netTxHistory = history.map((point) => toNullableNumber(point.networkTxBytes));
+ const throughput = netRxHistory.map((rx, i) => {
+   const tx = netTxHistory[i];
+   if (rx == null || tx == null) return null;
+   return Math.round((rx + tx) * 100) / 100;
+ });
+ const lastThroughput = [...throughput].reverse().find((v) => v != null) ?? 0;
 
  const cards: TrendCard[] = [
  {
@@ -84,7 +91,7 @@ function ServerMetricsTrends({
  },
  {
  label: t('metrics.labels.network'),
- value: `${(throughput[throughput.length - 1] ?? 0).toFixed(2)} MB/s`,
+ value: `${lastThroughput.toFixed(2)} MB/s`,
  color: 'text-info',
  stroke: 'hsl(var(--info))',
  data: toChartData(throughput),

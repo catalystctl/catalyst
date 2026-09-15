@@ -11,6 +11,10 @@ import { createServerMetricsStream, type ServerEventType } from '../services/api
 import type { ServerMetrics as ServerMetricsType } from '../types/server';
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
+// CPU is normalized against allocated cores backend-side (100 per core), so a
+// multi-core server legitimately reports >100%. Keep the raw value for the
+// numeric label; the gauge bar itself still caps at 100% width.
+const clampCpu = (value: number) => (Number.isFinite(value) ? Math.max(0, value) : 0);
 const UPDATE_THROTTLE_MS = 250;
 
 export function useServerMetrics(serverId?: string, allocatedMemoryMb?: number) {
@@ -36,7 +40,7 @@ export function useServerMetrics(serverId?: string, allocatedMemoryMb?: number) 
         if (data.serverId != null && String(data.serverId) !== serverId) return;
 
         const applyMetrics = (d: Record<string, unknown>) => {
-          const cpuPercent = clampPercent(Number(d.cpuPercent ?? d.cpu ?? 0));
+          const cpuPercent = clampCpu(Number(d.cpuPercent ?? d.cpu ?? 0));
           const memoryUsageMb = Number(d.memoryUsageMb ?? 0);
           const memoryPercent =
             typeof d.memory === 'number'

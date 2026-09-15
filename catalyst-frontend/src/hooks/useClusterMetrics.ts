@@ -158,11 +158,11 @@ export function useClusterMetrics(refreshInterval = 60_000) {
           ? Math.round(onlineNodes.reduce((sum, n) => sum + n.memory, 0) / onlineNodes.length)
           : 0;
       const avgNetworkRx = Math.round(
-        onlineNodes.reduce((sum, n) => sum + n.networkRx, 0) / Math.max(1, onlineNodes.length),
-      );
+        (onlineNodes.reduce((sum, n) => sum + n.networkRx, 0) / Math.max(1, onlineNodes.length)) * 100,
+      ) / 100;
       const avgNetworkTx = Math.round(
-        onlineNodes.reduce((sum, n) => sum + n.networkTx, 0) / Math.max(1, onlineNodes.length),
-      );
+        (onlineNodes.reduce((sum, n) => sum + n.networkTx, 0) / Math.max(1, onlineNodes.length)) * 100,
+      ) / 100;
 
       return {
         nodes: nodeMetrics,

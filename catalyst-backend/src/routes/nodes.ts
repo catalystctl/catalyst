@@ -1075,18 +1075,26 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return apiError(reply, 401, ErrorCodes.UNAUTHORIZED, "Unauthorized");
 			}
 
-			const cpuPercent = Number(health?.cpuPercent);
-			const memoryUsageMb = Number(health?.memoryUsageMb);
-			const memoryTotalMb = Number(health?.memoryTotalMb ?? node.maxMemoryMb);
-			const diskUsageMb = Number(health?.diskUsageMb ?? 0);
-			const diskTotalMb = Number(health?.diskTotalMb ?? 0);
+			const INT4_MAX = 2_147_483_647;
+			const INT8_MAX = 9_223_372_036_854_775_807n;
+			const clampInt4 = (n: number, fallback = 0) =>
+				!Number.isFinite(n) ? fallback : Math.min(INT4_MAX, Math.max(0, Math.round(n)));
+			const toByteCounter = (v: unknown): bigint => {
+				const n = Number(v);
+				if (!Number.isFinite(n) || n <= 0) return 0n;
+				const bytes = BigInt(Math.floor(n));
+				return bytes > INT8_MAX ? INT8_MAX : bytes;
+			};
+			const cpuPercent = !Number.isFinite(Number(health?.cpuPercent))
+				? 0
+				: Math.min(100, Math.max(0, Number(health.cpuPercent)));
+			const memoryUsageMb = clampInt4(Number(health?.memoryUsageMb));
+			const memoryTotalMb = clampInt4(Number(health?.memoryTotalMb ?? node.maxMemoryMb), node.maxMemoryMb);
+			const diskUsageMb = clampInt4(Number(health?.diskUsageMb ?? 0));
+			const diskTotalMb = clampInt4(Number(health?.diskTotalMb ?? 0));
 			const containerCount = Number(health?.containerCount);
-			const networkRxBytes = BigInt(
-				Math.max(0, Number(health?.networkRxBytes ?? 0)),
-			);
-			const networkTxBytes = BigInt(
-				Math.max(0, Number(health?.networkTxBytes ?? 0)),
-			);
+			const networkRxBytes = toByteCounter(health?.networkRxBytes);
+			const networkTxBytes = toByteCounter(health?.networkTxBytes);
 
 			if (
 				!Number.isFinite(cpuPercent) ||

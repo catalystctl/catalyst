@@ -53,6 +53,8 @@ export default function ServerMetricsTab({
   const memUsed = liveMetrics?.memoryUsageMb;
   const diskUsed = liveMetrics?.diskUsageMb;
   const diskTotal = liveMetrics?.diskTotalMb || allocatedDiskMb;
+  // Live network counters are cumulative totals; per-second rates live in
+  // the trends chart below (history buckets are MB/s).
 
   return (
     <div className="space-y-4">
