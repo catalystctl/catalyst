@@ -9,6 +9,7 @@ Agent instructions for the Catalyst monorepo (game-server control panel).
 - `catalyst-agent/` — the Rust node agent (`cargo`).
 - `packages/plugin-sdk/`, `packages/plugin-sdk-cli/` — plugin SDKs.
 - Plugin frontends live in the separate `catalystctl/catalyst-plugins` repo. CI checks it out to `catalyst-plugins/`; the panel build globs it in, so a local build needs that directory present.
+- Public docs live in the separate `catalystctl/catalyst-doc` repo, vendored here as the `catalyst-doc/` submodule (docs site source + docs agent). Clone with `git clone --recurse-submodules`, or `git submodule update --init --recursive` afterwards. Docs changes go through PRs in `catalyst-doc`; bump the submodule pointer here to adopt a new docs revision. Never edit the submodule in place for product work.
 
 ## Verify before claiming something works
 
@@ -55,7 +56,7 @@ non-trivial, all of them:
 
 - Conventional commits: the release workflow derives minor/patch bumps from them (`feat:` minor, `fix:` patch).
 - Tests live next to the code (`src/__tests__/`, `src/**/__tests__/`). Backend tests hit the real dev database and must clean up the rows they create.
-- When behaviour changes, update the matching doc (`docs/i18n.md`, `docs/admin-guide.md`, `docs/api-reference.md`).
+- When behaviour changes, update the matching doc (`docs/i18n.md`, the relevant `catalyst-doc` page, or the generated API reference).
 - Comments stay short and factual; explain non-obvious constraints only.
 - When a change alters anything a user sees in the panel, verify it in the browser (sign-in and admin flows) before reporting it as done.
 

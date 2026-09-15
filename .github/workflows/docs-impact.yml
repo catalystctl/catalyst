@@ -1,0 +1,28 @@
+name: Docs impact (advisory)
+
+# Runs the catalyst-doc docs agent in heuristic mode against the PR diff and
+# posts which documentation areas are affected. Advisory only: it never blocks
+# merges and never writes to either repo. Human reviewers use it to request
+# matching docs updates in catalyst-doc.
+on:
+  pull_request:
+
+jobs:
+  docs-impact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Documentation impact report
+        run: |
+          node catalyst-doc/tools/docs-agent/bin/docs-agent.mjs diff \
+            --source-repo . \
+            --docs-repo catalyst-doc \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            --dry-run

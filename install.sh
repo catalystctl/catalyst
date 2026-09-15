@@ -8,8 +8,8 @@ set -euo pipefail
 umask 077
 
 # Pinned release metadata for verified installs (see "Versioned install" note
-# in docs/installation.md). Release artifacts publish install.sh + .sha256;
-# always verify before executing.
+# in the Installation guide on docs.catalystctl.com). Release artifacts
+# publish install.sh + .sha256; always verify before executing.
 INSTALL_VERSION="${INSTALL_VERSION:-main}"
 INSTALL_SHA256="${INSTALL_SHA256:-}"
 

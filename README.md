@@ -38,7 +38,7 @@ Open your `PUBLIC_URL` in a browser. Complete the **Setup** wizard (admin accoun
 
 That's it. No build steps, no dependency installation, no manual secret generation (the install script does that for you).
 
-👉 Want more detail? See the [Quick Start Guide](docs/QUICKSTART.md) for the full walkthrough with screenshots, or the [Detailed Installation Guide](docs/INSTALLATION_DETAILED.md) for every option, every edge case, and production hardening.
+👉 Want more detail? See the [Administrator Guide](https://docs.catalystctl.com/admin/overview/) for the full walkthrough, or [Installation](https://docs.catalystctl.com/admin/installation/) for every option and production hardening.
 
 Stuck or have questions? Join the community on [Discord](https://discord.gg/mybxhmru3y) or open a [GitHub Issue](https://github.com/catalystctl/catalyst/issues).
 
@@ -50,8 +50,8 @@ Catalyst deploys in three ways. Pick the one that fits you:
 
 | Method | Time | Best For |
 |--------|------|----------|
-| **[One-Line Install](docs/QUICKSTART.md)** | 5 minutes | First-time users, production |
-| **[Docker/Podman Compose](docs/docker-setup.md)** | 10 minutes | Users who want full control over TLS, ports, volumes |
+| **[One-Line Install](https://docs.catalystctl.com/admin/installation/)** | 5 minutes | First-time users, production |
+| **[Docker/Podman Compose](https://docs.catalystctl.com/admin/installation/)** | 10 minutes | Users who want full control over TLS, ports, volumes |
 | **[Build from Source](docs/development.md)** | 30+ minutes | Developers contributing to Catalyst |
 
 ### 🐳 Docker & Podman
@@ -98,7 +98,7 @@ docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
 docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
 ```
 
-See [Docker Setup](docs/docker-setup.md) for full TLS, reverse proxy, and hardening details.
+See the [Administrator Guide](https://docs.catalystctl.com/admin/networking/) for full TLS, reverse proxy, and hardening details.
 
 ---
 
@@ -249,22 +249,21 @@ All screenshots are captured automatically at 1080p via Playwright. [See how to 
 
 ## Documentation
 
-| Guide | For You If... | Description |
-|-------|---------------|-------------|
-| **[⚡ Quick Start](docs/QUICKSTART.md)** | New to Catalyst | 5-minute setup with Docker Compose |
-| **[📖 Detailed Installation](docs/INSTALLATION_DETAILED.md)** | Devs & ops | Full install: every option, every edge case |
-| **[Getting Started](docs/getting-started.md)** | First-time admin | Walkthrough: nodes, templates, first server |
-| **[Docker Setup](docs/docker-setup.md)** | System operator | TLS, volumes, networking, production hardening |
-| **[User Guide](docs/user-guide.md)** | Server owner | Manage your servers, files, backups, console |
-| **[Admin Guide](docs/admin-guide.md)** | System operator | Deploy nodes, configure networking, monitor health |
-| **[Agent Guide](docs/agent.md)** | Node operator | Deploy the Rust agent on game server nodes |
-| **[API Reference](docs/api-reference.md)** | Developer | Complete REST API with integration examples |
-| **[Automation & Plugins](docs/automation.md)** | Power user | Scheduled tasks, webhooks, API automation, plugins |
-| **[Development Guide](docs/development.md)** | Contributor | Dev environment, testing, code style, PR process |
-| **[Plugin System](docs/plugins.md)** | Plugin dev | Extend Catalyst with custom functionality |
-| **[Environment Variables](docs/environment-variables.md)** | All | Complete reference of all 70+ config variables |
-| **[Troubleshooting](docs/troubleshooting.md)** | All | Common errors, solutions, debugging workflows |
-| **[Architecture](docs/architecture.md)** | Technical | System design, data flow, security model |
+Full product documentation lives at **[docs.catalystctl.com](https://docs.catalystctl.com)**
+([source](https://github.com/catalystctl/catalyst-doc)):
+
+| Guide | For You If... | Start here |
+|-------|---------------|------------|
+| **[Getting Started](https://docs.catalystctl.com/getting-started/first-server/)** | New to Catalyst | First server in minutes |
+| **[Game Server Guide](https://docs.catalystctl.com/users/overview/)** | Server owner | Console, files, backups, databases, tasks |
+| **[Administrator Guide](https://docs.catalystctl.com/admin/overview/)** | System operator | Install, nodes, networking, updates |
+| **[API & Developers](https://docs.catalystctl.com/api/overview/)** | Developer | Auth, WebSockets, generated API reference |
+| **[Troubleshooting](https://docs.catalystctl.com/troubleshooting/overview/)** | All | Errors, fixes, debugging workflows |
+
+Contributor and engineering references stay in this repo under [`docs/`](docs/README.md):
+[Agent Guide](docs/agent.md) · [Architecture](docs/architecture.md) ·
+[Development](docs/development.md) · [Plugin System](docs/plugins.md) ·
+[Environment Variables](docs/environment-variables.md) · [Security](docs/SECURITY.md)
 
 ---
 
@@ -289,11 +288,11 @@ All screenshots are captured automatically at 1080p via Playwright. [See how to 
 
 ## 📚 Quick Documentation Links
 
-New here? Pick your path:
+New here? Pick your path in the [documentation](https://docs.catalystctl.com):
 
-- 🚀 **[Quick Start](docs/QUICKSTART.md)** — Running in 5 minutes with Docker
-- 📖 **[Detailed Installation](docs/INSTALLATION_DETAILED.md)** — Every option, every edge case, production hardening
-- 🐳 **[Docker Reference](docs/docker-setup.md)** — Complete Docker/Podman guide: TLS, volumes, networking
+- 🚀 **[First server](https://docs.catalystctl.com/getting-started/first-server/)** — Running in minutes
+- 📖 **[Installation](https://docs.catalystctl.com/admin/installation/)** — Every option, every edge case, production hardening
+- 🐳 **[Networking & TLS](https://docs.catalystctl.com/admin/networking/)** — Reverse proxy, TLS, ports
 
 The full documentation catalog is in the table above.
 

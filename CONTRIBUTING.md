@@ -748,9 +748,9 @@ translated nor listed with a reason in
 
 ### Resources
 
-- **Documentation:** [docs/](docs/)
+- **Documentation:** [docs.catalystctl.com](https://docs.catalystctl.com) ([source](https://github.com/catalystctl/catalyst-doc), vendored as `catalyst-doc/`)
 - **Architecture:** [docs/architecture.md](docs/architecture.md)
-- **API Reference:** [docs/api-reference.md](docs/api-reference.md)
+- **API Reference:** [generated OpenAPI](https://docs.catalystctl.com/api/reference/) (`pnpm --filter catalyst-backend run openapi:export`)
 
 ### Community
 
