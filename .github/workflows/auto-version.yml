@@ -10,15 +10,19 @@ permissions:
   id-token: write # SLSA provenance + cosign signing
   attestations: write
 
+# New pushes supersede older release pipelines instead of FIFO stacking.
+# Each main push fans out to musl agent builds + image builds; without this
+# rapid pushes queue obsolete 6-minute builds behind each other.
+concurrency:
+  group: auto-version-main
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   PROTOC_VERSION: "25.1"
   PROTOC_ARCH: "linux-x86_64"
   REGISTRY: ghcr.io
-  # Single credential file shared by buildah (login/push) and the SLSA
-  # attestation action, which only reads the docker default location.
-  REGISTRY_AUTH_FILE: /root/.docker/config.json
 
 jobs:
   version:
@@ -308,8 +312,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ══════════════════════════════════════════════════════════════════════════════
-  # Agent Release Build — builds release agent binaries and uploads them as
-  # GitHub Release assets with SHA256 checksums.
+  # Agent Release Build — builds static musl agent binaries and uploads them
+  # as GitHub Release assets with SHA256 checksums.
+  #
+  # Musl only: deploy-agent.sh, the agent self-updater, and the backend
+  # download proxy all fetch catalyst-agent-{arch}-linux-musl. The gnu
+  # targets were unused (the agent Docker image compiles gnu from source),
+  # so they were dropped to halve compile load and fit the runner pool.
   #
   # Lives in auto-version.yml (not ci.yml) because this workflow creates the
   # tag and release. ci.yml can't be triggered by GITHUB_TOKEN tag pushes
@@ -323,6 +332,7 @@ jobs:
       contents: write
       id-token: write # SLSA provenance via attest-build-provenance
       attestations: write
+      actions: write # sccache GHA cache backend
     needs: version
     if: needs.version.outputs.bump != 'none'
     # Push-to-main only (trusted), so self-hosted directly. Runs natively on
@@ -336,12 +346,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            artifact_name: catalyst-agent-x86_64-linux-gnu
           - target: x86_64-unknown-linux-musl
             artifact_name: catalyst-agent-x86_64-linux-musl
-          - target: aarch64-unknown-linux-gnu
-            artifact_name: catalyst-agent-aarch64-linux-gnu
           - target: aarch64-unknown-linux-musl
             artifact_name: catalyst-agent-aarch64-linux-musl
 
@@ -350,80 +356,38 @@ jobs:
         with:
           ref: v${{ needs.version.outputs.new_version }}
 
-      - name: Cache protoc
-        id: cache-protoc
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: /usr/local/bin/protoc
-          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
-
-      - name: Install protoc
-        if: steps.cache-protoc.outputs.cache-hit != 'true'
+      - name: Check protoc
         shell: bash
         run: |
           set -euo pipefail
-          # Self-hosted runners preinstall protoc; extracting over it makes
-          # unzip prompt (and fail on closed stdin), so skip when present.
+          # Runner image preinstalls protoc 25.1; fail fast if it drifted.
           if command -v protoc >/dev/null 2>&1 && [ "$(protoc --version)" = "libprotoc ${{ env.PROTOC_VERSION }}" ]; then
             echo "protoc ${{ env.PROTOC_VERSION }} already installed"
             exit 0
           fi
-          apt-get update && apt-get install -y unzip ca-certificates
-          curl -fsSL -o /tmp/protoc-${{ env.PROTOC_VERSION }}.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
-          echo "ed8fca87a11c888fed329d6a59c34c7d436165f662a2c875246ddb1ac2b6dd50  /tmp/protoc-${{ env.PROTOC_VERSION }}.zip" | sha256sum -c -
-          unzip -o "/tmp/protoc-${{ env.PROTOC_VERSION }}.zip" -d /usr/local
-          rm -f "/tmp/protoc-${{ env.PROTOC_VERSION }}.zip"
-          chmod +x /usr/local/bin/protoc
+          echo "ERROR: protoc ${{ env.PROTOC_VERSION }} missing from runner image — rebuild infra/self-hosted-runners"
+          exit 1
 
       - name: Install target linkers
         shell: bash
         run: |
           set -euo pipefail
-          # Link toolchains are preinstalled in the runner image: only install
-          # what is missing. The linker env exports below run every time.
-          need_install=false
+          # Musl link toolchains are preinstalled in the runner image.
+          # Fail fast if the image drifted instead of apt-installing mid-release.
           case "${{ matrix.target }}" in
-            x86_64-unknown-linux-gnu) ;;
             x86_64-unknown-linux-musl)
-              if ! command -v musl-gcc >/dev/null 2>&1; then need_install=true; fi ;;
-            aarch64-unknown-linux-gnu)
-              if ! command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then need_install=true; fi ;;
-            aarch64-unknown-linux-musl)
-              if [ ! -x /opt/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc ]; then need_install=true; fi ;;
-            *)
-              echo "Unknown target ${{ matrix.target }}"
-              exit 1
-              ;;
-          esac
-          if [ "$need_install" = "true" ]; then
-            apt-get update
-            case "${{ matrix.target }}" in
-              x86_64-unknown-linux-musl)
-                apt-get install -y musl-tools musl-dev
-                ;;
-              aarch64-unknown-linux-gnu)
-                apt-get install -y gcc-aarch64-linux-gnu
-                ;;
-              aarch64-unknown-linux-musl)
-                # Cross-compile musl aarch64 on the x86_64 builder (deploy + auto-update use this asset).
-                apt-get install -y wget xz-utils
-                curl -fsSL -o /tmp/aarch64-linux-musl-cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
-                echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/aarch64-linux-musl-cross.tgz" | sha256sum -c -
-                tar -C /opt -xzf /tmp/aarch64-linux-musl-cross.tgz
-                rm -f /tmp/aarch64-linux-musl-cross.tgz
-                ;;
-            esac
-          fi
-          case "${{ matrix.target }}" in
-            aarch64-unknown-linux-gnu)
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-              echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+              command -v musl-gcc >/dev/null 2>&1 || { echo "ERROR: musl-gcc missing from runner image"; exit 1; }
               ;;
             aarch64-unknown-linux-musl)
+              [ -x /opt/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc ] || { echo "ERROR: aarch64 musl cross toolchain missing"; exit 1; }
               echo "/opt/aarch64-linux-musl-cross/bin" >> "$GITHUB_PATH"
               echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
               echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
               echo "AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unknown target ${{ matrix.target }}"
+              exit 1
               ;;
           esac
 
@@ -432,10 +396,19 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # No remote Rust cache here on purpose: restoring multi-hundred-MB
-      # target dirs costs ~20 minutes, about as much as compiling, and any
-      # profile change invalidates it anyway. sccache on the per-slot volume
-      # covers repeat builds with zero network cost.
+      # sccache GHA backend needs these tokens as env vars on self-hosted
+      # runners (GitHub-hosted exposes them automatically).
+      - name: Export GHA cache credentials for sccache
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      # Disk cache (per-slot /cache volume) + shared GHA cache backend.
+      # Disk covers repeat builds on the same slot with zero network cost;
+      # GHA shares hits across slots so a target compiled on slot 0 helps
+      # slot 3. Bump SCCACHE_GHA_VERSION to purge the shared cache.
       - name: Configure Rust build caching
         # sccache is guarded (not job env) so the workflow also works on
         # images predating it: without it the build just compiles directly.
@@ -449,9 +422,11 @@ jobs:
               echo "SCCACHE_DIR=/cache/sccache"
               echo "SCCACHE_CACHE_SIZE=10G"
               echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1"
+              echo "SCCACHE_GHA_ENABLED=on"
+              echo "SCCACHE_GHA_VERSION=1"
             } >> "$GITHUB_ENV"
             mkdir -p /cache/sccache
-            echo "sccache enabled"
+            echo "sccache enabled (disk + GHA shared)"
           else
             echo "sccache not installed, compiling directly"
           fi
@@ -469,13 +444,11 @@ jobs:
           mv "catalyst-agent/target/${{ matrix.target }}/release/catalyst-agent" "/tmp/${{ matrix.artifact_name }}"
 
       - name: Verify musl binary is statically linked
-        if: endsWith(matrix.target, '-musl')
         shell: bash
         run: |
           set -euo pipefail
           BIN="/tmp/${{ matrix.artifact_name }}"
-          apt-get update -qq && apt-get install -y -qq binutils >/dev/null
-          # Cross-arch safe: a static musl ELF has no PT_INTERP.
+          # binutils is preinstalled in the runner image; no apt mid-release.
           if readelf -l "$BIN" | grep -q 'INTERP'; then
             echo "ERROR: ${{ matrix.artifact_name }} is dynamically linked (has PT_INTERP)"
             readelf -d "$BIN" || true
@@ -492,19 +465,13 @@ jobs:
         with:
           subject-path: /tmp/${{ matrix.artifact_name }}
 
-      - name: Upload binary as release asset
+      - name: Upload binary + checksum as release assets
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: v${{ needs.version.outputs.new_version }}
-          files: /tmp/${{ matrix.artifact_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload checksum as release asset
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
-        with:
-          tag_name: v${{ needs.version.outputs.new_version }}
-          files: /tmp/${{ matrix.artifact_name }}.sha256
+          files: |
+            /tmp/${{ matrix.artifact_name }}
+            /tmp/${{ matrix.artifact_name }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -606,17 +573,22 @@ jobs:
   # from the tagged commit so baked-in versions match the agent binaries.
   # ci.yml cannot do this on main — GITHUB_TOKEN chore(release) commits do not
   # retrigger workflows.
+  #
+  # Runs on GitHub-hosted ubuntu-latest with Docker Buildx + GHA layer cache:
+  # overlayfs + warm pnpm layers beat self-hosted buildah/vfs cold builds,
+  # and it frees the self-hosted pool for the musl agent compiles.
   publish-images:
     name: Publish ${{ matrix.image }} Image
     needs: version
     if: needs.version.outputs.bump != 'none'
-    runs-on: [self-hosted, Linux, X64, catalyst-ci]
+    runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
       contents: read
       packages: write
       id-token: write # SLSA provenance via attest-build-provenance
       attestations: write
+      actions: write # Buildx GHA layer cache
     strategy:
       fail-fast: false
       matrix:
@@ -641,8 +613,15 @@ jobs:
           ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
           path: catalyst-plugins
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to GHCR
-        run: buildah login -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}" "${{ env.REGISTRY }}"
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
@@ -657,41 +636,15 @@ jobs:
 
       - name: Build and push
         id: build-push
-        run: |
-          set -euo pipefail
-          # vfs storage: overlay is unusable nested inside the runner
-          # container (overlayfs backing fs, no fuse mount helper), so every
-          # buildah invocation pins vfs explicitly.
-          STORE_ARGS=(--storage-driver vfs)
-          TAG_ARGS=()
-          while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            TAG_ARGS+=(-t "$tag")
-          done <<< "${{ steps.meta.outputs.tags }}"
-          LABEL_ARGS=()
-          while IFS= read -r label; do
-            [ -n "$label" ] || continue
-            LABEL_ARGS+=(--label "$label")
-          done <<< "${{ steps.meta.outputs.labels }}"
-          IIDFILE="$(mktemp)"
-          buildah "${STORE_ARGS[@]}" build --isolation chroot \
-            "${TAG_ARGS[@]}" "${LABEL_ARGS[@]}" \
-            --iidfile "$IIDFILE" \
-            -f "${{ matrix.file }}" .
-          IID="$(cat "$IIDFILE")"
-          FIRST_TAG="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | grep -v '^$' | head -1)"
-          DIGEST_FILE="$(mktemp)"
-          buildah "${STORE_ARGS[@]}" push --digestfile "$DIGEST_FILE" "$IID" "docker://$FIRST_TAG"
-          RAW_DIGEST="$(cat "$DIGEST_FILE")"
-          RAW_DIGEST="${RAW_DIGEST#sha256:}"
-          DIGEST="sha256:$RAW_DIGEST"
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
-          while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            [ "$tag" = "$FIRST_TAG" ] && continue
-            buildah "${STORE_ARGS[@]}" push "$IID" "docker://$tag"
-          done <<< "${{ steps.meta.outputs.tags }}"
-          # No local cleanup: container storage vanishes with the ephemeral runner.
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Attest image provenance (SLSA/Sigstore)
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2

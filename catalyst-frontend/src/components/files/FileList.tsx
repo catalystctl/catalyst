@@ -388,7 +388,7 @@ function FileList({
 
  {/* Actions */}
  <div className="w-10 px-3">
- <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+ <div className="flex justify-end opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:focus-within:opacity-100 has-[button[data-state=open]]:opacity-100">
  <FileContextMenu
  entry={entry}
  onOpen={() => onOpen(entry)}

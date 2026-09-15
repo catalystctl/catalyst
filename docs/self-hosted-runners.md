@@ -9,7 +9,8 @@ container that is destroyed afterwards. No Blacksmith runners remain.
 | Job | Runner |
 |-----|--------|
 | PR gates: lint, test, build verification (`ci.yml`) | Self-hosted, except fork and Dependabot PRs |
-| Agent release, version image publish (`auto-version.yml`) | Self-hosted (push to `main` only) |
+| Musl agent release (`auto-version.yml`) | Self-hosted (push to `main` only) |
+| Version image publish (`auto-version.yml`) | GitHub-hosted `ubuntu-latest` with Buildx GHA cache |
 | Fork and Dependabot pull requests (lint, test, build) | GitHub-hosted `ubuntu-latest` |
 | Pushes to `main` | No CI gates — straight to `auto-version.yml` release |
 | Discord notifications, benchmark harness check | GitHub-hosted `ubuntu-latest` |

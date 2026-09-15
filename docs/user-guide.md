@@ -70,6 +70,14 @@ Use the sidebar to navigate between sections:
 - **Profile** — Account settings, 2FA, passkeys, API keys
 - **Admin** *(if permitted)* — Administrative tools
 
+### Search Palette (`Ctrl+K` / `⌘K`)
+
+Press `Ctrl+K` (or `⌘K` on macOS) anywhere in the panel to open the command
+palette. It searches across Pages, Admin screens, Settings, your Servers,
+Nodes, Templates, Account items, quick Actions, and the open Server's tabs —
+so you can jump straight to a server console or an admin page without
+touching the sidebar. Results you can't access are hidden automatically.
+
 ---
 
 ## Server Listing
@@ -2022,6 +2030,26 @@ On the login page, click **Sign in with Passkey** instead of entering a password
 - **Delete** — remove a passkey
 
 ---
+
+## Profile Settings
+
+Your profile page (**Profile** in the sidebar) holds account-level settings:
+
+- **Account details** — username, display name, and avatar upload.
+- **Appearance** — theme and display preferences, including the interface
+  language switcher (English, French, Simplified Chinese; see below).
+- **Security** — password change, 2FA, passkeys, and linked SSO accounts
+  (covered in their own sections below).
+- **Sessions** — active session list and revocation ([Session Management](#session-management)).
+- **API keys** — personal keys ([API Keys](#api-keys)).
+
+### Interface Language
+
+Click the globe icon (top bar, sign-in pages, setup wizard, and
+**Profile → Appearance**) to switch between English, French (`fr`), and
+Simplified Chinese (`zh-CN`). Your choice is saved as a preference; before
+sign-in, the panel renders in the instance default locale configured by the
+admin (`GET /api/settings/locale`).
 
 ## Session Management
 

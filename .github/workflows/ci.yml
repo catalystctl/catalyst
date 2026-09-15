@@ -15,13 +15,13 @@
 # ║    build        — pnpm build + cargo build verification                       ║
 # ║                                                                              ║
 # ║  Pushes to main skip CI and go straight to auto-version.yml, which           ║
-# ║  cuts the tag and builds the release agent binaries, the MCP bundle,       ║
+# ║  cuts the tag and builds the musl agent binaries, the MCP bundle,          ║
 # ║  AND both GHCR images. Keep PRs green before pushing — direct pushes       ║
 # ║  are ungated.                                                              ║
 # ║                                                                              ║
 # ║  Release (in auto-version.yml, not here):                                    ║
-# ║    agent-release + mcp-release + publish-images — agent binaries, MCP      ║
-# ║    bundle, AND both GHCR images                                            ║
+# ║    agent-release + mcp-release + publish-images — musl agent binaries, MCP ║
+# ║    bundle, AND both GHCR images (images on ubuntu-latest)                  ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: CI/CD — Catalyst

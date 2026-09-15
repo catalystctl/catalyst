@@ -8,29 +8,30 @@ This guide covers all administrative features in Catalyst, from user management 
 
 1. [Admin Dashboard Overview](#admin-dashboard-overview)
 2. [System Health](#system-health)
-3. [User Management](#user-management)
-4. [Role & Permission System](#role--permission-system)
-5. [Node Management](#node-management)
-6. [Agent link resilience controls](#agent-link-resilience-controls)
-7. [Server Templates](#server-templates)
-8. [Server Administration](#server-administration)
-9. [Backup Management](#backup-management)
-10. [Alerts System](#alerts-system)
-11. [Scheduled Tasks](#scheduled-tasks)
-12. [API Key Management](#api-key-management)
-13. [Webhooks](#webhooks)
-14. [Plugin Management](#plugin-management)
-15. [Security Settings](#security-settings)
-16. [SMTP & Email Configuration](#smtp--email-configuration)
-17. [Interface Language](#interface-language)
-18. [Theme & Branding](#theme--branding)
-19. [IPAM (IP Address Management)](#ipam-ip-address-management)
-20. [Database Host Management](#database-host-management)
-21. [Audit Logs](#audit-logs)
-22. [Pterodactyl Migration](#pterodactyl-migration)
-23. [Auth Lockouts](#auth-lockouts)
-24. [OIDC / OAuth Provider Configuration](#oidc--oauth-provider-configuration)
-25. [Mod Manager Settings](#mod-manager-settings)
+3. [System Errors](#system-errors)
+4. [User Management](#user-management)
+5. [Role & Permission System](#role--permission-system)
+6. [Node Management](#node-management)
+7. [Agent link resilience controls](#agent-link-resilience-controls)
+8. [Server Templates](#server-templates)
+9. [Server Administration](#server-administration)
+10. [Backup Management](#backup-management)
+11. [Alerts System](#alerts-system)
+12. [Scheduled Tasks](#scheduled-tasks)
+13. [API Key Management](#api-key-management)
+14. [Webhooks](#webhooks)
+15. [Plugin Management](#plugin-management)
+16. [Security Settings](#security-settings)
+17. [SMTP & Email Configuration](#smtp--email-configuration)
+18. [Interface Language](#interface-language)
+19. [Theme & Branding](#theme--branding)
+20. [IPAM (IP Address Management)](#ipam-ip-address-management)
+21. [Database Host Management](#database-host-management)
+22. [Audit Logs](#audit-logs)
+23. [Pterodactyl Migration](#pterodactyl-migration)
+24. [Auth Lockouts](#auth-lockouts)
+25. [OIDC / OAuth Provider Configuration](#oidc--oauth-provider-configuration)
+26. [Mod Manager Settings](#mod-manager-settings)
 
 ---
 
@@ -104,6 +105,20 @@ Response example:
 
 ---
 
+## System Errors
+
+Navigate to **Admin → System Errors** to review backend-raised error reports
+(plugin failures, mail delivery problems, memory-pressure warnings, and other
+operational faults). Each entry shows its status (`Unresolved` / `Resolved`)
+with detail and history.
+
+- **Resolve one error:** use the Resolve action on the entry
+  (`POST /api/admin/system-errors/:id/resolve`, `admin.write`).
+- **Resolve everything at once:** use Resolve All
+  (`POST /api/admin/system-errors/resolve-all`, `admin.write`).
+- **Export** the list for offline analysis
+  (`GET /api/admin/system-errors/export`, `admin.read`).
+
 ## User Management
 
 ### Viewing Users
@@ -169,6 +184,22 @@ To view which servers a user has access to:
 ```bash
 GET /api/admin/users/:userId/servers
 ```
+
+### User Security Actions
+
+Beyond editing and deleting, admins with `user.update` can intervene in a
+user's authentication state (all actions are audit-logged):
+
+| Action | Endpoint | Notes |
+|--------|----------|-------|
+| Ban / unban | `POST /api/admin/users/:id/ban`, `.../unban` | Requires `user.ban` / `user.unban` |
+| Verify email manually | `PUT /api/admin/users/:id/verify-email` | No email is sent; errors if already verified |
+| Enforce 2FA | `PUT /api/admin/users/:id/enforce-2fa` with `{ "enforce": true }` | Fails if the user has not set up 2FA yet; `false` lifts the requirement |
+| Wipe 2FA | `DELETE /api/admin/users/:id/two-factor` | Clears stored factors and disables 2FA |
+| Wipe passkeys | `DELETE /api/admin/users/:id/passkeys` | Removes all passkeys; returns the wiped count |
+| Unlink SSO account | `DELETE /api/admin/users/:id/accounts/:accountId` | Refused when it is the user's only auth method |
+
+Modifying users who hold `*` or `admin.write` requires the caller to hold `*`.
 
 ### Permissions Required
 
@@ -339,6 +370,7 @@ POST /api/nodes/:nodeId/allocations
 | Create allocations | `POST /api/nodes/:nodeId/allocations` |
 | Update alias/notes | `PATCH /api/nodes/:nodeId/allocations/:id` |
 | Delete allocation | `DELETE /api/nodes/:nodeId/allocations/:id` |
+| Bulk-delete allocations | `POST /api/nodes/:nodeId/allocations/bulk-delete` with `{ "allocationIds": [...] }` (max 5,000) |
 
 Allocations assigned to a server cannot be deleted.
 
@@ -1031,6 +1063,7 @@ POST /api/admin/database-hosts
 | `port` | 1–65535 (default: `DATABASE_HOST_PORT_DEFAULT` or 3306) |
 | `username` | Required |
 | `password` | Required |
+| `engine` | `mysql` (default) or `postgresql` — provisioning, password rotation, and deletion use MySQL DDL or Postgres `ROLE`/`DATABASE` DDL accordingly. For Postgres, port defaults to 5432 and the maintenance database defaults to `postgres` (never provisioned or dropped via the API) |
 
 ### Managing Database Hosts
 
@@ -1040,6 +1073,7 @@ POST /api/admin/database-hosts
 | Create host | `POST /api/admin/database-hosts` |
 | Update host | `PUT /api/admin/database-hosts/:id` |
 | Delete host | `DELETE /api/admin/database-hosts/:id` |
+| Test connection | `GET /api/admin/database-hosts/:id/ping` (reports round-trip latency) |
 
 Database hosts with active server databases cannot be deleted.
 

@@ -87,6 +87,22 @@ For Podman, use `podman compose up -d` instead of `docker compose up -d`.
 
 📖 See [Detailed Installation](INSTALLATION_DETAILED.md) for a breakdown of everything the install script does, Podman quirks, and LAN exposure settings.
 
+### Installer Flags
+
+`bash install.sh` accepts these flags (see `bash install.sh --help`):
+
+| Flag | Effect |
+|------|--------|
+| `-y`, `--yes`, `--non-interactive` | Accept all defaults; configure via environment overrides (`PUBLIC_URL`, `APP_NAME`) |
+| `--dry-run` | Show what would be done without making changes |
+| `--update` | Refresh stack files in `./catalyst-docker` (keeps your `.env`) |
+| `--reconfigure` | Re-run the `.env` configuration prompts even when `.env` already exists |
+| `--uninstall` | Remove the Catalyst Docker stack (add `REMOVE_VOLUMES=1` with `-y` to also delete compose volumes) |
+
+```bash
+REMOVE_VOLUMES=1 bash install.sh --uninstall -y
+```
+
 ---
 
 ## Option 2: Standalone Docker / Podman

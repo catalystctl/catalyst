@@ -2238,6 +2238,18 @@ Download a backup file directly. For local storage, returns the file as `applica
 | `POST` | `/api/nodes/:id/agent/ping` | `node.read` | Ping agent |
 | `GET` | `/api/nodes/:id/unregistered-containers/:cid/suggest-template` | `admin.write` | Suggest template match |
 | `POST` | `/api/nodes/:id/import-server` | `admin.write` | Import container as server |
+| `POST` | `/api/nodes/:id/host-network` | `node.update` | Enable/disable host networking on the node |
+
+#### POST `/api/nodes/:id/host-network` — Set Host Networking Policy
+
+Enable or disable host networking on the node. The agent applies the policy
+live and persists it to its `config.toml`, so servers using `networkMode`
+`"host"` can start without an agent restart. Fails with 409 when the agent is
+offline and 503 when the panel's agent gateway is unavailable.
+
+**Auth:** `node.update`
+**Body:** `{ "enabled": true }`
+**Response (200):** `{ "success": true, "data": { "allowHostNetwork": true, "persisted": true } }`
 
 #### POST `/api/nodes/:id/heartbeat` — Agent Heartbeat
 
@@ -2718,9 +2730,15 @@ Remove a wildcard node assignment from a user or role.
 | `POST` | `/api/admin/system-errors/resolve-all` | `admin.write` | Resolve all system errors |
 | `POST` | `/api/admin/users/:id/ban` | `user.ban` | Ban a user |
 | `POST` | `/api/admin/users/:id/unban` | `user.unban` | Unban a user |
+| `PUT` | `/api/admin/users/:id/verify-email` | `user.update` | Mark a user's email verified (no email sent) |
+| `PUT` | `/api/admin/users/:id/enforce-2fa` | `user.update` | Require (or lift) 2FA for a user |
+| `DELETE` | `/api/admin/users/:id/two-factor` | `user.update` | Wipe a user's 2FA enrollment |
+| `DELETE` | `/api/admin/users/:id/passkeys` | `user.update` | Wipe all of a user's passkeys |
+| `DELETE` | `/api/admin/users/:id/accounts/:accountId` | `user.update` | Unlink an SSO account from a user |
 | `GET` | `/api/admin/roles` | `role.read` | List roles (admin view) |
 | `GET` | `/api/admin/db-status` | `admin.read` | Database connectivity status |
 | `GET` | `/api/admin/smtp` | `admin.read` | Get SMTP settings |
+| `PUT` | `/api/admin/smtp` | `admin.write` | Update SMTP settings |
 | `GET` | `/api/admin/settings/file-tunnel-upload-limit` | `admin.read` | File tunnel upload limit |
 | `GET` | `/api/admin/security-settings` | `admin.read` | Get security settings |
 | `PUT` | `/api/admin/security-settings` | `admin.write` | Update security settings |
@@ -2732,6 +2750,7 @@ Remove a wildcard node assignment from a user or role.
 | `POST` | `/api/admin/database-hosts` | `admin.write` | Create database host |
 | `PUT` | `/api/admin/database-hosts/:hostId` | `admin.write` | Update database host |
 | `DELETE` | `/api/admin/database-hosts/:hostId` | `admin.write` | Delete database host |
+| `GET` | `/api/admin/database-hosts/:hostId/ping` | `admin.read` | Test connection to a database host |
 | `GET` | `/api/admin/mod-manager` | `admin.read` | Get mod manager settings |
 | `PUT` | `/api/admin/mod-manager` | `admin.write` | Update mod manager settings |
 | `GET` | `/api/admin/auth-lockouts` | `admin.read` | List auth lockouts |
@@ -2740,6 +2759,9 @@ Remove a wildcard node assignment from a user or role.
 | `PATCH` | `/api/admin/oidc-config` | `admin.write` | Update OIDC provider config |
 | `GET` | `/api/admin/theme-settings` | `admin.read` | Get theme settings |
 | `PATCH` | `/api/admin/theme-settings` | `admin.write` | Update theme settings |
+| `GET` | `/api/admin/localization-settings` | `admin.read` | Get instance default locale |
+| `PUT` | `/api/admin/localization-settings` | `admin.write` | Set instance default locale |
+| `GET` | `/api/settings/locale` | No | Public instance locale (pre-login twin) |
 | `GET` | `/api/admin/update/status` | `admin.write` | Check for panel updates |
 | `POST` | `/api/admin/update/trigger` | `admin.write` | Trigger panel update |
 | `GET` | `/api/admin/update/state` | `admin.write` | Read update state machine |
@@ -2800,6 +2822,33 @@ Trigger a panel update to the latest available version. Downloads the update pac
 ```
 
 Update progress events are streamed via SSE to `/api/admin/events`.
+
+#### PUT `/api/admin/users/:id/verify-email` / PUT `/api/admin/users/:id/enforce-2fa`
+
+Manually mark a user's email as verified (no email is sent; errors if already
+verified), or require 2FA for a user. Enforcing fails with 400 if the user has
+not set up 2FA yet — set it up first, then enforce. Send `{ "enforce": false }`
+to lift the requirement.
+
+**Auth:** `user.update`  
+**Body (enforce-2fa):** `{ "enforce": true }`
+
+#### DELETE `/api/admin/users/:id/two-factor` / DELETE `/api/admin/users/:id/passkeys`
+
+Wipe a user's 2FA enrollment (clears stored factors and flips
+`twoFactorEnabled` off) or wipe all of their passkeys (returns the wiped
+count). Cannot be used against `*` / `admin.write` holders unless the caller
+also holds `*`.
+
+**Auth:** `user.update`
+
+#### DELETE `/api/admin/users/:id/accounts/:accountId` — Unlink SSO Account
+
+Unlink an SSO account from a user. Refuses with 400 when it is the user's only
+authentication method (no password credential and no other linked accounts) —
+set a password first.
+
+**Auth:** `user.update`
 
 #### GET `/api/admin/users` — List Users
 
@@ -3042,6 +3091,49 @@ Update or delete a database host.
 
 **Auth:** `admin.write`  
 **Body (PUT):** Same as POST, all fields optional.
+
+#### GET `/api/admin/database-hosts/:hostId/ping` — Test Database Host Connection
+
+Test connectivity to a database host (MySQL or Postgres, per the host's
+`engine`) and report round-trip latency. Returns 404 when the host does not
+exist.
+
+**Auth:** `admin.read`
+
+#### PUT `/api/admin/smtp` — Update SMTP Settings
+
+Update outbound mail settings. `GET` never returns the plaintext password —
+it sends a `'********'` mask instead — so an omitted, empty, or masked
+password keeps the stored value; explicit `null` clears it. Empty strings are
+rejected and the port must be 1–65535.
+
+**Auth:** `admin.write`  
+**Body (all fields optional):**
+```json
+{
+  "host": "smtp.example.com",
+  "port": 587,
+  "username": "catalyst",
+  "password": "securePassword123",
+  "from": "panel@example.com",
+  "replyTo": "support@example.com",
+  "secure": false,
+  "requireTls": true,
+  "pool": true,
+  "maxConnections": 5,
+  "maxMessages": 100
+}
+```
+
+#### GET `/api/admin/localization-settings` / PUT `/api/admin/localization-settings`
+
+Get or set the instance default locale (`en`, `fr`, or `zh-CN`). The panel
+reads the public twin `GET /api/settings/locale` before anyone signs in, so
+the sign-in page already renders in the instance language. The public endpoint
+needs no auth and is rate-limited (60/minute).
+
+**Auth:** `admin.read` (GET), `admin.write` (PUT); none for `/api/settings/locale`  
+**Body (PUT):** `{ "defaultLocale": "fr" }`
 
 #### GET `/api/admin/oidc-config` / PATCH `/api/admin/oidc-config`
 
@@ -4706,6 +4798,16 @@ No content — the upload was sent as part of the poll request.
 | `GET` | `/api/sftp/tokens` | Session | List SFTP tokens (non-owners see only own token) |
 | `DELETE` | `/api/sftp/tokens/:targetUserId` | Session | Revoke token for specific user (own token only unless owner) |
 | `DELETE` | `/api/sftp/tokens` | Owner only | Revoke all tokens for server |
+| `POST` | `/api/agent/sftp/validate-token` | Agent | Agent validates an SFTP token (agent-to-panel) |
+
+| `POST` | `/api/agent/sftp/validate-token` | Agent | Agent validates an SFTP token (agent-to-panel) |
+
+#### POST `/api/agent/sftp/validate-token` — Agent SFTP Token Validation
+
+Agent-to-panel endpoint: the node agent calls it to validate an SFTP token
+and learn the associated user and permissions. Uses agent header auth
+(`X-Node-Id` + `X-Node-Api-Key`, legacy `X-Catalyst-*` headers, or
+`Authorization: Bearer`), not session or API-key auth.
 
 #### GET `/api/sftp/connection-info`
 

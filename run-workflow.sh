@@ -722,8 +722,8 @@ step_build_verify() {
 
 # ── Step 6: Agent Release Build (push + v* tag only) ───────────────────────────
 # Maps to:
-#   - agent-release: job in ci.yml
-#   - cargo build --release (gnu + musl targets)
+#   - agent-release: job in auto-version.yml
+#   - cargo build --release (musl targets only)
 #   - softprops/action-gh-release@v2 (upload binary + checksum)
 # Merged from: agent-release.yml
 #
@@ -837,7 +837,7 @@ step_agent_release() {
 #
 # NOTE: This step is mocked locally because:
 #   - It needs GITHUB_TOKEN for GHCR authentication
-#   - The real workflow builds via buildah on self-hosted runners
+#   - The real workflow builds via docker/build-push-action on ubuntu-latest
 #   - The real workflow only publishes when relevant paths changed
 # Locally we simulate the change-detection and show what would be pushed.
 step_docker_publish() {
@@ -914,7 +914,7 @@ step_docker_publish() {
     fi
   else
     # Real run — attempt local docker build (no push without GHCR credentials)
-    # This is a limited approximation: GHA builds via buildah + GHCR push.
+    # This is a limited approximation: GHA builds via docker/build-push-action + GHCR push.
     # Locally we just verify the Dockerfile builds.
 
     if [[ "$HAS_DOCKER" -eq 0 ]]; then
@@ -932,7 +932,7 @@ step_docker_publish() {
         fi
       else
         echo -e "  ${C_YELLOW}[backend] Skipped — no Dockerfile or docker runtime${C_RESET}"
-        echo -e "  ${C_YELLOW}  In GHA: buildah builds and pushes to ghcr.io/<owner>/catalyst-backend${C_RESET}"
+        echo -e "  ${C_YELLOW}  In GHA: docker/build-push-action builds and pushes to ghcr.io/<owner>/catalyst-backend${C_RESET}"
       fi
     fi
 
@@ -946,7 +946,7 @@ step_docker_publish() {
         fi
       else
         echo -e "  ${C_YELLOW}[frontend] Skipped — no Dockerfile or docker runtime${C_RESET}"
-        echo -e "  ${C_YELLOW}  In GHA: buildah builds and pushes to ghcr.io/<owner>/catalyst-frontend${C_RESET}"
+        echo -e "  ${C_YELLOW}  In GHA: docker/build-push-action builds and pushes to ghcr.io/<owner>/catalyst-frontend${C_RESET}"
       fi
     fi
   fi

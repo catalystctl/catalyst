@@ -26,14 +26,14 @@
       "file": "src/components/files/FileContextMenu.tsx",
       "type": "hardcoded",
       "text": "Del",
-      "count": 1,
+      "count": 2,
       "reason": "Keyboard shortcut hint."
     },
     {
       "file": "src/components/files/FileContextMenu.tsx",
       "type": "hardcoded",
       "text": "F2",
-      "count": 1,
+      "count": 2,
       "reason": "Keyboard shortcut hint."
     },
     {
@@ -60,16 +60,16 @@
     {
       "file": "src/components/nodes/NodeCard.tsx",
       "type": "hardcoded",
-      "text": "GB",
+      "text": "→ v",
       "count": 1,
-      "reason": "Unit symbol rendered next to a number."
+      "reason": "Symbol separating an arrow from a version number."
     },
     {
       "file": "src/components/nodes/NodeCard.tsx",
       "type": "hardcoded",
-      "text": "→ v",
+      "text": "GB",
       "count": 1,
-      "reason": "Symbol separating an arrow from a version number."
+      "reason": "Unit symbol rendered next to a number."
     },
     {
       "file": "src/components/nodes/NodeCreateModal.tsx",
@@ -81,14 +81,14 @@
     {
       "file": "src/components/search/SearchPalette.tsx",
       "type": "hardcoded",
-      "text": "esc",
+      "text": "↑↓",
       "count": 1,
       "reason": "Keyboard shortcut hint."
     },
     {
       "file": "src/components/search/SearchPalette.tsx",
       "type": "hardcoded",
-      "text": "↑↓",
+      "text": "esc",
       "count": 1,
       "reason": "Keyboard shortcut hint."
     },
@@ -165,6 +165,13 @@
     {
       "file": "src/components/templates/TemplateCreateModal.tsx",
       "type": "hardcoded",
+      "text": "(.json, .yaml, .yml)",
+      "count": 1,
+      "reason": "File extension list, identical in every language."
+    },
+    {
+      "file": "src/components/templates/TemplateCreateModal.tsx",
+      "type": "hardcoded",
       "text": "#!/bin/sh",
       "count": 1,
       "reason": "Code sample: shebang shown in the startup-script editor."
@@ -172,9 +179,9 @@
     {
       "file": "src/components/templates/TemplateCreateModal.tsx",
       "type": "hardcoded",
-      "text": "(.json, .yaml, .yml)",
+      "text": "java -Xmx{{MEMORY}}M -jar server.jar",
       "count": 1,
-      "reason": "File extension list, identical in every language."
+      "reason": "Code sample: example startup command."
     },
     {
       "file": "src/components/templates/TemplateCreateModal.tsx",
@@ -196,13 +203,6 @@
       "text": "SIGTERM",
       "count": 1,
       "reason": "Process signal name."
-    },
-    {
-      "file": "src/components/templates/TemplateCreateModal.tsx",
-      "type": "hardcoded",
-      "text": "java -Xmx{{MEMORY}}M -jar server.jar",
-      "count": 1,
-      "reason": "Code sample: example startup command."
     },
     {
       "file": "src/components/templates/TemplateEditModal.tsx",
@@ -242,6 +242,13 @@
     {
       "file": "src/pages/admin/DatabasePage.tsx",
       "type": "hardcoded",
+      "text": "ms",
+      "count": 2,
+      "reason": "Unit symbol rendered next to a number."
+    },
+    {
+      "file": "src/pages/admin/DatabasePage.tsx",
+      "type": "hardcoded",
       "text": "MySQL",
       "count": 1,
       "reason": "Database product name."
@@ -254,11 +261,11 @@
       "reason": "Database product name."
     },
     {
-      "file": "src/pages/admin/DatabasePage.tsx",
+      "file": "src/pages/admin/MigrationPage.tsx",
       "type": "hardcoded",
-      "text": "ms",
-      "count": 2,
-      "reason": "Unit symbol rendered next to a number."
+      "text": "://",
+      "count": 1,
+      "reason": "URL fragment: part of a placeholder around a user-typed URL."
     },
     {
       "file": "src/pages/admin/MigrationPage.tsx",
@@ -266,13 +273,6 @@
       "text": "% CPU",
       "count": 1,
       "reason": "Unit symbol combined with a value in a compact stat."
-    },
-    {
-      "file": "src/pages/admin/MigrationPage.tsx",
-      "type": "hardcoded",
-      "text": "://",
-      "count": 1,
-      "reason": "URL fragment: part of a placeholder around a user-typed URL."
     },
     {
       "file": "src/pages/admin/MigrationPage.tsx",
@@ -305,23 +305,16 @@
     {
       "file": "src/pages/admin/ThemeSettingsPage.tsx",
       "type": "hardcoded",
-      "text": "Aa",
-      "count": 1,
-      "reason": "Font preview glyph."
-    },
-    {
-      "file": "src/pages/admin/ThemeSettingsPage.tsx",
-      "type": "hardcoded",
       "text": "{\"version\": 1, \"primaryColor\": \"#0d9488\", ...}",
       "count": 1,
       "reason": "Code sample: theme JSON snippet."
     },
     {
-      "file": "src/pages/setup/SetupPage.tsx",
+      "file": "src/pages/admin/ThemeSettingsPage.tsx",
       "type": "hardcoded",
-      "text": "%)",
+      "text": "Aa",
       "count": 1,
-      "reason": "CSS colour syntax in a hint."
+      "reason": "Font preview glyph."
     },
     {
       "file": "src/pages/setup/SetupPage.tsx",
@@ -333,7 +326,7 @@
     {
       "file": "src/pages/setup/SetupPage.tsx",
       "type": "hardcoded",
-      "text": "HSL(",
+      "text": "%)",
       "count": 1,
       "reason": "CSS colour syntax in a hint."
     },
@@ -341,6 +334,13 @@
       "file": "src/pages/setup/SetupPage.tsx",
       "type": "hardcoded",
       "text": "°,",
+      "count": 1,
+      "reason": "CSS colour syntax in a hint."
+    },
+    {
+      "file": "src/pages/setup/SetupPage.tsx",
+      "type": "hardcoded",
+      "text": "HSL(",
       "count": 1,
       "reason": "CSS colour syntax in a hint."
     },

@@ -156,6 +156,9 @@ The application crashes on startup if `DATABASE_URL` is not set. Use the Docker 
 | `API_KEY_SECRET` | Base64 string | Falls back to `BETTER_AUTH_SECRET` | HMAC secret for hashing panel/agent API keys. If unset, falls back to `BETTER_AUTH_SECRET` (same as Docker Compose). Set a dedicated value for key-rotation isolation: `openssl rand -base64 32`. |
 | `BETTER_AUTH_URL` | Full URL | `http://localhost:3000` | Better Auth base URL. Defaults to `PUBLIC_URL` if set. Override only for split internal/external setups. |
 | `PASSKEY_RP_ID` | Hostname | `localhost` | Passkey (WebAuthn) relying party ID. Must match the hostname portion of `PUBLIC_URL`. For `https://panel.example.com`, set `PASSKEY_RP_ID=panel.example.com`. |
+| `ALLOW_LEGACY_API_KEY_HASH` | `1` or unset | Unset | Accept legacy-hashed API keys during key-format migration. Leave unset in normal operation. |
+| `ALLOW_PLAINTEXT_CREDS` | `1` or unset | Unset | Escape hatch that stores backup credentials unencrypted — local debugging only. Refused in production (`NODE_ENV=production` throws instead of storing). |
+| `REGISTRATION_ENABLED` | truthy / falsy | Panel security settings | Environment override for public registration. Any non-empty value except `0`, `false`, `no`, `off` enables registration. |
 
 ### OAuth Providers
 
@@ -214,6 +217,12 @@ SFTP file size is the panel Admin → Security **Max upload size**, not an envir
 | `PLUGINS_DIR` | Filesystem path | `/var/lib/catalyst/plugins` in Docker (`./plugins` in the backend example) | Directory where installed plugins are loaded from. |
 | `PLUGIN_HOT_RELOAD` | `true` \| `false` | `false` | Enable live reload of plugins on file changes. Disable in production. |
 | `AGENT_TARGET_DIR` | Filesystem path | `/opt/catalyst-agent` | Target directory for agent deployment on game server nodes. |
+| `AGENT_BINARY_DIR` | Filesystem path | `AGENT_TARGET_DIR`, else repo `../catalyst-agent/target` | Directory searched for the local agent binary (air-gapped installs and the agent download endpoint). |
+| `AGENT_RELEASE_REPO` | `owner/repo` | Built-in default | GitHub repo used as the fallback source for agent release binaries. |
+| `PLUGIN_MARKETPLACE_URLS` | Comma-separated URLs | Official index only | Extra marketplace index URLs browsed together with the official index; when several sources list the same plugin name, the newest semver wins. |
+| `PLUGIN_MARKETPLACE_DISABLE_OFFICIAL` | `1` \| `true` \| `yes` \| `on` | Unset | Browse only configured/panel marketplaces and skip the official index. |
+| `PLUGIN_MARKETPLACE_ALLOW_LOCAL` | `true` or unset | Unset | Allow marketplace downloads from local URLs. Development only. |
+| `PLUGIN_PROCESS_HEAP_LIMIT_MB` | Integer | `1024` | Process-wide heap threshold that triggers plugin request throttling and memory-pressure warnings. |
 | `DEPLOY_SCRIPT_PATH` | Filesystem path | — | Path to a custom agent deployment script. Uses the built-in script if not set. |
 
 ### Backups
@@ -225,6 +234,9 @@ SFTP file size is the panel Admin → Security **Max upload size**, not an envir
 | `BACKUP_STREAM_DIR` | Temp path | `/tmp/catalyst-backup-stream` | Temporary directory for streaming backup operations. |
 | `BACKUP_TRANSFER_DIR` | Temp path | `/tmp/catalyst-backup-transfer` | Temporary directory for backup file transfers. |
 | `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | 32-byte key | **Required for S3/SFTP backups, database passwords, and migration keys** | Key used to encrypt credentials stored in the database. `install.sh` generates base64 (`openssl rand -base64 32`). Note: `routes/backups.ts` also reads a legacy `BACKUP_ENCRYPTION_KEY` — use `BACKUP_CREDENTIALS_ENCRYPTION_KEY`. |
+| `STUCK_BACKUP_STATE_INTERVAL_MS` | Integer | `120000` | How often the sweeper scans for stuck backup states, in milliseconds. |
+| `STUCK_BACKUP_STATE_TIMEOUT_MS` | Integer | `900000` | A backup with no progress for this long is marked stuck, in milliseconds. |
+| `STUCK_TRANSFER_STATE_TIMEOUT_MS` | Integer | `3600000` | A transfer with no progress for this long is marked stuck, in milliseconds. |
 
 #### S3 Backup Variables (when `BACKUP_STORAGE_MODE=s3`)
 
@@ -278,6 +290,9 @@ Webhooks include an `X-Webhook-Signature` header with an HMAC-SHA256 hash of the
 | `WS_MAX_PAYLOAD_BYTES` | Integer | `8388608` (8 MB) | Maximum accepted WebSocket message size (`fastify-websocket` `maxPayload`, registered in `catalyst-backend/src/index.ts`). Messages larger than this are rejected at the protocol level. Raise only if agents legitimately send larger single frames. |
 | `AGENT_BACKPRESSURE_BYTES` | Integer | `4194304` (4 MiB) | Outbound backpressure watermark per agent socket in `WebSocketGateway`. When an agent's unsent outbound buffer exceeds this, low-priority traffic to that agent is shed and bulk binary transfers abort instead of growing memory; control-plane power commands are always attempted. |
 | `METRICS_RETENTION_DAYS` | Integer | `30` | How long to retain server metrics data, in days. |
+| `DISABLE_RATE_LIMIT` | `1` \| `true` or unset | Unset | Bypass global rate limiting (auth, API keys, mailer). Development/benchmark use only — never in production. |
+| `CATALYST_BACKGROUND_JOB_OWNER` | `1` or unset | Unset | In cluster mode (`WORKERS>0`), mark this worker as the sole owner of background jobs (scheduler, alerts, retention). |
+| `TZ` | Timezone name | `UTC` | Timezone used by the task scheduler for cron expressions. |
 
 ### Auto Updater
 

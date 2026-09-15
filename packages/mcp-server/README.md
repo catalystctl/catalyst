@@ -61,6 +61,28 @@ Add to your MCP client configuration (using the release download above):
 }
 ```
 
+Or run without downloading anything: each launch fetches the release
+bundle to a temp dir, verifies its checksum, and execs it (needs bash,
+curl, and Node.js 20+; nothing persists on disk):
+
+```json
+{
+  "mcpServers": {
+    "catalyst": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "set -e; d=$(mktemp -d); trap 'rm -rf \"$d\"' EXIT; b=https://github.com/catalystctl/catalyst/releases/latest/download; curl -fsSL -o \"$d/catalyst-mcp.mjs\" \"$b/catalyst-mcp.mjs\" -o \"$d/catalyst-mcp.mjs.sha256\" \"$b/catalyst-mcp.mjs.sha256\"; (cd \"$d\" && sha256sum -c catalyst-mcp.mjs.sha256 >/dev/null); exec node \"$d/catalyst-mcp.mjs\""
+      ],
+      "env": {
+        "CATALYST_URL": "https://panel.example.com",
+        "CATALYST_API_KEY": "catalyst_..."
+      }
+    }
+  }
+}
+```
+
 Or run the `tsc` output from a source checkout:
 
 ```json
