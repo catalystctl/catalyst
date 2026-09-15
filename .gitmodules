@@ -1,0 +1,3 @@
+[submodule "catalyst-doc"]
+	path = catalyst-doc
+	url = https://github.com/catalystctl/catalyst-doc.git

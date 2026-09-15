@@ -25,7 +25,8 @@
 		"lint": "eslint src --ext .ts",
 		"test": "vitest run",
 		"test:ui": "vitest --ui",
-		"test:coverage": "vitest run --coverage"
+		"test:coverage": "vitest run --coverage",
+		"openapi:export": "tsx scripts/export-openapi.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "~3.1107.0",
