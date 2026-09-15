@@ -65,13 +65,13 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Plugin frontends under catalyst-plugins/ compile into the panel build
       # (build-time discovery via import.meta.glob). The plugins live in their
       # own repo: catalystctl/catalyst-plugins.
       - name: Checkout plugins repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: catalystctl/catalyst-plugins
           ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
@@ -269,10 +269,10 @@ jobs:
       BETTER_AUTH_SECRET: ci-test-better-auth-secret-do-not-use-in-production
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Checkout plugins repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: catalystctl/catalyst-plugins
           ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
@@ -403,10 +403,10 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Checkout plugins repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: catalystctl/catalyst-plugins
           ref: 4e735b0411a67e54a38e9fdf5fb85e4ec55ff569 # pinned main 2026-09-10
