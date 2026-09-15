@@ -154,9 +154,9 @@ It's strongly recommended to enable 2FA for admin accounts:
    - Each backup code can be used **only once**.
    - If you lose your authenticator device, backup codes are your only way to log in.
 
-### 2FA Page Features
+### 2FA Setup Features
 
-The 2FA Setup page (`/two-factor`) includes:
+The inline 2FA setup (Profile → Security, not a standalone page) includes:
 
 | Feature | Description |
 |---------|-------------|
@@ -391,31 +391,32 @@ Templates define how game servers are configured and deployed. Catalyst comes wi
 
 After seeding, you'll have two default templates:
 
-#### Minecraft Server (Paper)
+#### Minecraft Server (Universal)
 
 | Setting | Value |
 |---|---|
-| **Image** | Eclipse Temurin 21 JRE |
+| **Image** | Eclipse Temurin 21 JRE (variants: 25, 21, 17, 11, 8 JRE) |
 | **Default RAM** | 1024 MB |
 | **Default CPU** | 2 cores |
-| **Port** | 25565 |
-| **Features** | Auto-restart, mod manager, plugin manager, file editor |
+| **Ports** | 25565, 25577 |
+| **Features** | Auto-restart, mod manager (CurseForge, Modrinth), plugin manager (Modrinth, Spigot, Paper) |
 
 **Template Variables:**
 
 | Variable | Default | Description |
 |---|---|---|
-| `MEMORY` | `1024` | Amount of RAM in MB (512–16384) |
-| `MEMORY_XMS` | `512` | Initial heap size in MB (256–8192) |
-| `PORT` | `25565` | Server port (1024–65535) |
-| `VERSION` | `1.21.11` | Minecraft version to install |
-| `BUILD` | *(latest)* | Paper build number (empty = latest) |
+| `SERVER_TYPE` | `paper` | Server software: vanilla, paper, purpur, spigot, folia, fabric, forge, neoforge, quilt, mohist, velocity, bungeecord, and more |
+| `MINECRAFT_VERSION` | `latest` | Minecraft version (for example `1.21.4`) or `latest` |
+| `BUILD_NUMBER` | `latest` | Specific build number or `latest` |
+| `MEMORY` | `1024` | JVM heap in MB |
+| `EULA` | `false` | Must be `true` to accept the Minecraft EULA |
+| `JVM_FLAGS` | *(empty)* | Extra JVM flags appended to startup |
 
 #### Node.js Bot (Git Repository)
 
 | Setting | Value |
 |---|---|
-| **Image** | Node.js 20 (Debian Slim) |
+| **Image** | Node.js 20 (Debian Slim) with variants 22, 20 (LTS), 18 |
 | **Default RAM** | 1024 MB |
 | **Default CPU** | 1 core |
 | **Port** | 3000 |
@@ -439,12 +440,12 @@ Templates use `{{VARIABLE_NAME}}` syntax for interpolation in startup commands a
 
 **Example — Minecraft startup command:**
 ```
-java -Xms{{MEMORY_XMS}}M -Xmx{{MEMORY}}M -jar paper.jar nogui
+java -Xms128M -Xmx{{MEMORY}}M -XX:+UseG1GC -XX:MaxRAMPercentage=70.0 -Dterminal.jline=false -Dterminal.ansi=true $( [[ -f unix_args.txt ]] && printf %s '@unix_args.txt' || printf %s '-jar server.jar nogui' )
 ```
 
-With `MEMORY=2048` and `MEMORY_XMS=1024`, this becomes:
+With `MEMORY=2048`, this becomes:
 ```
-java -Xms1024M -Xmx2048M -jar paper.jar nogui
+java -Xms128M -Xmx2048M -XX:+UseG1GC -XX:MaxRAMPercentage=70.0 -Dterminal.jline=false -Dterminal.ansi=true $( [[ -f unix_args.txt ]] && printf %s '@unix_args.txt' || printf %s '-jar server.jar nogui' )
 ```
 
 **Built-in placeholders available in install scripts:**
@@ -469,7 +470,7 @@ java -Xms1024M -Xmx2048M -jar paper.jar nogui
 | **Name** | Display name for your server | `My Minecraft Server` |
 | **Description** | Optional description | `Survival server for friends` |
 | **Node** | The node to deploy on | `node-1` |
-| **Template** | Server template | `Minecraft Server (Paper)` |
+| **Template** | Server template | `Minecraft Server (Universal)` |
 
 #### Resource Allocation
 
@@ -560,7 +561,7 @@ The real-time console lets you interact with your server:
 - Real-time output streaming (WebSocket)
 - Command history (use arrow keys)
 - Scroll through past output
-- The console buffer is configurable via `CONSOLE_OUTPUT_BYTE_LIMIT_BYTES` (default: 256 KB)
+- The console buffer is configurable via `CONSOLE_OUTPUT_BYTE_LIMIT_BYTES` (live gateway default 2 MB; Docker stack sets 512 KB)
 
 **Common Minecraft console commands:**
 ```

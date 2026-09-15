@@ -121,7 +121,7 @@ Reconnect uses exponential backoff with jitter plus a circuit breaker
 Failures are logged at most once per 30s window and a circuit-open event
 raises a `warn` SystemError (visible in the admin feed); reconnects after
 boot re-subscribe automatically. `GET /health` reports
-`redis: disabled|ready|degraded` but never fails liveness on Redis alone.
+`redis: disabled|connecting|ready|degraded|closed` but never fails liveness on Redis alone.
 `GET /api/admin/health` exposes Redis counters, realtime reliability stats,
 and node status.
 

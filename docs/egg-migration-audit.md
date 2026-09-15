@@ -105,7 +105,7 @@ sandbox wave (Enshrouded, V Rising, Core Keeper, 7DtD, DayZ, PZ, Satisfactory, F
 | SCP: Secret Laboratory | 2 (dedicated, exiled) | Multi-port range; 7.9k+ community servers |
 | Space Engineers | 2 (default, torch) | Torch variant is the preferred modded path; `SpaceEngineers-Dedicated.cfg` via `xml` |
 | Sons/The Forest | 2 | Wine/Proton path; XVFB already handled |
-| **Team Fortress 2** | **0 — missing** | Vendor from upstream; classic SRCDS egg; TV_PORT; appid 232250 already in disk table |
+| **Team Fortress 2** | **1 — classic only (`team_fortress_2_classic` vendored; vanilla TF2 missing)** | Vendor vanilla from upstream; classic SRCDS egg; TV_PORT; appid 232250 already in disk table |
 
 ### Tier 3 — long tail (batch import is fine; curate on request)
 

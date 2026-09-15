@@ -6,7 +6,7 @@ description: Complete reference for all Catalyst REST API endpoints, WebSocket p
 # Catalyst API Reference
 
 > **Base URL:** `https://your-domain.com/api`  
-> **Version:** `1.0.0`  
+> **Version:** `1.56.3`  
 > **Auth:** Session cookie, API key (`Bearer catalyst...`), or Agent header auth
 
 All responses follow a consistent JSON envelope:
@@ -80,7 +80,7 @@ Error responses use `{ error, code, requestId? }` (`requestId` is the Fastify re
 
 ### Session Authentication
 
-All `/api/*` endpoints (except those marked `unauthenticated`) require session authentication. Sessions are managed via **Better Auth v1.6.9** with secure HTTP-only cookies.
+All `/api/*` endpoints (except those marked `unauthenticated`) require session authentication. Sessions are managed via **Better Auth v1.6.26** with secure HTTP-only cookies.
 
 ```http
 Cookie: better-auth.session_token=<session-token>
@@ -856,8 +856,8 @@ Resize the server's allocated disk space. Online grow is supported; shrinking re
 | `POST` | `/api/servers/:id/reinstall` | `server.reinstall` | Reinstall (wipe + install) |
 | `POST` | `/api/servers/:id/cancel-install` | `server.install` or `server.reinstall` | Kill stuck installer, reset to stopped |
 | `POST` | `/api/servers/:id/rebuild` | `server.rebuild` | Rebuild container (preserve data) |
-| `POST` | `/api/servers/:id/suspend` | `server.suspend` or `admin` | Suspend server |
-| `POST` | `/api/servers/:id/unsuspend` | `server.suspend` or `admin` | Unsuspend server |
+| `POST` | `/api/servers/:id/suspend` | `server.suspend` or `admin.write` | Suspend server |
+| `POST` | `/api/servers/:id/unsuspend` | `server.suspend` or `admin.write` | Unsuspend server |
 | `POST` | `/api/servers/eula` | `server.install` | Respond to EULA prompt |
 
 #### POST `/api/servers/:id/reinstall`
@@ -922,7 +922,7 @@ Respond to an EULA (End User License Agreement) prompt. The server must have an 
 
 Suspend a server. Optionally stops the server first and records a reason for the suspension.
 
-**Auth:** `server.suspend` or `admin`  
+**Auth:** `server.suspend` or `admin.write`  
 **Body:**
 ```json
 {
@@ -1385,6 +1385,7 @@ Get a paginated log of server activity events (power actions, file ops, console 
 | `POST` | `/api/servers/:id/plugin-manager/uninstall` | `file.write` | Uninstall a plugin |
 | `POST` | `/api/servers/:id/plugin-manager/check-updates` | `server.read` | Check for plugin updates |
 | `POST` | `/api/servers/:id/plugin-manager/update` | `file.write` | Update a plugin |
+| `POST` | `/api/servers/:id/mod-manager/update` | `file.write` | Update a mod |
 | `GET` | `/api/servers/:id/cs2/frameworks` | `server.read` | List CS2 frameworks |
 | `GET` | `/api/servers/:id/cs2/frameworks/:framework/releases` | `server.read` | List CS2 framework releases |
 | `GET` | `/api/servers/:id/cs2/plugins` | `server.read` | List installed CS2 plugins |
@@ -1653,8 +1654,8 @@ Remove an installed plugin.
 | `PATCH` | `/api/servers/:id/backup-settings` | `backup.create` | Update backup configuration |
 | `POST` | `/api/servers/:id/transfer` | `server.transfer` | Transfer server to another node |
 | `POST` | `/api/servers/:id/transfer-ownership` | `admin.write` or owner | Transfer ownership to another user |
-| `POST` | `/api/servers/:id/archive` | `server.suspend` or `admin` | Archive server |
-| `POST` | `/api/servers/:id/restore` | `server.suspend` or `admin` | Restore from archive |
+| `POST` | `/api/servers/:id/archive` | `server.suspend` or `admin.write` | Archive server |
+| `POST` | `/api/servers/:id/restore` | `server.suspend` or `admin.write` | Restore from archive |
 
 #### PATCH `/api/servers/:id/restart-policy`
 
@@ -1703,7 +1704,8 @@ Reset the server's crash counter to zero. Used after manually resolving a crash 
 
 Configure backup storage mode, retention, and provider settings (S3/SFTP).
 
-**Auth:** `server.start`  
+**Auth:** `backup.create` (`server.start` alone returns 403). Changing storage
+or provider credentials additionally requires the owner/admin/node-manage path.
 **Body:**
 ```json
 {
@@ -1776,8 +1778,11 @@ Transfer a server to another node. The server must be stopped. This is a streami
 Transfer events are streamed via SSE to `/api/servers/:id/sse-events`.
 
 **Errors:**
-- `409` — Server must be stopped
-- `400` — Target node has insufficient resources
+- `400 SERVER_NOT_STOPPED` — Server must be stopped
+- `400 SERVER_ALREADY_ON_NODE` — Server is already on the target node
+- `400 NODE_OFFLINE` — Target node is offline
+- `404` — Target node not found
+- `409 SERVER_TRANSFER_STATE_CHANGED` — Transfer raced (server entered `TRANSFERRING` concurrently)
 
 #### POST `/api/servers/:id/transfer-ownership`
 
@@ -1810,7 +1815,7 @@ Transfer server ownership to another user. The target user must have permission 
 
 Archive a server. Stops the server and sets its status to `archived`. Archived servers are hidden from the active server list but retain all data.
 
-**Auth:** `server.suspend` or `admin`  
+**Auth:** `server.suspend` or `admin.write`  
 **Response (200):**
 ```json
 {
@@ -1826,7 +1831,7 @@ Archive a server. Stops the server and sets its status to `archived`. Archived s
 
 Restore an archived server. Sets the server status back to `stopped`, making it visible in the active server list again.
 
-**Auth:** `server.suspend` or `admin`  
+**Auth:** `server.suspend` or `admin.write`  
 **Response (200):**
 ```json
 {
@@ -1842,16 +1847,18 @@ Restore an archived server. Sets the server status back to `stopped`, making it 
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/api/servers/bulk/suspend` | `admin.write`, `admin.read`, or `server.suspend` | Bulk suspend servers |
-| `POST` | `/api/servers/bulk/unsuspend` | `admin.write`, `admin.read`, or `server.suspend` | Bulk unsuspend servers |
-| `DELETE` | `/api/servers/bulk` | `admin.write`, `admin.read`, or `server.suspend` (endpoint); `server.delete` (per-server) | Bulk delete servers |
+| `POST` | `/api/servers/bulk/suspend` | `admin.write` or `server.suspend` (endpoint); per-server `server.suspend`/`server.update` or ownership | Bulk suspend servers |
+| `POST` | `/api/servers/bulk/unsuspend` | `admin.write` or `server.suspend` (endpoint); per-server check | Bulk unsuspend servers |
+| `DELETE` | `/api/servers/bulk` | `admin.write` or `server.suspend` (endpoint); `server.delete` (per-server) | Bulk delete servers |
 | `POST` | `/api/servers/bulk/status` | No specific permission (filters accessible) | Bulk status check |
 
 #### POST `/api/servers/bulk/suspend`
 
 Suspend multiple servers at once. Optionally stops them first and sets a reason.
 
-**Auth:** `admin.write`, `admin.read`, or `server.suspend`  
+**Auth:** `admin.write` or `server.suspend` (endpoint gate; `admin.read` alone
+returns 403), plus a per-server check (`server.suspend`/`server.update` or
+ownership — failures land in the per-server `failed` list, not as a 403).
 **Body:**
 ```json
 {
@@ -1883,7 +1890,8 @@ Suspend multiple servers at once. Optionally stops them first and sets a reason.
 
 Unsuspend multiple servers at once. Re-enables scheduled tasks for each.
 
-**Auth:** `admin.write`, `admin.read`, or `server.suspend`  
+**Auth:** `admin.write` or `server.suspend` (endpoint gate; `admin.read` alone
+returns 403), plus the per-server check.
 **Body:**
 ```json
 {
@@ -1911,7 +1919,7 @@ Unsuspend multiple servers at once. Re-enables scheduled tasks for each.
 
 Bulk delete servers. Maximum 100 servers per request. All servers must be stopped.
 
-**Auth:** `admin.write`, `admin.read`, or `server.suspend` (endpoint); `server.delete` (per-server)  
+**Auth:** `admin.write` or `server.suspend` (endpoint); `server.delete` (per-server)  
 **Body:**
 ```json
 {
@@ -1982,7 +1990,7 @@ Check the status of up to 200 servers in a single request. Returns server detail
 
 #### POST `/api/servers/:id/console/command`
 
-Send a command to the server console. Maximum 4096 characters. A newline is automatically appended.
+Send a command to the server console. Maximum 4096 characters (required, non-empty, trimmed automatically). A newline is automatically appended. The command is forwarded to the agent via the WebSocket gateway.
 
 **Auth:** Session (`console.write`)  
 **Body:**
@@ -1992,20 +2000,18 @@ Send a command to the server console. Maximum 4096 characters. A newline is auto
 }
 ```
 
-**Response (200):**
+**Response (202):**
 ```json
 {
   "success": true,
-  "data": {
-    "sent": true,
-    "command": "say Hello world",
-    "echoed": "[Server] [CHAT] <user_xxx>: Hello world"
-  }
+  "timestamp": "2024-01-01T12:00:00Z"
 }
 ```
 
 **Errors:**
-- `400` — Command exceeds 4096 character limit
+- `400 VALIDATION_ERROR` — Command missing, empty, or exceeds 4096 characters
+- `403 SERVER_SUSPENDED` — Server is suspended
+- `500 AGENT_COMMAND_FAILED` — Forwarding to the agent failed
 
 #### GET `/api/servers/:serverId/console/stream` — Console SSE Stream
 
@@ -2039,34 +2045,6 @@ Accept: text/event-stream
 - `403` — Insufficient permissions (`console.read` required)
 - `404` — Server not found
 - `503` — Subscriber cap reached (50 concurrent viewers)
-
-#### POST `/api/servers/:serverId/console/command` — Send Console Command
-
-Send a command to the server console via HTTP. The command is forwarded to the agent via the WebSocket gateway.
-
-**Auth:** `console.write`
-
-**Auth:** Session (`console.write`)  
-**Body:**
-```json
-{
-  "command": "say Hello world"
-}
-```
-
-- `command` — string, required, max 4096 characters, trimmed automatically
-- A newline is automatically appended if not present
-
-**Response (202):**
-```json
-{
-  "success": true,
-  "timestamp": "2024-01-01T12:00:00Z"
-}
-```
-
-**Errors:**
-- `400` — Command missing, empty, or exceeds 4096 characters
 - `403` — Insufficient permissions or server is suspended
 - `404` — Server not found
 - `500` — Failed to route command to agent
@@ -2790,7 +2768,7 @@ Returns a `text/csv` file with columns:
 - `userAgent` — actor's user agent
 - `metadata` — JSON string of additional context
 
-#### POST `/api/update/trigger`
+#### POST `/api/admin/update/trigger`
 
 Trigger a panel update to the latest available version. Downloads the update package and applies it. The panel restarts automatically after the update completes. Update status is cached for 5 minutes.
 
@@ -2810,14 +2788,12 @@ Trigger a panel update to the latest available version. Downloads the update pac
 }
 ```
 
-**Response (409):**
+**Response (400 `UPDATE_FAILED` — the update run failed):**
 ```json
 {
-  "error": "No update available",
-  "data": {
-    "currentVersion": "1.1.0",
-    "latestVersion": "1.1.0"
-  }
+  "success": false,
+  "message": "<failure reason>",
+  "code": "UPDATE_FAILED"
 }
 ```
 
@@ -3600,7 +3576,7 @@ Templates define how game servers are deployed:
 
 Get a single location with its associated nodes.
 
-**Auth:** `template.read`  
+**Auth:** `admin.read`  
 **Response (200):**
 ```json
 {
@@ -3854,7 +3830,7 @@ Update an existing scheduled task. All fields are optional — only provided fie
 | `PATCH` | `/api/plugins/marketplace/sources/:id` | `admin.write` | Enable or disable a panel-added source |
 | `DELETE` | `/api/plugins/marketplace/sources/:id` | `admin.write` | Remove a panel-added source |
 | `GET` | `/plugins-assets/:name/:file` | auth | Serve installed-plugin runtime frontend assets |
-| `GET` | `/api/plugins/:name/frontend-manifest` | `admin.read` | Get plugin frontend manifest |
+| `GET` | `/api/plugins/:name/frontend-manifest` | Session (any authenticated user) | Get plugin frontend manifest |
 
 #### GET `/api/plugins`
 
@@ -4066,7 +4042,7 @@ Update a plugin's runtime configuration. The config object must match the plugin
 
 Get the frontend manifest for a plugin. Returns information about registered routes, tabs, slots, and components that the plugin adds to the frontend.
 
-**Auth:** Session  
+**Auth:** Session (any authenticated user; stored secret values are redacted for non-admins)  
 **Response (200):**
 ```json
 {
@@ -4194,21 +4170,14 @@ Get usage statistics for an API key, including request counts and rate limit inf
 {
   "success": true,
   "data": {
-    "keyId": "key_xxx",
     "totalRequests": 15234,
-    "requestsLastHour": 150,
-    "requestsLastDay": 2500,
-    "requestsLastWeek": 12000,
+    "remaining": 9850,
+    "lastUsed": "2024-01-01T12:00:00Z",
     "rateLimit": {
       "max": 100,
-      "timeWindowMs": 60000,
-      "currentWindowCount": 12
+      "windowMs": 60000
     },
-    "lastRequestAt": "2024-01-01T12:00:00Z",
-    "topEndpoints": [
-      { "path": "/api/servers", "count": 5000 },
-      { "path": "/api/servers/:id/start", "count": 2000 }
-    ]
+    "createdAt": "2024-01-01T00:00:00Z"
   }
 }
 ```
@@ -4456,7 +4425,6 @@ Retry a failed migration step. Useful after fixing the underlying issue that cau
 | `GET` | `/api/servers/:serverId/metrics` | `server.read` | Server metrics REST endpoint |
 | `GET` | `/api/servers/:serverId/stats` | `server.read` | Server stats REST endpoint |
 | `GET` | `/api/servers/:serverId/metrics/stream` | `server.read` | SSE server metrics stream |
-| `GET` | `/api/servers/:serverId/metrics` | `server.read` | Server metrics REST endpoint |
 | `GET` | `/api/nodes/:nodeId/metrics` | `admin.read` | Node metrics REST endpoint |
 
 #### GET `/api/dashboard/stats` — Dashboard Statistics
@@ -4798,8 +4766,6 @@ No content — the upload was sent as part of the poll request.
 | `GET` | `/api/sftp/tokens` | Session | List SFTP tokens (non-owners see only own token) |
 | `DELETE` | `/api/sftp/tokens/:targetUserId` | Session | Revoke token for specific user (own token only unless owner) |
 | `DELETE` | `/api/sftp/tokens` | Owner only | Revoke all tokens for server |
-| `POST` | `/api/agent/sftp/validate-token` | Agent | Agent validates an SFTP token (agent-to-panel) |
-
 | `POST` | `/api/agent/sftp/validate-token` | Agent | Agent validates an SFTP token (agent-to-panel) |
 
 #### POST `/api/agent/sftp/validate-token` — Agent SFTP Token Validation

@@ -19,7 +19,7 @@ This guide covers all features available to Catalyst users — from the dashboar
 11. [Alerts](#alerts)
 12. [Mod Manager](#mod-manager)
 13. [Plugin Manager](#plugin-manager)
-14. [Server Activity Log](#server-activity-log)
+14. [Server Activity](#server-activity)
 15. [Server Archiving](#server-archiving)
 16. [Server Databases](#server-databases)
 17. [Server Metrics](#server-metrics)
@@ -33,7 +33,7 @@ This guide covers all features available to Catalyst users — from the dashboar
 25. [Admin Audit Logs](#admin-audit-logs)
 26. [Server Suspension](#server-suspension)
 27. [Forgot Password & Reset Password Pages](#forgot-password--reset-password-pages)
-28. [2FA Setup Page Details](#2fa-setup-page-details)
+28. [2FA Verification at Login](#2fa-verification-at-login)
 29. [System Settings](#system-settings)
 30. [Security Settings](#security-settings)
 31. [System Errors Dashboard](#system-errors-dashboard)
@@ -46,6 +46,7 @@ This guide covers all features available to Catalyst users — from the dashboar
 38. [Cross-Tab Session Synchronization](#cross-tab-session-synchronization)
 39. [Brute Force Protection & Lockout Viewer](#brute-force-protection--lockout-viewer)
 40. [File Editing in File Manager](#file-editing-in-file-manager)
+41. [Troubleshooting Common Problems](#troubleshooting-common-problems)
 
 ---
 
@@ -66,8 +67,10 @@ The dashboard displays:
 
 Use the sidebar to navigate between sections:
 
-- **Servers** — Your server list
-- **Profile** — Account settings, 2FA, passkeys, API keys
+- **Dashboard** (`/dashboard`) — Stats, resources, and recent activity
+- **Servers** (`/servers`) — Your server list
+- **Tickets** (`/tickets`) — Support tickets, shown only when the ticketing plugin route is available
+- **Profile** — Not a main link: your account card at the bottom of the sidebar opens account settings, 2FA, passkeys, and API keys
 - **Admin** *(if permitted)* — Administrative tools
 
 ### Search Palette (`Ctrl+K` / `⌘K`)
@@ -367,11 +370,7 @@ Catalyst runs a dedicated SFTP server (default port: 2022). Instead of using you
    | 30 minutes | 30 min |
    | 1 hour | 1 hour |
    | 6 hours | 6 hours |
-   | 24 hours | 24 hours |
-   | 7 days | 7 days |
-   | 30 days | 30 days |
-   | 90 days | 90 days |
-   | 1 year | 1 year |
+   | 24 hours | 24 hours (maximum; longer values are clamped) |
 
 4. Copy the generated token (starts with `sftp_`).
 5. Configure your SFTP client:
@@ -512,7 +511,7 @@ The **Settings** tab covers name, description, and resource allocations. Templat
 
 Server owners can transfer a server to another node on the cluster:
 
-1. Navigate to **Settings**.
+1. Navigate to your server → **Admin** tab (visible to the owner and `admin.write` / `server.delete` holders).
 2. Find the **Transfer** section and click **Transfer to Another Node**.
 3. Select the target node from the dropdown (only shows online nodes with enough resources).
 4. Confirm the transfer.
@@ -534,8 +533,8 @@ Server owners can transfer a server to another node on the cluster:
 
 Server owners can transfer ownership to another user:
 
-1. Navigate to **Settings** → **Transfer Ownership**.
-2. Enter the target user's email or username.
+1. Navigate to your server → **Admin** tab → **Transfer Ownership**.
+2. Search for the target user (type at least 3 characters) and pick them from the transfer-candidates list — you cannot just type an email.
 3. Confirm the transfer.
 
 The target user must have an existing account on the panel. Pick them from the transfer-candidates list (search needs at least 3 characters). Ownership transfer requires owner or `admin.write`.
@@ -548,7 +547,7 @@ Configure how the server handles unexpected crashes:
 - **Crash counter** — tracks consecutive crashes to prevent restart loops
 - **Reset crash count** — manually reset the crash counter (accessible from Settings → Admin tab)
 
-When the server crashes multiple times in succession, the crash counter prevents infinite restart loops. The admin can configure the maximum number of restarts before the server is marked as `issues` status.
+When the server crashes multiple times in succession, the crash counter prevents infinite restart loops. The server stays in `crashed` status until an admin resets the counter or restarts it.
 
 ### Backup Settings (Admin/Owner)
 
@@ -620,24 +619,15 @@ Configure alert rules to monitor your server's health and receive notifications.
 ### Creating an Alert Rule
 
 1. Navigate to your server → **Alerts** tab.
-2. Click **Create Alert Rule**.
-3. Configure:
-   - **Name** — descriptive name
-   - **Type** — alert trigger type:
-     - `resource_threshold` — triggered when resource usage exceeds a threshold
-     - `node_offline` — triggered when the node goes offline
-     - `server_crashed` — triggered when the server crashes
-   - **Conditions** — threshold values and comparison operators
-   - **Actions** — what happens when the alert fires (webhook, notification)
-   - **Enabled** — toggle the rule on or off
+2. Click **Create Alert Rule**. Creation is a 3-step wizard:
+   - **Details** — name and description.
+   - **Conditions** — what triggers the rule: CPU, memory, or disk thresholds, node-offline, or server-crashed.
+   - **Notifications** — who gets told: webhook targets, email targets, notify-owner toggle, and a cooldown between repeat notifications.
+3. Save to enable the rule.
 
 ### Viewing Alerts
 
-The alerts page shows all alerts for your server with filtering by:
-
-- **Severity** — info, warning, critical
-- **Resolved status** — unresolved or resolved
-- **Type** — alert type
+The alerts history filters only by resolved state — **Unresolved**, **Resolved**, or **All** — plus **Resolve All** for bulk resolution. Each alert row shows its delivery status (channel, status, last error) so you can tell whether the notification actually went out.
 
 ### Resolving Alerts
 
@@ -813,6 +803,10 @@ POST /api/servers/:serverId/suspend
 POST /api/servers/:serverId/unsuspend
 ```
 
+---
+
+## Server Databases
+
 If your admin has configured database hosts, you can create and manage databases for your server.
 
 ### Creating a Database
@@ -926,8 +920,8 @@ Create API keys to programmatically interact with the Catalyst API.
 
 ### Creating an API Key
 
-1. Navigate to **Profile** → **API Keys**.
-2. Click **Create API Key**.
+1. Navigate to **Admin → API Keys** (`/admin/api-keys`) — key management requires the `apikey.manage` permission. Your **Profile** page shows a preview of your first 5 keys with a Manage link, but creation happens on the API Keys page.
+2. Click **Create API Key** (visible only if you can manage keys; otherwise the button is hidden).
 3. Configure:
    - **Name** — descriptive name (1–100 characters)
    - **Permissions** — select specific permissions to scope the key
@@ -1017,6 +1011,46 @@ Password recovery requires SMTP to be configured by your administrator:
 
 ---
 
+## Troubleshooting Common Problems
+
+Beyond password recovery, these cover the failures users hit most.
+
+### When a List Is Empty
+
+Empty tabs show an illustrated empty state with a next action — not an error:
+
+| Where | Empty state says | Next action |
+|-------|------------------|-------------|
+| Servers | No servers yet | Create your first server |
+| Dashboard activity | No recent activity | Activity appears as servers run |
+| Alerts | No rules / no unresolved / no resolved | Create an alert rule |
+| Tasks | No tasks | Open the create-task dialog from the tab |
+| Backups | No backups | Open the create-backup dialog from the tab |
+| Profile passkeys / sessions / activity / API keys | Nothing here yet | Add a passkey, sign in elsewhere, or create a key |
+
+### When Something Fails to Load
+
+Failed tabs show an error panel. Most offer **Retry**, which simply refetches:
+
+- **API keys, file list** — have Retry; press it once, then check your connection if it persists.
+- **Backups** — shows the failure without Retry; reload the page.
+- **Dashboard cards** (stats, resources, activity) — show inline errors per card; the rest of the page keeps working.
+
+If retry and reload both fail, contact your administrator with the exact message.
+
+### Common Problems
+
+| Problem | Solution |
+|---------|----------|
+| Console won't send commands | The server must be **running** (not stopped/suspended), the stream must be connected, and you need `console.write`. Suspended servers reject sends. |
+| Upload rejected as too large | The file exceeds the per-file cap — the error names the limit. Compress, split, or ask your admin to raise **Max upload size**. |
+| Backup button disabled | Local/stream backups need a backup allocation on the server (`allocationWarning`); ask the owner/admin. S3 mode has no such gate. |
+| Task shows a red `lastError` box | The last run failed — read the message, fix the cause (often a stopped server or bad command), and run again or wait for the next schedule. |
+| SFTP login fails | SFTP is per-server with short-lived tokens minted from the panel — regenerate the connection details. Only users with access see them. |
+| Login asks for passkey / 2FA / email verification unexpectedly | The account requires that step (`PASSKEY_REQUIRED`, `TWO_FACTOR_REQUIRED`, `EMAIL_VERIFICATION_REQUIRED`). Complete it, or ask your admin to reset the requirement. |
+
+---
+
 ## Forgot Password & Reset Password Pages
 
 These pages handle the complete password recovery flow in Catalyst.
@@ -1076,511 +1110,51 @@ This page completes the password recovery flow. It is accessed via the link in t
 
 ---
 
-## 2FA Setup Page Details
+## 2FA Verification at Login
 
-The 2FA Setup page (`/two-factor`) handles the complete 2FA enrollment flow.
+There is no standalone 2FA page: `/two-factor` redirects to `/login`, and verification happens in an inline dialog during sign-in.
 
-### Accessing the 2FA Setup Page
+When your account has 2FA enabled, logging in with email and password opens a verification dialog instead of signing you in directly:
 
-Navigate to **Profile** → **Security** → **Two-Factor Authentication**, or go directly to `/two-factor`.
-
-### Step 1 — Verify Current Password
-
-Before enabling 2FA, you must verify your current password:
-1. Enter your current password in the verification field.
-2. Click **Enable 2FA**.
-3. The system validates the password before proceeding.
-
-### Step 2 — Scan QR Code
-
-After password verification, a QR code is displayed:
-1. Open your authenticator app (Google Authenticator, Authy, Microsoft Authenticator, etc.).
-2. Scan the QR code shown on the page.
-3. The QR code contains the TOTP secret key encoded as a `otpauth://totp/` URI.
-4. The app generates 6-digit codes that change every 30 seconds.
-
-### Step 3 — Enter Verification Code
-
-After scanning the QR code:
 1. Enter the 6-digit code from your authenticator app.
-2. Click **Verify**.
-3. The system validates the code using time-based one-time password (TOTP) algorithm.
-4. If valid, 2FA is enabled.
+2. Optionally tick **Trust this device** to skip verification on this device next time.
+3. Click **Verify** to complete sign-in. A wrong code shows an inline error and lets you retry.
 
-### Step 4 — Save Backup Codes
-
-10 backup codes are generated. Each code can be used **only once**:
-1. Display the codes on screen.
-2. Copy them to a password manager, printed document, or secure location.
-3. Click **I've Saved My Backup Codes** to proceed.
-
-> **Important:** If you lose access to your authenticator device, these backup codes are your only way to log in. They cannot be recovered.
-
-### Trust Device Option
-
-During the verification step (Step 3), you'll see a checkbox: **"Trust this device for 30 days."**
-
-When checked:
-- Your browser fingerprint is stored server-side as a trusted device identifier.
-- For 30 days, you won't need to enter a 2FA code from this browser.
-- The device identity is based on a cryptographic fingerprint, not cookies alone.
-- Each trusted device shows its registration date and fingerprint hash in the 2FA settings.
-- You can revoke trust at any time by clicking **Revoke Trust** next to the device.
-- Revoking a trusted device immediately requires 2FA on the next login attempt.
-
-### Disabling 2FA
-
-To disable 2FA:
-1. Navigate to **Profile** → **Two-Factor Authentication**.
-2. Enter a valid 2FA code from your authenticator.
-3. Click **Disable 2FA**.
-4. All backup codes are immediately invalidated.
-5. Trusted devices are also untrusteds.
-
-### Backup Code Usage
-
-If you lose your authenticator device:
-1. Go to the login page.
-2. Click **Use a backup code** instead of entering a 2FA code.
-3. Enter one of your 10 backup codes.
-4. You'll be prompted to:
-   - Generate new backup codes (invalidating the old ones)
-   - Re-enable 2FA with a new QR code
+If you lose your authenticator, click **Use a backup code** in the dialog and enter one of the 10 backup codes from enrollment (each code is single-use — generate a fresh set afterwards from **Profile** → **Security**).
 
 ---
 
 ## System Settings
 
-The System Settings page (`/admin/system`) is the central hub for platform configuration. It provides a comprehensive dashboard showing system health and critical configuration options.
+System Settings (`/admin/system`) is administrator-only. See [Admin Guide](./admin-guide.md) for health, SMTP, mod manager, OIDC, and update controls.
 
-### Accessing System Settings
-
-1. Navigate to **Admin** → **System** (`/admin/system`).
-2. The page loads with three main sections: System Health, SMTP Configuration, and Mod Manager Settings.
-
-### System Health Dashboard
-
-The top section displays real-time platform health:
-
-| Metric | Description |
-|--------|-------------|
-| **Panel Version** | Current running version of the panel |
-| **Database Status** | Connected, disconnected, or degraded |
-| **Online Nodes** | Number of nodes currently connected |
-| **Offline Nodes** | Number of nodes that haven't reported in the last 5 minutes |
-| **Stale Nodes** | Nodes that were online but haven't reported metrics in the last 15 minutes |
-| **Total Users** | Number of registered users |
-| **Total Servers** | Number of servers across all nodes |
-| **Active Servers** | Servers currently in running or starting state |
-
-The dashboard auto-refreshes every 30 seconds for real-time monitoring.
-
-### SMTP Configuration
-
-SMTP (Simple Mail Transfer Protocol) settings are critical for Catalyst to send emails: login verification, password resets, invite notifications, alert notifications, and audit log exports.
-
-**Configuration fields:**
-
-| Field | Description | Example |
-|-------|-------------|--------|
-| **Host** | SMTP server hostname or IP | `smtp.gmail.com` |
-| **Port** | SMTP server port (587 for STARTTLS, 465 for SSL/TLS, 25 for unencrypted) | `587` |
-| **Username** | SMTP authentication username | `noreply@yourdomain.com` |
-| **Password** | SMTP authentication password or app-specific password | `••••••••` |
-| **From Address** | Sender email address displayed to recipients | `Catalyst <noreply@yourdomain.com>` |
-| **Reply-To** | Email address for replies (optional) | `admin@yourdomain.com` |
-| **SSL/TLS** | Use encrypted TLS connection | ☑️ Enabled |
-| **STARTTLS** | Upgrade connection to TLS after connecting (port 587) | ☑️ Enabled |
-| **Connection Pool** | Maximum concurrent SMTP connections | `10` |
-| **Max Connections** | Maximum connections per pool | `5` |
-| **Max Messages** | Max messages per connection before reconnection | `100` |
-
-**Sending a test email:**
-1. Fill in all required fields.
-2. Enter a test recipient email address.
-3. Click **Send Test Email**.
-4. A confirmation message appears: "Test email sent successfully" or an error if delivery failed.
-
-> **⚠️ Security:** SMTP passwords are stored encrypted in the database. They are never logged or displayed in plain text.
-
-**Common SMTP providers:**
-
-| Provider | Host | Port | SSL/TLS | STARTTLS |
-|----------|------|------|---------|----------|
-| **Gmail** | `smtp.gmail.com` | 465 | ✅ | ❌ |
-| **Gmail (STARTTLS)** | `smtp.gmail.com` | 587 | ❌ | ✅ |
-| **SendGrid** | `smtp.sendgrid.net` | 465 | ✅ | ❌ |
-| **Amazon SES** | `email-smtp.region.amazonaws.com` | 465 | ✅ | ❌ |
-| **Mailgun** | `smtp.mailgun.org` | 465 | ✅ | ❌ |
-| **Office 365** | `smtp.office365.com` | 587 | ❌ | ✅ |
-
-### Mod Manager API Keys
-
-The Mod Manager allows users to browse and install mods from CurseForge, Modrinth, and Paper. To access these providers, API keys are required.
-
-**CurseForge API Key:**
-1. Go to [CurseForge Developers](https://developers.curseforge.com/).
-2. Create an API key for your application.
-3. Paste the key into the **CurseForge API Key** field.
-4. Click **Save**.
-
-**Modrinth API Key:**
-1. Go to [Modrinth API Settings](https://modrinth.com/user/settings).
-2. Create an API key.
-3. Paste the key into the **Modrinth API Key** field.
-4. Click **Save**.
-
-> **Note:** These API keys are used server-side only. They are not exposed to users or included in API responses.
-
-### Auto Updater
-
-The Auto Updater section shows version information and update controls:
-
-| Field | Description |
-|-------|-------------|
-| **Current Version** | The currently installed panel version |
-| **Latest Version** | The most recent release version (checked against GitHub) |
-| **Update Available** | Boolean showing whether a newer version exists |
-| **Release URL** | Link to the GitHub release page |
-| **Auto-Update** | Toggle to automatically apply updates when available |
-
-**Update behavior:**
-- When a new version is detected, a notification banner appears at the top of the panel.
-- If auto-update is enabled, the update is applied automatically on the next panel restart.
-- If auto-update is disabled, the banner includes a manual update button.
-- The panel detects whether it's running in Docker or native mode and shows the appropriate update instructions.
-
----
+What you feel as a user: if the admin never configured SMTP, invites, password resets, and alert emails never arrive — that is the first thing to check with them.
 
 ## Security Settings
 
-The Security Settings page (`/admin/security`) provides comprehensive security configuration for the entire platform. It contains 18 configurable fields organized into four sections.
+Security Settings (`/admin/security`) is administrator-only. See [Admin Guide](./admin-guide.md) for rate limits, lockout policy, file-tunnel caps, and audit retention.
 
-### Accessing Security Settings
-
-1. Navigate to **Admin** → **Security** (`/admin/security`).
-2. The page loads with four collapsible sections: Rate Limits, Lockout Policy, File Tunnel, and Auth Lockouts.
-
-### Rate Limits
-
-Controls how many requests different endpoints can receive per time window. These limits prevent resource exhaustion and abuse.
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Auth Requests/Min** | 10 | Maximum authentication requests (login, register, reset) per minute per IP |
-| **File Ops/Min** | 30 | Maximum file operations (upload, download, edit) per minute per server |
-| **Console Input/Min** | 60 | Maximum console commands per minute per server |
-| **Console Output Lines/Sec** | 1000 | Maximum console output lines per second per server |
-| **Console Output Bytes/Sec** | 100000 | Maximum console output bytes per second per server |
-| **Agent Messages/Sec** | 100 | Maximum WebSocket messages per second from agent |
-| **Agent Metrics/Sec** | 50 | Maximum metric messages per second from agent |
-| **Server Metrics/Sec** | 100 | Maximum metric messages per second per server |
-| **File Upload/MB** | 100 | Maximum file upload size in megabytes |
-
-> **⚠️ Warning:** Lowering rate limits too aggressively may cause legitimate users to be throttled. Test changes in a development environment before applying to production.
-
-### Lockout Policy
-
-Protects against brute-force login attempts by temporarily blocking IPs or emails after repeated failures.
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Max Login Attempts** | 5 | Number of failed attempts before lockout |
-| **Lockout Window** | 15 | Time window in minutes for counting failed attempts |
-| **Lockout Duration** | 30 | Minutes to block an IP/email after reaching max attempts |
-| **Enable IP Lockout** | ✅ | Block the IP address of failed login attempts |
-| **Enable Email Lockout** | ✅ | Block login attempts for an email after too many failures |
-| **Lockout Viewer** | — | Searchable table of active lockouts (see below) |
-
-**Lockout Viewer:**
-- Shows all currently active lockouts with:
-  - **IP Address** — the blocked IP
-  - **Email** — the blocked email address (if email lockout is enabled)
-  - **Failure Count** — number of failed attempts that triggered the lockout
-  - **Last Failed** — timestamp of the most recent failed attempt
-  - **Status** — locked/unlocked
-- Supports search by IP or email.
-- Pagination: 50 entries per page.
-- Administrators can manually clear lockouts by clicking **Clear** next to an entry.
-- Auto-refreshes every 30 seconds.
-
-### File Tunnel Security
-
-Controls the secure file tunnel used by the file manager to communicate with node agents.
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Tunnel Requests/Min** | 60 | Maximum file tunnel requests per minute per server |
-| **Max Upload Size (MB)** | 100 | Maximum single file upload size through the tunnel |
-| **Max Pending Per Node** | 50 | Maximum pending file operations queued per node |
-| **Max Concurrent Per Agent** | 10 | Maximum concurrent file operations per agent |
-| **Max Buffer (MB)** | 64 | Maximum output buffer for compress, decompress, and archive browsing |
-
-### Auth Lockouts
-
-The Auth Lockouts section provides a real-time view of active login lockouts (see [Brute Force Protection & Lockout Viewer](#brute-force-protection--lockout-viewer) below for details).
-
-### Audit Retention
-
-Controls how long audit logs are kept:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Audit Retention Days** | 90 | Number of days to retain audit log entries |
-
-Logs older than the retention period are permanently deleted by a background pruning service.
-
-### CORS & Helmet
-
-| Setting | Description |
-|---------|-------------|
-| **CORS Origin** | Configured via the `CORS_ORIGIN` environment variable. Specifies which domains can make cross-origin requests to the API. Default allows all origins in development; restrict to specific domains in production. |
-| **Helmet Headers** | Catalyst uses `@fastify/helmet` to set secure HTTP headers: `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Strict-Transport-Security`. These are configured automatically by the framework and cannot be disabled. |
-
----
+What you feel as a user: too many failed logins trigger a temporary lockout (your admin can see and clear it in the lockout viewer), and API/file/console actions are rate-limited per minute.
 
 ## System Errors Dashboard
 
-The System Errors dashboard (`/admin/system-errors`) displays client-side errors reported by frontend modules throughout the application.
-
-### Accessing the Dashboard
-
-1. Navigate to **Admin** → **System Errors** (`/admin/system-errors`).
-2. The page loads with error statistics and a searchable table of reported errors.
-
-### What Gets Reported
-
-The `reportSystemError()` function is called by 60+ frontend modules, including:
-- **AuthStore** — authentication failures, token refresh errors
-- **useFileManager** — file upload failures, permission errors
-- **useSetupStatus** — setup wizard errors
-- **useSseConsole** — console stream disconnections, command failures
-- **themeStore** — theme loading errors
-- **ProfilePage** — profile update failures, avatar upload errors
-
-### Error Information
-
-Each reported error includes:
-| Field | Description |
-|-------|-------------|
-| **Level** | `error`, `warn`, or `critical` |
-| **Component** | The module or page that reported the error |
-| **Message** | Error message (sensitive data is redacted automatically) |
-| **Stack Trace** | JavaScript stack trace (if available) |
-| **Metadata** | Contextual data (e.g., server ID, user agent, browser version) |
-| **Resolved** | Whether the error has been acknowledged and marked as resolved |
-| **Timestamp** | When the error was reported |
-
-### Searching and Filtering
-
-| Filter | Description |
-|--------|-------------|
-| **Search** | Full-text search across error messages |
-| **Level** | Filter by `error`, `warn`, or `critical` |
-| **Component** | Filter by the reporting module |
-| **Date Range** | Filter by when errors were reported |
-
-### Resolving Errors
-
-1. Find the error in the table.
-2. Click **Resolve** next to the error entry.
-3. The error is marked as resolved and removed from the active list.
-4. Resolved errors can still be viewed in a separate "Resolved" tab.
-
-### Pagination
-
-- 50 errors per page.
-- Supports navigation through paginated results.
-- Auto-refreshes every 30 seconds to show new errors.
-
----
+The System Errors dashboard (`/admin/system-errors`) is administrator-only. See [Admin Guide](./admin-guide.md#system-errors). If the panel misbehaves, your admin resolves the listed errors there.
 
 ## Theme Settings
 
-The Theme Settings page (`/admin/theme-settings`) allows administrators to customize the look and feel of the Catalyst panel.
-
-### Accessing Theme Settings
-
-1. Navigate to **Admin** → **Theme Settings** (`/admin/theme-settings`).
-2. The page displays a live preview panel alongside configuration controls.
-
-### Panel Branding
-
-| Setting | Description | Example |
-|---------|-------------|--------|
-| **Panel Name** | Display name shown in the browser title, sidebar, and login page | `My Game Panel` |
-| **Logo URL** | URL to a custom logo image (recommended size: 200×50 pixels) | `https://example.com/logo.png` |
-| **Favicon URL** | URL to a custom favicon (32×32 or 16×16 PNG) | `https://example.com/favicon.ico` |
-
-### Color Scheme
-
-Customize the panel's color palette with three primary colors:
-
-| Color | Usage | Example |
-|-------|-------|--------|
-| **Primary** | Sidebar, buttons, primary links, active states | `#1d4ed8` (blue) |
-| **Secondary** | Headers, accents, secondary buttons | `#16a34a` (green) |
-| **Accent** | Highlights, notifications, badges | `#dc2626` (red) |
-
-### Custom CSS
-
-Inject custom CSS rules to further customize the appearance:
-
-1. Navigate to the **Custom CSS** section.
-2. Enter CSS rules in the editor.
-3. Click **Apply** to see changes in the live preview.
-4. Click **Save** to persist the CSS to the database.
-
-> **⚠️ Warning:** Custom CSS is applied globally. Ensure your rules don't break the layout or accessibility of the panel. Invalid CSS will be rejected on save.
-
-### Theme Preview
-
-The preview panel shows:
-- The sidebar with your logo and custom colors
-- A sample server card with custom button styles
-- The header with your panel name and color scheme
-- Light and dark mode toggles for previewing both themes
-
-### Light/Dark Mode
-
-| Setting | Description |
-|---------|-------------|
-| **Default Mode** | Set the default theme for new users (light or dark) |
-| **Per-User Override** | Individual users can toggle between light and dark mode from their profile settings |
-
----
+Panel-wide branding (`/admin/theme-settings`) is administrator-only. See [Admin Guide](./admin-guide.md#theme--branding). Your personal appearance (including language) lives under **Profile → Appearance**.
 
 ## Database Hosts
 
-The Database Hosts page (`/admin/database`) manages remote database servers that can be used for Catalyst server databases.
-
-### Accessing Database Hosts
-
-1. Navigate to **Admin** → **Database** (`/admin/database`).
-2. The page shows a list of configured database hosts.
-
-### Creating a Database Host
-
-1. Click **Add Database Host**.
-2. Configure the connection:
-
-| Field | Description |
-|-------|-------------|
-| **Name** | Display name for the host (e.g., `Production MySQL`) |
-| **Host** | Database server hostname or IP address |
-| **Port** | Database port (3306 for MySQL, 5432 for PostgreSQL) |
-| **Username** | Admin username with CREATE DATABASE and CREATE USER privileges |
-| **Password** | Admin password |
-| **Database Type** | MySQL, MariaDB, or PostgreSQL |
-
-3. Click **Test Connection** to verify the settings.
-4. Click **Save** to add the host.
-
-### Database Host Actions
-
-| Action | Description |
-|--------|-------------|
-| **Test Connection** | Verify connectivity with the database server |
-| **Edit** | Modify host settings |
-| **Delete** | Remove the host (prevents deletion if servers are using it) |
-
-### Per-Server Database Provisioning
-
-Once database hosts are configured, server owners can create databases from the server's **Databases** tab:
-
-1. Navigate to your server → **Databases** tab.
-2. Select a database host from the dropdown.
-3. Enter a database name.
-4. Click **Create**.
-
-The database is provisioned on the remote host, and connection credentials are displayed to the user.
-
----
+Database hosts (`/admin/*`) are administrator-only. See [Admin Guide](./admin-guide.md#database-host-management). What you feel as a user: the **Databases** tab on your server is hidden entirely when the admin configured no database hosts.
 
 ## System-wide Alerts
 
-The System-wide Alerts page (`/admin/alerts`) manages alerts that affect the entire platform (not individual servers).
-
-### Accessing Alerts
-
-1. Navigate to **Admin** → **Alerts** (`/admin/alerts`).
-2. The page shows a list of system-wide alert rules and active alerts.
-
-### Creating Alert Rules
-
-1. Click **Create Alert Rule**.
-2. Configure:
-
-| Field | Description |
-|-------|-------------|
-| **Name** | Descriptive name for the rule |
-| **Type** | `node_offline` — triggers when a node goes offline; `server_crash_surge` — triggers when multiple servers crash simultaneously; `disk_usage` — triggers when total disk usage exceeds a threshold |
-| **Conditions** | Threshold values and comparison operators |
-| **Notification Channels** | Webhook URL, email recipients, or in-panel notification |
-| **Enabled** | Toggle the rule on or off |
-
-### Viewing System Alerts
-
-System alerts are visible to all users with the `alert.read` permission:
-1. An alert badge appears on the sidebar navigation.
-2. Click the badge to view active alerts.
-3. Click **Resolve** to mark an alert as handled.
-
----
+System-wide alert rules are administrator-only. See [Admin Guide](./admin-guide.md#alerts-system). Server-level rules you can manage yourself are covered in [Alerts](#alerts) above.
 
 ## Migration Tool
 
-The Migration Tool (`/admin/migration`) assists in migrating from Pterodactyl Panel to Catalyst.
-
-### Accessing the Migration Tool
-
-1. Navigate to **Admin** → **Migration** (`/admin/migration`).
-2. The page shows migration configuration and progress.
-
-### Migration Scopes
-
-| Scope | Description |
-|-------|-------------|
-| **Full Migration** | Migrate all nodes, servers, users, and databases |
-| **Node Migration** | Migrate specific nodes and their servers |
-| **Server Migration** | Migrate individual servers across nodes |
-
-### Migration Process
-
-1. **Test Connection:**
-   - Enter your Pterodactyl panel URL and API key.
-   - Click **Test Connection** to verify access.
-   - The tool retrieves a summary of Pterodactyl data (users, servers, nodes) for verification.
-
-2. **Configure Mapping:**
-   - **Node Mapping:** Map each Pterodactyl node to a Catalyst node.
-   - **Server Mapping:** Verify each server's target node and allocation.
-   - **User Mapping:** Map Pterodactyl users to Catalyst users (by email or manual mapping).
-
-3. **Start Migration:**
-   - Click **Start Migration** to begin.
-   - Progress is shown step by step:
-     - Migrating users...
-     - Migrating nodes...
-     - Migrating servers...
-     - Migrating databases...
-     - Migrating backups...
-   - A progress bar shows completion percentage.
-
-4. **Pause/Resume/Cancel:**
-   - **Pause** — temporarily stop the migration.
-   - **Resume** — continue from where you paused.
-   - **Cancel** — abort the migration and roll back completed steps.
-
-### Post-Migration
-
-After migration completes:
-- All migrated users will need to reset their passwords (password hashes are not compatible).
-- Server databases should be tested for connectivity.
-- Node allocations should be verified against the Catalyst node configuration.
-- SFTP tokens will need to be regenerated for each server.
-
----
+Pterodactyl migration (`/admin/migration`) is administrator-only. See [Admin Guide](./admin-guide.md#pterodactyl-migration). If your server arrived via migration, its files, variables, and allocations come along — verify startup variables on first boot.
 
 ## Node Details Page
 
@@ -1673,7 +1247,7 @@ The Template Details page (`/admin/templates/:templateId`) allows you to view an
 
 | Field | Description |
 |-------|-------------|
-| **Name** | Display name (e.g., `Minecraft Server (Paper)`) |
+| **Name** | Display name (e.g., `Minecraft Server (Universal)`) |
 | **Description** | Human-readable description |
 | **Author** | Template author |
 | **Features** | Enabled features (e.g., Mod Manager, Plugin Manager, File Editor) |
@@ -1753,55 +1327,7 @@ This ensures that even if a tab is in a different browser window or process, it 
 
 ## Brute Force Protection & Lockout Viewer
 
-Catalyst protects against brute-force login attempts through a combination of rate limiting, IP blocking, email blocking, and a lockout viewer.
-
-### How Brute Force Protection Works
-
-1. **Rate Limiting:**
-   - Login attempts are limited to a configurable number per minute (default: 10 requests/minute per IP).
-   - Exceeding the rate limit results in a `429 Too Many Requests` response.
-   - The rate limiter uses a sliding window algorithm for accuracy.
-
-2. **Lockout Policy:**
-   - After a configurable number of consecutive failed login attempts (default: 5), the user's IP is blocked for a configurable duration (default: 30 minutes).
-   - The user's email can also be blocked independently (if email lockout is enabled).
-   - Lockouts are stored in the database and checked on every login attempt.
-
-3. **Secure Token Comparison:**
-   - All authentication tokens use constant-time comparison to prevent timing attacks.
-   - This ensures that the time taken to compare tokens is the same regardless of whether the tokens match or not.
-
-### Lockout Viewer
-
-The lockout viewer (available in Admin → Security) displays all active lockouts in real-time:
-
-| Column | Description |
-|--------|-------------|
-| **IP Address** | The blocked IP address |
-| **Email** | The blocked email address (if email lockout is enabled) |
-| **Failure Count** | Number of failed attempts that triggered the lockout |
-| **Last Failed** | Timestamp of the most recent failed login attempt |
-| **Status** | `locked` or `unlocked` (manually cleared by admin) |
-| **Actions** | Click **Clear** to manually remove a lockout |
-
-**Features:**
-- **Search:** Filter lockouts by IP address or email.
-- **Pagination:** 50 entries per page.
-- **Auto-Refresh:** Updates every 30 seconds to show lockouts that are expiring.
-- **Manual Clear:** Admins can immediately release a locked IP or email without waiting for the lockout to expire.
-
-### Additional Security Features
-
-| Feature | Description |
-|---------|-------------|
-| **Password Reset Rate Limiting** | Forgot password requests are rate-limited (typically 3 per hour per IP) |
-| **Email Enumeration Prevention** | The forgot password page returns the same message whether the email exists or not |
-| **Session Revocation** | Changing your password revokes all other sessions |
-| **Token Expiry** | Password reset tokens expire after 1 hour and are single-use |
-| **CORS Protection** | `@fastify/cors` restricts cross-origin requests to trusted domains |
-| **Helmet Headers** | `@fastify/helmet` sets secure HTTP headers (CSP, X-Frame-Options, HSTS) |
-
----
+Too many failed logins temporarily lock the account or IP. If you are locked out, wait for the lockout to expire or ask your administrator, who can see and clear lockouts in the viewer (`admin.write`). The lockout policy itself (attempts, window, duration) is administrator-configured — see [Admin Guide](./admin-guide.md).
 
 ## File Editing in File Manager
 
@@ -2072,46 +1598,7 @@ Click **Revoke** on any session to immediately log out that device. This is usef
 
 ## Admin Audit Logs
 
-**This section is for administrators** who have the `audit-log.read` permission. The Admin Audit Logs page provides a system-wide view of all actions performed across the platform.
-
-### Accessing Admin Audit Logs
-
-1. Navigate to **Admin** → **Audit Logs** (`/admin/audit-logs`).
-2. The page loads the system-wide audit trail with 15-second auto-refresh.
-
-### Filtering Audit Logs
-
-Filter by multiple criteria simultaneously:
-
-| Filter | Description | Options |
-|--------|-------------|--------|
-| **Action Type** | What kind of action | login, logout, server.create, server.start, server.stop, server.delete, user.create, user.update, password.change, api.key.create, 2fa.enable, passkey.create, backup.create, file.edit, console.command, task.execute, alert.resolve, and more |
-| **Resource Type** | What was affected | server, node, user, role, api_key, auth, backup, alert, template, email, security |
-| **User** | Who performed the action | Search by username or email |
-| **Date Range** | Time window | Start and end date pickers |
-
-### Viewing Entries
-
-Each audit log entry shows:
-- **Action** — what was done (with icon)
-- **Resource** — what was affected (e.g., server name, user email)
-- **User** — who performed the action
-- **Timestamp** — when it happened
-- **Details** — additional context (e.g., old/new values for updates)
-
-### Exporting Audit Logs
-
-1. Click **Export CSV** on the audit logs page.
-2. A CSV file is generated with all filtered entries.
-3. The export includes: action, resource type, user, timestamp, IP address, and details.
-
-### Retention
-
-- Audit logs are automatically pruned based on the **Audit Retention** setting in Admin → Security.
-- Default retention: 90 days.
-- Logs older than the retention period are permanently deleted by a background pruning service.
-
----
+The system-wide audit log (`/admin/audit-logs`) is administrator-only. See [Admin Guide](./admin-guide.md#audit-logs). Your own actions are always visible to you under **Profile → Audit log**.
 
 ## Quick Reference: User API Endpoints
 

@@ -110,6 +110,10 @@ Catalyst plugins extend the platform with custom backend routes, frontend UI com
 │  │  POST   /api/plugins/:name/reload            │     │
 │  │  PUT    /api/plugins/:name/config            │     │
 │  │  GET    /api/plugins/:name/frontend-manifest │     │
+│  │  POST   /api/plugins/install                 │     │
+│  │  POST   /api/plugins/:name/uninstall         │     │
+│  │  GET    /api/plugins/:name/permissions       │     │
+│  │  GET    /api/plugins/marketplace (+ sources CRUD) │     │
 │  │  Custom routes registered by each plugin     │     │
 │  └─────────────────────────────────────────────┘     │
 │                                                      │
@@ -274,9 +278,8 @@ ctx.registerRoute({
 ctx.registerRoute({
   method: 'POST',
   url: '/echo',
-  handler: async (request, reply, next) => {
-    // request, reply, next (express-style)
-    next();
+  handler: async (request, reply) => {
+    return { success: true, echo: request.body };
   },
 });
 ```
@@ -306,6 +309,8 @@ The `PluginBackendContext` object passed to all lifecycle hooks is a "god object
 | `emit()` | `(event: string, data: any) => void` | Emit a Catalyst event |
 | `emitTyped()` | `(event: string, data: any) => void` | Emit with schema validation (warns, doesn't throw) |
 | `getConfig()` | `(key: string) => any` | Get plugin config value |
+| `requirePermission()` | `(permission: string) => preHandler` | Gate a route on a permission (use in `preHandler`) |
+| `getUserId()` | `(request) => string` | Get the authenticated user id (`request.user.userId`) |
 | `setConfig()` | `(key: string, value: any) => Promise<void>` | Update plugin config value |
 | `getStorage()` | `(key: string) => Promise<any>` | Persistent key-value storage |
 | `setStorage()` | `(key: string, value: any) => Promise<void>` | Persistent key-value storage |
@@ -682,8 +687,7 @@ The Plugin SDK lives in `packages/plugin-sdk/` and provides scaffolding, types, 
 
 ```bash
 # Scaffold a new plugin
-cd packages/plugin-sdk
-npx @catalyst/plugin-sdk create my-plugin --template fullstack
+npx @catalyst/plugin-sdk-cli create my-plugin --template fullstack
 ```
 
 ### SDK Templates
@@ -696,7 +700,18 @@ npx @catalyst/plugin-sdk create my-plugin --template fullstack
 
 ### SDK Exports
 
-From `@catalyst/plugin-sdk`:
+Primary helpers (see `packages/plugin-sdk/src/index.ts`):
+
+| Export | Type | Description |
+|--------|------|-------------|
+| `defineConfig`, `configField`, `createConfigSchema` | helpers | Plugin config schema (also via `@catalyst/plugin-sdk/config`) |
+| `definePermissions` | helper | Produces the `permissions` manifest block |
+| `defineRoutes`, `PluginRouteBuilder` | helpers | Typed route builders (also via `@catalyst/plugin-sdk/routes`) |
+| `createTypedCollection` | helper | Typed storage collections (also via `@catalyst/plugin-sdk/storage`) |
+| `createTypedContext`, `defineTypedContext` | helpers | Typed plugin context (also via `@catalyst/plugin-sdk/context`) |
+| `createMockContext`, `createTestPlugin` | testing | Mock context and lifecycle harness (via `@catalyst/plugin-sdk/testing`) |
+
+Legacy types:
 
 | Export | Type | Description |
 |--------|------|-------------|
@@ -1072,9 +1087,9 @@ Demonstrates all plugin capabilities:
 ```json
 {
   "name": "example-plugin",
-  "version": "1.0.0",
+  "version": "1.16.0",
   "displayName": "Example Plugin",
-  "permissions": ["server.read", "server.write", "admin.read", "console.read"],
+  "permissions": ["server.read", "server.write"],
   "config": {
     "greeting": { "type": "string", "default": "Hello from Example Plugin!" },
     "cronEnabled": { "type": "boolean", "default": true },

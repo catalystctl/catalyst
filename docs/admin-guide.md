@@ -9,29 +9,30 @@ This guide covers all administrative features in Catalyst, from user management 
 1. [Admin Dashboard Overview](#admin-dashboard-overview)
 2. [System Health](#system-health)
 3. [System Errors](#system-errors)
-4. [User Management](#user-management)
-5. [Role & Permission System](#role--permission-system)
-6. [Node Management](#node-management)
-7. [Agent link resilience controls](#agent-link-resilience-controls)
-8. [Server Templates](#server-templates)
-9. [Server Administration](#server-administration)
-10. [Backup Management](#backup-management)
-11. [Alerts System](#alerts-system)
-12. [Scheduled Tasks](#scheduled-tasks)
-13. [API Key Management](#api-key-management)
-14. [Webhooks](#webhooks)
-15. [Plugin Management](#plugin-management)
-16. [Security Settings](#security-settings)
-17. [SMTP & Email Configuration](#smtp--email-configuration)
-18. [Interface Language](#interface-language)
-19. [Theme & Branding](#theme--branding)
-20. [IPAM (IP Address Management)](#ipam-ip-address-management)
-21. [Database Host Management](#database-host-management)
-22. [Audit Logs](#audit-logs)
-23. [Pterodactyl Migration](#pterodactyl-migration)
-24. [Auth Lockouts](#auth-lockouts)
-25. [OIDC / OAuth Provider Configuration](#oidc--oauth-provider-configuration)
-26. [Mod Manager Settings](#mod-manager-settings)
+4. [Auto-Updater](#auto-updater)
+5. [User Management](#user-management)
+6. [Role & Permission System](#role--permission-system)
+7. [Node Management](#node-management)
+8. [Agent link resilience controls](#agent-link-resilience-controls)
+9. [Server Templates](#server-templates)
+10. [Server Administration](#server-administration)
+11. [Backup Management](#backup-management)
+12. [Alerts System](#alerts-system)
+13. [Scheduled Tasks](#scheduled-tasks)
+14. [API Key Management](#api-key-management)
+15. [Webhooks](#webhooks)
+16. [Plugin Management](#plugin-management)
+17. [Security Settings](#security-settings)
+18. [SMTP & Email Configuration](#smtp--email-configuration)
+19. [Interface Language](#interface-language)
+20. [Theme & Branding](#theme--branding)
+21. [IPAM (IP Address Management)](#ipam-ip-address-management)
+22. [Database Host Management](#database-host-management)
+23. [Audit Logs](#audit-logs)
+24. [Pterodactyl Migration](#pterodactyl-migration)
+25. [Auth Lockouts](#auth-lockouts)
+26. [OIDC / OAuth Provider Configuration](#oidc--oauth-provider-configuration)
+27. [Mod Manager Settings](#mod-manager-settings)
 
 ---
 
@@ -64,7 +65,7 @@ From the admin dashboard, you can navigate to all management sections:
 | **Migration** | Import from Pterodactyl panels |
 | **System** | SMTP, mod manager, database hosts, and general settings |
 
-All admin operations require appropriate permissions. The `admin.read` permission grants read-only access to the admin panel, while `admin.write` grants full administrative control.
+All admin operations require appropriate permissions. The `admin.read` permission grants read-only access to most of the admin panel, while `admin.write` grants full administrative control. **Exceptions:** the **System** page (`/admin/system`) and **Theme** page (`/admin/theme-settings`) require `admin.write` even to view — so SMTP, interface language, and theme instructions below all assume `admin.write`.
 
 ---
 
@@ -72,9 +73,7 @@ All admin operations require appropriate permissions. The `admin.read` permissio
 
 The system health endpoint provides a real-time overview of Catalyst's infrastructure status.
 
-**Access:** Admin panel → System Health
-
-The health check reports:
+The health check reports (embedded in the **Admin → System** page header — there is no separate System Health page or `/admin/health` route):
 
 - **Overall status** — `healthy` (all systems nominal) or `degraded` (issues detected)
 - **Database** — PostgreSQL connectivity status (`connected` / `disconnected`)
@@ -118,6 +117,19 @@ with detail and history.
   (`POST /api/admin/system-errors/resolve-all`, `admin.write`).
 - **Export** the list for offline analysis
   (`GET /api/admin/system-errors/export`, `admin.read`).
+
+---
+
+## Auto-Updater
+
+Navigate to **Admin → System** and find the **Auto Updater** section. It shows
+the running version, whether an update is available, and when the last check
+ran, with a progress modal while an update applies.
+
+- **Triggering is Docker-only:** the Trigger button enables only when the panel reports `isDocker` and an update is available. Standalone (non-Docker) installs show a notice instead — update those by pulling and rebuilding.
+- **Permissions:** status, trigger, and state reads all require `admin.write` (`GET /api/admin/update/status`, `POST /api/admin/update/trigger`, `GET /api/admin/update/state`).
+- **Behavior knobs:** `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_INTERVAL_MS`, and `AUTO_UPDATE_AUTO_TRIGGER` (see [Environment Variables](./environment-variables.md)); `DOCKER_BIN` and `AUTO_UPDATE_FORCE_DOCKER` cover non-standard runtimes.
+- **Recovery:** a failed update leaves a `failed` state with logs — see [Troubleshooting](./troubleshooting.md) for retry and `update.sh --restore` rollback.
 
 ## User Management
 
@@ -245,7 +257,7 @@ Catalyst ships with four role presets that can be used as starting points:
 | **Administrator** | Full system access | `*` |
 | **Moderator** | Can manage most resources but not users/roles | `node.read`, `node.update`, `node.view_stats`, `location.read`, `template.read`, `user.read`, `server.read`, `server.start`, `server.stop`, `file.read`, `file.write`, `console.read`, `console.write`, `alert.read`, `alert.create`, `alert.update`, `alert.delete` |
 | **Support** | Read-only access for support staff | `node.read`, `node.view_stats`, `location.read`, `template.read`, `server.read`, `file.read`, `console.read`, `alert.read`, `user.read` |
-| **User** | Basic access to own servers | `server.read` (fresh setup seeds the **User** role with `server.read/start/stop`, `file.read/write`, `console.read/write`) |
+| **User** | Basic access to own servers | `server.read` |
 
 ### Creating a Custom Role
 
@@ -392,14 +404,15 @@ The agent sends heartbeats to `POST /api/nodes/:nodeId/heartbeat` with health da
 
 ## Agent link resilience controls
 
-Catalyst hardens the panel↔agent WebSocket link so transient network trouble does not silently strand commands or grow memory without bound. These behaviors are automatic; as an operator you mainly observe them via logs and counters:
+Catalyst hardens the panel↔agent WebSocket link so transient network trouble does not silently strand commands. These behaviors are automatic; as an operator you mainly observe them via logs and node status:
 
-- **Dead-socket detection:** the panel sends WS-level pings to every connected agent every 30 seconds and reaps any agent socket that stays silent past a 60-second liveness timeout using forceful `terminate()` — skipping the close-frame handshake a half-open peer would never complete.
-- **Command queueing during reconnects:** commands aimed at a disconnected agent are queued briefly per node (outbox cap of 50 messages with a 30-second TTL) and delivered when the agent reconnects; expired or overflowing entries are dropped and counted.
-- **Backpressure shedding:** when a slow agent's outbound buffer passes the backpressure watermark (`AGENT_BACKPRESSURE_BYTES`, default 4 MiB), low-priority traffic to that agent is shed and bulk binary transfers abort instead of buffering unboundedly; control-plane power commands (start/stop/restart/kill) are always attempted.
-- **Reliability statistics:** cumulative per-node counters (connections, heartbeat timeouts, rate-limited drops, outbox queued/dropped, backpressure drops) are queryable programmatically via `wsGateway.getReliabilityStats()`.
-- **Flap detection:** a node connecting 5 or more times within one minute raises a `node_flapping` event to admin subscribers, so chronic instability surfaces instead of hiding behind logs.
-- **Protocol compatibility:** an agent speaking an incompatible protocol major receives a machine-readable `protocol_mismatch` rejection at handshake rather than undefined behavior afterwards.
+- **Dead-socket detection:** unresponsive agent sockets are reaped automatically — a node that stops heartbeating shows offline and its commands fail fast instead of hanging.
+- **Command queueing during reconnects:** commands aimed at a briefly disconnected agent are queued per node and delivered on reconnect; entries that expire or overflow are dropped and counted.
+- **Backpressure shedding:** when a slow agent's outbound buffer passes the watermark, low-priority traffic is shed and bulk transfers abort instead of growing memory; start/stop/restart commands are always attempted.
+- **Flap detection:** a node reconnecting repeatedly in a short window raises a `node_flapping` event to admin subscribers.
+- **Protocol compatibility:** an agent on an incompatible protocol major gets a machine-readable `protocol_mismatch` rejection at handshake.
+
+(Tuning knobs live in code: `AGENT_BACKPRESSURE_BYTES` and the outbox/heartbeat constants in `catalyst-backend/src/websocket/gateway.ts`.)
 
 ---
 
@@ -505,6 +518,12 @@ The import process maps:
 
 Templates that are currently in use by servers cannot be deleted.
 
+When creating or editing a template, the **Nest** picker is optional — leave it on none for a standalone template. Assigning a nest groups the template under it; a missing or inaccessible nest fails validation, so create the nest first (`template.create` covers both).
+
+### Managing Locations
+
+There is no standalone Locations page: on **Admin → Nodes**, open the **Locations manager** modal to list, create, update, and delete locations. It needs `location.read` to view and `location.create` / `location.update` / `location.delete` for the respective actions.
+
 ---
 
 ## Server Administration
@@ -515,7 +534,7 @@ Admins can view and manage all servers across the panel from **Admin → Servers
 
 The admin server list supports filtering by:
 
-- **Status** — running, stopped, starting, stopping, installing, suspended
+- **Status** — running, stopped, starting, stopping, installing, suspended, crashed, transferring, cloning, restoring, creating_backup, error, archived (statuses are derived from live data)
 - **Search** — server name, ID, or node name
 - **Owner** — filter by owner username or email
 - **Pagination** — configurable page size
@@ -721,6 +740,8 @@ Tasks run in the timezone specified by the `TZ` environment variable (default: `
 
 API keys allow programmatic access to the Catalyst API. They can be scoped with specific permissions.
 
+> **Permissions:** the **Admin → API Keys** page and route require `apikey.manage`. On the backend, reads additionally accept admin status (`apikey.manage` **or** admin) while creates/updates/deletes stay `apikey.manage`-only.
+
 ### Creating an API Key
 
 1. Navigate to **Admin → API Keys** (or use the API directly).
@@ -891,11 +912,13 @@ Navigate to **Admin → Security** to configure security policies.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `authRateLimitMax` | 30 | Max authentication requests per window |
-| `fileRateLimitMax` | 120 | Max file operation requests per window |
-| `consoleRateLimitMax` | 60 | Max console input commands per window |
+| `authRateLimitMax` | 60 | Max authentication requests per window |
+| `fileRateLimitMax` | 180 | Max file operation requests per window |
+| `consoleRateLimitMax` | 120 | Max console input commands per window |
 | `consoleOutputLinesMax` | 2000 | Max console output lines retained |
-| `consoleOutputByteLimitBytes` | 262144 (256 KB) | Max console output throughput per second |
+| `consoleOutputByteLimitBytes` | 262144 (256 KB) | Max console output throughput per second (clamped 64 KB–2 MB for this setting; live agent traffic uses the gateway default of 2 MB, clamped 256 KB–10 MB — see [Environment Variables](./environment-variables.md)) |
+| `requireEmailVerification` | `true` | Require email verification for new accounts |
+| `registrationEnabled` | `false` | Allow open registration (first setup keeps it off) |
 
 ### Brute-Force Protection (Auth Lockouts)
 
@@ -992,7 +1015,7 @@ Navigate to **Admin → Theme** to customize the panel's appearance.
 
 ## IPAM (IP Address Management)
 
-Catalyst includes a built-in IPAM system for managing IP addresses across macvlan networks.
+Catalyst includes a built-in IPAM system for managing IP addresses across macvlan networks. Pool management is **API-only** — there is no `/admin/ip-pools` page. Pool usage stats are visible inside the Node Allocations page.
 
 ### IP Pools
 
@@ -1029,7 +1052,7 @@ When a pool is created, the panel automatically sends a `create_network` command
 | Action | Permission | Endpoint |
 |--------|-----------|----------|
 | List pools | `admin.read` | `GET /api/admin/ip-pools` |
-| Create pool | `admin.read` | `POST /api/admin/ip-pools` |
+| Create pool | `admin.write` | `POST /api/admin/ip-pools` |
 | Update pool | `admin.write` | `PUT /api/admin/ip-pools/:id` |
 | Delete pool | `admin.write` | `DELETE /api/admin/ip-pools/:id` |
 | View node pools | `node.read` | `GET /api/nodes/:nodeId/ip-pools` |
@@ -1076,6 +1099,8 @@ POST /api/admin/database-hosts
 | Test connection | `GET /api/admin/database-hosts/:id/ping` (reports round-trip latency) |
 
 Database hosts with active server databases cannot be deleted.
+
+The **Database** page also shows a **Catalyst DB status card** for the panel's own Postgres (connected state, table count, size, active connections, row counts, latency). Each host row carries a **ping** readout: engine version, database/table counts, or the error text when the last ping failed. For Postgres hosts the form includes the maintenance database field (default `postgres`, never provisioned or dropped via the API). A failed ping means wrong credentials/host/port or an unreachable host — fix those before provisioning databases onto it.
 
 ---
 
@@ -1135,7 +1160,8 @@ GET /api/admin/audit-logs/export?format=json&resource=server
 
 - Exports are capped at 2,000 records
 - CSV includes columns: id, timestamp, action, resource, resourceId, userId, username, email, details
-- JSON export requires `admin.write` permission
+- The whole export endpoint (`GET /api/admin/audit-logs/export`, CSV and JSON) requires `admin.write`; the list view (`GET /api/admin/audit-logs`) needs only `admin.read`
+- Invalid `from`/`to` timestamps return an error — use ISO 8601 or Unix epoch
 
 ### Retention
 
@@ -1248,7 +1274,9 @@ Each provider requires:
 |-------|-------------|
 | `clientId` | OAuth client ID |
 | `clientSecret` | OAuth client secret |
-| `discoveryUrl` | OIDC discovery document URL (must start with `https://`) |
+| `discoveryUrl` | OIDC discovery document URL (`http://` or `https://`) |
+
+Reading the config needs `admin.read`; saving it (`PATCH /api/admin/oidc-config`) needs `admin.write`.
 
 ### Configuration Sources
 
@@ -1333,3 +1361,6 @@ These keys enable the built-in mod manager on templates that have the `modManage
 | GET | `/api/admin/audit-logs/export` | Export audit logs |
 | GET/DELETE | `/api/admin/auth-lockouts/*` | Manage auth lockouts |
 | GET/PATCH | `/api/admin/oidc-config` | OIDC provider settings |
+| GET | `/api/admin/update/status` | Panel update status |
+| POST | `/api/admin/update/trigger` | Trigger panel update (Docker only) |
+| GET | `/api/admin/update/state` | Read update state machine |

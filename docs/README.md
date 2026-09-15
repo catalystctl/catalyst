@@ -21,7 +21,7 @@ For most users who just want Catalyst running:
 
 ```bash
 # One-line install (download + verify checksum first — see installation.md)
-VERSION=v1.18.8  # replace with the release you want
+VERSION=v1.56.3  # replace with the release you want
 curl -fsSL -o install.sh "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh"
 curl -fsSL -o install.sh.sha256 "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh.sha256"
 sha256sum -c install.sh.sha256 && bash install.sh
@@ -69,7 +69,7 @@ For production deployments, custom setups, or when things go wrong:
 |----------|-------------|
 | [Admin Guide](admin-guide.md) | Node deployment, user/role management, templates, monitoring, health checks |
 | [Agent Guide](agent.md) | Deploy and configure the Rust agent on game server nodes (containerd, CNI) |
-| [Environment Variables](environment-variables.md) | Complete reference of all 60+ configuration variables with defaults |
+| [Environment Variables](environment-variables.md) | Complete reference of all 70+ configuration variables with defaults |
 
 ### Infrastructure & Deployment
 

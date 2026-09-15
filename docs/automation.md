@@ -373,7 +373,7 @@ Real-time console output stream. Falls back to WebSocket if SSE is unavailable. 
 1. Client connects to `/api/servers/:serverId/console/stream`
 2. Server opens an SSE connection with proper CORS headers
 3. Console output from the game server is pushed to the client
-4. Heartbeats are sent every 30 seconds to keep the connection alive
+4. Heartbeats are sent every 25 seconds to keep the connection alive (below most proxy 30s timeouts)
 5. If the connection drops, the client auto-reconnects
 
 **SSE message format:**
@@ -417,11 +417,11 @@ location ~ ^/api/servers/.*/console/stream {
 }
 ```
 
-### Metrics Stream
+### Metrics Stream (SSE)
 
-**Endpoint:** `GET /api/metrics/stream`
+**Endpoint:** `GET /api/servers/:serverId/metrics/stream`
 
-WebSocket-based real-time metrics stream for server resource monitoring (CPU, memory, disk, network).
+SSE-based real-time metrics stream for server resource monitoring (CPU, memory, disk, network).
 
 **Metrics sent:**
 
@@ -442,14 +442,14 @@ WebSocket-based real-time metrics stream for server resource monitoring (CPU, me
 **Example client (JavaScript):**
 
 ```javascript
-const ws = new WebSocket('ws://localhost:3000/api/metrics/stream');
+const evtSource = new EventSource('http://localhost:3000/api/servers/srv_abc/metrics/stream');
 
-ws.onmessage = (event) => {
+evtSource.onmessage = (event) => {
   const metrics = JSON.parse(event.data);
   console.log(`CPU: ${metrics.cpuUsage}%`, `RAM: ${metrics.memoryUsed}/${metrics.memoryTotal} MB`);
 };
 
-ws.onerror = (error) => {
+evtSource.onerror = (error) => {
   console.error('Metrics stream error:', error);
 };
 ```
@@ -488,7 +488,7 @@ evtSource.onmessage = (event) => {
 };
 ```
 
-**Rate limits:** Admin events stream is exempt from the global rate limiter. Maximum 1 concurrent subscriber per admin.
+**Rate limits:** Admin events stream is exempt from the global rate limiter. Subscribers are tracked in an unbounded map (no per-admin cap).
 
 ---
 ## API Automation
@@ -794,7 +794,7 @@ Templates define everything needed to provision a game server: container image, 
 
 ### Template Schema Reference
 
-The full JSON Schema is available at `templates/schema.template`. Key points:
+Template validation lives in backend code (see `catalyst-backend/src/routes/templates.ts`); there is no `templates/schema.template` file. Key points:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -920,7 +920,7 @@ Templates can declare optional features:
 | `backupPaths` | Paths to include in backups |
 | `fileEditor` | File editing configuration |
 
-### Template Example: Minecraft Paper
+### Template Example: Custom Minecraft Paper (illustrative, not the seeded Universal template)
 
 ```json
 {
@@ -1358,7 +1358,7 @@ services:
       retries: 5
 
   catalyst-redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
     volumes:
       - redisdata:/data

@@ -42,7 +42,7 @@ Complete instructions for deploying **Catalyst** with Docker Compose. This guide
 | **CPU** | 2 cores | 4+ cores |
 | **RAM** | 2 GB | 4+ GB |
 | **Disk** | 10 GB (panel only) | SSD with 50+ GB |
-| **Open Ports** | 80 (or 8080), 3000, 2022 | 80, 443, 2022 |
+| **Open Ports** | 80 (or 8080), 3000 | 80, 443 (2022 lives on game nodes for agent SFTP, not the panel compose stack) |
 
 > **Note:** Docker Compose (Docker or Podman) is the **only supported deployment method**. Direct bare-metal installation is not supported.
 
@@ -56,7 +56,7 @@ The fastest way to get Catalyst running — no repo clone needed.
 > Download the versioned installer, check its SHA-256, then execute:
 
 ```bash
-VERSION=v1.18.8  # replace with the release you want
+VERSION=v1.56.3  # replace with the release you want
 curl -fsSL -o install.sh "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh"
 curl -fsSL -o install.sh.sha256 "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh.sha256"
 sha256sum -c install.sh.sha256
@@ -206,7 +206,7 @@ When you first visit your Catalyst URL:
 2. Complete the **Setup** wizard — the admin account you create becomes the administrator
 3. Optionally configure SMTP, panel branding, and OAuth from the admin panel
 
-> **Seed alternative:** Run `docker exec -e NODE_ENV=development catalyst-backend pnpm run db:seed` to create a default admin (`admin@example.com` / `admin123`). **Change this password immediately.**
+> Do not use `db:seed` to create the admin on Docker installs: the backend image ships without dev dependencies, so seeding fails/is forbidden in production. Always use the `/setup` wizard (or `bootstrap-production.ts` for automation).
 
 ### Verify the Stack
 
@@ -221,7 +221,7 @@ Expected — four containers running:
 | Container | Status | Image |
 |---|---|---|
 | catalyst-postgres | healthy | postgres:16-alpine |
-| catalyst-redis | healthy | redis:7-alpine |
+| catalyst-redis | healthy | redis:7.4-alpine |
 | catalyst-backend | healthy | ghcr.io/catalystctl/catalyst-backend:latest |
 | catalyst-frontend | running | ghcr.io/catalystctl/catalyst-frontend:latest |
 
@@ -242,7 +242,7 @@ The backend's `/health` endpoint returns `200 OK` when ready.
 
 All config lives in `.env` inside `catalyst-docker/`. Copy `.env.example` as a starting point.
 
-📖 For the full 60+ variable reference with defaults and security recommendations, see [Environment Variables](./environment-variables.md).  
+📖 For the full 70+ variable reference with defaults and security recommendations, see [Environment Variables](./environment-variables.md).  
 📖 For Docker service architecture, volume management, and production hardening, see [Docker Setup](./docker-setup.md).
 
 ### Required Variables
@@ -252,6 +252,7 @@ All config lives in `.env` inside `catalyst-docker/`. Copy `.env.example` as a s
 | `PUBLIC_URL` | Exact URL users type into their browser (no trailing slash) | `http://your-domain.com` or `http://192.168.1.100:8080` |
 | `POSTGRES_PASSWORD` | PostgreSQL database password | Generate: `openssl rand -base64 32 \| tr -d '/+=' \| head -c 32` |
 | `BETTER_AUTH_SECRET` | Session encryption key | Generate: `openssl rand -base64 32` |
+| `REDIS_PASSWORD` | Redis auth password (compose hard-requires it: `${REDIS_PASSWORD:?}` — the stack will not boot without it) | Generate: `openssl rand -base64 32` |
 
 > **`PUBLIC_URL` is the single source of truth.** It automatically drives `BETTER_AUTH_URL`, `CORS_ORIGIN`, `FRONTEND_URL`, `BACKEND_EXTERNAL_ADDRESS`, and `BACKEND_URL`.
 
@@ -286,6 +287,8 @@ File size is the panel Admin → Security **Max upload size**.
 | `BACKUP_STORAGE_MODE` | `local` | `local`, `s3`, or `stream` |
 | `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | Required to save S3/SFTP backup credentials, database passwords, and migration keys — the backend refuses to store them unencrypted. Generate: `openssl rand -base64 32` (must decode to 32 bytes). **If lost, credentials are unrecoverable.** |
 
+> **Encrypted restores need the legacy key too.** Restore decryption reads only the legacy `BACKUP_ENCRYPTION_KEY` (`BACKUP_ENCRYPTION_KEY_MISSING` otherwise), while compose wires `BACKUP_CREDENTIALS_ENCRYPTION_KEY`. If you restore backups encrypted under the old variable, set `BACKUP_ENCRYPTION_KEY` to that same value or restores fail.
+
 When `BACKUP_STORAGE_MODE=s3`, also set `BACKUP_S3_BUCKET`, `BACKUP_S3_REGION`, `BACKUP_S3_ACCESS_KEY`, `BACKUP_S3_SECRET_KEY`, and optionally `BACKUP_S3_ENDPOINT` and `BACKUP_S3_PATH_STYLE` (set `true` for MinIO).
 
 ### Optional Features
@@ -317,6 +320,7 @@ DOMAIN=panel.example.com
 ACME_EMAIL=admin@example.com
 PUBLIC_URL=https://panel.example.com
 NODE_ENV=production
+FRONTEND_PORT=127.0.0.1:8080
 ```
 
 ```bash
@@ -324,6 +328,8 @@ docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
 ```
 
 Caddy handles certificate issuance, renewal, and HTTP→HTTPS redirects automatically.
+
+> **Podman/overlay warning:** the Caddy and Traefik overlays *merge* ports with the base file instead of replacing them, so the base `FRONTEND_PORT` (default `0.0.0.0:80`, commonly overridden to `:8080`) stays directly exposed unless you restrict it. Setting `FRONTEND_PORT=127.0.0.1:8080` as above keeps the panel reachable only through the proxy.
 
 ### Traefik (Docker-Native)
 
@@ -423,7 +429,7 @@ No protocol, no port — bare hostname or IP only.
 
 Catalyst uses a **pnpm** workspace monorepo. Requirements:
 
-- [Node.js](https://nodejs.org/) >= 22 + [pnpm](https://pnpm.io/) >= 8
+- [Node.js](https://nodejs.org/) >= 22 + [pnpm](https://pnpm.io/) >= 10 (CI uses pnpm 12.x latest)
 - Docker or Podman (for PostgreSQL, Redis)
 - Rust toolchain (for the agent)
 

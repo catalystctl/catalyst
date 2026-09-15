@@ -70,7 +70,7 @@ For browser-based or cookie-sensitive integrations:
 
 ```bash
 # Login and capture the session cookie
-curl -c cookies.txt -X POST http://localhost:3000/api/auth/signin/email \
+curl -c cookies.txt -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"securepassword"}'
 
@@ -80,15 +80,15 @@ curl -b cookies.txt http://localhost:3000/api/servers
 
 ### Agent Token Auth
 
-Rust agents authenticate with a long-lived token distinct from user API keys:
+Rust agents authenticate with node credentials, not user API keys:
 
 ```bash
-# Agent authentication (used internally by the Rust agent binary)
-# Token is configured via AGENT_TOKEN environment variable
-curl -X POST http://localhost:3000/api/agent/report \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
+# Agent heartbeat (used internally by the Rust agent binary)
+curl -X POST http://localhost:3000/api/nodes/node_abc/heartbeat \
+  -H "X-Node-Id: node_abc" \
+  -H "X-Node-Api-Key: $NODE_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"nodeId":"node_abc","status":"online","cpu":45.2}'
+  -d '{"status":"online","cpu":45.2}'
 ```
 
 For full agent details, see [agent.md](./agent.md).
@@ -157,28 +157,20 @@ curl http://localhost:3000/api/servers/srv_xyz789 \
 
 ```bash
 # Start
-curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
-  -d '{"signal":"start"}'
+curl -X POST http://localhost:3000/api/servers/srv_xyz789/start \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 
 # Stop
-curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
-  -d '{"signal":"stop"}'
+curl -X POST http://localhost:3000/api/servers/srv_xyz789/stop \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 
 # Restart
-curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
-  -d '{"signal":"restart"}'
+curl -X POST http://localhost:3000/api/servers/srv_xyz789/restart \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 
 # Kill (force stop)
-curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
-  -d '{"signal":"kill"}'
+curl -X POST http://localhost:3000/api/servers/srv_xyz789/kill \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Delete a Server
@@ -198,7 +190,7 @@ curl -X DELETE http://localhost:3000/api/servers/srv_xyz789 \
 Send a command to the server console:
 
 ```bash
-curl -X POST http://localhost:3000/api/servers/srv_xyz789/command \
+curl -X POST http://localhost:3000/api/servers/srv_xyz789/console/command \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{"command":"say Hello from API!"}'
@@ -209,7 +201,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/command \
 Stream real-time console output via Server-Sent Events:
 
 ```bash
-curl -N http://localhost:3000/api/servers/srv_xyz789/console-stream \
+curl -N http://localhost:3000/api/servers/srv_xyz789/console/stream \
   -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
@@ -270,9 +262,7 @@ curl http://localhost:3000/api/servers/srv_xyz789/backups \
 
 ```bash
 curl -X POST http://localhost:3000/api/servers/srv_xyz789/backups/bkp_abc/restore \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
-  -d '{"backupId":"bkp_abc"}'
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Delete a Backup
@@ -341,21 +331,9 @@ For more examples and supported actions, see [automation.md](./automation.md).
 
 ---
 
-## Webhooks
+## Webhooks (outbound-only)
 
-### Create a Webhook
-
-```bash
-curl -X POST http://localhost:3000/api/webhooks \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
-  -d '{
-    "name": "Server Monitor",
-    "url": "https://your-endpoint.example.com/webhook",
-    "events": ["server.created", "server.deleted", "server.suspended"],
-    "secret": "whsec_your_secret_key"
-  }'
-```
+Catalyst sends outbound webhook events; there is no `POST /api/webhooks` route. Configure targets via `WEBHOOK_URLS` (see [admin-guide.md](./admin-guide.md)).
 
 ### Webhook Receiver Examples
 
@@ -462,10 +440,9 @@ All available webhook events: `server.created`, `server.deleted`, `server.suspen
 ### Read Files
 
 ```bash
-# Read a single file (returns base64-encoded content)
-curl http://localhost:3000/api/servers/srv_xyz789/files/read \
-  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
-  -d '{"path":"server.properties"}'
+# List a directory (query ?path) or download a file
+curl "http://localhost:3000/api/servers/srv_xyz789/files?path=/" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Write/Update Files
@@ -485,10 +462,8 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/files/write \
 
 ```bash
 # List files in a directory
-curl http://localhost:3000/api/servers/srv_xyz789/files/list \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
-  -d '{"path":"/"}'
+curl "http://localhost:3000/api/servers/srv_xyz789/files?path=/" \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ---
@@ -523,34 +498,37 @@ curl -X POST http://localhost:3000/api/admin/users \
 ### List Nodes
 
 ```bash
-curl http://localhost:3000/api/admin/nodes \
+curl http://localhost:3000/api/nodes \
   -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Deploy a Node
 
 ```bash
-curl -X POST http://localhost:3000/api/admin/nodes/deploy \
+# Create the node, then mint a one-time deployment token
+curl -X POST http://localhost:3000/api/nodes \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
     "name": "game-node-03",
-    "host": "192.168.1.100",
-    "port": 2022,
-    "token": "node_token_abc123",
-    "labels": {"region": "us-east", "tier": "standard"}
+    "hostname": "node-03.example.com",
+    "publicAddress": "192.168.1.100"
   }'
+
+# One-time deploy token for the agent install script
+curl -X POST http://localhost:3000/api/nodes/node_abc/deployment-token \
+  -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 ```
 
 ### Server Templates
 
 ```bash
 # List templates
-curl http://localhost:3000/api/admin/templates \
+curl http://localhost:3000/api/templates \
   -H "Authorization: Bearer catalyst_YOUR_API_KEY"
 
 # Create a template
-curl -X POST http://localhost:3000/api/admin/templates \
+curl -X POST http://localhost:3000/api/templates \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer catalyst_YOUR_API_KEY" \
   -d '{
@@ -780,8 +758,7 @@ For complete API details and all endpoints, see [api-reference.md](./api-referen
 ### Scaffold a New Plugin
 
 ```bash
-cd packages/plugin-sdk
-npx @catalyst/plugin-sdk create my-plugin --template fullstack
+npx @catalyst/plugin-sdk-cli create my-plugin --template fullstack
 ```
 
 ### Backend Plugin Example

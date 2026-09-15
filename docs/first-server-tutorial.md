@@ -36,12 +36,13 @@ Go to **Servers** → **New server** (dialog title **Create new server**).
 
 ## 5. Startup variables
 
-Required variables show an asterisk. For Paper:
+Required variables show an asterisk. For the seeded Universal template:
 
-- `MINECRAFT_VERSION` — e.g. `1.21.11`.
-- `SERVER_JARFILE` — e.g. `server.jar`.
-- `BUILD_NUMBER` — leave empty for latest.
-- `MEMORY`/`MEMORY_XMS` style sizing variables if your template defines them — keep within the resources from step 3.
+- `SERVER_TYPE` — for example `paper`.
+- `MINECRAFT_VERSION` — for example `latest` or `1.21.4`.
+- `BUILD_NUMBER` — leave as `latest` for the latest build.
+- `MEMORY` — heap in MB, keep within the resources from step 3.
+- `EULA` — must be `true` to accept the Minecraft EULA.
 
 `SERVER_DIR` is managed by the panel and hidden.
 

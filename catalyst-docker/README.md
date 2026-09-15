@@ -104,7 +104,7 @@ nano .env
 | Variable | Default | When to Change |
 |---|---|---|
 | `PASSKEY_RP_ID` | `localhost` | Set to hostname from `PUBLIC_URL` for passkeys |
-| `FRONTEND_PORT` | `0.0.0.0:8080` | Change to `127.0.0.1:8080` to block external access |
+| `FRONTEND_PORT` | `0.0.0.0:8080` (installed `.env`; bare compose fallback is `0.0.0.0:80`) | Change to `127.0.0.1:8080` to block external access |
 | `PORT` | `80` | Nginx listen port inside the frontend container (same mechanism as the backend's `PORT`). Advanced use — to move the panel for users, change `FRONTEND_PORT` instead. |
 | `BACKEND_PORT` | `127.0.0.1:3000` | Change to `127.0.0.1:3000` for localhost-only API |
 | `BACKEND_INTERNAL_PORT` | `3000` | Port the backend listens on inside its container. Advanced use — the frontend nginx upstream, backend healthcheck, and published mapping all follow it. |
@@ -182,7 +182,7 @@ The Docker Compose stack defines four services:
 | Service | Image | Purpose | Exposed Port |
 |---|---|---|---|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
-| `redis` | `redis:7-alpine` | Present in compose; **not** the Better Auth session store in current backend | `127.0.0.1:6379` |
+| `redis` | `redis:7.4-alpine` | Present in compose; **not** the Better Auth session store in current backend | `127.0.0.1:6379` |
 | `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API (SFTP runs on the node agent, not here) | `127.0.0.1:3000` |
 | `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Nginx static SPA | `0.0.0.0:8080` |
 

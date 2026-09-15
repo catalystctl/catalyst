@@ -286,6 +286,7 @@ For security-related questions or concerns:
 
 - **Security Advisories**: https://github.com/catalystctl/catalyst/security/advisories
 - **General Issues**: https://github.com/catalystctl/catalyst/issues
+- **Discord**: https://discord.gg/mybxhmru3y (community discussion; do not share sensitive vulnerability details there — use Security Advisories)
 
 ---
 

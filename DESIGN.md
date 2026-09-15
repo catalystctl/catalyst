@@ -103,12 +103,12 @@ Catalyst is a dense product UI for game-server operations. The visual system is 
 
 **Stack lock:** shadcn/ui + CSS variables. Theme Settings rewrites `--primary`, surfaces, radius, and semantics at runtime. Never hardcode brand hex in components; always use theme tokens (`bg-primary`, `bg-card`, `bg-surface-*`, `text-muted-foreground`, etc.).
 
-The system is built on tonal layering rather than shadow elevation. Depth is communicated through background color steps (`surface-0` through `surface-3`), not lifted cards. This keeps the interface grounded and avoids the visual noise of competing drop shadows. Dark mode inverts the warmth to a cool zinc — same systematic logic, different ambient temperature.
+The system is built on tonal layering rather than shadow elevation. Depth is communicated through background color steps (`surface-0` through `surface-3`), not lifted cards. This keeps the interface grounded and avoids the visual noise of competing drop shadows. Dark mode inverts the warmth to a cool zinc (same systematic logic, different ambient temperature).
 
 This system explicitly rejects the generic visual language of AI-generated dashboards: no gradient text, no glassmorphism, no decorative side-stripes, no identical icon-heading-text card grids, and no modal-as-default interaction patterns. It also rejects "gamer aesthetic" neon accents and Bootstrap-era dense chrome. Catalyst is infrastructure software that happens to be well-designed, not a design portfolio piece.
 
 **Key Characteristics:**
-- Warm zinc ground in light mode, cool zinc in dark mode — never pure white or pure black
+- Warm zinc ground in light mode, cool zinc in dark mode (never pure white or pure black)
 - One accent color (warm aqua teal) used sparingly; semantic colors (green, amber, red, blue) for status only
 - Tonal layering for depth; minimal shadow use
 - 200ms default transitions; no bounce or elastic easing
@@ -117,7 +117,7 @@ This system explicitly rejects the generic visual language of AI-generated dashb
 
 ## 2. Colors: The Warm Aqua Palette
 
-The palette is intentionally restrained: tinted neutrals carry 90%+ of every screen, warm aqua marks interactive and active states, and semantic colors are reserved for status indicators. The "Warm Aqua Rule" governs the accent: it appears on active navigation items, primary buttons, focus rings, and selected states — never as decorative fills or gradient backgrounds.
+The palette is intentionally restrained: tinted neutrals carry 90%+ of every screen, warm aqua marks interactive and active states, and semantic colors are reserved for status indicators. The "Warm Aqua Rule" governs the accent: it appears on active navigation items, primary buttons, focus rings, and selected states, never as decorative fills or gradient backgrounds.
 
 ### Primary
 - **Warm Aqua** (`#17D3C0` / `hsl(174 80% 46%)`): The sole accent. Used for primary buttons, active navigation, focus rings, selected states, and links. Its warmth comes from the zinc ground; against cool backgrounds it reads as slightly greener. In dark mode it gains luminosity against the deep cool ground.
@@ -149,17 +149,17 @@ The palette is intentionally restrained: tinted neutrals carry 90%+ of every scr
 ### Named Rules
 **The Warm Aqua Rule.** The primary accent appears on ≤10% of any given screen. Its rarity is the point. If warm aqua is everywhere, it marks nothing. Reserve it for active states, primary actions, and focus rings only.
 
-**The Tinted Neutral Rule.** Never use `#000` or `#fff`. Every neutral is tinted toward the mode's temperature: warm (40°) in light, cool (240°) in dark. Chroma stays at 0.005–0.01 — just enough to feel intentional, not enough to read as color.
+**The Tinted Neutral Rule.** Never use `#000` or `#fff`. Every neutral is tinted toward the mode's temperature: warm (40°) in light, cool (240°) in dark. Chroma stays at 0.005–0.01, just enough to feel intentional, not enough to read as color.
 
 **The Semantic Isolation Rule.** Green, amber, red, and blue are status indicators only. They do not appear in marketing elements, decorative accents, or brand expression. A green button is a confirmation; it is never a "brand color."
 
 ## 3. Typography
 
-**Display Font:** Outfit Variable (system-ui fallback) — geometric, confident, slightly technical. Used for page titles, card headers, and any moment that needs structural presence.
+**Display Font:** Outfit Variable (system-ui fallback): geometric, confident, slightly technical. Used for page titles, card headers, and any moment that needs structural presence.
 
-**Body Font:** DM Sans Variable (system-ui fallback) — humanist sans with generous apertures. Optimized for extended reading of server logs, configuration values, and dense tabular data.
+**Body Font:** DM Sans Variable (system-ui fallback): humanist sans with generous apertures. Optimized for extended reading of server logs, configuration values, and dense tabular data.
 
-**Mono Font:** JetBrains Mono Variable (Fira Code fallback) — purpose-built for code. Used for file paths, console output, configuration keys, and any monospace context.
+**Mono Font:** JetBrains Mono Variable (Fira Code fallback): purpose-built for code. Used for file paths, console output, configuration keys, and any monospace context.
 
 **Character:** The pairing is warm-meets-technical. DM Sans provides approachable readability; Outfit provides architectural hierarchy. Together they feel like a well-organized workshop: everything has a place, and the labels are legible at a glance.
 
@@ -183,7 +183,7 @@ Catalyst is a tonal-layering system. Surfaces are flat at rest; depth is conveye
 Shadows exist but are minimal and functional: a 1px diffuse shadow (`surface-light`) gives cards subtle separation from the ground, and a 4px elevated shadow (`elevated`) appears only on hover or for modal overlays. There are no persistent medium shadows on static elements.
 
 ### Shadow Vocabulary
-- **Surface** (`box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05)` in light / `0 1px 2px 0 rgb(0 0 0 / 0.3)` in dark): Default card shadow. Barely perceptible — just enough to register as a discrete surface.
+- **Surface** (`box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05)` in light / `0 1px 2px 0 rgb(0 0 0 / 0.3)` in dark): Default card shadow. Barely perceptible, just enough to register as a discrete surface.
 - **Elevated** (`box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.1)` in light / `0 4px 12px -2px rgb(0 0 0 / 0.5)` in dark): Hover elevation on cards, dropdown menus, and modal content. Appears as a response to state, not at rest.
 
 ### Tonal Layering
@@ -224,7 +224,7 @@ Component character across the system: direct and expert. Buttons feel firm, inp
 - **Style:** 36px height, 6px radius, 1px border in Warm Zinc Border, background in Warm Zinc Ground. Text in body style.
 - **Focus:** Border shifts to Warm Aqua, 2px ring at 40% primary opacity. No glow, no animated border.
 - **Placeholder:** Warm Zinc Text Muted.
-- **Disabled:** Cursor not-allowed, opacity 0.5. No grayed-out background change — the opacity reduction is sufficient.
+- **Disabled:** Cursor not-allowed, opacity 0.5. No grayed-out background change; the opacity reduction is sufficient.
 - **File inputs:** Same styling with transparent file button styling.
 
 ### Navigation

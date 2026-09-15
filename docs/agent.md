@@ -149,7 +149,7 @@ The agent communicates exclusively with the Catalyst panel backend over **WebSoc
 │  CNI Networks: macvlan / bridge (via /etc/cni/net.d)                 │
 │  Data Dir:     /var/lib/catalyst/{server-uuid}/                      │
 │  Firewall:     iptables / ufw / firewalld / ipset                    │
-│  Log Dir:      /var/log/catalyst/console/{container-id}/             │
+│  Log Dir:      /var/lib/catalyst/console/{container-id}/ (effective default, derived from data_dir)             │
 │  Metrics:      /var/lib/catalyst/metrics_buffer.jsonl                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -242,8 +242,8 @@ If GitHub is unreachable the script falls back to the panel proxy (`GET /api/age
 
 2. **Copy the binary:**
    ```bash
-   sudo cp catalyst-agent /usr/local/bin/catalyst-agent
-   sudo chmod +x /usr/local/bin/catalyst-agent
+   sudo cp catalyst-agent /opt/catalyst-agent/catalyst-agent
+   sudo chmod +x /opt/catalyst-agent/catalyst-agent
    ```
 
 3. **Create the configuration directory:**
@@ -275,9 +275,9 @@ If GitHub is unreachable the script falls back to the panel proxy (`GET /api/age
 
 5. **Run the agent:**
    ```bash
-   sudo /usr/local/bin/catalyst-agent /etc/catalyst-agent/config.toml
+   sudo /opt/catalyst-agent/catalyst-agent /opt/catalyst-agent/config.toml
    # Or with explicit --config flag:
-   sudo /usr/local/bin/catalyst-agent --config /opt/catalyst-agent/config.toml
+   sudo /opt/catalyst-agent/catalyst-agent --config /opt/catalyst-agent/config.toml
    ```
 
 > **Note:** The agent looks for config files in this order:
@@ -757,7 +757,7 @@ Server containers are created with these settings:
 | **Data mount** | `/data` (mounted from disk image) |
 | **Container user** | uid 1000:gid 1000 |
 | **Container name** | `server-{serverId}` |
-| **Console log dir** | `/var/log/catalyst/console/{container-id}/` |
+| **Console log dir** | `/var/lib/catalyst/console/{container-id}/` (effective default derived from `data_dir`; `/var/log/catalyst/console` sentinel) |
 
 ### Starting and Stopping
 
@@ -817,7 +817,7 @@ Server containers are created with these settings:
 
 The agent provides real-time console streaming via WebSocket:
 
-- **Output** — Container stdout/stderr is streamed to the panel from files at `/var/log/catalyst/console/{container-id}/{stdout,stderr}`
+- **Output** — Container stdout/stderr is streamed to the panel from files at `/var/lib/catalyst/console/{container-id}/{stdout,stderr}` (effective default derived from `data_dir`)
 - **Input** — Commands from the panel are forwarded to the container's stdin via containerd exec
 - **Console FIFO** — Uses a named pipe at `{console_log_dir}/{container-id}/stdin` (default: `/var/lib/catalyst/console/{container-id}/stdin`) for reliable I/O
 - **Line splitting** — Handles `\n` (Unix), `\r\n` (Windows), and `\r` (Paper/Minecraft overwrites) — `\r` emulates terminal behavior to prevent progress lines from concatenating
@@ -839,7 +839,7 @@ Container logs are automatically rotated to prevent disk exhaustion:
 - **Max log file size:** 10 MB per file (`stdout` or `stderr`)
 - **Backup count:** 2 backup files (`stdout.1`, `stdout.2`)
 - **Rotation strategy:** `stdout` → `stdout.1` → `stdout.2` (oldest dropped)
-- **Log location:** `/var/log/catalyst/console/{container-id}/`
+- **Log location:** `/var/lib/catalyst/console/{container-id}/` (effective default derived from `data_dir`)
 
 ### Resource Monitoring
 

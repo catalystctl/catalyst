@@ -18,6 +18,7 @@ Common errors, solutions, FAQ, and debugging steps for Catalyst deployments.
 - [Rate Limiting](#rate-limiting)
 - [Network & Firewall Issues](#network--firewall-issues)
 - [Debug Logging](#debug-logging)
+- [Upgrade & Update Recovery](#upgrade--update-recovery)
 - [FAQ](#faq)
 - [Reporting Issues](#reporting-issues)
 - [Known Limitations](#known-limitations)
@@ -63,9 +64,11 @@ docker compose version
 df -h
 ss -tlnp | grep -E ':(80|3000|2022|5432)\s'
 
-# Remove old installation and retry
+# Remove old installation and retry (⚠️ read the P1000 warning below first:
+# regenerating .env against a kept postgres volume locks you out)
 cd catalyst-docker
 docker compose down
+cp .env .env.bak-before-retry
 rm -rf .env docker-compose.yml
 
 # Redownload and reinstall
@@ -335,7 +338,7 @@ PASSKEY_RP_ID=panel.example.com
 # The callback URL is: https://panel.example.com/auth/callback/[provider]
 
 # Check provider configuration in the panel
-# Admin → Settings → Authentication → [Provider]
+# Admin → System → OIDC Config
 
 # Check backend logs for OAuth errors
 docker compose logs backend | grep -i oauth
@@ -769,6 +772,17 @@ npm exec @prisma/client -- prisma db execute --stdin
 SELECT * FROM "AuditLog" WHERE userId = 'user-uuid' LIMIT 100;
 ```
 
+### Invite Problems
+
+| Code | Meaning | Fix |
+|------|---------|-----|
+| `410 INVITE_EXPIRED` | Invite past its expiry (default 7 days) | Owner regenerates the invite (only pending invites can be regenerated) and resends the link |
+| `404 INVITE_NOT_FOUND` | Bad/expired token or wrong panel | Copy-paste the full link; confirm it belongs to this panel |
+| `409 INVITE_NOT_ACTIVE` / `INVITE_NOT_PENDING` | Already accepted, cancelled, or regenerated | Ask the owner for a fresh invite |
+| `403 INVITE_NOT_VALID_FOR_ACCOUNT` | Invite email doesn't match the signed-in account | Sign in with the invited address (or have the owner invite the right one) |
+
+Also check SMTP delivery and panel/DB clock skew when invite emails arrive late or links die early.
+
 ### Agent Config File Errors
 
 **Symptoms:** Agent fails to start with "Configuration error".
@@ -969,6 +983,14 @@ sudo systemctl restart catalyst-agent
 
 If the agent listens on a non-default port, use the port shown in the panel's SFTP connection info. The panel does not listen on `2022` — there is nothing to expose in `catalyst-docker/docker-compose.yml`.
 
+### SFTP Token Expired or Invalid
+
+SFTP passwords are short-lived opaque tokens minted by the panel, not static credentials. An unexpired token is reused; expired entries are pruned automatically.
+
+- **"Invalid token" right after connecting:** regenerate the connection info in the panel (server → Files → SFTP info) and retry — the old token expired.
+- **Repeated expiry:** check TTL configuration and clock skew between panel and node.
+- **Stuck uploads:** expired in-flight uploads are cleaned up server-side; re-mint and re-upload rather than retrying with the old password.
+
 ### File Manager Fails to Load Files
 
 **Symptoms:** File manager shows "Failed to load directory" or hangs.
@@ -996,6 +1018,8 @@ df -h /var/lib/catalyst
 ---
 
 ## Backup Failures
+
+> Stuck restores (`409`), offline-node deferral, and encryption-key errors each have their own subsection below and in [Known Limitations](#known-limitations).
 
 ### Local Backup Fails
 
@@ -1066,6 +1090,14 @@ BACKUP_CREDENTIALS_ENCRYPTION_KEY=$(openssl rand -base64 32)
 
 docker compose restart backend
 ```
+
+### Backup Encryption Key Errors (`BACKUP_ENCRYPTION_KEY_MISSING`, `CREDENTIAL_ENCRYPTION_KEY_MISSING`)
+
+The backend fails closed: stored S3/SFTP credentials, database passwords, and migration keys cannot be read or written without the key, and there is no plaintext fallback (setting `ALLOW_PLAINTEXT_CREDS=1` is refused outright in production).
+
+- **Missing key:** set `BACKUP_CREDENTIALS_ENCRYPTION_KEY` to the 32-byte value from install time and restart the backend.
+- **Rotated key:** previously stored credentials become undecryptable. Restore the old key value from your `.env` backup — the key must remain stable across upgrades and restores (see [Safe Panel Backup & Restore](#safe-panel-backup--restore)).
+- **Encrypted restores:** restore decryption reads the legacy `BACKUP_ENCRYPTION_KEY`. If the backup was encrypted under it, set that variable too or restores fail even with the new key set.
 
 ---
 
@@ -1191,10 +1223,10 @@ SELECT * FROM "SystemSetting" WHERE id = 'security';
 npm exec @prisma/client -- prisma db execute --stdin
 DELETE FROM "SystemSetting" WHERE id = 'security';
 
-# Default values (from DEFAULT_SECURITY_SETTINGS):
-# authRateLimitMax: 30
-# fileRateLimitMax: 120
-# consoleRateLimitMax: 60
+# Default values (from DEFAULT_SECURITY_SETTINGS in mailer.ts):
+# authRateLimitMax: 60
+# fileRateLimitMax: 180
+# consoleRateLimitMax: 120
 # consoleOutputLinesMax: 2000
 # consoleOutputByteLimitBytes: 262144
 # agentMessageMax: 10000
@@ -1206,7 +1238,7 @@ DELETE FROM "SystemSetting" WHERE id = 'security';
 # auditRetentionDays: 90
 # maxBufferMb: 50
 # fileTunnelRateLimitMax: 100
-# fileTunnelMaxUploadMb: 100
+# fileTunnelMaxUploadMb: 500
 # fileTunnelMaxPendingPerNode: 50
 # fileTunnelConcurrentMax: 10
 
@@ -1233,7 +1265,7 @@ DELETE FROM "SystemSetting" WHERE id = 'security';
 # Search for reportSystemError in frontend source
 grep -r "reportSystemError" catalyst-frontend/src/
 
-# It's used by 60+ modules including AuthStore, useFileManager, useSetupStatus, useSseConsole
+# It's used by 40+ modules including AuthStore, useFileManager, useSetupStatus, useSseConsole
 # If no errors are showing, verify the frontend can reach the API
 curl -H "Authorization: Bearer <token>" http://localhost:3000/api/admin/system-errors
 
@@ -1550,9 +1582,16 @@ du -sh /var/lib/catalyst/console/*/
 # Clean up old backups
 # Admin → Backups → Delete old backups
 
-# Clean up stale server data
-# First, delete the server from the panel, then manually remove:
+# Clean up deleted servers the safe way: delete the server in the panel FIRST
+# (this revokes tokens, disconnects sessions, and cleans DB records), and only
+# then remove any leftover data dir. Never rm -rf a live server's UUID dir —
+# that orphans database rows, tokens, and sessions.
 sudo rm -rf /var/lib/catalyst/servers/DELETED-SERVER-UUID/
+
+# Staged-upload failure ("Failed to stage upload data"): the panel could not
+# write the upload temp file — usually temp-disk ENOSPC, not a panel bug.
+# Free temp space, then retry the upload. Orphaned staged files expire and are
+# cleaned automatically; do not hand-delete temp dirs mid-upload.
 
 # Rotate console logs (done automatically if MAX_LOG_SIZE is set)
 # Force rotation:
@@ -1579,6 +1618,14 @@ Global Fastify limit is 1200 requests per minute per IP/user. Per-route override
 2. **Implement retry with exponential backoff** in your scripts
 3. **For login brute-force protection:** Use strong passwords; consider disabling password auth temporarily if locked out
 4. **For file operations:** Batch operations instead of individual requests
+
+**Not all 429s are HTTP.** These have no `X-RateLimit-*` headers and need different handling:
+
+| Signal | Meaning | Fix |
+|--------|---------|-----|
+| WS message `{type: error, code: RATE_LIMITED}` then socket close | Gateway connection cap (`MAX_CLIENT_CONNECTIONS`) or per-user cap (`MAX_CONNECTIONS_PER_USER`) | Close idle sockets; raise the caps via env |
+| Per-API-key 429s | The key's own `rateLimit.max` per `windowMs` (default 100/60s) | Lower call rate or raise the key's limit |
+| `Too many pending requests for node` / `File tunnel queue full` | File-tunnel per-node queue cap reached | Wait and retry with backoff; avoid parallel bulk uploads to one node |
 
 ---
 
@@ -1697,6 +1744,33 @@ sudo journalctl -u containerd -f --no-pager
 
 ---
 
+## Upgrade & Update Recovery
+
+### Failed Stack Upgrade (`update.sh`)
+
+`update.sh` backs up the live directory to `catalyst-docker-backup-<timestamp>` (next to `catalyst-docker/`) before changing anything. If an upgrade leaves the stack broken:
+
+```bash
+cd catalyst-docker
+# List timestamped backups
+ls -d ../catalyst-docker-backup-*
+# Overlay the backup back over the live directory (restores .env too)
+bash update.sh --restore ../catalyst-docker-backup-<timestamp>
+docker compose up -d
+```
+
+Restore overlays (files added after the backup stay on disk; they are inert unless referenced). `--restore` also accepts `--dry-run` to preview.
+
+### Failed Panel Auto-Update
+
+The updater state machine is `idle → pulling → restarting`, or `failed` when the pull/check phase errors (a kill mid-restart cannot report failure — check whether the panel came back instead). On `failed`:
+
+1. Read the update message and logs in **Admin → System → Auto Updater**, plus backend logs.
+2. Fix the cause (usually compose path detection or Docker availability), then trigger again.
+3. If the stack is half-upgraded, roll back with `update.sh --restore` above.
+
+---
+
 ## FAQ
 
 ### Q: How do I reset the admin password?
@@ -1720,7 +1794,7 @@ Then use the panel's "Forgot Password" flow if you have SMTP configured.
 ```bash
 # Admin → Migration in the panel UI
 # Follow the wizard:
-# 1. Enter your Pterodactyl URL and API key
+# 1. Enter your Pterodactyl URL and Application API key (ptla_*) plus Client API key (ptlc_*; required for file/backup migration)
 # 2. Test connection
 # 3. Choose migration scope (full, node, or server)
 # 4. Map Pterodactyl nodes to Catalyst nodes
@@ -1740,6 +1814,17 @@ tar czf catalyst-data-$(date +%Y%m%d).tar.gz /var/lib/catalyst/
 
 # Restoring: stop services, extract files, restore database, restart
 ```
+
+### Safe Panel Backup & Restore
+
+Follow this order — skipping steps risks credential loss (rotating `BACKUP_CREDENTIALS_ENCRYPTION_KEY` makes stored credentials undecryptable):
+
+1. **Stop the stack** (`docker compose down`) so nothing writes mid-backup.
+2. **Back up the database** (`pg_dump` as above) **and** the data dir tarball.
+3. **Preserve `.env` and the encryption key** — back up `catalyst-docker/.env` alongside the dumps. Never rotate `BACKUP_CREDENTIALS_ENCRYPTION_KEY` across a restore.
+4. **Restore:** extract files, restore the DB (`psql`/`pg_restore`), put the original `.env` back, then `docker compose up -d`.
+5. **Migrate:** the backend entrypoint runs `prisma migrate deploy` on startup — confirm it applied cleanly in the backend logs.
+6. **Volumes:** `update.sh` merges (never overwrites) secrets when refreshing stack files, so updating the stack mid-restore is safe — but a bare `docker volume rm` of the postgres volume wipes the DB; only do that deliberately (see the P1000 section above).
 
 ### Q: Why do servers take so long to start?
 
@@ -1833,7 +1918,19 @@ The following are known limitations that are not bugs but may affect your deploy
 | **SFTP is not encrypted** | SFTP uses plain TCP; TLS requires an external proxy | Place SFTP behind a reverse proxy with TLS |
 | **Backup encryption is client-side** | S3 backups are encrypted by the agent before upload | Ensure `BACKUP_CREDENTIALS_ENCRYPTION_KEY` is backed up |
 | **Console logs rotate but aren't archived** | Old logs are gzip-compressed and kept for 2 rotations | Monitor disk usage if servers are very verbose |
-| **One restore stream at a time** | The agent only supports one backup restore at a time | Wait for the current restore to complete |
+| **One restore stream at a time** | The agent only supports one backup restore at a time | Wait for the current restore to complete (see below) |
+
+### Restore Stuck / `409 RESTORE_ALREADY_IN_PROGRESS`
+
+A second restore is rejected while the server sits in `RESTORING`. A stuck status clears itself: the backup sweeper resets `RESTORING` servers idle longer than `STUCK_BACKUP_STATE_TIMEOUT_MS` (default 15 minutes).
+
+1. Check the agent log for the active restore — if bytes are moving, just wait.
+2. If nothing has progressed for longer than the timeout, wait for the sweeper pass, then retry.
+3. If the status never clears, confirm the agent is online and the backend scheduler is running (single-process or `CATALYST_BACKGROUND_JOB_OWNER` worker), then retry.
+
+### Offline-Node Backup Behavior
+
+Backup paths treat offline nodes as *deferred*, not failed: backup deletion against an offline node is deferred for retry, while creating a backup returns `503 Node is offline`. Bring the node back online and retry (deferred deletions complete on reconnect); only treat repeated failures after reconnect as real errors.
 | **Plugin hot reload is dev-only** | `PLUGIN_HOT_RELOAD=true` is intended for development | Set to `false` in production to prevent memory leaks |
 | **No built-in load balancing** | Only one backend instance is supported in Docker Compose | Use external load balancer (HAProxy, NGINX) for production |
 | **Rate limits are per-process** | Rate limiting applies per backend process | Keep `WORKERS=0` (single process) in Compose, or use sticky sessions behind an external load balancer |

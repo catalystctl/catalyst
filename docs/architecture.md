@@ -15,7 +15,6 @@
   - [Frontend (React SPA)](#frontend-react-spa)
   - [Backend API Server](#backend-api-server)
   - [Agent (Rust)](#agent-rust)
-  - [Shared Layer](#shared-layer)
 - [Data Flows](#data-flows)
   - [User Request Flow](#user-request-flow)
   - [WebSocket Message Routing](#websocket-message-routing)
@@ -90,7 +89,7 @@ Catalyst is a **three-tier architecture** consisting of a React frontend SPA, a 
 │   └──────────────────┬──────────────────┘                      │
 │                      │ wss://                                  │
 │   ┌──────────────────┴──────────────────┐                      │
-│   │         HTTP Tunnel (:2022)         │                      │
+│   │         Agent SFTP (:2022)          │                      │
 │   └─────────────────────────────────────┘                      │
 └───────────────────────────────────────────────────────────────┘
                             │
@@ -171,7 +170,7 @@ Catalyst is a **three-tier architecture** consisting of a React frontend SPA, a 
 |------|---------|
 | `src/index.ts` | Fastify bootstrap, middleware, route registration, service initialization |
 | `src/auth.ts` | Better Auth configuration (Prisma adapter, plugins) |
-| `src/routes/*.ts` | 20+ route modules for all API endpoints |
+| `src/routes/*.ts` | 26 route modules for all API endpoints |
 | `src/services/` | Business logic services (tasks, webhooks, alerts, backup, SFTP, etc.) |
 | `src/lib/` | Core libraries (permissions, validation, IPAM, caching, agent auth) |
 | `src/middleware/` | RBAC middleware, custom serializers |
@@ -198,7 +197,7 @@ Catalyst is a **three-tier architecture** consisting of a React frontend SPA, a 
 3. Register WebSocket gateway at /ws
 4. Register health check at /health
 5. Register auth routes at /api/auth
-6. Register 20+ route modules
+6. Register 26 route modules
 7. Initialize plugin loader and auto-enable enabled plugins
 8. Bootstrap OIDC config from database (falls back to env vars)
 9. Initialize Better Auth
@@ -258,7 +257,7 @@ CatalystAgent
 
 1. **WebSocket connection** — reconnects on disconnect, handles command routing
 2. **Health monitoring** — 5-second interval heartbeat to backend
-3. **File tunnel server** — HTTP endpoint for backend to fetch server files
+3. **File tunnel client** — long-polls the backend (`POST /api/internal/file-tunnel/poll`, 4 workers, 35s timeout) for file work; production file I/O uses the backend HTTPS file tunnel, not WebSocket
 
 ---
 
@@ -326,7 +325,7 @@ Agent Node A          WebSocket Gateway          Backend Services
 | `console_input` | Server ID, command string | Send command to container console |
 | `create_backup` | Server ID, environment, storage config | Create a backup snapshot |
 | `delete_backup` | Server ID, backup ID | Remove a backup |
-| `file_op` | Server ID, operation, path | Read/write/rename/delete files |
+| `file_op` | Server ID, operation, path | Legacy/unused — production file I/O uses the HTTPS file tunnel, not this WS command |
 
 **Messages received from agents:**
 
@@ -462,7 +461,7 @@ Agent Node A          WebSocket Gateway          Backend Services
 
 ### Authentication Flow
 
-Catalyst uses **Better Auth v1.6.9** with the Prisma adapter as its primary authentication system.
+Catalyst uses **Better Auth v1.6.26** with the Prisma adapter as its primary authentication system.
 
 **Supported methods:**
 
@@ -509,7 +508,7 @@ Client                          Backend                          Database
 
 ### Authorization Model
 
-Catalyst uses a **Role-Based Access Control (RBAC)** system with **20+ granular permissions**.
+Catalyst uses a **Role-Based Access Control (RBAC)** system with **50+ granular permissions**.
 
 **Permission categories:**
 
@@ -701,11 +700,11 @@ Admin creates DeploymentToken (POST /api/admin/nodes)
 └──────────┘                 └─────────┘                 └──────────┘
 
 ┌──────────┐       1:1       ┌─────────┐       1:N       ┌──────────┐
-│ ThemeSet │               │  Server │◄────────────────│  File    │
+│ ThemeSet │               │  Server │◄────────────────│ ServerLog│
 │ ttings   │                 │─────────│                 │──────────│
 │ id       │                 │ server  │                 │ id       │
 │ name     │                 │ disk    │                 │ serverId │
-│ colors   │                 │ memory  │                 │ path     │
+│ colors   │                 │ memory  │                 │ content  │
 └──────────┘                 └─────────┘                 └──────────┘
 
 ┌──────────┐       1:N       ┌──────────┐       N:1       ┌──────────┐
@@ -954,7 +953,7 @@ iptables -A FORWARD -s 172.18.0.2 -p udp --dport 25565 -j ACCEPT
 | Approach | Supported? | Notes |
 |----------|------------|-------|
 | Multiple backend instances | ✅ Supported with Redis | Cross-instance invalidations and realtime fan-out use Redis pub/sub; without Redis each instance serves only its own subscribers. SFTP mint stays process-local with broadcast revokes. |
-| Worker threads | ✅ Yes | The backend supports `WORKERS` env var for Cluster API multi-process mode. |
+| Worker threads | ⚠️ Partial | The backend supports `WORKERS` for Cluster API multi-process mode, but `WORKERS>1` with agent WebSocket connections is NOT fully supported (sockets are process-local). Use `WORKERS=0` or `1`, or terminate at a sticky load balancer. |
 | Reverse proxy | ✅ Yes | Nginx, Caddy, Traefik all supported as load balancers. |
 
 **Node scalability:**
@@ -1127,7 +1126,7 @@ All retention jobs use randomized jitter (`0–60s`) to prevent synchronized dat
 | [Docker Setup](./docker-setup.md) | Deployment topology, service configurations, and health checks |
 | [Agent](./agent.md) | Agent internals, containerd integration, and CNI networking |
 | [Admin Guide](./admin-guide.md) | Operational management, alert configuration, and RBAC setup |
-| [Environment Variables](./environment-variables.md) | Complete configuration reference for all 60+ variables |
+| [Environment Variables](./environment-variables.md) | Complete configuration reference for all 70+ variables |
 | [Security](./SECURITY.md) | Security policy, vulnerability reporting, and threat model |
 | [Troubleshooting](./troubleshooting.md) | Common errors and resolution steps |
 | [Development](./development.md) | Build system, testing, and contribution guidelines |

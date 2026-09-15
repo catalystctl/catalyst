@@ -53,7 +53,7 @@ Project maintainers have the right to remove, edit, or reject comments, commits,
    ```
 3. **Add upstream remote**:
    ```bash
-   git remote add upstream https://github.com/original-owner/catalyst.git
+   git remote add upstream https://github.com/catalystctl/catalyst.git
    ```
 4. **Create a feature branch**:
    ```bash
@@ -171,7 +171,7 @@ cargo fmt
 
 ```bash
 # Start database services (PostgreSQL + Redis)
-docker-compose up -d
+docker compose up -d
 
 # Start backend (terminal 1)
 cd catalyst-backend && pnpm run dev
@@ -198,9 +198,9 @@ cd catalyst-agent && cargo run
 **Naming Conventions:**
 - **Files:** kebab-case (`user-routes.ts`)
 - **Variables/Functions:** camelCase (`getUserById`)
-- **Classes/Types:** PascalCase (`UserController`, `UserProfile`)
+- **Classes/Types:** PascalCase (`User`, `UserProfile`)
 - **Constants:** UPPER_SNAKE_CASE (`MAX_RETRIES`)
-- **Interfaces:** PascalCase with `I` prefix (`IUser`)
+- **Interfaces:** PascalCase, no prefix (`User`)
 
 **Code Structure:**
 ```typescript
@@ -586,9 +586,9 @@ If applicable, add screenshots to help explain the problem.
 
 **Environment:**
 - OS: [e.g. Ubuntu 22.04]
-- Node.js: [e.g. 20.10.0]
+- Node.js: [e.g. 22.0.0]
 - Rust: [e.g. 1.95.0]
-- Catalyst Version: [e.g. 1.0.0]
+- Catalyst Version: [e.g. 1.56.3]
 
 **Logs:**
 Relevant log output:

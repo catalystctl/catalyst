@@ -29,7 +29,7 @@ If you already have Docker Compose installed and just want Catalyst running:
 
 ```bash
 # 1. Get the files (download + verify checksum first — see installation.md; install.sh already generates .env with secrets — do not overwrite it)
-VERSION=v1.18.8  # replace with the release you want
+VERSION=v1.56.3  # replace with the release you want
 curl -fsSL -o install.sh "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh"
 curl -fsSL -o install.sh.sha256 "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh.sha256"
 sha256sum -c install.sh.sha256 && bash install.sh
@@ -74,9 +74,9 @@ The Docker Compose stack (`catalyst-docker/docker-compose.yml`) defines four cor
 | Service | Image | Purpose | Default Exposed Port |
 |---------|-------|---------|---------------------|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
-| `redis` | `redis:7-alpine` | Compose service; not session store in current backend | `127.0.0.1:6379` |
+| `redis` | `redis:7.4-alpine` | Compose service; not session store in current backend | `127.0.0.1:6379` |
 | `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API (SFTP runs on the node agent, not here) | `127.0.0.1:3000` |
-| `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Nginx static SPA | `0.0.0.0:80` |
+| `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Nginx static SPA | `0.0.0.0:80` bare compose default (`0.0.0.0:8080` once the installed `.env.example` is in place) |
 
 ### What Each Service Does
 
@@ -785,14 +785,14 @@ To build images locally instead of using pre-built ones:
 ### Backend Image
 
 ```dockerfile
-# catalyst-backend/Dockerfile
+# catalyst-backend/Dockerfile (simplified; see the live Dockerfile for the full multi-stage build)
 FROM node:22-alpine
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && corepack prepare pnpm@latest --activate && pnpm install
+RUN corepack enable && corepack prepare pnpm@10.34.5 --activate && pnpm install
 COPY . .
 RUN pnpm run build
-EXPOSE 3000 2022
+EXPOSE 3000
 CMD ["node", "dist/index.js"]
 ```
 
@@ -805,11 +805,11 @@ docker build -t catalyst-backend:local .
 ### Frontend Image
 
 ```dockerfile
-# catalyst-frontend/Dockerfile
+# catalyst-frontend/Dockerfile (simplified)
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && corepack prepare pnpm@latest --activate && pnpm install
+RUN corepack enable && corepack prepare pnpm@10.34.5 --activate && pnpm install
 COPY . .
 RUN pnpm run build
 

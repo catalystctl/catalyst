@@ -54,9 +54,9 @@ The stack consists of four services:
 | Service | Image | Purpose | Default Port |
 |---------|-------|---------|-------------|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
-| `redis` | `redis:7-alpine` | Compose service; not used as session store by current backend | `127.0.0.1:6379` |
+| `redis` | `redis:7.4-alpine` | Compose service; not used as session store by current backend | `127.0.0.1:6379` |
 | `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | API (SFTP runs on the node agent, not here) | `127.0.0.1:3000` |
-| `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Web panel | `0.0.0.0:80` |
+| `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Web panel | `0.0.0.0:80` bare compose default (`0.0.0.0:8080` once the installed `.env.example` is in place) |
 
 > **Important:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct bare-metal installation is not supported.
 
@@ -128,7 +128,7 @@ The fastest way to get Catalyst running. No repository clone, no build step.
 > Download the versioned installer, check its SHA-256, then execute:
 
 ```bash
-VERSION=v1.18.8  # replace with the release you want
+VERSION=v1.56.3  # replace with the release you want
 curl -fsSL -o install.sh "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh"
 curl -fsSL -o install.sh.sha256 "https://github.com/catalystctl/catalyst/releases/download/${VERSION}/install.sh.sha256"
 sha256sum -c install.sh.sha256
@@ -158,7 +158,7 @@ The `install.sh` script performs these operations in order:
 - Exits with a helpful error message if any are missing
 
 **Step 4 — Download `catalyst-docker/` Folder**
-- Downloads `https://github.com/catalystctl/catalyst/archive/refs/heads/main.tar.gz`
+- Downloads `https://github.com/catalystctl/catalyst/archive/refs/heads/main.tar.gz` (note: the installer always snapshots `main` for stack files even when you verified a versioned `install.sh`; `VERSION` selects the installer itself, and `update.sh` refreshes stack files afterward)
 - Extracts only the `catalyst-docker/` directory using `--strip-components`
 - Creates a temporary working directory (auto-cleaned on exit via `trap`)
 
@@ -167,7 +167,7 @@ The `install.sh` script performs these operations in order:
 - Otherwise, copies all files fresh
 
 **Step 6 — Generate Secrets**
-- Generates all five secrets with `openssl rand`: 32-char `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `REDIS_PASSWORD`, `API_KEY_SECRET`, `BACKUP_CREDENTIALS_ENCRYPTION_KEY`
+- Generates secrets with `openssl rand`: 32-char `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `API_KEY_SECRET`, `BACKUP_CREDENTIALS_ENCRYPTION_KEY`, and 24-char `REDIS_PASSWORD`
 - Reuses existing non-placeholder values; regenerates `CHANGE_ME*` placeholders and replaces an empty `REDIS_PASSWORD` (the compose stack requires one)
 - Writes atomically via a staging file (`.env.staging.$$`, `chmod 600`), preserving any existing `.env` as `.env.backup.$$`
 - Prompts `PUBLIC_URL` (defaults to the host LAN IP port 8080, scheme-forced, trailing `/` stripped), derives `PASSKEY_RP_ID`, sets `NODE_ENV=production` automatically for `https://` URLs, and offers a TLS overlay (`DOMAIN`/`ACME_EMAIL`) for `http://` URLs
@@ -258,7 +258,7 @@ frontend → backend → postgres
 
 **Dependencies:**
 - `frontend` waits for `backend` to be healthy
-- `backend` waits for `postgres` AND `redis` to be healthy
+- `backend` waits for `postgres` to be healthy (Redis is intentionally NOT a startup dependency; the backend degrades without it)
 - This means first startup can take 1–3 minutes as the cascade resolves
 
 **Health checks:**
@@ -308,7 +308,7 @@ For development or when you need to modify the code before deploying.
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 22
-- [pnpm](https://pnpm.io/) >= 8
+- [pnpm](https://pnpm.io/) >= 10 (CI uses pnpm 12.x latest)
 - Docker or Podman (for PostgreSQL + Redis infrastructure)
 - Rust toolchain (for the agent, if needed)
 
@@ -429,7 +429,7 @@ docker compose ps
 # Expected output:
 # NAME                STATUS    IMAGE
 # catalyst-postgres   healthy   postgres:16-alpine
-# catalyst-redis      healthy   redis:7-alpine
+# catalyst-redis      healthy   redis:7.4-alpine
 # catalyst-backend    healthy   ghcr.io/catalystctl/catalyst-backend:latest
 # catalyst-frontend   running   ghcr.io/catalystctl/catalyst-frontend:latest
 ```
@@ -458,7 +458,7 @@ Use this checklist before deploying to production. Each item is explained below.
 | 4 | `NODE_ENV=production` (only with HTTPS) | Enables HSTS and security headers |
 | 5 | `BACKEND_PORT` bound to `127.0.0.1` | Prevents direct API access from the internet |
 | 6 | `POSTGRES_PORT` bound to `127.0.0.1` | Prevents direct database access |
-| 7 | `REDIS_PORT` commented out | Redis should not be externally accessible |
+| 7 | `REDIS_PORT` left at its localhost default | Redis must not be reachable beyond localhost |
 | 8 | TLS is configured (Caddy, Traefik, or proxy) | Encrypts all traffic |
 | 9 | `BACKUP_CREDENTIALS_ENCRYPTION_KEY` is set | Protects S3 backup credentials |
 | 10 | `AUTO_UPDATE_AUTO_TRIGGER=false` | Review updates before applying |
@@ -519,7 +519,7 @@ When set to `production`, the backend enables:
 By default:
 - `BACKEND_PORT=127.0.0.1:3000` — only localhost can reach the API
 - `POSTGRES_PORT=127.0.0.1:5432` — only localhost can reach the database
-- `REDIS_PORT` is commented out — no external access
+- `REDIS_PORT` defaults to `127.0.0.1:6379` even when commented out (compose `:-` fallback) — localhost-only either way; fully remove host access with an empty value plus a `ports: []` override
 
 These restrictions prevent direct access to internal services. All legitimate traffic goes through the frontend nginx proxy.
 
@@ -546,7 +546,7 @@ With `AUTO_UPDATE_AUTO_TRIGGER=false`, the backend notifies you of updates but d
 
 **11. Pin Image Versions**
 
-Instead of `latest`, use:
+Instead of `latest`, use (requires a Compose edit — stock `docker-compose.yml` pins `image: ghcr.io/...:latest` with no `${BACKEND_IMAGE}` interpolation):
 ```env
 BACKEND_IMAGE=ghcr.io/catalystctl/catalyst-backend:v1.2.3
 FRONTEND_IMAGE=ghcr.io/catalystctl/catalyst-frontend:v1.2.3
@@ -875,7 +875,7 @@ sudo chown -R $(id -u):$(id -g) /path/to/volume
 | Feature | Docker Compose | Podman Compose |
 |---------|---------------|----------------|
 | Port replacement | Replaces base ports list | Merges port lists |
-| Health check syntax | JSON array: `["CMD-SHELL", "..."]` | String form: `"CMD-SHELL"` |
+| Health check syntax | JSON array and string forms (postgres/backend use `["CMD-SHELL", "..."]`, redis uses string form for Podman compatibility) | Same (compose file is already cross-compatible) |
 | Volume driver | `local` | `local` (same) |
 | Network isolation | Bridge network | Bridge network |
 
@@ -1227,14 +1227,14 @@ This section explains every variable in `.env.example` in detail.
 | `POSTGRES_USER` | `catalyst` | No | PostgreSQL username. Note: `docker-compose.yml` currently hardcodes the user/db (`catalyst`/`catalyst_db`) — this variable is informational until the compose file interpolates it. |
 | `POSTGRES_PASSWORD` | *(placeholder)* | **Yes** | Strong password. Generate: `openssl rand -base64 48 \| tr -d '/+=' \| head -c 32`. |
 | `POSTGRES_DB` | `catalyst_db` | No | Database name. Note: `docker-compose.yml` currently hardcodes it — informational until the compose file interpolates it. |
-| `POSTGRES_PORT` | `127.0.0.1:5432` | No | Host port binding. `127.0.0.1` restricts to localhost. Comment out to disable external access entirely. |
+| `POSTGRES_PORT` | `127.0.0.1:5432` | No | Host port binding. `127.0.0.1` restricts to localhost. Commenting it out does **not** unpublish the port (the compose `:-` default still applies) — use an empty value plus a `ports: []` override to remove host access entirely. |
 
 ### Redis
 
 | Variable | Default | Required? | Description |
 |----------|---------|-----------|-------------|
 | `REDIS_PASSWORD` | *(auto-generated)* | **Yes (Docker)** | Redis auth password. `install.sh` generates it; the compose file refuses to boot Redis without it (`--requirepass ${REDIS_PASSWORD:?...}`). |
-| `REDIS_PORT` | *(commented out)* | No | Host port binding. Commented out by default — Redis is internal-only. |
+| `REDIS_PORT` | *(commented out)* | No | Host port binding. Commented out by default, but commenting alone does **not** unpublish it — the compose `:-` default (`127.0.0.1:6379`) still applies. Redis is localhost-only either way; to remove host access entirely, override with an empty `REDIS_PORT=` plus a `ports: []` override. |
 
 ### Authentication
 
@@ -1247,7 +1247,7 @@ This section explains every variable in `.env.example` in detail.
 
 | Variable | Default | Required? | Description |
 |----------|---------|-----------|-------------|
-| `FRONTEND_PORT` | `0.0.0.0:8080` | No | Web panel port. `0.0.0.0` = all interfaces; `127.0.0.1` = localhost only. |
+| `FRONTEND_PORT` | `0.0.0.0:8080` (installed `.env`; bare compose fallback is `0.0.0.0:80`) | No | Web panel port. `0.0.0.0` = all interfaces; `127.0.0.1` = localhost only. |
 | `BACKEND_PORT` | `127.0.0.1:3000` | No | Backend API publish binding. Compose default is localhost-only; keep it that way in production. |
 
 ### SFTP
@@ -1267,7 +1267,7 @@ File size is the panel Admin → Security **Max upload size**.
 | `BACKUP_S3_ACCESS_KEY` | *(commented out)* | For S3 | S3 access key ID. |
 | `BACKUP_S3_SECRET_KEY` | *(commented out)* | For S3 | S3 secret access key. |
 | `BACKUP_S3_ENDPOINT` | *(commented out)* | For S3 | Custom endpoint (e.g., MinIO). |
-| `BACKUP_S3_PATH_STYLE` | `true` | For S3 | `true` for MinIO; `false` for AWS S3. |
+| `BACKUP_S3_PATH_STYLE` | `false` | For S3 | `true` for MinIO; `false` for AWS S3. |
 | `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | For S3/SFTP | Encrypts stored backup credentials in DB (the backend refuses to save them unencrypted). `install.sh` generates base64 (`openssl rand -base64 32`). |
 
 ### Webhooks

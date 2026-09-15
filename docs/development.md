@@ -24,12 +24,12 @@
 
 | Tool | Minimum Version | Purpose |
 |------|----------------|---------|
-| **pnpm** | 9+ (repo uses pnpm 11 workspace settings) | JavaScript/TypeScript package manager for the monorepo |
-| **Node.js** | 20+ | Peer dependency resolution |
+| **pnpm** | 10+ (CI uses pnpm 12.x latest; repo uses pnpm 11+ workspace settings) | JavaScript/TypeScript package manager for the monorepo |
+| **Node.js** | 22+ (engines require >=20, CI pins 22) | Backend, frontend, and tooling runtime |
 | **Rust** | **1.95.0** (see `catalyst-agent/rust-toolchain.toml`) | Catalyst agent (cross-compiled targets) |
 | **cargo** | Latest stable | Rust package manager & build tool |
 | **Docker** | 24+ or **Podman** | Development infra (PostgreSQL, Redis) |
-| **PostgreSQL** | 14+ | Primary database (provided via Docker/Podman) |
+| **PostgreSQL** | 16+ (`postgres:16-alpine` in compose) | Primary database (provided via Docker/Podman) |
 | **protoc** | 25.1+ | Protocol buffer compilation for agent (gRPC) |
 
 ### Installing Prerequisites
@@ -459,7 +459,7 @@ class ApiClient {
 
 #### Error Reporting
 
-Frontend services call `reportSystemError()` for client-side error tracking. This function is used by 60+ modules including `AuthStore`, `useFileManager`, `useSetupStatus`, `useSseConsole`, and all page components. Errors are collected and visible on the Admin System Errors page (`/admin/system-errors`).
+Frontend services call `reportSystemError()` for client-side error tracking. This function is used by 40+ modules including `AuthStore`, `useFileManager`, `useSetupStatus`, `useSseConsole`, and all page components. Errors are collected and visible on the Admin System Errors page (`/admin/system-errors`).
 
 ---
 
@@ -683,10 +683,14 @@ sudo cargo run -- ./config.toml
 ```
 catalyst-agent/src/
 ├── main.rs                  # Entry point, Tokio runtime, signal handling
-├── websocket_handler.rs     # WebSocket connection to backend
-├── runtime_manager.rs       # Containerd lifecycle management
-├── file_manager.rs          # File operations on node filesystem
-└── config.rs                # TOML configuration parsing
+├── config.rs / config_parser.rs  # TOML configuration parsing
+├── websocket_handler/       # WebSocket connection to backend (console, lifecycle, monitoring, backup)
+├── runtime_manager/         # Containerd lifecycle management
+├── file_manager.rs / file_tunnel.rs  # File operations and long-poll file-tunnel client
+├── network_manager.rs / firewall_manager.rs  # CNI networking and iptables
+├── sftp_server.rs           # Agent-hosted SFTP
+├── storage_manager.rs / backup_crypto.rs / system_setup.rs / updater.rs
+└── command_utils.rs / shell_utils.rs / net_utils.rs / ownership.rs / atomic_write.rs
 ```
 
 ### Key Architecture Patterns
@@ -879,10 +883,10 @@ Tests include auth flow, template management, node registration, server state tr
 | `02-templates.test.sh` | Template CRUD, variable validation, egg import |
 | `03-nodes.test.sh` | Node registration, allocation, health checks |
 | `04-servers.test.sh` | Server lifecycle: create → start → stop → transfer → delete |
-| `05-rbac.test.sh` | Role-based access control, permission enforcement |
+| `05-permissions.test.sh` | Role-based access control, permission enforcement |
 | `06-websocket.test.sh` | WebSocket connection, console streaming, SSE fallback |
-| `07-files.test.sh` | File tunnel operations, upload/download, archive/extract |
-| `smoke-test.sh` | Quick health check — starts all services and verifies `/health` endpoint |
+| `08-container-lifecycle.test.sh` | Container lifecycle operations |
+| `10-full-workflow.test.sh` | End-to-end workflow verification |
 
 **Testing patterns for auth/security features:**
 
@@ -1141,7 +1145,7 @@ docker compose logs -f frontend   # Tail frontend only
 
 ### Frontend
 
-- **Transitional states auto-refetch** — Servers in `installing`, `starting`, `stopping`, or `transferring` states are polled every 1 second via Catalyst Sync. Don't override this behavior.
+- **Transitional states auto-refetch** — Servers in `installing`, `starting`, `stopping`, or `transferring` states refetch every 2s via Catalyst Sync (10s otherwise). Don't override this behavior.
 - **Plugin frontend components share the bundle** — Plugin frontend code is compiled with the main app. Ensure plugin components don't leak state.
 - **Modals must be dismissed properly** — Use Escape key or explicit close buttons. Don't rely on route changes to close dialogs.
 

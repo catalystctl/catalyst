@@ -19,7 +19,7 @@
    - [Console & Server Limits](#console--server-limits)
    - [Suspension Policies](#suspension-policies)
    - [Database Hosts (MySQL)](#database-hosts-mysql)
-   - [SFTP Server](#sftp-server)
+   - [Server Data (includes SFTP notes)](#server-data)
    - [Plugins](#plugins)
    - [Backups](#backups)
    - [Webhooks](#webhooks)
@@ -141,7 +141,7 @@ Better Auth uses the same origin list (via `buildTrustedOrigins()`) for its `tru
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string | **Required** | Full connection string: `postgresql://user:password@host:5432/dbname`. No default — must be set. The application **will not start** without this. |
-| `DB_POOL_MAX` | Integer | `15` | PostgreSQL connection pool max size. Raise for production under load. |
+| `DB_POOL_MAX` | Integer | `15` in code (`50` in `catalyst-backend/.env.example`) | PostgreSQL connection pool max size. Raise for production under load. |
 | `DB_STATEMENT_TIMEOUT_MS` | Integer | `30000` | **Reserved for future use.** Statement timeout per query in milliseconds. Currently hardcoded in Prisma config. |
 
 ::: warning DATABASE_URL
@@ -179,7 +179,7 @@ Do not commit OAuth secrets to version control. Use secret managers, Docker secr
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `CONSOLE_OUTPUT_BYTE_LIMIT_BYTES` | Integer | `262144` (256 KB) in code; Docker stack sets `524288` | Per-server console output cap in bytes. Clamped to range 65536–2097152. |
+| `CONSOLE_OUTPUT_BYTE_LIMIT_BYTES` | Integer | Docker stack sets `524288` | Per-server console output cap in bytes. **Two different clamps apply depending on path:** the mailer default is `262144` (256 KB), clamped to 64 KB–2 MB, while the live agent gateway (`websocket/gateway.ts`) defaults to 2 MB clamped to 256 KB–10 MB. Size live console traffic against the gateway limits, not the mailer ones. |
 | `MAX_DISK_MB` | Integer | Unset (no cap) unless set | Maximum disk usage per server in megabytes, enforced only when set. The Docker stack sets a high default; the backend example uses `10240`. |
 
 ### Suspension Policies
@@ -223,7 +223,7 @@ SFTP file size is the panel Admin → Security **Max upload size**, not an envir
 | `PLUGIN_MARKETPLACE_DISABLE_OFFICIAL` | `1` \| `true` \| `yes` \| `on` | Unset | Browse only configured/panel marketplaces and skip the official index. |
 | `PLUGIN_MARKETPLACE_ALLOW_LOCAL` | `true` or unset | Unset | Allow marketplace downloads from local URLs. Development only. |
 | `PLUGIN_PROCESS_HEAP_LIMIT_MB` | Integer | `1024` | Process-wide heap threshold that triggers plugin request throttling and memory-pressure warnings. |
-| `DEPLOY_SCRIPT_PATH` | Filesystem path | — | Path to a custom agent deployment script. Uses the built-in script if not set. |
+| `DEPLOY_SCRIPT_PATH` | Filesystem path | — | Path to a custom agent deployment script. Uses the built-in script if not set. **Docker caveat:** compose hardcodes `DEPLOY_SCRIPT_PATH: /scripts/deploy-agent.sh` with no `${...}` interpolation, so a `.env` value is ignored on Docker installs — edit the compose file to override. |
 
 ### Backups
 
@@ -283,11 +283,11 @@ Webhooks include an `X-Webhook-Signature` header with an HMAC-SHA256 hash of the
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `MAX_AGENT_CONNECTIONS` | Integer | `1000` | Max concurrent WebSocket connections from agent nodes. |
+| `MAX_AGENT_CONNECTIONS` | Integer | `1000` in code (`2000` in `catalyst-backend/.env.example`) | Max concurrent WebSocket connections from agent nodes. |
 | `MAX_CLIENT_CONNECTIONS` | Integer | `10000` | Max concurrent connections from dashboard/API clients. |
 | `MAX_CONNECTIONS_PER_USER` | Integer | `10` | Max concurrent connections per authenticated user. |
 | `WORKERS` | Integer | `0` | Number of **Node.js** cluster worker processes. `0` = single process (cluster mode off). Set to a positive number for multi-process cluster mode. |
-| `WS_MAX_PAYLOAD_BYTES` | Integer | `8388608` (8 MB) | Maximum accepted WebSocket message size (`fastify-websocket` `maxPayload`, registered in `catalyst-backend/src/index.ts`). Messages larger than this are rejected at the protocol level. Raise only if agents legitimately send larger single frames. |
+| `WS_MAX_PAYLOAD_BYTES` | Integer | Effective max is `2097152` (2 MB) regardless of setting | Maximum accepted WebSocket message size (`fastify-websocket` `maxPayload`, registered in `catalyst-backend/src/index.ts`). The code clamps every value into 1–2 MB (`Math.min(2MB, Math.max(1MB, configured))`), so the compose default of `8388608` (8 MB) can never apply — do not raise it expecting larger frames. |
 | `AGENT_BACKPRESSURE_BYTES` | Integer | `4194304` (4 MiB) | Outbound backpressure watermark per agent socket in `WebSocketGateway`. When an agent's unsent outbound buffer exceeds this, low-priority traffic to that agent is shed and bulk binary transfers abort instead of growing memory; control-plane power commands are always attempted. |
 | `METRICS_RETENTION_DAYS` | Integer | `30` | How long to retain server metrics data, in days. |
 | `DISABLE_RATE_LIMIT` | `1` \| `true` or unset | Unset | Bypass global rate limiting (auth, API keys, mailer). Development/benchmark use only — never in production. |
@@ -302,6 +302,8 @@ Webhooks include an `X-Webhook-Signature` header with an HMAC-SHA256 hash of the
 | `AUTO_UPDATE_INTERVAL_MS` | Integer | `3600000` (1 hour) | Interval between update checks, in milliseconds. |
 | `AUTO_UPDATE_AUTO_TRIGGER` | `true` \| `false` | `false` | Auto-trigger the update when a new version is available. If `false`, only send a notification (admin must approve). |
 | `AUTO_UPDATE_DOCKER_COMPOSE_PATH` | Filesystem path | `${CATALYST_COMPOSE_DIR:-/opt/catalyst-docker}/docker-compose.yml` in Docker | Path to `docker-compose.yml` for Docker-based auto-update. Used to restart the stack after updating. |
+| `DOCKER_BIN` | Binary name/path | `docker` | Container runtime binary invoked by the auto-updater. |
+| `AUTO_UPDATE_FORCE_DOCKER` | `true` or unset | Unset | Force Docker-mode update flow even when Docker detection fails. |
 
 ### Bootstrap / Seeding (Dev Only)
 
@@ -318,6 +320,8 @@ These variables and the associated seed scripts are for **development and initia
 | `SEED_ALLOW_DEFAULT_ADMIN` | `true` \| `false` | `false` | Allow seed scripts to run in production. **Never set to `true` in production.** |
 | `SEED_NODE_PUBLIC_ADDRESS` | IP/Hostname | — | Seed node public address (dev only). |
 | `SEED_NODE_HOSTNAME` | String | — | Seed node hostname (dev only). |
+| `SEED_ADMIN_PASSWORD` | String | `admin123` | Dev-seed admin password (dev only; the seed file carries a hardcoded-secret exception for this). |
+| `SEED_NODE_SECRET` | String | `dev-secret-key-12345` | Dev-seed node secret (dev only). |
 
 ---
 
