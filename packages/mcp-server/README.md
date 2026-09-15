@@ -12,9 +12,22 @@ It talks to the panel over HTTPS with a `catalyst_...` API key. Configure it onc
 
 ## Install
 
+Download `catalyst-mcp.mjs` plus its `.sha256` from the latest
+[GitHub Release](https://github.com/catalystctl/catalyst/releases), verify it,
+and make it executable. No npm registry needed — only Node.js 20 or newer.
+
+```bash
+curl -fLO https://github.com/catalystctl/catalyst/releases/latest/download/catalyst-mcp.mjs
+curl -fLO https://github.com/catalystctl/catalyst/releases/latest/download/catalyst-mcp.mjs.sha256
+sha256sum -c catalyst-mcp.mjs.sha256
+chmod +x catalyst-mcp.mjs
+```
+
+From source instead:
+
 ```bash
 pnpm install
-pnpm --filter @catalyst/mcp-server run build
+pnpm --filter @catalyst/mcp-server run build:bundle
 ```
 
 ## Configure
@@ -32,14 +45,30 @@ The key can only do what its permissions allow. For full access, create it with 
 
 ## Use with Claude Code / Claude Desktop
 
-Add to your MCP client configuration:
+Add to your MCP client configuration (using the release download above):
+
+```json
+{
+  "mcpServers": {
+    "catalyst": {
+      "command": "/usr/local/bin/catalyst-mcp.mjs",
+      "env": {
+        "CATALYST_URL": "https://panel.example.com",
+        "CATALYST_API_KEY": "catalyst_..."
+      }
+    }
+  }
+}
+```
+
+Or run the `tsc` output from a source checkout:
 
 ```json
 {
   "mcpServers": {
     "catalyst": {
       "command": "node",
-      "args": ["/home/karutoil/catalyst/packages/mcp-server/dist/index.js"],
+      "args": ["packages/mcp-server/dist/index.js"],
       "env": {
         "CATALYST_URL": "https://panel.example.com",
         "CATALYST_API_KEY": "catalyst_..."

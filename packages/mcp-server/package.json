@@ -10,6 +10,7 @@
 	},
 	"scripts": {
 		"build": "tsc",
+		"build:bundle": "node scripts/build-bundle.mjs",
 		"dev": "tsx src/index.ts",
 		"start": "node dist/index.js",
 		"typecheck": "tsc --noEmit",
@@ -26,6 +27,7 @@
 		"@typescript-eslint/eslint-plugin": "~8.67.0",
 		"@typescript-eslint/parser": "~8.67.0",
 		"eslint": "~10.8.1",
+		"esbuild": "~0.28.2",
 		"globals": "~17.9.0",
 		"tsx": "~4.23.12",
 		"typescript": "~6.0.3",

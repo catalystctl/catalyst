@@ -439,6 +439,9 @@ importers:
       '@typescript-eslint/parser':
         specifier: ~8.67.0
         version: 8.67.0(eslint@10.8.1(jiti@2.7.0))(typescript@6.0.3)
+      esbuild:
+        specifier: ~0.28.2
+        version: 0.28.2
       eslint:
         specifier: ~10.8.1
         version: 10.8.1(jiti@2.7.0)

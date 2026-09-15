@@ -545,6 +545,63 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # MCP server: single-file Node bundle, no npm registry needed. Users
+  # download catalyst-mcp.mjs from the release and point their MCP client
+  # at it (Node 20+ only). Built here so every version tag ships one.
+  mcp-release:
+    name: Publish MCP Server Bundle
+    needs: version
+    if: needs.version.outputs.bump != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write # SLSA provenance via attest-build-provenance
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: v${{ needs.version.outputs.new_version }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: latest
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+
+      - name: Build MCP bundle
+        run: pnpm --filter @catalyst/mcp-server run build:bundle
+
+      - name: Stage release asset
+        run: |
+          cp packages/mcp-server/dist/catalyst-mcp.mjs /tmp/catalyst-mcp.mjs
+          chmod +x /tmp/catalyst-mcp.mjs
+          sha256sum /tmp/catalyst-mcp.mjs > /tmp/catalyst-mcp.mjs.sha256
+          cat /tmp/catalyst-mcp.mjs.sha256
+
+      - name: Attest bundle provenance (SLSA/Sigstore)
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: /tmp/catalyst-mcp.mjs
+
+      - name: Upload bundle + checksum as release assets
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
+        with:
+          tag_name: v${{ needs.version.outputs.new_version }}
+          files: |
+            /tmp/catalyst-mcp.mjs
+            /tmp/catalyst-mcp.mjs.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # Lockstep image publish: a version bump always rebuilds backend AND frontend
   # from the tagged commit so baked-in versions match the agent binaries.
   # ci.yml cannot do this on main — GITHUB_TOKEN chore(release) commits do not
@@ -645,7 +702,7 @@ jobs:
 
   # ══════════════════════════════════════════════════════════════════════════════
   # Publish the draft release created by the version job. Runs only after the
-  # agent binaries AND both container images are live. Until this flips the
+  # agent binaries, the MCP bundle, AND both container images are live. Until this flips the
   # draft to published, `releases/latest` keeps serving the previous version,
   # so panels don't notify (and can't pull) an update whose artifacts don't
   # exist yet. If any build job fails this is skipped and the release stays
@@ -653,7 +710,7 @@ jobs:
   # ══════════════════════════════════════════════════════════════════════════════
   publish-release:
     name: Publish GitHub Release
-    needs: [version, agent-release, publish-install-script, publish-images]
+    needs: [version, agent-release, publish-install-script, mcp-release, publish-images]
     if: needs.version.outputs.bump != 'none'
     runs-on: ubuntu-latest
     permissions:
