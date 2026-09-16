@@ -71,7 +71,7 @@ jobs:
         run: pnpm --filter catalyst-frontend run build
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@2c70c40e6c19c2b8a84605859dcbfe766a5b46451 # v3
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
