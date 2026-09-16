@@ -157,13 +157,16 @@ class ApiClient {
       ...authHeaders,
       ...headers,
     };
-    if (hasBody && !finalHeaders['Content-Type']) {
-      finalHeaders['Content-Type'] = 'application/json';
-    }
     // If Content-Type was explicitly set to empty string, remove it entirely.
     // This allows FormData to set the correct multipart/form-data boundary.
+    // The opt-out must also skip the JSON default below: '' is falsy, so a
+    // plain `!finalHeaders['Content-Type']` check would replace it with
+    // application/json and break every FormData upload (the server then sees
+    // multipart bytes labeled as JSON and rejects the body).
     if (finalHeaders['Content-Type'] === '') {
       delete finalHeaders['Content-Type'];
+    } else if (hasBody && !finalHeaders['Content-Type']) {
+      finalHeaders['Content-Type'] = 'application/json';
     }
 
     let response: Response;

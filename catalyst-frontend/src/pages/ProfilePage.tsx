@@ -283,7 +283,7 @@ export default function ProfilePage() {
             <button onClick={() => fileRef.current?.click()} className="absolute inset-0 flex items-center justify-center rounded-md bg-background/60 opacity-0 transition-opacity group-hover:opacity-100">
               <Camera className="h-3.5 w-3.5 text-foreground" />
             </button>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) avatarMutation.mutate(f); e.target.value = ''; }} />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) avatarMutation.mutate(f); e.target.value = ''; }} />
           </div>
 
           <div className="flex-1 min-w-0">
