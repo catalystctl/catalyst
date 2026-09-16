@@ -80,6 +80,17 @@ class ConsoleSseClient {
 
   /** Send a command to the server via HTTP POST. */
   async sendCommand(serverId: string, command: string): Promise<void> {
+    // Demo is read-only: accept the command silently so the UI stays usable.
+    if ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_DEMO_MODE === 'true') {
+      this.dispatch({
+        type: 'console_output',
+        serverId,
+        stream: 'stdout',
+        data: `$ ${command}\n(demo mode — commands are not executed)`,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     const res = await fetch(`${BASE_URL}/api/servers/${encodeURIComponent(serverId)}/console/command`, {
       method: 'POST',
       credentials: 'include',

@@ -86,11 +86,11 @@ function SetupPage() {
  const [showConfirm, setShowConfirm] = useState(false);
 
  // ── Step 3 state ──
- const [seedColor, setSeedColor] = useState('#0d9488');
+ const [seedColor, setSeedColor] = useState('#c48d5a');
  const [harmonyMode, setHarmonyMode] = useState<HarmonyMode>('auto');
- const [primaryColor] = useState('#0d9488');
- const [secondaryColor] = useState('#8b5cf6');
- const [accentColor] = useState('#06b6d4');
+ const [primaryColor] = useState('#c48d5a');
+ const [secondaryColor] = useState('#5ac4c2');
+ const [accentColor] = useState('#5a5cc4');
  const [themeColors] = useState<ThemeColors>({ ...defaultThemeColors });
  const [defaultTheme, setDefaultTheme] = useState<'light' | 'dark'>('dark');
 
@@ -619,7 +619,7 @@ function SetupPage() {
  type="text"
  value={seedColor}
  onChange={(e) => setSeedColor(e.target.value)}
- placeholder="#0d9488"
+ placeholder="#c48d5a"
  className={`w-36 rounded-lg border bg-card px-3 py-2 font-mono text-sm transition-colors focus:outline-none focus:ring-2 ${
  isSeedValid
  ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'

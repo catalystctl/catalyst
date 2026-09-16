@@ -305,7 +305,7 @@
     {
       "file": "src/pages/admin/ThemeSettingsPage.tsx",
       "type": "hardcoded",
-      "text": "{\"version\": 1, \"primaryColor\": \"#0d9488\", ...}",
+      "text": "{\"version\": 1, \"primaryColor\": \"#c48d5a\", ...}",
       "count": 1,
       "reason": "Code sample: theme JSON snippet."
     },

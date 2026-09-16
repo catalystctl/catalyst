@@ -578,7 +578,7 @@
     "popoverDescription": "Menus & popovers",
     "presetDescription": {
       "brutalist": "Sharp corners, hard shadows, stark yellow",
-      "catalystTeal": "The default panel look — balanced teal",
+      "catalystTeal": "The default panel look — warm bronze",
       "crimson": "Strong red with bold contrast",
       "forest": "Natural greens that breathe",
       "neonNights": "Hot pink on deep void with cyan accents",
@@ -589,7 +589,7 @@
     },
     "presetName": {
       "brutalist": "Brutalist",
-      "catalystTeal": "Catalyst Teal",
+      "catalystTeal": "Catalyst Bronze",
       "crimson": "Crimson",
       "forest": "Forest",
       "neonNights": "Neon Nights",

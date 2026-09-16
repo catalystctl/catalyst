@@ -18,15 +18,15 @@ const setupSchema = z.object({
 	primaryColor: z
 		.string()
 		.regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color")
-		.default("#0d9488"),
+		.default("#c48d5a"),
 	secondaryColor: z
 		.string()
 		.regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color")
-		.default("#8b5cf6"),
+		.default("#5ac4c2"),
 	accentColor: z
 		.string()
 		.regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color")
-		.default("#06b6d4"),
+		.default("#5a5cc4"),
 	defaultTheme: z.enum(["light", "dark"]).default("dark"),
 	logoUrl: z.string().optional(),
 	metadata: z.record(z.string(), z.any()).default({}),

@@ -5,6 +5,19 @@ import type { LoginSchema, RegisterSchema } from '../../validators/auth';
 import type { User } from '../../types/user';
 import { authClient } from '../authClient';
 
+const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+
+const demoSessionUser: User = {
+  id: 'demo-admin-1',
+  email: 'demo@catalystctl.com',
+  username: 'demo-admin',
+  name: 'Demo Admin',
+  firstName: 'Demo',
+  lastName: 'Admin',
+  role: 'admin',
+  permissions: ['*'],
+};
+
 interface PasskeyRequiredError extends Error {
   code: 'PASSKEY_REQUIRED';
 }
@@ -308,6 +321,8 @@ export const authApi = {
     trustDevice?: boolean;
     rememberMe?: boolean;
   }): Promise<{ token: string; user: User; rememberMe?: boolean }> {
+    // Demo never challenges 2FA — return the mock admin session directly.
+    if (isDemoMode) return { token: '', user: demoSessionUser, rememberMe: payload.rememberMe };
     // Consume the challenge token stored during custom /api/auth/login when
     // two-factor was required. better-auth primarily relies on the signed
     // two_factor cookie (forwarded via Set-Cookie + credentials:include), but
@@ -360,6 +375,8 @@ export const authApi = {
   },
 
   async signInWithProvider(providerId: 'whmcs' | 'paymenter') {
+    // OAuth has no backend in the demo.
+    if (isDemoMode) throw new Error('Single sign-on is disabled in the demo.');
     const frontendOrigin = typeof window !== 'undefined' ? window.location.origin : '';
     const response = await authClient.signIn.oauth2({
       providerId,
@@ -378,12 +395,16 @@ export const authApi = {
   },
 
   async logout(options?: { signal?: AbortSignal }): Promise<void> {
+    // No server session in the static demo — local state clear is enough.
+    if (isDemoMode) return;
     await authClient.signOut({
       fetchOptions: options?.signal ? { signal: options.signal } : undefined,
     });
   },
 
   async forgotPassword(email: string): Promise<void> {
+    // Demo has no mailer — resolve silently (same anti-enumeration UX).
+    if (isDemoMode) return;
     const normalizedEmail = email.trim().toLowerCase();
     const res = await authClient.requestPasswordReset({ email: normalizedEmail, redirectTo: `${window.location.origin}/reset-password` });
     // Better Auth always returns success to prevent email enumeration.
@@ -395,6 +416,8 @@ export const authApi = {
   },
 
   async validateResetToken(token: string): Promise<boolean> {
+    // No tokens exist in the demo — any token is treated as invalid.
+    if (isDemoMode) throw new Error('Invalid or expired token');
     // Better Auth validates the token as part of the reset flow.
     // There's no separate validation endpoint. We attempt a lightweight
     // check by calling the custom /reset-password/validate route which
@@ -408,6 +431,8 @@ export const authApi = {
   },
 
   async resetPassword(token: string, password: string): Promise<void> {
+    // No accounts to update in the demo.
+    if (isDemoMode) throw new Error('Failed to reset password. The link may be invalid or expired.');
     const res = await authClient.resetPassword({ newPassword: password, token });
     if (res.error) {
       // Sanitize error — don't reveal whether token maps to a real account

@@ -395,6 +395,7 @@ Frontend variables are defined in `catalyst-frontend/.env.example` and consumed 
 | `VITE_API_URL` | Full URL | — | Base URL for API requests. Empty = use Vite dev proxy in development, relative paths in production. |
 | `VITE_BETTER_AUTH_URL` | Full URL | Auto from `VITE_API_URL` | Base URL for Better Auth client. Defaults to `VITE_API_URL` if not set. |
 | `VITE_PASSKEY_RP_ID` | Hostname | — | Only affects Vite dev-server `allowedHosts` in `vite.config.ts`; it is not read by frontend `src` code. Set the backend `PASSKEY_RP_ID` to match your domain. |
+| `VITE_DEMO_MODE` | `true` \| unset | unset | Builds a static demo with canned fixtures and no backend (used by the `demo.catalystctl.com` Cloudflare Pages deployment via `.github/workflows/demo-pages.yml`). Auto-signs in a read-only demo admin; mutations are accepted but not persisted. |
 | `SKIP_WEB_SERVER` | `true` \| `false` | `false` | Playwright Node-side flag (read in `playwright.config.ts`), not a Vite browser variable. Set to `true` in CI to skip starting the frontend dev server during E2E tests. |
 
 ::: tip Vite Environment Variables

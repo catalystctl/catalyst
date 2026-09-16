@@ -45,6 +45,9 @@
   "configFormats": {
     "jsonMustBeObject": "La configuration JSON doit être un objet"
   },
+  "demo": {
+    "banner": "Démo — vous explorez des données fictives. Les modifications ne sont pas enregistrées."
+  },
   "errorBoundary": {
     "message": "Une erreur inattendue s’est produite.",
     "retry": "Réessayer",

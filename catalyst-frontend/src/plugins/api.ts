@@ -4,6 +4,8 @@ import type { PluginManifest } from './types';
 // In prod, always uses relative URL (same-origin behind nginx).
 import { reportSystemError } from '../services/api/systemErrors';
 
+const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 // Warn if someone set VITE_API_URL to an absolute URL — that bypasses the
@@ -25,6 +27,14 @@ async function apiFetch<T>(
   },
 ): Promise<T> {
   const { method = 'GET', body } = options ?? {};
+  // Static demo has no plugin backend: reads degrade to empty, writes are
+  // refused with an honest message instead of failing on CDN HTML.
+  if (isDemoMode) {
+    if (method.toUpperCase() !== 'GET') {
+      throw new Error('Plugin changes are disabled in the demo.');
+    }
+    return { success: true, data: null } as unknown as Promise<T>;
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     credentials: 'include',
@@ -61,6 +71,28 @@ async function apiFetch<T>(
  * Fetch all plugins
  */
 export async function fetchPlugins(): Promise<PluginManifest[]> {
+  // Static demo has no plugin backend — synthesize manifests for the
+  // frontends bundled at build time so routes, tabs and sidebar entries
+  // register and the plugin context initializes instead of retrying forever.
+  // Only the showcased plugins are enabled in the demo.
+  if (isDemoMode) {
+    const DEMO_PLUGINS = ['fastdl-sync', 'cs16-admin'];
+    const { getBundledPluginNames } = await import('./loader');
+    return getBundledPluginNames()
+      .filter((name) => DEMO_PLUGINS.includes(name))
+      .map((name) => ({
+      name,
+      version: 'demo',
+      displayName: name,
+      description: 'Demo-bundled plugin — fictional data.',
+      author: 'Catalyst Demo',
+      status: 'loaded',
+      enabled: true,
+      hasBackend: false,
+      hasFrontend: true,
+      permissions: [],
+    }));
+  }
   const data = await apiFetch<{ data: PluginManifest[] }>('/api/plugins');
   // Normalize partial payloads so UI never crashes on missing arrays
   return (data.data ?? []).map((plugin) => ({

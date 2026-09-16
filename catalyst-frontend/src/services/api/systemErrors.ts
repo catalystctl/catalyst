@@ -63,6 +63,16 @@ export async function reportSystemError(opts: {
   stack?: string;
   metadata?: Record<string, any>;
 }): Promise<void> {
+  // No backend in the static demo — keep the console log, skip the POST.
+  if ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_DEMO_MODE === 'true') {
+    try {
+      const log = opts.level === 'warn' ? console.warn : console.error;
+      log(`[system-error][${opts.component}]`, opts.message);
+    } catch {
+      /* best-effort */
+    }
+    return;
+  }
   try {
     const { level = 'error', component, stack, metadata } = opts;
 

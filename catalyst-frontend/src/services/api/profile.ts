@@ -2,6 +2,8 @@ import apiClient from './client';
 import { reportSystemError } from './systemErrors';
 import { authClient } from '../authClient';
 
+const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+
 // ── Types ──
 
 export interface ProfileAccount {
@@ -105,11 +107,13 @@ export const profileApi = {
 
   // ── Password ──
   async changePassword(payload: { currentPassword: string; newPassword: string; revokeOtherSessions?: boolean }) {
+    if (isDemoMode) throw new Error('Password changes are disabled in the demo.');
     const res = await authClient.changePassword(payload);
     if (res.error) throw new Error(res.error.message || 'Failed to change password');
     return res.data;
   },
   async setPassword(payload: { newPassword: string }) {
+    if (isDemoMode) throw new Error('Password changes are disabled in the demo.');
     // ponytail: better-auth exposes no client route to set a first password for
     // credential-less (SSO) users — the server `setPassword` endpoint is server-only.
     // Delegate to changePassword (the correct authenticated password method); a
@@ -125,6 +129,7 @@ export const profileApi = {
 
   // ── 2FA ──
   async enableTwoFactor(payload: { password: string }) {
+    if (isDemoMode) throw new Error('Two-factor changes are disabled in the demo.');
     const res = await authClient.twoFactor.enable({ password: payload.password });
     if (res.error) {
       // Surface whatever detail better-auth provides (status, code, message)
@@ -136,11 +141,13 @@ export const profileApi = {
     return res.data;
   },
   async disableTwoFactor(payload: { password: string }) {
+    if (isDemoMode) throw new Error('Two-factor changes are disabled in the demo.');
     const res = await authClient.twoFactor.disable({ password: payload.password });
     if (res.error) throw new Error(res.error.message || 'Failed to disable 2FA');
     return res.data;
   },
   async generateBackupCodes(payload: { password: string }) {
+    if (isDemoMode) throw new Error('Two-factor changes are disabled in the demo.');
     const res = await authClient.twoFactor.generateBackupCodes({ password: payload.password });
     if (res.error) throw new Error(res.error.message || 'Failed to generate backup codes');
     return res.data;
@@ -151,6 +158,7 @@ export const profileApi = {
   // Server endpoint is GET /passkey/list-user-passkeys → client: passkey.listUserPasskeys().
   // (passkey.listPasskeys would hit the non-existent /passkey/list-passkeys.)
   async listPasskeys(): Promise<Passkey[]> {
+    if (isDemoMode) return [];
     const res = await (authClient as any).passkey.listUserPasskeys();
     if (res.error) {
       reportSystemError({
@@ -164,6 +172,7 @@ export const profileApi = {
     return (res.data ?? []) as Passkey[];
   },
   async createPasskey(payload: { name?: string; authenticatorAttachment?: 'platform' | 'cross-platform' }) {
+    if (isDemoMode) throw new Error('Passkeys are disabled in the demo.');
     const res = await authClient.passkey.addPasskey({
       name: payload.name,
       authenticatorAttachment: payload.authenticatorAttachment,
@@ -177,11 +186,13 @@ export const profileApi = {
     return res;
   },
   async deletePasskey(id: string) {
+    if (isDemoMode) throw new Error('Passkeys are disabled in the demo.');
     const res = await (authClient as any).passkey.deletePasskey({ id });
     if (res.error) throw new Error(res.error.message || 'Failed to delete passkey');
     return res.data;
   },
   async updatePasskey(id: string, name: string) {
+    if (isDemoMode) throw new Error('Passkeys are disabled in the demo.');
     const res = await (authClient as any).passkey.updatePasskey({ id, name });
     if (res.error) throw new Error(res.error.message || 'Failed to update passkey');
     return res.data;
@@ -208,6 +219,7 @@ export const profileApi = {
 
   // ── Email ──
   async resendVerification(email: string) {
+    if (isDemoMode) return null;
     const res = await authClient.sendVerificationEmail({ email });
     if (res.error) throw new Error(res.error.message || 'Failed to send verification email');
     return res.data;
@@ -215,6 +227,7 @@ export const profileApi = {
 
   // ── Sessions ──
   async listSessions(): Promise<UserSession[]> {
+    if (isDemoMode) return [];
     const res = await authClient.listSessions();
     if (res.error) {
       reportSystemError({ level: 'error', component: 'ApiProfile', message: 'Failed to load sessions', metadata: { action: 'listSessions' } });
@@ -231,12 +244,14 @@ export const profileApi = {
     }));
   },
   async revokeSession(id: string) {
+    if (isDemoMode) return null;
     // Better Auth's revokeSession takes a session token or id
     const res = await authClient.revokeSession({ token: id });
     if (res.error) throw new Error(res.error.message || 'Failed to revoke session');
     return res.data;
   },
   async revokeAllSessions() {
+    if (isDemoMode) return null;
     const res = await authClient.revokeSessions();
     if (res.error) throw new Error(res.error.message || 'Failed to revoke sessions');
     return res.data;
@@ -299,6 +314,7 @@ export const profileApi = {
   // Better Auth client path proxy: listAccounts → GET /list-accounts
   // (listUserAccounts would hit the non-existent /list-user-accounts.)
   async listSsoAccounts(): Promise<ProfileAccount[]> {
+    if (isDemoMode) return [];
     const res = await (authClient as any).listAccounts();
     if (res.error) {
       reportSystemError({
@@ -312,6 +328,7 @@ export const profileApi = {
     return (res.data ?? []) as ProfileAccount[];
   },
   async linkSso(providerId: string) {
+    if (isDemoMode) throw new Error('Single sign-on is disabled in the demo.');
     const frontendOrigin = typeof window !== 'undefined' ? window.location.origin : '';
     // WHMCS/Paymenter use genericOAuth → POST /oauth2/link (client: oauth2.link).
     // Body field is providerId. Built-in social linkSocial is a different endpoint.

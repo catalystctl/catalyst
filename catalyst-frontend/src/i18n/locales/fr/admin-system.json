@@ -587,7 +587,7 @@
     "popoverDescription": "Menus et popovers",
     "presetDescription": {
       "brutalist": "Angles vifs, ombres marquées, jaune franc",
-      "catalystTeal": "L’aspect par défaut du panneau — bleu sarcelle équilibré",
+      "catalystTeal": "L’aspect par défaut du panneau — bronze chaleureux",
       "crimson": "Rouge intense au contraste marqué",
       "forest": "Verts naturels qui respirent",
       "neonNights": "Rose vif sur fond abyssal avec des accents cyan",
@@ -598,7 +598,7 @@
     },
     "presetName": {
       "brutalist": "Brutaliste",
-      "catalystTeal": "Sarcelle Catalyst",
+      "catalystTeal": "Bronze Catalyst",
       "crimson": "Cramoisi",
       "forest": "Forêt",
       "neonNights": "Nuits Néon",

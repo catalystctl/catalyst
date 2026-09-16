@@ -1,17 +1,17 @@
 <!doctype html>
-<html lang="en" class="dark" style="background-color: #0c0c14">
+<html lang="en" class="dark" style="background-color: #161412">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0c0c14" />
+    <meta name="theme-color" content="#161412" />
     <link rel="icon" href="/favicon.ico" />
     <title>Catalyst</title>
     <style>
       html {
-        background-color: #0c0c14;
+        background-color: #161412;
       }
       html.light {
-        background-color: #f5f4f2;
+        background-color: #f6f5f4;
       }
     </style>
     <script>
@@ -53,10 +53,10 @@
             }
             if (vars['--background']) root.style.backgroundColor = 'hsl(' + vars['--background'] + ')';
           } else {
-            root.style.backgroundColor = theme === 'light' ? '#f5f4f2' : '#0c0c14';
+            root.style.backgroundColor = theme === 'light' ? '#f6f5f4' : '#161412';
           }
           var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', theme === 'light' ? '#f5f4f2' : '#0c0c14');
+          if (meta) meta.setAttribute('content', theme === 'light' ? '#f6f5f4' : '#161412');
           if (css) {
             var style = document.createElement('style');
             style.id = 'catalyst-custom-css';

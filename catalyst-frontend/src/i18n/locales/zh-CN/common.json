@@ -45,6 +45,9 @@
   "configFormats": {
     "jsonMustBeObject": "JSON 配置必须为对象"
   },
+  "demo": {
+    "banner": "演示 — 您正在查看虚构数据。更改不会保存。"
+  },
   "errorBoundary": {
     "message": "发生了意外错误。",
     "retry": "重试",

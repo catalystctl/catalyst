@@ -114,11 +114,11 @@ const brutalistPreset: ThemePreset = {
 
 const catalystDefault: ThemePreset = {
   id: 'catalyst-teal',
-  name: 'Catalyst Teal',
-  description: 'The default panel look — balanced teal',
-  primaryColor: '#0d9488',
-  secondaryColor: '#8b5cf6',
-  accentColor: '#06b6d4',
+  name: 'Catalyst Bronze',
+  description: 'The default panel look — warm bronze matching catalystctl.com',
+  primaryColor: '#c48d5a',
+  secondaryColor: '#5ac4c2',
+  accentColor: '#5a5cc4',
   themeColors: { ...defaultThemeColors },
 };
 

@@ -1,6 +1,9 @@
 import { useAuthStore } from '../../stores/authStore';
 import { queryClient } from '../../lib/queryClient';
 import { reportSystemError } from './systemErrors';
+import { isDemoMode } from '../../demo/isDemo';
+import { handleDemoRequest } from '../../demo/mockHandler';
+import { demoAccountExport } from '../../demo/fixtures';
 
 /** Module-level guard set by authStore.login() to suppress the 401 interceptor
  *  while a login request is in flight.  Without this, a stale server-side
@@ -116,6 +119,29 @@ class ApiClient {
       timeoutMs,
     } = options ?? {};
     const effectiveTimeoutMs = timeoutMs ?? (responseType === 'blob' ? BLOB_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
+
+    // Static demo deployment (Cloudflare Pages): serve canned fixtures with
+    // no backend. Unmocked paths resolve to a generic success so new pages
+    // fail open instead of hanging the demo on a missing route.
+    if (isDemoMode) {
+      const demo = handleDemoRequest(method, path);
+      if (responseType === 'blob') {
+        // GDPR export downloads a fictional but complete payload in the demo.
+        const payload = path.includes('/auth/profile/export')
+          ? demoAccountExport()
+          : demo.handled ? demo.data : { success: true };
+        return new Blob([JSON.stringify(payload, null, 2)], {
+          type: 'application/json',
+        }) as unknown as Promise<T>;
+      }
+      if (responseType === 'text') {
+        const payload = demo.handled ? demo.data : { success: true };
+        return (typeof payload === 'string' ? payload : JSON.stringify(payload)) as unknown as Promise<T>;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      if (demo.handled) return demo.data as T;
+      return { success: true, data: [] } as unknown as Promise<T>;
+    }
 
     // Build URL with query params
     let url = `${this.baseUrl}${path}`;

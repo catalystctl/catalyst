@@ -54,7 +54,7 @@ export default function AppearanceSettings() {
   const clearPersonalTheme = useThemeStore((s) => s.clearPersonalTheme);
   const themeSettings = useThemeStore((s) => s.themeSettings);
 
-  const panelPrimary = themeSettings?.primaryColor || '#0d9488';
+  const panelPrimary = themeSettings?.primaryColor || '#c48d5a';
   const panelSecondary = themeSettings?.secondaryColor || '#8b5cf6';
   const panelAccent = themeSettings?.accentColor || '#06b6d4';
   const panelDefault = themeSettings?.defaultTheme || 'dark';

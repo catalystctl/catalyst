@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import UpdateNotification from '../shared/UpdateNotification';
 import UploadProgressIndicator from '../files/UploadProgressIndicator';
 import DownloadProgressIndicator from '../files/DownloadProgressIndicator';
+import { isDemoMode } from '../../demo/isDemo';
 
 function AppLayout() {
   useServerStateUpdates();
@@ -34,7 +35,9 @@ function AppLayout() {
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsMobileSidebarOpen(false); }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close); }, []);
 
   return (
-    <div className="app-shell flex h-[100dvh] font-sans">
+    // Demo builds render a fixed h-8 banner above everything: shift the shell
+    // below it and shrink to fit so nothing overlaps and no page scroll appears.
+    <div className={cn('app-shell flex font-sans', isDemoMode ? 'mt-8 h-[calc(100dvh-2rem)]' : 'h-[100dvh]')}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:m-2 focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-foreground">{t('shell.skipToContent')}</a>
       <UpdateNotification />
       {/* Mobile overlay */}
@@ -47,7 +50,7 @@ function AppLayout() {
       )}
 
       {/* Mobile header */}
-      <div className="fixed top-0 left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 shadow-panel lg:hidden">
+      <div className={cn('fixed left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 shadow-panel lg:hidden', isDemoMode ? 'top-8' : 'top-0')}>
         <button
           type="button"
           onClick={() => setIsMobileSidebarOpen(true)}
@@ -72,10 +75,14 @@ function AppLayout() {
       </div>
 
       {/* Sidebar */}
+      {/* Demo: start below the fixed banner and stack above it. The shell
+        uses isolation:isolate, so the drawer's z-50 is trapped inside the
+        shell context and the root-level banner would otherwise paint over it. */}
       <div
         id="mobile-sidebar"
         className={cn(
-          'fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-standard lg:static lg:transform-none',
+          'fixed left-0 z-50 transform transition-transform duration-200 ease-standard lg:static lg:transform-none',
+          isDemoMode ? 'top-8 bottom-0 z-[70]' : 'inset-y-0',
           isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
@@ -93,8 +100,11 @@ function AppLayout() {
       <main
         id="main-content"
         className={cn(
-          'relative flex min-h-0 flex-1 flex-col overflow-hidden px-4 pt-[4.5rem] lg:px-6',
-          isServerWorkspace ? 'py-3 lg:pt-3' : 'py-4 lg:py-6 lg:pt-6',
+          // Spell out each side: py-* would make tailwind-merge drop the
+          // pt-[4.5rem] that clears the fixed mobile header (content slid
+          // underneath it on every mobile page).
+          'relative flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-[4.5rem] lg:px-6',
+          isServerWorkspace ? 'pb-3 lg:pb-3 lg:pt-3' : 'lg:pb-6 lg:pt-6',
         )}
       >
         <div

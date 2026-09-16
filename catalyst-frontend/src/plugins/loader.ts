@@ -43,6 +43,11 @@ function buildFrontendMap() {
 
 const frontendMap = buildFrontendMap();
 
+/** Names of plugin frontends bundled at build time (demo manifests derive from this). */
+export function getBundledPluginNames(): string[] {
+  return [...frontendMap.keys()];
+}
+
 /**
  * Load a marketplace-installed plugin's self-contained ESM bundle.
  * Cache-busted by version so an update is not stuck on a previously imported module.

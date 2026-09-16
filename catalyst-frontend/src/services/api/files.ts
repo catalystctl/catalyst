@@ -2,6 +2,20 @@ import type { FileEntry, FileListing } from '../../types/file';
 import { joinPath, normalizePath } from '../../utils/filePaths';
 import { reportSystemError } from './systemErrors';
 
+const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+
+// Fictional listing so the file browser renders with no backend.
+const demoFiles = (requestedPath: string): FileListing => ({
+  path: normalizePath(requestedPath),
+  files: [
+    { name: 'server.jar', path: joinPath(requestedPath, 'server.jar'), size: 48234512, isDirectory: false, modified: new Date().toISOString() },
+    { name: 'server.properties', path: joinPath(requestedPath, 'server.properties'), size: 1212, isDirectory: false, modified: new Date().toISOString() },
+    { name: 'eula.txt', path: joinPath(requestedPath, 'eula.txt'), size: 184, isDirectory: false, modified: new Date().toISOString() },
+    { name: 'world', path: joinPath(requestedPath, 'world'), size: 0, isDirectory: true, modified: new Date().toISOString() },
+    { name: 'logs', path: joinPath(requestedPath, 'logs'), size: 0, isDirectory: true, modified: new Date().toISOString() },
+  ],
+});
+
 /** Fallback max upload size (MB) when the backend setting can't be fetched. */
 export const DEFAULT_MAX_UPLOAD_MB = 500;
 
@@ -145,6 +159,18 @@ async function assertOk(response: Response): Promise<void> {
 // ── Fetch helpers ──
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  // Static demo: serve the file browser from fixtures, accept mutations
+  // without persisting (the banner discloses the demo is read-only).
+  if (isDemoMode) {
+    const path = url.split('?')[0];
+    if ((init?.method ?? 'GET').toUpperCase() === 'GET' && /\/files$/.test(path)) {
+      const queryPath = new URL(url, 'http://demo.invalid').searchParams.get('path') ?? '/';
+      return { success: true, data: demoFiles(queryPath) } as unknown as T;
+    }
+    if (/\/files\/archive-contents$/.test(path)) return { success: true, data: [] } as unknown as T;
+    if (/\/files\/compress$/.test(path)) return { success: true, data: {} } as unknown as T;
+    return { success: true } as unknown as T;
+  }
   const res = await fetch(url, { ...init, credentials: 'include' });
   await assertOk(res);
   return res.json() as Promise<T>;
@@ -168,6 +194,10 @@ export const filesApi = {
     onProgress?: (loaded: number, total?: number) => void,
     signal?: AbortSignal,
   ) => {
+    // Static demo has no files to download — return a small placeholder blob.
+    if (isDemoMode) {
+      return new Blob([`# Demo placeholder for ${path}\nFile downloads are disabled in the demo.\n`], { type: 'text/plain' });
+    }
     const normalizedPath = normalizePath(path);
     let res: Response;
     try {
@@ -224,6 +254,11 @@ export const filesApi = {
     onProgress?: (fileIndex: number, progress: number, loaded?: number, total?: number) => void,
     signal?: AbortSignal,
   ) => {
+    // Demo is read-only — accept uploads without persisting them.
+    if (isDemoMode) {
+      files.forEach((_, index) => onProgress?.(index, 100, 1, 1));
+      return;
+    }
     const normalizedPath = normalizePath(path);
     await Promise.all(
       files.map((file, index) =>

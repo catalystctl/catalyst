@@ -45,6 +45,9 @@
   "configFormats": {
     "jsonMustBeObject": "JSON config must be an object"
   },
+  "demo": {
+    "banner": "Demo — you're exploring fictional data. Changes aren't saved."
+  },
   "errorBoundary": {
     "message": "Unexpected error encountered.",
     "retry": "Try again",

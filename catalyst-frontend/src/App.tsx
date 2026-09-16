@@ -24,6 +24,7 @@ import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 
 import InvitesPage from './pages/InvitesPage';
 import NotFoundPage from './pages/NotFoundPage';
+import DemoBanner from './demo/DemoBanner';
 import { PluginProvider } from './plugins/PluginProvider';
 import PluginRoutePage from './pages/PluginRoutePage';
 import { ApiKeysPage } from './pages/ApiKeysPage';
@@ -215,6 +216,7 @@ function App() {
  return (
  <ErrorBoundary resetKey={location.pathname}>
  <ToastProvider />
+ <DemoBanner />
  <PluginProvider>
  <AnimatePresence initial={false}>
  <Routes>
@@ -236,6 +238,7 @@ function App() {
  return (
  <ErrorBoundary resetKey={location.pathname}>
  <ToastProvider />
+ <DemoBanner />
  <PluginProvider>
  <AnimatePresence initial={false}>
  <Routes>

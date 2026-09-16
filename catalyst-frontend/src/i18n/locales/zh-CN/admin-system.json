@@ -569,7 +569,7 @@
     "popoverDescription": "菜单与弹出层",
     "presetDescription": {
       "brutalist": "锐利直角、硬阴影与醒目黄色",
-      "catalystTeal": "默认面板外观 —— 均衡的青绿色",
+      "catalystTeal": "默认面板外观 —— 暖古铜色",
       "crimson": "强烈醒目的红色",
       "forest": "自然呼吸的绿色",
       "neonNights": "深空之上的霓虹粉与青色点缀",
@@ -580,7 +580,7 @@
     },
     "presetName": {
       "brutalist": "粗野主义",
-      "catalystTeal": "Catalyst 青绿",
+      "catalystTeal": "Catalyst 古铜",
       "crimson": "绯红",
       "forest": "森林绿",
       "neonNights": "霓虹之夜",

@@ -42,9 +42,9 @@ import {
 // ─── Defaults ───
 
 const DEFAULTS = {
- primaryColor: '#0d9488',
- secondaryColor: '#8b5cf6',
- accentColor: '#06b6d4',
+ primaryColor: '#c48d5a',
+ secondaryColor: '#5ac4c2',
+ accentColor: '#5a5cc4',
  themeColors: { ...defaultThemeColors } satisfies ThemeColors,
 } as const;
 
@@ -1026,7 +1026,7 @@ function ThemeSettingsPage() {
  type="text"
  value={seedColor}
  onChange={(e) => setSeedColor(e.target.value)}
- placeholder="#0d9488"
+ placeholder="#c48d5a"
  className={`w-36 rounded-lg border bg-card px-3 py-2 font-mono text-sm transition-colors focus:outline-none focus:ring-2 ${
  isSeedValid
  ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
@@ -1304,7 +1304,7 @@ function ThemeSettingsPage() {
  <textarea
  value={importText}
  onChange={(e) => { setImportText(e.target.value); setImportError(null); }}
- placeholder='{"version": 1, "primaryColor": "#0d9488", ...}'
+ placeholder='{"version": 1, "primaryColor": "#c48d5a", ...}'
  rows={8}
  spellCheck={false}
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"

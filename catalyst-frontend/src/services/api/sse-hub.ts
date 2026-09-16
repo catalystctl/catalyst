@@ -314,6 +314,16 @@ export function subscribeSharedEventSource(
   onEvent: EventListener,
   onStatus?: StatusListener,
 ): () => void {
+  // Static demo has no event stream — report closed so hooks fall back to
+  // their polling path instead of opening a socket against the CDN.
+  if ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_DEMO_MODE === 'true') {
+    try {
+      onStatus?.('closed');
+    } catch {
+      /* isolate */
+    }
+    return () => {};
+  }
   ensureBroadcast();
 
   let stream = streams.get(url);
