@@ -1,12 +1,14 @@
 # Screenshot test artifacts (generated to docs/screenshots/ which IS committed)
 catalyst-frontend/screenshots/
 catalyst-frontend/playwright-report/
-catalyst-frontend/playwright-report/
 docs.md
 
-# Local architecture/review notes (not for commit)
-review-*.md
+# Local architecture/review notes (not for commit, root only so .github/prompts stays tracked)
+/review-*.md
 EXHAUSTIVE_REVIEW_REPORT.md
+# One-off root reports (use benchmarks/results/ or docs/ instead)
+/benchmark.html
+/PERFORMANCE_AUDIT.md
 
 # Development-only scripts (keep these local)
 catalyst-backend/generate-better-auth-schema.ts
@@ -17,9 +19,10 @@ catalyst-backend/sftp_host_key
 catalyst-backend/schema-additions.prisma
 catalyst-backend/updated-user-model.prisma
 
-# Test environment config
-tests/config.env
+# Test runtime deps (installed via tests/lib/package.json, never commit)
 tests/lib/node_modules/
+# install.sh compatibility test output (generated reports, never commit)
+test-install-sh/chain-runs/
 
 # Build artifacts
 *.tgz
@@ -111,3 +114,6 @@ BRANCH-STACK.md
 .incus/
 lxc-data/
 scripts/lxc-lab/*.local.env
+
+# Standalone docs checkout (own repo, not a submodule — clone separately)
+catalyst-doc/
