@@ -40,6 +40,21 @@ import { PANEL_VERSION } from '../../utils/version';
 import { roleLabel } from '../../utils/constants';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 
+// Expanded admin sections persist across page refreshes.
+const SIDEBAR_EXPANDED_KEY = 'catalyst.sidebar.expandedSections';
+
+function readExpandedSections(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_EXPANDED_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 const buildMainLinks = (t: TFunction): MenuItemProps[] => [
   { to: '/dashboard', label: t('layout:nav.dashboard'), icon: LayoutDashboard },
   { to: '/servers', label: t('layout:nav.servers'), icon: Server },
@@ -272,24 +287,25 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
 }
 
 interface SectionProps {
+  id: string;
   title: string;
   links: MenuItemProps[];
-  defaultExpanded?: boolean;
+  expanded?: boolean;
+  onToggle?: (id: string) => void;
   collapsed?: boolean;
 }
 
-function Section({ title, links, defaultExpanded = false, collapsed }: SectionProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+function Section({ id, title, links, expanded = false, onToggle, collapsed }: SectionProps) {
   const location = useLocation();
 
   const hasActiveLink = links.some(
     (link) => location.pathname === link.to || (link.to !== '/admin' && location.pathname.startsWith(`${link.to}/`)),
   );
-  const shouldExpand = isExpanded || hasActiveLink;
+  const shouldExpand = expanded || hasActiveLink;
 
   const toggleExpanded = (e: MouseEvent) => {
     e.preventDefault();
-    setIsExpanded(!isExpanded);
+    onToggle?.(id);
   };
 
   if (links.length === 0) return null;
@@ -310,7 +326,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
         type="button"
         onClick={toggleExpanded}
         aria-expanded={shouldExpand}
-        aria-controls={`section-${title.toLowerCase().replace(/\s+/g, '-')}`}
+        aria-controls={`section-${id}`}
         className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80 transition-colors hover:text-foreground"
       >
         <span>{title}</span>
@@ -321,7 +337,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
         )}
       </button>
       {shouldExpand && (
-        <div id={`section-${title.toLowerCase().replace(/\s+/g, '-')}`} className="relative space-y-0.5 border-l border-border/70 ml-3 pl-2.5">
+        <div id={`section-${id}`} className="relative space-y-0.5 border-l border-border/70 ml-3 pl-2.5">
           {links.map((link) => (
             <MenuItem key={link.to} {...link} />
           ))}
@@ -344,6 +360,19 @@ function Sidebar() {
   const toggleSidebar = useThemeStore((s) => s.toggleSidebar);
   const pluginTabs = usePluginTabs('admin');
   const pluginRoutes = usePluginRoutes();
+  const [expandedIds, setExpandedIds] = useState<string[]>(readExpandedSections);
+
+  const toggleSection = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id];
+      try {
+        window.localStorage.setItem(SIDEBAR_EXPANDED_KEY, JSON.stringify(next));
+      } catch {
+        // Storage may be unavailable (private mode); menu still works for this page view.
+      }
+      return next;
+    });
+  };
 
   // Show main "Tickets" nav only when the ticketing user route is loaded.
   const hasUserTicketPage = pluginRoutes.some(
@@ -443,8 +472,11 @@ function Sidebar() {
               {filteredSections.map((section) => (
                 <Section
                   key={section.id}
+                  id={section.id}
                   title={section.title}
                   links={section.links}
+                  expanded={expandedIds.includes(section.id)}
+                  onToggle={toggleSection}
                   collapsed={collapsed}
                 />
               ))}
