@@ -818,6 +818,13 @@ impl ContainerdRuntime {
             return Ok(());
         }
 
+        // Snapshot the desired forwards BEFORE teardown: teardown_port_forward
+        // deletes the state file on success, so re-reading it afterwards would
+        // always miss and the re-ADD loop below would silently attach no DNAT.
+        let prev_forwards: Option<PortForwardState> = fs::read_to_string(&ports_path)
+            .ok()
+            .and_then(|raw| serde_json::from_str(&raw).ok());
+
         // Clear any stale port-forward rules from the previous task netns before
         // re-adding against the new PID's network namespace.
         let _ = self.teardown_port_forward(container_id).await;
@@ -862,22 +869,18 @@ impl ContainerdRuntime {
 
             if !cip.is_empty() {
                 let mut forwards: Vec<PortForward> = Vec::new();
-                if ports_path.exists() {
-                    if let Ok(raw) = fs::read_to_string(&ports_path) {
-                        if let Ok(prev) = serde_json::from_str::<PortForwardState>(&raw) {
-                            for fwd in prev.forwards {
-                                if let Err(e) = self
-                                    .setup_port_forward(fwd.host_port, fwd.container_port, cip)
-                                    .await
-                                {
-                                    warn!(
-                                        "Failed to reattach port forward {}->{}:{}: {}",
-                                        fwd.host_port, cip, fwd.container_port, e
-                                    );
-                                } else {
-                                    forwards.push(fwd);
-                                }
-                            }
+                if let Some(prev) = &prev_forwards {
+                    for fwd in prev.forwards.clone() {
+                        if let Err(e) = self
+                            .setup_port_forward(fwd.host_port, fwd.container_port, cip)
+                            .await
+                        {
+                            warn!(
+                                "Failed to reattach port forward {}->{}:{}: {}",
+                                fwd.host_port, cip, fwd.container_port, e
+                            );
+                        } else {
+                            forwards.push(fwd);
                         }
                     }
                 }
@@ -922,36 +925,32 @@ impl ContainerdRuntime {
             return Ok(());
         }
 
-        // Config missing but ports state exists: try to re-bind DNAT to current IP if known.
+        // Config missing but prior port state was snapshotted above (the state
+        // file was already deleted by teardown): re-bind DNAT to the current
+        // IP when one is known.
         if let Ok(ip) = self.get_container_ip(container_id).await {
-            if !ip.is_empty() && ports_path.exists() {
-                if let Ok(raw) = fs::read_to_string(&ports_path) {
-                    if let Ok(prev) = serde_json::from_str::<PortForwardState>(&raw) {
-                        let mut forwards = Vec::new();
-                        for fwd in prev.forwards {
-                            if self
-                                .setup_port_forward(fwd.host_port, fwd.container_port, &ip)
-                                .await
-                                .is_ok()
-                            {
-                                let _ = FirewallManager::allow_port(
-                                    fwd.host_port,
-                                    "tcp",
-                                    &ip,
-                                    server_id,
-                                )
-                                .await;
-                                forwards.push(fwd);
-                            }
+            if !ip.is_empty() {
+                if let Some(prev) = &prev_forwards {
+                    let mut forwards = Vec::new();
+                    for fwd in prev.forwards.clone() {
+                        if self
+                            .setup_port_forward(fwd.host_port, fwd.container_port, &ip)
+                            .await
+                            .is_ok()
+                        {
+                            let _ =
+                                FirewallManager::allow_port(fwd.host_port, "tcp", &ip, server_id)
+                                    .await;
+                            forwards.push(fwd);
                         }
-                        if !forwards.is_empty() {
-                            let state = PortForwardState {
-                                container_ip: ip,
-                                forwards,
-                            };
-                            if let Ok(j) = serde_json::to_string_pretty(&state) {
-                                let _ = fs::write(&ports_path, &j);
-                            }
+                    }
+                    if !forwards.is_empty() {
+                        let state = PortForwardState {
+                            container_ip: ip,
+                            forwards,
+                        };
+                        if let Ok(j) = serde_json::to_string_pretty(&state) {
+                            let _ = fs::write(&ports_path, &j);
                         }
                     }
                 }
@@ -1427,10 +1426,17 @@ impl ContainerdRuntime {
                 while let Ok(Some(entry)) = entries.next_entry().await {
                     let path = entry.path();
                     let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    // Only CNI *result* files (`catalyst-<id>`) name a container.
+                    // Port-forward state (`catalyst-<id>-ports.json`) and the
+                    // stored plugin config (`catalyst-<id>-config`) must be
+                    // skipped: stripping the prefix yields a bogus id
+                    // (`<id>-ports.json`) whose existence check always fails,
+                    // which previously deleted live DNAT bookkeeping on every
+                    // agent restart.
+                    if fname.ends_with("-ports.json") || fname.ends_with("-config") {
+                        continue;
+                    }
                     if let Some(cid) = fname.strip_prefix("catalyst-") {
-                        if fname.contains("-config") {
-                            continue;
-                        }
                         stale_results.push((cid.to_string(), path.to_string_lossy().to_string()));
                     }
                 }

@@ -38,7 +38,13 @@ impl ContainerdRuntime {
         File::create(&stderr_path)
             .map_err(|e| AgentError::ContainerError(format!("stderr: {}", e)))?;
 
-        let stdin_writer = open_fifo_rdwr(&stdin_path)?;
+        let stdin_writer = match open_fifo_rdwr(&stdin_path) {
+            Ok(w) => w,
+            Err(e) => {
+                let _ = fs::remove_dir_all(&io_dir);
+                return Err(e);
+            }
+        };
         {
             let mut io_map = self.container_io.lock().await;
             io_map.insert(
@@ -71,18 +77,26 @@ impl ContainerdRuntime {
                 ),
                 Some(serde_json::json!({ "serverId": config.server_id })),
             );
+            // Unwind the I/O state created above (io_dir, FIFO, map entry).
+            self.remove_io_state(config.container_id).await;
             return Err(AgentError::InvalidRequest(
                 "networkMode \"host\" is disabled on this node".to_string(),
             ));
         }
-        let spec = self.build_oci_spec(
+        let spec = match self.build_oci_spec(
             &config,
             &io_dir,
             use_host_network,
             &image_env,
             image_entrypoint.as_deref(),
             image_cmd.as_deref(),
-        )?;
+        ) {
+            Ok(spec) => spec,
+            Err(e) => {
+                self.remove_io_state(config.container_id).await;
+                return Err(e);
+            }
+        };
         let spec_any = Any {
             type_url: SPEC_TYPE_URL.to_string(),
             value: spec.to_string().into_bytes(),
@@ -90,7 +104,13 @@ impl ContainerdRuntime {
 
         // Prepare rootfs snapshot
         let snap_key = format!("{}-snap", config.container_id);
-        self.prepare_snapshot(&qualified_image, &snap_key).await?;
+        if let Err(e) = self.prepare_snapshot(&qualified_image, &snap_key).await {
+            // Nothing was created in containerd yet; drop local I/O state and
+            // best-effort remove a possibly stale snapshot under our key.
+            self.remove_io_state(config.container_id).await;
+            self.remove_snapshot(&snap_key).await;
+            return Err(e);
+        }
 
         // Create container
         let container = Container {
@@ -111,7 +131,13 @@ impl ContainerdRuntime {
             container: Some(container),
         };
         let req = with_namespace!(req, &self.namespace);
-        client.create(req).await.map_err(grpc_err)?;
+        if let Err(e) = client.create(req).await {
+            // Snapshot is prepared but the record was not created: remove the
+            // snapshot and local I/O state so retries don't hit AlreadyExists.
+            self.remove_snapshot(&snap_key).await;
+            self.remove_io_state(config.container_id).await;
+            return Err(grpc_err(e));
+        }
 
         // Cache cgroup path for fast stats lookups
         let cached_cg = format!("/sys/fs/cgroup/{}/{}", self.namespace, config.container_id);
@@ -121,7 +147,15 @@ impl ContainerdRuntime {
         }
 
         // Get rootfs mounts and create task
-        let mounts = self.get_snapshot_mounts(&snap_key).await?;
+        let mounts = match self.get_snapshot_mounts(&snap_key).await {
+            Ok(mounts) => mounts,
+            Err(e) => {
+                // Container record exists but its snapshot is unusable: tear
+                // down the whole stack so the next attempt starts clean.
+                let _ = self.remove_container(config.container_id).await;
+                return Err(e);
+            }
+        };
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = CreateTaskRequest {
             container_id: config.container_id.to_string(),
@@ -132,10 +166,16 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        let resp = tasks.create(req).await.map_err(|e| {
-            self.cleanup_io(config.container_id);
-            grpc_err(e)
-        })?;
+        let resp = match tasks.create(req).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                // Task creation failed after the container record, snapshot,
+                // and maps were set up: destroy the whole stack (task +
+                // container + snapshot + CNI + maps + io_dir), not just stdio.
+                let _ = self.remove_container(config.container_id).await;
+                return Err(grpc_err(e));
+            }
+        };
         let pid = resp.into_inner().pid;
 
         // Set up CNI networking before starting
@@ -220,10 +260,13 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        tasks.start(req).await.map_err(|e| {
-            self.cleanup_io(config.container_id);
-            grpc_err(e)
-        })?;
+        if let Err(e) = tasks.start(req).await {
+            // The task, container, snapshot, and full CNI attachment (iface,
+            // lease, DNAT rules, state files) all exist here: destroy the
+            // whole stack so nothing leaks on a start failure.
+            let _ = self.remove_container(config.container_id).await;
+            return Err(grpc_err(e));
+        }
 
         info!(
             "Container created and started: {} (pid {})",
@@ -477,7 +520,10 @@ impl ContainerdRuntime {
         };
 
         let snap_key = format!("{}-snap", container_id);
-        self.prepare_snapshot(&qualified_image, &snap_key).await?;
+        if let Err(e) = self.prepare_snapshot(&qualified_image, &snap_key).await {
+            let _ = fs::remove_dir_all(&io_dir);
+            return Err(e);
+        }
 
         let container = Container {
             id: container_id.clone(),
@@ -496,14 +542,24 @@ impl ContainerdRuntime {
             container: Some(container),
         };
         let req = with_namespace!(req, &self.namespace);
-        client.create(req).await.map_err(grpc_err)?;
+        if let Err(e) = client.create(req).await {
+            self.remove_snapshot(&snap_key).await;
+            let _ = fs::remove_dir_all(&io_dir);
+            return Err(grpc_err(e));
+        }
 
         info!(
             "[DEBUG] Installer {} container created in containerd",
             container_id
         );
 
-        let mounts = self.get_snapshot_mounts(&snap_key).await?;
+        let mounts = match self.get_snapshot_mounts(&snap_key).await {
+            Ok(mounts) => mounts,
+            Err(e) => {
+                let _ = self.remove_container(&container_id).await;
+                return Err(e);
+            }
+        };
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = CreateTaskRequest {
             container_id: container_id.clone(),
@@ -514,7 +570,10 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        tasks.create(req).await.map_err(grpc_err)?;
+        if let Err(e) = tasks.create(req).await {
+            let _ = self.remove_container(&container_id).await;
+            return Err(grpc_err(e));
+        }
 
         info!(
             "[DEBUG] Installer {} task created, stdout={} stderr={}",
@@ -546,7 +605,12 @@ impl ContainerdRuntime {
                 0
             }
         };
-        start_result.map_err(grpc_err)?;
+        if let Err(e) = start_result {
+            // Task, container record, and snapshot all exist: destroy the
+            // whole stack so retries don't leak installer generations.
+            let _ = self.remove_container(&container_id).await;
+            return Err(grpc_err(e));
+        }
 
         // The installer spec uses a private network namespace, so attach it
         // to the bridge network for connectivity (no port forwards).
@@ -621,12 +685,47 @@ impl ContainerdRuntime {
             }
         }
 
-        let _ = self.ensure_container_io(container_id).await;
+        let io_ready = self.ensure_container_io(container_id).await?;
+        if !io_ready {
+            // I/O paths are missing (e.g. a prior failed create cleaned the
+            // dir while the container record survived): recreate them instead
+            // of handing task create dangling stdio paths.
+            let io_dir = self.console_log_dir.join(container_id);
+            fs::create_dir_all(&io_dir).map_err(|e| {
+                AgentError::ContainerError(format!("Failed to recreate I/O directory: {}", e))
+            })?;
+            set_dir_perms(&io_dir, 0o700);
+            let stdin_path = io_dir.join("stdin");
+            if stdin_path.exists() {
+                fs::remove_file(&stdin_path).ok();
+            }
+            create_fifo(&stdin_path).map_err(|e| {
+                AgentError::ContainerError(format!("Failed to recreate stdin FIFO: {}", e))
+            })?;
+            File::create(io_dir.join("stdout"))
+                .map_err(|e| AgentError::ContainerError(format!("stdout: {}", e)))?;
+            File::create(io_dir.join("stderr"))
+                .map_err(|e| AgentError::ContainerError(format!("stderr: {}", e)))?;
+            if !self.ensure_container_io(container_id).await? {
+                return Err(AgentError::ContainerError(format!(
+                    "stdio paths for {} are unavailable and could not be recreated",
+                    container_id
+                )));
+            }
+        }
         let snap_key = format!("{}-snap", container_id);
-        let mounts = self
-            .get_snapshot_mounts(&snap_key)
-            .await
-            .unwrap_or_default();
+        let mounts = self.get_snapshot_mounts(&snap_key).await.map_err(|e| {
+            AgentError::ContainerError(format!(
+                "snapshot mounts for {} unavailable (snapshot was GC'd or partially removed; recreate the container): {}",
+                snap_key, e
+            ))
+        })?;
+        if mounts.is_empty() {
+            return Err(AgentError::ContainerError(format!(
+                "snapshot mounts for {} are empty; refusing to start without a rootfs (recreate the container)",
+                snap_key
+            )));
+        }
         let io_dir = self.console_log_dir.join(container_id);
 
         let req = CreateTaskRequest {
@@ -729,7 +828,11 @@ impl ContainerdRuntime {
                 };
                 let req = with_namespace!(req, &self.namespace);
                 let _ = tasks.kill(req).await;
-                let _ = self.wait_for_exit(container_id).await;
+                // Bounded second wait: never rely on wait_for_exit's 90s
+                // backstop here or every wedged stop stalls for over a minute.
+                let _ =
+                    tokio::time::timeout(Duration::from_secs(10), self.wait_for_exit(container_id))
+                        .await;
             }
         }
         let req = DeleteTaskRequest {
@@ -876,6 +979,7 @@ impl ContainerdRuntime {
             let mut cg_map = self.cgroup_paths.write().await;
             cg_map.remove(container_id);
         }
+        self.cpu_tracker.remove(container_id).await;
         let _ = fs::remove_dir_all(self.console_log_dir.join(container_id));
         Ok(())
     }
@@ -901,20 +1005,51 @@ impl ContainerdRuntime {
         };
         if let Some(h) = handle {
             let input = input.to_string();
-            // The stdin FIFO is opened blocking (O_RDWR, no O_NONBLOCK), so a
-            // container that never reads stdin would block write_all forever
-            // on a full 64K pipe — wedging a blocking-pool thread and (before
-            // console_input was spawned) the whole WS read loop. Bound the
-            // write; on timeout the pipe is full and the process is not
-            // consuming input.
+            // Non-blocking bounded write: the stdin FIFO is opened O_RDWR so
+            // the pipe always has a "reader" (ourselves) — a blocking
+            // write_all on a full 64K pipe would park this pool thread
+            // forever with no EPIPE, leaking one blocking-pool thread per
+            // large/pasted input to a non-reading container. Instead the
+            // clone is switched to O_NONBLOCK and EAGAIN is retried within a
+            // 5s budget, so the worker thread always terminates.
+            // (O_NONBLOCK lives on the shared open file description; every
+            // writer goes through this path, so the mode is consistent.)
             let write_fut = spawn_blocking(move || {
-                let mut w = h;
-                w.write_all(input.as_bytes())
-                    .map_err(|e| AgentError::ContainerError(format!("stdin: {}", e)))?;
-                let _ = w.flush();
+                use std::os::unix::io::AsRawFd;
+                let w = h;
+                let fd = w.as_raw_fd();
+                let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+                if flags >= 0 {
+                    unsafe {
+                        libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+                    }
+                }
+                let mut buf = input.as_bytes();
+                let start = std::time::Instant::now();
+                while !buf.is_empty() {
+                    let n = unsafe { libc::write(fd, buf.as_ptr() as *const _, buf.len()) };
+                    if n > 0 {
+                        buf = &buf[n as usize..];
+                        continue;
+                    }
+                    let err = std::io::Error::last_os_error();
+                    if err.kind() == std::io::ErrorKind::WouldBlock {
+                        if start.elapsed() > Duration::from_secs(5) {
+                            return Err(AgentError::ContainerError(
+                                "stdin write timed out: container is not reading input".to_string(),
+                            ));
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    if err.kind() == std::io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    return Err(AgentError::ContainerError(format!("stdin: {}", err)));
+                }
                 Ok::<(), AgentError>(())
             });
-            match tokio::time::timeout(Duration::from_secs(5), write_fut).await {
+            match tokio::time::timeout(Duration::from_secs(6), write_fut).await {
                 Ok(Ok(Ok(()))) => {}
                 Ok(Ok(Err(e))) => return Err(e),
                 Ok(Err(join_err)) => {
@@ -939,7 +1074,8 @@ impl ContainerdRuntime {
             );
         }
 
-        // Fallback: exec
+        // Fallback: exec `cat > /proc/1/fd/0` as uid 1000 (mirrors the
+        // runtime posture; see exec()).
         let exec_id = format!("stdin-{}", &uuid::Uuid::new_v4().to_string()[..8]);
         let io_dir = self.console_log_dir.join(container_id);
         let ep = io_dir.join(format!("e-{}-in", exec_id));
@@ -965,44 +1101,112 @@ impl ContainerdRuntime {
             spec: Some(spec_any),
         };
         let req = with_namespace!(req, &self.namespace);
-        tasks.exec(req).await.map_err(grpc_err)?;
+        if let Err(e) = tasks.exec(req).await {
+            self.delete_exec_process(container_id, &exec_id).await;
+            let _ = fs::remove_file(&ep);
+            let _ = fs::remove_file(&eo);
+            return Err(grpc_err(e));
+        }
         let req = StartRequest {
             container_id: container_id.to_string(),
             exec_id: exec_id.clone(),
         };
         let req = with_namespace!(req, &self.namespace);
-        tasks.start(req).await.map_err(grpc_err)?;
+        if let Err(e) = tasks.start(req).await {
+            self.delete_exec_process(container_id, &exec_id).await;
+            let _ = fs::remove_file(&ep);
+            let _ = fs::remove_file(&eo);
+            return Err(grpc_err(e));
+        }
         let epc = ep.clone();
         let input_owned = input.to_string();
-        spawn_blocking(move || -> AgentResult<()> {
-            let mut f = std::fs::OpenOptions::new()
-                .write(true)
-                .open(&epc)
-                .map_err(|e| AgentError::ContainerError(format!("stdin fallback open: {}", e)))?;
-            f.write_all(input_owned.as_bytes())
-                .map_err(|e| AgentError::ContainerError(format!("stdin fallback write: {}", e)))?;
-            Ok(())
-        })
-        .await
-        .map_err(|e| AgentError::ContainerError(e.to_string()))??;
+        // Bounded open+write: a blocking O_WRONLY open parks the pool thread
+        // forever when the exec'd cat died before opening the read end.
+        let write_result = tokio::time::timeout(
+            Duration::from_secs(5),
+            spawn_blocking(move || -> AgentResult<()> {
+                let mut f = std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(&epc)
+                    .map_err(|e| {
+                        AgentError::ContainerError(format!("stdin fallback open: {}", e))
+                    })?;
+                f.write_all(input_owned.as_bytes()).map_err(|e| {
+                    AgentError::ContainerError(format!("stdin fallback write: {}", e))
+                })?;
+                Ok(())
+            }),
+        )
+        .await;
+        // Reap the exec entry and temp files on every path.
+        self.delete_exec_process(container_id, &exec_id).await;
         let _ = fs::remove_file(&ep);
         let _ = fs::remove_file(&eo);
-        Ok(())
+        match write_result {
+            Ok(Ok(Ok(()))) => Ok(()),
+            Ok(Ok(Err(e))) => Err(e),
+            Ok(Err(join_err)) => Err(AgentError::ContainerError(join_err.to_string())),
+            Err(_) => Err(AgentError::ContainerError(
+                "stdin fallback write timed out".to_string(),
+            )),
+        }
+    }
+
+    /// Reap installer containers orphaned by a previous agent process (kill or
+    /// restart mid-install). Installers carry no labels and the in-memory
+    /// `active_installs` map does not survive restarts, so match by the
+    /// `catalyst-installer-` ID prefix (UUID-suffixed; never collides with
+    /// server IDs). Without this, a detached installer holds its 2 GiB
+    /// cgroup, /data bind, IPAM lease, and io_dir with no waiter and no
+    /// exit monitor. Returns the number of installers reaped.
+    pub async fn cleanup_stale_installers(&self) -> usize {
+        let containers = match self.list_containers().await {
+            Ok(c) => c,
+            Err(e) => {
+                warn!("installer sweep: cannot list containers: {}", e);
+                return 0;
+            }
+        };
+        let mut reaped = 0;
+        for c in containers {
+            if !c.id.starts_with("catalyst-installer-") {
+                continue;
+            }
+            info!("Reaping stale installer container {}", c.id);
+            // Best-effort full teardown (CNI lease, task, record, snapshot).
+            let _ = self.remove_container(&c.id).await;
+            reaped += 1;
+        }
+        reaped
     }
 
     pub async fn restore_console_writers(&self) -> AgentResult<()> {
         info!("Restoring console writers for running containers");
         let containers = self.list_containers().await?;
         let mut restored = 0;
+        let mut missing_fifo = 0;
         for c in containers {
             if !c.status.contains("Up") {
                 continue;
             }
-            if self.ensure_container_io(&c.id).await.is_ok() {
-                restored += 1;
+            match self.ensure_container_io(&c.id).await {
+                Ok(true) => restored += 1,
+                Ok(false) => {
+                    missing_fifo += 1;
+                    warn!(
+                        "No stdin FIFO for running container {}: console input degraded to exec fallback",
+                        c.id
+                    );
+                }
+                Err(e) => {
+                    warn!("Failed to restore console writer for {}: {}", c.id, e);
+                }
             }
         }
-        info!("Console writer restoration: {} restored", restored);
+        info!(
+            "Console writer restoration: {} restored, {} missing FIFO",
+            restored, missing_fifo
+        );
         Ok(())
     }
 
@@ -1151,9 +1355,38 @@ impl ContainerdRuntime {
             .await
             .map_err(|_| AgentError::ContainerError("list_containers timed out".to_string()))?
             .map_err(grpc_err)?;
-        let mut result = Vec::new();
+        // Status checks run concurrently (bounded) with per-item timeouts: a
+        // sequential N+1 of unbounded task.get RPCs lets one wedged task
+        // stall the whole listing (and every 5s-tick consumer of it).
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(16));
+        let mut set = tokio::task::JoinSet::new();
         for c in resp.into_inner().containers {
-            let running = self.is_container_running(&c.id).await.unwrap_or(false);
+            let permit_owner = semaphore.clone();
+            let channel = self.channel.clone();
+            let namespace = self.namespace.clone();
+            set.spawn(async move {
+                let _permit = permit_owner.acquire_owned().await;
+                let mut tasks = TasksClient::new(channel);
+                let req = containerd_client::services::v1::GetRequest {
+                    container_id: c.id.clone(),
+                    ..Default::default()
+                };
+                let req = with_namespace!(req, &namespace);
+                let running = tokio::time::timeout(Duration::from_secs(5), tasks.get(req))
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                    .and_then(|resp| resp.into_inner().process)
+                    .map(|p| p.status == 2)
+                    .unwrap_or(false);
+                (c, running)
+            });
+        }
+        let mut result = Vec::new();
+        while let Some(joined) = set.join_next().await {
+            let Ok((c, running)) = joined else {
+                continue;
+            };
             result.push(ContainerInfo {
                 id: c.id.clone(),
                 names: c.id.clone(),
@@ -1168,6 +1401,8 @@ impl ContainerdRuntime {
                 labels: c.labels.clone(),
             });
         }
+        // Keep listing order deterministic for consumers and tests.
+        result.sort_by(|a, b| a.id.cmp(&b.id));
 
         {
             let mut cache = self.container_list_cache.write().await;
@@ -1297,14 +1532,20 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        match tasks.get(req).await {
-            Ok(resp) => Ok(resp
+        // Bounded: a wedged containerd must not park status polls forever.
+        // Callers on hot paths (health ticks, log tails) run this frequently.
+        match tokio::time::timeout(Duration::from_secs(5), tasks.get(req)).await {
+            Ok(Ok(resp)) => Ok(resp
                 .into_inner()
                 .process
                 .map(|p| p.status == 2)
                 .unwrap_or(false)),
-            Err(e) if e.code() == tonic::Code::NotFound => Ok(false),
-            Err(e) => Err(grpc_err(e)),
+            Ok(Err(e)) if e.code() == tonic::Code::NotFound => Ok(false),
+            Ok(Err(e)) => Err(grpc_err(e)),
+            Err(_) => Err(AgentError::ContainerError(format!(
+                "is_container_running timed out for {}",
+                container_id
+            ))),
         }
     }
 
@@ -1321,10 +1562,14 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        match tasks.get(req).await {
-            Ok(resp) => Ok(resp.into_inner().process.map(|p| p.pid)),
-            Err(e) if e.code() == tonic::Code::NotFound => Ok(None),
-            Err(e) => Err(grpc_err(e)),
+        match tokio::time::timeout(Duration::from_secs(5), tasks.get(req)).await {
+            Ok(Ok(resp)) => Ok(resp.into_inner().process.map(|p| p.pid)),
+            Ok(Err(e)) if e.code() == tonic::Code::NotFound => Ok(None),
+            Ok(Err(e)) => Err(grpc_err(e)),
+            Err(_) => Err(AgentError::ContainerError(format!(
+                "get_container_task_pid timed out for {}",
+                container_id
+            ))),
         }
     }
 
@@ -1335,14 +1580,15 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        match tasks.get(req).await {
-            Ok(resp) => Ok(resp.into_inner().process.and_then(|p| {
+        match tokio::time::timeout(Duration::from_secs(5), tasks.get(req)).await {
+            Ok(Ok(resp)) => Ok(resp.into_inner().process.and_then(|p| {
                 if p.status == 3 {
                     Some(p.exit_status as i32)
                 } else {
                     None
                 }
             })),
+            Ok(_) => Ok(None),
             Err(_) => Ok(None),
         }
     }
@@ -1482,7 +1728,15 @@ impl ContainerdRuntime {
         File::create(&op).ok();
         File::create(&ep).ok();
 
-        let spec = serde_json::json!({"args":command,"env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"cwd":"/data"});
+        // Exec processes inherit the runtime container posture (uid 1000,
+        // minimal caps, noNewPrivileges). An exec spec without `user`
+        // defaults to uid 0 — a root shell in a uid-1000 container.
+        let caps = ["CAP_NET_BIND_SERVICE"];
+        let spec = serde_json::json!({"args":command,
+            "user":{"uid":1000,"gid":1000},
+            "capabilities":{"bounding":caps,"effective":caps,"permitted":caps,"ambient":caps},
+            "noNewPrivileges":true,
+            "env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"cwd":"/data"});
         let spec_any = Any {
             type_url: "types.containerd.io/opencontainers/runtime-spec/1/Process".to_string(),
             value: spec.to_string().into_bytes(),
@@ -1498,21 +1752,35 @@ impl ContainerdRuntime {
             spec: Some(spec_any),
         };
         let req = with_namespace!(req, &self.namespace);
-        tasks.exec(req).await.map_err(grpc_err)?;
+        if let Err(e) = tasks.exec(req).await {
+            self.delete_exec_process(container_id, &exec_id).await;
+            let _ = fs::remove_file(&op);
+            let _ = fs::remove_file(&ep);
+            return Err(grpc_err(e));
+        }
 
         let req = StartRequest {
             container_id: container_id.to_string(),
             exec_id: exec_id.clone(),
         };
         let req = with_namespace!(req, &self.namespace);
-        tasks.start(req).await.map_err(grpc_err)?;
+        if let Err(e) = tasks.start(req).await {
+            self.delete_exec_process(container_id, &exec_id).await;
+            let _ = fs::remove_file(&op);
+            let _ = fs::remove_file(&ep);
+            return Err(grpc_err(e));
+        }
 
         let req = WaitRequest {
             container_id: container_id.to_string(),
-            exec_id,
+            exec_id: exec_id.clone(),
         };
         let req = with_namespace!(req, &self.namespace);
         let _ = tokio::time::timeout(Duration::from_secs(30), tasks.wait(req)).await;
+
+        // Reap the exec process entry on every path; otherwise each exec
+        // leaks a zombie entry in the task state.
+        self.delete_exec_process(container_id, &exec_id).await;
 
         let out = tokio::fs::read_to_string(&op).await.unwrap_or_default();
         let err = tokio::fs::read_to_string(&ep).await.unwrap_or_default();
@@ -1522,6 +1790,22 @@ impl ContainerdRuntime {
             return Err(AgentError::ContainerError(format!("Exec failed: {}", err)));
         }
         Ok(out)
+    }
+
+    /// Best-effort reap of an exec'd process entry (DeleteProcess).
+    pub(crate) async fn delete_exec_process(&self, container_id: &str, exec_id: &str) {
+        let mut tasks = TasksClient::new(self.channel.clone());
+        let req = containerd_client::services::v1::DeleteProcessRequest {
+            container_id: container_id.to_string(),
+            exec_id: exec_id.to_string(),
+        };
+        let req = with_namespace!(req, &self.namespace);
+        if let Err(e) = tasks.delete_process(req).await {
+            debug!(
+                "delete exec {} in {} failed (may already be gone): {}",
+                exec_id, container_id, e
+            );
+        }
     }
 
     pub async fn subscribe_to_container_events(
@@ -1655,7 +1939,11 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        let resp = tokio::time::timeout(Duration::from_secs(30), tasks.wait(req))
+        // Backstop only: every caller enforces its own (shorter) deadline, so
+        // this must stay strictly above all of them. A shorter inner timeout
+        // would fire first and its Err is indistinguishable from a real exit
+        // at some call sites (silent early-kill of graceful stops).
+        let resp = tokio::time::timeout(Duration::from_secs(90), tasks.wait(req))
             .await
             .map_err(|_| {
                 AgentError::ContainerError(format!("wait_for_exit timed out for {}", container_id))
@@ -1686,7 +1974,30 @@ impl ContainerdRuntime {
         Ok(true)
     }
 
-    pub(crate) fn cleanup_io(&self, container_id: &str) {
+    /// Best-effort removal of a prepared snapshot under `snap_key`.
+    /// Used to unwind failed creates before any container record exists.
+    pub(crate) async fn remove_snapshot(&self, snap_key: &str) {
+        let mut snaps = SnapshotsClient::new(self.channel.clone());
+        let req = RemoveSnapshotRequest {
+            snapshotter: "overlayfs".to_string(),
+            key: snap_key.to_string(),
+        };
+        let req = with_namespace!(req, &self.namespace);
+        if let Err(e) = snaps.remove(req).await {
+            debug!(
+                "snapshot remove {} failed (may already be gone): {}",
+                snap_key, e
+            );
+        }
+    }
+
+    /// Drop in-memory I/O + cgroup state and the io_dir for a container that
+    /// never reached a running task (create-path unwind). Unlike the old
+    /// `cleanup_io`, this also removes the `container_io`/`cgroup_paths` map
+    /// entries so later `send_input`/`get_stats` don't use stale handles.
+    pub(crate) async fn remove_io_state(&self, container_id: &str) {
+        self.container_io.lock().await.remove(container_id);
+        self.cgroup_paths.write().await.remove(container_id);
         let _ = fs::remove_dir_all(self.console_log_dir.join(container_id));
     }
 }

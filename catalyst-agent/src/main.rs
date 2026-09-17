@@ -88,6 +88,13 @@ impl CatalystAgent {
         // (e.g. containers that were running when the agent was killed).
         runtime.cleanup_stale_cni_leases().await;
 
+        // Reap installer containers orphaned by a previous agent process
+        // (kill/restart mid-install left them with no waiter and no monitor).
+        let reaped = runtime.cleanup_stale_installers().await;
+        if reaped > 0 {
+            info!("Reaped {} stale installer container(s)", reaped);
+        }
+
         let ws_handler = Arc::new(WebSocketHandler::new(
             config.clone(),
             runtime.clone(),

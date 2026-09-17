@@ -435,13 +435,42 @@ impl ContainerdRuntime {
     }
 
     pub(crate) fn qualify_image_ref(image: &str) -> String {
-        let name = image.split(':').next().unwrap_or(image);
-        if name.contains('/') {
-            // Already has a registry or org prefix (e.g. ghcr.io/org/img, user/img)
-            image.to_string()
+        // Preserve any @digest suffix; only the name portion is normalized.
+        let (reference, digest) = match image.split_once('@') {
+            Some((r, d)) => (r, Some(d)),
+            None => (image, None),
+        };
+        // A tag is the last ':' only when it comes after the last '/'.
+        // A ':' before any '/' belongs to a registry host:port
+        // (e.g. localhost:5000/img), which the old naive split(':')
+        // misclassified as a bare name and corrupted into
+        // docker.io/library/localhost:5000/img.
+        let (name, tag) = match reference.rfind('/') {
+            Some(slash) => match reference[slash..].find(':') {
+                Some(_) => {
+                    let idx = reference.rfind(':').unwrap();
+                    (&reference[..idx], &reference[idx..])
+                }
+                // Tagged-image default: an untagged multi-component ref
+                // resolves to :latest, matching ctr/containerd behaviour.
+                None => (reference, ":latest"),
+            },
+            None => match reference.find(':') {
+                Some(idx) => (&reference[..idx], &reference[idx..]),
+                None => (reference, ":latest"),
+            },
+        };
+        // qualify_image_ref is idempotent: already-qualified refs
+        // (registry/org/img) pass through unchanged.
+        let base = if name.contains('/') {
+            format!("{}{}", name, tag)
         } else {
-            // Bare image name like "alpine:3.19" -> "docker.io/library/alpine:3.19"
-            format!("docker.io/library/{}", image)
+            // Bare image name like "alpine" -> "docker.io/library/alpine:3.19"
+            format!("docker.io/library/{}{}", name, tag)
+        };
+        match digest {
+            Some(d) => format!("{}@{}", base, d),
+            None => base,
         }
     }
 
@@ -520,6 +549,10 @@ impl ContainerdRuntime {
     }
 
     pub(crate) async fn resolve_image_config_digest(&self, image: &str) -> AgentResult<String> {
+        // Normalize through the same choke point as ensure_image: callers may
+        // pass raw panel refs (alpine:3.19) while the image is stored qualified
+        // (docker.io/library/alpine:3.19).
+        let image = Self::qualify_image_ref(image);
         let mut images = ImagesClient::new(self.channel.clone());
         let req = GetImageRequest {
             name: image.to_string(),
@@ -1085,6 +1118,50 @@ mod tests {
         // 0 MB floors to 1 MB (limit 0 is runc's "unset" = unlimited).
         let (memory, _) = linux_memory_resources(0, 0, 0);
         assert_eq!(memory.get("limit"), Some(&serde_json::json!(1_048_576i64)));
+    }
+
+    #[test]
+    fn qualify_image_ref_handles_registry_ports_digests_and_bare_names() {
+        // Bare names gain the docker.io/library prefix AND :latest so the
+        // Get and pull paths resolve identically.
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("alpine"),
+            "docker.io/library/alpine:latest"
+        );
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("alpine:3.19"),
+            "docker.io/library/alpine:3.19"
+        );
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("user/img"),
+            "user/img:latest"
+        );
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("user/img:1.0"),
+            "user/img:1.0"
+        );
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("ghcr.io/o/i:t"),
+            "ghcr.io/o/i:t"
+        );
+        // Registry host:port must NOT be treated as a tag separator.
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("localhost:5000/i"),
+            "localhost:5000/i:latest"
+        );
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("localhost:5000/i:t"),
+            "localhost:5000/i:t"
+        );
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("img@sha256:abc123"),
+            "docker.io/library/img:latest@sha256:abc123"
+        );
+        // Idempotent on already-qualified refs.
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("docker.io/library/alpine:3.19"),
+            "docker.io/library/alpine:3.19"
+        );
     }
 
     #[test]

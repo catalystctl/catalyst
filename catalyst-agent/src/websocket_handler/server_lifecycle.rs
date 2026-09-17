@@ -214,24 +214,26 @@ impl WebSocketHandler {
                             }
                         }
                     }
-                    let _ = installer.cleanup().await;
-                    // Installers now carry CNI state (private netns attached
-                    // to the bridge); release the lease file with it.
+                    // CNI teardown FIRST while the task netns is still alive
+                    // (DEL needs the live netns; cleanup deletes the task).
+                    // Installers carry CNI state (private netns attached to
+                    // the bridge); this releases the interface and lease.
                     let _ = self
                         .runtime
                         .teardown_cni_network(&installer.container_id)
                         .await;
+                    let _ = installer.cleanup().await;
                     {
                         self.active_installs.write().await.remove(server_id);
                     }
                     return Ok((exit_code, stdout_buffer, stderr_buffer));
                 }
                 Ok(Err(e)) => {
-                    let _ = installer.cleanup().await;
                     let _ = self
                         .runtime
                         .teardown_cni_network(&installer.container_id)
                         .await;
+                    let _ = installer.cleanup().await;
                     {
                         self.active_installs.write().await.remove(server_id);
                     }

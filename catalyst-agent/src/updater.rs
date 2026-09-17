@@ -757,7 +757,7 @@ mod tests {
         );
         assert_eq!(
             ContainerdRuntime::qualify_image_ref("alpine"),
-            "docker.io/library/alpine"
+            "docker.io/library/alpine:latest"
         );
         assert_eq!(
             ContainerdRuntime::qualify_image_ref("ghcr.io/org/img:tag"),

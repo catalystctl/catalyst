@@ -132,6 +132,12 @@ impl CpuTracker {
         let max_cpus = num_cpus::get() as f64;
         percent.clamp(0.0, 100.0 * max_cpus)
     }
+
+    /// Drop the sample for a removed container. Without this the map grows
+    /// forever on nodes with installer churn (catalyst-installer-* IDs).
+    pub async fn remove(&self, container_id: &str) {
+        self.samples.lock().await.remove(container_id);
+    }
 }
 
 /// Device access profiles for container security
@@ -332,7 +338,27 @@ impl InstallerHandle {
     }
 
     pub async fn cleanup(&self) -> AgentResult<()> {
+        // Best-effort full-stack teardown mirroring remove_container's order:
+        // SIGKILL a possibly still-running installer, then delete the task,
+        // the container record, the snapshot, and the I/O directory.
+        //
+        // NOTE: CNI teardown must run BEFORE this call while the task netns
+        // is still alive (teardown_cni_network issues DEL against the live
+        // netns; after the task is deleted only the lease-file fallback
+        // remains). Callers must call teardown_cni_network first.
         let mut tasks = TasksClient::new(self.channel.clone());
+        let kill_req = TaskKillRequest {
+            container_id: self.container_id.clone(),
+            signal: 9,
+            all: true,
+            ..Default::default()
+        };
+        let kill_req = with_namespace!(kill_req, &self.namespace);
+        let _ = tasks.kill(kill_req).await;
+        // Bounded wait so a wedged shim can't stall cleanup; deletion
+        // proceeds regardless.
+        let _ = tokio::time::timeout(Duration::from_secs(3), self.wait()).await;
+
         let req = DeleteTaskRequest {
             container_id: self.container_id.clone(),
         };
