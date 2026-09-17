@@ -13,13 +13,15 @@ import {
  Info,
  FolderSync,
  MailCheck,
+ Bot,
 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
+import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { useAuthLockouts, useSecuritySettings } from '../../hooks/useAdmin';
+import { useAuthLockouts, useMcpSettings, useSecuritySettings } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import type { AuthLockout } from '../../types/admin';
@@ -168,6 +170,114 @@ function Section({
       {children}
       {footer ? <div className="mt-3 flex justify-end">{footer}</div> : null}
     </ServerTabCard>
+  );
+}
+
+
+// ── Panel-hosted MCP (Streamable HTTP) ──
+// Self-contained card: own query + mutation so the toggle saves instantly
+// and takes effect without a panel restart.
+function McpSettingsCard() {
+  const { t } = useTranslation('admin-access');
+  const { data: mcp } = useMcpSettings();
+  const [enabled, setEnabled] = useState(false);
+  const [budget, setBudget] = useState('300');
+  const [riskOpen, setRiskOpen] = useState(false);
+
+  const [prevMcp, setPrevMcp] = useState<typeof mcp | undefined>(undefined);
+  if (mcp !== prevMcp) {
+    setPrevMcp(mcp);
+    if (mcp) {
+      setEnabled(mcp.enabled);
+      setBudget(String(mcp.toolRateLimitMax));
+    }
+  }
+
+  const canSubmit = Number.isFinite(Number(budget)) && Number(budget) >= 10 && Number(budget) <= 5000;
+
+  const saveMutation = useMutation({
+    mutationFn: () => adminApi.updateMcpSettings({ enabled, toolRateLimitMax: Number(budget) }),
+    onSuccess: () => notifySuccess(t('security.mcpSaved')),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.adminMcpSettings() });
+    },
+    onError: (error: unknown) => notifyError(error),
+  });
+
+  // Enabling is gated behind an explicit risk acknowledgment: flipping the
+  // switch on opens the dialog, and the switch only engages on confirm.
+  const handleToggle = (next: boolean) => {
+    if (next && !enabled) {
+      setRiskOpen(true);
+      return;
+    }
+    setEnabled(next);
+  };
+
+  const endpoint = typeof window !== 'undefined' ? `${window.location.origin}/api/mcp` : '/api/mcp';
+
+  return (
+    <Section
+      title={t('security.mcpTitle')}
+      subtitle={t('security.mcpDescription')}
+      icon={<Bot className="h-4 w-4 text-info" />}
+      footer={
+        <Button size="sm" disabled={!canSubmit || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+          {saveMutation.isPending ? t('saving') : t('common:actions.save')}
+        </Button>
+      }
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm text-foreground">{t('security.mcpEnable')}</p>
+          <p className="text-[11px] text-muted-foreground">{t('security.mcpEnableDescription')}</p>
+        </div>
+        <Switch
+          checked={enabled}
+          onCheckedChange={handleToggle}
+          aria-label={t('security.mcpEnableAria')}
+        />
+      </div>
+      <ConfirmDialog
+        open={riskOpen}
+        variant="danger"
+        title={t('security.mcpRiskTitle')}
+        message={
+          <div className="space-y-2">
+            <p>{t('security.mcpRiskIntro')}</p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>{t('security.mcpRiskInjection')}</li>
+              <li>{t('security.mcpRiskScope')}</li>
+              <li>{t('security.mcpRiskConfirm')}</li>
+            </ul>
+          </div>
+        }
+        confirmText={t('security.mcpRiskEnable')}
+        onConfirm={() => {
+          setRiskOpen(false);
+          setEnabled(true);
+        }}
+        onCancel={() => setRiskOpen(false)}
+      />
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <NumberField
+          label={t('security.mcpBudget')}
+          value={budget}
+          onChange={setBudget}
+          min="10"
+          max="5000"
+          tooltip={t('security.mcpBudgetTooltip')}
+        />
+        <label className="block space-y-1">
+          <span className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+            {t('security.mcpEndpoint')}
+          </span>
+          <Input value={endpoint} readOnly onFocus={(e) => e.target.select()} />
+        </label>
+      </div>
+      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{t('security.mcpKeyHint')}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{t('security.mcpConfirmHint')}</p>
+    </Section>
   );
 }
 
@@ -572,6 +682,9 @@ function SecurityPage() {
  />
  </div>
  </Section>
+
+ {/* ── Panel-hosted MCP ── */}
+ <McpSettingsCard />
 
  {/* ── Auth Lockouts ── */}
  <ServerTabCard>

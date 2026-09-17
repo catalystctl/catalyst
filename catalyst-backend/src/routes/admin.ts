@@ -36,6 +36,7 @@ import {
   maxUploadBytesFromMb,
 } from '../services/mailer';
 import { getLocalizationSettings, updateLocalizationSettings } from '../services/localization';
+import { getMcpSettings, upsertMcpSettings } from '../services/mcp-settings';
 import { isSupportedLocale } from '../i18n/locales.js';
 import { serialize } from '../utils/serialize';
 import { withRegistrationBypass } from '../lib/registration-gate.js';
@@ -2657,6 +2658,62 @@ export async function adminRoutes(app: FastifyInstance) {
         wsGateway?.pushToAdminSubscribers('security_settings_updated', { updatedBy: user.userId });
       } catch { /* ignore — WS push is best-effort */ }
       reply.send({ success: true });
+    }
+  );
+
+  // Panel-hosted MCP settings (admin only). The toggle takes effect
+  // immediately on every worker/host via config-cache invalidation — no
+  // restart. The endpoint itself 404s while disabled.
+  app.get(
+    '/mcp-settings',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(checkPerm(request, 'admin.read'))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
+      }
+
+      reply.send(serialize({ success: true, data: await getMcpSettings() }));
+    }
+  );
+
+  app.put(
+    '/mcp-settings',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.user;
+
+      if (!(checkPerm(request, 'admin.write'))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
+      }
+
+      const { enabled, toolRateLimitMax } = request.body as {
+        enabled?: unknown;
+        toolRateLimitMax?: unknown;
+      };
+      if (typeof enabled !== 'boolean') {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'enabled must be a boolean');
+      }
+      if (
+        toolRateLimitMax !== undefined &&
+        (typeof toolRateLimitMax !== 'number' || !Number.isFinite(toolRateLimitMax))
+      ) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'toolRateLimitMax must be a number');
+      }
+
+      const settings = await upsertMcpSettings({ enabled, toolRateLimitMax });
+
+      await createAuditLog(user.userId, {
+        request,
+        action: 'mcp.settings.update',
+        resource: 'system',
+        details: { enabled, toolRateLimitMax: settings.toolRateLimitMax },
+      });
+
+      try {
+        const wsGateway = (app as any).wsGateway;
+        wsGateway?.pushToAdminSubscribers('mcp_settings_updated', { updatedBy: user.userId, enabled });
+      } catch { /* ignore — WS push is best-effort */ }
+      reply.send(serialize({ success: true, data: settings }));
     }
   );
 

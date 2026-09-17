@@ -261,6 +261,13 @@ export interface LocalizationSettings {
   defaultLocale: string | null;
 }
 
+export interface McpSettings {
+  /** Master switch for the panel-hosted MCP endpoint (POST /api/mcp). */
+  enabled: boolean;
+  /** Max MCP tool calls per minute per API key. */
+  toolRateLimitMax: number;
+}
+
 export interface SecuritySettings {
   authRateLimitMax: number;
   authRateLimitWindowMs: number;

@@ -115,6 +115,31 @@ server {
         proxy_http_version 1.1;
     }
 
+    # ── Panel-hosted MCP (Streamable HTTP) ───────────────────────────────
+    # POST returns a single JSON response (buffering would be fine), but GET
+    # opens a long-lived SSE keep-alive stream, so this location must not
+    # buffer or gzip — same rules as the console/metrics SSE carve-outs.
+    # Exact match (=) wins over the general /api/ prefix below.
+    location = /api/mcp {
+        proxy_pass http://backend:${BACKEND_UPSTREAM_PORT};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Connection "";
+
+        # MCP tool arguments are small JSON; large transfers belong on REST.
+        client_max_body_size 2m;
+        gzip off;
+        proxy_buffering off;
+        proxy_http_version 1.1;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 86400s;
+        proxy_read_timeout 86400s;
+        proxy_intercept_errors off;
+    }
+
     # Admin SSE event stream
     location /api/admin/events/stream {
         proxy_pass http://backend:${BACKEND_UPSTREAM_PORT};

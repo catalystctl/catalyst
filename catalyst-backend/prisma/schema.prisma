@@ -346,6 +346,10 @@ model SystemSetting {
   // panel and to emails/alerts for anyone who has not chosen a language;
   // NULL means the built-in default (English).
   defaultLocale                String?
+  // Panel-hosted MCP (Streamable HTTP at /api/mcp, row id "mcp"). Opt-in at
+  // runtime via Admin > Security; NULL rate limit means the built-in default.
+  mcpEnabled                   Boolean  @default(false)
+  mcpToolRateLimitMax          Int?
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }

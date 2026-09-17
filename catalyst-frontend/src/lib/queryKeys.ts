@@ -156,6 +156,7 @@ export const qk = {
   adminModManager: () => ['admin-mod-manager'] as const,
   adminLocalizationSettings: () => ['admin-localization-settings'] as const,
   adminSecuritySettings: () => ['admin-security-settings'] as const,
+  adminMcpSettings: () => ['admin-mcp-settings'] as const,
   adminAuthLockouts: (params?: Record<string, unknown>) =>
     params ? ['admin-auth-lockouts', params] as const : ['admin-auth-lockouts'] as const,
   adminSystemErrors: (params?: Record<string, unknown>) =>

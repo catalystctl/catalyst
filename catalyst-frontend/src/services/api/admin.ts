@@ -15,6 +15,7 @@ import type {
   ModManagerSettings,
   SmtpSettings,
   SecuritySettings,
+  McpSettings,
   LocalizationSettings,
   AuthLockoutsResponse,
   Role,
@@ -228,6 +229,14 @@ export const adminApi = {
   updateLocalizationSettings: async (payload: LocalizationSettings) => {
     const data = await apiClient.put<ApiResponse<LocalizationSettings>>('/api/admin/localization-settings', payload);
     return data;
+  },
+  getMcpSettings: async () => {
+    const data = await apiClient.get<ApiResponse<McpSettings>>('/api/admin/mcp-settings');
+    return data.data;
+  },
+  updateMcpSettings: async (payload: McpSettings) => {
+    const data = await apiClient.put<ApiResponse<McpSettings>>('/api/admin/mcp-settings', payload);
+    return data.data;
   },
   getModManagerSettings: async () => {
     const data = await apiClient.get<ApiResponse<ModManagerSettings>>('/api/admin/mod-manager');

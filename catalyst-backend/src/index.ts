@@ -89,6 +89,7 @@ import { pluginRoutes } from "./routes/plugins";
 import { FileTunnelService } from "./services/file-tunnel";
 import { fileTunnelRoutes } from "./routes/file-tunnel";
 import { migrationRoutes } from "./routes/migration";
+import { mcpRoutes } from "./routes/mcp";
 import { updateRoutes } from "./routes/update";
 import { verifyAgentApiKey } from "./lib/agent-auth";
 import { getCurrentVersion, normalizePanelVersion } from "./lib/panel-version";
@@ -1052,6 +1053,10 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 
 		// Migration routes (Pterodactyl → Catalyst)
 		await app.register((app) => migrationRoutes(app));
+
+		// Panel-hosted MCP (Streamable HTTP, stateless). Bearer-key only,
+		// master switch in MCP settings; 404s while disabled.
+		await app.register(mcpRoutes, { prefix: "/api" });
 
 		// Panel + agent version (authenticated; bootstrap uses AGENT_VERSION env or default binary).
 		app.get(

@@ -135,6 +135,15 @@ export function useSecuritySettings() {
   });
 }
 
+export function useMcpSettings() {
+  return useQuery({
+    queryKey: qk.adminMcpSettings(),
+    queryFn: adminApi.getMcpSettings,
+    staleTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useModManagerSettings() {
   return useQuery({
     queryKey: qk.adminModManager(),

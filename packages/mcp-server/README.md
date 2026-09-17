@@ -4,6 +4,14 @@ An MCP server that lets an AI assistant manage your Catalyst game-server panel: 
 
 It talks to the panel over HTTPS with a `catalyst_...` API key. Configure it once with the panel URL and key; every tool call reuses that configuration.
 
+> Prefer zero-install? Recent panels can expose the same 174 tools directly:
+> enable **Panel MCP access** under Admin **Security**, then point your MCP
+> client at `https://panel.example.com/api/mcp` with a scoped API key. The
+> panel endpoint is Bearer-key only, permission-checked and audit-logged like
+> the REST API, and destructive tools additionally require `confirm: true`.
+> This local server remains the choice when you want the key to stay on your
+> own machine or your client only speaks stdio.
+
 ## Requirements
 
 - Node.js 20 or newer
