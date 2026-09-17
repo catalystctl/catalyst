@@ -3,6 +3,14 @@ name: Auto Version
 on:
   push:
     branches: [main]
+    # Docs-only pushes never change the version (docs commits are excluded
+    # from bump analysis), so don't run — or cancel — a release pipeline
+    # for them. A no-op run still triggers cancel-in-progress below, which
+    # once assassinated the agent builds of an in-flight release.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/workflows/docs-impact.yml'
 
 permissions:
   contents: write

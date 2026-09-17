@@ -1,0 +1,57 @@
+# E2E LXC — Minecraft pipeline (reusable install.sh → panel → node → Paper).
+#
+# Manual / weekly only: needs a self-hosted runner with LXC + nesting,
+# pulls GHCR images + PaperMC builds, and takes ~15-25 minutes.
+# Does NOT gate PRs (see ci.yml for PR gates).
+
+name: E2E LXC Minecraft
+
+on:
+  workflow_dispatch:
+    inputs:
+      use_local:
+        description: "Push working-tree install.sh + catalyst-docker/ (1) or test GitHub install.sh (0)"
+        required: false
+        default: "0"
+      mc_version:
+        description: "PaperMC version (Fill API selector)"
+        required: false
+        default: "latest"
+  schedule:
+    - cron: "0 3 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-lxc-minecraft:
+    name: install.sh → node → Paper (LXC)
+    runs-on: ["self-hosted", "Linux", "X64", "catalyst-ci"]
+    timeout-minutes: 60
+    env:
+      E2E_USE_LOCAL: ${{ inputs.use_local || '0' }}
+      E2E_MC_VERSION: ${{ inputs.mc_version || 'latest' }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Host pre-flight (lxc, curl, jq)
+        run: |
+          command -v lxc-create
+          command -v lxc-attach
+          command -v curl
+          command -v jq
+          ip addr show lxcbr0
+
+      - name: Run Minecraft E2E pipeline
+        run: |
+          chmod +x tests/e2e-lxc/e2e-minecraft.sh
+          ./tests/e2e-lxc/e2e-minecraft.sh all
+
+      - name: Upload JUnit + logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-lxc-minecraft
+          path: |
+            ~/.local/share/catalyst-e2e-lxc/junit.xml
+            ~/.local/share/catalyst-e2e-lxc/logs/

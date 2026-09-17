@@ -560,8 +560,9 @@ stage_agent() {
   systemctl is-active --quiet catalyst-agent || fail "catalyst-agent did not start"
   # Official install.sh sets BACKEND_URL from PUBLIC_URL (the panel). Point the
   # agent at the backend LXC so WebSockets do not traverse the host TCP proxy.
+  # Uses HOST_LAN_IP (not a hardcoded address) so custom lab configs keep working.
   if [[ -f /opt/catalyst-agent/config.toml ]]; then
-    sudo sed -i "s#http://192.168.1.78:8080#${BACKEND_PUBLIC}#g; s#ws://192.168.1.78:8080#${BACKEND_PUBLIC/http/ws}#g" /opt/catalyst-agent/config.toml
+    sudo sed -i "s#http://${HOST_LAN_IP}:${PANEL_HOST_PORT}#${BACKEND_PUBLIC}#g; s#ws://${HOST_LAN_IP}:${PANEL_HOST_PORT}#${BACKEND_PUBLIC/http/ws}#g" /opt/catalyst-agent/config.toml
     sudo systemctl restart catalyst-agent
     sleep 2
   fi

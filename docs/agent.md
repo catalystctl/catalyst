@@ -527,6 +527,16 @@ Standard CNI bridge networking with port forwarding.
 - The agent manages iptables rules for port forwarding
 - Simple setup but all containers share the host's IP
 
+On every boot the agent reconciles leftover network state: it removes NAT
+rules (DNAT/MASQUERADE/portmap chains) and IPAM leases that belong to
+containers which no longer exist, drops exact-duplicate rules, and skips
+re-adding rules that are already present. Only state in the agent's own
+configured CNI directories (plus jumps inside its own bridge subnet) is ever
+touched, so co-hosted agents and foreign rules are left alone. If a
+`running` server is unreachable right after an agent restart or reinstall,
+check for stale first-match DNAT shadowing the live IP:
+`iptables -t nat -L PREROUTING -n --line-numbers | grep <port>`.
+
 ### Automatic Network Detection
 
 If no networks are configured in `config.toml`, the agent automatically:

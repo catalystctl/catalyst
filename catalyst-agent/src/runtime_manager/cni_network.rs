@@ -561,6 +561,9 @@ impl ContainerdRuntime {
                         &dest,
                     ],
                 ] {
+                    if rule_shape_present(cmd, &args).await {
+                        continue;
+                    }
                     match Command::new(cmd).args(&args).output().await {
                         Ok(o) if o.status.success() => {
                             any_rule_added = true;
@@ -609,6 +612,9 @@ impl ContainerdRuntime {
                     "MASQUERADE",
                 ],
             ] {
+                if rule_shape_present(cmd, &args).await {
+                    continue;
+                }
                 match Command::new(cmd).args(&args).output().await {
                     Ok(o) if o.status.success() => {
                         any_rule_added = true;
@@ -994,6 +1000,10 @@ impl ContainerdRuntime {
             // The host-local IPAM plugin reads the result file to know which
             // address to free; if that also fails, fall back to removing the
             // lease file from the data directory.
+            //
+            // Snapshot this container's IPs now: the result/config files are
+            // deleted below, and the NAT sweep at the end needs them.
+            let stale_ips = self.state_ips_of_container(container_id).await;
             let ipam_data_dir = cfg["ipam"]["dataDir"]
                 .as_str()
                 .map(|s| s.to_string())
@@ -1021,13 +1031,394 @@ impl ContainerdRuntime {
                     }
                 }
             }
+            // The container record itself may still exist (stopped) while its
+            // task is gone; only sweep NAT when the record is gone too.
+            // teardown_port_forward above already removed rules tracked in
+            // ports.json — this catches the rest (e.g. CNI portmap chains
+            // from older agents).
+            if !self.container_exists(container_id).await {
+                let mut ips = stale_ips;
+                if let Some(live) = self.live_container_ips().await {
+                    ips.retain(|ip| !live.contains(ip));
+                } else {
+                    ips.clear();
+                }
+                if !ips.is_empty() {
+                    self.sweep_dead_nat_rules(&ips).await;
+                }
+            }
         }
         let _ = tokio::fs::remove_file(&rp).await;
         let _ = tokio::fs::remove_file(&cfg_path).await;
         Ok(())
     }
 
+    /// Best-effort idempotency guard for `-A`: skip the rule when an
+    /// identical one already exists (stop → start re-attach must not stack
+    /// duplicates).
+    /// All container IPs referenced by on-disk CNI state for one container:
+    /// the CNI result file, the ports.json state, and IPAM lease filenames
+    /// holding its ID.
+    async fn state_ips_of_container(&self, container_id: &str) -> HashSet<String> {
+        let mut out = HashSet::new();
+        if let Ok(content) = tokio::fs::read_to_string(
+            self.cni_results_dir
+                .join(format!("catalyst-{}", container_id)),
+        )
+        .await
+        {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(ips) = v.get("ips").and_then(|v| v.as_array()) {
+                    for entry in ips {
+                        if let Some(addr) = entry.get("address").and_then(|v| v.as_str()) {
+                            let bare = addr.split('/').next().unwrap_or("");
+                            if bare.parse::<std::net::IpAddr>().is_ok() {
+                                out.insert(bare.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Ok(content) = tokio::fs::read_to_string(self.cni_results_dir.join(format!(
+            "{}{}-ports.json",
+            PORT_FWD_STATE_PREFIX, container_id
+        )))
+        .await
+        {
+            if let Ok(state) = serde_json::from_str::<PortForwardState>(&content) {
+                if !state.container_ip.is_empty() {
+                    out.insert(state.container_ip);
+                }
+            }
+        }
+        if let Ok(mut entries) = tokio::fs::read_dir(self.cni_data_dir.join("catalyst")).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.parse::<std::net::IpAddr>().is_err() {
+                    continue;
+                }
+                if let Ok(content) = tokio::fs::read_to_string(entry.path()).await {
+                    if content.trim() == container_id {
+                        out.insert(name);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// IPs currently owned by live containers in this agent's namespace.
+    /// `None` when containerd cannot be listed — callers must skip sweeping
+    /// then (an empty live set would misclassify everything as dead).
+    async fn live_container_ips(&self) -> Option<HashSet<String>> {
+        let containers = match self.list_containers().await {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(
+                    "NAT sweep: cannot list containers, skipping live-IP guard: {}",
+                    e
+                );
+                return None;
+            }
+        };
+        let mut out = HashSet::new();
+        for c in containers {
+            // get_container_ip falls back to the result file, so stopped
+            // containers keep their addresses too.
+            if let Ok(ip) = self.get_container_ip(&c.id).await {
+                if !ip.is_empty() {
+                    out.insert(ip);
+                }
+            }
+        }
+        Some(out)
+    }
+
+    /// Delete one parsed NAT rule by exact spec. Missing rules (concurrent
+    /// modification) are warnings, not errors.
+    async fn delete_nat_rule(&self, cmd: &str, rule: &NatRule) {
+        let mut args = vec!["-t", "nat", "-D", rule.chain.as_str()];
+        args.extend(rule.spec.iter().map(|s| s.as_str()));
+        match Command::new(cmd).args(&args).output().await {
+            Ok(o) if o.status.success() => {
+                info!("NAT sweep ({}): removed stale {} rule", cmd, rule.chain);
+            }
+            Ok(o) => {
+                warn!(
+                    "{} -D {} failed (likely already gone): {}",
+                    cmd,
+                    rule.chain,
+                    String::from_utf8_lossy(&o.stderr).trim()
+                );
+            }
+            Err(e) => {
+                warn!("failed to run {}: {}", cmd, e);
+            }
+        }
+    }
+
+    /// Sweep one nat table: drop exact-duplicate rules and rules pointing at
+    /// dead container IPs, then garbage-collect unreferenced `CNI-*` chains.
+    /// Best-effort throughout; never fails.
+    async fn sweep_nat_table(&self, cmd: &str, save_bin: &str, dead_ips: &HashSet<String>) {
+        let out = match Command::new(save_bin).args(["-t", "nat"]).output().await {
+            Ok(o) if o.status.success() => o,
+            Ok(o) => {
+                warn!(
+                    "{} -t nat failed: {}",
+                    save_bin,
+                    String::from_utf8_lossy(&o.stderr).trim()
+                );
+                return;
+            }
+            Err(e) => {
+                warn!("failed to run {}: {}", save_bin, e);
+                return;
+            }
+        };
+        let text = String::from_utf8_lossy(&out.stdout);
+        let (rules, refcounts, declared) = parse_nat_save(&text);
+        if rules.is_empty() {
+            return;
+        }
+        let (del_idx, chains) = plan_nat_cleanup(&rules, &refcounts, &declared, dead_ips);
+        if del_idx.is_empty() && chains.is_empty() {
+            return;
+        }
+        info!(
+            "NAT sweep ({}): removing {} stale rules and {} orphaned chains",
+            cmd,
+            del_idx.len(),
+            chains.len()
+        );
+        for idx in del_idx {
+            if let Some(rule) = rules.get(idx) {
+                self.delete_nat_rule(cmd, rule).await;
+            }
+        }
+        for chain in chains {
+            for args in [
+                vec!["-t", "nat", "-F", chain.as_str()],
+                vec!["-t", "nat", "-X", chain.as_str()],
+            ] {
+                match Command::new(cmd).args(&args).output().await {
+                    Ok(o) if o.status.success() => {}
+                    _ => break,
+                }
+            }
+        }
+    }
+
+    /// Sweep stale NAT state for dead container IPs (IPv4 always, IPv6 when a
+    /// dead address is v6). Runs the exact-duplicate pass unconditionally.
+    pub(crate) async fn sweep_dead_nat_rules(&self, dead_ips: &HashSet<String>) {
+        self.sweep_nat_table("iptables", "iptables-save", dead_ips)
+            .await;
+        if dead_ips.iter().any(|ip| ip.contains(':')) {
+            self.sweep_nat_table("ip6tables", "ip6tables-save", dead_ips)
+                .await;
+        }
+    }
+
+    /// True when an IP belongs to this agent's bridge subnet. Jump-rule
+    /// cleanup is scoped to it so one agent can never remove rules that
+    /// belong to another agent's (or the host's) networks.
+    fn bridge_subnet_contains(&self, ip: &str) -> bool {
+        if let Some((net, prefix)) = self.cni_bridge_subnet.split_once('/') {
+            if let Ok(prefix_len) = prefix.parse::<u8>() {
+                return crate::net_utils::ip_in_subnet(ip, net, prefix_len);
+            }
+        }
+        false
+    }
+
+    /// Global orphan sweep: collect every container IP referenced by on-disk
+    /// CNI state, subtract live container IPs, and sweep NAT for the rest.
+    /// Assumes one agent owns its CNI state dirs (the default); IPs with no
+    /// state references are never touched.
+    pub(crate) async fn sweep_orphaned_nat_rules(&self) {
+        let live = match self.live_container_ips().await {
+            Some(live) => live,
+            None => return,
+        };
+        let mut candidates = HashSet::new();
+        // CNI result files.
+        if let Ok(mut entries) = tokio::fs::read_dir(&self.cni_results_dir).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if !fname.starts_with("catalyst-") || fname.contains("-config") {
+                    continue;
+                }
+                if fname.ends_with("-ports.json") {
+                    if let Ok(content) = tokio::fs::read_to_string(entry.path()).await {
+                        if let Ok(state) = serde_json::from_str::<PortForwardState>(&content) {
+                            if !state.container_ip.is_empty() {
+                                candidates.insert(state.container_ip);
+                            }
+                        }
+                    }
+                    continue;
+                }
+                if let Ok(content) = tokio::fs::read_to_string(entry.path()).await {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(ips) = v.get("ips").and_then(|v| v.as_array()) {
+                            for entry in ips {
+                                if let Some(addr) = entry.get("address").and_then(|v| v.as_str()) {
+                                    let bare = addr.split('/').next().unwrap_or("");
+                                    if bare.parse::<std::net::IpAddr>().is_ok() {
+                                        candidates.insert(bare.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // IPAM lease filenames.
+        if let Ok(mut entries) = tokio::fs::read_dir(self.cni_data_dir.join("catalyst")).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.parse::<std::net::IpAddr>().is_ok() {
+                    candidates.insert(name);
+                }
+            }
+        }
+        let dead: HashSet<String> = candidates.difference(&live).cloned().collect();
+        if !dead.is_empty() {
+            info!(
+                "NAT sweep: {} dead container IPs with stale rules: {:?}",
+                dead.len(),
+                dead
+            );
+        }
+        self.sweep_dead_nat_rules(&dead).await;
+
+        // Second pass: `-s` jumps into CNI-* chains for dead containers that
+        // left no state files (e.g. finished installers). Scoped to our
+        // bridge subnet; liveness is checked per container record.
+        self.sweep_dead_jump_rules().await;
+
+        // Prune IPAM leases for IPs no live container holds, regardless of
+        // which container ID the lease names (a live container that moved to
+        // a new address orphans its old lease under its own ID).
+        if let Ok(mut entries) = tokio::fs::read_dir(self.cni_data_dir.join("catalyst")).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.parse::<std::net::IpAddr>().is_err() || live.contains(&name) {
+                    continue;
+                }
+                info!("Removing orphaned CNI IPAM lease {}", name);
+                let _ = tokio::fs::remove_file(entry.path()).await;
+            }
+        }
+    }
+
+    /// Delete `-s <ip> -j CNI-*` jump rules whose comment names a container
+    /// record that no longer exists. Only jumps with a source inside our own
+    /// bridge subnet are eligible.
+    pub(crate) async fn sweep_dead_jump_rules(&self) {
+        let save = match Command::new("iptables")
+            .args(["-t", "nat", "-S"])
+            .output()
+            .await
+        {
+            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+            _ => return,
+        };
+        // iptables -S prints one rule per line like iptables-save's -A form.
+        let mut rules = Vec::new();
+        for line in save.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("-A ") {
+                let words = split_save_words(rest);
+                if words.is_empty() {
+                    continue;
+                }
+                rules.push(NatRule {
+                    chain: words[0].clone(),
+                    spec: words[1..].to_vec(),
+                });
+            }
+        }
+        // Resolve liveness once for every distinct comment ID in range.
+        let mut cids: HashSet<String> = HashSet::new();
+        for rule in &rules {
+            let mut is_jump = false;
+            let mut src: Option<&str> = None;
+            let mut k = 0;
+            while k < rule.spec.len() {
+                match rule.spec[k].as_str() {
+                    "-j" => {
+                        is_jump = rule.spec.get(k + 1).is_some_and(|j| j.starts_with("CNI-"));
+                        k += 2;
+                    }
+                    "-s" => {
+                        src = rule.spec.get(k + 1).map(|s| s.as_str());
+                        k += 2;
+                    }
+                    _ => {
+                        k += 1;
+                    }
+                }
+            }
+            if !is_jump {
+                continue;
+            }
+            let in_scope = src
+                .and_then(normalize_rule_ip)
+                .is_some_and(|ip| self.bridge_subnet_contains(&ip));
+            if !in_scope {
+                continue;
+            }
+            if let Some(cid) = comment_container_id(&rule.spec) {
+                cids.insert(cid);
+            }
+        }
+        let mut dead_cids = HashSet::new();
+        let candidate_count = cids.len();
+        for cid in cids {
+            if !self.container_exists(&cid).await {
+                dead_cids.insert(cid);
+            }
+        }
+        info!(
+            "NAT sweep: scanned {} nat rules, {} in-scope jump candidates, {} dead",
+            rules.len(),
+            candidate_count,
+            dead_cids.len()
+        );
+        if dead_cids.is_empty() {
+            return;
+        }
+        // Re-read for exact specs (table unchanged since we only read), then
+        // delete and let the dupe/chain pass below collect the husks.
+        let doomed = select_dead_jump_rules(&rules, &dead_cids);
+        if doomed.is_empty() {
+            return;
+        }
+        info!(
+            "NAT sweep: removing {} jump rules for dead containers: {:?}",
+            doomed.len(),
+            dead_cids
+        );
+        for idx in doomed {
+            if let Some(rule) = rules.get(idx) {
+                self.delete_nat_rule("iptables", rule).await;
+            }
+        }
+        // Chain garbage-collection (+ dupe pass) on the fresh table.
+        self.sweep_dead_nat_rules(&HashSet::new()).await;
+    }
+
     pub async fn cleanup_stale_cni_leases(&self) {
+        // --- Phase 0: Sweep NAT for dead container IPs FIRST ---
+        // Result files are deleted below; collect stale DNAT/MASQUERADE state
+        // while the IPs are still derivable. Duplicate DNAT rules (re-attach
+        // stacking) are removed here too.
+        self.sweep_orphaned_nat_rules().await;
+
         // --- Phase 1: Release leases via CNI result files ---
         let results_dir = &self.cni_results_dir;
         if tokio::fs::try_exists(results_dir).await.unwrap_or(false) {
@@ -1129,5 +1520,427 @@ impl ContainerdRuntime {
         let guard = CtrChildGuard { child };
         let (guard, lines) = CtrChildGuard::into_lines(guard);
         Ok((guard, lines))
+    }
+}
+
+/// One `-A <chain> ...` rule parsed from `iptables-save` output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NatRule {
+    chain: String,
+    /// Tokens after `-A <chain>`, unescaped, suitable for an exact `-D` rebuild.
+    spec: Vec<String>,
+}
+
+/// Split an iptables-save rule line into words, honouring single/double
+/// quotes with backslash escapes (comments embed spaces and quotes).
+fn split_save_words(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut quote: Option<char> = None;
+    let mut chars = line.chars().peekable();
+    let mut in_word = false;
+    while let Some(c) = chars.next() {
+        match quote {
+            Some(q) => {
+                if c == '\\' {
+                    if let Some(n) = chars.next() {
+                        cur.push(n);
+                    }
+                    in_word = true;
+                } else if c == q {
+                    quote = None;
+                } else {
+                    cur.push(c);
+                    in_word = true;
+                }
+            }
+            None => {
+                if c == '"' || c == '\'' {
+                    quote = Some(c);
+                    in_word = true;
+                } else if c.is_whitespace() {
+                    if in_word {
+                        out.push(std::mem::take(&mut cur));
+                        in_word = false;
+                    }
+                } else {
+                    cur.push(c);
+                    in_word = true;
+                }
+            }
+        }
+    }
+    if in_word {
+        out.push(cur);
+    }
+    out
+}
+
+/// Normalize a NAT rule address token to a bare IP when it denotes exactly
+/// one host: plain IPs, `[v6]` brackets, `host:port` DNAT destinations, and
+/// `/32|/128` suffixed addresses. Wider subnets return None so a dead host
+/// IP can never match a broader rule.
+fn normalize_rule_ip(token: &str) -> Option<String> {
+    let mut t = token;
+    if let Some(stripped) = t.strip_prefix('[') {
+        t = stripped.split(']').next().unwrap_or(stripped);
+        return t.parse::<std::net::IpAddr>().ok().map(|ip| ip.to_string());
+    }
+    if let Some((addr, prefix)) = t.split_once('/') {
+        if prefix != "32" && prefix != "128" {
+            return None;
+        }
+        return addr
+            .parse::<std::net::IpAddr>()
+            .ok()
+            .map(|ip| ip.to_string());
+    }
+    if let Some(idx) = t.rfind(':') {
+        let (host, port) = t.split_at(idx);
+        let port = &port[1..];
+        if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) && !host.contains(':') {
+            return host
+                .parse::<std::net::IpAddr>()
+                .ok()
+                .map(|ip| ip.to_string());
+        }
+        // Bare IPv6 without port falls through to the plain parse below.
+    }
+    t.parse::<std::net::IpAddr>().ok().map(|ip| ip.to_string())
+}
+
+/// Extract the single container IP a NAT rule references, if any:
+/// DNAT `--to-destination`, MASQUERADE `-d`, or jumps into `CNI-*` chains
+/// pinned with `-s`.
+fn nat_rule_ip(rule: &NatRule) -> Option<String> {
+    let mut to_dest: Option<String> = None;
+    let mut src: Option<String> = None;
+    let mut dst: Option<String> = None;
+    let mut jump: Option<&str> = None;
+    let mut i = 0;
+    while i < rule.spec.len() {
+        match rule.spec[i].as_str() {
+            "--to-destination" => {
+                if let Some(v) = rule.spec.get(i + 1) {
+                    to_dest = normalize_rule_ip(v);
+                }
+                i += 2;
+            }
+            "-s" => {
+                if let Some(v) = rule.spec.get(i + 1) {
+                    src = normalize_rule_ip(v);
+                }
+                i += 2;
+            }
+            "-d" => {
+                if let Some(v) = rule.spec.get(i + 1) {
+                    dst = normalize_rule_ip(v);
+                }
+                i += 2;
+            }
+            "-j" => {
+                jump = rule.spec.get(i + 1).map(|s| s.as_str());
+                i += 2;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+    if to_dest.is_some() {
+        return to_dest;
+    }
+    match jump {
+        Some("MASQUERADE") => dst,
+        Some(j) if j.starts_with("CNI-") => src,
+        _ => None,
+    }
+}
+
+/// Parse `iptables-save -t nat` output into rules, `-j` target refcounts,
+/// and declared chain names.
+fn parse_nat_save(
+    save: &str,
+) -> (
+    Vec<NatRule>,
+    std::collections::HashMap<String, usize>,
+    Vec<String>,
+) {
+    let mut rules = Vec::new();
+    let mut refcounts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut declared = Vec::new();
+    for line in save.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with('*') || line == "COMMIT" {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix(':') {
+            if let Some(name) = rest.split_whitespace().next() {
+                declared.push(name.to_string());
+            }
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("-A ") {
+            let words = split_save_words(rest);
+            if words.is_empty() {
+                continue;
+            }
+            let chain = words[0].clone();
+            let spec = words[1..].to_vec();
+            let mut k = 0;
+            while k < spec.len() {
+                if spec[k] == "-j" {
+                    if let Some(t) = spec.get(k + 1) {
+                        *refcounts.entry(t.clone()).or_insert(0) += 1;
+                    }
+                    k += 2;
+                } else {
+                    k += 1;
+                }
+            }
+            rules.push(NatRule { chain, spec });
+        }
+    }
+    (rules, refcounts, declared)
+}
+
+/// Plan deletions: exact-duplicate rules (keep the first occurrence) plus
+/// rules whose container IP is dead. Returns rule indices and `CNI-*` chains
+/// left with zero references once the planned deletions are applied.
+fn plan_nat_cleanup(
+    rules: &[NatRule],
+    refcounts: &std::collections::HashMap<String, usize>,
+    declared: &[String],
+    dead_ips: &std::collections::HashSet<String>,
+) -> (Vec<usize>, Vec<String>) {
+    let mut delete = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (idx, rule) in rules.iter().enumerate() {
+        let key = format!("{}\0{}", rule.chain, rule.spec.join("\0"));
+        let is_dupe = !seen.insert(key);
+        let is_dead = nat_rule_ip(rule)
+            .as_ref()
+            .is_some_and(|ip| dead_ips.contains(ip));
+        if is_dupe || is_dead {
+            delete.push(idx);
+        }
+    }
+    let mut refs = refcounts.clone();
+    for &idx in &delete {
+        let spec = &rules[idx].spec;
+        let mut k = 0;
+        while k < spec.len() {
+            if spec[k] == "-j" {
+                if let Some(t) = spec.get(k + 1) {
+                    if let Some(c) = refs.get_mut(t) {
+                        *c = c.saturating_sub(1);
+                    }
+                }
+                k += 2;
+            } else {
+                k += 1;
+            }
+        }
+    }
+    let mut chains: Vec<String> = declared
+        .iter()
+        .filter(|c| c.starts_with("CNI-"))
+        .filter(|c| refs.get(*c).copied().unwrap_or(0) == 0)
+        .cloned()
+        .collect();
+    chains.sort();
+    chains.dedup();
+    (delete, chains)
+}
+
+/// Extract the `id: "<container-id>"` value from a CNI rule comment token,
+/// if present. Comments look like `name: "catalyst" id: "<cid>"`.
+fn comment_container_id(spec: &[String]) -> Option<String> {
+    for token in spec {
+        if let Some(pos) = token.find("id:") {
+            let rest = token[pos + 3..].trim_start();
+            let rest = rest.strip_prefix('"').unwrap_or(rest);
+            let end = rest.find('"').unwrap_or(rest.len());
+            let cid = rest[..end].trim();
+            if !cid.is_empty() {
+                return Some(cid.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Indices of `-s <ip> -j CNI-*` jump rules whose comment names a dead
+/// container. The caller resolves liveness (containerd); this pure selector
+/// keeps the rule shape policy in one testable place.
+fn select_dead_jump_rules(
+    rules: &[NatRule],
+    dead_cids: &std::collections::HashSet<String>,
+) -> Vec<usize> {
+    let mut out = Vec::new();
+    for (idx, rule) in rules.iter().enumerate() {
+        let mut jump: Option<&str> = None;
+        let mut src: Option<&str> = None;
+        let mut k = 0;
+        while k < rule.spec.len() {
+            match rule.spec[k].as_str() {
+                "-j" => {
+                    jump = rule.spec.get(k + 1).map(|s| s.as_str());
+                    k += 2;
+                }
+                "-s" => {
+                    src = rule.spec.get(k + 1).map(|s| s.as_str());
+                    k += 2;
+                }
+                _ => {
+                    k += 1;
+                }
+            }
+        }
+        let is_cni_jump = jump.is_some_and(|j| j.starts_with("CNI-"));
+        if !is_cni_jump || src.is_none() {
+            continue;
+        }
+        if let Some(cid) = comment_container_id(&rule.spec) {
+            if dead_cids.contains(&cid) {
+                out.push(idx);
+            }
+        }
+    }
+    out
+}
+
+/// Best-effort idempotency guard for `-A`: true when an identical rule
+/// already exists. `args` is the exact `-A` argv shape (`-t nat -A ...`).
+async fn rule_shape_present(cmd: &str, args: &[&str]) -> bool {
+    if args.len() < 4 || args[0] != "-t" || args[1] != "nat" || args[2] != "-A" {
+        return false;
+    }
+    let mut check = vec!["-t", "nat", "-C"];
+    check.extend_from_slice(&args[3..]);
+    Command::new(cmd)
+        .args(&check)
+        .output()
+        .await
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod nat_sweep_tests {
+    use super::*;
+
+    const FIXTURE: &str = r#"# Generated by iptables-save v1.8.11 (nf_tables)
+*nat
+:PREROUTING ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+:CNI-aaa - [0:0]
+:CNI-bbb - [0:0]
+-A PREROUTING -p tcp -m tcp --dport 25566 -j DNAT --to-destination 10.44.0.15:25566
+-A PREROUTING -p udp -m udp --dport 25566 -j DNAT --to-destination 10.44.0.15:25566
+-A PREROUTING -p tcp -m tcp --dport 25566 -j DNAT --to-destination 10.44.0.13:25566
+-A PREROUTING -p tcp -m tcp --dport 25566 -j DNAT --to-destination 10.44.0.13:25566
+-A POSTROUTING -s 10.44.0.10/32 -m comment --comment "name: \"catalyst\" id: \"dead-installer\"" -j CNI-aaa
+-A POSTROUTING -s 10.44.0.13/32 -m comment --comment "name: \"catalyst\" id: \"live-game\"" -j CNI-bbb
+-A POSTROUTING -d 10.44.0.15/32 -p tcp -m tcp --dport 25566 -j MASQUERADE
+-A POSTROUTING -d 10.44.0.13/32 -p tcp -m tcp --dport 25566 -j MASQUERADE
+-A POSTROUTING -d 10.44.0.0/16 -j ACCEPT
+COMMIT
+"#;
+
+    #[test]
+    fn parses_dnat_and_masquerade_shapes() {
+        let (rules, _, _) = parse_nat_save(FIXTURE);
+        assert_eq!(rules.len(), 9);
+        assert_eq!(nat_rule_ip(&rules[0]).as_deref(), Some("10.44.0.15"));
+        assert_eq!(rules[0].chain, "PREROUTING");
+        assert_eq!(nat_rule_ip(&rules[6]).as_deref(), Some("10.44.0.15"));
+        // Subnet rules never match a host IP.
+        assert_eq!(nat_rule_ip(&rules[8]), None);
+    }
+
+    #[test]
+    fn parses_commented_jump_with_escaped_quotes() {
+        let (rules, refcounts, declared) = parse_nat_save(FIXTURE);
+        assert_eq!(nat_rule_ip(&rules[4]).as_deref(), Some("10.44.0.10"));
+        assert_eq!(refcounts.get("CNI-aaa"), Some(&1));
+        assert_eq!(refcounts.get("CNI-bbb"), Some(&1));
+        assert!(declared.contains(&"CNI-aaa".to_string()));
+    }
+
+    #[test]
+    fn plans_dead_deletion_and_dupe_removal() {
+        let (rules, refcounts, declared) = parse_nat_save(FIXTURE);
+        let dead: HashSet<String> = ["10.44.0.15".to_string(), "10.44.0.10".to_string()]
+            .into_iter()
+            .collect();
+        let (del, chains) = plan_nat_cleanup(&rules, &refcounts, &declared, &dead);
+        // Rules 0,1 (dead .15 DNAT), rule 3 (exact dupe of rule 2), rule 4
+        // (dead .10 jump), rule 6 (dead .15 MASQUERADE). Live .13 rules stay.
+        assert_eq!(del, vec![0, 1, 3, 4, 6]);
+        // CNI-aaa loses its only reference; CNI-bbb stays referenced.
+        assert_eq!(chains, vec!["CNI-aaa".to_string()]);
+    }
+
+    #[test]
+    fn delete_spec_preserves_argv_tokens() {
+        let (rules, _, _) = parse_nat_save(FIXTURE);
+        let rule = &rules[4];
+        let mut rebuilt = vec!["-A".to_string(), rule.chain.clone()];
+        rebuilt.extend(rule.spec.clone());
+        assert_eq!(
+            rebuilt.join(" "),
+            "-A POSTROUTING -s 10.44.0.10/32 -m comment --comment name: \"catalyst\" id: \"dead-installer\" -j CNI-aaa"
+        );
+    }
+
+    #[test]
+    fn normalize_rule_ip_rejects_subnets() {
+        assert_eq!(
+            normalize_rule_ip("10.44.0.10/32").as_deref(),
+            Some("10.44.0.10")
+        );
+        assert_eq!(normalize_rule_ip("10.44.0.0/16"), None);
+        assert_eq!(
+            normalize_rule_ip("[fd00::5]:25566").as_deref(),
+            Some("fd00::5")
+        );
+        assert_eq!(normalize_rule_ip("not-an-ip"), None);
+    }
+
+    #[test]
+    fn empty_save_plans_nothing() {
+        let (rules, refcounts, declared) = parse_nat_save("# empty\n*nat\nCOMMIT\n");
+        let dead = HashSet::new();
+        let (del, chains) = plan_nat_cleanup(&rules, &refcounts, &declared, &dead);
+        assert!(del.is_empty());
+        assert!(chains.is_empty());
+    }
+
+    #[test]
+    fn comment_container_id_parses_portmap_comments() {
+        let spec = split_save_words(
+            r#"-s 10.44.0.10/32 -m comment --comment "name: \"catalyst\" id: \"dead-beef\"" -j CNI-aaa"#,
+        );
+        // First word is the -s flag; the helper scans the whole spec.
+        assert_eq!(comment_container_id(&spec), Some("dead-beef".to_string()));
+        let plain =
+            split_save_words("-p tcp --dport 25566 -j DNAT --to-destination 10.0.0.5:25566");
+        assert_eq!(comment_container_id(&plain), None);
+    }
+
+    #[test]
+    fn select_dead_jump_rules_keeps_live_containers() {
+        let (rules, _, _) = parse_nat_save(FIXTURE);
+        // Rule 4 jumps for dead-installer, rule 5 for live-game.
+        let dead: HashSet<String> = ["dead-installer".to_string()].into_iter().collect();
+        assert_eq!(select_dead_jump_rules(&rules, &dead), vec![4]);
+        let live_too: HashSet<String> = ["dead-installer".to_string(), "live-game".to_string()]
+            .into_iter()
+            .collect();
+        assert_eq!(select_dead_jump_rules(&rules, &live_too), vec![4, 5]);
+        let empty = HashSet::new();
+        assert!(select_dead_jump_rules(&rules, &empty).is_empty());
     }
 }

@@ -366,20 +366,30 @@ install_nerdctl() {
 # CNI plugins
 # ---------------------------------------------------------------------------
 
+# A plugin dir is usable only when every required plugin is present AND the
+# set speaks the 1.0.0 CNI spec the agent's configs use. Distro packages can
+# be ancient (e.g. Ubuntu jammy ships 0.9.1, 0.4.0-spec only): presence alone
+# is not enough — containers get IPs but broken DNS with those.
+cni_dir_usable() {
+    local cni_dir="$1" plugin
+    for plugin in bridge host-local portmap macvlan; do
+        if [ ! -x "${cni_dir}/${plugin}" ]; then
+            return 1
+        fi
+    done
+    if ! "${cni_dir}/bridge" 2>&1 | grep -q "1\.0\.0"; then
+        log "CNI plugins in ${cni_dir} predate the 1.0.0 spec — ignoring"
+        return 1
+    fi
+    return 0
+}
+
 install_cni_plugins() {
-    local required=(bridge host-local portmap macvlan)
     local cni_dirs=("/opt/cni/bin" "/usr/libexec/cni" "/usr/lib/cni")
     local found_dir=""
 
     for cni_dir in "${cni_dirs[@]}"; do
-        local all_present=true
-        for plugin in "${required[@]}"; do
-            if [ ! -x "${cni_dir}/${plugin}" ]; then
-                all_present=false
-                break
-            fi
-        done
-        if [ "$all_present" = true ]; then
+        if cni_dir_usable "$cni_dir"; then
             found_dir="$cni_dir"
             break
         fi
@@ -412,17 +422,11 @@ install_cni_plugins() {
             ;;
     esac
 
-    # Re-check after package install
+    # Re-check after package install (version-gated: an old distro set still
+    # falls through to the pinned upstream tarball below).
     if [ "$pkg_installed" = true ]; then
         for cni_dir in "${cni_dirs[@]}"; do
-            local all_present=true
-            for plugin in "${required[@]}"; do
-                if [ ! -x "${cni_dir}/${plugin}" ]; then
-                    all_present=false
-                    break
-                fi
-            done
-            if [ "$all_present" = true ]; then
+            if cni_dir_usable "$cni_dir"; then
                 log "CNI plugins installed via package manager in ${cni_dir}"
                 return 0
             fi
@@ -447,7 +451,7 @@ install_cni_plugins() {
     tar -xzf "$archive" -C /opt/cni/bin
     rm -f "$archive"
 
-    for plugin in "${required[@]}"; do
+    for plugin in bridge host-local portmap macvlan; do
         [ -x "/opt/cni/bin/${plugin}" ] || fail "Missing required CNI plugin: ${plugin}"
     done
     log "CNI plugins installed from upstream tarball."
@@ -861,7 +865,7 @@ LimitNOFILE=65536
 # - RestrictNamespaces allows only mount/net/uts/ipc (no userns/pid/cgroup
 #   games) — the agent enters namespaces via nsenter, it does not create
 #   hostile ones.
-# - ProtectHome=true (agent state lives under /opt + data_dir, never $HOME).
+# - ProtectHome=true (agent state lives under /opt + data_dir, never a home dir).
 # - PrivateDevices=true is NOT set: loop devices are required for disk images.
 # - TasksMax is bounded (matches node-tuning.sh limits.conf): infinity would
 #   let a fork bomb wedge the node.

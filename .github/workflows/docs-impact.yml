@@ -4,6 +4,9 @@ name: Docs impact (advisory)
 # posts which documentation areas are affected. Advisory only: it never blocks
 # merges and never writes to either repo. Human reviewers use it to request
 # matching docs updates in catalyst-doc.
+#
+# catalyst-doc is a standalone repo (nested checkout, not a submodule), so
+# this job clones it explicitly.
 on:
   pull_request:
 
@@ -14,7 +17,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
+      - name: Checkout docs repository
+        uses: actions/checkout@v4
+        with:
+          repository: catalystctl/catalyst-doc
+          path: catalyst-doc
       - uses: actions/setup-node@v4
         with:
           node-version: 22

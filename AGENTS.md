@@ -9,7 +9,7 @@ Agent instructions for the Catalyst monorepo (game-server control panel).
 - `catalyst-agent/` — the Rust node agent (`cargo`).
 - `packages/plugin-sdk/`, `packages/plugin-sdk-cli/` — plugin SDKs.
 - Plugin frontends live in the separate `catalystctl/catalyst-plugins` repo. CI checks it out to `catalyst-plugins/`; the panel build globs it in, so a local build needs that directory present.
-- Public docs live in the separate `catalystctl/catalyst-doc` repo, vendored here as the `catalyst-doc/` submodule (docs site source + docs agent). Clone with `git clone --recurse-submodules`, or `git submodule update --init --recursive` afterwards. Docs changes go through PRs in `catalyst-doc`; bump the submodule pointer here to adopt a new docs revision. Never edit the submodule in place for product work.
+- Public docs live in the separate `catalystctl/catalyst-doc` repo (docs site source + docs agent). It is NOT a submodule: clone it next to this repo (`../catalyst-doc`) or anywhere else and pass `--source-repo/--docs-repo` explicitly. Never nest product work inside a docs checkout. Docs-only pushes must not trigger release builds — `auto-version.yml` ignores docs paths for exactly this reason, and nothing in a docs change may cancel an in-flight release pipeline.
 
 ## Verify before claiming something works
 

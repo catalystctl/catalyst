@@ -3,9 +3,8 @@
 Public product documentation lives on the docs site:
 
 **[docs.catalystctl.com](https://docs.catalystctl.com)**
-([source](https://github.com/catalystctl/catalyst-doc), also vendored here as
-the `catalyst-doc/` submodule — clone with `git clone --recurse-submodules`
-or run `git submodule update --init --recursive`).
+([source](https://github.com/catalystctl/catalyst-doc) — a standalone repo;
+clone it next to this checkout to edit the docs site).
 
 - Game-server owners → *Game Server Guide* (console, files, SFTP, backups,
   databases, tasks, networking, subusers).
