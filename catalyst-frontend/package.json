@@ -1,6 +1,6 @@
 {
 	"name": "catalyst-frontend",
-	"version": "1.60.1",
+	"version": "1.60.2",
 	"private": true,
 	"type": "module",
 	"engines": {
