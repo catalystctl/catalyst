@@ -666,6 +666,15 @@ stage_minecraft() {
   fi
   e2e_save_state E2E_MC_SERVER_ID "$E2E_MC_SERVER_ID"
 
+  # The agent pauses an install (status sticks at "installing") when
+  # eula.txt exists without eula=true — e.g. a leftover from a previous
+  # failed run — and only resumes once EULA is accepted. The create payload
+  # already declares intent (EULA:"true"), so accept up front: it rewrites
+  # eula.txt=true when the file exists, is a no-op on a fresh server dir,
+  # and keeps reinstalls from hanging to the install timeout.
+  e2e_log "Pre-accepting Minecraft EULA"
+  e2e_api POST /api/servers/eula "$(jq -n --arg serverId "$E2E_MC_SERVER_ID" '{serverId:$serverId,accepted:true}')" >/dev/null || true
+
   e2e_log "Installing Paper $E2E_MC_SERVER_ID (timeout ${E2E_INSTALL_TIMEOUT_S}s)"
   # Stop first when reusing a running server: POST /install against a live
   # server leaves status=running, which the wait loop below would mistake
@@ -723,7 +732,14 @@ stage_minecraft() {
   while true; do
     st="$(e2e_api GET "/api/servers/${E2E_MC_SERVER_ID}" | jq -r '.data.status // empty')"
     if [[ "$st" == "running" ]]; then
-      break
+      # Paper reports "running" for a few seconds before exiting on an
+      # unaccepted EULA; breaking on the first sighting races that exit,
+      # skips the accept below, and leaves the next reinstall paused at
+      # the agent's EULA gate. Require the state to hold across a re-poll
+      # (fall through otherwise — the log check below then accepts).
+      sleep 8
+      st="$(e2e_api GET "/api/servers/${E2E_MC_SERVER_ID}" | jq -r '.data.status // empty')"
+      [[ "$st" == "running" ]] && break
     fi
     if [[ "$st" == "stopped" && "$eula_accepted" == "1" ]]; then
       e2e_log "Starting after EULA accept"
@@ -827,6 +843,44 @@ stage_destroy() {
       e2e_warn "Stopping isolated host agent (pid $p)"
       sudo kill "$p" 2>/dev/null || true
     fi
+    sleep 2
+    # The kill above is not graceful. Nothing else will reap the agent's
+    # leftovers, and they poison the next run: containers squat IPs,
+    # stale DNAT rules shadow the new container's rules (first match wins),
+    # and the CNI bridge holds the subnet. The namespace, bridge and subnet
+    # are e2e-only, so removing everything that references them is safe.
+    # NB: nerdctl rm chokes on these containers once their CNI state is
+    # gone; this ctr has no `containers -q` and prints usage errors to
+    # stdout, hence the explicit `list` and the field-splitting read.
+    if command -v ctr >/dev/null 2>&1; then
+      local ns="${E2E_HOST_AGENT_NAMESPACE}" cid
+      while read -r cid _; do
+        [[ -n "$cid" ]] || continue
+        sudo ctr --namespace "$ns" tasks kill "$cid" 2>/dev/null || true
+        sudo ctr --namespace "$ns" tasks rm --force "$cid" 2>/dev/null || true
+        sudo ctr --namespace "$ns" containers rm "$cid" 2>/dev/null || true
+      done < <(sudo ctr --namespace "$ns" containers list 2>/dev/null | tail -n +2)
+    fi
+    # CNI bridge + iptables footprints (subnet prefix from E2E_HOST_SUBNET).
+    local e2e_pfx e2e_pfx_esc e2e_rule e2e_chain
+    e2e_pfx="${E2E_HOST_SUBNET:-10.44.0.0/16}"
+    e2e_pfx="${e2e_pfx%/*}"
+    e2e_pfx="$(printf '%s' "$e2e_pfx" | cut -d. -f1-2)."
+    e2e_pfx_esc="${e2e_pfx//./\\.}"
+    sudo ip link del "${E2E_HOST_BRIDGE}" 2>/dev/null || true
+    while e2e_rule=$(sudo iptables -t nat -S 2>/dev/null | grep -E "^-[AI] .*(${e2e_pfx_esc}|${E2E_HOST_BRIDGE})" | head -1); [[ -n "$e2e_rule" ]]; do
+      eval "sudo iptables -t nat ${e2e_rule/#-A /-D }" 2>/dev/null || break
+    done
+    while e2e_rule=$(sudo iptables -S FORWARD 2>/dev/null | grep -E "${e2e_pfx_esc}|${E2E_HOST_BRIDGE}" | head -1); [[ -n "$e2e_rule" ]]; do
+      eval "sudo iptables ${e2e_rule/#-A /-D }" 2>/dev/null || break
+    done
+    # Dangling CNI chains whose contents reference the e2e subnet
+    for e2e_chain in $(sudo iptables -t nat -S 2>/dev/null | awk '/^:-N CNI-|^-N CNI-/{print $2}'); do
+      if sudo iptables -t nat -S "$e2e_chain" 2>/dev/null | grep -qE "$e2e_pfx_esc"; then
+        sudo iptables -t nat -F "$e2e_chain" 2>/dev/null || true
+        sudo iptables -t nat -X "$e2e_chain" 2>/dev/null || true
+      fi
+    done
     rm -f "$E2E_HOST_AGENT_PIDFILE" 2>/dev/null || sudo rm -f "$E2E_HOST_AGENT_PIDFILE"
     if [[ -d "${E2E_HOST_AGENT_DATADIR:-}" ]]; then
       e2e_warn "Removing host agent data ${E2E_HOST_AGENT_DATADIR}"
