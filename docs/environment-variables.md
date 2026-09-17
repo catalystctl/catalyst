@@ -351,9 +351,9 @@ Set the prefix to `127.0.0.1:` to restrict access to localhost only. Example: `F
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `POSTGRES_USER` | String | `catalyst` | PostgreSQL superuser name. Hardcoded to `catalyst` in `catalyst-docker/docker-compose.yml`; `.env` values do not interpolate. |
+| `POSTGRES_USER` | String | `catalyst` | PostgreSQL superuser name. Applied by the official image **only on first start of an empty data volume** — changing it later without wiping `catalyst-postgres-data` leaves the old user in place. `DATABASE_URL` and the healthcheck follow this value. |
 | `POSTGRES_PASSWORD` | String | **Required** | PostgreSQL superuser password. **Must be changed from the default before production use.** |
-| `POSTGRES_DB` | String | `catalyst_db` | PostgreSQL database name. Hardcoded to `catalyst_db` in Compose; `.env` values do not interpolate. |
+| `POSTGRES_DB` | String | `catalyst_db` | PostgreSQL database name. Like the user, applied only on first start of an empty data volume. `DATABASE_URL` follows this value. |
 | `POSTGRES_PORT` | Host:Container binding | `127.0.0.1:5432` | Port mapping for exposing PostgreSQL to the host (e.g., for pgAdmin or local tools). |
 
 ::: tip PostgreSQL Security

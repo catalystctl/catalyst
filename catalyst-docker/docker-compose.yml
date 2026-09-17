@@ -19,19 +19,22 @@ services:
     container_name: catalyst-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: catalyst
+      # Like the password, POSTGRES_USER/POSTGRES_DB are only applied by the
+      # official image on FIRST volume init — changing them later against an
+      # existing catalyst-postgres-data volume does nothing.
+      POSTGRES_USER: ${POSTGRES_USER:-catalyst}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: catalyst_db
+      POSTGRES_DB: ${POSTGRES_DB:-catalyst_db}
     ports:
       - "${POSTGRES_PORT:-127.0.0.1:5432}:5432"
     volumes:
       - catalyst-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      # -d catalyst_db: without an explicit DB, pg_isready defaults to a database
-      # named after the user ("catalyst"), which does not exist (POSTGRES_DB is
-      # catalyst_db). That spams FATAL logs and can confuse install debugging
+      # -d <db>: without an explicit DB, pg_isready defaults to a database
+      # named after the user, which need not exist (POSTGRES_DB may differ).
+      # That spams FATAL logs and can confuse install debugging
       # (see GitHub issue #206).
-      test: ["CMD-SHELL", "pg_isready -U catalyst -d catalyst_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-catalyst} -d $${POSTGRES_DB:-catalyst_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -128,7 +131,7 @@ services:
       # Compose does not URL-encode ${POSTGRES_PASSWORD}; install.sh generates
       # URL-safe passwords (no /+=). If you set a custom password with special
       # characters, URL-encode them in a full DATABASE_URL override instead.
-      DATABASE_URL: postgresql://catalyst:${POSTGRES_PASSWORD}@postgres:5432/catalyst_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:-catalyst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-catalyst_db}
 
       # Redis (optional shared cache/coordination; backend degrades to
       # Postgres + process-local state when REDIS_URL is unset/unreachable).

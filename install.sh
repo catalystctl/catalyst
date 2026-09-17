@@ -10,6 +10,13 @@ umask 077
 # Pinned release metadata for verified installs (see "Versioned install" note
 # in the Installation guide on docs.catalystctl.com). Release artifacts
 # publish install.sh + .sha256; always verify before executing.
+#   INSTALL_VERSION — git ref the catalyst-docker tree is downloaded from
+#                     ("main" tracks the branch; a release tag like v1.60.1
+#                     pins the stack files to that release).
+#   INSTALL_SHA256  — expected SHA-256 of install.sh itself. When set, the
+#                     script verifies its own checksum at startup and aborts
+#                     on mismatch (accepts the raw hex or the content of the
+#                     published install.sh.sha256 file).
 INSTALL_VERSION="${INSTALL_VERSION:-main}"
 INSTALL_SHA256="${INSTALL_SHA256:-}"
 
@@ -27,47 +34,143 @@ NON_INTERACTIVE=false
 DRY_RUN=false
 FORCE_RECONFIGURE=false
 MODE="${MODE:-install}"
+# Ordered "KEY=VALUE" .env overrides from --env-file / --set (later wins).
+USER_SETS=()
+ENV_FILE=""
 
 # ── Parse arguments ──────────────────────────────────────────────────────────
-for arg in "$@"; do
-    case "$arg" in
+usage() {
+    echo "Usage: bash install.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  -y, --yes, --non-interactive   Accept all defaults / use env var overrides"
+    echo "  --dry-run                      Show what would be done without making changes"
+    echo "  --uninstall                    Remove the Catalyst Docker stack"
+    echo "  --update                       Update stack files in ./catalyst-docker (keeps .env)"
+    echo "  --reconfigure                  Re-run the .env configuration prompts"
+    echo "  --set KEY=VALUE                Set a .env variable (repeatable; applied on"
+    echo "                                 top of prompts/defaults, wins over the environment)"
+    echo "  --env-file FILE                Read KEY=VALUE overrides from FILE (applied"
+    echo "                                 before --set, so --set wins)"
+    echo "  -h, --help                     Show this help"
+    echo ""
+    echo "Environment overrides (used with -y, or as prompt defaults):"
+    echo "  PUBLIC_URL=       Panel URL (e.g. http://192.168.1.100:8080)"
+    echo "  APP_NAME=         Panel name (default: Catalyst)"
+    echo "  REMOVE_VOLUMES=1  With --uninstall -y, also delete compose volumes"
+    echo "  INSTALL_VERSION=  Git ref for the stack files (default: main; a release"
+    echo "                    tag like v1.60.1 pins catalyst-docker to that release)"
+    echo "  INSTALL_SHA256=   Expected SHA-256 of install.sh itself — the script"
+    echo "                    verifies its own checksum and aborts on mismatch"
+}
+
+# True for a KEY we allow writing into .env (UPPER_SNAKE_CASE, no metacharacters).
+is_valid_env_key() {
+    [[ "$1" =~ ^[A-Z_][A-Z0-9_]*$ ]]
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         -y|--yes|--non-interactive)
             NON_INTERACTIVE=true
+            shift
             ;;
         --dry-run)
             DRY_RUN=true
+            shift
             ;;
         --uninstall)
             MODE=uninstall
+            shift
             ;;
         --update)
             MODE=update
+            shift
             ;;
         --reconfigure)
             FORCE_RECONFIGURE=true
+            shift
+            ;;
+        --set)
+            if [[ "${2:-}" != *=* || -z "${2%%=*}" ]]; then
+                echo "--set expects KEY=VALUE (got '${2:-}')" >&2
+                exit 1
+            fi
+            USER_SETS+=("$2")
+            shift 2
+            ;;
+        --set=*)
+            SET_ARG="${1#--set=}"
+            if [[ "$SET_ARG" != *=* || -z "${SET_ARG%%=*}" ]]; then
+                echo "--set expects KEY=VALUE (got '$SET_ARG')" >&2
+                exit 1
+            fi
+            USER_SETS+=("$SET_ARG")
+            shift
+            ;;
+        --env-file)
+            ENV_FILE="${2:?--env-file needs a path}"
+            shift 2
+            ;;
+        --env-file=*)
+            ENV_FILE="${1#--env-file=}"
+            shift
             ;;
         -h|--help)
-            echo "Usage: bash install.sh [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  -y, --yes, --non-interactive   Accept all defaults / use env var overrides"
-            echo "  --dry-run                      Show what would be done without making changes"
-            echo "  --uninstall                    Remove the Catalyst Docker stack"
-            echo "  --update                       Update stack files in ./catalyst-docker (keeps .env)"
-            echo "  --reconfigure                  Re-run the .env configuration prompts"
-            echo "  -h, --help                     Show this help"
-            echo ""
-            echo "Environment overrides (used with -y):"
-            echo "  PUBLIC_URL=       Panel URL (e.g. http://192.168.1.100:8080)"
-            echo "  APP_NAME=         Panel name (default: Catalyst)"
-            echo "  REMOVE_VOLUMES=1  With --uninstall -y, also delete compose volumes"
+            usage
             exit 0
             ;;
         *)
-            echo "Unknown argument: $arg" >&2
+            echo "Unknown argument: $1" >&2
             exit 1
             ;;
     esac
+done
+
+# ── --env-file: load KEY=VALUE lines before --set entries so --set wins ──────
+if [[ -n "$ENV_FILE" ]]; then
+    if [[ ! -f "$ENV_FILE" ]]; then
+        echo "env-file not found: $ENV_FILE" >&2
+        exit 1
+    fi
+    FILE_SETS=()
+    while IFS= read -r env_line || [[ -n "$env_line" ]]; do
+        env_line="${env_line%$'\r'}"
+        [[ -z "${env_line//[[:space:]]/}" ]] && continue
+        [[ "$env_line" == \#* ]] && continue
+        # ltrim + optional "export " prefix
+        env_line="${env_line#"${env_line%%[![:space:]]*}"}"
+        env_line="${env_line#export }"
+        if [[ "$env_line" != *=* ]]; then
+            echo "${ENV_FILE}: not a KEY=VALUE line: ${env_line}" >&2
+            exit 1
+        fi
+        env_key="${env_line%%=*}"
+        env_val="${env_line#*=}"
+        # Strip one pair of matching surrounding quotes, if present
+        if [[ ${#env_val} -ge 2 ]]; then
+            env_q="${env_val:0:1}"
+            if [[ "$env_q" == '"' && "${env_val: -1}" == '"' ]] || \
+               [[ "$env_q" == "'" && "${env_val: -1}" == "'" ]]; then
+                env_val="${env_val:1:${#env_val}-2}"
+            fi
+        fi
+        if ! is_valid_env_key "$env_key"; then
+            echo "${ENV_FILE}: invalid key (must be UPPER_SNAKE_CASE): ${env_key}" >&2
+            exit 1
+        fi
+        FILE_SETS+=("${env_key}=${env_val}")
+    done < "$ENV_FILE"
+    if [[ ${#FILE_SETS[@]} -gt 0 ]]; then
+        USER_SETS=("${FILE_SETS[@]}" "${USER_SETS[@]}")
+    fi
+fi
+
+for set_entry in "${USER_SETS[@]}"; do
+    if ! is_valid_env_key "${set_entry%%=*}"; then
+        echo "Invalid --set key: ${set_entry%%=*} (must be UPPER_SNAKE_CASE)" >&2
+        exit 1
+    fi
 done
 
 # ── Colors (graceful fallback when piped / no terminal) ─────────────────────
@@ -95,6 +198,30 @@ run() {
     fi
     "$@" >> "$LOGFILE" 2>&1
 }
+
+# ── Verified install: self-check install.sh against INSTALL_SHA256 ───────────
+# Optional, but closes the loop on the documented release flow: the user
+# downloads install.sh + install.sh.sha256, and can export INSTALL_SHA256 to
+# make the script verify itself (instead of trusting a manual sha256sum -c).
+# Accepts raw hex or the full "<hex>  install.sh" line from the .sha256 file.
+if [[ -n "$INSTALL_SHA256" ]]; then
+    EXPECTED_SUM="$(awk '{print $1}' <<<"$INSTALL_SHA256" | tr -d '[:space:]' | tr 'A-F' 'a-f')"
+    ACTUAL_SUM=""
+    if command -v sha256sum &>/dev/null; then
+        ACTUAL_SUM="$(sha256sum -- "$0" 2>/dev/null | awk '{print $1}' || true)"
+    elif command -v openssl &>/dev/null; then
+        ACTUAL_SUM="$(openssl dgst -r -sha256 -- "$0" 2>/dev/null | awk '{print $1}' || true)"
+    fi
+    if [[ -z "$ACTUAL_SUM" || "$ACTUAL_SUM" != "$EXPECTED_SUM" ]]; then
+        echo "install.sh checksum mismatch (INSTALL_SHA256)" >&2
+        echo "  expected: ${EXPECTED_SUM}" >&2
+        echo "  actual:   ${ACTUAL_SUM:-<unavailable>}" >&2
+        echo "  Re-download install.sh + install.sh.sha256 from the release assets" >&2
+        echo "  and verify with: sha256sum -c install.sh.sha256" >&2
+        exit 1
+    fi
+    echo "  ✓ install.sh checksum verified (INSTALL_SHA256)"
+fi
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 WORK_DIR=""
@@ -181,6 +308,40 @@ confirm() {
     echo -en "\n  ${BLD}?${RST} $1 ${DIM}[y/N]${RST}: "
     read -r ans </dev/tty
     [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]
+}
+
+# ── --set / --env-file helpers ────────────────────────────────────────────────
+# Value of KEY from USER_SETS (later entries win; empty string when absent).
+user_set_value() {
+    local key="$1" entry v=""
+    for entry in "${USER_SETS[@]}"; do
+        [[ "${entry%%=*}" == "$key" ]] && v="${entry#*=}"
+    done
+    printf '%s' "$v"
+}
+
+user_set_has() {
+    [[ -n "$(user_set_value "$1")" ]]
+}
+
+# Print "***" for values that look like secrets, so dry-run output and logs
+# never echo a credential that was passed via --set / --env-file.
+mask_secret_value() {
+    case "$1" in
+        *PASSWORD|*SECRET|*KEY|*TOKEN) echo "***" ;;
+        *) printf '%s' "$2" ;;
+    esac
+}
+
+# Effective value for a host-port setting: --set/--env-file > environment >
+# compose default. Used by the port pre-flight so it checks the port the user
+# actually asked for, not just the default.
+preflight_port() {
+    local key="$1" default="$2" v
+    v="$(user_set_value "$key")"
+    [[ -z "$v" ]] && v="${!key:-}"
+    [[ -z "$v" ]] && v="$default"
+    printf '%s' "$v"
 }
 
 # ── Extract hostname from URL (for PASSKEY_RP_ID) ────────────────────────────
@@ -573,6 +734,17 @@ phase_check_runtime() {
             ok "Podman Compose ${COMPOSE_VERSION}"
         fi
     fi
+
+    # Podman caveats: the compose file bind-mounts /var/run/docker.sock (used
+    # by the panel's server management + Update button), which only exists
+    # under Podman when podman-docker's compatibility socket is enabled.
+    # Rootless Podman also cannot bind host ports below 1024 (the default
+    # FRONTEND_PORT=8080 and loopback-bound service ports are fine).
+    if [[ "$RUNTIME_CMD" == "podman" ]]; then
+        warn "Podman detected — the backend expects a Docker-compatible socket at /var/run/docker.sock"
+        echo -e "  ${DIM}Enable the podman-docker compatibility socket (or run rootful Podman).${RST}"
+        echo -e "  ${DIM}Rootless Podman cannot bind ports below 1024 — defaults (8080) are safe.${RST}"
+    fi
 }
 
 # ── Phase 2: Install Docker if missing ───────────────────────────────────────
@@ -603,6 +775,19 @@ phase_install_docker() {
                 info "[dry-run] Would install Docker"
                 return 0
             fi
+            # The snippets above call sudo unconditionally. Running as root
+            # without sudo installed (minimal VPS images) would spray
+            # "sudo: command not found" through the whole snippet; a non-root
+            # user without sudo cannot proceed at all.
+            if [[ ${EUID} -ne 0 ]] && ! command -v sudo &>/dev/null; then
+                err "sudo is not installed and you are not root — cannot install Docker automatically"
+                echo -e "  ${DIM}Install sudo (or re-run as root), or install Docker manually:${RST}"
+                echo -e "  ${CYN}https://docs.docker.com/engine/install/${RST}"
+                exit 1
+            fi
+            if [[ ${EUID} -eq 0 ]] && ! command -v sudo &>/dev/null; then
+                DOCKER_INSTALL_CMDS="$(sed -e 's/^sudo //' -e 's/^\([[:space:]]*\)sudo /\1/' <<<"$DOCKER_INSTALL_CMDS")"
+            fi
             info "Installing Docker..."
             log "Installing Docker for ${DETECTED_DISTRO}"
             echo "$DOCKER_INSTALL_CMDS" | bash
@@ -621,7 +806,11 @@ phase_install_docker() {
                 # Try to start the daemon if not running
                 if ! docker info &>/dev/null; then
                     info "Starting Docker daemon..."
-                    sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
+                    if [[ ${EUID} -eq 0 ]] && ! command -v sudo &>/dev/null; then
+                        systemctl start docker 2>/dev/null || service docker start 2>/dev/null || true
+                    else
+                        sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
+                    fi
                     sleep 2
                     if ! docker info &>/dev/null; then
                         err "Docker daemon still not reachable"
@@ -700,11 +889,66 @@ phase_check_deps() {
     fi
 }
 
+# ── Phase 4b: Pre-flight (warn-only; nothing here is fatal) ──────────────────
+# Catches the failures that otherwise only surface later at `docker compose up`:
+# a port already bound by another service, or a disk too small for the images.
+phase_preflight() {
+    step "Pre-flight checks"
+
+    # Disk space — images + postgres data live on the target filesystem
+    local avail_mb
+    avail_mb=$(df -Pk "$PWD" 2>/dev/null | awk 'NR==2 {printf "%d", $4/1024}')
+    if [[ -n "${avail_mb:-}" ]]; then
+        if [[ "$avail_mb" -lt 5120 ]]; then
+            warn "Only ${avail_mb} MB free under ${PWD} — images + database need several GB"
+        else
+            ok "Disk space OK (${avail_mb} MB free)"
+        fi
+    fi
+
+    # Host-side ports: warn when something is already listening. A running
+    # Catalyst stack on a re-install is legitimate, so this is advisory.
+    local listeners=""
+    if command -v ss &>/dev/null; then
+        listeners=$(ss -ltn 2>/dev/null || true)
+    elif command -v netstat &>/dev/null; then
+        listeners=$(netstat -ltn 2>/dev/null || true)
+    fi
+    if [[ -n "$listeners" ]]; then
+        local pair key raw port
+        for pair in "FRONTEND_PORT:0.0.0.0:8080" "BACKEND_PORT:127.0.0.1:3000" "POSTGRES_PORT:127.0.0.1:5432" "REDIS_PORT:127.0.0.1:6379"; do
+            key="${pair%%:*}"
+            raw="$(preflight_port "$key" "${pair#*:}")"
+            port="${raw##*:}"
+            [[ "$port" =~ ^[0-9]+$ ]] || continue
+            # Trailing non-digit guard so :8080 does not also match :80800
+            if grep -qE "[:.]${port}([^0-9]|$)" <<<"$listeners"; then
+                warn "Port ${port} (${key}) is already in use — stop that service or change ${key}"
+            else
+                ok "Port ${port} free (${key})"
+            fi
+        done
+    else
+        info "ss/netstat not available — skipping port checks"
+    fi
+}
+
 # ── Phase 5: Download catalyst-docker ────────────────────────────────────────
 phase_download() {
     step "Downloading ${TARGET_DIR}"
 
-    local archive_url="https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
+    # INSTALL_VERSION picks the git ref: "main" tracks the branch, anything
+    # else (a release tag like v1.60.1) pins the stack files to that release
+    # so a verified installer from release X installs stack X, not main HEAD.
+    local ref_spec="refs/heads/${BRANCH}"
+    local ref_name="${BRANCH}"
+    if [[ "$INSTALL_VERSION" != "$BRANCH" ]]; then
+        ref_spec="refs/tags/${INSTALL_VERSION}"
+        ref_name="${INSTALL_VERSION}"
+        info "Pinned install: using release ${INSTALL_VERSION} for stack files"
+    fi
+
+    local archive_url="https://github.com/${REPO}/archive/${ref_spec}.tar.gz"
     WORK_DIR=$(mktemp -d /tmp/catalyst-install.XXXXXX)
 
     if $DRY_RUN; then
@@ -713,7 +957,7 @@ phase_download() {
         return 0
     fi
 
-    info "Fetching from ${REPO} (${BRANCH})..."
+    info "Fetching from ${REPO} (${ref_name})..."
     if ! curl -fsSL "$archive_url" -o "${WORK_DIR}/catalyst.tar.gz"; then
         err "Failed to download from GitHub"
         info "Check your internet connection and try again."
@@ -722,7 +966,7 @@ phase_download() {
     ok "Download complete"
 
     info "Extracting..."
-    tar -xzf "${WORK_DIR}/catalyst.tar.gz" -C "$WORK_DIR" --strip-components=1 "${REPO#*/}-${BRANCH}/${TARGET_DIR}/"
+    tar -xzf "${WORK_DIR}/catalyst.tar.gz" -C "$WORK_DIR" --strip-components=1 "${REPO#*/}-${ref_name}/${TARGET_DIR}/"
 
     if [[ ! -d "${WORK_DIR}/${TARGET_DIR}" ]]; then
         err "Extraction failed — '${TARGET_DIR}' not found in archive"
@@ -799,6 +1043,11 @@ phase_configure() {
 
     if $DRY_RUN; then
         info "[dry-run] Would create .env with generated secrets and prompted values"
+        local dry_entry dry_key
+        for dry_entry in "${USER_SETS[@]}"; do
+            dry_key="${dry_entry%%=*}"
+            info "[dry-run] Would set ${dry_key}=$(mask_secret_value "$dry_key" "${dry_entry#*=}")  (from --set/--env-file)"
+        done
         return 0
     fi
 
@@ -927,6 +1176,22 @@ phase_configure() {
         DEFAULT_PUBLIC_URL="http://${DETECTED_IP}:8080"
     fi
 
+    # ── Seed prompted values from --set/--env-file ────────────────────────
+    # Behaves like the environment-variable overrides: a --set PUBLIC_URL is
+    # picked up by ask() as a preset instead of prompting. Only the prompted
+    # keys are assigned as shell variables here — everything else goes through
+    # apply_user_sets() on the staging file, so --set can never clobber the
+    # script's own internals.
+    local seed_key seed_val
+    for seed_key in PUBLIC_URL APP_NAME DOMAIN ACME_EMAIL; do
+        if [[ -z "${!seed_key:-}" ]]; then
+            seed_val="$(user_set_value "$seed_key")"
+            if [[ -n "$seed_val" ]]; then
+                printf -v "$seed_key" '%s' "$seed_val"
+            fi
+        fi
+    done
+
     # ── Prompt for configuration ─────────────────────────────────────────
     echo ""
     echo -e "  ${BLD}Configuration${RST}"
@@ -944,8 +1209,12 @@ phase_configure() {
         PUBLIC_URL="${PUBLIC_URL%/}"
     fi
 
-    # Derive PASSKEY_RP_ID
-    PASSKEY_RP_ID=$(extract_hostname "$PUBLIC_URL")
+    # Derive PASSKEY_RP_ID (an explicit --set PASSKEY_RP_ID wins)
+    if user_set_has PASSKEY_RP_ID; then
+        PASSKEY_RP_ID="$(user_set_value PASSKEY_RP_ID)"
+    else
+        PASSKEY_RP_ID=$(extract_hostname "$PUBLIC_URL")
+    fi
 
     ask APP_NAME "Panel name (shown in UI and emails)" "Catalyst"
 
@@ -1026,6 +1295,33 @@ phase_configure() {
     chmod 600 "$STAGING_ENV" 2>/dev/null || true
     find "$COMPOSE_DIR" -maxdepth 1 -name ".env*" -exec chmod 600 {} \; 2>/dev/null || true
 
+    # ── Apply --set / --env-file overrides ────────────────────────────────
+    # Last stop before the atomic commit: user overrides land on top of the
+    # generated secrets and prompted values, with warnings where an override
+    # replaces something dangerous to hand-set.
+    if [[ ${#USER_SETS[@]} -gt 0 ]]; then
+        local set_entry set_key set_val
+        local example_env="${DEST}/.env.example"
+        for set_entry in "${USER_SETS[@]}"; do
+            set_key="${set_entry%%=*}"
+            set_val="${set_entry#*=}"
+            if [[ -f "$example_env" ]] && ! grep -qE "^#?[[:space:]]*${set_key}=" "$example_env"; then
+                warn "${set_key} is not in .env.example — appending anyway (check for typos)"
+            fi
+            case "$set_key" in
+                POSTGRES_PASSWORD)
+                    warn "--set POSTGRES_PASSWORD overrides the generated/reused value — it must match the password the postgres volume was FIRST initialized with, or the backend fails with Prisma P1000"
+                    ;;
+                BETTER_AUTH_SECRET|REDIS_PASSWORD|API_KEY_SECRET|BACKUP_CREDENTIALS_ENCRYPTION_KEY)
+                    warn "--set ${set_key} overrides the generated/reused secret"
+                    ;;
+            esac
+            env_set "$STAGING_ENV" "$set_key" "$set_val"
+            ok "Set ${set_key}=$(mask_secret_value "$set_key" "$set_val")  (from --set/--env-file)"
+        done
+        chmod 600 "$STAGING_ENV" 2>/dev/null || true
+    fi
+
     # ── Commit: atomically move staging → .env ────────────────────────────
     # All prompts answered, all values written.  Now it's safe to commit.
     mv "$STAGING_ENV" "${DEST}/.env"
@@ -1056,7 +1352,7 @@ phase_uninstall() {
     echo -e "  ${DIM}postgres volume, the backend will fail with Prisma P1000 auth errors.${RST}"
     echo ""
 
-    if ! confirm "Remove the Catalyst Docker stack?"; then
+    if [[ "$NON_INTERACTIVE" != "true" ]] && ! confirm "Remove the Catalyst Docker stack?"; then
         info "Aborted."
         exit 0
     fi
@@ -1112,12 +1408,14 @@ phase_uninstall() {
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 print_summary() {
-    # Read current values
+    # Read current values. env_get tolerates a missing file (dry-run never
+    # writes .env) and missing keys, unlike a bare grep|cut pipeline which
+    # pipefail+errexit would abort on.
     local public_url passkey_rp_id app_name node_env
-    public_url=$(grep "^PUBLIC_URL=" "${DEST}/.env" | cut -d= -f2-)
-    passkey_rp_id=$(grep "^PASSKEY_RP_ID=" "${DEST}/.env" | cut -d= -f2-)
-    app_name=$(grep "^APP_NAME=" "${DEST}/.env" | cut -d= -f2-)
-    node_env=$(grep "^NODE_ENV=" "${DEST}/.env" | cut -d= -f2-)
+    public_url=$(env_get "${DEST}/.env" PUBLIC_URL)
+    passkey_rp_id=$(env_get "${DEST}/.env" PASSKEY_RP_ID)
+    app_name=$(env_get "${DEST}/.env" APP_NAME)
+    node_env=$(env_get "${DEST}/.env" NODE_ENV)
 
     echo ""
     echo -e "  ${GRN}${BLD}╔══════════════════════════════════════════╗${RST}"
@@ -1184,7 +1482,7 @@ phase_update() {
 
     if [[ ! -f "${dest}/update.sh" ]]; then
         warn "update.sh not present (older install) — fetching it from upstream"
-        local url="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${TARGET_DIR}/update.sh"
+        local url="https://raw.githubusercontent.com/${REPO}/${INSTALL_VERSION}/${TARGET_DIR}/update.sh"
         curl -fsSL "$url" -o "${dest}/update.sh" || {
             err "Could not download update.sh — check your internet connection"
             exit 1
@@ -1194,7 +1492,13 @@ phase_update() {
     fi
 
     info "Updating stack files in ${dest} (.env is preserved)"
-    bash "${dest}/update.sh"
+    # --dry-run passes through to update.sh (which supports its own dry-run);
+    # without this, `install.sh --update --dry-run` would update for real.
+    if $DRY_RUN; then
+        bash "${dest}/update.sh" --dry-run
+    else
+        bash "${dest}/update.sh"
+    fi
     local rc=$?
     if [[ $rc -ne 0 ]]; then
         exit $rc
@@ -1220,6 +1524,7 @@ main() {
     phase_install_docker
     phase_validate_compose
     phase_check_deps
+    phase_preflight
     phase_download
     phase_configure
     print_summary
