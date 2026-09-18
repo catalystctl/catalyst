@@ -24,6 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   Tooltip as UiTooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useAuthLockouts, useMcpSettings, useSecuritySettings } from '../../hooks/useAdmin';
@@ -64,6 +65,7 @@ function timeWindowLabel(t: TFunction<'admin-access'>, value: string): string {
 // The portal escapes the card so the text stays visible.
 function Tooltip({ text }: { text: string }) {
  return (
+ <TooltipProvider>
  <UiTooltip>
  <TooltipTrigger asChild>
  <span className="inline-flex" tabIndex={0} aria-label={text}>
@@ -74,6 +76,7 @@ function Tooltip({ text }: { text: string }) {
  {text}
  </TooltipContent>
  </UiTooltip>
+ </TooltipProvider>
  );
 }
 
