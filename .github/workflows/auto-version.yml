@@ -44,7 +44,7 @@ jobs:
       new_version: ${{ steps.version.outputs.new_version }}
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -360,7 +360,7 @@ jobs:
             artifact_name: catalyst-agent-aarch64-linux-musl
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: v${{ needs.version.outputs.new_version }}
 
@@ -496,7 +496,7 @@ jobs:
       attestations: write # SLSA provenance via attest-build-provenance
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: v${{ needs.version.outputs.new_version }}
 
@@ -535,7 +535,7 @@ jobs:
       attestations: write # SLSA provenance via attest-build-provenance
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: v${{ needs.version.outputs.new_version }}
 
@@ -607,7 +607,7 @@ jobs:
             file: catalyst-frontend/Dockerfile
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: v${{ needs.version.outputs.new_version }}
 
@@ -615,7 +615,7 @@ jobs:
       # frontends) — the plugins live in their own repo, not in this checkout.
       - name: Checkout plugins repository
         if: matrix.image == 'frontend'
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: catalystctl/catalyst-plugins
           ref: e3d2e3ee786e19bb40ecf5a565638e3f6db7c186 # pinned main 2026-09-18 (discord-oauth 1.0.1)
