@@ -256,6 +256,7 @@
     },
     "last60Min": "Last 60 min",
     "live": "Live",
+    "offline": "Offline",
     "resourceUsage": "Resource usage"
   },
   "networkModes": {

@@ -1021,8 +1021,23 @@ function ServerDetailsPage() {
  'n/a';
  const nodePort = server?.primaryPort ?? 'n/a';
  const diskLimitMb = server?.allocatedDiskMb ?? 0;
- const liveDiskUsageMb = liveMetrics?.diskUsageMb;
- const liveDiskTotalMb = liveMetrics?.diskTotalMb;
+ const isServerRunning = server?.status === 'running';
+ // The agent stops sending resource_stats when the container is gone, but the
+ // last running sample stays cached (backend + hook state). An offline server
+ // must read zero CPU/memory/network — never stale usage. Disk persists.
+ const displayMetrics = !isServerRunning && liveMetrics
+   ? {
+       ...liveMetrics,
+       cpuPercent: 0,
+       memoryPercent: 0,
+       memoryUsageMb: 0,
+       networkRxBytes: 0,
+       networkTxBytes: 0,
+       diskIoMb: 0,
+     }
+   : liveMetrics;
+ const liveDiskUsageMb = displayMetrics?.diskUsageMb;
+ const liveDiskTotalMb = displayMetrics?.diskTotalMb;
 
   const templateLabel = server?.template?.name;
   return (
@@ -1070,9 +1085,10 @@ function ServerDetailsPage() {
         }
         stats={
           <ServerHeaderStats
-            metrics={liveMetrics}
+            metrics={displayMetrics}
             allocatedMemoryMb={server?.allocatedMemoryMb}
             allocatedDiskMb={diskLimitMb}
+            serverStatus={server?.status}
           />
         }
         actions={
@@ -1142,7 +1158,7 @@ function ServerDetailsPage() {
           <Suspense fallback={<TabSkeleton />}>
             {!isPluginTab && activeTab === 'console' && (
               <ServerConsoleTab
-                liveMetrics={liveMetrics}
+                liveMetrics={displayMetrics}
                 liveDiskUsageMb={liveDiskUsageMb}
                 liveDiskTotalMb={liveDiskTotalMb ?? diskLimitMb}
                 allocatedMemoryMb={server?.allocatedMemoryMb}
@@ -1227,12 +1243,13 @@ function ServerDetailsPage() {
 
  {!isPluginTab && activeTab === 'metrics' && server && (
  <ServerMetricsTab
- serverCpuPercent={server.cpuPercent ?? 0}
- serverMemoryPercent={server.memoryPercent ?? 0}
+ serverCpuPercent={isServerRunning ? (server.cpuPercent ?? 0) : 0}
+ serverMemoryPercent={isServerRunning ? (server.memoryPercent ?? 0) : 0}
  allocatedMemoryMb={server.allocatedMemoryMb ?? 0}
  allocatedDiskMb={diskLimitMb}
- liveMetrics={liveMetrics}
+ liveMetrics={displayMetrics}
  isConnected={isConnected}
+ serverStatus={server.status}
  metricsHistory={metricsHistory}
  metricsTimeRange={metricsTimeRange}
  onMetricsTimeRangeChange={setMetricsTimeRange}

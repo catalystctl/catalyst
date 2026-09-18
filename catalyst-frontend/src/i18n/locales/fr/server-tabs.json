@@ -593,6 +593,7 @@
       "liveUsage": "Utilisation des ressources en direct.",
       "ram": "{{used}} MB de RAM",
       "rx": "Reçu {{value}}",
+      "serverOffline": "Serveur hors ligne. L’utilisation des ressources est à zéro à l’arrêt.",
       "title": "Métriques"
     },
     "mods": {

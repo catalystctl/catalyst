@@ -578,6 +578,7 @@
       "liveUsage": "Live resource usage.",
       "ram": "{{used}} MB RAM",
       "rx": "RX {{value}}",
+      "serverOffline": "Server offline. Resource usage is zero while stopped.",
       "title": "Metrics"
     },
     "mods": {

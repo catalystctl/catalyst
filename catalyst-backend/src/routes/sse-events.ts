@@ -247,36 +247,58 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
           )
         : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push, userId ?? undefined);
 
-      // Push cached latest metric immediately so the client doesn't wait for the next agent tick
+      // Push cached latest metric immediately so the client doesn't wait for the next agent tick.
+      // Offline servers must read zero CPU/memory, never the last running sample.
       if (!isGlobal) {
-        const cached = wsGateway.getLatestResourceStats(serverId);
-        if (cached) {
-          push('resource_stats', cached);
+        const liveOwner = await prisma.server.findUnique({
+          where: { id: serverId },
+          select: { status: true, allocatedDiskMb: true },
+        });
+        if (liveOwner && liveOwner.status !== 'running') {
+          const cached = wsGateway.getLatestResourceStats(serverId) as Record<string, unknown> | undefined;
+          const diskUsageMb = typeof cached?.diskUsageMb === 'number' ? (cached.diskUsageMb as number) : 0;
+          push('resource_stats', {
+            type: 'resource_stats',
+            serverId,
+            cpuPercent: 0,
+            memoryUsageMb: 0,
+            networkRxBytes: '0',
+            networkTxBytes: '0',
+            diskIoMb: 0,
+            diskUsageMb,
+            diskTotalMb: liveOwner.allocatedDiskMb ?? 0,
+            timestamp: Date.now(),
+          });
         } else {
-          // Fallback: query the DB for the most recent metric
-          const [latest, diskOwner] = await Promise.all([
-            prisma.serverMetrics.findFirst({
-              where: { serverId },
-              orderBy: { timestamp: 'desc' },
-            }),
-            prisma.server.findUnique({
-              where: { id: serverId },
-              select: { allocatedDiskMb: true },
-            }),
-          ]);
-          if (latest) {
-            push('resource_stats', {
-              type: 'resource_stats',
-              serverId,
-              cpuPercent: latest.cpuPercent,
-              memoryUsageMb: latest.memoryUsageMb,
-              networkRxBytes: latest.networkRxBytes.toString(),
-              networkTxBytes: latest.networkTxBytes.toString(),
-              diskIoMb: latest.diskIoMb ?? 0,
-              diskUsageMb: latest.diskUsageMb,
-              diskTotalMb: diskOwner?.allocatedDiskMb ?? 0,
-              timestamp: latest.timestamp.getTime(),
-            });
+          const cached = wsGateway.getLatestResourceStats(serverId);
+          if (cached) {
+            push('resource_stats', cached);
+          } else {
+            // Fallback: query the DB for the most recent metric
+            const [latest, diskOwner] = await Promise.all([
+              prisma.serverMetrics.findFirst({
+                where: { serverId },
+                orderBy: { timestamp: 'desc' },
+              }),
+              prisma.server.findUnique({
+                where: { id: serverId },
+                select: { allocatedDiskMb: true },
+              }),
+            ]);
+            if (latest) {
+              push('resource_stats', {
+                type: 'resource_stats',
+                serverId,
+                cpuPercent: latest.cpuPercent,
+                memoryUsageMb: latest.memoryUsageMb,
+                networkRxBytes: latest.networkRxBytes.toString(),
+                networkTxBytes: latest.networkTxBytes.toString(),
+                diskIoMb: latest.diskIoMb ?? 0,
+                diskUsageMb: latest.diskUsageMb,
+                diskTotalMb: diskOwner?.allocatedDiskMb ?? 0,
+                timestamp: latest.timestamp.getTime(),
+              });
+            }
           }
         }
       }

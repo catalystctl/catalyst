@@ -21,6 +21,11 @@ import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import {
+  Tooltip as UiTooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useAuthLockouts, useMcpSettings, useSecuritySettings } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -54,14 +59,21 @@ function timeWindowLabel(t: TFunction<'admin-access'>, value: string): string {
 
 
 // ── Tooltip Helper ──
+// Radix portal tooltip: the previous custom absolute tooltip was clipped by
+// ServerTabCard overflow-hidden and rendered unreadable underneath content.
+// The portal escapes the card so the text stays visible.
 function Tooltip({ text }: { text: string }) {
  return (
- <span className="group relative inline-flex">
+ <UiTooltip>
+ <TooltipTrigger asChild>
+ <span className="inline-flex" tabIndex={0} aria-label={text}>
  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60" />
- <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+ </span>
+ </TooltipTrigger>
+ <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
  {text}
- </span>
- </span>
+ </TooltipContent>
+ </UiTooltip>
  );
 }
 

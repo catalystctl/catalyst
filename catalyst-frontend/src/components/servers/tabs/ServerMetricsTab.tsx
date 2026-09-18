@@ -31,6 +31,7 @@ interface Props {
   allocatedDiskMb: number;
   liveMetrics: LiveMetrics | null;
   isConnected: boolean;
+  serverStatus?: string;
   metricsHistory: MetricsHistory | undefined;
   metricsTimeRange: MetricsTimeRange;
   onMetricsTimeRangeChange: (range: MetricsTimeRange) => void;
@@ -43,14 +44,17 @@ export default function ServerMetricsTab({
   allocatedDiskMb,
   liveMetrics,
   isConnected,
+  serverStatus,
   metricsHistory,
   metricsTimeRange,
   onMetricsTimeRangeChange,
 }: Props) {
   const { t } = useTranslation('server-tabs');
-  const cpu = liveMetrics?.cpuPercent ?? serverCpuPercent ?? 0;
-  const memory = liveMetrics?.memoryPercent ?? serverMemoryPercent ?? 0;
-  const memUsed = liveMetrics?.memoryUsageMb;
+  const isRunning = !serverStatus || serverStatus === 'running';
+  // Offline servers must not show stale live usage from the last running tick.
+  const cpu = isRunning ? (liveMetrics?.cpuPercent ?? serverCpuPercent ?? 0) : 0;
+  const memory = isRunning ? (liveMetrics?.memoryPercent ?? serverMemoryPercent ?? 0) : 0;
+  const memUsed = isRunning ? liveMetrics?.memoryUsageMb : undefined;
   const diskUsed = liveMetrics?.diskUsageMb;
   const diskTotal = liveMetrics?.diskTotalMb || allocatedDiskMb;
   // Live network counters are cumulative totals; per-second rates live in
@@ -62,19 +66,21 @@ export default function ServerMetricsTab({
         icon={BarChart3}
         title={t('tabs.metrics.title')}
         description={
-          isConnected
-            ? [
-                memUsed != null ? t('tabs.metrics.ram', { used: memUsed }) : null,
-                diskUsed != null && diskTotal
-                  ? t('tabs.metrics.disk', { used: diskUsed, total: diskTotal })
-                  : null,
-                liveMetrics?.networkRxBytes != null
-                  ? t('tabs.metrics.rx', { value: formatBytes(liveMetrics.networkRxBytes) })
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(' · ') || t('tabs.metrics.liveUsage')
-            : t('tabs.metrics.agentOffline')
+          !isRunning
+            ? t('tabs.metrics.serverOffline')
+            : isConnected
+              ? [
+                  memUsed != null ? t('tabs.metrics.ram', { used: memUsed }) : null,
+                  diskUsed != null && diskTotal
+                    ? t('tabs.metrics.disk', { used: diskUsed, total: diskTotal })
+                    : null,
+                  liveMetrics?.networkRxBytes != null
+                    ? t('tabs.metrics.rx', { value: formatBytes(liveMetrics.networkRxBytes) })
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || t('tabs.metrics.liveUsage')
+              : t('tabs.metrics.agentOffline')
         }
         actions={
           <MetricsTimeRangeSelector
@@ -84,7 +90,7 @@ export default function ServerMetricsTab({
         }
       />
 
-      <ServerMetrics cpu={cpu} memory={memory} />
+      <ServerMetrics cpu={cpu} memory={memory} isLive={isRunning && isConnected} />
 
       <ServerMetricsTrends
         history={metricsHistory?.history ?? []}

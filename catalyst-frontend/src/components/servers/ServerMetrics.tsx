@@ -6,7 +6,7 @@ type Metric = {
  color: string;
 };
 
-function ServerMetrics({ cpu = 0, memory = 0 }: { cpu?: number; memory?: number }) {
+function ServerMetrics({ cpu = 0, memory = 0, isLive = true }: { cpu?: number; memory?: number; isLive?: boolean }) {
  const { t } = useTranslation('servers');
  const metrics: Metric[] = [
  { label: t('metrics.labels.cpu'), value: cpu, color: 'bg-primary' },
@@ -17,9 +17,15 @@ function ServerMetrics({ cpu = 0, memory = 0 }: { cpu?: number; memory?: number 
  <div className="space-y-3 rounded-xl border border-border bg-card p-4">
  <div className="flex items-center justify-between">
  <h3 className="text-sm font-semibold text-foreground">{t('metrics.resourceUsage')}</h3>
+ {isLive ? (
  <span className="rounded-full bg-success-muted px-2 py-0.5 text-[11px] font-medium text-success">
  {t('metrics.live')}
  </span>
+ ) : (
+ <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+ {t('metrics.offline')}
+ </span>
+ )}
  </div>
  {metrics.map((metric) => (
  <div key={metric.label} className="space-y-1.5">

@@ -2618,6 +2618,11 @@ export class WebSocketGateway {
 
         // Route to clients
         await this.routeToClients(message.serverId, message);
+        // Container is gone: drop the last running sample so offline servers
+        // read 0 CPU/memory instead of stale usage.
+        if (message.state !== ServerState.RUNNING) {
+          await this.broadcastZeroedResourceStats(message.serverId).catch(() => {});
+        }
       } else if (message.type === "server_state_sync") {
         // State reconciliation from agent - updates status to match actual container state
         // Container name is the server ID (CUID), not the UUID field
@@ -2724,6 +2729,9 @@ export class WebSocketGateway {
             state: message.state,
             timestamp: message.timestamp || Date.now(),
           });
+          if (message.state !== ServerState.RUNNING) {
+            await this.broadcastZeroedResourceStats(server.id).catch(() => {});
+          }
         }
       } else if (message.type === "server_state_sync_complete") {
         // Reconciliation completed - check for servers that should exist but weren't found
@@ -2795,6 +2803,7 @@ export class WebSocketGateway {
               state: ServerState.STOPPED,
               timestamp: Date.now(),
             });
+            await this.broadcastZeroedResourceStats(server.id).catch(() => {});
           }
         }
 
@@ -4173,6 +4182,34 @@ export class WebSocketGateway {
     return this.latestResourceStats.get(serverId);
   }
 
+  /**
+   * Replace a stopped/offline server cached live stats with zeros and push
+   * them to SSE/WS subscribers. The agent stops sending resource_stats when
+   * the container is not running, so without this the last running sample
+   * (e.g. 4.8 GB) stays cached forever and fresh page loads render stale
+   * memory as if the offline server were still using it. Disk usage is
+   * preserved because files remain on disk while stopped.
+   */
+  private async broadcastZeroedResourceStats(serverId: string): Promise<void> {
+    const prev = this.latestResourceStats.get(serverId) as Record<string, unknown> | undefined;
+    const diskUsageMb = typeof prev?.diskUsageMb === 'number' ? (prev.diskUsageMb as number) : 0;
+    const diskTotalMb = typeof prev?.diskTotalMb === 'number' ? (prev.diskTotalMb as number) : 0;
+    const payload = {
+      type: 'resource_stats',
+      serverId,
+      cpuPercent: 0,
+      memoryUsageMb: 0,
+      networkRxBytes: '0',
+      networkTxBytes: '0',
+      diskIoMb: 0,
+      diskUsageMb,
+      diskTotalMb,
+      timestamp: Date.now(),
+    };
+    this.latestResourceStats.set(serverId, payload);
+    await this.routeToClients(serverId, payload);
+  }
+
   addGlobalSseSubscriber(
     eventTypes: string[],
     push: (event: string, data: any) => void,
@@ -4366,6 +4403,7 @@ export class WebSocketGateway {
           reason: `Node ${nodeId} disconnected during ${server.status}`,
           timestamp: Date.now(),
         });
+        await this.broadcastZeroedResourceStats(server.id).catch(() => {});
         this.logger.info(
           { serverId: server.id, nodeId, fromStatus: server.status },
           "Reverted stuck state to STOPPED on node disconnect"

@@ -563,6 +563,7 @@
       "liveUsage": "实时资源使用情况。",
       "ram": "内存 {{used}} MB",
       "rx": "接收 {{value}}",
+      "serverOffline": "服务器已离线。停止时资源使用率为零。",
       "title": "监控指标"
     },
     "mods": {

@@ -254,6 +254,7 @@
     },
     "last60Min": "最近 60 分钟",
     "live": "实时",
+    "offline": "离线",
     "resourceUsage": "资源使用情况"
   },
   "networkModes": {

@@ -258,6 +258,7 @@
     },
     "last60Min": "60 dernières min",
     "live": "En direct",
+    "offline": "Hors ligne",
     "resourceUsage": "Utilisation des ressources"
   },
   "networkModes": {

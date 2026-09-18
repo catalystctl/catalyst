@@ -52,16 +52,25 @@ export default function ServerHeaderStats({
   metrics,
   allocatedMemoryMb,
   allocatedDiskMb,
+  serverStatus,
 }: {
   metrics: ServerMetrics | null;
   allocatedMemoryMb?: number | null;
   allocatedDiskMb?: number | null;
+  serverStatus?: string;
 }) {
   const { t } = useTranslation('servers');
   const prevNetRef = useRef<{ rx: number; tx: number; t: number } | null>(null);
   const [netRate, setNetRate] = useState({ rx: 0, tx: 0 });
 
+  const isRunning = !serverStatus || serverStatus === 'running';
+
   useEffect(() => {
+    if (!isRunning) {
+      prevNetRef.current = null;
+      setNetRate({ rx: 0, tx: 0 });
+      return;
+    }
     if (!metrics) return;
     const now = performance.now();
     const rx = Number(metrics.networkRxBytes ?? 0);
@@ -79,12 +88,16 @@ export default function ServerHeaderStats({
     } else {
       prevNetRef.current = { rx, tx, t: now };
     }
-  }, [metrics]);
+  }, [metrics, isRunning]);
 
   if (!metrics) return null;
 
+  // Offline servers must not render stale live usage. CPU/memory/network are
+  // forced to zero; disk persists because files remain while stopped.
+  const cpuPercent = isRunning ? metrics.cpuPercent : 0;
+  const memoryPercent = isRunning ? metrics.memoryPercent : 0;
   const memoryLimit = allocatedMemoryMb && allocatedMemoryMb > 0 ? allocatedMemoryMb : null;
-  const memoryUsed = metrics.memoryUsageMb ?? null;
+  const memoryUsed = isRunning ? (metrics.memoryUsageMb ?? null) : 0;
   const memoryValue =
     memoryUsed != null && memoryLimit
       ? `${formatMem(memoryUsed)} / ${formatMem(memoryLimit)}`
@@ -99,13 +112,13 @@ export default function ServerHeaderStats({
 
   return (
     <div className="hidden items-end gap-4 lg:flex">
-      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${metrics.cpuPercent.toFixed(0)}%`} percent={metrics.cpuPercent} />
-      <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={metrics.memoryPercent} />
+      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
+      <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
       <HeaderStat icon={HardDrive} label={t('metrics.labels.disk')} value={diskValue} percent={diskPercent} />
       <HeaderStat
         icon={Activity}
         label={t('metrics.labels.network')}
-        value={`↓ ${formatBytes(netRate.rx)}/s  ↑ ${formatBytes(netRate.tx)}/s`}
+        value={isRunning ? `↓ ${formatBytes(netRate.rx)}/s  ↑ ${formatBytes(netRate.tx)}/s` : '↓ 0 B/s  ↑ 0 B/s'}
       />
     </div>
   );
