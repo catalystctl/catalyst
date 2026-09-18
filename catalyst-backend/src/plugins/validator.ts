@@ -79,6 +79,22 @@ export const PluginManifestSchema = z.object({
       }),
     )
     .optional(),
+  /**
+   * External sign-in providers this plugin implements (e.g. Discord OAuth).
+   * Declared providers are listed by the public /api/auth/oauth-providers
+   * endpoint so the login page can render their buttons; each provider's
+   * authorize route must exist and be registered with `config.auth`.
+   */
+  authProviders: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(32),
+        label: z.string().min(1).max(64),
+        authorizePath: z.string().regex(/^\/?[a-zA-Z0-9/_-]{1,120}$/).optional(),
+      }),
+    )
+    .max(8)
+    .optional(),
 }).superRefine((manifest, ctx) => {
   // permissionDescriptions keys must reference DECLARED permissions. Failing
   // loudly here gives authors an immediate, actionable error during discovery

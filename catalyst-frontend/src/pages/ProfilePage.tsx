@@ -36,6 +36,7 @@ import ServerTabCard from '../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../components/servers/tabs/SectionHeader';
 import TabLoadingState from '../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../components/servers/tabs/TabEmptyState';
+import { PluginSlot } from '../plugins/PluginSlot';
 
 // ── Helpers ──
 const fmtDate = (d: string | null | undefined) => !d ? i18n.t('notAvailable', { ns: 'profile' }) : formatDate(d);
@@ -454,6 +455,7 @@ export default function ProfilePage() {
  </div>
  </ServerTabCard>
  )}
+ <PluginSlot name="profile-connections" />
  </div>
 
  <div className="space-y-5">

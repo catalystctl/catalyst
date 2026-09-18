@@ -89,28 +89,96 @@ async function runHooks(
   return true;
 }
 
+/** Route auth mode a plugin may request via `config.auth` on registerRoute. */
+export type PluginRouteAuthMode = 'required' | 'optional' | 'public';
+
+// Route-level auth mode for plugin routes (see PluginRouteAuthMode). Declared
+// by plugins in registerRoute({ config: { auth: 'public' } }) and consumed by
+// the dispatcher below.
+declare module 'fastify' {
+  interface FastifyContextConfig {
+    auth?: PluginRouteAuthMode | string;
+  }
+}
+
+export function routeAuthMode(route: RouteOptions): PluginRouteAuthMode {
+  const mode = (route.config as { auth?: unknown } | undefined)?.auth;
+  return mode === 'public' || mode === 'optional' ? mode : 'required';
+}
+
+export interface PluginRouteDispatcherOptions {
+  /** Host auth hook; 401s unauthenticated callers. */
+  authenticate?: Function;
+  /**
+   * Non-replying session resolution for `config.auth: 'optional'` routes —
+   * attaches request.user when a valid session exists, stays anonymous
+   * otherwise.
+   */
+  resolveUser?: (request: FastifyRequest) => Promise<{
+    userId: string;
+    email: string;
+    username: string;
+    permissions: string[];
+  } | null>;
+  /** Live effective grants for a plugin; `routes.public` unlocks non-required auth modes. */
+  permissionsProvider?: (pluginName: string) => string[];
+}
+
 /**
  * Mount a single catch-all under /api/plugins/:pluginName/*. Must run before
  * listen(). Host routes like /api/plugins/:name/enable stay more specific.
+ *
+ * Auth: every route is host-authenticated unless the plugin registered it
+ * with `config.auth` 'public'/'optional' AND holds the `routes.public` grant
+ * (checked live per request, so revoking the grant immediately re-secures
+ * the routes).
  */
 export function registerPluginRouteDispatcher(
   fastify: FastifyInstance,
   table: PluginRouteTable,
+  options: PluginRouteDispatcherOptions = {},
 ): void {
-  const authenticate = (fastify as FastifyInstance & { authenticate?: Function }).authenticate;
+  const authenticate = options.authenticate ?? (fastify as FastifyInstance & { authenticate?: Function }).authenticate;
+  const resolveUser = options.resolveUser;
+  const permissionsProvider = options.permissionsProvider;
   const methods: HTTPMethods[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
   fastify.route({
     method: methods,
     url: '/api/plugins/:pluginName/*',
-    ...(authenticate ? { onRequest: [authenticate as any] } : {}),
     handler: async (request: FastifyRequest, reply: FastifyReply) => {
       const pluginName = String((request.params as { pluginName?: string }).pluginName ?? '');
       const splat = String((request.params as { '*': string })['*'] ?? '').replace(/^\/+/, '');
       const pathname = `/api/plugins/${pluginName}/${splat}`;
       const matched = table.match(pluginName, request.method, pathname);
+
+      // Auth runs after matching so a plugin's public routes can skip it.
+      // Unmatched requests keep the legacy behaviour of 401 before 404.
+      const grants = permissionsProvider?.(pluginName);
+      const authMode =
+        matched && routeAuthMode(matched.route) !== 'required' && grants &&
+        (grants.includes('routes.public') || grants.includes('*'))
+          ? routeAuthMode(matched.route)
+          : 'required';
+
       if (!matched) {
+        if (authenticate) {
+          await authenticate(request, reply);
+          if (reply.sent) return;
+        }
         return reply.status(404).send({ success: false, error: 'Plugin route not found' });
+      }
+
+      if (authMode === 'required') {
+        if (authenticate) {
+          await authenticate(request, reply);
+          if (reply.sent) return;
+        }
+      } else if (authMode === 'optional' && resolveUser) {
+        const user = await resolveUser(request);
+        if (user) {
+          (request as any).user = user;
+        }
       }
 
       Object.assign(request.params as object, matched.params);

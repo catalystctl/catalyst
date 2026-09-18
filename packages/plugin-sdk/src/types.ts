@@ -19,6 +19,17 @@ export interface PluginManifest {
   events?: Record<string, { payload: Record<string, any>; description?: string }>;
   storageEngine?: 'legacy' | 'dedicated';
   runtime?: 'legacy' | 'isolated';
+  /**
+   * External sign-in providers implemented by this plugin (OAuth, SSO).
+   * Declared providers are listed on the public /api/auth/oauth-providers
+   * endpoint (login-page buttons) while the plugin is enabled.
+   */
+  authProviders?: {
+    id: string;
+    label: string;
+    /** Route path (relative to the plugin namespace) starting the flow. Default "/authorize". */
+    authorizePath?: string;
+  }[];
 }
 
 export interface PluginLifecycle {
@@ -123,11 +134,18 @@ export interface ScopedPluginDB {
 /**
  * Route registration options. Standalone copy of the Fastify `RouteOptions`
  * subset the plugin host accepts (kept `any`-ish to avoid a hard fastify dep).
+ *
+ * `config.auth` controls host authentication for the route:
+ *   - 'required' (default) — host auth middleware rejects unauthenticated calls
+ *   - 'optional' — a valid session populates request.user; anonymous callers pass
+ *   - 'public'   — never authenticated (OAuth redirects/callbacks)
+ * Non-required modes require the live `routes.public` permission grant.
  */
 export interface PluginRouteOptions {
   method: string | string[];
   url: string;
   handler: PluginRouteHandler;
+  config?: { auth?: 'required' | 'optional' | 'public'; [key: string]: any };
   [key: string]: any;
 }
 
@@ -165,6 +183,58 @@ export interface PluginBackendContext {
   requirePermission?(...required: string[]): (request: any, reply: any) => Promise<any> | any;
   /** Awaited file operations against node server directories (file tunnel). Present when the host provides it. */
   fileTunnel?: PluginFileTunnel;
+  /**
+   * Auth bridge for external sign-in plugins (OAuth/SSO). Every method is
+   * live-gated on manifest permissions the admin can revoke:
+   * `auth.sessions` → createSession, `auth.users` → findUser/createUser,
+   * `roles.assign` → role operations. Present when the host provides it.
+   */
+  auth?: PluginAuthBridge;
+}
+
+/** User record returned by the plugin auth bridge. */
+export interface PluginAuthUser {
+  id: string;
+  email: string;
+  username: string;
+  name: string;
+  image: string | null;
+  emailVerified: boolean;
+  banned: boolean;
+  lockedUntil: string | null;
+}
+
+/** Panel role descriptor used by the plugin auth bridge. */
+export interface PluginAuthRole {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+/** Session created by the plugin auth bridge (real better-auth session). */
+export interface PluginAuthSession {
+  token: string;
+  expiresAt: Date;
+}
+
+/** Host-provided auth operations for external sign-in flows. */
+export interface PluginAuthBridge {
+  findUser(by: { userId?: string; email?: string; username?: string }): Promise<PluginAuthUser | null>;
+  createUser(input: {
+    email: string;
+    username: string;
+    name: string;
+    emailVerified?: boolean;
+    image?: string | null;
+  }): Promise<PluginAuthUser>;
+  createSession(
+    userId: string,
+    opts?: { rememberMe?: boolean; ipAddress?: string; userAgent?: string; reply?: any },
+  ): Promise<PluginAuthSession>;
+  listRoles(): Promise<PluginAuthRole[]>;
+  listUserRoles(userId: string): Promise<PluginAuthRole[]>;
+  assignRoles(userId: string, roleIds: string[], opts?: { reason?: string }): Promise<void>;
+  removeRoles(userId: string, roleIds: string[], opts?: { reason?: string }): Promise<void>;
 }
 
 /**

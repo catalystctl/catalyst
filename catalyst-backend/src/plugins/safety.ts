@@ -93,6 +93,30 @@ export const PERMISSION_INFO: Record<string, PermissionInfo> = {
     riskLevel: 'medium',
     description: 'Invoke APIs exposed by other installed plugins.',
   },
+  'routes.public': {
+    label: 'Unauthenticated routes',
+    riskLevel: 'high',
+    description:
+      'Register plugin routes reachable without signing in (OAuth redirects and callbacks). The plugin decides who those routes authenticate; a flaw there exposes panel data to anyone.',
+  },
+  'auth.sessions': {
+    label: 'Create login sessions',
+    riskLevel: 'critical',
+    description:
+      'Sign users into the panel (create session cookies). A malicious plugin with this grant can log in as any existing user.',
+  },
+  'auth.users': {
+    label: 'Look up and create users',
+    riskLevel: 'high',
+    description:
+      'Look up panel users by email/username (including ban/lock status) and create new user accounts for external sign-in.',
+  },
+  'roles.assign': {
+    label: 'Assign panel roles',
+    riskLevel: 'critical',
+    description:
+      'Add or remove panel roles on users (e.g. to mirror external-group roles). Misuse can grant or strip panel permissions.',
+  },
 };
 
 const PERMISSION_TOKEN_RE = /^[a-zA-Z0-9_.*-]{1,64}$/;

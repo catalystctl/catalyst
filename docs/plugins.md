@@ -195,6 +195,7 @@ Every plugin must have a `plugin.json` file at its root. This is the single sour
 | `dependencies` | `Record<string, string>` | ❌ | Plugin name → version map. Validated at discovery. |
 | `config` | `Record<string, any>` | ❌ | Free-form config schema. Types inferred by admin UI. |
 | `events` | `Record<string, object>` | ❌ | Event name → `{ payload: object, description?: string }`. |
+| `authProviders` | `array` | ❌ | Sign-in providers the plugin implements: `[{ "id": "discord", "label": "Discord", "authorizePath": "authorize" }]` (max 8). While the plugin is enabled, each entry is served by the public `GET /api/auth/oauth-providers` endpoint and rendered as a "Continue with {label}" button on the login page, linking to `/api/plugins/{name}/{authorizePath}` (default `authorize`). See [External sign-in (OAuth)](#external-sign-in-oauth). |
 
 ### Config Field Types
 
@@ -286,6 +287,62 @@ ctx.registerRoute({
 
 Route URL paths are **scoped under** `/api/plugins/{plugin-name}/`. For example, a route at `url: '/hello'` becomes `GET /api/plugins/my-plugin/hello`.
 
+#### Route auth modes
+
+Every plugin route is host-authenticated by default. Routes needed for
+external sign-in flows (OAuth redirects and callbacks) can opt out via
+`config.auth`:
+
+```javascript
+ctx.registerRoute({
+  method: 'GET',
+  url: '/callback',
+  config: { auth: 'public' },   // 'required' (default) | 'optional' | 'public'
+  handler: async (request, reply) => { /* ... */ },
+});
+```
+
+| Mode | Behaviour |
+|------|-----------|
+| `required` (default) | Host auth middleware 401s unauthenticated callers; `request.user` is populated. |
+| `optional` | A valid session populates `request.user`; anonymous callers pass through (handler decides). |
+| `public` | Never authenticated (OAuth redirect targets, callbacks). |
+
+Non-required modes need the live **`routes.public`** grant: without it the
+route is downgraded to `required` at registration (logged), and revoking the
+grant re-secures already-registered routes immediately — the dispatcher
+re-checks on every request. Unmatched plugin routes keep the legacy behaviour
+of 401 before 404 for anonymous callers.
+
+### External sign-in (OAuth)
+
+Plugins can implement third-party sign-in (e.g. the
+[discord-oauth](https://github.com/catalystctl/catalyst-plugins/tree/main/discord-oauth)
+plugin) through three cooperating pieces:
+
+1. **Manifest declaration** — `authProviders` entries make the login page
+   render "Continue with {label}" buttons (see above).
+2. **Public/optional routes** — `authorize` (`optional`, so signed-in users
+   can start a *link* flow) and `callback` (`public`) registered with
+   `config.auth`.
+3. **The auth bridge** — `context.auth`, a host-provided object whose methods
+   are live-gated on manifest permissions and audited:
+
+| Method | Permission | Purpose |
+|--------|------------|---------|
+| `auth.findUser({ userId?, email?, username? })` | `auth.users` | Look up a panel user (incl. banned/locked/email-verified state). |
+| `auth.createUser({ email, username, name, emailVerified?, image? })` | `auth.users` | Create an account for an external identity (no credential login). |
+| `auth.createSession(userId, { reply, rememberMe?, ipAddress?, userAgent? })` | `auth.sessions` | Create a real better-auth session and set the session cookie on `reply`. |
+| `auth.listRoles()` / `auth.listUserRoles(userId)` | `roles.assign` | Read panel roles / a user's roles. |
+| `auth.assignRoles(userId, roleIds, { reason? })` / `auth.removeRoles(...)` | `roles.assign` | Audited role membership changes (e.g. role mirroring). |
+
+`auth.createSession` returns `{ token, expiresAt }`; when `reply` is passed
+the better-auth session cookie is set exactly like a password login, so the
+panel frontend picks the session up transparently. Failures redirect back to
+`/login?oauthError=<code>&providerLabel=<label>` — the login page renders a
+localized failure notice for that shape.
+
+
 ### Plugin Context
 
 The `PluginBackendContext` object passed to all lifecycle hooks is a "god object" containing 30+ methods and properties:
@@ -311,6 +368,7 @@ The `PluginBackendContext` object passed to all lifecycle hooks is a "god object
 | `getConfig()` | `(key: string) => any` | Get plugin config value |
 | `requirePermission()` | `(permission: string) => preHandler` | Gate a route on a permission (use in `preHandler`) |
 | `getUserId()` | `(request) => string` | Get the authenticated user id (`request.user.userId`) |
+| `auth` | `PluginAuthBridge` | Host auth bridge for external sign-in (see [External sign-in (OAuth)](#external-sign-in-oauth)) |
 | `setConfig()` | `(key: string, value: any) => Promise<void>` | Update plugin config value |
 | `getStorage()` | `(key: string) => Promise<any>` | Persistent key-value storage |
 | `setStorage()` | `(key: string, value: any) => Promise<void>` | Persistent key-value storage |
@@ -635,6 +693,15 @@ export function registerSlots() {
 ```
 
 Slot components are sorted by `order` (lower first) and rendered in designated `usePluginSlots(slot)` locations throughout the app.
+
+Slots with host mounts today:
+
+| Slot | Rendered at |
+|------|-------------|
+| `dashboard-widgets` | Dashboard page |
+| `sidebar-bottom` | Sidebar (bottom of the admin section) |
+| `profile-connections` | Profile page, under "Linked accounts" — intended for external-identity cards (e.g. Discord OAuth's link/unlink card) |
+| `server.header`, `server.footer` | Reserved for server pages (convention) |
 
 ### Plugin Store (Zustand)
 
@@ -986,6 +1053,10 @@ Plugins declare required permissions in their manifest. The scoped DB enforces t
 | `admin.read` | Admin data (read) | None |
 | `admin.write` | Admin data (read + limited write) | None |
 | `plugin.rpc` | Enables plugin-to-plugin API calls | N/A |
+| `routes.public` | Lets `registerRoute({ config: { auth } })` take effect for `optional`/`public` routes (re-checked live per request) | N/A |
+| `auth.sessions` | `context.auth.createSession` — create panel sessions (sign users in) | N/A |
+| `auth.users` | `context.auth.findUser` / `createUser` — identity lookup + account creation for external sign-in | N/A |
+| `roles.assign` | `context.auth` role operations — audited role assignment/removal (e.g. role mirroring) | N/A |
 
 **Wildcard permissions** (`server.*`) apply to user-level permissions but NOT to plugin permissions (which use exact matching).
 
@@ -1060,7 +1131,7 @@ To enable hot reload, ensure the PluginLoader is initialized with `hotReload: tr
 | Config schema vs values | Admin UI needs field schemas; runtime needs plain values | Host unwraps schema → values in `getConfig`; `configSchema` is the original plugin.json |
 | Host auth user id shape | `request.user.userId` (not `.id`) | Use `context.getUserId(request)` |
 | RPC circuit breaker | Repeated failures open a 30s circuit | Keep plugin APIs fast; handle thrown circuit errors |
-| Component slots need host mounts | Only wired slots render | Use `dashboard-widgets` and `sidebar-bottom` today |
+| Component slots need host mounts | Only wired slots render | Use `dashboard-widgets`, `sidebar-bottom` and `profile-connections` today |
 | Memory reading is process heap | Heap pressure cannot be attributed to one plugin | `memoryLimitMb` is an observation threshold only (warn, never 503); tune via `PLUGIN_PROCESS_HEAP_LIMIT_MB` |
 
 ---

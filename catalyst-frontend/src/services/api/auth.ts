@@ -7,6 +7,14 @@ import { authClient } from '../authClient';
 
 const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
 
+/** Sign-in provider declared by an enabled plugin (manifest.authProviders). */
+export interface PluginOauthProvider {
+  plugin: string;
+  id: string;
+  label: string;
+  authorizeUrl: string;
+}
+
 const demoSessionUser: User = {
   id: 'demo-admin-1',
   email: 'demo@catalystctl.com',
@@ -400,6 +408,18 @@ export const authApi = {
     await authClient.signOut({
       fetchOptions: options?.signal ? { signal: options.signal } : undefined,
     });
+  },
+
+  /**
+   * Sign-in providers contributed by enabled plugins (Discord OAuth etc.).
+   * Public endpoint — safe to call before authentication.
+   */
+  async getOAuthProviders(): Promise<PluginOauthProvider[]> {
+    if (isDemoMode) return [];
+    const data = await apiClient.get<{ success: boolean; providers?: PluginOauthProvider[] }>(
+      '/api/auth/oauth-providers',
+    );
+    return data?.providers ?? [];
   },
 
   async forgotPassword(email: string): Promise<void> {

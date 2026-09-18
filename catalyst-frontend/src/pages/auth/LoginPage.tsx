@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 
 import { authApi } from '../../services/api/auth';
+import type { PluginOauthProvider } from '../../services/api/auth';
 import type { LoginSchema } from '../../validators/auth';
 import { createLoginSchema } from '../../validators/auth';
 import { authClient } from '../../services/authClient';
@@ -65,6 +66,9 @@ function LoginPage() {
  const [searchParams] = useSearchParams();
  const ssoError = searchParams.get('error');
  const ssoProvider = searchParams.get('provider');
+ const oauthError = searchParams.get('oauthError');
+ const oauthProviderLabel = searchParams.get('providerLabel');
+ const [pluginProviders, setPluginProviders] = useState<PluginOauthProvider[]>([]);
  const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname;
  const fromSetup = Boolean(
  (location.state as { fromSetup?: boolean } | undefined)?.fromSetup,
@@ -92,6 +96,27 @@ function LoginPage() {
  navigate('/setup', { replace: true });
  }
  }, [isSetupLoading, isAuthenticated, fromSetup, setupRequired, navigate]);
+
+ // Plugin-provided sign-in providers (Discord OAuth etc.) — public endpoint,
+ // so buttons render before any session exists. Failures are silent: the
+ // password form is always the primary path.
+ useEffect(() => {
+  let active = true;
+  authApi
+    .getOAuthProviders()
+    .then((providers) => {
+      if (active) setPluginProviders(providers);
+    })
+    .catch(() => {});
+  return () => {
+    active = false;
+  };
+ }, []);
+
+ const handlePluginProvider = (provider: PluginOauthProvider) => {
+  const target = from || '/servers';
+  window.location.href = `${provider.authorizeUrl}?redirect=${encodeURIComponent(target)}`;
+ };
 
  const syncPasskeySession = async () => {
  try {
@@ -295,6 +320,17 @@ function LoginPage() {
  </Alert>
  )}
 
+ {oauthError && !authStep && (
+ <Alert variant="destructive" className="mt-4">
+ <AlertDescription>
+  {oauthProviderLabel
+  ? t('sso.oauthFailed', { provider: oauthProviderLabel })
+  : t('sso.oauthFailedNoProvider')}
+  {oauthError !== 'failed' ? ` (${oauthError})` : ''}
+ </AlertDescription>
+ </Alert>
+ )}
+
  <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
  <div className="space-y-2">
  <Label htmlFor="email">{t('fields.email')}</Label>
@@ -381,6 +417,21 @@ function LoginPage() {
  {t('sso.continueWithPaymenter')}
  </Button>
  )}
+ </div>
+ )}
+
+ {pluginProviders.length > 0 && (
+ <div className="mt-4 space-y-2">
+ {pluginProviders.map((provider) => (
+ <Button
+ key={`${provider.plugin}:${provider.id}`}
+ variant="outline"
+ className="w-full"
+ onClick={() => handlePluginProvider(provider)}
+ >
+ {t('sso.continueWithProvider', { provider: provider.label })}
+ </Button>
+ ))}
  </div>
  )}
  </CardContent>

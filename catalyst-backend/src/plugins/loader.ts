@@ -90,7 +90,7 @@ export class PluginLoader {
 
     // Catch-all for /api/plugins/:name/* must exist before listen() so
     // marketplace installs can attach handlers without Fastify.route().
-    this.ensureDispatcher();
+    await this.ensureDispatcher();
 
     // Discover and load plugins (with dependency ordering)
     await this.discoverPlugins();
@@ -103,9 +103,19 @@ export class PluginLoader {
     this.logger.info({ count: this.registry.count() }, 'Plugin system initialized');
   }
 
-  private ensureDispatcher(): void {
+  private async ensureDispatcher(): Promise<void> {
     if (this.dispatcherRegistered) return;
-    registerPluginRouteDispatcher(this.fastify, this.routeTable);
+    // Lazy import: session-user pulls in better-auth, whose module-load checks
+    // (BETTER_AUTH_SECRET) must not run for tools that only import the loader.
+    const { resolveSessionUser } = await import('../lib/session-user');
+    registerPluginRouteDispatcher(this.fastify, this.routeTable, {
+      authenticate: (this.fastify as any).authenticate,
+      // Non-replying session resolution for config.auth:'optional' routes.
+      resolveUser: (request) => resolveSessionUser(request),
+      // Live grants — the dispatcher re-checks routes.public per request so
+      // revoking the grant immediately re-secures public/optional routes.
+      permissionsProvider: (name) => this.getEffectivePermissions(name),
+    });
     this.dispatcherRegistered = true;
   }
 

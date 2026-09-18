@@ -19,6 +19,7 @@ import type { PluginRegistry } from './registry';
 import cron from 'node-cron';
 import type { ScheduledTask } from 'node-cron';
 import { describeError } from '../utils/describe-error.js';
+import { createHmac } from 'node:crypto';
 import EventEmitter from 'events';
 import { captureSystemError } from '../services/error-logger';
 import { createCollectionStorage } from './storage/collection-storage';
@@ -591,6 +592,69 @@ const PERMISSION_TO_TABLES: Record<string, string[]> = {
   'admin.write': [], // Admin write is for admin routes, not direct DB access
 };
 
+// ── Plugin auth bridge helpers ──────────────────────────────────────────────
+
+const AUTH_USER_SELECT = {
+  id: true,
+  email: true,
+  username: true,
+  name: true,
+  image: true,
+  emailVerified: true,
+  banned: true,
+  lockedUntil: true,
+} as const;
+
+type AuthUserRow = {
+  id: string;
+  email: string;
+  username: string;
+  name: string;
+  image: string | null;
+  emailVerified: boolean;
+  banned: boolean;
+  lockedUntil: Date | null;
+};
+
+function toAuthUser(row: AuthUserRow) {
+  return {
+    id: row.id,
+    email: row.email,
+    username: row.username,
+    name: row.name,
+    image: row.image,
+    emailVerified: row.emailVerified,
+    banned: row.banned,
+    lockedUntil: row.lockedUntil ? row.lockedUntil.toISOString() : null,
+  };
+}
+
+/** Serialize a better-auth session cookie for a Set-Cookie header. */
+function serializeSessionCookie(name: string, token: string, expiresAt: Date, rememberMe: boolean, secure: boolean): string {
+  const parts = [`${name}=${token}`, 'Path=/', 'HttpOnly', 'SameSite=Lax'];
+  if (secure) parts.push('Secure');
+  if (rememberMe) {
+    parts.push(`Expires=${expiresAt.toUTCString()}`);
+    parts.push(`Max-Age=${Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000))}`);
+  }
+  return parts.join('; ');
+}
+
+/**
+ * better-auth stores session cookies as `${token}.${signature}` where the
+ * signature is base64(HMAC-SHA256(secret, token)) — getSession verifies it
+ * via getSignedCookie and silently returns null for unsigned values. This
+ * mirrors makeSignature() from better-auth's crypto module with node:crypto
+ * (same raw-secret HMAC-SHA256 over the token bytes, standard base64).
+ */
+function signSessionToken(token: string, secret: string): string {
+  return createHmac('sha256', Buffer.from(secret, 'utf8')).update(token, 'utf8').digest('base64');
+}
+
+const USERNAME_RE = /^[a-zA-Z0-9._-]{1,32}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+
 function getAllowedTablesForPermissions(permissions: string[]): string[] {
   const allowed: string[] = [];
   for (const perm of permissions) {
@@ -642,6 +706,47 @@ export function createPluginContext(
   // Create scoped database wrapper based on live effective permissions
   const scopedDb = new ScopedPluginDBClient(prisma, manifest.name, pluginLogger, getPermissions);
 
+  /** Live capability check for the auth bridge (`*` grants everything). */
+  const hasCapability = (token: string) => {
+    const perms = getPermissions();
+    return perms.includes('*') || perms.includes(token);
+  };
+
+  /** Connect/disconnect roles on a user, gated on roles.assign and audited. */
+  const modifyUserRoles = async (
+    userId: string,
+    roleIds: string[],
+    op: 'connect' | 'disconnect',
+    reason: string,
+  ) => {
+    if (!hasCapability('roles.assign')) {
+      throw new Error('Permission denied: roles.assign permission required for role changes');
+    }
+    const ids = [...new Set((roleIds ?? []).filter((r) => typeof r === 'string' && r))];
+    if (ids.length === 0) return;
+
+    // Only touch roles that exist — unknown ids would make the write fail and
+    // likely mean stale mappings.
+    const existing = await prisma.role.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+    if (existing.length === 0) return;
+    const existingIds = existing.map((r) => r.id);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { roles: { [op]: existingIds.map((id) => ({ id })) } },
+    });
+
+    recordAudit(prisma, manifest.name, op === 'connect' ? 'auth.roles_assigned' : 'auth.roles_removed', {
+      userId,
+      roles: existing.map((r) => r.name),
+      reason,
+    }, { userId });
+    pluginLogger.info({ userId, op, roles: existing.map((r) => r.name), reason }, 'Plugin modified user roles');
+  };
+
   const context: PluginBackendContext = {
     manifest,
     originalConfig,
@@ -653,13 +758,32 @@ export function createPluginContext(
     registerRoute(options: RouteOptions) {
       // Prefix route path with plugin namespace
       const prefixedPath = `/api/plugins/${manifest.name}/${options.url.replace(/^\//, '')}`;
+
+      // Auth mode: 'required' (default), 'optional' (session attached when
+      // present, anonymous otherwise) or 'public' (never authenticated).
+      // Non-required modes need the live `routes.public` grant — otherwise
+      // the route is silently downgraded to required (and logged).
+      const requestedMode = (options.config as { auth?: unknown } | undefined)?.auth;
+      let authMode: 'required' | 'optional' | 'public' = 'required';
+      if (requestedMode === 'public' || requestedMode === 'optional') {
+        if (getPermissions().includes('routes.public') || getPermissions().includes('*')) {
+          authMode = requestedMode;
+        } else {
+          pluginLogger.warn(
+            { route: prefixedPath, requested: requestedMode },
+            'Route requested non-required auth without routes.public grant — downgraded to required',
+          );
+        }
+      }
+
       const routeOptions: RouteOptions = {
         ...options,
         url: prefixedPath,
+        config: { ...(options.config as object | undefined), auth: authMode },
       };
       // SECURITY: Always inject host authentication middleware.
       // Plugin-provided preHandler/onRequest are run AFTER the host auth check.
-      if (authenticate) {
+      if (authenticate && authMode === 'required') {
         const existingPreHandler = options.preHandler;
         const existingOnRequest = options.onRequest;
         if (existingPreHandler || existingOnRequest) {
@@ -1060,6 +1184,138 @@ export function createPluginContext(
           error: `Permission denied: requires one of [${required.join(', ')}]`,
         });
       };
+    },
+
+    // ── Auth bridge (external sign-in plugins) ──────────────────────────
+    // Every method is live-gated on manifest permissions so an admin can
+    // revoke mid-flight: auth.sessions → createSession, auth.users →
+    // findUser/createUser, roles.assign → role operations.
+    auth: {
+      async findUser(by: { userId?: string; email?: string; username?: string }) {
+        if (!hasCapability('auth.users')) {
+          throw new Error('Permission denied: auth.users permission required to look up users');
+        }
+        const where: Record<string, string> = {};
+        if (by.userId) where.id = by.userId;
+        else if (by.email) where.email = by.email;
+        else if (by.username) where.username = by.username;
+        else {
+          throw new Error('findUser requires one of userId, email or username');
+        }
+        const row = await prisma.user.findFirst({
+          where: by.email ? { email: { equals: where.email, mode: 'insensitive' as const } } : where,
+          select: AUTH_USER_SELECT,
+        });
+        return row ? toAuthUser(row) : null;
+      },
+
+      async createUser(input: { email: string; username: string; name: string; emailVerified?: boolean; image?: string | null }) {
+        if (!hasCapability('auth.users')) {
+          throw new Error('Permission denied: auth.users permission required to create users');
+        }
+        if (!EMAIL_RE.test(input.email) || !USERNAME_RE.test(input.username) || !input.name?.trim()) {
+          throw new Error('Invalid email, username or display name');
+        }
+        try {
+          const row = await prisma.user.create({
+            data: {
+              email: input.email.toLowerCase(),
+              username: input.username,
+              name: input.name.trim().slice(0, 100),
+              emailVerified: input.emailVerified ?? false,
+              image: input.image ?? null,
+            },
+            select: AUTH_USER_SELECT,
+          });
+          pluginLogger.info({ userId: row.id }, 'Plugin created panel user');
+          recordAudit(prisma, manifest.name, 'auth.user_created', {
+            userId: row.id,
+            email: row.email,
+            username: row.username,
+          }, { userId: row.id });
+          return toAuthUser(row);
+        } catch (err: any) {
+          if (String(err?.code) === 'P2002') {
+            throw new Error(`A panel user with that ${err?.meta?.target?.includes('email') ? 'email' : 'username'} already exists`);
+          }
+          throw err;
+        }
+      },
+
+      async createSession(
+        userId: string,
+        opts?: { rememberMe?: boolean; ipAddress?: string; userAgent?: string; reply?: any },
+      ) {
+        if (!hasCapability('auth.sessions')) {
+          throw new Error('Permission denied: auth.sessions permission required to create sessions');
+        }
+        const rememberMe = opts?.rememberMe !== false;
+        // Lazy import: auth.ts enforces env secrets at module load, which must
+        // not run for tooling that imports the plugin context directly.
+        const { getAuth } = await import('../auth');
+        const auth = getAuth();
+        // better-auth's createBetterAuth assigns the async init's return value
+        // WITHOUT awaiting it — `$context` is a Promise of the context in
+        // 1.6.x. Await either shape so this works across versions.
+        const rawContext = (auth as any).$context;
+        const ctx =
+          rawContext && typeof (rawContext as Promise<unknown>).then === 'function'
+            ? await rawContext
+            : rawContext;
+        if (!ctx?.internalAdapter?.createSession) {
+          throw new Error('Host auth instance does not expose session creation');
+        }
+        const session = await ctx.internalAdapter.createSession(userId, !rememberMe, {
+          ipAddress: opts?.ipAddress ?? '',
+          userAgent: opts?.userAgent ?? '',
+        });
+        recordAudit(prisma, manifest.name, 'auth.session_created', { userId }, { userId });
+        pluginLogger.info({ userId }, 'Plugin created session');
+
+        if (opts?.reply) {
+          const cookie = ctx.authCookies?.sessionToken;
+          if (cookie?.name && typeof ctx.secret === 'string') {
+            const signedToken = `${session.token}.${signSessionToken(session.token, ctx.secret)}`;
+            opts.reply.header(
+              'set-cookie',
+              serializeSessionCookie(cookie.name, signedToken, new Date(session.expiresAt), rememberMe, Boolean(cookie.attributes?.secure)),
+            );
+          } else if (cookie?.name) {
+            pluginLogger.warn('Session cookie could not be signed — host auth secret unavailable');
+          }
+        }
+        return { token: session.token, expiresAt: new Date(session.expiresAt) };
+      },
+
+      async listRoles() {
+        if (!hasCapability('roles.assign')) {
+          throw new Error('Permission denied: roles.assign permission required to list roles');
+        }
+        const roles = await prisma.role.findMany({
+          select: { id: true, name: true, description: true },
+          orderBy: { name: 'asc' },
+        });
+        return roles;
+      },
+
+      async listUserRoles(userId: string) {
+        if (!hasCapability('roles.assign')) {
+          throw new Error('Permission denied: roles.assign permission required to list user roles');
+        }
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { roles: { select: { id: true, name: true, description: true } } },
+        });
+        return user?.roles ?? [];
+      },
+
+      async assignRoles(userId: string, roleIds: string[], options?: { reason?: string }) {
+        await modifyUserRoles(userId, roleIds, 'connect', options?.reason ?? 'plugin role sync');
+      },
+
+      async removeRoles(userId: string, roleIds: string[], options?: { reason?: string }) {
+        await modifyUserRoles(userId, roleIds, 'disconnect', options?.reason ?? 'plugin role sync');
+      },
     },
   };
 

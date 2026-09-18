@@ -115,6 +115,20 @@ export interface PluginManifest {
   dependencies?: Record<string, string>;
   config?: Record<string, any>;
   events?: Record<string, PluginEventSchema>;
+  /**
+   * External sign-in providers implemented by this plugin (OAuth redirects,
+   * SSO bridges). Declared providers power the login-page buttons via the
+   * public /api/auth/oauth-providers endpoint.
+   */
+  authProviders?: PluginAuthProviderDecl[];
+}
+
+/** A sign-in provider declared in a plugin manifest. */
+export interface PluginAuthProviderDecl {
+  id: string;
+  label: string;
+  /** Route path (relative to the plugin's route namespace) that starts the flow. Defaults to "/authorize". */
+  authorizePath?: string;
 }
 
 /**
@@ -272,6 +286,84 @@ export interface PluginBackendContext {
    * file tunnel. Present when the host provides it (standard deployment).
    */
   fileTunnel?: PluginFileTunnel;
+
+  /**
+   * Authentication & identity bridge for external sign-in plugins (OAuth,
+   * SSO). Every method is live-gated on manifest permissions the admin can
+   * revoke at any time:
+   *   - `auth.sessions`  → createSession
+   *   - `auth.users`     → findUser / createUser
+   *   - `roles.assign`   → listRoles / listUserRoles / assignRoles / removeRoles
+   * Present when the host provides it (standard deployment).
+   */
+  auth?: PluginAuthBridge;
+}
+
+/** User record shape returned by the plugin auth bridge. */
+export interface PluginAuthUser {
+  id: string;
+  email: string;
+  username: string;
+  name: string;
+  image: string | null;
+  emailVerified: boolean;
+  banned: boolean;
+  lockedUntil: string | null;
+}
+
+/** Panel role descriptor used by the plugin auth bridge. */
+export interface PluginAuthRole {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+/** Session created by the plugin auth bridge. */
+export interface PluginAuthSession {
+  token: string;
+  expiresAt: Date;
+}
+
+/**
+ * Host-provided auth operations for external sign-in flows. Sessions are
+ * real better-auth sessions (same cookie as password login); role changes
+ * are audited like admin-driven ones.
+ */
+export interface PluginAuthBridge {
+  /** Look up a panel user by id, email or username. */
+  findUser(by: { userId?: string; email?: string; username?: string }): Promise<PluginAuthUser | null>;
+  /**
+   * Create a panel user (no credential account — such users sign in through
+   * the plugin). Throws on duplicate email/username.
+   */
+  createUser(input: {
+    email: string;
+    username: string;
+    name: string;
+    emailVerified?: boolean;
+    image?: string | null;
+  }): Promise<PluginAuthUser>;
+  /**
+   * Create a better-auth session and set the session cookie on `reply`
+   * when given. Returns the session token/expiry.
+   */
+  createSession(
+    userId: string,
+    opts?: {
+      rememberMe?: boolean;
+      ipAddress?: string;
+      userAgent?: string;
+      reply?: any;
+    },
+  ): Promise<PluginAuthSession>;
+  /** List panel roles (id/name/description). */
+  listRoles(): Promise<PluginAuthRole[]>;
+  /** Roles currently assigned to a user. */
+  listUserRoles(userId: string): Promise<PluginAuthRole[]>;
+  /** Assign roles to a user (additive; audited). */
+  assignRoles(userId: string, roleIds: string[], opts?: { reason?: string }): Promise<void>;
+  /** Remove roles from a user (audited). */
+  removeRoles(userId: string, roleIds: string[], opts?: { reason?: string }): Promise<void>;
 }
 
 /**

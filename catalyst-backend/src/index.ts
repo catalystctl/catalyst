@@ -84,6 +84,7 @@ import { auth } from "./auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { normalizeHostIp } from "./utils/ipam";
 import { PluginLoader } from "./plugins/loader";
+import { collectAuthProviders } from "./plugins/auth-providers";
 import { DISCLAIMER_VERSION } from "./plugins/safety";
 import { pluginRoutes } from "./routes/plugins";
 import { FileTunnelService } from "./services/file-tunnel";
@@ -1886,6 +1887,22 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				data,
 			});
 		});
+
+		// Public OAuth/SSO provider list (unauthenticated). Plugins that declare
+		// manifest.authProviders appear here while enabled, powering the
+		// login-page "Continue with …" buttons. No plugin secrets involved —
+		// just id/label/authorize URL.
+		app.get(
+			"/api/auth/oauth-providers",
+			{ config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+			async (_request, reply) => {
+				const providers = collectAuthProviders(
+					pluginLoader.getRegistry().getAll(),
+				);
+				reply.header("Cache-Control", "no-store");
+				return reply.send({ success: true, providers });
+			},
+		);
 
 		// Frontend error reporting endpoint (unauthenticated, rate-limited)
 		app.post(

@@ -84,6 +84,13 @@ const pgError = (code: string) => {
 };
 
 beforeEach(async () => {
+  // The suite runs with isolate:false (one shared module registry). When an
+  // earlier file (e.g. authz-fixes via routes/servers/_helpers) imports
+  // services/mysql.js first, it caches the REAL mysql2 binding and this
+  // file's vi.mock can no longer reach it — intermittently, depending on
+  // import timing. Reset the registry so the per-test dynamic imports below
+  // re-evaluate services/mysql.js against the mocks declared here.
+  vi.resetModules();
   const Client = await pgClient();
   Client.queries.length = 0;
   Client.instances = 0;
