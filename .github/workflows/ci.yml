@@ -96,7 +96,7 @@ jobs:
       # Was in original agent-ci.yml; missing from first version of unified workflow
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.local/bin/protoc
@@ -133,7 +133,7 @@ jobs:
       # (e.g. catalyst-backend/node_modules/.bin/eslint -> ../eslint/...) that
       # break after lockfile upgrades. Store hits still keep installs fast.
       - name: Cache pnpm store
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.STORE_PATH }}
           key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
@@ -141,7 +141,7 @@ jobs:
             pnpm-store-v2-${{ runner.os }}-
 
       - name: Cache Prisma Client
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             node_modules/.prisma
@@ -294,7 +294,7 @@ jobs:
       # ── Install protoc ──
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.local/bin/protoc
@@ -330,7 +330,7 @@ jobs:
       # (e.g. catalyst-backend/node_modules/.bin/eslint -> ../eslint/...) that
       # break after lockfile upgrades. Store hits still keep installs fast.
       - name: Cache pnpm store
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.STORE_PATH }}
           key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
@@ -338,7 +338,7 @@ jobs:
             pnpm-store-v2-${{ runner.os }}-
 
       - name: Cache Prisma Client
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             node_modules/.prisma
@@ -428,7 +428,7 @@ jobs:
       # ── Install protoc ──
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.local/bin/protoc
@@ -464,7 +464,7 @@ jobs:
       # (e.g. catalyst-backend/node_modules/.bin/eslint -> ../eslint/...) that
       # break after lockfile upgrades. Store hits still keep installs fast.
       - name: Cache pnpm store
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.STORE_PATH }}
           key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
@@ -472,7 +472,7 @@ jobs:
             pnpm-store-v2-${{ runner.os }}-
 
       - name: Cache Prisma Client
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             node_modules/.prisma
