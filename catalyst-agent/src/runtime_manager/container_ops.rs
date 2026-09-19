@@ -433,7 +433,7 @@ impl ContainerdRuntime {
         // This matches Pterodactyl's behavior: install scripts run without
         // `set -e`, and the final exit code determines success/failure.
         let wrapped_script = format!(
-            "__catalyst_on_exit() {{ __e=$?; chown -R 1000:1000 /data 2>/dev/null; exit $__e; }}\ntrap '__catalyst_on_exit' EXIT\necho '[Catalyst] Install wrapper started (container: {})'\nset -e\nrm -rf /mnt/server && ln -s /data /mnt/server\n# Some eggs also write to /home/container during install\nif [ ! -e /home/container ]; then ln -s /data /home/container; fi\nexport HOME=/data\nexport USER=container\necho '[Catalyst] Wrapper setup complete, running install script...'\nset +e\n\n{}",
+            "__catalyst_on_exit() {{ __e=$?; chown -R 1000:1000 /data 2>/dev/null; exit $__e; }}\ntrap '__catalyst_on_exit' EXIT\necho '[Catalyst] Install wrapper started (container: {})'\nset -e\nrm -rf /mnt/server && ln -s /data /mnt/server\n# Some eggs also write to /home/container during install\nif [ ! -e /home/container ]; then ln -s /data /home/container; fi\nexport HOME=/data\nexport USER=container\necho '[Catalyst] Wrapper setup complete, running install script...'\nset +e\n# The containerd task starts before setup_cni_network finishes plumbing the\n# veth (ADD took ~150ms on a node whose egg scripts died at their first curl\n# with instant 'Could not resolve host'). Wait — bounded — for the default\n# route so the script's first network call doesn't race the attach.\nfor _ in $(seq 1 100); do ip route show default 2>/dev/null | grep -q . && break; sleep 0.1; done\n\n{}",
             container_id, script
         );
 
