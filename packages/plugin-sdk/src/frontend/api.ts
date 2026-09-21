@@ -81,6 +81,11 @@ export function createPluginApi<T = any>(pluginName: string) {
     del<R = T>(path: string): Promise<PluginApiResponse<R>> {
       return pluginFetch<R>(pluginName, path, { method: 'DELETE' });
     },
+    // Alias matching the panel's internal client (@/plugins/plugin-definition),
+    // which exposes this method as `delete`. Either name works.
+    delete<R = T>(path: string): Promise<PluginApiResponse<R>> {
+      return pluginFetch<R>(pluginName, path, { method: 'DELETE' });
+    },
     patch<R = T>(path: string, body?: unknown): Promise<PluginApiResponse<R>> {
       return pluginFetch<R>(pluginName, path, { method: 'PATCH', body });
     },

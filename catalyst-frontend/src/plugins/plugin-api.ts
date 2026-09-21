@@ -103,6 +103,12 @@ export function createPluginApiClient(pluginName: string) {
       return pluginFetch<T>(pluginName, path, { ...options, method: 'DELETE' });
     },
 
+    // Alias matching the published SDK (@catalyst/plugin-sdk/frontend),
+    // which exposes this method as `del`. Either name works.
+    del<T>(path: string, options?: Omit<PluginApiOptions, 'method' | 'body'>) {
+      return pluginFetch<T>(pluginName, path, { ...options, method: 'DELETE' });
+    },
+
     patch<T>(path: string, body?: unknown, options?: Omit<PluginApiOptions, 'method' | 'body'>) {
       return pluginFetch<T>(pluginName, path, { ...options, method: 'PATCH', body });
     },
