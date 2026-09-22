@@ -50,10 +50,22 @@ const ADMIN_PERMISSIONS = [
   'apikey.manage',
 ];
 
+function isReadPermission(required: string): boolean {
+  return (
+    required.endsWith('.read') ||
+    required === 'node.view_stats' ||
+    required === 'backup.download'
+  );
+}
+
 function permissionMatches(granted: string, required: string): boolean {
   if (granted === required || granted === '*') return true;
   // Scoped grants like "node.delete:node_123" satisfy base "node.delete"
   if (granted.startsWith(`${required}:`)) return true;
+  // admin.write = every concrete permission; admin.read = every read.
+  // Mirrors backend lib/permissions.ts. "*" stays exclusive to Super Admin.
+  if (required !== '*' && granted === 'admin.write') return true;
+  if (granted === 'admin.read' && isReadPermission(required)) return true;
   return false;
 }
 

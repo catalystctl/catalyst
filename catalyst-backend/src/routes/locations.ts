@@ -1,36 +1,20 @@
 import { prisma } from "../db.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { hasPermission } from "../lib/permissions";
+import { hasAnyPermission } from "../lib/permissions";
 import { serialize } from "../utils/serialize";
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 
-const ensurePermission = async (
+// Catalog permission, or the admin-write / super-admin path that previously
+// gated these routes. admin.read is intentionally not enough to mutate.
+const ensureAnyPermission = async (
 	userId: string,
 	reply: FastifyReply,
-	requiredPermission: string,
+	required: string[],
 ) => {
-	const has = await hasPermission(prisma, userId, requiredPermission);
+	const has = await hasAnyPermission(prisma, userId, required);
 	if (!has) {
 		apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
-		return false;
-	}
-	return true;
-};
-
-const ensureAdmin = async (userId: string, reply: FastifyReply) => {
-	const roles = await prisma.role.findMany({
-		where: { users: { some: { id: userId } } },
-		select: { permissions: true, name: true },
-	});
-	const permissions = roles.flatMap((role) => role.permissions);
-	// SECURITY: permission bits only — never role names (user-created roles
-	// can be named "Administrator").
-	const isAdmin =
-		permissions.includes("*") ||
-		permissions.includes("admin.write");
-	if (!isAdmin) {
-		apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access required");
 		return false;
 	}
 	return true;
@@ -42,11 +26,11 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			const has = await ensurePermission(
-				request.user.userId,
-				reply,
+			const has = await ensureAnyPermission(request.user.userId, reply, [
+				"location.read",
 				"admin.read",
-			);
+				"admin.write",
+			]);
 			if (!has) return;
 
 			const locations = await prisma.location.findMany({
@@ -72,11 +56,14 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/:locationId",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			const has = await ensurePermission(
-				request.user.userId,
-				reply,
+			// location.read is the catalog read. admin.read stays so existing
+			// admin panels keep working, but it must not receive node secrets
+			// (those require node.read, and the node routes omit `secret`).
+			const has = await ensureAnyPermission(request.user.userId, reply, [
+				"location.read",
 				"admin.read",
-			);
+				"admin.write",
+			]);
 			if (!has) return;
 
 			const { locationId } = request.params as { locationId: string };
@@ -86,6 +73,7 @@ export async function locationRoutes(app: FastifyInstance) {
 				include: {
 					nodes: {
 						orderBy: { name: "asc" },
+						omit: { secret: true },
 					},
 				},
 			});
@@ -103,7 +91,13 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!(await ensureAdmin(request.user.userId, reply))) return;
+			if (
+				!(await ensureAnyPermission(request.user.userId, reply, [
+					"location.create",
+					"admin.write",
+				]))
+			)
+				return;
 
 			const { name, description } = request.body as {
 				name: string;
@@ -150,7 +144,13 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/:locationId",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!(await ensureAdmin(request.user.userId, reply))) return;
+			if (
+				!(await ensureAnyPermission(request.user.userId, reply, [
+					"location.update",
+					"admin.write",
+				]))
+			)
+				return;
 
 			const { locationId } = request.params as { locationId: string };
 			const { name, description } = request.body as {
@@ -205,7 +205,13 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/:locationId",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!(await ensureAdmin(request.user.userId, reply))) return;
+			if (
+				!(await ensureAnyPermission(request.user.userId, reply, [
+					"location.delete",
+					"admin.write",
+				]))
+			)
+				return;
 
 			const { locationId } = request.params as { locationId: string };
 

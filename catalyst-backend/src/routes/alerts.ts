@@ -9,15 +9,17 @@ import { ErrorCodes } from '../shared-types';
 export async function alertRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
   const authenticate = (app as any).authenticate;
-  const isAdminUser = async (userId: string) => {
-    // Consume the shared 30s permission cache (lib/permissions-catalog)
-    // instead of an uncached role query per request. Mirrors the canonical
-    // isAdminUser (lib/permissions): '*' or 'admin.write' is full admin,
-    // 'admin.read' is read-only admin — all three may manage global/node
-    // alert targets, matching the admin alerts page gating.
+  const isAdminUser = async (userId: string, required: 'admin.read' | 'admin.write' = 'admin.read') => {
+    // Consume the shared 30s permission cache. '*' or 'admin.write' is full
+    // admin; 'admin.read' is read-only and must not authorize rule mutations
+    // or alert resolution.
     const { getUserPermissions } = await import('../lib/permissions.js');
     const permissions = await getUserPermissions(prisma, userId);
-    return permissions.has('*') || permissions.has('admin.write') || permissions.has('admin.read');
+    return (
+      permissions.has('*') ||
+      permissions.has('admin.write') ||
+      (required === 'admin.read' && permissions.has('admin.read'))
+    );
   };
   const ensureServerAccess = async ({
     userId,
@@ -79,7 +81,7 @@ export async function alertRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
-      const isAdmin = await isAdminUser(user.userId);
+      const isAdmin = await isAdminUser(user.userId, 'admin.write');
       const { name, description, type, target, targetId, conditions, actions, enabled } = request.body as {
         name: string;
         description?: string;
@@ -254,7 +256,7 @@ export async function alertRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
-      const isAdmin = await isAdminUser(user.userId);
+      const isAdmin = await isAdminUser(user.userId, 'admin.write');
       const { ruleId } = request.params as { ruleId: string };
       const { name, description, conditions, actions, enabled } = request.body as {
         name?: string;
@@ -319,7 +321,7 @@ export async function alertRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
-      const isAdmin = await isAdminUser(user.userId);
+      const isAdmin = await isAdminUser(user.userId, 'admin.write');
       const { ruleId } = request.params as { ruleId: string };
 
       const existing = await prisma.alertRule.findUnique({ where: { id: ruleId } });
@@ -530,7 +532,7 @@ export async function alertRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
-      const isAdmin = await isAdminUser(user.userId);
+      const isAdmin = await isAdminUser(user.userId, 'admin.write');
       const { alertId } = request.params as { alertId: string };
       const alert = await prisma.alert.findUnique({
         where: { id: alertId },
@@ -579,7 +581,7 @@ export async function alertRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
-      const isAdmin = await isAdminUser(user.userId);
+      const isAdmin = await isAdminUser(user.userId, 'admin.write');
       const { alertIds } = request.body as { alertIds: string[] };
 
       if (!alertIds || !Array.isArray(alertIds)) {

@@ -193,6 +193,10 @@ interface ClientConnection {
   socket: any;
   authenticated: boolean;
   subscriptions: Set<string>;
+  /** Servers this connection may receive live console output for.
+   *  Granted at subscribe time (console.read / owner / admin.read / node-manage),
+   *  so delivery cannot widen to plain server.read viewers. */
+  consoleSubscriptions: Set<string>;
   lastAuthAt?: number;
 }
 
@@ -271,7 +275,8 @@ export class WebSocketGateway {
       this.pruneServerSubscriptions();
       return;
     }
-    this.serverAccessCache.delete(serverId);
+    this.serverAccessCache.delete(`${serverId}:server.read`);
+    this.serverAccessCache.delete(`${serverId}:console.read`);
     this.pruneServerSubscriptions(serverId);
   }
 
@@ -330,7 +335,10 @@ export class WebSocketGateway {
   /** Remove every WS/SSE subscription a user holds on a server. */
   private removeUserServerSubscriptions(userId: string, serverId: string): void {
     for (const [, client] of this.clients) {
-      if (client.userId === userId) client.subscriptions.delete(serverId);
+      if (client.userId === userId) {
+        client.subscriptions.delete(serverId);
+        client.consoleSubscriptions?.delete(serverId);
+      }
     }
     for (const map of [this.sseSubscribers, this.sseEventSubscribers]) {
       const subs = map.get(serverId);
@@ -1197,6 +1205,7 @@ export class WebSocketGateway {
         socket,
         authenticated: false,
         subscriptions: new Set<string>(),
+        consoleSubscriptions: new Set<string>(),
       };
       this.clients.set(clientId, client);
       this.logger.info(`Client connected (pending auth): ${clientId}`);
@@ -3332,7 +3341,7 @@ export class WebSocketGateway {
           rolePerms.includes("server.read") ||
           rolePerms.includes("admin.write") ||
           rolePerms.includes("*");
-        const roleCanConsoleRead = rolePerms.includes("console.read") || roleCanServerRead;
+        const roleCanConsoleRead = rolePerms.includes("console.read");
         if (
           !access &&
           server.ownerId !== client.userId &&
@@ -3373,6 +3382,7 @@ export class WebSocketGateway {
         }
         client.subscriptions.add(server.id);
         if (canConsoleRead) {
+          client.consoleSubscriptions?.add(server.id);
           await this.requestConsoleStream(server.id, server.uuid);
         }
         // Request immediate metrics to avoid 30-second wait
@@ -3388,6 +3398,7 @@ export class WebSocketGateway {
       if (message.type === "unsubscribe") {
         if (message.serverId) {
           client.subscriptions.delete(message.serverId);
+          client.consoleSubscriptions?.delete(message.serverId);
         }
         return;
       }
@@ -3508,27 +3519,11 @@ export class WebSocketGateway {
           if (typeof maybeRequestId === "string") {
             whitelisted.requestId = maybeRequestId;
           }
-          const maybeTemplate = (event as unknown as Record<string, unknown>)
-            .template;
-          if (
-            maybeTemplate &&
-            typeof maybeTemplate === "object" &&
-            !Array.isArray(maybeTemplate)
-          ) {
-            // Graceful stop policy only (template.stopCommand / sendSignalTo);
-            // startup/image fields are intentionally excluded.
-            const t = maybeTemplate as Record<string, unknown>;
-            const stopPolicy: Record<string, unknown> = {};
-            if (typeof t.stopCommand === "string") {
-              stopPolicy.stopCommand = t.stopCommand.slice(0, 500);
-            }
-            if (typeof t.sendSignalTo === "string") {
-              stopPolicy.sendSignalTo = t.sendSignalTo.slice(0, 32);
-            }
-            if (Object.keys(stopPolicy).length > 0) {
-              whitelisted.template = stopPolicy;
-            }
-          }
+          // Do not forward client template.stopCommand / sendSignalTo. The
+          // agent writes stopCommand to the game process stdin, so a
+          // server.stop holder could run arbitrary console commands without
+          // console.write. Stop policy comes from the stored template on the
+          // panel-initiated power routes, not from this socket frame.
           agent.socket.send(
             JSON.stringify({
               ...whitelisted,
@@ -3923,9 +3918,14 @@ export class WebSocketGateway {
    * Pass bypassCache=true on handshake/auth paths so grant changes apply
    * immediately instead of waiting out the TTL.
    */
-  private async getAllowedUsersForServer(serverId: string, bypassCache = false): Promise<Set<string> | null> {
+  private async getAllowedUsersForServer(
+    serverId: string,
+    bypassCache = false,
+    requiredPermission = "server.read",
+  ): Promise<Set<string> | null> {
+    const cacheKey = `${serverId}:${requiredPermission}`;
     const now = Date.now();
-    const cached = this.serverAccessCache.get(serverId);
+    const cached = this.serverAccessCache.get(cacheKey);
     if (!bypassCache && cached && cached.expiresAt > now) return cached.allowedUsers;
     const server = await this.prisma.server.findUnique({
       where: { id: serverId },
@@ -3958,17 +3958,19 @@ export class WebSocketGateway {
           hasExplicitServerAccess: false,
           rolePermissions: rolePerms,
           hasNodeAccess: await hasNodeAccess(this.prisma, candidate, server.nodeId),
-          requiredPermission: "server.read",
+          requiredPermission,
         });
         if (decision.allowed) allowedUsers.add(candidate);
       }
     } catch { /* owner+access baseline still enforced */ }
-    this.serverAccessCache.set(serverId, { allowedUsers, expiresAt: now + WebSocketGateway.SERVER_ACCESS_TTL_MS, grantVersion: this.grantVersion });
+    this.serverAccessCache.set(cacheKey, { allowedUsers, expiresAt: now + WebSocketGateway.SERVER_ACCESS_TTL_MS, grantVersion: this.grantVersion });
     return allowedUsers;
   }
 
   private async routeConsoleToSubscribers(serverId: string, message: any) {
-    const allowedUsers = await this.getAllowedUsersForServer(serverId);
+    // Console output is console.read territory. stats and lifecycle fan-out
+    // use routeToClients (server.read); this path must not piggyback on it.
+    const allowedUsers = await this.getAllowedUsersForServer(serverId, false, "console.read");
     if (!allowedUsers) {
       return;
     }
@@ -3985,6 +3987,12 @@ export class WebSocketGateway {
 
     for (const [, client] of this.clients) {
       if (!client.subscriptions.has(serverId)) {
+        continue;
+      }
+      // Console output is console.read territory. The subscribe handler
+      // recorded consoleSubscriptions for holders; server.read-only viewers
+      // must not receive it. allowedUsers stays as a revocation backstop.
+      if (!client.consoleSubscriptions?.has(serverId)) {
         continue;
       }
       if (allowedUsers.has(client.userId)) {

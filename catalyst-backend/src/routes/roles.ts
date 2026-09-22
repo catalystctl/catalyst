@@ -1190,6 +1190,7 @@ export async function roleRoutes(app: FastifyInstance) {
         }
 
         const allNodes = await prisma.node.findMany({
+          omit: { secret: true },
           include: {
             location: {
               select: {
@@ -1268,6 +1269,7 @@ export async function roleRoutes(app: FastifyInstance) {
         where: {
           id: { in: nodeIds },
         },
+        omit: { secret: true },
         include: {
           location: {
             select: {

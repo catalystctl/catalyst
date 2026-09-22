@@ -32,7 +32,7 @@ import {
   normalizeHostIp,
   shouldUseIpam,
 } from "../../utils/ipam";
-import { hasNodeAccess, getUserAccessibleNodes } from "../../lib/permissions";
+import { hasGrant, hasNodeAccess, getUserAccessibleNodes } from "../../lib/permissions";
 import { decideServerAccess } from "../../lib/server-access";
 import { serverCreateSchema, validateRequestBody } from "../../lib/validation";
 import {
@@ -496,8 +496,7 @@ export const enforceKeyScope = (
   permission: string,
 ): boolean => {
   if (!actor?.apiKeyId) return true;
-  const perms = actor.permissions ?? [];
-  return perms.includes("*") || perms.includes("admin.write") || perms.includes(permission);
+  return hasGrant(actor.permissions ?? [], permission);
 };
 
 export const ensureServerAccess = async (
@@ -1261,13 +1260,12 @@ export const ensureNotSuspended = (server: any, reply: FastifyReply, message?: s
 // Check permissions from request.user.permissions (populated by auth middleware)
 export const checkPerm = (request: any, permission: string): boolean => {
   const perms: string[] = request.user?.permissions ?? [];
-  return perms.includes('*') || perms.includes(permission);
+  return hasGrant(perms, permission);
 };
 
 export const checkAnyPerm = (request: any, permissions: string[]): boolean => {
   const perms: string[] = request.user?.permissions ?? [];
-  if (perms.includes('*')) return true;
-  return permissions.some((p) => perms.includes(p));
+  return permissions.some((p) => hasGrant(perms, p));
 };
 
 export const checkIsAdmin = (request: any, required: "admin.read" | "admin.write" = "admin.read"): boolean => {
@@ -1308,6 +1306,7 @@ export const isAdminUser = async (userId: string, required: "admin.read" | "admi
  * Check if user can access a server.
  * Aligns with decideServerAccess / ensureServerAccess:
  *   owner OR ServerAccess OR (hasNodeAccess AND node.update) OR admin.write/*
+ *   OR admin.read (read-everything; writes still need their own permission)
  * Node assignment alone is NOT enough.
  */
 export const canAccessServer = async (
@@ -1347,7 +1346,11 @@ export const canAccessServer = async (
       hasExplicitServerAccess,
       rolePermissions,
       hasNodeAccess: hasNodeAccessToServer,
-    }).allowed || hasScopedGrant
+    }).allowed ||
+    hasScopedGrant ||
+    // admin.read is read-everything. Callers still enforce the operation's
+    // own write permission (clone needs server.create, etc.).
+    rolePermissions.includes("admin.read")
   );
 };
 
@@ -1420,12 +1423,22 @@ export const getEffectiveServerPermissions = async (
     (ALL_SERVER_PERMISSION_KEYS as readonly string[]).includes(p),
   );
 
+  // admin.read is read-everything: add the server-scoped READ subset. Union,
+  // never replace — an explicit ServerAccess row may still grant writes.
+  const adminReadSubset = rolePermissions.includes("admin.read")
+    ? (ALL_SERVER_PERMISSION_KEYS as readonly string[]).filter(
+        (p) => p.endsWith(".read") || p === "backup.download",
+      )
+    : [];
+
   if (hasExplicitServerAccess) {
     const access = serverAccess?.find((a) => a.userId === userId);
-    return [...new Set([...roleGranted, ...(access?.permissions ?? [])])];
+    return [
+      ...new Set([...roleGranted, ...adminReadSubset, ...(access?.permissions ?? [])]),
+    ];
   }
 
-  return roleGranted;
+  return [...new Set([...roleGranted, ...adminReadSubset])];
 };
 
 export const isArchiveName = (value: string) => {

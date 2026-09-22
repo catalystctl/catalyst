@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { decideServerAccess, isFullAdminRole, canManageViaNode } from "../lib/server-access";
+import { hasGrant } from "../lib/permissions";
 
 describe("decideServerAccess — node-access no longer bypasses", () => {
   it("allows the server owner without extra grants", () => {
@@ -234,5 +235,98 @@ describe("decideServerAccess — requiredPermission (global role grants)", () =>
       requiredPermission: "file.write",
     });
     expect(result).toEqual({ allowed: true, reason: "owner" });
+  });
+});
+
+describe("decideServerAccess — admin.read is read-everything", () => {
+  it("allows admin.read for read permissions", () => {
+    for (const requiredPermission of [
+      "server.read",
+      "console.read",
+      "file.read",
+      "backup.read",
+      "backup.download",
+      "database.read",
+      "alert.read",
+    ]) {
+      const result = decideServerAccess({
+        isOwner: false,
+        hasExplicitServerAccess: false,
+        rolePermissions: ["admin.read"],
+        hasNodeAccess: false,
+        requiredPermission,
+      });
+      expect(result).toEqual({ allowed: true, reason: "admin_read" });
+    }
+  });
+
+  it("DENIES admin.read for write permissions", () => {
+    for (const requiredPermission of [
+      "server.start",
+      "server.stop",
+      "server.delete",
+      "server.suspend",
+      "server.update",
+      "file.write",
+      "console.write",
+      "backup.create",
+      "backup.restore",
+    ]) {
+      const result = decideServerAccess({
+        isOwner: false,
+        hasExplicitServerAccess: false,
+        rolePermissions: ["admin.read"],
+        hasNodeAccess: false,
+        requiredPermission,
+      });
+      expect(result.allowed).toBe(false);
+    }
+  });
+
+  it("still DENIES admin.read without a requiredPermission (not a manage grant)", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["admin.read"],
+      hasNodeAccess: false,
+    });
+    expect(result.allowed).toBe(false);
+  });
+});
+
+describe("hasGrant — non-admin permissions stay exact", () => {
+  it("specific grants match only themselves", () => {
+    expect(hasGrant(["server.start"], "server.start")).toBe(true);
+    expect(hasGrant(["server.start"], "server.stop")).toBe(false);
+    expect(hasGrant(["file.read"], "file.write")).toBe(false);
+    expect(hasGrant(["file.write"], "file.read")).toBe(false);
+    expect(hasGrant(["backup.create"], "backup.delete")).toBe(false);
+    expect(hasGrant(["console.read"], "console.write")).toBe(false);
+    expect(hasGrant(["node.read"], "node.delete")).toBe(false);
+  });
+
+  it("admin.write grants concrete permissions but not *", () => {
+    expect(hasGrant(["admin.write"], "server.delete")).toBe(true);
+    expect(hasGrant(["admin.write"], "user.set_roles")).toBe(true);
+    expect(hasGrant(["admin.write"], "apikey.manage")).toBe(true);
+    expect(hasGrant(["admin.write"], "admin.read")).toBe(true);
+    expect(hasGrant(["admin.write"], "*")).toBe(false);
+  });
+
+  it("admin.read grants reads only", () => {
+    expect(hasGrant(["admin.read"], "server.read")).toBe(true);
+    expect(hasGrant(["admin.read"], "backup.download")).toBe(true);
+    expect(hasGrant(["admin.read"], "node.view_stats")).toBe(true);
+    expect(hasGrant(["admin.read"], "server.create")).toBe(false);
+    expect(hasGrant(["admin.read"], "user.ban")).toBe(false);
+    expect(hasGrant(["admin.read"], "apikey.manage")).toBe(false);
+    expect(hasGrant(["admin.read"], "admin.write")).toBe(false);
+    expect(hasGrant(["admin.read"], "*")).toBe(false);
+  });
+
+  it("* grants everything including *", () => {
+    expect(hasGrant(["*"], "*")).toBe(true);
+    expect(hasGrant(["*"], "server.delete")).toBe(true);
+    expect(hasGrant(["*"], "admin.write")).toBe(true);
   });
 });

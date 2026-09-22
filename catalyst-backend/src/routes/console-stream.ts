@@ -159,7 +159,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         return;
       }
 
-      const isAdmin = checkIsAdmin(request, 'admin.write');
+      const isAdmin = checkIsAdmin(request, 'admin.read');
       const access = server.access.find((a) => a.userId === userId);
       // Server-scoped resolution: global roles + RoleServerGrant +
       // RoleNodeGrant rows covering this server.

@@ -125,6 +125,31 @@ export function buildScopedPermission(
 }
 
 /**
+ * True for permissions that only observe state. `admin.read` grants these
+ * (it is the read-everything admin grant); everything else is a write.
+ */
+export function isReadPermission(permission: string): boolean {
+  return (
+    permission.endsWith(".read") ||
+    permission === "node.view_stats" ||
+    permission === "backup.download"
+  );
+}
+
+/**
+ * True when a granted permission set satisfies `required`.
+ * `*` grants everything; `admin.write` grants every concrete permission;
+ * `admin.read` grants every read permission.
+ */
+export function hasGrant(granted: readonly string[], required: string): boolean {
+  if (granted.includes("*")) return true;
+  if (granted.includes(required)) return true;
+  if (required !== "*" && granted.includes("admin.write")) return true;
+  if (granted.includes("admin.read") && isReadPermission(required)) return true;
+  return false;
+}
+
+/**
  * Check if a permission string matches a required permission
  * Handles wildcards and scoping
  *
@@ -143,6 +168,14 @@ export function permissionMatches(
 
   // Wildcard grants all permissions
   if (userPerm === "*") return true;
+
+  // admin.write = every concrete permission; admin.read = every read.
+  // Unscoped or wildcard-scoped only — a resource-scoped admin bit must not
+  // silently widen to all resources.
+  if (!userResourceId || userResourceId === "*") {
+    if (userPerm === "admin.write" && requiredPermission !== "*") return true;
+    if (userPerm === "admin.read" && isReadPermission(requiredPermission)) return true;
+  }
 
   // Exact permission match
   if (userPerm === requiredPermission) {

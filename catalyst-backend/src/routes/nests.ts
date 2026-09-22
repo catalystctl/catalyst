@@ -1,36 +1,21 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { hasPermission } from "../lib/permissions";
+import { hasAnyPermission } from "../lib/permissions";
 import { serialize } from '../utils/serialize';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 
-const ensurePermission = async (
+// There is no nest.* permission. Nests group templates, so nest reads follow
+// template.read and nest mutations follow the matching template.* permission.
+// admin.write / * remain valid (hasAnyPermission treats "*" as everything).
+const ensureAnyPermission = async (
   userId: string,
   reply: FastifyReply,
-  requiredPermission: string
+  required: string[]
 ) => {
-  const has = await hasPermission(prisma, userId, requiredPermission);
+  const has = await hasAnyPermission(prisma, userId, required);
   if (!has) {
     apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
-    return false;
-  }
-  return true;
-};
-
-const ensureAdmin = async (userId: string, reply: FastifyReply) => {
-  const roles = await prisma.role.findMany({
-    where: { users: { some: { id: userId } } },
-    select: { permissions: true, name: true },
-  });
-  const permissions = roles.flatMap((role) => role.permissions);
-  // SECURITY: permission bits only — never role names (user-created roles
-  // can be named "Administrator"; see roles.ts name reservation).
-  const isAdmin =
-    permissions.includes("*") ||
-    permissions.includes("admin.write");
-  if (!isAdmin) {
-    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access required");
     return false;
   }
   return true;
@@ -42,7 +27,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const has = await ensurePermission(request.user.userId, reply, "template.read");
+      const has = await ensureAnyPermission(request.user.userId, reply, ["template.read", "admin.read", "admin.write"]);
       if (!has) return;
 
       const nests = await prisma.nest.findMany({
@@ -68,7 +53,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/:nestId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const has = await ensurePermission(request.user.userId, reply, "template.read");
+      const has = await ensureAnyPermission(request.user.userId, reply, ["template.read", "admin.read", "admin.write"]);
       if (!has) return;
 
       const { nestId } = request.params as { nestId: string };
@@ -95,7 +80,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      if (!(await ensureAdmin(request.user.userId, reply))) return;
+      if (!(await ensureAnyPermission(request.user.userId, reply, ["template.create", "admin.write"]))) return;
 
       const { name, description, icon, author } = request.body as {
         name: string;
@@ -146,7 +131,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/:nestId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      if (!(await ensureAdmin(request.user.userId, reply))) return;
+      if (!(await ensureAnyPermission(request.user.userId, reply, ["template.update", "admin.write"]))) return;
 
       const { nestId } = request.params as { nestId: string };
       const { name, description, icon, author } = request.body as {
@@ -204,7 +189,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/:nestId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      if (!(await ensureAdmin(request.user.userId, reply))) return;
+      if (!(await ensureAnyPermission(request.user.userId, reply, ["template.delete", "admin.write"]))) return;
 
       const { nestId } = request.params as { nestId: string };
 

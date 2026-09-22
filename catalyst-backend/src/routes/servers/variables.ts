@@ -21,19 +21,20 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      // Permission check: owner | ServerAccess with server.read | role server.read | node+node.update | admin.write/*
+      // Permission check: owner | ServerAccess with server.read | role
+      // server.read (admin.read is read-everything) | node+node.update | admin.write/*
       if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
           where: { userId, serverId, permissions: { has: "server.read" } },
         });
-        if (!access && !checkIsAdmin(request, "admin.write")) {
+        if (!access && !checkIsAdmin(request, "admin.read")) {
           const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
-          const { hasNodeAccess } = await import("../../lib/permissions.js");
+          const { hasGrant, hasNodeAccess } = await import("../../lib/permissions.js");
           const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
           const nodeManage =
             (await hasNodeAccess(prisma, userId, server.nodeId)) &&
             rolePerms.includes("node.update");
-          if (!rolePerms.includes("server.read") && !rolePerms.includes("*") && !nodeManage) {
+          if (!hasGrant(rolePerms, "server.read") && !nodeManage) {
             return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
           }
         }
@@ -79,15 +80,15 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Permission check: owner | ServerAccess with server.rebuild | global
-      // role with server.rebuild/admin | node+node.update. Environment flows
-      // into container startup, so unrelated grants must not suffice.
+      // Permission check: owner | ServerAccess with server.update | global
+      // role with server.update/admin | node+node.update. Environment is a
+      // server setting, so server.rebuild is not the grant for it.
       if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
             serverId,
-            permissions: { has: "server.rebuild" },
+            permissions: { has: "server.update" },
           },
         });
         // Server-scoped role resolution: global roles + RoleServerGrant +
@@ -98,7 +99,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         const roleAllowed =
           rolePerms.includes("*") ||
           rolePerms.includes("admin.write") ||
-          rolePerms.includes("server.rebuild");
+          rolePerms.includes("server.update");
         if (!access && !roleAllowed) {
           const { hasNodeAccess } = await import("../../lib/permissions.js");
           const nodeManage =

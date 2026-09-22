@@ -1424,8 +1424,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				);
 				const isAdmin =
 					rolePerms.includes("*") ||
-					rolePerms.includes("admin.write") ||
-					user?.role === "administrator";
+					rolePerms.includes("admin.write");
 				const permissions = isAdmin
 					? ["*"]
 					: serverAccess?.permissions ?? [];

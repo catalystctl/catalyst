@@ -45,8 +45,9 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       const canUpdate = await ensureServerAccess(
         id,
         request.user.userId,
-        "server.start",
-        reply
+        "server.update",
+        reply,
+        request.user,
       );
       if (!canUpdate) return;
 
@@ -109,8 +110,9 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       const canUpdate = await ensureServerAccess(
         id,
         request.user.userId,
-        "server.start",
-        reply
+        "server.update",
+        reply,
+        request.user,
       );
       if (!canUpdate) return;
 

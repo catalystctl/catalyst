@@ -61,11 +61,9 @@ export async function taskRoutes(app: FastifyInstance) {
     // RoleNodeGrant rows covering this server (mirrors decideServerAccess's
     // requiredPermission branch).
     const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
+    const { hasGrant } = await import('../lib/permissions.js');
     const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-    const roleAllowed =
-      rolePerms.includes('*') ||
-      rolePerms.includes('admin.write') ||
-      rolePerms.includes('server.schedule');
+    const roleAllowed = hasGrant(rolePerms, 'server.schedule');
 
     // SECURITY: a bare node assignment must NOT grant scheduling (tasks can
     // run arbitrary console commands via action "command" in ANY server's
@@ -102,8 +100,9 @@ export async function taskRoutes(app: FastifyInstance) {
     });
     if (access) return true;
     const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
+    const { hasGrant } = await import('../lib/permissions.js');
     const rolePerms = await resolveServerPermissions(userId, serverId, nodeId);
-    if (rolePerms.includes('*') || rolePerms.includes('admin.write') || rolePerms.includes('console.write')) {
+    if (hasGrant(rolePerms, 'console.write')) {
       return true;
     }
     if ((await hasNodeAccess(prisma, userId, nodeId)) && rolePerms.includes('node.update')) {

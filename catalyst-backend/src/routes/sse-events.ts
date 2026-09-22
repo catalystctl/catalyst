@@ -152,6 +152,8 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
           hasExplicitServerAccess,
           rolePermissions: rolePerms,
           hasNodeAccess: hasNodeAccessToServer,
+          // Server events are a read stream.
+          requiredPermission: "server.read",
         });
 
         if (!decision.allowed) {

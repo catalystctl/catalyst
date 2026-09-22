@@ -1589,6 +1589,17 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const { nodeId } = request.params as { nodeId: string };
 
+			// Same scope as POST /:nodeId/assign: node.assign is not enough to
+			// read assignment rows for a node the caller cannot access.
+			const viewerHasAccess = await hasNodeAccess(
+				prisma,
+				request.user.userId,
+				nodeId,
+			);
+			if (!viewerHasAccess) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
+
 			// Verify node exists
 			const node = await prisma.node.findUnique({
 				where: { id: nodeId },

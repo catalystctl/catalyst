@@ -195,10 +195,11 @@ export function getPermissionCategory(value: string): PermissionCategory | undef
  * Check if a request's user has a specific permission.
  * Uses request.user.permissions which is populated by the auth middleware
  * for both session and API key authentication.
+ * `admin.write` satisfies any concrete permission; `admin.read` any read.
  */
 export function hasPermission(request: any, permission: string): boolean {
   const perms: string[] = request.user?.permissions ?? [];
-  return perms.includes('*') || perms.includes(permission);
+  return hasGrant(perms, permission);
 }
 
 /**
@@ -214,14 +215,14 @@ export function isAdmin(request: any): boolean {
  */
 export function hasAnyPermission(request: any, permissions: string[]): boolean {
   const perms: string[] = request.user?.permissions ?? [];
-  if (perms.includes('*')) return true;
-  return permissions.some((p) => perms.includes(p));
+  return permissions.some((p) => hasGrant(perms, p));
 }
 
 import { prisma } from '../db';
 import { SimpleCache } from './cache';
 import { registerCacheStats } from './cache';
 import { broadcastCacheInvalidate, onCacheInvalidate } from './cache-bus';
+import { hasGrant } from './permissions';
 
 /**
  * The canonical server-scoped permission set — the "subuser permission list".

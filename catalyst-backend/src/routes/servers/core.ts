@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, serverUpdateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, validateVariableRule, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
+import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, ensureServerAccess, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, serverUpdateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, validateVariableRule, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { minimumDiskMbFromHints } from "../../utils/egg-import.js";
 import { describeError } from "../../utils/describe-error.js";
@@ -1643,13 +1643,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           hasExplicitServerAccess: false,
           rolePermissions: scopedRolePerms,
           hasNodeAccess: nodeAccessGranted,
+          // Detail view is a read: lets admin.read through (admin_read)
+          // without opening write paths.
+          requiredPermission: "server.read",
         });
-        const hasGrant =
+        const hasServerGrant =
           server.id &&
           scopedRolePerms.some((p) =>
             (ALL_SERVER_PERMISSIONS as readonly string[]).includes(p),
           );
-        if (!decision.allowed && !hasGrant) {
+        if (!decision.allowed && !hasServerGrant) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
@@ -1716,10 +1719,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Check permission - owner, admin.write/*, ServerAccess, or (node + node.update)
-      if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
-        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-      }
+      // Name and description are settings too: server.update, not any grant.
+      const canUpdate = await ensureServerAccess(serverId, userId, "server.update", reply, request.user);
+      if (!canUpdate) return;
 
       const {
         name,
@@ -1755,8 +1757,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const hasAllocationUpdate = allocationId !== undefined;
       const normalizedPrimaryIp = typeof primaryIp === "string" ? primaryIp.trim() : null;
 
-      // Sensitive fields flow into container execution or infrastructure;
-      // rename/description stay available to any subuser, but these require rebuild-level control.
+      // Sensitive fields flow into container execution or infrastructure.
+      // server.update is the catalog grant for settings; rebuild is not a
+      // substitute, and a name-only subuser must not change them either.
       const touchesSensitiveFields =
         environment !== undefined ||
         startupCommand !== undefined ||
@@ -1771,7 +1774,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         allocationId !== undefined;
       if (touchesSensitiveFields && server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
         const sensitiveAccess = await prisma.serverAccess.findFirst({
-          where: { serverId, userId, permissions: { has: "server.rebuild" } },
+          where: { serverId, userId, permissions: { has: "server.update" } },
         });
         if (!sensitiveAccess) {
           const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
@@ -1779,7 +1782,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           const nodeManage =
             (await hasNodeAccess(prisma, userId, server.nodeId)) &&
             rolePerms.includes("node.update");
-          if (!rolePerms.includes("server.rebuild") && !rolePerms.includes("*") && !nodeManage) {
+          if (!rolePerms.includes("server.update") && !rolePerms.includes("*") && !nodeManage) {
             return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
           }
         }

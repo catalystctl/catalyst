@@ -1,3 +1,5 @@
+import { isReadPermission } from "./permissions";
+
 /**
  * Pure access decision for ensureServerAccess (no DB / reply side-effects).
  *
@@ -5,6 +7,7 @@
  * - Owners always allowed.
  * - Explicit per-server ServerAccess grants allowed.
  * - Global `*` / `admin.write` allowed.
+ * - Global `admin.read` allowed for READ operations only.
  * - Global roles may grant granular server permissions (e.g. a "game manager"
  *   role holding `server.start` or `file.write`): when `requiredPermission`
  *   is provided, a role holding exactly that permission counts like a
@@ -16,13 +19,14 @@
  * Callers that need effective permission *sets* (not just allow/deny) should
  * still use this decision, then map:
  *   owner | admin | node_manage → full server permission set
+ *   admin_read → the server-scoped READ subset
  *   role_permission → the role-granted server permissions
  *   server_access → explicit ServerAccess.permissions
  */
 export type ServerAccessDecision =
   | {
       allowed: true;
-      reason: "owner" | "server_access" | "admin" | "role_permission" | "node_manage";
+      reason: "owner" | "server_access" | "admin" | "admin_read" | "role_permission" | "node_manage";
     }
   | { allowed: false; reason: "forbidden" };
 
@@ -43,6 +47,15 @@ export function decideServerAccess(input: {
   }
   if (input.rolePermissions.includes("*") || input.rolePermissions.includes("admin.write")) {
     return { allowed: true, reason: "admin" };
+  }
+  // admin.read is the read-everything grant: it covers server reads but must
+  // not authorize power/file/console writes.
+  if (
+    input.requiredPermission &&
+    input.rolePermissions.includes("admin.read") &&
+    isReadPermission(input.requiredPermission)
+  ) {
+    return { allowed: true, reason: "admin_read" };
   }
   if (input.requiredPermission && input.rolePermissions.includes(input.requiredPermission)) {
     return { allowed: true, reason: "role_permission" };

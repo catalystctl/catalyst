@@ -112,8 +112,12 @@ describe("WS server_control payload whitelist", () => {
     expect(forwarded.environment).toBeUndefined();
     expect(forwarded.template?.startup).toBeUndefined();
     expect(forwarded.template?.image).toBeUndefined();
-    // The benign graceful-stop policy is preserved (parse_stop_policy input):
-    expect(forwarded.template?.stopCommand).toBe("/bin/sh -c 'graceful stop'");
+    // stopCommand is NOT preserved: the agent writes it to the game process
+    // stdin, so a server.stop holder could run arbitrary console commands
+    // without console.write. Stop policy comes from the stored template on
+    // panel-initiated power routes, not from this socket frame.
+    expect(forwarded.template?.stopCommand).toBeUndefined();
+    expect(forwarded.template?.sendSignalTo).toBeUndefined();
     gw.destroy();
   });
 

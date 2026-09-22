@@ -11,6 +11,7 @@ import { describeError } from '../utils/describe-error.js';
 import { createAuditLog, buildServerAuditDetails, enrichAuditDetails, resolveActorDetails } from '../middleware/audit';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
 import {
+  hasGrant,
   hasNodeAccess,
   invalidateAdminUserCache,
   invalidateNodeAccessCache,
@@ -50,15 +51,15 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Check permissions from request.user.permissions (populated by auth middleware)
   // Works for both session and API key auth without extra DB queries.
+  // admin.write satisfies any concrete permission; admin.read any read.
   const checkPerm = (request: any, permission: string): boolean => {
     const perms: string[] = request.user?.permissions ?? [];
-    return perms.includes('*') || perms.includes(permission);
+    return hasGrant(perms, permission);
   };
 
   const checkAnyPerm = (request: any, permissions: string[]): boolean => {
     const perms: string[] = request.user?.permissions ?? [];
-    if (perms.includes('*')) return true;
-    return permissions.some((p) => perms.includes(p));
+    return permissions.some((p) => hasGrant(perms, p));
   };
 
   // Helper to check if user has admin permissions (uses request.user.permissions
@@ -1353,6 +1354,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
       const nodes = await prisma.node.findMany({
         where,
+        omit: { secret: true },
         include: {
           location: true,
           servers: {
@@ -1518,6 +1520,15 @@ export async function adminRoutes(app: FastifyInstance) {
       if (!(checkPerm(request, requiredPerm))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Server ${action} permission required`, {
           params: { action },
+        });
+      }
+
+      // API-key scope: a key minted with a narrower set must not exercise
+      // broader power actions (same contract as enforceKeyScope in servers/_helpers).
+      const actorPerms: string[] = request.user?.permissions ?? [];
+      if (request.user?.apiKeyId && !actorPerms.includes('*') && !actorPerms.includes('admin.write') && !actorPerms.includes(requiredPerm)) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'API key does not include the required permission', {
+          params: { action, permission: requiredPerm },
         });
       }
 
@@ -3497,6 +3508,8 @@ export async function adminRoutes(app: FastifyInstance) {
     '/database-hosts/:hostId/ping',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      // The probe opens an authenticated connection with the stored password
+      // and reports server version and schema layout — read-only, so admin.read.
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
@@ -3835,6 +3848,8 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
+      // metadata stores OIDC client secrets. admin.read may read settings but
+      // gets masked secrets (same contract as GET /oidc-config).
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
@@ -3849,7 +3864,26 @@ export async function adminRoutes(app: FastifyInstance) {
         });
       }
 
-      reply.send(serialize({ success: true, data: settings }));
+      let data: typeof settings = settings;
+      if (!checkPerm(request, 'admin.write') && settings.metadata) {
+        const meta = settings.metadata as Record<string, any>;
+        const providers = meta.oidcProviders;
+        if (providers && typeof providers === 'object') {
+          const redactedProviders: Record<string, any> = {};
+          for (const [name, cfg] of Object.entries(providers as Record<string, any>)) {
+            const c = (cfg ?? {}) as { clientSecret?: string };
+            redactedProviders[name] = {
+              ...c,
+              clientSecret: c.clientSecret
+                ? c.clientSecret.slice(0, 4) + '•'.repeat(Math.max(0, c.clientSecret.length - 4))
+                : '',
+            };
+          }
+          data = { ...settings, metadata: { ...meta, oidcProviders: redactedProviders } };
+        }
+      }
+
+      reply.send(serialize({ success: true, data }));
     }
   );
 

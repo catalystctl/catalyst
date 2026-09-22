@@ -86,13 +86,12 @@ export async function backupRoutes(app: FastifyInstance) {
     });
     // Server-scoped role resolution: global roles + RoleServerGrant +
     // RoleNodeGrant rows covering this server (mirrors decideServerAccess's
-    // requiredPermission branch).
+    // requiredPermission branch). hasGrant applies the admin.read / admin.write
+    // implications so read-everything admins can read backups.
     const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
+    const { hasGrant } = await import("../lib/permissions.js");
     const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-    const roleAllowed =
-      rolePerms.includes("*") ||
-      rolePerms.includes("admin.write") ||
-      rolePerms.includes(permission);
+    const roleAllowed = hasGrant(rolePerms, permission);
     // SECURITY: bare node assignment must NOT grant backup operations
     // (read/download = full cross-tenant data exfiltration, restore/delete =
     // destruction). Mirror decideServerAccess: the node path only counts when
@@ -526,12 +525,10 @@ export async function backupRoutes(app: FastifyInstance) {
         backupId: string;
       };
       const userId = request.user.userId;
+      // backup.read must not stream the archive. ensureBackupAccess already
+      // wrote the 403 when this fails; do not fall through to another check.
       const downloadServer = await ensureBackupAccess(serverId, userId, reply, "backup.download");
-      if (!downloadServer) {
-        const fallback = await ensureBackupAccess(serverId, userId, reply, "backup.read");
-        if (!fallback) return;
-        (request.log ?? app.log).warn({ serverId, userId }, "backup.download fallback to backup.read; backfill grants");
-      }
+      if (!downloadServer) return;
 
       const backup = await prisma.backup.findFirst({
         where: {

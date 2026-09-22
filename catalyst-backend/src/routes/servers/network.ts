@@ -135,7 +135,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       // Bare node assignment / admin.read alone is NOT enough.
       const hasWriteAccess = server.access.some(
         (access) => access.userId === userId &&
-          (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
+          (access.permissions.includes('server.update'))
       );
       if (server.ownerId !== userId && !hasWriteAccess && !checkIsAdmin(request, "admin.write")) {
         const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
@@ -144,7 +144,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         const nodeManage =
           (await hasNodeAccess(prisma, userId, server.nodeId)) &&
           rolePerms.includes("node.update");
-        if (!rolePerms.includes("server.update") && !rolePerms.includes("server.delete") && !rolePerms.includes("*") && !nodeManage) {
+        if (!rolePerms.includes("server.update") && !rolePerms.includes("*") && !nodeManage) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
@@ -370,7 +370,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
 
       const hasWriteAccess = server.access.some(
         (access) => access.userId === userId &&
-          (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
+          (access.permissions.includes('server.update'))
       );
       if (server.ownerId !== userId && !hasWriteAccess && !checkIsAdmin(request, "admin.write")) {
         const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
@@ -379,7 +379,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         const nodeManage =
           (await hasNodeAccess(prisma, userId, server.nodeId)) &&
           rolePerms.includes("node.update");
-        if (!rolePerms.includes("server.update") && !rolePerms.includes("server.delete") && !rolePerms.includes("*") && !nodeManage) {
+        if (!rolePerms.includes("server.update") && !rolePerms.includes("*") && !nodeManage) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
@@ -494,7 +494,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
 
       const hasWriteAccess = server.access.some(
         (access) => access.userId === userId &&
-          (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
+          (access.permissions.includes('server.update'))
       );
       if (server.ownerId !== userId && !hasWriteAccess && !checkIsAdmin(request, "admin.write")) {
         const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
@@ -503,7 +503,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         const nodeManage =
           (await hasNodeAccess(prisma, userId, server.nodeId)) &&
           rolePerms.includes("node.update");
-        if (!rolePerms.includes("server.update") && !rolePerms.includes("server.delete") && !rolePerms.includes("*") && !nodeManage) {
+        if (!rolePerms.includes("server.update") && !rolePerms.includes("*") && !nodeManage) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }

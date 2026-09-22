@@ -22,14 +22,16 @@ export async function bulkServerRoutes(app: FastifyInstance) {
   const authenticate = (app as any).authenticate;
 
   /**
-   * Helper: check if user has admin/suspend permission.
+   * Helper: check the global permission for a bulk operation class.
+   * Suspend/unsuspend require server.suspend (same as the single-server
+   * routes); delete requires server.delete. admin.write / * cover both.
    */
-  const ensureBulkPermission = (request: any, reply: FastifyReply) => {
+  const ensureBulkPermission = (request: any, reply: FastifyReply, required: string[]) => {
     const perms: string[] = request.user?.permissions ?? [];
     if (
       perms.includes('*') ||
       perms.includes('admin.write') ||
-      perms.includes('server.suspend')
+      required.some((p) => perms.includes(p))
     ) {
       return true;
     }
@@ -113,7 +115,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Maximum 100 servers per bulk operation');
       }
 
-      if (!(ensureBulkPermission(request, reply))) return;
+      if (!(ensureBulkPermission(request, reply, ['server.suspend']))) return;
 
       const webhookService = (app as any).webhookService as import('../services/webhook-service').WebhookService | undefined;
       const scheduler = (app as any).taskScheduler;
@@ -144,9 +146,10 @@ export async function bulkServerRoutes(app: FastifyInstance) {
           continue;
         }
 
-        // Check if user has permission for this specific server
-        const hasServerPermission = server.ownerId === userId || 
-          await hasServerAccess(prisma, request, serverId, ['server.suspend', 'server.update']);
+        // server.suspend is a global grant (not a subuser permission), and
+        // ownership alone does not suspend — same contract as
+        // ensureSuspendPermission on the single-server routes.
+        const hasServerPermission = await hasServerAccess(prisma, request, serverId, ['server.suspend']);
         if (!hasServerPermission) {
           result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
@@ -283,7 +286,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Maximum 100 servers per bulk operation');
       }
 
-      if (!(ensureBulkPermission(request, reply))) return;
+      if (!(ensureBulkPermission(request, reply, ['server.suspend']))) return;
 
       const scheduler = (app as any).taskScheduler;
       const result: BulkResult = { success: [], failed: [] };
@@ -308,9 +311,10 @@ export async function bulkServerRoutes(app: FastifyInstance) {
           continue;
         }
 
-        // Check if user has permission for this specific server
-        const hasServerPermission = server.ownerId === userId || 
-          await hasServerAccess(prisma, request, serverId, ['server.suspend', 'server.update']);
+        // server.suspend is a global grant (not a subuser permission), and
+        // ownership alone does not suspend — same contract as
+        // ensureSuspendPermission on the single-server routes.
+        const hasServerPermission = await hasServerAccess(prisma, request, serverId, ['server.suspend']);
         if (!hasServerPermission) {
           result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
@@ -427,7 +431,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Maximum 100 servers per bulk operation');
       }
 
-      if (!(ensureBulkPermission(request, reply))) return;
+      if (!(ensureBulkPermission(request, reply, ['server.delete']))) return;
 
       const webhookService = (app as any).webhookService as import('../services/webhook-service').WebhookService | undefined;
       const gateway = (app as any).wsGateway;
@@ -456,9 +460,9 @@ export async function bulkServerRoutes(app: FastifyInstance) {
           continue;
         }
 
-        // Check if user has permission for this specific server
-        const hasServerPermission = server.ownerId === userId || 
-          await hasServerAccess(prisma, request, serverId, ['server.delete', 'server.update']);
+        // server.update is not a delete grant; match DELETE /api/servers/:serverId.
+        const hasServerPermission = server.ownerId === userId ||
+          await hasServerAccess(prisma, request, serverId, ['server.delete']);
         if (!hasServerPermission) {
           result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
