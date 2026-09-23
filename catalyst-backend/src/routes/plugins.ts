@@ -18,6 +18,7 @@ import {
   normalizePermissionList,
   resolveCapabilitySummaries,
 } from '../plugins/safety';
+import { summarizeLicensing } from '../plugins/licensing';
 
 const EnablePluginSchema = z.object({
   enabled: z.boolean(),
@@ -202,6 +203,12 @@ function buildConsentSummary(plugin: any, row: PluginSafetyRow | null) {
     /** Fully-resolved reviewer copy for each declared scope. */
     permissionSummaries: resolveCapabilitySummaries(declaredPermissions, permissionDescriptions),
     permissionDescriptions,
+    /**
+     * Declared licensing / phone-home disclosure, or null for the common case
+     * of a plugin with no `licensing` block. Shown verbatim in the consent
+     * dialog so an admin knows before enabling where the plugin will connect.
+     */
+    licensing: summarizeLicensing(plugin.manifest.licensing),
     // Consent
     consentRequired: state.consentRequired,
     consentReason: state.reason ?? null,
@@ -406,6 +413,12 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           url: body.url,
           version: result.version,
           sha256: result.sha256,
+          // Declared phone-home destination, so a licensed install is
+          // traceable. Key material is never present here or anywhere in the
+          // audit trail.
+          ...(result.licensing
+            ? { licensing: { encrypted: result.licensing.encrypted, licenseServerHost: result.licensing.licenseServerHost } }
+            : {}),
         }, userId);
 
         try {
@@ -717,6 +730,8 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
               requestedPermissions: summary.declaredPermissions,
               /** Reviewer-ready copy for the consent dialog. */
               requestedCapabilities: summary.permissionSummaries,
+              /** Declared phone-home / licensing disclosure. */
+              licensing: summary.licensing,
               disclaimerVersion: DISCLAIMER_VERSION,
               author: plugin.manifest.author,
               version: plugin.manifest.version,

@@ -20,6 +20,16 @@ export type {
 export { defineConfig, configField, createConfigSchema } from './config.js';
 export type { ConfigFieldDef } from './config.js';
 
+// Licensing — types only at the root. The runtime helpers live behind
+// `@catalyst/plugin-sdk/licensing` and use `node:crypto`, so they must not be
+// pulled into a bundle that imports the root entry.
+export type {
+  PluginLicensing,
+  PluginRuntimeContext,
+  ActivateOptions,
+  Activation,
+} from './licensing.js';
+
 // Permissions
 export { definePermissions } from './permissions.js';
 export type { PermissionDefinition, PermissionsManifestFragment } from './permissions.js';

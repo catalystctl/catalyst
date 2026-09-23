@@ -139,6 +139,7 @@ export interface SafetyConsentRequiredError extends Error {
     reason?: string;
     requestedPermissions?: string[];
     requestedCapabilities?: import('./types').CapabilitySummary[];
+    licensing?: import('./types').LicensingDisclosure | null;
     disclaimerVersion?: string;
     author?: string;
     version?: string;
@@ -202,6 +203,16 @@ export interface MarketplaceEntry {
   installed?: boolean;
   installedVersion?: string | null;
   updateAvailable?: boolean;
+  /**
+   * Declared licensing metadata (display only — the installed plugin.json is
+   * authoritative). Lets the browse UI badge licensed plugins and link a
+   * store page before anyone installs.
+   */
+  licensing?: {
+    licenseServer?: string;
+    buyUrl?: string;
+    encrypted?: boolean;
+  };
 }
 
 export interface MarketplaceBrowseResult {

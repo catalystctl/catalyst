@@ -121,6 +121,32 @@ export interface PluginManifest {
    * public /api/auth/oauth-providers endpoint.
    */
   authProviders?: PluginAuthProviderDecl[];
+  /**
+   * Vendor-owned licensing declaration. Catalyst never issues or validates
+   * keys: the plugin's own bootstrap talks to `licenseServer`. The block
+   * exists so the phone-home is disclosed to admins before enablement and so
+   * encrypted payloads are enforced at install time.
+   */
+  licensing?: PluginLicensing;
+}
+
+/**
+ * Declared licensing behaviour. See `PluginLicensingSchema` in validator.ts
+ * for the validation rules this mirrors.
+ */
+export interface PluginLicensing {
+  /** Vendor activation endpoint the plugin's bootstrap calls to validate a key. */
+  licenseServer: string;
+  /** Store / purchase page surfaced to admins when activation fails. */
+  buyUrl?: string;
+  /** Hostnames contacted for licensing. Defaults to the `licenseServer` hostname. */
+  contact?: string[];
+  /** True when the plugin ships an encrypted backend payload (`backend/*.enc`). */
+  encrypted?: boolean;
+  /** What a non-encrypted plugin does when it cannot activate. Ignored when `encrypted`. */
+  failMode?: 'closed' | 'open';
+  /** Activation cache lifetime in hours. Default 168 (7 days). */
+  cacheTtlHours?: number;
 }
 
 /** A sign-in provider declared in a plugin manifest. */
@@ -288,7 +314,13 @@ export interface PluginBackendContext {
   fileTunnel?: PluginFileTunnel;
 
   /**
-   * Authentication & identity bridge for external sign-in plugins (OAuth,
+   * Stable, opaque identity for this panel install. Handed to vendor license
+   * servers for seat binding. Identifier, not a secret.
+   */
+  installId: string;
+
+  /**
+   * Auth bridge for external sign-in plugins (OAuth,
    * SSO). Every method is live-gated on manifest permissions the admin can
    * revoke at any time:
    *   - `auth.sessions`  → createSession

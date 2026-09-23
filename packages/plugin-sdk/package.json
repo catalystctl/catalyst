@@ -22,6 +22,10 @@
 			"import": "./dist/config.js",
 			"types": "./dist/config.d.ts"
 		},
+		"./licensing": {
+			"import": "./dist/licensing.js",
+			"types": "./dist/licensing.d.ts"
+		},
 		"./routes": {
 			"import": "./dist/routes.js",
 			"types": "./dist/routes.d.ts"

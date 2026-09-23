@@ -35,6 +35,11 @@ export interface InstalledPluginResult {
   /** True when this replaced an existing installation of the same plugin. */
   upgraded: boolean;
   sha256: string;
+  /**
+   * Declared licensing metadata, so installs can be audited with their
+   * phone-home destination. Never contains key material.
+   */
+  licensing?: { encrypted: boolean; licenseServerHost: string | null };
 }
 
 export interface MarketplaceEntry {
@@ -49,6 +54,16 @@ export interface MarketplaceEntry {
   tags?: string[];
   /** Index URL the entry was merged from, so multi-source browsing stays attributable. */
   sourceUrl?: string;
+  /**
+   * Declared licensing metadata (display only). The installed `plugin.json`
+   * is authoritative; this just lets the browse UI badge paid/licensed
+   * plugins and link a store page before anyone installs.
+   */
+  licensing?: {
+    licenseServer?: string;
+    buyUrl?: string;
+    encrypted?: boolean;
+  };
 }
 
 /** Marketplace listing annotated with the panel's currently installed copy. */
@@ -91,6 +106,21 @@ export function annotateMarketplaceEntries(
 
 export const MARKETPLACE_INDEX_SCHEMA_VERSION = 1;
 
+/**
+ * Index `licensing` is read leniently (the installed `plugin.json` is the
+ * authoritative declaration); malformed entries degrade to "absent" rather
+ * than failing the whole listing.
+ */
+function parseIndexLicensing(raw: unknown): MarketplaceEntry['licensing'] {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const src = raw as Record<string, unknown>;
+  const out: NonNullable<MarketplaceEntry['licensing']> = {};
+  if (typeof src.licenseServer === 'string') out.licenseServer = src.licenseServer;
+  if (typeof src.buyUrl === 'string') out.buyUrl = src.buyUrl;
+  if (typeof src.encrypted === 'boolean') out.encrypted = src.encrypted;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 const MarketplaceIndexSchema = {
   parse(raw: unknown): MarketplaceEntry[] {
     const obj = raw as any;
@@ -114,6 +144,7 @@ const MarketplaceIndexSchema = {
           sha256: typeof e.sha256 === 'string' ? e.sha256 : undefined,
           homepage: typeof e.homepage === 'string' ? e.homepage : undefined,
           tags: Array.isArray(e.tags) ? e.tags.filter((t: unknown) => typeof t === 'string').slice(0, 12) : undefined,
+          licensing: parseIndexLicensing(e.licensing),
         };
       })
       .filter((e): e is MarketplaceEntry => e !== null);
@@ -460,6 +491,20 @@ export class PluginMarketplaceService {
       const name = String(manifest.name);
       const version = String(manifest.version);
 
+      const lic = (manifest as { licensing?: { licenseServer?: string; encrypted?: boolean } }).licensing;
+      const licensing = lic?.licenseServer
+        ? {
+            encrypted: lic.encrypted === true,
+            licenseServerHost: (() => {
+              try {
+                return new URL(lic.licenseServer).hostname;
+              } catch {
+                return null;
+              }
+            })(),
+          }
+        : undefined;
+
       const existingRow = await this.prisma.plugin.findUnique({ where: { name }, select: { version: true } });
       if (existingRow && existingRow.version === version) {
         // A leftover Plugin row from an uninstall without purge must not
@@ -482,7 +527,7 @@ export class PluginMarketplaceService {
       }
 
       this.logger.info({ plugin: name, version, upgraded: !!existingRow }, 'Plugin installed from marketplace package');
-      return { name, version, upgraded: !!existingRow, sha256 };
+      return { name, version, upgraded: !!existingRow, sha256, licensing };
     } finally {
       await fsp.rm(tmpPath, { force: true }).catch(() => {});
       await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});

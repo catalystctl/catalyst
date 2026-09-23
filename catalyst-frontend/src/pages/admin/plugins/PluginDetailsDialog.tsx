@@ -207,6 +207,31 @@ export function PluginDetailsDialog({
                   <MetaRow label={t('pluginsAdmin.statusLabel')} value={<Badge variant={statusText.variant}>{statusText.text}</Badge>} />
                   <MetaRow label={t('pluginsAdmin.versionLabel')} value={details?.version} />
                   <MetaRow label={t('pluginsAdmin.requiresCatalyst')} value={details?.catalystVersion ?? '—'} />
+                  {details?.licensing && (
+                    <MetaRow
+                      label={t('pluginsAdmin.consentLicensingTitle')}
+                      value={
+                        <span className="flex flex-col items-start gap-0.5">
+                          <span className="font-mono text-xs">{details.licensing.licenseServer}</span>
+                          {details.licensing.encrypted && (
+                            <span className="text-xs text-muted-foreground">
+                              {t('pluginsAdmin.consentLicensingEncrypted')}
+                            </span>
+                          )}
+                          {details.licensing.buyUrl && (
+                            <a
+                              href={details.licensing.buyUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-medium text-accent hover:underline"
+                            >
+                              {t('pluginsAdmin.consentLicensingBuy')}
+                            </a>
+                          )}
+                        </span>
+                      }
+                    />
+                  )}
                   <MetaRow
                     label={t('pluginsAdmin.frontendBackend')}
                     value={t('pluginsAdmin.frontendBackendValue', {

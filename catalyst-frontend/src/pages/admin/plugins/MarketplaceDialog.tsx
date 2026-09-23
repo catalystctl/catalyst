@@ -433,6 +433,11 @@ export function MarketplaceDialog({
                             v{entry.version}
                           </span>
                         )}
+                        {entry.licensing && (
+                          <Badge variant="outline" className="shrink-0 gap-1 border-accent/40 text-accent text-[10px]">
+                            {t('pluginsAdmin.licensedBadge')}
+                          </Badge>
+                        )}
                         {entry.updateAvailable ? (
                           <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
                             {entry.installedVersion

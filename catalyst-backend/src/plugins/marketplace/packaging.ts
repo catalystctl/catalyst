@@ -8,6 +8,7 @@ import net from 'net';
 import fetch from 'node-fetch';
 import extract from 'extract-zip';
 import { validateManifest } from '../validator';
+import { hasEncryptedPayload } from '../licensing';
 
 /**
  * Plugin package (.catpkg.zip) handling.
@@ -322,6 +323,27 @@ export async function extractPackage(
   } catch (err: any) {
     await fsp.rm(destDir, { recursive: true, force: true }).catch(() => {});
     throw new PackagingError('INVALID_MANIFEST', `Invalid plugin.json: ${err.message}`);
+  }
+
+  // `licensing.encrypted` is a promise to the panel and to the admin: the
+  // valuable code ships as `backend/*.enc` and is only readable after vendor
+  // activation. Enforce it here so a mispackaged plugin fails at install time
+  // instead of at enable time, in front of an admin who cannot fix it.
+  const licensing = (parsed as { licensing?: { encrypted?: boolean } }).licensing;
+  if (licensing?.encrypted === true) {
+    let backendNames: string[] = [];
+    try {
+      backendNames = await fsp.readdir(path.join(destDir, 'backend'));
+    } catch {
+      backendNames = [];
+    }
+    if (!hasEncryptedPayload(backendNames)) {
+      await fsp.rm(destDir, { recursive: true, force: true }).catch(() => {});
+      throw new PackagingError(
+        'PAYLOAD_MISSING',
+        'plugin.json sets licensing.encrypted but the package ships no backend/*.enc payload',
+      );
+    }
   }
 
   return { destDir, manifest: parsed as Record<string, unknown> };

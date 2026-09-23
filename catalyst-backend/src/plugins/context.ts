@@ -695,6 +695,7 @@ export function createPluginContext(
   registry?: PluginRegistry,
   permissionsProvider?: () => string[],
   fileTunnel?: PluginFileTunnel,
+  installId = 'inst_unknown',
 ): PluginBackendContext {
   const pluginLogger = logger.child({ plugin: manifest.name });
 
@@ -754,6 +755,7 @@ export function createPluginContext(
     logger: pluginLogger,
     wsGateway,
     fileTunnel,
+    installId,
 
     registerRoute(options: RouteOptions) {
       // Prefix route path with plugin namespace

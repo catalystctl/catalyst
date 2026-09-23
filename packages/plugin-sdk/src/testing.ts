@@ -396,3 +396,40 @@ export function createTestPlugin<T extends { onLoad?: any; onEnable?: any; onDis
 ): TestPluginHarness<T> {
   return new TestPluginHarness(plugin, manifest, config);
 }
+
+// ── Licensing stub ──────────────────────────────────────────────────────────
+
+export interface MockLicenseOptions {
+  /** Content key the stub returns. Default: 32 zero bytes. */
+  dek?: Uint8Array;
+  entitlements?: string[];
+  expiresAt?: string;
+  cached?: boolean;
+  /** Resolve `false` to exercise the `failMode: 'open'` degradation path. */
+  enabled?: boolean;
+  error?: string;
+}
+
+/**
+ * Stub license activation so plugin tests can exercise bootstrap logic
+ * without a running license server.
+ *
+ * ```ts
+ * const license = createMockLicense({ entitlements: ['bzip2'] });
+ * // pass `license.activateLicense` wherever your bootstrap expects the real one
+ * ```
+ */
+export function createMockLicense(opts: MockLicenseOptions = {}) {
+  const activation = {
+    enabled: opts.enabled ?? true,
+    dek: opts.enabled === false ? null : (opts.dek ?? new Uint8Array(32)),
+    entitlements: opts.entitlements ?? [],
+    expiresAt: opts.expiresAt ?? new Date(Date.now() + 86_400_000).toISOString(),
+    cached: opts.cached ?? false,
+    ...(opts.error ? { error: opts.error } : {}),
+  };
+  return {
+    activation,
+    activateLicense: async () => activation,
+  };
+}

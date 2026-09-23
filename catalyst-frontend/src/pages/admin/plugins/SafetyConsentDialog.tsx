@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
-import type { CapabilitySummary } from '../../../plugins/types';
+import type { CapabilitySummary, LicensingDisclosure } from '../../../plugins/types';
 
 /** Must match DISCLAIMER_VERSION on the backend (source of truth: server). */
 export const PLUGIN_DISCLAIMER_VERSION = '1';
@@ -31,6 +31,11 @@ interface SafetyConsentDialogProps {
   requestedCapabilities?: CapabilitySummary[];
   /** Fallback permission tokens when summaries are unavailable. */
   requestedPermissions?: string[];
+  /**
+   * Declared licensing / phone-home disclosure. Rendered verbatim so an admin
+   * sees where the plugin connects before enabling it.
+   */
+  licensing?: LicensingDisclosure | null;
   permissionLabels: Record<string, string>;
   open: boolean;
   busy?: boolean;
@@ -49,6 +54,7 @@ export function SafetyConsentDialog({
   version,
   requestedCapabilities,
   requestedPermissions,
+  licensing,
   permissionLabels,
   open,
   busy,
@@ -115,6 +121,51 @@ export function SafetyConsentDialog({
                 </p>
               )}
             </div>
+
+            {licensing && (
+              <div
+                className="rounded-lg border border-border/60 bg-surface-2/30 p-4"
+                data-testid="plugin-consent-licensing"
+              >
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">
+                  {t('pluginsAdmin.consentLicensingTitle')}
+                </p>
+                <ul className="space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-warning" />
+                    <span className="min-w-0 text-sm text-foreground">
+                      {t('pluginsAdmin.consentLicensingContacts', {
+                        hosts: licensing.contactHosts.join(', '),
+                      })}
+                    </span>
+                  </li>
+                  {licensing.encrypted && (
+                    <li className="flex items-start gap-2">
+                      <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-warning" />
+                      <span className="min-w-0 text-sm text-foreground">
+                        {t('pluginsAdmin.consentLicensingEncrypted')}
+                      </span>
+                    </li>
+                  )}
+                  <li className="flex items-start gap-2">
+                    <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-warning" />
+                    <span className="min-w-0 text-sm text-foreground">
+                      {t('pluginsAdmin.consentLicensingServer', { server: licensing.licenseServer })}
+                    </span>
+                  </li>
+                </ul>
+                {licensing.buyUrl && (
+                  <a
+                    href={licensing.buyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex text-sm font-medium text-accent hover:underline"
+                  >
+                    {t('pluginsAdmin.consentLicensingBuy')}
+                  </a>
+                )}
+              </div>
+            )}
 
             <p className="text-xs leading-relaxed text-muted-foreground">
               {t('pluginsAdmin.consentRisk')}

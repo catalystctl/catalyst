@@ -9,6 +9,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { WebSocketGateway } from '../websocket/gateway';
 import type { PluginManifest, PluginBackend, LoadedPlugin, PluginStatus } from './types';
 import { validateManifest, isVersionCompatible, validateDependencies, isValidPluginName } from './validator';
+import { getInstallId } from '../lib/install-id';
 import { createPluginContext, runMiddleware } from './context';
 import { captureSystemError } from '../services/error-logger';
 import { PluginRegistry } from './registry';
@@ -470,6 +471,7 @@ export class PluginLoader {
         this.registry,
         () => this.effectiveGrants.get(manifest.name) ?? [],
         (this.fastify as any).fileTunnel,
+        await getInstallId(this.prisma),
       );
 
       loadedPlugin.context = context;

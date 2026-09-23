@@ -354,6 +354,16 @@ model SystemSetting {
   updatedAt                   DateTime @updatedAt
 }
 
+// Stable, opaque install identity handed to plugins as `ctx.installId`.
+// Generated once on first access and never rotates. Vendor license servers
+// use it for node-locking, so it must survive restarts and plugin reinstalls.
+// Exactly one row (id = "local").
+model PanelIdentity {
+  id        String   @id
+  installId String   @unique
+  createdAt DateTime @default(now())
+}
+
 model ThemeSettings {
   id             String   @id @default("default")
   panelName      String   @default("Catalyst")

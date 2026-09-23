@@ -46,6 +46,13 @@ export interface PluginManifest {
    */
   legacyAcceptance?: boolean;
 
+  /**
+   * Declared licensing / phone-home disclosure, or null when the plugin has
+   * no `licensing` block. Rendered verbatim in the consent dialog so an admin
+   * sees where the plugin connects before enabling it.
+   */
+  licensing?: LicensingDisclosure | null;
+
   /** Aggregate capability counts from the list endpoint */
   capabilityCounts?: {
     routes: number;
@@ -77,6 +84,19 @@ export interface CapabilitySummary {
   description: string;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
   source: 'builtin' | 'plugin' | 'fallback';
+}
+
+/**
+ * Reviewer-facing licensing / phone-home disclosure. Mirrors the backend's
+ * `summarizeLicensing()` output; shown verbatim before enablement.
+ */
+export interface LicensingDisclosure {
+  licenseServer: string;
+  contactHosts: string[];
+  encrypted: boolean;
+  failMode: 'closed' | 'open';
+  cacheTtlHours: number;
+  buyUrl: string | null;
 }
 
 /**

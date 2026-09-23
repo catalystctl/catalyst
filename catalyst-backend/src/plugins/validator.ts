@@ -19,6 +19,55 @@ export function isValidPluginName(name: string): boolean {
 // Permission description values — single reviewer-facing sentence.
 const PERMISSION_DESCRIPTION_MAX = 200;
 
+// ── Third-party licensing declaration ────────────────────────────────────────
+const LICENSE_URL_MAX = 500;
+const CONTACT_HOSTNAME_REGEX = /^[a-z0-9.-]{1,253}$/i;
+export const PLUGIN_LICENSING_CONTACT_MAX = 8;
+
+/**
+ * `https` only, except loopback — so local development works and a shipped
+ * plugin cannot quietly phone home over cleartext.
+ */
+function isLicenseUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol === 'https:') return true;
+  if (url.protocol !== 'http:') return false;
+  const host = url.hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+}
+
+const licenseUrl = z
+  .string()
+  .min(1)
+  .max(LICENSE_URL_MAX)
+  .refine(isLicenseUrl, {
+    message: 'must be an https URL (http is accepted only for localhost / 127.0.0.1)',
+  });
+
+/**
+ * Declared licensing behaviour. Catalyst never issues or validates keys — this
+ * block exists so the phone-home is *declared* (and therefore disclosable to
+ * the admin before enablement) instead of happening silently inside plugin
+ * code that already has unrestricted network access.
+ */
+export const PluginLicensingSchema = z.object({
+  licenseServer: licenseUrl,
+  buyUrl: licenseUrl.optional(),
+  contact: z
+    .array(z.string().regex(CONTACT_HOSTNAME_REGEX, 'must be a bare hostname'))
+    .max(PLUGIN_LICENSING_CONTACT_MAX)
+    .optional(),
+  encrypted: z.boolean().optional(),
+  /** Only meaningful when `encrypted` is false: an encrypted plugin cannot fall open. */
+  failMode: z.enum(['closed', 'open']).optional(),
+  cacheTtlHours: z.number().int().min(1).max(8760).optional(),
+});
+
 /**
  * Zod schema for plugin manifest validation
  */
@@ -95,6 +144,12 @@ export const PluginManifestSchema = z.object({
     )
     .max(8)
     .optional(),
+  /**
+   * Vendor-owned licensing declaration. Presence of this block is the flag
+   * that the plugin contacts an external license server (and optionally ships
+   * an encrypted backend payload). Catalyst neither issues nor validates keys.
+   */
+  licensing: PluginLicensingSchema.optional(),
 }).superRefine((manifest, ctx) => {
   // permissionDescriptions keys must reference DECLARED permissions. Failing
   // loudly here gives authors an immediate, actionable error during discovery

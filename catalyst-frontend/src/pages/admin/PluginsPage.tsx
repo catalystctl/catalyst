@@ -24,7 +24,7 @@ import { fetchPlugins, fetchMarketplace, togglePlugin, reloadPlugin, updatePlugi
 import { toast } from 'sonner';
 import { notifyError } from '../../utils/notify';
 import { usePluginContext } from '../../plugins/usePluginContext';
-import type { CapabilitySummary, PluginManifest } from '../../plugins/types';
+import type { CapabilitySummary, LicensingDisclosure, PluginManifest } from '../../plugins/types';
 import {
   Dialog,
   DialogBody,
@@ -427,6 +427,7 @@ export default function PluginsPage() {
     author?: string;
     version?: string;
     requestedCapabilities?: CapabilitySummary[];
+    licensing?: LicensingDisclosure | null;
   } | null>(null);
   const [consentBusy, setConsentBusy] = useState(false);
 
@@ -481,6 +482,8 @@ export default function PluginsPage() {
           version: err.payload?.version,
           // Server-resolved reviewer copy (builtin + plugin-provided descriptions)
           requestedCapabilities: err.payload?.requestedCapabilities,
+          // Declared phone-home / licensing disclosure
+          licensing: err.payload?.licensing ?? plugin.licensing ?? null,
         });
       } else {
         notifyError(error);
@@ -725,6 +728,7 @@ export default function PluginsPage() {
         version={consentRequest?.version}
         requestedCapabilities={consentCapabilities}
         requestedPermissions={consentPlugin?.declaredPermissions ?? []}
+        licensing={consentRequest?.licensing ?? consentPlugin?.licensing ?? null}
         permissionLabels={consentPermissionLabels}
         onAccept={confirmEnableWithConsent}
         onOpenChange={(open) => !open && setConsentRequest(null)}
