@@ -62,6 +62,7 @@
     "labelOptionalPlaceholder": "Libellé (facultatif)",
     "legacyNotice": "Ce plugin a été conservé depuis une époque antérieure à l’existence des avertissements de sécurité. Vérifiez ses autorisations ci-dessous et révoquez tout ce que vous ne reconnaissez pas.",
     "licensedBadge": "Sous licence",
+    "licensingKeyHint": "Saisissez la clé de licence dans la boîte de dialogue Configurer de ce plugin, puis rechargez-le.",
     "loadingMarketplaces": "Chargement des places de marché…",
     "marketplace": "Place de marché",
     "marketplaceDescription": "Découvrez et installez des plugins de la communauté. Le code installé reste désactivé jusqu’à ce que vous vérifiiez ses autorisations et acceptiez l’avertissement de sécurité.",

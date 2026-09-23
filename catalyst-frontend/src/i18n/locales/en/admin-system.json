@@ -60,6 +60,7 @@
     "labelOptionalPlaceholder": "Label (optional)",
     "legacyNotice": "This plugin was grandfathered from before safety disclaimers existed. Review its permissions below and revoke anything you don't recognize.",
     "licensedBadge": "Licensed",
+    "licensingKeyHint": "Enter the license key in this plugin’s Configure dialog, then reload it.",
     "loadingMarketplaces": "Loading marketplaces…",
     "marketplace": "Marketplace",
     "marketplaceDescription": "Discover and install community plugins. Installed code stays disabled until you review its permissions and accept the safety disclaimer.",

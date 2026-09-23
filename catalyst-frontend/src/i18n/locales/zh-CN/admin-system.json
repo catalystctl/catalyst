@@ -58,6 +58,7 @@
     "labelOptionalPlaceholder": "标签（可选）",
     "legacyNotice": "此插件是在安全免责声明推出之前遗留保留的。请检查下方权限，并撤销任何您不认识的权限。",
     "licensedBadge": "需授权",
+    "licensingKeyHint": "请在此插件的「配置」对话框中填入许可证密钥，然后重新加载插件。",
     "loadingMarketplaces": "正在加载市场…",
     "marketplace": "市场",
     "marketplaceDescription": "发现并安装社区插件。已安装的代码在您审查其权限并接受安全免责声明之前保持禁用。",

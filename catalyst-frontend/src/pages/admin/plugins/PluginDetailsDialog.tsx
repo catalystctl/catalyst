@@ -228,6 +228,9 @@ export function PluginDetailsDialog({
                               {t('pluginsAdmin.consentLicensingBuy')}
                             </a>
                           )}
+                          <span className="text-xs text-muted-foreground">
+                            {t('pluginsAdmin.licensingKeyHint')}
+                          </span>
                         </span>
                       }
                     />

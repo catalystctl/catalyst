@@ -316,7 +316,11 @@ export async function activateLicense(
 
   // 2. Need a key.
   const licenseKey = String(ctx.getConfig(keyField) ?? '').trim();
-  if (!licenseKey) return bail(`no license key configured (config.${keyField})`);
+  if (!licenseKey) {
+    return bail(
+      `no license key set — open this plugin's config in the panel and fill in the "${keyField}" field, then reload it`,
+    );
+  }
 
   const url = opts.licenseServer ?? lic?.licenseServer;
   if (!url) return bail('plugin.json declares no licensing.licenseServer');
