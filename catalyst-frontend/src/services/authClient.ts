@@ -1,6 +1,5 @@
 import { createAuthClient } from 'better-auth/client';
 import {
-  genericOAuthClient,
   inferAdditionalFields,
   twoFactorClient,
 } from 'better-auth/client/plugins';
@@ -16,7 +15,8 @@ export const authClient = createAuthClient({
   plugins: [
     twoFactorClient(),
     passkeyClient(),
-    genericOAuthClient(),
+    // better-auth 1.7: generic OAuth endpoints (/sign-in/oauth2, /oauth2/link)
+    // are core client actions; genericOAuthClient was removed upstream.
     inferAdditionalFields({
       user: {
         username: {

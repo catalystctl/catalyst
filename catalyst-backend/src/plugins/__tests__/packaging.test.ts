@@ -3,7 +3,7 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import {
   assertInstallableUrl,
   extractPackage,
@@ -31,7 +31,7 @@ async function makeZip(
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const output = fs.createWriteStream(zipPath);
-    const archive = archiver('zip', { zlib: { level: 1 } });
+    const archive = new ZipArchive({ zlib: { level: 1 } });
     output.on('close', resolve);
     archive.on('error', reject);
     archive.pipe(output);

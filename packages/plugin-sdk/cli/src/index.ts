@@ -211,8 +211,13 @@ async function packPlugin(options: Record<string, string | boolean>) {
     console.error("❌ archiver is unavailable — install it with: npm install -D archiver");
     process.exit(1);
   }
-  const archiverFactory = (archiverMod as any).default ?? archiverMod;
-  const archive = archiverFactory('zip', { zlib: { level: 9 } });
+  // archiver >=8 exports ZipArchive/TarArchive classes; archiver <=7 exposes a
+  // factory function. Support both since this resolves the plugin author's copy.
+  const archiverAny = archiverMod as any;
+  const factory = archiverAny.default ?? archiverAny;
+  const archive = typeof factory === 'function'
+    ? factory('zip', { zlib: { level: 9 } })
+    : new archiverAny.ZipArchive({ zlib: { level: 9 } });
   const hash = (await import('crypto')).createHash('sha256');
   const ws = fsSync.createWriteStream(outFile);
   archive.on('data', (chunk: Buffer) => hash.update(chunk));

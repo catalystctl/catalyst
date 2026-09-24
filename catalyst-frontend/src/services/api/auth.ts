@@ -386,7 +386,9 @@ export const authApi = {
     // OAuth has no backend in the demo.
     if (isDemoMode) throw new Error('Single sign-on is disabled in the demo.');
     const frontendOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-    const response = await authClient.signIn.oauth2({
+    // better-auth 1.7: generic OAuth is core but untyped on the client proxy
+    // (same pattern as profile.ts linkSso). Endpoint: POST /sign-in/oauth2.
+    const response = await (authClient as any).signIn.oauth2({
       providerId,
       callbackURL: `${frontendOrigin}/servers`,
     });
