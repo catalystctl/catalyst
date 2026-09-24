@@ -75,7 +75,7 @@ function validateDiscoveryUrl(url: string, label: string): string {
  * Called during initAuth() so that env vars bootstrapped from the DB
  * (via index.ts startup) are picked up correctly.
  */
-function buildOAuthConfig() {
+export function buildOAuthConfig() {
   return [
     {
       providerId: "whmcs",

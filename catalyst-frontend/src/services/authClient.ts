@@ -15,8 +15,8 @@ export const authClient = createAuthClient({
   plugins: [
     twoFactorClient(),
     passkeyClient(),
-    // better-auth 1.7: generic OAuth endpoints (/sign-in/oauth2, /oauth2/link)
-    // are core client actions; genericOAuthClient was removed upstream.
+    // better-auth 1.7 removed genericOAuthClient. Generic OAuth/OIDC providers
+    // are reached through the core signIn.social / linkSocial actions instead.
     inferAdditionalFields({
       user: {
         username: {

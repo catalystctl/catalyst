@@ -448,7 +448,7 @@ export default function ProfilePage() {
  (ssoAccounts ?? []).filter((a) => a.providerId !== 'credential').map((a) => (
  <div key={a.id} className="flex items-center justify-between rounded-lg border border-border/30 bg-surface-2/30 px-3 py-2.5">
  <span className="text-xs font-medium text-foreground">{a.providerId.toUpperCase()}</span>
- <button onClick={() => profileApi.unlinkSso(a.providerId, a.accountId).then(() => queryClient.invalidateQueries({ queryKey: qk.profileSsoAccounts() }))} className="text-xs text-destructive hover:text-destructive">{t('linkedAccounts.unlink')}</button>
+  <button onClick={() => profileApi.unlinkSso(a.providerId, a.id).then(() => queryClient.invalidateQueries({ queryKey: qk.profileSsoAccounts() }))} className="text-xs text-destructive hover:text-destructive">{t('linkedAccounts.unlink')}</button>
  </div>
  ))
  )}

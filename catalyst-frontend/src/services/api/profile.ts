@@ -330,27 +330,31 @@ export const profileApi = {
   async linkSso(providerId: string) {
     if (isDemoMode) throw new Error('Single sign-on is disabled in the demo.');
     const frontendOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-    // WHMCS/Paymenter use genericOAuth → POST /oauth2/link (client: oauth2.link).
-    // Body field is providerId. Built-in social linkSocial is a different endpoint.
-    const res = await (authClient as any).oauth2.link({
-      providerId,
+    // WHMCS/Paymenter register through better-auth's genericOAuth plugin, so
+    // linking goes through the core linkSocial action → POST /link-social.
+    // (better-auth 1.7 removed the plugin-specific /oauth2/link endpoint.)
+    const res = await (authClient as any).linkSocial({
+      provider: providerId,
       callbackURL: `${frontendOrigin}/profile`,
     });
     if (res.error) throw new Error(res.error.message || 'Failed to link SSO account');
     const data = res.data as any;
     if (data?.redirect && data?.url) {
-      // Validate redirect origin to prevent open-redirect attacks
-      const trusted = new URL(data.url);
-      const allowed = [frontendOrigin, import.meta.env.VITE_BETTER_AUTH_URL].filter(Boolean);
-      if (!allowed.some(o => trusted.origin === new URL(o as string).origin)) {
+      // data.url is the identity provider's authorization endpoint on its own
+      // origin, so panel-origin allowlisting cannot apply to it — only enforce
+      // a safe redirect scheme.
+      const target = new URL(data.url);
+      if (target.protocol !== 'http:' && target.protocol !== 'https:') {
         throw new Error('Untrusted redirect URL from SSO link');
       }
       window.location.href = data.url;
     }
     return data;
   },
-  async unlinkSso(providerId: string, accountId?: string) {
-    const { data } = await apiClient.post<{ success: boolean; data: unknown }>('/api/auth/profile/sso/unlink', { providerId, accountId });
+  // accountRowId is better-auth's account row id (listAccounts → `id`),
+  // which is what 1.7's unlinkAccount deletes by — not the provider subject.
+  async unlinkSso(providerId: string, accountRowId: string) {
+    const { data } = await apiClient.post<{ success: boolean; data: unknown }>('/api/auth/profile/sso/unlink', { providerId, accountId: accountRowId });
     return data;
   },
 };

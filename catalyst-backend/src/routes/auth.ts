@@ -398,7 +398,9 @@ export async function authRoutes(app: FastifyInstance) {
       const { providerId, accountId } = request.body as {
         providerId: string; accountId?: string;
       };
-      // better-auth 1.7 unlinkAccount requires both providerId and accountId.
+      // better-auth 1.7 unlinkAccount takes { accountId } only, where accountId
+      // is the better-auth account row id (not the provider subject);
+      // providerId is still needed for the only-sign-in-method guard below.
       if (!providerId || !accountId) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing providerId or accountId");
       }
