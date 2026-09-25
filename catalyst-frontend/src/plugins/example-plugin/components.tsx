@@ -167,7 +167,7 @@ export function ServerTab({ serverId }: { serverId: string }) {
  <pre className="text-xs text-foreground/80 overflow-x-auto">
  {JSON.stringify(resp.echoed, null, 2)}
  </pre>
- <p className="text-xs text-gray-500 mt-1">
+ <p className="text-xs text-muted-foreground mt-1">
  {new Date(resp.timestamp).toLocaleTimeString()}
  </p>
  </div>
