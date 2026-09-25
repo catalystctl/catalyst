@@ -57,7 +57,7 @@ function ForgotPasswordPage() {
  <div className="flex items-start gap-2.5">
  <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
  <div className="min-w-0">
- <h1 className="text-sm font-semibold tracking-tight text-foreground">{t('forgotPassword.title')}</h1>
+ <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">{t('forgotPassword.title')}</h1>
  <p className="type-meta mt-0.5">
  {t('forgotPassword.subtitle')}
  </p>

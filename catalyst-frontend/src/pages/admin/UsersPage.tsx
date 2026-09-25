@@ -202,9 +202,7 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  <div className="rounded-xl border border-border/30 bg-card p-4">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-3">
- <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${twoFactorEnabled ? 'bg-success/10' : 'bg-surface-2'}`}>
- <ShieldCheck className={`h-4 w-4 ${twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
- </div>
+ <ShieldCheck className={`h-4 w-4 shrink-0 ${twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
  <div>
  <div className="text-sm font-medium text-foreground">{t('users.twoFactorAuth')}</div>
  <div className="text-[11px] text-muted-foreground">
@@ -236,9 +234,7 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  <div className="rounded-xl border border-border/30 bg-card p-4">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-3">
- <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${passkeys.length > 0 ? 'bg-primary/10' : 'bg-surface-2'}`}>
- <Fingerprint className={`h-4 w-4 ${passkeys.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
- </div>
+ <Fingerprint className={`h-4 w-4 shrink-0 ${passkeys.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
  <div>
  <div className="text-sm font-medium text-foreground">{t('users.passkeys')}</div>
  <div className="text-[11px] text-muted-foreground">
@@ -1145,11 +1141,6 @@ function UsersPage() {
  }
  className="h-4 w-4 flex-shrink-0 rounded border-border/40 bg-card text-primary-600"
  />
-
- {/* Avatar icon */}
- <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-100">
- <Users className="h-4 w-4 text-primary-600" />
- </div>
 
  {/* User info — primary column */}
  <div className="min-w-0 flex-1">

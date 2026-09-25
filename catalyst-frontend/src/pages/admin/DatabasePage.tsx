@@ -96,9 +96,6 @@ function CatalystDbCard({ status }: { status?: DbStatusResult }) {
  <ServerTabCard>
  <div className="flex items-start justify-between gap-3">
  <div className="flex items-start gap-3 min-w-0 flex-1">
- <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
- <Database className="h-4 w-4 text-primary" />
- </div>
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
  <span className="font-semibold text-foreground">{t('database.catalystDatabase')}</span>
@@ -159,21 +156,13 @@ function HostCard({
  <ServerTabCard>
  <div className="flex items-start justify-between gap-3">
  <div className="flex items-start gap-3 min-w-0 flex-1">
- <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
- connected === true
- ? 'bg-success/10'
- : connected === false
- ? 'bg-destructive/10'
- : 'bg-muted'
- }`}>
- <Server className={`h-4 w-4 ${
+ <Server className={`h-4 w-4 shrink-0 ${
  connected === true
  ? 'text-success'
  : connected === false
  ? 'text-destructive'
  : 'text-muted-foreground'
  }`} />
- </div>
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
  <span className="font-semibold text-foreground">{host.name}</span>

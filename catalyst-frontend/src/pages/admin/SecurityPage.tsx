@@ -314,13 +314,11 @@ function LockoutRow({
  return (
  <div className="group flex flex-wrap items-center gap-4 border-b border-border/30 px-5 py-3.5 last:border-b-0 transition-colors hover:bg-surface-2/30">
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
- <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-destructive/10' : 'bg-warning/10'}`}>
  {isActive ? (
- <Lock className="h-3.5 w-3.5 text-destructive" />
+ <Lock className="h-3.5 w-3.5 shrink-0 text-destructive" />
  ) : (
- <Unlock className="h-3.5 w-3.5 text-warning" />
+ <Unlock className="h-3.5 w-3.5 shrink-0 text-warning" />
  )}
- </div>
  <div className="min-w-0">
  <div className="truncate text-sm font-medium text-foreground">{displayEmail}</div>
  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -705,9 +703,7 @@ function SecurityPage() {
  <ServerTabCard>
  <div className="flex flex-wrap items-center justify-between gap-3">
  <div className="flex items-center gap-2.5">
- <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
- <Lock className="h-4 w-4 text-destructive" />
- </div>
+ <Lock className="h-4 w-4 shrink-0 text-destructive" />
  <div>
  <h2 className="text-sm font-semibold text-foreground">{t('security.authLockouts')}</h2>
  <p className="text-[11px] text-muted-foreground">{t('security.authLockoutsDescription')}</p>

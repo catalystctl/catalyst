@@ -57,7 +57,7 @@ function RegisterPage() {
  </div>
  <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
  <CardContent className="px-3 py-4 sm:px-4">
- <h1 className="text-sm font-semibold tracking-tight text-foreground">{t('register.title')}</h1>
+ <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">{t('register.title')}</h1>
  <p className="type-meta mt-0.5">
  {t('register.subtitle')}
  </p>

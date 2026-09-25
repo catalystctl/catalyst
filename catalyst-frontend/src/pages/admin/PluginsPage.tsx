@@ -103,11 +103,9 @@ function PluginRow({
       onClick={onDetails}
       data-testid={`plugin-row-${plugin.name}`}
     >
-      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
-        plugin.enabled ? 'bg-success/10 text-success' : plugin.error ? 'bg-danger/10 text-danger' : 'bg-surface-2 text-muted-foreground'
-      }`}>
-        <Puzzle className="h-4 w-4" />
-      </div>
+      <Puzzle className={`h-4 w-4 shrink-0 ${
+        plugin.enabled ? 'text-success' : plugin.error ? 'text-danger' : 'text-muted-foreground'
+      }`} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">{plugin.displayName}</span>

@@ -165,17 +165,13 @@ function ApiKeyRow({
  <div className="flex items-start gap-4">
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2.5">
- <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
- agent ? 'bg-warning-muted' : expired ? 'bg-danger-muted' : 'bg-primary/10'
- }`}>
  {agent ? (
- <Server className="h-4 w-4 text-warning" />
+ <Server className="h-4 w-4 shrink-0 text-warning" />
  ) : expired ? (
- <Clock className="h-4 w-4 text-danger" />
+ <Clock className="h-4 w-4 shrink-0 text-danger" />
  ) : (
- <Key className="h-4 w-4 text-primary" />
+ <Key className="h-4 w-4 shrink-0 text-primary" />
  )}
- </div>
  <div className="min-w-0">
  <div className="flex items-center gap-2 flex-wrap">
  <span className="font-semibold text-foreground truncate">
