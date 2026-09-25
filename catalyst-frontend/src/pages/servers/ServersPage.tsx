@@ -1,7 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { notifyError, notifySuccess } from '../../utils/notify';
 import CreateServerModal from '../../components/servers/CreateServerModal';
 import ServerControls from '../../components/servers/ServerControls';
 import { useServers } from '../../hooks/useServers';
@@ -11,18 +10,13 @@ import {
   ActivityBars,
   BracketLabel,
   GameChip,
-  MetricCluster,
   Segmented,
   StatusLed,
 } from '../../components/deck/primitives';
 import {
   ChevronRight,
-  Copy,
-  FolderOpen,
   Globe,
-  HardDrive,
   Search,
-  Settings,
   Shield,
   Terminal,
   Users,
@@ -53,12 +47,9 @@ const toneForState = (status: string): Tone => STATE_TONE[status] ?? 'info';
  *   xl   : identity · game · cpu · ram · disk · address · state · actions
  */
 const GRID =
-  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 ' +
-  'md:grid-cols-[minmax(0,1fr)_9rem_6rem_auto] ' +
-  'xl:grid-cols-[minmax(0,1fr)_10rem_5.25rem_5.25rem_5.25rem_11rem_5.5rem_minmax(0.5rem,0.12fr)_auto]';
-
-const formatMB = (mb: number) =>
-  mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(0)} MB`;
+  'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+  'md:grid-cols-[minmax(0,1fr)_9rem_6rem_12rem] ' +
+  'xl:grid-cols-[minmax(0,1fr)_9rem_5.25rem_5.25rem_5.25rem_11rem_5.5rem_12rem]';
 
 function gameVersion(server: Server): string | undefined {
   const env = server.environment ?? {};
@@ -86,8 +77,13 @@ function useColumns() {
   };
 }
 
-function stateTextClass(status: ServerStatus, running: boolean) {
-  if (running) return 'text-success';
+/** Load severity belongs on the reading; the bars are only a glance. */
+function severityClass(value: number | null) {
+  if (value == null) return undefined;
+  return value >= 90 ? 'text-danger' : value >= 75 ? 'text-warning' : undefined;
+}
+
+function stateTextClass(status: ServerStatus) {
   if (status === 'crashed' || status === 'error') return 'text-danger';
   if (status === 'suspended') return 'text-warning';
   return 'text-muted-foreground';
@@ -95,13 +91,9 @@ function stateTextClass(status: ServerStatus, running: boolean) {
 
 function ServerRow({
   server,
-  selected,
-  onSelect,
   onMoveFocus,
 }: {
   server: Server;
-  selected: boolean;
-  onSelect: () => void;
   onMoveFocus: (dir: 1 | -1) => void;
 }) {
   const { t } = useTranslation('servers');
@@ -133,9 +125,6 @@ function ServerRow({
     <div
       role="row"
       tabIndex={0}
-      aria-selected={selected}
-      onFocus={onSelect}
-      onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'ArrowDown') {
           event.preventDefault();
@@ -149,15 +138,10 @@ function ServerRow({
       }}
       className={cn(
         GRID,
-        'group relative cursor-default py-1.5 pl-3 pr-2 outline-none transition-colors',
-        'focus-visible:bg-primary/10',
-        selected && 'bg-primary/[0.07]',
+        'group relative py-1.5 pl-3 pr-3 outline-none transition-colors',
+        'hover:bg-surface-1/40 focus-visible:bg-primary/10',
       )}
     >
-      {selected && (
-        <span className="absolute left-0 top-0 h-full w-[2px] bg-primary" aria-hidden />
-      )}
-
       {/* identity — on small screens this cell also carries address + state */}
       <div className="flex min-w-0 items-center gap-2">
         <StatusLed tone={toneForState(server.status)} pulse={running} />
@@ -176,19 +160,14 @@ function ServerRow({
               </Segmented>
             )}
           </span>
-          <span className="flex items-center gap-2 text-micro text-muted-foreground">
-            <span className="hidden shrink-0 font-mono md:inline">
-              {server.node?.name ??
-                server.nodeName ??
-                (server.nodeId ? `${server.nodeId.slice(0, 8)}…` : '')}
-            </span>
-            <span className="md:hidden truncate font-mono">
+          <span className="flex items-center gap-2 text-micro text-muted-foreground md:hidden">
+            <span className="truncate font-mono">
               {host}:{port}
             </span>
             <span
               className={cn(
-                'shrink-0 font-display uppercase tracking-[0.12em] md:hidden',
-                stateTextClass(server.status, running),
+                'shrink-0 font-display uppercase tracking-[0.12em]',
+                stateTextClass(server.status),
               )}
             >
               {serverStatusLabel(t, server.status)}
@@ -206,19 +185,19 @@ function ServerRow({
           carries only the reading (bars + value) to stay dense and aligned */}
       <span className="hidden items-center justify-end gap-2 xl:flex">
         <ActivityBars value={cpu} />
-        <Segmented muted={cpu == null} className="min-w-[3.25rem] text-right">
+        <Segmented muted={cpu == null} className={cn('min-w-[3.25rem] text-right', severityClass(cpu))}>
           {cpu == null ? '—' : `${Math.round(cpu)}%`}
         </Segmented>
       </span>
       <span className="hidden items-center justify-end gap-2 xl:flex">
         <ActivityBars value={ramPct} />
-        <Segmented muted={ramPct == null} className="min-w-[3.25rem] text-right">
+        <Segmented muted={ramPct == null} className={cn('min-w-[3.25rem] text-right', severityClass(ramPct))}>
           {ramPct == null ? '—' : `${Math.round(ramPct)}%`}
         </Segmented>
       </span>
       <span className="hidden items-center justify-end gap-2 xl:flex">
         <ActivityBars value={diskPct} />
-        <Segmented muted={diskPct == null} className="min-w-[3.25rem] text-right">
+        <Segmented muted={diskPct == null} className={cn('min-w-[3.25rem] text-right', severityClass(diskPct))}>
           {diskPct == null ? '—' : `${Math.round(diskPct)}%`}
         </Segmented>
       </span>
@@ -234,18 +213,11 @@ function ServerRow({
       {/* state */}
       <span className="hidden justify-end md:flex">
         <span
-          className={cn(
-            'font-display text-micro uppercase tracking-[0.12em]',
-            stateTextClass(server.status, running),
-          )}
+          className={cn('text-micro uppercase', stateTextClass(server.status))}
         >
           {serverStatusLabel(t, server.status)}
         </span>
       </span>
-
-      {/* flexible spacer: keeps the data columns compact and pins actions right.
-          Must exist in the header too, or the tracks shift by one. */}
-      <span className="hidden xl:block" aria-hidden />
 
       <span className="flex shrink-0 items-center justify-end gap-1">
         <ServerControls
@@ -275,119 +247,12 @@ function ServerRow({
   );
 }
 
-/** Selection detail — the browser's lower pane, rendered inline under its row. */
-function ServerDetail({ server }: { server: Server }) {
-  const { t } = useTranslation('servers');
-  const running = server.status === 'running';
-  const cols = useColumns();
-
-  const host =
-    server.connection?.host ??
-    server.primaryIp ??
-    server.node?.publicAddress ??
-    server.node?.hostname ??
-    '—';
-  const port = server.connection?.port ?? server.primaryPort ?? '—';
-
-  const copyAddress = () => {
-    navigator.clipboard.writeText(`${host}:${port}`).then(
-      () => notifySuccess(t('details.copiedAddress')),
-      () => notifyError(t('details.copyFailed')),
-    );
-  };
-
-  const cpu = running && server.cpuPercent != null ? server.cpuPercent : null;
-  const ramPct =
-    running && server.memoryUsageMb != null && server.allocatedMemoryMb
-      ? (server.memoryUsageMb / server.allocatedMemoryMb) * 100
-      : null;
-  const diskTotal = server.diskTotalMb ?? server.allocatedDiskMb ?? null;
-  const diskPct =
-    running && server.diskUsageMb != null && diskTotal
-      ? (server.diskUsageMb / diskTotal) * 100
-      : null;
-
-  const links = [
-    { to: `/servers/${server.id}/console`, label: t('tabs.console'), icon: Terminal },
-    { to: `/servers/${server.id}/files`, label: t('tabs.files'), icon: FolderOpen },
-    { to: `/servers/${server.id}/backups`, label: t('tabs.backups'), icon: HardDrive },
-    { to: `/servers/${server.id}/settings`, label: t('tabs.settings'), icon: Settings },
-  ];
-
-  return (
-    <div className="border-t border-border/50 bg-surface-1/50 px-3 py-3">
-      <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
-        <div className="min-w-[13rem]">
-          <BracketLabel tone="muted">{cols.address}</BracketLabel>
-          <button
-            type="button"
-            onClick={copyAddress}
-            className="mt-1 flex items-center gap-1.5 font-mono text-data tabular-nums text-foreground hover:text-primary"
-          >
-            {host}:{port}
-            <Copy className="h-3 w-3 opacity-60" />
-          </button>
-          <p className="type-meta mt-1">
-            {server.node?.name ??
-              server.nodeName ??
-              (server.nodeId ? `${server.nodeId.slice(0, 8)}…` : '')}
-            {gameVersion(server) ? ` · ${gameVersion(server)}` : ''}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <MetricCluster label={cols.cpu} value={cpu} display={cpu == null ? '—' : `${Math.round(cpu)}%`} />
-          <MetricCluster
-            label={cols.ram}
-            value={ramPct}
-            display={
-              server.memoryUsageMb != null && server.allocatedMemoryMb
-                ? `${formatMB(server.memoryUsageMb)}/${formatMB(server.allocatedMemoryMb)}`
-                : '—'
-            }
-          />
-          <MetricCluster
-            label={cols.disk}
-            value={diskPct}
-            display={
-              server.diskUsageMb != null && diskTotal
-                ? `${formatMB(server.diskUsageMb)}/${formatMB(diskTotal)}`
-                : '—'
-            }
-          />
-        </div>
-
-        <div className="ml-auto flex flex-col items-end gap-2">
-          <ServerControls
-            serverId={server.id}
-            status={server.status}
-            permissions={server.effectivePermissions}
-          />
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            {links.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className="flex items-center gap-1.5 rounded-sm border border-border/60 px-2 py-1 font-display text-micro uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-              >
-                <link.icon className="h-3 w-3" />
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ServersPage() {
   const { t } = useTranslation('servers');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<ServerStatus | undefined>();
   const [debounced, setDebounced] = useState<ServerListParams>({});
   const [accessFilter, setAccessFilter] = useState<AccessFilter>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useServers(debounced);
@@ -459,29 +324,24 @@ function ServersPage() {
   const totalServers = data?.length ?? 0;
   const online = statusCounts.running;
   const fleetPct = totalServers > 0 ? (online / totalServers) * 100 : 0;
-  const selected = filtered.find((server) => server.id === selectedId) ?? null;
   const hasFilters = Boolean(search || status);
 
   const moveFocus = (dir: 1 | -1) => {
     const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="row"]') ?? []);
     const idx = rows.findIndex((row) => row === document.activeElement);
-    const next = rows[idx + dir];
-    if (next) {
-      next.focus();
-      setSelectedId(next.getAttribute('data-server-id'));
-    }
+    rows[idx + dir]?.focus();
   };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* ── Deck header ── */}
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-0.5">
-        <div className="min-w-0">
+      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-col gap-1">
           <BracketLabel>{t('page.overline')}</BracketLabel>
-          <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight text-foreground">
+          <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
             {t('page.title')}
           </h1>
-          <p className="type-meta mt-0.5">{t('page.description')}</p>
+
         </div>
 
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -490,17 +350,17 @@ function ServersPage() {
             <Segmented className="text-mini">
               {online}/{totalServers}
             </Segmented>
-            <ActivityBars value={fleetPct} bars={7} />
+            <ActivityBars value={fleetPct} bars={7} tone="state" />
           </span>
           {canCreateServer && <CreateServerModal />}
         </div>
       </header>
 
       {/* ── The deck: controls, columns, rows and footer in one frame ── */}
-      <div className="deck-panel flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
         {/* Control strip */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-2.5 py-2">
-          <div className="flex items-center gap-0.5 rounded-sm border border-border/60 bg-background/40 p-0.5">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+          <div className="flex items-center gap-0.5 border-b border-border/50">
             <RailTab
               active={accessFilter === 'all'}
               onClick={() => setAccessFilter('all')}
@@ -526,7 +386,7 @@ function ServersPage() {
             )}
           </div>
 
-          <span className="h-5 w-px bg-border/60" aria-hidden />
+          <span className="mx-1 h-5 w-px bg-border/60" aria-hidden />
 
           <label className="relative flex min-w-[12rem] flex-1 items-center">
             <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
@@ -564,43 +424,34 @@ function ServersPage() {
                 setSearch('');
                 setStatus(undefined);
               }}
-              className="flex h-7 items-center gap-1 rounded-sm px-2 font-display text-micro uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="flex h-7 items-center gap-1 rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               <X className="h-3 w-3" />
               {t('filters.clear')}
             </button>
           )}
 
-          <span className="ml-auto flex items-center gap-2">
-            <Segmented muted className="text-mini">
-              {filtered.length}/{totalServers}
-            </Segmented>
-            <span className="font-display text-micro uppercase tracking-[0.12em] text-muted-foreground">
-              {t('page.stats.total')}
-            </span>
-          </span>
         </div>
 
         {/* Column header — same grid as the rows, so columns always line up */}
         <div
           className={cn(
             GRID,
-            'border-b border-border/50 bg-surface-1/30 py-1.5 pl-3 pr-2 text-muted-foreground',
+            'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
           )}
         >
-          <span className="deck-label">{cols.server}</span>
-          <span className="deck-label deck-label--muted hidden xl:inline-flex">{cols.game}</span>
-          <span className="deck-label deck-label--muted hidden justify-end xl:inline-flex">{cols.cpu}</span>
-          <span className="deck-label deck-label--muted hidden justify-end xl:inline-flex">{cols.ram}</span>
-          <span className="deck-label deck-label--muted hidden justify-end xl:inline-flex">{cols.disk}</span>
-          <span className="deck-label deck-label--muted hidden md:inline-flex">{cols.address}</span>
-          <span className="deck-label deck-label--muted hidden justify-end md:inline-flex">{cols.state}</span>
-          <span className="hidden xl:block" aria-hidden />
-          <span className="deck-label deck-label--muted justify-self-end">{cols.actions}</span>
+          <span className="type-overline">{cols.server}</span>
+          <span className="type-overline hidden xl:inline-flex">{cols.game}</span>
+          <span className="type-overline hidden justify-end xl:inline-flex">{cols.cpu}</span>
+          <span className="type-overline hidden justify-end xl:inline-flex">{cols.ram}</span>
+          <span className="type-overline hidden justify-end xl:inline-flex">{cols.disk}</span>
+          <span className="type-overline hidden md:inline-flex">{cols.address}</span>
+          <span className="type-overline hidden justify-end md:inline-flex">{cols.state}</span>
+          <span className="type-overline justify-self-end">{cols.actions}</span>
         </div>
 
         {/* Rows */}
-        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto bg-background/25">
+        <div ref={listRef} className="max-h-[calc(100dvh-22rem)] min-h-[6rem] min-w-0 overflow-y-auto bg-background/25">
           {isLoading ? (
             <div>
               {Array.from({ length: 6 }).map((_, index) => (
@@ -619,40 +470,32 @@ function ServersPage() {
             </div>
           ) : (
             filtered.map((server, index) => (
-              <Fragment key={server.id}>
-                <div
-                  data-server-id={server.id}
-                  className={cn(index > 0 && 'border-t border-border/40')}
-                >
-                  <ServerRow
-                    server={server}
-                    selected={server.id === selectedId}
-                    onSelect={() => setSelectedId(server.id)}
-                    onMoveFocus={moveFocus}
-                  />
-                </div>
-                {selected?.id === server.id && <ServerDetail server={server} />}
-              </Fragment>
+              <div
+                key={server.id}
+                className={cn(index > 0 && 'border-t border-border/40')}
+              >
+                <ServerRow server={server} onMoveFocus={moveFocus} />
+              </div>
             ))
           )}
         </div>
 
         {/* Footer strip — legend + keymap, the deck's bottom edge */}
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-2.5 py-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <LegendCount tone="go" value={statusCounts.running} label={t('common:status.running')} />
             <LegendCount tone="idle" value={statusCounts.stopped} label={t('common:status.stopped')} />
             <LegendCount tone="alarm" value={statusCounts.issues} label={t('page.stats.issues')} />
           </div>
-          <div className="flex items-center gap-3 font-mono text-micro text-muted-foreground/80">
+          <div className="flex items-center gap-4 font-mono text-micro text-muted-foreground/60">
             <span>
-              <kbd className="rounded-sm border border-border/60 px-1">↑↓</kbd> {t('hints.navigate')}
+              <kbd className="font-mono text-muted-foreground/80">↑↓</kbd> {t('hints.navigate')}
             </span>
             <span>
-              <kbd className="rounded-sm border border-border/60 px-1">↵</kbd> {t('hints.open')}
+              <kbd className="font-mono text-muted-foreground/80">↵</kbd> {t('hints.open')}
             </span>
             <span className="hidden sm:inline">
-              <kbd className="rounded-sm border border-border/60 px-1">↹</kbd> {t('hints.actions')}
+              <kbd className="font-mono text-muted-foreground/80">↹</kbd> {t('hints.actions')}
             </span>
           </div>
         </div>
@@ -676,9 +519,7 @@ function LegendCount({
       <Segmented muted className="text-micro">
         {value}
       </Segmented>
-      <span className="font-display text-micro uppercase tracking-[0.12em] text-muted-foreground">
-        {label}
-      </span>
+      <span className="type-overline">{label}</span>
     </span>
   );
 }
@@ -701,23 +542,17 @@ function RailTab({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-6 items-center gap-1.5 rounded-sm px-2 transition-colors',
-        'font-display text-micro uppercase tracking-[0.12em]',
-        active
-          ? 'bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+        'relative flex h-7 items-center gap-1.5 px-2.5 transition-colors',
+        'text-mini',
+        active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
       )}
     >
+      {active && (
+        <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+      )}
       {icon}
       <span>{label}</span>
-      <span
-        className={cn(
-          'font-mono text-micro tabular-nums',
-          active ? 'text-primary-foreground/75' : 'text-muted-foreground/70',
-        )}
-      >
-        {count}
-      </span>
+      <span className="font-mono text-micro tabular-nums text-muted-foreground/80">{count}</span>
     </button>
   );
 }

@@ -194,7 +194,9 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       label: start.isPending ? t('controls.starting') : t('controls.start'),
       icon: Play,
       className: 'bg-success text-success-foreground hover:bg-success/90',
+      iconClass: 'text-muted-foreground hover:bg-success/10 hover:text-success',
       disabled: busy || !STARTABLE.includes(status),
+      applies: STARTABLE.includes(status),
       pending: start.isPending,
       onClick: () => start.mutate(),
     },
@@ -204,7 +206,9 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       label: stop.isPending ? t('controls.stopping') : t('controls.stop'),
       icon: Square,
       variant: 'secondary' as const,
+      iconClass: 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
       disabled: busy || !STOPPABLE.includes(status),
+      applies: STOPPABLE.includes(status),
       pending: stop.isPending,
       onClick: () => stop.mutate(),
     },
@@ -214,7 +218,9 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       label: restart.isPending ? t('controls.restarting') : t('controls.restart'),
       icon: RotateCw,
       variant: 'outline' as const,
+      iconClass: 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
       disabled: busy || !RESTARTABLE.includes(status),
+      applies: RESTARTABLE.includes(status),
       pending: restart.isPending,
       onClick: () => restart.mutate(),
     },
@@ -224,7 +230,9 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       label: t('controls.kill'),
       icon: OctagonX,
       variant: 'destructive' as const,
+      iconClass: 'text-muted-foreground hover:bg-danger/10 hover:text-danger',
       disabled: busy || !KILLABLE.includes(status),
+      applies: KILLABLE.includes(status),
       pending: kill.isPending,
       onClick: () => setShowKillConfirm(true),
     },
@@ -234,7 +242,9 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       label: cancelInstall.isPending ? t('controls.cancelling') : t('controls.cancelInstall'),
       icon: Ban,
       variant: 'destructive' as const,
+      iconClass: 'text-muted-foreground hover:bg-danger/10 hover:text-danger',
       disabled: busy,
+      applies: true,
       pending: cancelInstall.isPending,
       onClick: () => setShowCancelInstallConfirm(true),
     },
@@ -243,23 +253,25 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
     label: string;
     icon: React.ComponentType<{ className?: string }>;
     className?: string;
+    iconClass?: string;
     variant?: 'secondary' | 'outline' | 'destructive';
     disabled: boolean;
+    applies: boolean;
     pending: boolean;
     onClick: () => void;
   }[];
 
   return (
     <>
-      <div className={cn(compact ? 'flex items-center gap-1' : 'flex flex-wrap gap-1.5 text-xs')}>
-        {actions.map((action) => {
+      <div className={cn(compact ? 'flex items-center gap-1' : 'flex flex-wrap gap-1.5 text-mini')}>
+        {actions.filter((action) => !compact || action.applies).map((action) => {
           const Icon = action.icon;
           return (
             <Button
               key={action.key}
               size={compact ? 'icon-sm' : 'sm'}
-              variant={compact ? (action.variant ?? 'default') : action.variant}
-              className={action.className}
+              variant={compact ? 'ghost' : action.variant}
+              className={compact ? action.iconClass : action.className}
               disabled={action.disabled}
               aria-busy={action.pending}
               aria-label={compact ? action.label : undefined}
