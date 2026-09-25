@@ -233,7 +233,7 @@ function FileList({
  }
 
  const thBase =
- 'cursor-pointer select-none text-left type-overline transition-colors hover:text-foreground';
+ 'inline-flex h-7 cursor-pointer select-none items-center text-left type-overline transition-colors hover:text-foreground';
 
  const totalHeight = files.length * ROW_HEIGHT;
 
@@ -252,9 +252,11 @@ function FileList({
  <button
  type="button"
  onClick={onSelectAll}
- className={selectBox(allSelected, selectedPaths.size > 0 && !allSelected ? 'border-primary' : '')}
+ className="flex h-7 w-7 items-center justify-center"
  >
+ <span className={selectBox(allSelected, selectedPaths.size > 0 && !allSelected ? 'border-primary' : '')}>
  {allSelected && <Check className="h-3 w-3" />}
+ </span>
  </button>
  </div>
  <button type="button" className={thBase} onClick={() => onSort('name')}>
@@ -287,7 +289,11 @@ function FileList({
  transition={{ duration: 0.12 }}
  className={`${GRID} absolute left-0 right-0 group px-3 py-1.5 transition-colors ${
  virtualRow.index > 0 ? 'border-t border-border/40' : ''
- } ${selected ? 'bg-primary/10' : 'hover:bg-surface-1/40'}`}
+ } ${
+ selected
+ ? 'bg-primary/25 shadow-[inset_2px_0_0_hsl(var(--primary))] hover:bg-primary/30'
+ : 'hover:bg-surface-3/80'
+ }`}
  style={{
  height: ROW_HEIGHT,
  transform: `translateY(${virtualRow.start}px)`,
@@ -314,16 +320,18 @@ function FileList({
  }
  }}
  aria-label={entry.name}
- className={selectBox(selected, 'group-hover:border-primary/50')}
+ className="flex h-7 w-7 items-center justify-center"
  >
+ <span className={selectBox(selected, 'group-hover:border-primary/50')}>
  {selected && <Check className="h-3 w-3" />}
+ </span>
  </button>
  </div>
 
  {/* Name */}
  <button
  type="button"
- className="flex min-w-0 items-center gap-2 text-left"
+ className="flex min-w-0 items-center gap-2 py-1.5 text-left min-h-7"
  onClick={(e) => {
  e.stopPropagation();
  onOpen(entry);

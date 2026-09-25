@@ -498,8 +498,8 @@ export default function ServerConfigurationTab({
  onValueChange(event.target.checked ? 'true' : 'false')
  }
  />
- <div className="h-5 w-10 rounded-full bg-surface-3 transition peer-checked:bg-primary dark:bg-surface-2" />
- <div className="pointer-events-none absolute left-0.5 h-4 w-4 rounded-full border border-border/50 bg-card transition peer-checked:translate-x-5" />
+ <div className="h-5 w-10 rounded-sm bg-surface-3 transition peer-checked:bg-primary dark:bg-surface-2" />
+ <div className="pointer-events-none absolute left-0.5 h-4 w-4 rounded-sm border border-border/50 bg-card transition peer-checked:translate-x-5" />
  </label>
  );
  }
@@ -510,7 +510,7 @@ export default function ServerConfigurationTab({
  className={`${className} h-7 rounded-sm border border-border/60 bg-background/40 px-2 font-mono text-mini text-foreground transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40 focus:outline-none`}
  value={entry.value}
  onChange={(event) => onValueChange(event.target.value)}
- placeholder={t('tabs.configuration.valuePlaceholder')}
+ placeholder={entry.key || t('tabs.configuration.valuePlaceholder')}
  />
  );
  };
@@ -543,7 +543,7 @@ export default function ServerConfigurationTab({
  </div>
  <div className="mt-3 flex items-center gap-2">
  <input
- className="h-8 min-w-0 flex-1 rounded-sm border border-border/60 bg-background/40 px-3 font-mono text-mini text-foreground transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40 focus:outline-none"
+ className="h-7 min-w-0 flex-1 rounded-sm border border-border/60 bg-background/40 px-2 font-mono text-mini text-foreground transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40 focus:outline-none"
  value={startupCommand}
  onChange={(event) =>
  onStartupCommandChange(event.target.value)
@@ -553,7 +553,7 @@ export default function ServerConfigurationTab({
  />
  <button
  type="button"
- className="h-8 shrink-0 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+ className="h-7 shrink-0 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  onClick={onSaveStartupCommand}
  disabled={
  isSuspended ||
@@ -832,30 +832,14 @@ export default function ServerConfigurationTab({
  ) => (
  <div
  key={`${entry.key}-${child.key}-${childIndex}`}
- className="space-y-2 border-b border-border/50 px-1 py-3 last:border-b-0"
+ className="group flex flex-wrap items-center justify-between gap-3 border-b border-border/50 px-1 py-3 last:border-b-0"
  >
- <div className="flex items-start justify-between gap-3">
- <div className="text-base font-semibold text-foreground">
+ <div className="min-w-[10rem] flex-1 type-numeric text-data text-foreground">
  {child.key ||
  t('tabs.configuration.unnamedKey')}
  </div>
- <button
- type="button"
- className="flex h-6 w-6 items-center justify-center rounded-sm border border-danger/30 bg-danger/5 text-micro font-semibold text-danger transition-colors hover:border-danger/50"
- onClick={() =>
- removeConfigEntry(
- fileIndexByPath.get(
- configFile.path,
- ) ?? 0,
- sectionIndex,
- entryIndex,
- childIndex,
- )
- }
- >
- ✕
- </button>
- </div>
+ <div className="flex items-center gap-1.5">
+ <div className="w-44 shrink-0 sm:w-56">
  {renderValueInput(
  child,
  (value) =>
@@ -870,22 +854,9 @@ export default function ServerConfigurationTab({
  ),
  )}
  </div>
- ),
- )}
- </div>
- </div>
- ) : (
- <div
- key={`${entry.key}-${entryIndex}`}
- className="space-y-2 border-b border-border/50 px-1 py-3 last:border-b-0"
- >
- <div className="flex items-start justify-between gap-3">
- <div className="text-base font-semibold text-foreground">
- {entry.key || t('tabs.configuration.unnamedKey')}
- </div>
  <button
  type="button"
- className="flex h-6 w-6 items-center justify-center rounded-sm border border-danger/30 bg-danger/5 text-micro font-semibold text-danger transition-colors hover:border-danger/50"
+ className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-danger focus-visible:text-danger md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
  onClick={() =>
  removeConfigEntry(
  fileIndexByPath.get(
@@ -893,12 +864,29 @@ export default function ServerConfigurationTab({
  ) ?? 0,
  sectionIndex,
  entryIndex,
+ childIndex,
  )
  }
+ aria-label={t('common:actions.remove')}
  >
  ✕
  </button>
  </div>
+ </div>
+ ),
+ )}
+ </div>
+ </div>
+ ) : (
+ <div
+ key={`${entry.key}-${entryIndex}`}
+ className="group flex flex-wrap items-center justify-between gap-3 border-b border-border/50 px-1 py-3 last:border-b-0"
+ >
+ <div className="min-w-[10rem] flex-1 type-numeric text-data text-foreground">
+ {entry.key || t('tabs.configuration.unnamedKey')}
+ </div>
+ <div className="flex items-center gap-1.5">
+ <div className="w-44 shrink-0 sm:w-56">
  {renderValueInput(
  entry,
  (value) =>
@@ -911,6 +899,24 @@ export default function ServerConfigurationTab({
  { value },
  ),
  )}
+ </div>
+ <button
+ type="button"
+ className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-danger focus-visible:text-danger md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+ onClick={() =>
+ removeConfigEntry(
+ fileIndexByPath.get(
+ configFile.path,
+ ) ?? 0,
+ sectionIndex,
+ entryIndex,
+ )
+ }
+ aria-label={t('common:actions.remove')}
+ >
+ ✕
+ </button>
+ </div>
  </div>
  ),
  )}

@@ -301,7 +301,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  <span className="type-overline w-24 shrink-0">
  {label}
  </span>
- <span className="min-w-0 flex-1 truncate font-mono text-data tabular-nums text-foreground">
+ <span className="min-w-0 flex-1 truncate font-mono text-data tabular-nums text-foreground" title={value}>
  {value}
  </span>
  <button
@@ -371,7 +371,10 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  {t('files.sftp.quickConnectUri')}
  </span>
  <div className="flex min-w-0 flex-1 items-center gap-2">
- <code className="min-w-0 flex-1 truncate font-mono text-data tabular-nums text-foreground">
+ <code
+ className="min-w-0 flex-1 truncate font-mono text-data tabular-nums text-foreground"
+ title={`sftp://${serverId}@${sftpInfo.host}:${sftpInfo.port}`}
+ >
  sftp://{serverId}@{sftpInfo.host}:{sftpInfo.port}
  </code>
  <button

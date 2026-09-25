@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useQuery, useMutation } from '@/csync';
@@ -7,6 +8,8 @@ import { queryClient } from '@/lib/queryClient';
 import {
   ChevronRight,
   CircleAlert,
+  CircleOff,
+  Layers,
   RefreshCw,
   Search,
   Settings,
@@ -75,7 +78,7 @@ function statusText(t: TFunction<'admin-system'>, status: string) {
  * One grid template shared by the column header and every row so the actions
  * column lines up. Fixed / minmax(0,1fr) tracks only — never `auto`.
  */
-const GRID = 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_11rem]';
+const GRID = 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_12.5rem]';
 
 function PluginRow({
   plugin,
@@ -165,16 +168,16 @@ function PluginRow({
         >
           {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : plugin.enabled ? t('common:actions.disable') : t('common:actions.enable')}
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onReload(); }} disabled={isProcessing} aria-label={t('pluginsAdmin.reloadAria')}>
+        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={(e) => { e.stopPropagation(); onReload(); }} disabled={isProcessing} aria-label={t('pluginsAdmin.reloadAria')}>
           <RefreshCw className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onSettings(); }} aria-label={t('pluginsAdmin.settingsAria')}>
+        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={(e) => { e.stopPropagation(); onSettings(); }} aria-label={t('pluginsAdmin.settingsAria')}>
           <Settings className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onUninstall(); }} disabled={isProcessing} aria-label={t('pluginsAdmin.uninstallAria', { name: plugin.name })}>
+        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={(e) => { e.stopPropagation(); onUninstall(); }} disabled={isProcessing} aria-label={t('pluginsAdmin.uninstallAria', { name: plugin.name })}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={onDetails} aria-label={t('pluginsAdmin.detailsAria')}>
+        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={onDetails} aria-label={t('pluginsAdmin.detailsAria')}>
           <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
         </Button>
       </div>
@@ -350,7 +353,7 @@ function PluginSettingsModal({
                             ? { ...(value as Record<string, any>), default: newVal }
                             : newVal);
                         }}
-                        className="flex h-9 w-full rounded-sm border border-border bg-card px-3 py-1 text-mini text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex h-9 w-full rounded-md border border-border bg-card px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {/* Empty placeholder only if current value is not in the list */}
                         {!selectOptions.some((o) => o.value === String(effectiveValue ?? '')) && (
@@ -384,7 +387,7 @@ function PluginSettingsModal({
                             ? { ...(value as Record<string, any>), default: e.target.value }
                             : e.target.value)
                         }
-                        className="flex min-h-[80px] w-full resize-none rounded-sm border border-border bg-transparent px-3 py-2 text-mini shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex min-h-[80px] w-full resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     ) : (
                       <Input
@@ -579,11 +582,11 @@ export default function PluginsPage() {
     });
   }, [plugins, searchQuery, statusFilter]);
 
-    const filterOptions: Array<{ key: StatusFilter; label: string; count: number }> = [
-    { key: 'all', label: t('pluginsAdmin.filterAll'), count: totalCount },
-    { key: 'enabled', label: t('pluginsAdmin.filterEnabled'), count: enabledCount },
-    { key: 'disabled', label: t('pluginsAdmin.filterDisabled'), count: totalCount - enabledCount },
-    { key: 'error', label: t('pluginsAdmin.filterErrors'), count: errorCount },
+    const filterOptions: Array<{ key: StatusFilter; label: string; count: number; icon: ReactNode }> = [
+    { key: 'all', label: t('pluginsAdmin.filterAll'), count: totalCount, icon: <Layers className="h-3 w-3" /> },
+    { key: 'enabled', label: t('pluginsAdmin.filterEnabled'), count: enabledCount, icon: <ShieldCheck className="h-3 w-3" /> },
+    { key: 'disabled', label: t('pluginsAdmin.filterDisabled'), count: totalCount - enabledCount, icon: <CircleOff className="h-3 w-3" /> },
+    { key: 'error', label: t('pluginsAdmin.filterErrors'), count: errorCount, icon: <CircleAlert className="h-3 w-3" /> },
   ];
 
   // Consent-dialog inputs resolved from freshest list data
@@ -635,7 +638,7 @@ export default function PluginsPage() {
               />
             </label>
             <div className="flex items-center gap-0.5" role="tablist" aria-label={t('pluginsAdmin.filterAria')}>
-              {filterOptions.map(({ key, label, count }) => (
+              {filterOptions.map(({ key, label, count, icon }) => (
                 <button
                   key={key}
                   role="tab"
@@ -651,6 +654,7 @@ export default function PluginsPage() {
                   {statusFilter === key && (
                     <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
                   )}
+                  {icon}
                   {label}
                   <span className="font-mono text-micro tabular-nums text-muted-foreground/80">{count}</span>
                 </button>

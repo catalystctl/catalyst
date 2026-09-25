@@ -313,20 +313,21 @@ export default function ServerConsoleTab({
             }}
             className={cn(
               'flex h-7 items-center gap-1 rounded-sm px-2 text-mini font-medium transition-colors',
-              autoScroll ? 'bg-primary-muted text-primary' : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+              autoScroll ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
             )}
           >
             <ArrowDown className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{t('console.tab.follow')}</span>
           </button>
 
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={copied ? t('common:actions.copied') : t('console.tab.copyOutput')} onClick={() => void handleCopy()}>
+          <Button className="rounded-sm" type="button" variant="ghost" size="icon-sm" aria-label={copied ? t('common:actions.copied') : t('console.tab.copyOutput')} onClick={() => void handleCopy()}>
             {copied ? <Check className="text-success" /> : <Copy />}
           </Button>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={t('console.tab.downloadOutput')} onClick={handleDownload}>
+          <Button className="rounded-sm" type="button" variant="ghost" size="icon-sm" aria-label={t('console.tab.downloadOutput')} onClick={handleDownload}>
             <Download />
           </Button>
           <Button
+            className="rounded-sm"
             type="button"
             variant="ghost"
             size="icon-sm"

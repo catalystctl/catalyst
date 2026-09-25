@@ -68,8 +68,10 @@ type DismissScope = 'session' | 'version' | 'global' | null;
  * see it — update checks require that permission server-side anyway, so
  * everyone else would just get 403s and a notification they cannot act on.
  *
- * Positioned under the header on the right edge, offset clear of the
- * breadcrumb row so it never overlaps page content.
+ * Positioned in the shell flow directly under the marquee, right-aligned, so
+ * it can never overlap the marquee controls or the page's primary action —
+ * the previous `fixed top-14/top-16` variant covered both (and the whole top
+ * bar on mobile) and clipped the page action.
  */
 export default function UpdateNotification() {
  const { t } = useTranslation('common');
@@ -158,9 +160,9 @@ export default function UpdateNotification() {
  animate={{ opacity: 1, y: 0, scale: 1 }}
  exit={{ opacity: 0, y: -16, scale: 0.98 }}
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
- className="pointer-events-none fixed right-3 top-14 z-40 flex justify-end lg:right-5 lg:top-16"
+ className="pointer-events-none flex shrink-0 justify-end"
  >
- <div className="deck-panel pointer-events-auto flex w-[min(24rem,calc(100vw-1.5rem))] items-start gap-3 px-3 py-2.5 shadow-elevated lg:items-center">
+ <div className="deck-panel pointer-events-auto flex w-[min(24rem,100%)] items-start gap-3 px-3 py-2.5 shadow-elevated lg:items-center">
  <ArrowUpCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary lg:mt-0" />
 
  <div className="flex min-w-0 flex-1 flex-col">

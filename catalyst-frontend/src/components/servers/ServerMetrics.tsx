@@ -35,8 +35,10 @@ function ServerMetrics({ cpu = 0, memory = 0, isLive = true }: { cpu?: number; m
             className="flex items-center gap-3 border-b border-border/40 px-3 py-2 last:border-b-0"
           >
             <span className="type-overline w-16 shrink-0">{metric.label}</span>
-            <Meter value={metric.value} width="flex-1" />
-            <Segmented className={cn('min-w-[3rem] text-right', severityClass(metric.value))}>
+            {/* Bounded at the call site: an unbounded flex-1 track renders as a
+                4px hairline ~1200px long and stops reading as a proportion. */}
+            <Meter value={metric.value} width="flex-1 max-w-[16rem]" />
+            <Segmented className={cn('ml-auto min-w-[3rem] text-right', severityClass(metric.value))}>
               {metric.value.toFixed(0)}%
             </Segmented>
           </div>

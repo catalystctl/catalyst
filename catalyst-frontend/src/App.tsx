@@ -607,28 +607,43 @@ function App() {
  </ProtectedRoute>
  }
  />
- </Route>
-
  {/* Plugin dynamic routes — /${pluginName} for each plugin's UserPage */}
- {/* Must come AFTER all static routes to avoid conflicts. */}
- <Route
- path="tickets"
- element={<Navigate to="/ticketing-plugin" replace />}
- />
+ {/* Declared inside the protected shell so a single-segment miss renders */}
+ {/* the in-app 404 instead of bouncing to the dashboard. Omitted for */}
+ {/* signed-out visitors so their single-segment typo falls to the */}
+ {/* anonymous catch-all below instead of the login redirect. */}
+ {isAuthenticated && (
  <Route
  path={":pluginRouteName"}
  element={
- <ProtectedRoute>
  <Suspense fallback={<PageFallback />}>
  <PageTransition>
  <PluginRoutePage />
  </PageTransition>
  </Suspense>
- </ProtectedRoute>
  }
  />
+ )}
+ {/* Catch-all: an unknown path renders the deck 404 inside the shell. */}
+ {isAuthenticated && <Route path="*" element={<NotFoundPage />} />}
+ </Route>
 
- <Route path="*" element={<NotFoundPage />} />
+ <Route
+ path="tickets"
+ element={<Navigate to="/ticketing-plugin" replace />}
+ />
+
+ {/* Anonymous catch-all — a mistyped URL resolves without waiting on auth. */}
+ {!isAuthenticated && (
+ <Route
+ path="*"
+ element={
+ <div className="app-shell flex min-h-[100dvh] items-center justify-center px-4 font-sans">
+ <NotFoundPage />
+ </div>
+ }
+ />
+ )}
  </Routes>
  </AnimatePresence>
  </PluginProvider>

@@ -22,8 +22,8 @@ import TemplateCreateModal from '../../components/templates/TemplateCreateModal'
 import TemplateEditModal from '../../components/templates/TemplateEditModal';
 import NestsManagerModal from '../../components/templates/NestsManagerModal';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
-import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
+import EmptyState from '../../components/shared/EmptyState';
 import { BracketLabel, Segmented } from '../../components/deck/primitives';
 import { Button } from '../../components/ui/button';
 import {
@@ -95,18 +95,20 @@ function TemplateRow({
     >
       {/* checkbox column — the spacer keeps the grid aligned when hidden */}
       {canWrite && !hideHeader ? (
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() =>
-            setSelectedIds((prev) =>
-              prev.includes(template.id)
-                ? prev.filter((id) => id !== template.id)
-                : [...prev, template.id],
-            )
-          }
-          className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary"
-        />
+        <label className="-m-2 flex cursor-pointer items-center justify-center p-2">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() =>
+              setSelectedIds((prev) =>
+                prev.includes(template.id)
+                  ? prev.filter((id) => id !== template.id)
+                  : [...prev, template.id],
+              )
+            }
+            className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary"
+          />
+        </label>
       ) : (
         <span aria-hidden />
       )}
@@ -129,19 +131,19 @@ function TemplateRow({
             <Link
               to={`/admin/templates/${template.id}`}
               title={template.name}
-              className="truncate font-display text-data font-semibold tracking-tight text-foreground hover:text-primary"
+              className="-my-1.5 truncate py-1.5 font-display text-data font-semibold tracking-tight text-foreground hover:text-primary"
             >
               {template.name}
             </Link>
             <Segmented muted className="hidden shrink-0 sm:inline">v{template.version}</Segmented>
           </span>
           <span className="flex min-w-0 items-center gap-2 text-micro text-muted-foreground">
-            <span className="truncate">{template.author}</span>
+            <span className="truncate" title={template.author}>{template.author}</span>
             <span aria-hidden>·</span>
-            <span className="truncate font-mono tabular-nums opacity-70">
+            <span className="truncate font-mono tabular-nums opacity-70" title={template.defaultImage || template.image}>
               {template.defaultImage || template.image}
             </span>
-            <span className="hidden truncate md:inline">{description}</span>
+            <span className="hidden truncate md:inline" title={description}>{description}</span>
             <span className="hidden shrink-0 lg:inline">
               {t('page.variablesCount', { count: template.variables?.length ?? 0 })}
             </span>
@@ -220,10 +222,18 @@ function TemplateRow({
 }
 
 // ── Nest Section Header ──
-function NestSectionHeader({ nest, count }: { nest: Nest | null; count: number }) {
+function NestSectionHeader({
+  nest,
+  count,
+  trailing,
+}: {
+  nest: Nest | null;
+  count: number;
+  trailing?: React.ReactNode;
+}) {
   const { t } = useTranslation('templates');
   return (
-    <div className="flex items-center gap-2 border-y border-border/50 bg-surface-1/40 px-3 py-1.5">
+    <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
       <BracketLabel tone="muted">{nest ? nest.name : t('page.ungrouped')}</BracketLabel>
       <Segmented muted className="text-micro">
         {t('page.templateCount', { count })}
@@ -233,6 +243,7 @@ function NestSectionHeader({ nest, count }: { nest: Nest | null; count: number }
           {nest.description}
         </span>
       )}
+      {trailing}
     </div>
   );
 }
@@ -452,7 +463,7 @@ function TemplatesPage({ hideHeader }: Props) {
 
   const emptyState = (
     <div className="py-2">
-      <TabEmptyState
+      <EmptyState
         title={
           search.trim() || hasActiveFilters ? t('page.noTemplatesFound') : t('list.emptyTitle')
         }
@@ -461,8 +472,8 @@ function TemplatesPage({ hideHeader }: Props) {
         }
         action={
           hasActiveFilters ? (
-            <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={clearFilters}>
-              <X className="mr-1.5 h-3.5 w-3.5" />
+            <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-mini" onClick={clearFilters}>
+              <X className="h-3 w-3" />
               {t('page.clearFilters')}
             </Button>
           ) : canWrite && !search.trim() ? (
@@ -633,7 +644,7 @@ function TemplatesPage({ hideHeader }: Props) {
 
         {/* Nest selector tabs */}
         {nests.length > 0 && (
-          <div className="flex items-center gap-0.5 overflow-x-auto border-b border-border/50 px-1 scrollbar-thin">
+          <div className="flex items-center gap-0.5 overflow-x-auto border-b border-border/50 px-1 scrollbar-thin [mask-image:linear-gradient(to_right,black_calc(100%_-_2rem),transparent)] [-webkit-mask-image:linear-gradient(to_right,black_calc(100%_-_2rem),transparent)]">
             <NestTab
               active={selectedNestId === null}
               onClick={() => setSelectedNestId(null)}
@@ -679,7 +690,7 @@ function TemplatesPage({ hideHeader }: Props) {
               </span>
               <button
                 onClick={() => setSelectedIds([])}
-                className="text-mini text-muted-foreground transition-colors hover:text-foreground"
+                className="flex h-7 items-center rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
               >
                 {t('page.clear')}
               </button>
@@ -701,6 +712,36 @@ function TemplatesPage({ hideHeader }: Props) {
 
         {/* Rows */}
         <div className="max-h-[calc(100dvh-24rem)] min-w-0 overflow-y-auto bg-background/25">
+          {/* One column header shared by the grouped and flat views */}
+          {!isLoading && canWrite && !hideHeader && (
+            <div
+              className={cn(
+                TEMPLATE_GRID,
+                'sticky top-0 z-10 border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70',
+              )}
+            >
+              <label className="-m-2 flex cursor-pointer items-center justify-center p-2">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() =>
+                    setSelectedIds((prev) => {
+                      if (allSelected) {
+                        return prev.filter((id) => !filteredIds.includes(id));
+                      }
+                      return Array.from(new Set([...prev, ...filteredIds]));
+                    })
+                  }
+                  aria-label={t('page.selectAll')}
+                  className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary"
+                />
+              </label>
+              <span className="type-overline">{t('page.selectAll')}</span>
+              <span className="type-overline hidden justify-end lg:inline-flex">{t('page.sortCpu')}</span>
+              <span className="type-overline hidden justify-end lg:inline-flex">{t('page.sortMemory')}</span>
+              <span className="type-overline justify-self-end">{t('actions.view')}</span>
+            </div>
+          )}
           {isLoading ? (
             <div className="p-3">
               <TabLoadingState rows={6} />
@@ -709,35 +750,38 @@ function TemplatesPage({ hideHeader }: Props) {
             groupedByNest.length > 0 ? (
               groupedByNest.map(([nestId, groupTemplates]) => {
                 const nest = nestId ? (nestMap.get(nestId) ?? null) : null;
+                const groupSelected =
+                  groupTemplates.length > 0 &&
+                  groupTemplates.every((t) => selectedIds.includes(t.id));
                 return (
                   <div key={nestId ?? '__ungrouped__'} className="border-b border-border/50 last:border-b-0">
-                    {canWrite && !hideHeader && (
-                      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5">
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={
-                              groupTemplates.length > 0 &&
-                              groupTemplates.every((t) => selectedIds.includes(t.id))
-                            }
-                            onChange={() =>
-                              setSelectedIds((prev) => {
-                                const groupIds = groupTemplates.map((t) => t.id);
-                                if (groupIds.every((id) => prev.includes(id))) {
-                                  return prev.filter((id) => !groupIds.includes(id));
-                                }
-                                return Array.from(new Set([...prev, ...groupIds]));
-                              })
-                            }
-                            className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary"
-                          />
-                          <span className="type-overline">
-                            {t('page.selectAllInSection')}
-                          </span>
-                        </label>
-                      </div>
-                    )}
-                    <NestSectionHeader nest={nest} count={groupTemplates.length} />
+                    <NestSectionHeader
+                      nest={nest}
+                      count={groupTemplates.length}
+                      trailing={
+                        canWrite && !hideHeader ? (
+                          <label className="ml-auto -my-2 flex cursor-pointer items-center gap-2 py-2 text-micro text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={groupSelected}
+                              onChange={() =>
+                                setSelectedIds((prev) => {
+                                  const groupIds = groupTemplates.map((t) => t.id);
+                                  if (groupIds.every((id) => prev.includes(id))) {
+                                    return prev.filter((id) => !groupIds.includes(id));
+                                  }
+                                  return Array.from(new Set([...prev, ...groupIds]));
+                                })
+                              }
+                              className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary"
+                            />
+                            <span className="type-overline">
+                              {t('page.selectAllInSection')}
+                            </span>
+                          </label>
+                        ) : undefined
+                      }
+                    />
                     <div className="divide-y divide-border/40">
                       {groupTemplates.map((template) => (
                         <TemplateRow
@@ -760,44 +804,21 @@ function TemplatesPage({ hideHeader }: Props) {
               emptyState
             )
           ) : filteredTemplates.length > 0 ? (
-            <>
-              {canWrite && !hideHeader && (
-                <div className={cn(TEMPLATE_GRID, 'border-b border-border/50 bg-surface-1/40 py-1.5 pl-3 pr-3')}>
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={() =>
-                      setSelectedIds((prev) => {
-                        if (allSelected) {
-                          return prev.filter((id) => !filteredIds.includes(id));
-                        }
-                        return Array.from(new Set([...prev, ...filteredIds]));
-                      })
-                    }
-                    className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary"
-                  />
-                  <span className="type-overline">{t('page.selectAll')}</span>
-                  <span className="type-overline hidden justify-end lg:inline-flex">{t('page.sortCpu')}</span>
-                  <span className="type-overline hidden justify-end lg:inline-flex">{t('page.sortMemory')}</span>
-                  <span className="type-overline justify-self-end">{t('actions.view')}</span>
-                </div>
-              )}
-              <div className="divide-y divide-border/40">
-                {filteredTemplates.map((template) => (
-                  <TemplateRow
-                    key={template.id}
-                    template={template}
-                    isSelected={selectedIds.includes(template.id)}
-                    canWrite={canWrite}
-                    hideHeader={hideHeader}
-                    setSelectedIds={setSelectedIds}
-                    setEditingTemplateId={setEditingTemplateId}
-                    handleBulkDelete={handleBulkDelete}
-                    deleteMutation={deleteMutation}
-                  />
-                ))}
-              </div>
-            </>
+            <div className="divide-y divide-border/40">
+              {filteredTemplates.map((template) => (
+                <TemplateRow
+                  key={template.id}
+                  template={template}
+                  isSelected={selectedIds.includes(template.id)}
+                  canWrite={canWrite}
+                  hideHeader={hideHeader}
+                  setSelectedIds={setSelectedIds}
+                  setEditingTemplateId={setEditingTemplateId}
+                  handleBulkDelete={handleBulkDelete}
+                  deleteMutation={deleteMutation}
+                />
+              ))}
+            </div>
           ) : (
             emptyState
           )}

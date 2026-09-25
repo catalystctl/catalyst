@@ -9,10 +9,15 @@ import { createRegisterSchema } from '../../validators/auth';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { describeError } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
+import { BrandFooter } from '../../components/shared/BrandFooter';
+import { usePanelBranding } from '../../hooks/usePanelBranding';
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+/** One banner recipe shared by every auth card. */
+const AUTH_BANNER_CLASS = 'rounded-sm border px-3 py-2.5 text-mini';
 
 function RegisterPage() {
  const { t } = useTranslation(['auth', 'validation']);
@@ -20,6 +25,7 @@ function RegisterPage() {
  const registerUser = useAuthStore((s) => s.register);
  const isLoading = useAuthStore((s) => s.isLoading);
  const error = useAuthStore((s) => s.error);
+ const { panelName, logoUrl } = usePanelBranding();
  const resolver = useMemo(() => zodResolver(createRegisterSchema(t)), [t]);
  const {
  register,
@@ -50,19 +56,24 @@ function RegisterPage() {
  };
 
  return (
- <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
  <div className="absolute right-4 top-4 z-20">
  <LanguageSwitcher variant="compact" />
  </div>
  <div className="deck-panel w-full max-w-md">
  <div className="px-3 py-4 sm:px-4">
+ <div className="flex items-start gap-2.5">
+ <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-sm border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+ <div className="min-w-0">
  <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">{t('register.title')}</h1>
  <p className="type-meta mt-1">
  {t('register.subtitle')}
  </p>
+ </div>
+ </div>
 
  {error ? (
- <div className="mt-4 rounded-sm border border-danger/25 bg-danger/5 px-3 py-2.5 text-mini text-danger">
+ <div role="alert" className={`mt-4 ${AUTH_BANNER_CLASS} border-danger/25 bg-danger/5 text-danger`}>
  {error}
  </div>
  ) : null}
@@ -121,13 +132,14 @@ function RegisterPage() {
  {t('register.haveAccount')}{' '}
  <Link
  to="/login"
- className="font-medium text-primary transition-colors hover:text-primary/80"
+ className="inline-flex min-h-7 items-center font-medium text-primary transition-colors hover:text-primary/80"
  >
  {t('register.signInLink')}
  </Link>
  </p>
  </div>
  </div>
+ <BrandFooter />
  </div>
  );
 }

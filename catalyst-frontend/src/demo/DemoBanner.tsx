@@ -18,7 +18,10 @@ export default function DemoBanner() {
         <span className="deck-led-pulse absolute inline-flex h-full w-full rounded-full bg-primary opacity-50" />
         <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
       </span>
-      <span className="truncate">{t('demo.banner')}</span>
+      {/* The label stays on one line (the banner must remain exactly h-8 so the
+          shell offset holds) and steps down to the micro ramp on narrow
+          viewports so the sentence ellipsises as late as possible. */}
+      <span className="min-w-0 truncate text-micro sm:text-mini">{t('demo.banner')}</span>
     </div>
   );
 }

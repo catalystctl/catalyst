@@ -858,12 +858,12 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <nav className="flex items-center gap-1 overflow-x-auto pb-1.5 text-mini text-muted-foreground scrollbar-hide">
  <button
  type="button"
- className="flex shrink-0 items-center gap-1 rounded-sm px-1 py-0.5 transition-colors hover:bg-surface-1/40 hover:text-foreground"
+ className="flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 transition-colors hover:bg-surface-1/40 hover:text-foreground"
  onClick={() => setPath('/')}
  title={t('files.manager.root')}
  >
  <Home className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{t('files.manager.root')}</span>
+ <span>{t('files.manager.root')}</span>
  </button>
  {breadcrumbs.map((crumb, idx) => (
  <div key={crumb.path} className="flex items-center gap-1 shrink-0">
@@ -886,7 +886,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {/* Search bar + toolbar */}
  <div className="mt-1 flex flex-wrap items-center gap-2">
  {/* Search */}
- <div className="relative min-w-[140px] max-w-xs flex-1">
+ <div className="relative min-w-[140px] flex-1 sm:max-w-xs">
  <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
  <input
  type="text"
@@ -896,6 +896,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
  </div>
+
+ {/* One trailing group so a narrow viewport wraps the whole control run
+ instead of orphaning the refresh button on its own row. */}
+ <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
 
  <div className="hidden sm:block h-4 w-px bg-border/60" />
 
@@ -1009,6 +1013,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </motion.div>
  )}
  </AnimatePresence>
+ </div>
  </div>
 
  {message && (

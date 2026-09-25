@@ -306,6 +306,8 @@
   },
   "shell": {
     "closeMenu": "Close menu",
+    "collapseNav": "Collapse navigation",
+    "expandNav": "Expand navigation",
     "fleetHeartbeat": "{{online}}/{{total}} online",
     "openMenu": "Open menu",
     "openSearch": "Open search ({{shortcut}})",
@@ -314,11 +316,9 @@
     "skipToContent": "Skip to content"
   },
   "sidebar": {
-    "dark": "Dark",
     "darkMode": "Dark mode",
     "fallbackRole": "Member",
     "fallbackUser": "User",
-    "light": "Light",
     "lightMode": "Light mode",
     "logout": "Logout",
     "updateTooltip": "v{{current}} - out of date (latest: v{{latest}})",

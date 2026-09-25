@@ -18,6 +18,7 @@ import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import { useNodes } from '../../hooks/useNodes';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
+import EmptyState from '../../components/shared/EmptyState';
 import { adminApi } from '../../services/api/admin';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,7 +32,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { BracketLabel, Segmented } from '../../components/deck/primitives';
 import { cn } from '@/lib/utils';
 
@@ -40,8 +40,8 @@ import { cn } from '@/lib/utils';
  * columns line up. Fixed / minmax(0,1fr) tracks only — never `auto`.
  */
 const PORTS_GRID =
-  'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
-  'md:grid-cols-[1.5rem_minmax(0,1fr)_6rem_8rem_6.5rem_5rem]';
+  'grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 ' +
+  'md:grid-cols-[1.5rem_minmax(0,1fr)_6rem_6.5rem_5rem]';
 
 const POOLS_GRID =
   'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
@@ -350,18 +350,6 @@ function NodeAllocationsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* Breadcrumb */}
-      <div className="flex flex-wrap items-center gap-2 text-micro text-muted-foreground">
-        <Link to="/admin/nodes" className="flex items-center gap-1 transition-colors hover:text-foreground">
-          <ArrowLeft className="h-3 w-3" />
-          {t('nodes.title')}
-        </Link>
-        <span className="text-muted-foreground/30">/</span>
-        <span className="font-medium text-foreground">{node?.name || t('common:actions.loading')}</span>
-        <span className="text-muted-foreground/30">/</span>
-        <span className="text-foreground">{t('allocations.title')}</span>
-      </div>
-
       {/* ── Deck header ── */}
       <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div className="flex min-w-0 flex-col gap-1">
@@ -373,21 +361,30 @@ function NodeAllocationsPage() {
             {t('allocations.description', { node: node?.name || t('allocations.thisNode') })}
           </p>
         </div>
-        <div className="hidden items-center gap-3 sm:flex">
-          <span className="flex items-center gap-1.5">
-            <Plug className="h-3 w-3 text-muted-foreground" />
-            <Segmented muted>{t('allocations.portCount', { value: portStats.total })}</Segmented>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Globe className="h-3 w-3 text-muted-foreground" />
-            <Segmented muted>{t('allocations.poolCount', { value: ipPoolStats.pools })}</Segmented>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/admin/nodes"
+            className="flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 text-mini text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            {t('nodes.title')}
+          </Link>
+          <span className="hidden items-center gap-3 sm:flex">
+            <span className="flex items-center gap-1.5">
+              <Plug className="h-3 w-3 text-muted-foreground" />
+              <Segmented muted>{t('allocations.portCount', { value: portStats.total })}</Segmented>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Globe className="h-3 w-3 text-muted-foreground" />
+              <Segmented muted>{t('allocations.poolCount', { value: ipPoolStats.pools })}</Segmented>
+            </span>
           </span>
         </div>
       </header>
 
       {/* Info note */}
-      <div className="flex items-start gap-2.5 rounded-sm border border-info/20 bg-info/[0.03] px-3 py-2">
-        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
+      <div className="flex max-w-2xl items-start gap-2.5 rounded-sm border border-border/50 px-3 py-2">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <div className="space-y-1">
           <p className="text-micro font-medium text-foreground">{t('allocations.info.title')}</p>
           <ul className="ml-3 list-disc space-y-0.5 text-micro text-muted-foreground">
@@ -449,7 +446,7 @@ function NodeAllocationsPage() {
               <button
                 type="button"
                 onClick={() => setShowCreatePortModal(true)}
-                className="flex h-7 items-center gap-1.5 rounded-sm border border-primary/50 bg-primary/10 px-2.5 text-mini text-foreground transition-colors hover:bg-primary/20"
+                className="flex h-7 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 <Plus className="h-3 w-3" />
                 {t('allocations.createAllocations')}
@@ -459,7 +456,7 @@ function NodeAllocationsPage() {
             <button
               type="button"
               onClick={() => setShowCreatePoolModal(true)}
-              className="ml-auto flex h-7 items-center gap-1.5 rounded-sm border border-primary/50 bg-primary/10 px-2.5 text-mini text-foreground transition-colors hover:bg-primary/20"
+              className="ml-auto flex h-7 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <Plus className="h-3 w-3" />
               {t('allocations.createPoolButton')}
@@ -477,6 +474,23 @@ function NodeAllocationsPage() {
               </Segmented>
             </span>
           ))}
+          {/* Mobile has no column header, so select-all lives here. */}
+          {activeTab === 'ports' && (
+            <label className="ml-auto -my-2 flex cursor-pointer items-center gap-1.5 py-2 text-micro text-muted-foreground md:hidden">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = !allFilteredSelected && someFilteredSelected;
+                }}
+                onChange={toggleSelectAllFiltered}
+                disabled={selectableFilteredIds.length === 0}
+                aria-label={t('allocations.selectAll')}
+                className="h-3.5 w-3.5 rounded-sm border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              />
+              {t('allocations.selectAll')}
+            </label>
+          )}
         </div>
 
         {/* Bulk actions strip */}
@@ -489,7 +503,7 @@ function NodeAllocationsPage() {
               <button
                 type="button"
                 onClick={() => setSelectedIds([])}
-                className="text-micro text-muted-foreground transition-colors hover:text-foreground"
+                className="flex h-7 items-center rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
               >
                 {t('allocations.clearSelection')}
               </button>
@@ -516,7 +530,7 @@ function NodeAllocationsPage() {
                 'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
               )}
             >
-              <span className="flex items-center">
+              <label className="-m-2 flex cursor-pointer items-center justify-center p-2">
                 <input
                   type="checkbox"
                   checked={allFilteredSelected}
@@ -528,14 +542,10 @@ function NodeAllocationsPage() {
                   aria-label={t('allocations.selectAll')}
                   className="h-3.5 w-3.5 rounded-sm border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
                 />
-              </span>
+              </label>
               <span className="type-overline">{t('allocations.field.ip')}</span>
               <span className="type-overline hidden justify-self-end md:inline-flex">{t('allocations.field.port')}</span>
-              <span className="hidden md:block" aria-hidden />
-              <span className="type-overline hidden justify-self-end gap-2 md:inline-flex">
-                {t('allocations.assigned')}
-                <span className="border-l border-border/50 pl-2">{t('allocations.available')}</span>
-              </span>
+              <span className="type-overline hidden justify-self-end md:inline-flex">{t('nodes.sort.status')}</span>
               <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
             </div>
 
@@ -552,7 +562,7 @@ function NodeAllocationsPage() {
                 </div>
               ) : filteredAllocations.length === 0 ? (
                 <div className="p-3">
-                  <TabEmptyState
+                  <EmptyState
                     title={search.trim() ? t('allocations.empty.noMatches') : t('allocations.empty.noPorts')}
                     description={search.trim() ? undefined : t('allocations.empty.noPortsDescription')}
                     action={
@@ -582,7 +592,7 @@ function NodeAllocationsPage() {
                         isSelected && 'bg-primary/5',
                       )}
                     >
-                      <span className="flex items-center">
+                      <label className="-m-2 flex cursor-pointer items-center justify-center p-2">
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -600,9 +610,9 @@ function NodeAllocationsPage() {
                             ip: allocation.ip,
                             port: allocation.port,
                           })}
-                          className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                          className="h-3.5 w-3.5 rounded-sm border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
                         />
-                      </span>
+                      </label>
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span
                           className="truncate font-mono text-data tabular-nums text-foreground"
@@ -613,16 +623,24 @@ function NodeAllocationsPage() {
                         <span className="font-mono text-micro text-muted-foreground md:hidden">
                           :{allocation.port}
                         </span>
-                      </span>
-                      <Segmented className="hidden justify-self-end md:inline-flex">{allocation.port}</Segmented>
-                      <span className="hidden min-w-0 md:block">
+                        {allocation.alias && (
+                          <span
+                            className="hidden min-w-0 truncate text-micro text-muted-foreground md:inline"
+                            title={allocation.alias}
+                          >
+                            {allocation.alias}
+                          </span>
+                        )}
                         <span
-                          className="block truncate text-micro text-muted-foreground"
-                          title={allocation.alias ?? undefined}
+                          className={cn(
+                            'shrink-0 text-micro uppercase md:hidden',
+                            isAssigned ? 'text-muted-foreground' : 'text-success',
+                          )}
                         >
-                          {allocation.alias ?? '—'}
+                          {isAssigned ? t('allocations.assigned') : t('allocations.available')}
                         </span>
                       </span>
+                      <Segmented className="hidden justify-self-end md:inline-flex">{allocation.port}</Segmented>
                       <span className="hidden justify-self-end overflow-hidden md:flex">
                         {isAssigned ? (
                           <span className="truncate text-micro uppercase text-muted-foreground">
@@ -634,7 +652,7 @@ function NodeAllocationsPage() {
                           </span>
                         )}
                       </span>
-                      <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
+                      <span className="flex shrink-0 items-center justify-end gap-1">
                         {!allocation.serverId && (
                           <button
                             type="button"
@@ -681,7 +699,7 @@ function NodeAllocationsPage() {
                 </div>
               ) : nodePools.length === 0 ? (
                 <div className="p-3">
-                  <TabEmptyState
+                  <EmptyState
                     title={t('allocations.empty.noPools')}
                     description={t('allocations.empty.noPoolsDescription')}
                     action={
@@ -786,6 +804,7 @@ function NodeAllocationsPage() {
                 value={ipInput}
                 onChange={(e) => setIpInput(e.target.value)}
                 placeholder={t('allocations.createPort.ipPlaceholder')}
+                className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
               />
             </label>
 
@@ -796,6 +815,7 @@ function NodeAllocationsPage() {
                 value={portsInput}
                 onChange={(e) => setPortsInput(e.target.value)}
                 placeholder={t('allocations.createPort.portsPlaceholder')}
+                className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
               />
             </label>
 
@@ -806,10 +826,11 @@ function NodeAllocationsPage() {
                 value={aliasInput}
                 onChange={(e) => setAliasInput(e.target.value)}
                 placeholder={t('allocations.createPort.aliasPlaceholder')}
+                className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
               />
             </label>
 
-            <Button variant="link" className="h-auto p-0 text-micro" onClick={handleQuickFillPorts}>
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-mini" onClick={handleQuickFillPorts}>
               {t('allocations.createPort.quickFill')}
             </Button>
           </DialogBody>
@@ -852,6 +873,7 @@ function NodeAllocationsPage() {
                 value={networkName}
                 onChange={(e) => setNetworkName(e.target.value)}
                 placeholder="mc-lan"
+                className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
               />
             </label>
 
@@ -862,10 +884,11 @@ function NodeAllocationsPage() {
                 value={cidr}
                 onChange={(e) => setCidr(e.target.value)}
                 placeholder={t('allocations.createPool.cidrPlaceholder')}
+                className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
               />
             </label>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="block space-y-1.5">
                 <span className="type-overline">{t('allocations.createPool.gateway')}</span>
                 <Input
@@ -873,6 +896,7 @@ function NodeAllocationsPage() {
                   value={gateway}
                   onChange={(e) => setGateway(e.target.value)}
                   placeholder="192.168.50.1"
+                  className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
                 />
               </label>
               <label className="block space-y-1.5">
@@ -882,6 +906,7 @@ function NodeAllocationsPage() {
                   value={startIp}
                   onChange={(e) => setStartIp(e.target.value)}
                   placeholder="192.168.50.10"
+                  className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
                 />
               </label>
               <label className="block space-y-1.5">
@@ -891,29 +916,32 @@ function NodeAllocationsPage() {
                   value={endIp}
                   onChange={(e) => setEndIp(e.target.value)}
                   placeholder="192.168.50.200"
+                  className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
                 />
               </label>
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  onClick={handleAutoFillPool}
-                  disabled={!autoFillIp.trim()}
-                  className="h-8 w-full rounded-sm text-mini"
-                >
-                  {t('allocations.createPool.autofill')}
-                </Button>
-              </div>
             </div>
 
-            <label className="block space-y-1.5">
-              <span className="type-overline">{t('allocations.createPool.quickSetupIp')}</span>
-              <Input
-                type="text"
-                value={autoFillIp}
-                onChange={(e) => setAutoFillIp(e.target.value)}
-                placeholder={node?.publicAddress || '0.0.0.0'}
-              />
-            </label>
+            {/* Autofill reads the quick-setup IP, so it sits beside that field. */}
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="block min-w-[12rem] flex-1 space-y-1.5">
+                <span className="type-overline">{t('allocations.createPool.quickSetupIp')}</span>
+                <Input
+                  type="text"
+                  value={autoFillIp}
+                  onChange={(e) => setAutoFillIp(e.target.value)}
+                  placeholder={node?.publicAddress || '0.0.0.0'}
+                  className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
+                />
+              </label>
+              <Button
+                variant="outline"
+                onClick={handleAutoFillPool}
+                disabled={!autoFillIp.trim()}
+                className="h-8 rounded-sm px-3 text-mini"
+              >
+                {t('allocations.createPool.autofill')}
+              </Button>
+            </div>
 
             <label className="block space-y-1.5">
               <span className="type-overline">{t('allocations.createPool.reservedIps')}</span>
@@ -922,7 +950,7 @@ function NodeAllocationsPage() {
                 onChange={(e) => setReserved(e.target.value)}
                 rows={2}
                 placeholder="192.168.50.20, 192.168.50.21"
-                className="resize-none"
+                className="min-h-[4rem] resize-none rounded-sm border-border/60 bg-background/40 px-2.5 py-2 text-mini"
               />
             </label>
           </DialogBody>

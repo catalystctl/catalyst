@@ -193,7 +193,9 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       show: true,
       label: start.isPending ? t('controls.starting') : t('controls.start'),
       icon: Play,
-      className: 'bg-success text-success-foreground hover:bg-success/90',
+      // Neutral until hover: the status LED and badge above already carry
+      // state, so a saturated fill here would be decorative.
+      variant: 'outline' as const,
       iconClass: 'text-muted-foreground hover:bg-success/10 hover:text-success',
       disabled: busy || !STARTABLE.includes(status),
       applies: STARTABLE.includes(status),
@@ -205,7 +207,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       show: true,
       label: stop.isPending ? t('controls.stopping') : t('controls.stop'),
       icon: Square,
-      variant: 'secondary' as const,
+      variant: 'outline' as const,
       iconClass: 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
       disabled: busy || !STOPPABLE.includes(status),
       applies: STOPPABLE.includes(status),

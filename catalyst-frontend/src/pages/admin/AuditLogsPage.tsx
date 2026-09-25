@@ -437,7 +437,7 @@ function AuditLogsPage() {
  title={t('audit.title')}
  description={t('audit.description')}
  actions={
- <div className="flex flex-wrap items-center gap-2">
+ <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto">
  {livePoll && (
  <Badge variant="outline" className="gap-1.5 border-success/30 text-success text-micro">
  <StatusLed tone="go" pulse />
@@ -598,7 +598,7 @@ function AuditLogsPage() {
  <span className="font-medium text-foreground/70">{log.user.username}</span>
  )}
  {resourceLink ? (
- <Link to={resourceLink} className="inline-flex items-center gap-1 font-mono text-primary transition-colors hover:underline">
+ <Link to={resourceLink} className="-my-1 inline-flex min-h-7 items-center gap-1 font-mono text-primary transition-colors hover:underline">
  {auditResourceLabel(t, log.resource)}:{log.resourceId?.slice(0, 8)}
  <ExternalLink className="h-2.5 w-2.5" />
  </Link>
@@ -610,16 +610,16 @@ function AuditLogsPage() {
  </div>
 
  <div className="flex shrink-0 items-center gap-1">
- <span className="font-mono text-micro tabular-nums text-muted-foreground" title={formatDateTime(log.timestamp)}>
- {formatTimeAgo(t, log.timestamp)}
- </span>
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-colors group-hover:opacity-100 hover:bg-surface-2 hover:text-primary"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary sm:opacity-0 sm:group-hover:opacity-100"
  onClick={() => setSelectedLog(log)}
  title={t('audit.viewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
+ <span className="font-mono text-micro tabular-nums text-muted-foreground" title={formatDateTime(log.timestamp)}>
+ {formatTimeAgo(t, log.timestamp)}
+ </span>
  </div>
  </div>
  );

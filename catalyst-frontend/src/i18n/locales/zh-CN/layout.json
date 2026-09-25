@@ -305,6 +305,8 @@
   },
   "shell": {
     "closeMenu": "关闭菜单",
+    "collapseNav": "收起导航",
+    "expandNav": "展开导航",
     "fleetHeartbeat": "{{online}}/{{total}} 在线",
     "openMenu": "打开菜单",
     "openSearch": "打开搜索（{{shortcut}}）",
@@ -313,11 +315,9 @@
     "skipToContent": "跳到主要内容"
   },
   "sidebar": {
-    "dark": "深色",
     "darkMode": "深色模式",
     "fallbackRole": "成员",
     "fallbackUser": "用户",
-    "light": "浅色",
     "lightMode": "浅色模式",
     "logout": "退出登录",
     "updateTooltip": "v{{current}} - 有新版本（最新：v{{latest}}）",

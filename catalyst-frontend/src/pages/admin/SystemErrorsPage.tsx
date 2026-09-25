@@ -232,7 +232,7 @@ return (
  </DialogHeader>
 
  <DialogBody className="space-y-5">
- <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+ <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.level')}</span>
  <LevelBadge level={error.level} className={`text-micro ${levelColor(error.level)}`} />
@@ -390,7 +390,7 @@ function ErrorRow({
  <span className="truncate text-mini text-muted-foreground" title={message}>
  {message}
  </span>
- <span className="hidden truncate font-mono text-micro tabular-nums text-muted-foreground xl:block">
+ <span className="hidden truncate text-right font-mono text-micro tabular-nums text-muted-foreground xl:block">
  {formatDateTime(error.createdAt)}
  </span>
  <span className="flex items-center justify-end gap-1">

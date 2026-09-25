@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@/csync';
 import { qk } from '../lib/queryKeys';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { serversApi } from '../services/api/servers';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { useAuthStore } from '../stores/authStore';
 import { reportSystemError } from '../services/api/systemErrors';
+import { getLocalizedErrorMessage } from '../i18n/api-errors';
 import type { ServerInvitePreview } from '../types/server';
 import ServerTabCard from '../components/servers/tabs/ServerTabCard';
+import TabEmptyState from '../components/servers/tabs/TabEmptyState';
+import LoadingSpinner from '../components/shared/LoadingSpinner';
 import { BracketLabel } from '../components/deck/primitives';
 
 const INPUT_CLASS =
@@ -23,7 +26,12 @@ function InvitesPage() {
   const setSession = useAuthStore((s) => s.setSession);
   const queryClient = useQueryClient();
   const [accepted, setAccepted] = useState(false);
-  const { data: invitePreview } = useQuery<ServerInvitePreview>({
+  const {
+    data: invitePreview,
+    isLoading: isPreviewLoading,
+    isError: isPreviewError,
+    error: previewError,
+  } = useQuery<ServerInvitePreview>({
     queryKey: qk.invitePreview(token ?? ''),
     queryFn: async () => {
       const response = await serversApi.previewInvite(token ?? '');
@@ -31,6 +39,9 @@ function InvitesPage() {
     },
     enabled: Boolean(token),
     staleTime: 60_000,
+    // An unusable token should surface as the invalid-invite state promptly
+    // rather than sitting in the preview spinner through retry backoff.
+    retry: false,
   });
   const [registerUsername, setRegisterUsername] = useState('');
   const [prevEmail, setPrevEmail] = useState(invitePreview?.email);
@@ -108,6 +119,38 @@ function InvitesPage() {
   );
 
   if (!isAuthenticated) {
+    if (!token || isPreviewError) {
+      return (
+        <div className="mx-auto w-full max-w-lg space-y-3">
+          {header(t('invite.registerDescription'))}
+          <ServerTabCard>
+            <TabEmptyState
+              title={getLocalizedErrorMessage(previewError, 'INVITE_NOT_FOUND')}
+              action={
+                <Link
+                  to="/login"
+                  className="inline-flex h-8 items-center rounded-sm border border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                >
+                  {t('invite.signInInstead')}
+                </Link>
+              }
+            />
+          </ServerTabCard>
+        </div>
+      );
+    }
+
+    if (isPreviewLoading) {
+      return (
+        <div className="mx-auto w-full max-w-lg space-y-3">
+          {header(t('invite.registerDescription'))}
+          <ServerTabCard>
+            <LoadingSpinner />
+          </ServerTabCard>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto w-full max-w-lg space-y-3">
         {header(t('invite.registerDescription'))}
@@ -179,13 +222,17 @@ function InvitesPage() {
     <div className="mx-auto w-full max-w-lg space-y-3">
       {header(t('invite.signedInDescription'))}
       <ServerTabCard>
-        <button
-          className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
-          onClick={() => acceptMutation.mutate()}
-          disabled={!token || acceptMutation.isPending || accepted}
-        >
-          {t('invite.accept')}
-        </button>
+        {!token || isPreviewError ? (
+          <TabEmptyState title={getLocalizedErrorMessage(previewError, 'INVITE_NOT_FOUND')} />
+        ) : (
+          <button
+            className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+            onClick={() => acceptMutation.mutate()}
+            disabled={!token || acceptMutation.isPending || accepted}
+          >
+            {t('invite.accept')}
+          </button>
+        )}
       </ServerTabCard>
     </div>
   );

@@ -59,7 +59,7 @@ const formatMemory = (mb: number) => {
  *   md   : identity · servers · cores · memory · actions
  */
 const GRID =
- 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+ 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 ' +
  'md:grid-cols-[minmax(0,1fr)_5rem_5rem_6.5rem_8.5rem]';
 
 // ── Skeleton Loader ──
@@ -145,6 +145,7 @@ function NodeRow({
  {/* identity — checkbox, LED, name, state; carries host/location/last-seen */}
  <div className="flex min-w-0 items-center gap-2">
  {canDelete && (
+ <label className="-m-2 flex shrink-0 cursor-pointer items-center justify-center p-2">
  <input
  type="checkbox"
  checked={isSelected}
@@ -153,8 +154,9 @@ function NodeRow({
  prev.includes(node.id) ? prev.filter((id) => id !== node.id) : [...prev, node.id],
  )
  }
- className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
+ className="h-3.5 w-3.5 rounded-sm border-border bg-card text-primary"
  />
+ </label>
  )}
  <StatusLed tone={node.isOnline ? 'go' : 'idle'} pulse={node.isOnline} />
  <div className="flex min-w-0 flex-col leading-tight">
@@ -162,7 +164,7 @@ function NodeRow({
  <Link
  to={`/admin/nodes/${node.id}`}
  title={node.name}
- className="truncate font-display text-data font-semibold tracking-tight text-foreground transition-colors hover:text-primary"
+ className="-my-1.5 truncate py-1.5 font-display text-data font-semibold tracking-tight text-foreground transition-colors hover:text-primary"
  >
  {node.name}
  </Link>
@@ -206,7 +208,7 @@ function NodeRow({
  </Segmented>
  <Segmented className="hidden justify-self-end md:inline-flex">{memoryGB} GB</Segmented>
 
- <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
+ <span className="flex shrink-0 items-center justify-end gap-1">
  <Link
  to={`/admin/nodes/${node.id}`}
  className="flex h-7 items-center gap-1 rounded-sm border border-border/60 px-2 text-micro text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
@@ -647,7 +649,7 @@ function AdminNodesPage() {
  <button
  type="button"
  onClick={() => setSelectedIds([])}
- className="text-micro text-muted-foreground transition-colors hover:text-foreground"
+ className="flex h-7 items-center rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  {t('nodes.clearSelection')}
  </button>
@@ -674,6 +676,7 @@ function AdminNodesPage() {
  >
  <span className="flex items-center gap-2">
  {canDelete && (
+ <label className="-m-2 flex shrink-0 cursor-pointer items-center justify-center p-2">
  <input
  type="checkbox"
  checked={allSelected}
@@ -686,8 +689,9 @@ function AdminNodesPage() {
  })
  }
  aria-label={t('nodes.selectAll')}
- className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
+ className="h-3.5 w-3.5 rounded-sm border-border bg-card text-primary"
  />
+ </label>
  )}
  <span className="type-overline">{t('nodes.title')}</span>
  </span>
@@ -713,7 +717,7 @@ function AdminNodesPage() {
  count={groupNodes.length}
  trailing={
  canDelete ? (
- <label className="ml-auto flex items-center gap-1.5 text-micro text-muted-foreground">
+ <label className="ml-auto -my-2 flex cursor-pointer items-center gap-1.5 py-2 text-micro text-muted-foreground">
  <input
  type="checkbox"
  checked={groupSelected}

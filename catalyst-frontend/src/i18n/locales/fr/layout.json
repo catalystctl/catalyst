@@ -307,6 +307,8 @@
   },
   "shell": {
     "closeMenu": "Fermer le menu",
+    "collapseNav": "Réduire la navigation",
+    "expandNav": "Développer la navigation",
     "fleetHeartbeat": "{{online}}/{{total}} en ligne",
     "openMenu": "Ouvrir le menu",
     "openSearch": "Ouvrir la recherche ({{shortcut}})",
@@ -315,11 +317,9 @@
     "skipToContent": "Aller au contenu"
   },
   "sidebar": {
-    "dark": "Sombre",
     "darkMode": "Mode sombre",
     "fallbackRole": "Membre",
     "fallbackUser": "Utilisateur",
-    "light": "Clair",
     "lightMode": "Mode clair",
     "logout": "Se déconnecter",
     "updateTooltip": "v{{current}} - non à jour (dernière version : v{{latest}})",

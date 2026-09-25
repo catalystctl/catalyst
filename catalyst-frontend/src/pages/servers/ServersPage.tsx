@@ -151,9 +151,9 @@ function ServerRow({
             <Link
               to={`/servers/${server.id}`}
               title={server.name}
-              className="truncate font-display text-data font-semibold tracking-tight text-foreground hover:text-primary"
+              className="-my-1 inline-flex min-h-7 min-w-0 items-center font-display text-data font-semibold tracking-tight text-foreground hover:text-primary"
             >
-              {server.name}
+              <span className="truncate">{server.name}</span>
             </Link>
             {version && (
               <Segmented muted className="hidden shrink-0 md:inline">
@@ -217,7 +217,7 @@ function ServerRow({
         </span>
       </span>
 
-      <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
+      <span className="col-span-full flex shrink-0 items-center justify-end gap-1 md:col-auto md:justify-end">
         <ServerControls
           serverId={server.id}
           status={server.status}
@@ -474,7 +474,7 @@ function ServersPage() {
             <LegendCount tone="idle" value={statusCounts.stopped} label={t('common:status.stopped')} />
             <LegendCount tone="alarm" value={statusCounts.issues} label={t('page.stats.issues')} />
           </div>
-          <div className="flex items-center gap-4 font-mono text-micro text-muted-foreground/60">
+          <div className="hidden items-center gap-4 font-mono text-micro text-muted-foreground/60 sm:flex">
             <span>
               <kbd className="font-mono text-muted-foreground/80">↑↓</kbd> {t('hints.navigate')}
             </span>

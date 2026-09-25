@@ -33,6 +33,9 @@ import {
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
+/** One banner recipe shared by every auth card. */
+const AUTH_BANNER_CLASS = 'rounded-sm border px-3 py-2.5 text-mini';
+
 function LoginPage() {
  const { t } = useTranslation(['auth', 'validation']);
  const navigate = useNavigate();
@@ -300,14 +303,11 @@ function LoginPage() {
           </div>
 
  {error && !authStep && (
- <Alert variant="destructive" className="mt-4 rounded-sm">
- <AlertDescription>{error}</AlertDescription>
- </Alert>
+ <div role="alert" className={`mt-4 ${AUTH_BANNER_CLASS} border-danger/25 bg-danger/5 text-danger`}>{error}</div>
  )}
 
  {ssoError === 'login_required' && !authStep && (
- <Alert className="mt-4 rounded-sm border-info/40 bg-info/5 text-foreground">
- <AlertDescription>
+ <div role="alert" className={`mt-4 ${AUTH_BANNER_CLASS} border-info/40 bg-info/5 text-foreground`}>
  {t('sso.loginRequired', {
  provider: ssoProvider === 'whmcs' ? 'WHMCS' : 'Paymenter',
  action:
@@ -315,19 +315,16 @@ function LoginPage() {
  ? t('sso.continueWithWhmcs')
  : t('sso.continueWithPaymenter'),
  })}
- </AlertDescription>
- </Alert>
+ </div>
  )}
 
  {oauthError && !authStep && (
- <Alert variant="destructive" className="mt-4 rounded-sm">
- <AlertDescription>
+ <div role="alert" className={`mt-4 ${AUTH_BANNER_CLASS} border-danger/25 bg-danger/5 text-danger`}>
   {oauthProviderLabel
   ? t('sso.oauthFailed', { provider: oauthProviderLabel })
   : t('sso.oauthFailedNoProvider')}
   {oauthError !== 'failed' ? ` (${oauthError})` : ''}
- </AlertDescription>
- </Alert>
+ </div>
  )}
 
  <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
@@ -349,7 +346,7 @@ function LoginPage() {
  <Label htmlFor="password">{t('fields.password')}</Label>
  <Link
  to="/forgot-password"
- className="text-mini font-medium text-primary transition-colors hover:text-primary/80"
+ className="inline-flex min-h-7 items-center text-mini font-medium text-primary transition-colors hover:text-primary/80"
  >
  {t('login.forgotPassword')}
  </Link>

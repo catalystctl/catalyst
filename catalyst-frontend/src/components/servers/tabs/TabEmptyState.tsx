@@ -17,7 +17,7 @@ export default function TabEmptyState({
 }: TabEmptyStateProps) {
   return (
     <div className="flex flex-col items-center px-5 py-6 text-center">
-      <InboxIcon className="h-4 w-4 text-muted-foreground/70" />
+      <InboxIcon className="h-6 w-6 text-muted-foreground/60" />
       <p className="mt-2 text-data font-medium text-foreground">
         {title}
       </p>

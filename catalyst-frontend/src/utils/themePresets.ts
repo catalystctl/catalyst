@@ -19,7 +19,7 @@ function makeGeneratedPreset(
   description: string,
   seed: string,
   mode: HarmonyMode,
-  borderRadius = '0.625rem',
+  borderRadius = '0.25rem',
 ): ThemePreset {
   const generated = generatePalette(seed, mode);
   return {
@@ -74,7 +74,7 @@ const neonPreset: ThemePreset = {
     lightSurface3: '#ecd9ea',
     lightBorder: '#e8c4e0',
     lightMuted: '#7a6a7e',
-    borderRadius: '0.375rem',
+    borderRadius: '0.25rem',
   },
   customCss: NEON_CSS,
 };

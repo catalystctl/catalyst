@@ -193,7 +193,7 @@ function SystemPage() {
  <Section
  title={t('system.smtp')}
  subtitle={t('system.smtpDescription')}
- icon={<Mail className="h-3.5 w-3.5 text-destructive" />}
+ icon={<Mail className="h-3.5 w-3.5" />}
  footer={
  <Button size="sm" className="h-8 px-3 text-mini" disabled={updateSmtpMutation.isPending} onClick={() => updateSmtpMutation.mutate()}>
  {updateSmtpMutation.isPending ? t('saving') : t('system.saveSmtp')}
@@ -241,7 +241,7 @@ function SystemPage() {
  </div>
 
  {/* Pool settings */}
- <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+ <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
  <label className="block space-y-1">
  <span className="type-overline">{t('system.maxConnections')}</span>
  <Input value={smtpMaxConnections} onChange={(e) => setSmtpMaxConnections(e.target.value)} placeholder="5" className="h-8 rounded-sm border-border/40 text-mini" />
@@ -254,7 +254,7 @@ function SystemPage() {
 
  {/* Checkboxes */}
  <div className="flex flex-wrap gap-4">
- <label className="flex cursor-pointer items-center gap-2 text-mini text-muted-foreground">
+ <label className="flex min-h-7 cursor-pointer items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
  checked={smtpSecure}
@@ -263,7 +263,7 @@ function SystemPage() {
  />
  {t('system.useSslTls')}
  </label>
- <label className="flex cursor-pointer items-center gap-2 text-mini text-muted-foreground">
+ <label className="flex min-h-7 cursor-pointer items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
  checked={smtpRequireTls}
@@ -272,7 +272,7 @@ function SystemPage() {
  />
  {t('system.requireStarttls')}
  </label>
- <label className="flex cursor-pointer items-center gap-2 text-mini text-muted-foreground">
+ <label className="flex min-h-7 cursor-pointer items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
  checked={smtpPool}
@@ -289,7 +289,7 @@ function SystemPage() {
  <Section
  title={t('system.modManagerKeys')}
  subtitle={t('system.modManagerKeysDescription')}
- icon={<Key className="h-3.5 w-3.5 text-warning" />}
+ icon={<Key className="h-3.5 w-3.5" />}
  footer={
  <Button size="sm" className="h-8 px-3 text-mini" disabled={updateModManagerMutation.isPending} onClick={() => updateModManagerMutation.mutate()}>
  {updateModManagerMutation.isPending ? t('saving') : t('system.saveModManagerKeys')}
@@ -316,7 +316,7 @@ function SystemPage() {
  <Section
  title={t('system.language')}
  subtitle={t('system.languageDescription')}
- icon={<Languages className="h-3.5 w-3.5 text-primary" />}
+ icon={<Languages className="h-3.5 w-3.5" />}
  footer={
  <Button size="sm" className="h-8 px-3 text-mini" disabled={updateLocalizationMutation.isPending} onClick={() => updateLocalizationMutation.mutate()}>
  {updateLocalizationMutation.isPending ? t('saving') : t('system.saveLanguage')}
@@ -349,7 +349,7 @@ function SystemPage() {
  <Section
  title={t('system.autoUpdater')}
  subtitle={t('system.autoUpdaterDescription')}
- icon={<ArrowUpCircle className="h-3.5 w-3.5 text-success" />}
+ icon={<ArrowUpCircle className="h-3.5 w-3.5" />}
  >
  <UpdateSettings />
  </Section>

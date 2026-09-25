@@ -81,7 +81,7 @@ export function WorkspaceHeader({
               aria-hidden
             />
             {typeof title === 'string' ? (
-              <Heading className="truncate font-display text-xl font-semibold tracking-tight text-foreground">
+              <Heading className="truncate font-display text-lg font-semibold tracking-tight text-foreground">
                 {title}
               </Heading>
             ) : (
@@ -91,7 +91,7 @@ export function WorkspaceHeader({
           </div>
           {description ? (
             typeof description === 'string' ? (
-              <p className="type-meta mt-0.5 truncate">{description}</p>
+              <p className="type-meta mt-0.5 line-clamp-2 sm:truncate" title={description}>{description}</p>
             ) : (
               description
             )
@@ -99,7 +99,7 @@ export function WorkspaceHeader({
           {extra}
         </div>
         {stats}
-        {actions ? <div className="ml-auto shrink-0">{actions}</div> : null}
+        {actions ? <div className="ml-auto min-w-0 max-w-full">{actions}</div> : null}
       </div>
       {banners}
       {toolbar}

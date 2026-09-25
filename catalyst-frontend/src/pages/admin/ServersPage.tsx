@@ -437,9 +437,10 @@ function AdminServersPage() {
           </div>
         )}
 
-        {/* Bulk actions strip */}
-        {selectedIds.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-primary/5 px-3 py-1.5">
+        {/* Bulk actions strip — swapped into the column-header slot so entering
+            selection does not reflow the table you were reading */}
+        {selectedIds.length > 0 ? (
+          <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-primary/5 px-3 py-1.5">
             <div className="flex items-center gap-3">
               <span className="text-mini text-foreground">
                 {t('servers.selectedCount', { value: selectedIds.length })}
@@ -458,7 +459,7 @@ function AdminServersPage() {
                 size="sm"
                 onClick={() => handleBulkAction('start', selectedIds, t('servers.selectedLabel', { value: selectedIds.length }))}
                 disabled={bulkActionMutation.isPending}
-                className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-success hover:border-success/20 hover:bg-success/5 hover:text-success"
+                className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-muted-foreground"
               >
                 <Play className="h-3 w-3" />
                 {t('servers.actions.start')}
@@ -468,7 +469,7 @@ function AdminServersPage() {
                 size="sm"
                 onClick={() => handleBulkAction('stop', selectedIds, t('servers.selectedLabel', { value: selectedIds.length }))}
                 disabled={bulkActionMutation.isPending}
-                className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-warning hover:border-warning/20 hover:bg-warning/5 hover:text-warning"
+                className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-muted-foreground"
               >
                 <Square className="h-3 w-3" />
                 {t('servers.actions.stop')}
@@ -499,7 +500,7 @@ function AdminServersPage() {
                 size="sm"
                 onClick={() => handleBulkAction('unsuspend', selectedIds, t('servers.selectedLabel', { value: selectedIds.length }))}
                 disabled={bulkActionMutation.isPending}
-                className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-success hover:border-success/20 hover:bg-success/5 hover:text-success"
+                className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-muted-foreground"
               >
                 <CheckCircle className="h-3 w-3" />
                 {t('servers.actions.unsuspend')}
@@ -517,38 +518,38 @@ function AdminServersPage() {
               </Button>
             </div>
           </div>
+        ) : (
+          /* Column header — same grid as the rows, so columns always line up */
+          <div
+            className={cn(
+              GRID,
+              'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={() =>
+                  setSelectedIds((prev) => {
+                    if (allSelected) {
+                      return prev.filter((id) => !filteredIds.includes(id));
+                    }
+                    return Array.from(new Set([...prev, ...filteredIds]));
+                  })
+                }
+                aria-label={t('servers.selectAll')}
+                className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
+              />
+              <span className="type-overline">{t('servers:columns.server')}</span>
+            </span>
+            <span className="type-overline hidden justify-self-end xl:inline-flex">{t('servers.filter.owner')}</span>
+            <span className="type-overline hidden justify-self-end md:inline-flex">{t('servers.filter.node')}</span>
+            <span className="type-overline hidden justify-self-end xl:inline-flex">{t('servers.filter.template')}</span>
+            <span className="type-overline hidden justify-self-end md:inline-flex">{t('servers.filter.status')}</span>
+            <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
+          </div>
         )}
-
-        {/* Column header — same grid as the rows, so columns always line up */}
-        <div
-          className={cn(
-            GRID,
-            'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
-          )}
-        >
-          <span className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={() =>
-                setSelectedIds((prev) => {
-                  if (allSelected) {
-                    return prev.filter((id) => !filteredIds.includes(id));
-                  }
-                  return Array.from(new Set([...prev, ...filteredIds]));
-                })
-              }
-              aria-label={t('servers.selectAll')}
-              className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
-            />
-            <span className="type-overline">{t('servers.title')}</span>
-          </span>
-          <span className="type-overline hidden justify-self-end xl:inline-flex">{t('servers.filter.owner')}</span>
-          <span className="type-overline hidden justify-self-end md:inline-flex">{t('servers.filter.node')}</span>
-          <span className="type-overline hidden justify-self-end xl:inline-flex">{t('servers.filter.template')}</span>
-          <span className="type-overline hidden justify-self-end md:inline-flex">{t('servers.filter.status')}</span>
-          <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
-        </div>
 
         {/* Rows */}
         <div className="max-h-[calc(100dvh-20rem)] min-w-0 overflow-y-auto bg-background/25">
@@ -602,9 +603,9 @@ function AdminServersPage() {
                       <Link
                         to={`/servers/${server.id}/console`}
                         title={server.name}
-                        className="truncate font-display text-data font-semibold tracking-tight text-foreground transition-colors hover:text-primary"
+                        className="flex min-h-7 min-w-0 items-center truncate font-display text-data font-semibold tracking-tight text-foreground transition-colors hover:text-primary"
                       >
-                        {server.name}
+                        <span className="truncate">{server.name}</span>
                       </Link>
                       <span className="flex min-w-0 items-center gap-2 text-micro text-muted-foreground">
                         <span className="truncate font-mono opacity-60">{server.id}</span>
@@ -616,7 +617,7 @@ function AdminServersPage() {
                   </div>
 
                   {/* owner */}
-                  <span className="hidden min-w-0 xl:block">
+                  <span className="hidden min-w-0 justify-self-end text-right xl:block">
                     <span
                       className="block truncate text-micro text-muted-foreground"
                       title={server.owner ? server.owner.username || server.owner.email : undefined}
@@ -626,12 +627,12 @@ function AdminServersPage() {
                   </span>
 
                   {/* node */}
-                  <span className="hidden min-w-0 md:block">
+                  <span className="hidden min-w-0 justify-self-end text-right md:block">
                     <span className="block truncate text-micro text-muted-foreground">{server.node.name}</span>
                   </span>
 
                   {/* template */}
-                  <span className="hidden min-w-0 xl:block">
+                  <span className="hidden min-w-0 justify-self-end text-right xl:block">
                     <span className="block truncate text-micro text-muted-foreground">{server.template.name}</span>
                   </span>
 

@@ -12,8 +12,6 @@ import CloneServerDialog from '../CloneServerDialog';
 import { ConfirmDialog } from '../../shared/ConfirmDialog';
 import type { Server } from '../../../types/server';
 import { Settings } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import SettingsRow from './SettingsRow';
 
 
@@ -108,40 +106,42 @@ export default function ServerSettingsTab({
  />
     <ServerTabCard>
       <SettingsRow label={t('shared.name')} description={t('tabs.settings.nameDescription')}>
-        <Input
-          className="min-w-[160px]"
+        <input
+          className="h-7 w-full min-w-[160px] rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40 disabled:opacity-50"
           value={serverName}
           onChange={(e) => onServerNameChange(e.target.value)}
           placeholder={t('tabs.settings.namePlaceholder')}
           disabled={isSuspended}
         />
-        <Button type="button" size="sm" onClick={onRename} disabled={renamePending || isSuspended || !serverName.trim()}>
+        <button
+          type="button"
+          className="h-7 shrink-0 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+          onClick={onRename}
+          disabled={renamePending || isSuspended || !serverName.trim()}
+        >
           {t('common:actions.save')}
-        </Button>
+        </button>
       </SettingsRow>
       <SettingsRow label={t('tabs.settings.maintenance')}>
         {canReinstall && (
-          <Button
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            className="border-warning/30 text-warning hover:bg-warning/10"
+            className="h-7 shrink-0 rounded-sm border border-warning/30 px-3 text-mini font-semibold text-warning transition-colors hover:bg-warning/10 disabled:opacity-50"
             disabled={serverStatus !== 'stopped' || isSuspended || reinstallPending}
             onClick={() => setShowReinstallConfirm(true)}
           >
             {t('tabs.settings.reinstall')}
-          </Button>
+          </button>
         )}
         {canReinstall && isInstalling && (
-          <Button
+          <button
             type="button"
-            variant="destructive"
-            size="sm"
+            className="h-7 shrink-0 rounded-sm bg-danger px-3 text-mini font-semibold text-danger-foreground transition-colors hover:bg-danger/90 disabled:opacity-50"
             disabled={isSuspended || cancelInstallPending}
             onClick={() => setShowCancelInstallConfirm(true)}
           >
             {cancelInstallPending ? t('tabs.settings.cancelling') : t('tabs.settings.cancelInstall')}
-          </Button>
+          </button>
         )}
         <CloneServerDialog server={server} disabled={isSuspended} />
       </SettingsRow>

@@ -401,7 +401,7 @@ function BackupSection({
  <div className="flex flex-wrap items-center gap-2 text-mini">
  <button
  type="button"
- className="inline-flex h-8 items-center rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+ className="inline-flex h-8 items-center rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-surface-3 disabled:text-muted-foreground disabled:hover:bg-surface-3"
  onClick={async () => {
  try {
  const parsedCount = retentionCount.trim() === '' ? undefined : Number(retentionCount);

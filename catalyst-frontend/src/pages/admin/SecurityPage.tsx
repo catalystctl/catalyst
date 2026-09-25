@@ -108,6 +108,7 @@ function NumberField({
  onChange={(e) => onChange(e.target.value)}
  min={min}
  max={max}
+ className="h-7 rounded-sm text-mini"
  />
  </label>
  );
@@ -147,7 +148,7 @@ function RateLimitField({
  onChange={(e) => onCountChange(e.target.value)}
  min={min}
  max={max}
- className="flex-1"
+ className="h-7 flex-1 rounded-sm text-mini"
  />
  <span className="shrink-0 text-mini text-muted-foreground">{t('security.per')}</span>
  <Select value={windowValue} onValueChange={onWindowChange}>
@@ -190,10 +191,10 @@ function Section({
         </div>
         {subtitle ? <p className="mt-0.5 text-micro text-muted-foreground">{subtitle}</p> : null}
       </div>
-      <div className="p-3">
-        {children}
-        {footer ? <div className="mt-3 flex justify-end border-t border-border/40 pt-2">{footer}</div> : null}
-      </div>
+      <div className="p-3">{children}</div>
+      {footer ? (
+        <div className="flex items-center justify-end border-t border-border/50 bg-surface-1/40 px-3 py-1.5">{footer}</div>
+      ) : null}
     </div>
   );
 }
@@ -245,7 +246,7 @@ function McpSettingsCard() {
     <Section
       title={t('security.mcpTitle')}
       subtitle={t('security.mcpDescription')}
-      icon={<Bot className="h-3.5 w-3.5 text-info" />}
+      icon={<Bot className="h-3.5 w-3.5" />}
       footer={
         <Button size="sm" disabled={!canSubmit || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
           {saveMutation.isPending ? t('saving') : t('common:actions.save')}
@@ -261,6 +262,7 @@ function McpSettingsCard() {
           checked={enabled}
           onCheckedChange={handleToggle}
           aria-label={t('security.mcpEnableAria')}
+          className="h-7 sm:h-5"
         />
       </div>
       <ConfirmDialog
@@ -329,10 +331,8 @@ function LockoutRow({
  <div className="truncate text-data font-medium text-foreground">{displayEmail}</div>
  <div className="flex flex-wrap items-center gap-2 text-micro text-muted-foreground">
  <span className="font-mono tabular-nums">{lockout.ipAddress}</span>
- <span>·</span>
- <span>{t('security.attempts', { count: lockout.failureCount })}</span>
- <span>·</span>
- <span className="font-mono tabular-nums">{t('security.lastFailedAt', { date: formatDateTime(lockout.lastFailedAt) })}</span>
+ <span className="before:mr-2 before:content-['·']">{t('security.attempts', { count: lockout.failureCount })}</span>
+ <span className="font-mono tabular-nums before:mr-2 before:content-['·']">{t('security.lastFailedAt', { date: formatDateTime(lockout.lastFailedAt) })}</span>
  </div>
  </div>
  </div>
@@ -529,6 +529,13 @@ function SecurityPage() {
  const lockouts = lockoutResponse?.lockouts ?? [];
  const lockoutPagination = lockoutResponse?.pagination;
 
+ // One Save per section, in the same full-bleed footer band as /admin/system.
+ const saveButton = (
+   <Button size="sm" className="h-8 px-3 text-mini" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
+     {updateMutation.isPending ? t('saving') : t('common:actions.save')}
+   </Button>
+ );
+
  return (
  <div className="space-y-5">
  {/* ── Header ── */}
@@ -536,11 +543,6 @@ function SecurityPage() {
       icon={ShieldCheck}
       title={t('security.title')}
       description={t('security.description')}
-      actions={
-        <Button size="sm" className="h-8 px-3 text-mini" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
-          {updateMutation.isPending ? t('saving') : t('common:actions.save')}
-        </Button>
-      }
     />
 
 
@@ -548,7 +550,8 @@ function SecurityPage() {
  <Section
  title={t('security.rateLimits')}
  subtitle={t('security.rateLimitsDescription')}
- icon={<Zap className="h-3.5 w-3.5 text-warning" />}
+ icon={<Zap className="h-3.5 w-3.5" />}
+ footer={saveButton}
  >
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -623,7 +626,8 @@ function SecurityPage() {
  <Section
  title={t('security.emailVerification')}
  subtitle={t('security.emailVerificationDescription')}
- icon={<MailCheck className="h-3.5 w-3.5 text-success" />}
+ icon={<MailCheck className="h-3.5 w-3.5" />}
+ footer={saveButton}
  >
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-foreground">{t('security.requireEmailVerification')}</p>
@@ -631,6 +635,7 @@ function SecurityPage() {
           checked={requireEmailVerification}
           onCheckedChange={setRequireEmailVerification}
           aria-label={t('security.requireEmailVerificationAria')}
+          className="h-7 sm:h-5"
         />
       </div>
 
@@ -640,7 +645,8 @@ function SecurityPage() {
  <Section
  title={t('security.lockoutPolicy')}
  subtitle={t('security.lockoutPolicyDescription')}
- icon={<Lock className="h-3.5 w-3.5 text-destructive" />}
+ icon={<Lock className="h-3.5 w-3.5" />}
+ footer={saveButton}
  >
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
  <NumberField
@@ -669,7 +675,8 @@ function SecurityPage() {
  <Section
  title={t('security.fileUploads')}
  subtitle={t('security.fileUploadsDescription')}
- icon={<FolderSync className="h-3.5 w-3.5 text-info" />}
+ icon={<FolderSync className="h-3.5 w-3.5" />}
+ footer={saveButton}
  >
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <RateLimitField

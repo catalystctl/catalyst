@@ -401,6 +401,13 @@
       "node": "Nœud : {{name}}",
       "pagination": "Page {{page}} sur {{totalPages}} · {{total}} entrées",
       "port": "Port {{port}}",
+      "powerResult": {
+        "acked": "Accepté par le nœud",
+        "failed": "Échec",
+        "sent": "Envoyé au nœud",
+        "timeout": "Délai dépassé",
+        "unknown": "Réponse du nœud"
+      },
       "previous": "Précédent",
       "statusSummary": "État : {{status}}",
       "system": "Système",

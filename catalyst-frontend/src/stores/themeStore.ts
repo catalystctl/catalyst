@@ -18,6 +18,8 @@ interface ThemeState {
   themePreference: ThemePreference;
   personalColors: PersonalColors | null;
   sidebarCollapsed: boolean;
+  /** Labelled, full-width navigation instead of the 56px icon rail. */
+  navExpanded: boolean;
  serverViewMode: 'card' | 'list';
  themeSettings: PublicThemeSettings | null;
   customCssElement: HTMLStyleElement | null;
@@ -28,6 +30,7 @@ interface ThemeState {
   clearPersonalTheme: () => void;
   setServerViewMode: (mode: 'card' | 'list') => void;
   toggleSidebar: () => void;
+  toggleNav: () => void;
   setThemeSettings: (settings: PublicThemeSettings, customCss?: string | null) => void;
   applyTheme: (ignorePersonal?: boolean) => void;
   previewColors: (overrides: {
@@ -315,6 +318,10 @@ function buildThemeCssVars(
   const primaryHSL = hexToHSL(primaryColor);
   const primaryScale = generateColorScale(primaryHSL);
   set('--primary', primaryHSL);
+  // Tinted primary surfaces (`bg-primary-muted`, `--primary-muted`) must follow
+  // the same hue as `--primary`; without this they fell back to the shipped
+  // magenta while their text used the themed primary.
+  set('--primary-muted', mutedVariant(primaryHSL));
   for (const [shade, value] of Object.entries(primaryScale)) {
     set(`--primary-${shade}`, value);
   }
@@ -521,6 +528,7 @@ export const useThemeStore = create<ThemeState>()(
       themePreference: initialThemePreference(),
       personalColors: initialPersonalColors(),
       sidebarCollapsed: false,
+      navExpanded: false,
       serverViewMode: 'card' as const,
       themeSettings: initialThemeSettings(),
       customCssElement: null,
@@ -565,6 +573,7 @@ export const useThemeStore = create<ThemeState>()(
       setServerViewMode: (mode) => set({ serverViewMode: mode }),
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      toggleNav: () => set((state) => ({ navExpanded: !state.navExpanded })),
 
       setThemeSettings: (settings, customCss) => {
         flushPreview();
@@ -692,6 +701,7 @@ export const useThemeStore = create<ThemeState>()(
         themePreference: state.themePreference,
         personalColors: state.personalColors,
         sidebarCollapsed: state.sidebarCollapsed,
+        navExpanded: state.navExpanded,
         serverViewMode: state.serverViewMode,
       }),
     }

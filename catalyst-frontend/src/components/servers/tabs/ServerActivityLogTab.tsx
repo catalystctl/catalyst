@@ -187,6 +187,20 @@ const TONE_AVATAR: Record<ActionTone, string> = {
   neutral: 'border-border/50 bg-surface-2 text-muted-foreground',
 };
 
+/** Power-command modes are backend tokens (`acked`, `sent`, …) — never prose. */
+const POWER_RESULT_KEYS: Record<string, string> = {
+  acked: 'tabs.activity.powerResult.acked',
+  sent: 'tabs.activity.powerResult.sent',
+  timeout: 'tabs.activity.powerResult.timeout',
+  failed: 'tabs.activity.powerResult.failed',
+};
+
+const formatPowerResult = (mode: string): string =>
+  i18n.t(
+    POWER_RESULT_KEYS[mode] ?? 'tabs.activity.powerResult.unknown',
+    { ns: 'server-tabs' },
+  );
+
 /** Build a one-line human summary from the most useful detail fields. */
 function buildSummary(_action: string, details: DetailBag): string | null {
   const parts: string[] = [];
@@ -204,7 +218,7 @@ function buildSummary(_action: string, details: DetailBag): string | null {
   }
 
   if (details.force === true) parts.push(i18n.t('tabs.activity.forced', { ns: 'server-tabs' }));
-  if (typeof details.powerResult === 'string') parts.push(details.powerResult);
+  if (typeof details.powerResult === 'string') parts.push(formatPowerResult(details.powerResult));
   if (typeof details.serverName === 'string') parts.push(details.serverName);
   if (typeof details.nodeName === 'string') {
     parts.push(i18n.t('tabs.activity.node', { ns: 'server-tabs', name: details.nodeName }));
@@ -330,7 +344,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
                     {humanizeKey(k)}
                   </dt>
                   <dd className="type-numeric min-w-0 break-words text-micro text-foreground/90">
-                    {renderExpandedValue(v)}
+                    {renderExpandedValue(v, k)}
                   </dd>
                 </div>
               ))}
@@ -351,7 +365,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
             <button
               type="button"
               onClick={() => setExpanded((e) => !e)}
-              className="inline-flex items-center gap-0.5 rounded-sm px-1.5 py-0.5 text-micro text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="inline-flex h-7 items-center gap-0.5 rounded-sm px-2 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
               aria-expanded={expanded}
             >
               {expanded ? t('tabs.activity.less') : t('tabs.activity.details')}
@@ -364,7 +378,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
   );
 }
 
-function renderExpandedValue(value: unknown): ReactNode {
+function renderExpandedValue(value: unknown, key?: string): ReactNode {
   if (value === null || value === undefined) {
     return <span className="italic text-muted-foreground/50">null</span>;
   }
@@ -375,6 +389,7 @@ function renderExpandedValue(value: unknown): ReactNode {
     return <span className="tabular-nums">{value}</span>;
   }
   if (typeof value === 'string') {
+    if (key === 'powerResult') return <span>{formatPowerResult(value)}</span>;
     return <span className="break-all">{value}</span>;
   }
   if (Array.isArray(value)) {

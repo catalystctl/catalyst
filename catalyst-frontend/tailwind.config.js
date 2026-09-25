@@ -105,10 +105,16 @@ export default {
         },
 
       },
+      // The deck's control radius is PINNED, not derived: with the shipped
+      // 4px base the old `calc(var(--radius) - 4px)` collapsed `rounded-sm`
+      // (every button, input, chip and row) to 0px, so applying a theme preset
+      // silently reshaped the whole panel. `lg` and up stay theme-driven for
+      // floating surfaces.
       borderRadius: {
+        sm: '4px',
+        DEFAULT: '4px',
+        md: '6px',
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
         xl: 'calc(var(--radius) + 4px)',
         '2xl': 'calc(var(--radius) + 8px)',
       },

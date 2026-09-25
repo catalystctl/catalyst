@@ -43,7 +43,7 @@ export default function DataField({
           <button
             type="button"
             onClick={() => setVisible(!visible)}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
             aria-label={visible ? t('shared.hideValue') : t('shared.showValue')}
           >
             {visible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -53,7 +53,7 @@ export default function DataField({
           <button
             type="button"
             onClick={copy}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
             aria-label={t('common:actions.copy')}
           >
             <Copy className="h-3 w-3" />

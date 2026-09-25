@@ -67,7 +67,7 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
       <Button
         variant="outline"
         size="sm"
-        className="h-8 gap-2 rounded-sm px-3 text-mini"
+        className="h-7 gap-2 rounded-sm px-3 text-mini"
       >
         <span>{selectedRange.label}</span>
         <ChevronDown className={`h-3.5 w-3.5 transition ${isOpen ? 'rotate-180' : ''}`} />
@@ -82,7 +82,7 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
             type="button"
             className={`w-full rounded-sm px-2 py-1.5 text-left text-mini font-medium transition-colors ${
               selectedRange.label === range.label
-                ? 'bg-primary-muted text-primary'
+                ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
             }`}
             onClick={() => handlePresetClick(range)}

@@ -398,7 +398,6 @@ function DatabasePage() {
  className="h-8 rounded-sm border-border/40 bg-card text-mini"
  />
  </label>
- </div>
  <label className="block space-y-1">
  <span className="type-overline flex items-center gap-1">
  <Database className="h-3 w-3" /> {t('database.form.engine')}
@@ -455,6 +454,7 @@ function DatabasePage() {
  className="h-8 rounded-sm border-border/40 bg-card text-mini"
  />
  </label>
+ </div>
  </div>
  );
 

@@ -316,7 +316,7 @@ function SetupPage() {
  <div className="relative z-10 w-full max-w-lg space-y-4">
  <div className="deck-panel px-3 py-3 sm:px-4 sm:py-4">
  {/* ── Step indicator ── */}
- <div className="mb-6 flex flex-wrap items-center gap-2">
+ <div className="mb-6 flex items-center gap-2 overflow-x-auto">
  {stepLabels.map((label, i) => {
  const Icon = stepIcons[i];
  const isActive = i === currentStep;

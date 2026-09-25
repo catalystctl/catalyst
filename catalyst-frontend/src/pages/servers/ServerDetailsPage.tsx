@@ -971,21 +971,17 @@ function ServerDetailsPage() {
 
  useEffect(() => {
  if (!server?.id || isPluginTab || activeTab !== 'databases') return;
- if (databaseAllocation <= 0) {
+ // A zero allocation is not an RBAC gate: keep the tab so its own
+ // "allocation disabled" empty state explains why it is unusable rather than
+ // bouncing the user back to Console.
+ if (!hasServerPerm('database.read')) {
  navigate(`/servers/${server.id}/console`, { replace: true });
  return;
  }
  if (!databaseHostsFetched) return;
- if (
- canShowServerDatabasesTab({
- hasDatabaseRead: hasServerPerm('database.read'),
- databaseAllocation,
- hostCount: databaseHosts.length,
- })
- ) {
- return;
- }
+ if (databaseAllocation > 0 && databaseHosts.length === 0) {
  navigate(`/servers/${server.id}/console`, { replace: true });
+ }
  }, [
  server?.id,
  isPluginTab,
@@ -1070,7 +1066,7 @@ function ServerDetailsPage() {
           server ? (
             <button
               type="button"
-              className="type-meta mt-0.5 inline-flex items-center gap-1 font-mono hover:text-foreground"
+              className="type-meta mt-0.5 inline-flex min-h-7 items-center gap-1 font-mono hover:text-foreground"
               onClick={() => {
                 void navigator.clipboard.writeText(`${nodeIp}:${nodePort}`).then(
                   () => notifySuccess(t('details.copiedAddress')),

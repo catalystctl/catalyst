@@ -371,6 +371,13 @@
       "node": "节点：{{name}}",
       "pagination": "第 {{page}} 页，共 {{totalPages}} 页 · {{total}} 条记录",
       "port": "端口 {{port}}",
+      "powerResult": {
+        "acked": "节点已接受",
+        "failed": "失败",
+        "sent": "已发送至节点",
+        "timeout": "超时",
+        "unknown": "节点响应"
+      },
       "previous": "上一页",
       "statusSummary": "状态：{{status}}",
       "system": "系统",

@@ -152,7 +152,7 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  <Button
  variant="outline"
  size="sm"
- className="h-7 shrink-0 px-2.5 text-mini opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+ className="h-7 shrink-0 rounded-sm px-2.5 text-mini opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
  onClick={onResolve}
  disabled={isPending}
  >
@@ -432,7 +432,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {showAdminTargets ? t('page.descriptionAll') : t('page.descriptionMine')}
  </p>
  </div>
- <Button size="sm" onClick={openCreateRule} className="h-8 px-3 text-mini">
+ <Button size="sm" onClick={openCreateRule} className="h-8 rounded-sm px-3 text-mini shadow-none">
  <Plus className="h-3.5 w-3.5" />
  {t('page.createRule')}
  </Button>
@@ -453,12 +453,12 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div
  key={item.label}
  className={cn(
- 'flex items-baseline justify-between gap-3 px-3 py-2',
+ 'flex items-center gap-3 px-3 py-2',
  i > 0 && 'border-t border-border/40 sm:border-l sm:border-t-0',
  )}
  >
- <span className="type-overline">{item.label}</span>
- <span className="font-mono text-sm font-semibold tabular-nums text-foreground">{item.value}</span>
+ <span className="type-overline w-24 shrink-0">{item.label}</span>
+ <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-foreground">{item.value}</span>
  </div>
  ))}
  </div>
@@ -508,7 +508,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
  {/* ── Alert History ── */}
  <section className="deck-panel flex min-h-0 flex-col overflow-hidden">
- <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/50 bg-surface-1/40 px-3 py-2">
+ <div className="flex flex-col items-stretch gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
  <div className="min-w-0 flex-1">
  <BracketLabel>{t('page.historyTitle')}</BracketLabel>
  <p className="type-meta mt-1">{t('page.historyDescription')}</p>
@@ -527,7 +527,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <Button
  variant="outline"
  size="sm"
- className="h-7 px-2.5 text-mini"
+ className="h-7 rounded-sm px-2.5 text-mini"
  disabled={!canBulkResolve}
  onClick={() => bulkResolveMutation.mutate(unresolvedAlertIds)}
  >

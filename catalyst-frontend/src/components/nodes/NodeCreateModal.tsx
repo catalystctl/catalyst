@@ -371,7 +371,7 @@ function NodeCreateModal(_props: Props) {
  onChange={(event) => setServerDataDir(event.target.value)}
  placeholder="/var/lib/catalyst/servers"
  />
- <p className="type-overline">
+ <p className="text-micro text-muted-foreground">
  {t('form.serverDataDirHint')}
  </p>
  </label>
@@ -393,7 +393,7 @@ function NodeCreateModal(_props: Props) {
  placeholder="203.0.113.10 or 2001:db8::1"
  />
  </label>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.memoryMb')}</span>
  <input
@@ -416,7 +416,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.memoryOverallocate')}</span>
  <input
@@ -426,7 +426,7 @@ function NodeCreateModal(_props: Props) {
  type="number"
  min={-1}
  />
- <p className="type-overline">
+ <p className="text-micro text-muted-foreground">
  {t('form.overallocateHint')}
  </p>
  </label>
@@ -439,7 +439,7 @@ function NodeCreateModal(_props: Props) {
  type="number"
  min={-1}
  />
- <p className="type-overline">
+ <p className="text-micro text-muted-foreground">
  {t('form.overallocateHint')}
  </p>
  </label>
@@ -472,7 +472,7 @@ function NodeCreateModal(_props: Props) {
  max={65535}
  placeholder="2022"
  />
- <p className="type-overline">
+ <p className="text-micro text-muted-foreground">
  {t('create.sftpPortHint')}
  </p>
  </label>
@@ -501,7 +501,7 @@ function NodeCreateModal(_props: Props) {
  placeholder={t('form.consoleLogDirPlaceholder')}
  />
  </label>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.cniConfigDir')}</span>
  <input
@@ -521,7 +521,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.cniDataDir')}</span>
  <input
@@ -541,7 +541,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.cniBridgeName')}</span>
  <input
@@ -570,7 +570,7 @@ function NodeCreateModal(_props: Props) {
  placeholder="/etc/systemd/system/containerd.service.d"
  />
  </label>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.agentConfigPath')}</span>
  <input
@@ -590,7 +590,7 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  </div>
- <p className="type-overline">
+ <p className="text-micro text-muted-foreground">
  {t('form.advancedPathsHint')}
  </p>
  </div>

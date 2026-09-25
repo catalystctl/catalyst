@@ -765,7 +765,7 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
 
 // ── Main Component ──
 export default function MigrationPage() {
- const { t } = useTranslation('admin-infra');
+ const { t } = useTranslation(['admin-infra', 'server-tabs']);
 
  // State
  const [activeTab, setActiveTab] = useState<'new' | 'progress' | 'history'>('new');
@@ -1042,7 +1042,7 @@ export default function MigrationPage() {
  className={cn(
  'h-7 rounded-sm px-3 text-mini font-medium transition-colors',
  activeTab === tab.id
- ? 'bg-primary text-primary-foreground '
+ ? 'bg-card text-foreground ring-1 ring-border'
  : 'text-muted-foreground hover:text-foreground'
  )}
  >
@@ -1086,8 +1086,11 @@ export default function MigrationPage() {
  className="h-8 rounded-sm border-border/40 bg-card pr-10 font-mono text-mini"
  />
  <button
+ type="button"
  onClick={() => setShowKey(!showKey)}
- className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+ className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ title={showKey ? t('server-tabs:files.sftp.hidePassword') : t('server-tabs:files.sftp.showPassword')}
+ aria-label={showKey ? t('server-tabs:files.sftp.hidePassword') : t('server-tabs:files.sftp.showPassword')}
  >
  <Eye className="h-4 w-4" />
  </button>
@@ -1109,8 +1112,11 @@ export default function MigrationPage() {
  className="h-8 rounded-sm border-border/40 bg-card pr-10 font-mono text-mini"
  />
  <button
+ type="button"
  onClick={() => setShowClientKey(!showClientKey)}
- className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+ className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ title={showClientKey ? t('server-tabs:files.sftp.hidePassword') : t('server-tabs:files.sftp.showPassword')}
+ aria-label={showClientKey ? t('server-tabs:files.sftp.hidePassword') : t('server-tabs:files.sftp.showPassword')}
  >
  <Eye className="h-4 w-4" />
  </button>
@@ -1238,7 +1244,9 @@ export default function MigrationPage() {
  )}
 
  {/* Actions */}
- <div className="flex gap-3 pt-2">
+ </div>
+ </div>
+ <div className="flex items-center justify-end gap-3 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
  <Button
  onClick={() => testMutation.mutate()}
  disabled={!panelUrl || !apiKey || testing}
@@ -1271,8 +1279,6 @@ export default function MigrationPage() {
  )}
  {t('migration.startMigration')}
  </Button>
- </div>
- </div>
  </div>
  </div>
  </div>

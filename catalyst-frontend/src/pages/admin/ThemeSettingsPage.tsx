@@ -939,8 +939,6 @@ function ThemeSettingsPage() {
  </div>
  </div>
 
- <hr className="border-border/30" />
-
  <PanelSectionHeader title={t('theme.themeMode')} description={t('theme.themeModeDescription')} />
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
@@ -1006,9 +1004,6 @@ function ThemeSettingsPage() {
  className="h-24 w-24 cursor-pointer rounded-sm ring-1 ring-border transition-all duration-300 group-hover:scale-105"
  style={{
  backgroundColor: isSeedValid ? seedColor : 'hsl(var(--muted-foreground))',
- boxShadow: isSeedValid
- ? `0 12px 32px ${seedColor}30, 0 4px 12px ${seedColor}15`
- : '0 4px 12px rgba(0,0,0,0.15)',
  }}
  />
  <input
@@ -1137,7 +1132,7 @@ function ThemeSettingsPage() {
  ).map(({ label, key }) => (
  <span
  key={label}
- className="inline-flex items-center gap-1.5 rounded-sm px-3 py-1 text-micro font-medium"
+ className="inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-mini font-medium"
  style={{
  backgroundColor: `${generatedPalette.themeColors[key]}18`,
  color: generatedPalette.themeColors[key],
@@ -1296,8 +1291,6 @@ function ThemeSettingsPage() {
  </pre>
  </div>
 
- <hr className="border-border/30" />
-
  <div>
  <PanelSectionHeader title={t('theme.importTheme')} description={t('theme.importThemeDescription')} />
  <div className="space-y-3">
@@ -1391,8 +1384,6 @@ function ThemeSettingsPage() {
  </div>
  </div>
 
- <hr className="border-border/30" />
-
  <div>
  <PanelSectionHeader
  title={t('theme.semanticColors')}
@@ -1448,8 +1439,6 @@ function ThemeSettingsPage() {
  </div>
  </div>
 
- <hr className="border-border/30" />
-
  <div>
  <PanelSectionHeader
  title={t('theme.focusRing')}
@@ -1498,8 +1487,6 @@ function ThemeSettingsPage() {
  ))}
  </div>
  </div>
-
- <hr className="border-border/30" />
 
  <div>
  <PanelSectionHeader
@@ -1620,8 +1607,6 @@ function ThemeSettingsPage() {
  </div>
  </div>
 
- <hr className="border-border/30" />
-
  <div>
  <PanelSectionHeader
  title={t('theme.oauthProviders')}
@@ -1727,7 +1712,7 @@ function ThemeSettingsPage() {
  };
 
  return (
- <div className="mx-auto max-w-5xl space-y-5">
+ <div className="space-y-5">
  {hasPersonalOverride && (
  <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-warning/30 bg-warning/5 p-3">
  <div className="flex items-start gap-2.5">
@@ -1837,14 +1822,16 @@ function ThemeSettingsPage() {
  key={tab.id}
  type="button"
  onClick={() => setActiveTab(tab.id)}
- className={`flex flex-1 items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-mini font-medium transition-colors ${
+ aria-label={tabLabel(t, tab.id)}
+ title={tabLabel(t, tab.id)}
+ className={`flex h-7 flex-1 items-center justify-center gap-2 rounded-sm px-3 text-mini font-medium transition-colors ${
  isActive
- ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
+ ? 'bg-card text-foreground ring-1 ring-border'
  : 'text-muted-foreground hover:bg-surface-2/50 hover:text-foreground'
  }`}
  >
- <Icon className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{tabLabel(t, tab.id)}</span>
+ <Icon className="h-3.5 w-3.5 shrink-0" />
+ <span className="whitespace-nowrap">{tabLabel(t, tab.id)}</span>
  </button>
  );
  })}

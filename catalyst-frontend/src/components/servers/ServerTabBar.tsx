@@ -41,7 +41,7 @@ function TabButton({ tab, hidden }: { tab: ServerNavTab; hidden?: boolean }) {
         <span className="absolute inset-x-1.5 bottom-0 h-[2px] bg-primary" aria-hidden />
       )}
       <Icon className="h-3.5 w-3.5" />
-      <span>{tab.label}</span>
+      <span className="text-mini">{tab.label}</span>
     </button>
   );
 }
@@ -108,7 +108,8 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
 
   const visible = tabs.slice(0, visibleCount);
   const overflow = tabs.slice(visibleCount);
-  const overflowActive = overflow.some((tab) => tab.active);
+  const overflowActiveTab = overflow.find((tab) => tab.active);
+  const overflowActive = Boolean(overflowActiveTab);
 
   return (
     <div ref={containerRef} className="relative min-w-0 w-full overflow-hidden border-t border-border/50 px-1.5 py-1">
@@ -143,10 +144,23 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
                     ? 'text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
-                aria-label={t('tabBar.moreTabs')}
+                aria-label={overflowActiveTab?.label ?? t('tabBar.moreTabs')}
+                aria-current={overflowActive ? 'page' : undefined}
+                title={overflowActiveTab?.label}
               >
+                {overflowActive && (
+                  <span className="absolute inset-x-1.5 bottom-0 h-[2px] bg-primary" aria-hidden />
+                )}
                 <MoreHorizontal className="h-3.5 w-3.5" />
-                {t('common:actions.more')}
+                <span className="text-mini">{t('common:actions.more')}</span>
+                {overflowActiveTab && (
+                  <>
+                    <span className="text-micro text-muted-foreground" aria-hidden>
+                      ·
+                    </span>
+                    <span className="text-mini text-foreground">{overflowActiveTab.label}</span>
+                  </>
+                )}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-44">

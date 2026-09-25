@@ -23,8 +23,8 @@ import { CreateApiKeyDialog } from '../components/apikeys/CreateApiKeyDialog';
 import { EditApiKeyDialog } from '../components/apikeys/EditApiKeyDialog';
 import { Button } from '@/components/ui/button';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import EmptyState from '@/components/shared/EmptyState';
 import TabLoadingState from '../components/servers/tabs/TabLoadingState';
-import TabEmptyState from '../components/servers/tabs/TabEmptyState';
 import TabErrorState from '../components/servers/tabs/TabErrorState';
 import { BracketLabel, Segmented, StatusLed } from '../components/deck/primitives';
 import { cn } from '@/lib/utils';
@@ -372,7 +372,7 @@ export function ApiKeysPage() {
     };
   }, [apiKeys]);
 
-  const hasActiveFilters = Boolean(search) || !showAgentKeys || statusFilter !== 'all';
+  const hasActiveFilters = Boolean(search) || statusFilter !== 'all';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -401,7 +401,7 @@ export function ApiKeysPage() {
       <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
         {/* Control strip */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
-          <label className="relative flex min-w-[12rem] flex-1 items-center">
+          <label className="relative flex min-w-[12rem] max-w-md flex-1 items-center">
             <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               type="search"
@@ -456,7 +456,7 @@ export function ApiKeysPage() {
             )}
             <button
               onClick={() => { setSearch(''); setStatusFilter('all'); }}
-              className="ml-auto text-micro text-muted-foreground transition-colors hover:text-foreground"
+              className="ml-auto flex h-7 items-center rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               {t('apiKeys.filters.clear')}
             </button>
@@ -501,7 +501,7 @@ export function ApiKeysPage() {
             </div>
           ) : (
             <div className="py-2">
-              <TabEmptyState
+              <EmptyState
                 title={search || statusFilter !== 'all' ? t('apiKeys.filteredEmptyTitle') : t('apiKeys.emptyTitle')}
                 description={
                   search || statusFilter !== 'all'

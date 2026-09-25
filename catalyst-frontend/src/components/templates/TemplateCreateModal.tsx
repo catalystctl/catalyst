@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { describeError } from '../../utils/errors';
+import { BracketLabel } from '../../components/deck/primitives';
 import { cn } from '@/lib/utils';
 
 type VariableDraft = {
@@ -694,7 +695,6 @@ function TemplateCreateModal() {
  {/* ── Step 1: Nest Selection ── */}
  {step === 1 && (
  <div className="flex flex-col items-center py-6 text-center">
- <FolderOpen className="mb-4 h-7 w-7 text-warning" />
  <h3 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
  {t('create.assignTitle')}
  </h3>
@@ -767,6 +767,15 @@ function TemplateCreateModal() {
  {importError}
  </p>
  ) : null}
+ {/* Validation summary lives in the form body, not between the footer actions. */}
+ {missingFields.length > 0 ? (
+ <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm border border-warning/30 bg-warning/5 px-3 py-2">
+ <span className="type-overline">{t('form.missingFields')}</span>
+ <span className="text-micro font-medium text-warning">{missingFields.join(', ')}</span>
+ </div>
+ ) : (
+ <p className="text-micro text-muted-foreground">{t('create.availableNow')}</p>
+ )}
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.name')}</span>
@@ -820,17 +829,15 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.description')}</span>
  <textarea
- className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+ className="min-h-[4rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={2}
  value={description}
  onChange={(event) => setDescription(event.target.value)}
  placeholder={t('form.descriptionPlaceholder')}
  />
  </label>
- <div className="space-y-3 border-t border-border/50 pt-3">
- <div className="type-overline">
-   {t('form.runtimeImages')}
- </div>
+ <div className="space-y-3">
+ <BracketLabel tone="muted">{t('form.runtimeImages')}</BracketLabel>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.containerImage')}</span>
@@ -860,11 +867,9 @@ function TemplateCreateModal() {
  />
  </label>
  </div>
- <div className="space-y-2 border-t border-border/50 pt-3">
+ <div className="space-y-2">
  <div className="flex flex-wrap items-center justify-between gap-2">
- <div className="type-overline">
-   {t('form.imageVariants')}
- </div>
+ <BracketLabel tone="muted">{t('form.imageVariants')}</BracketLabel>
  <button
  className="h-7 rounded-sm border border-border/60 px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
  onClick={() => setImageOptions((prev) => [...prev, createImageOptionDraft()])}
@@ -949,10 +954,8 @@ function TemplateCreateModal() {
  )}
  </div>
  </div>
- <div className="space-y-3 border-t border-border/50 pt-3">
- <div className="type-overline">
-   {t('form.commandsConfig')}
- </div>
+ <div className="space-y-3">
+ <BracketLabel tone="muted">{t('form.commandsConfig')}</BracketLabel>
  <label className="block space-y-1">
  <span className="type-overline">{t('form.configFile')}</span>
  <input
@@ -980,7 +983,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.startupCommand')}</span>
  <textarea
- className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+ className="min-h-[4rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={2}
  value={startup}
  onChange={(event) => setStartup(event.target.value)}
@@ -1017,7 +1020,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.installScript')}</span>
  <textarea
- className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+ className="min-h-[7rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={5}
  value={installScript}
  onChange={(event) => setInstallScript(event.target.value)}
@@ -1025,10 +1028,8 @@ function TemplateCreateModal() {
  />
  </label>
  </div>
- <div className="space-y-3 border-t border-border/50 pt-3">
- <div className="type-overline">
-   {t('form.resourcesPorts')}
- </div>
+ <div className="space-y-3">
+ <BracketLabel tone="muted">{t('form.resourcesPorts')}</BracketLabel>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.ports')}</span>
@@ -1062,11 +1063,9 @@ function TemplateCreateModal() {
  </label>
  </div>
  </div>
- <div className="space-y-3 border-t border-border/50 pt-3">
+ <div className="space-y-3">
  <div className="flex flex-wrap items-center justify-between gap-2">
- <h3 className="type-overline">
-   {t('form.variables')}
- </h3>
+ <BracketLabel tone="muted">{t('form.variables')}</BracketLabel>
  <button
  className="h-7 rounded-sm border border-border/60 px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
  onClick={() => setVariables((prev) => [...prev, createVariableDraft()])}
@@ -1211,10 +1210,8 @@ function TemplateCreateModal() {
  </div>
  ))}
  </div>
- <div className="space-y-3 border-t border-border/50 pt-3">
- <div className="type-overline">
-   {t('form.advancedFeatures')}
- </div>
+ <div className="space-y-3">
+ <BracketLabel tone="muted">{t('form.advancedFeatures')}</BracketLabel>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
@@ -1279,29 +1276,11 @@ function TemplateCreateModal() {
  )}
  </DialogBody>
  <DialogFooter className="sm:justify-between">
- <div className="flex items-center gap-3">
+ <div className="flex items-center gap-2">
  {step === 2 && (
  <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(1)}>
- {'\u2190'} {t('common:actions.back')}
+ {t('common:actions.back')}
  </Button>
- )}
- {step === 2 && (
- <div className="space-y-1">
- {missingFields.length > 0 ? (
- <div className="text-micro">
- <span className="type-overline">
- {t('form.missingFields')}{' '}
- </span>
- <span className="text-warning font-medium">
- {missingFields.join(', ')}
- </span>
- </div>
- ) : (
- <span className="text-micro text-muted-foreground">
- {t('create.availableNow')}
- </span>
- )}
- </div>
  )}
  </div>
  <div className="flex gap-2">

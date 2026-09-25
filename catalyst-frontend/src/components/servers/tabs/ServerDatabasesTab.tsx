@@ -109,7 +109,7 @@ export default function ServerDatabasesTab({
  />
  <button
  type="button"
- className="h-8 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+ className="h-7 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  onClick={onCreate}
  disabled={!databaseHostId || createPending || disabled || databaseLimitReached}
  >
@@ -173,7 +173,7 @@ export default function ServerDatabasesTab({
  </div>
  )}
  </div>
- <div className="mt-1 grid grid-cols-1 gap-x-6 sm:grid-cols-3">
+ <div className="mt-1 grid grid-cols-1 gap-x-6">
  <DataField label={t('tabs.databases.fields.database')} value={db.name} copyable concealable />
  <DataField label={t('tabs.databases.fields.username')} value={db.username} copyable />
  <DataField label={t('tabs.databases.fields.password')} value={db.password} concealable />

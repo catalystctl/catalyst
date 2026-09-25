@@ -24,7 +24,6 @@ preApplyCachedTheme();
 
 // Self-hosted fonts (no external requests)
 import '@fontsource-variable/dm-sans';
-import '@fontsource-variable/outfit';
 import '@fontsource-variable/oxanium';
 import '@fontsource-variable/jetbrains-mono';
 

@@ -48,7 +48,6 @@ function AppLayout() {
     // below it and shrink to fit so nothing overlaps and no page scroll appears.
     <div className={cn('app-shell flex font-sans', showsDemoChrome ? 'mt-8 h-[calc(100dvh-2rem)]' : 'h-[100dvh]')}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:m-2 focus:rounded-sm focus:bg-card focus:px-3 focus:py-2 focus:text-foreground">{t('shell.skipToContent')}</a>
-      <UpdateNotification />
       {/* Mobile overlay */}
       {isMobileSidebarOpen && (
         <div
@@ -141,6 +140,9 @@ function AppLayout() {
               </button>
             </div>
           </header>
+          {/* In the shell flow, directly under the marquee: a fixed flyout here
+              overlapped the marquee/search and clipped page primary actions. */}
+          <UpdateNotification />
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <Outlet />
           </div>

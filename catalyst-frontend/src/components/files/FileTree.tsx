@@ -68,7 +68,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
       >
         <button
           type="button"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
           onClick={(e) => {
             e.stopPropagation();
             onToggle(entry.path);
@@ -81,7 +81,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
         </button>
         <button
           type="button"
-          className="flex flex-1 items-center gap-1.5 truncate px-1 py-0.5 text-left text-mini"
+          className="flex min-h-7 flex-1 items-center gap-1.5 truncate px-2 text-left text-mini"
           onClick={() => onNavigate(entry.path)}
         >
           {isExpanded ? (

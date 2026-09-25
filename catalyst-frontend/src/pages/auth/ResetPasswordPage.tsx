@@ -6,12 +6,16 @@ import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { describeError } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
+import { BrandFooter } from '../../components/shared/BrandFooter';
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+/** One banner recipe shared by every auth card. */
+const AUTH_BANNER_CLASS = 'rounded-sm border px-3 py-2.5 text-mini';
 
 function ResetPasswordPage() {
  const { t } = useTranslation('auth');
@@ -86,22 +90,25 @@ function ResetPasswordPage() {
  }
  };
 
- if (isValidating) {
+ // The invalid-token branch must win: an errored validate query leaves
+ // `tokenValidating` true in this build, which used to spin forever.
+ if (isValidating && !tokenInvalid) {
  return (
- <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
  <div className="deck-panel w-full max-w-md">
  <div className="flex flex-col items-center px-3 py-6 text-center">
  <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
  <p className="type-meta mt-3">{t('resetPassword.validating')}</p>
  </div>
  </div>
+ <BrandFooter />
  </div>
  );
  }
 
  if (!token || !isValid) {
  return (
- <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
  <div className="absolute right-4 top-4 z-20">
  <LanguageSwitcher variant="compact" />
  </div>
@@ -123,12 +130,13 @@ function ResetPasswordPage() {
  </div>
  </div>
  </div>
+ <BrandFooter />
  </div>
  );
  }
 
  return (
- <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
  <div className="absolute right-4 top-4 z-20">
  <LanguageSwitcher variant="compact" />
  </div>
@@ -144,7 +152,7 @@ function ResetPasswordPage() {
 
  {isReset ? (
  <div className="mt-6 space-y-4">
- <div className="rounded-sm border border-success/25 bg-success/5 px-3 py-3">
+ <div className={`${AUTH_BANNER_CLASS} border-success/25 bg-success/5 text-success`} role="alert">
  <p className="text-mini text-success">
  {t('resetPassword.success')}
  </p>
@@ -197,7 +205,7 @@ function ResetPasswordPage() {
  <div className="text-center">
  <Link
  to="/login"
- className="text-mini font-medium text-primary transition-colors hover:text-primary/80"
+ className="inline-flex min-h-7 items-center text-mini font-medium text-primary transition-colors hover:text-primary/80"
  >
  {t('resetPassword.backToLogin')}
  </Link>
@@ -206,6 +214,7 @@ function ResetPasswordPage() {
  )}
  </div>
  </div>
+ <BrandFooter />
  </div>
  );
 }

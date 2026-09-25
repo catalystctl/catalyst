@@ -381,7 +381,7 @@ function RoleRow({
  ) : (
  <Shield className="h-3.5 w-3.5 shrink-0 text-primary" />
  )}
- <div className="flex min-w-0 flex-col leading-tight">
+ <div className="flex min-h-9 min-w-0 flex-col justify-center leading-tight">
  <span
  className="truncate font-display text-data font-semibold tracking-tight text-foreground"
  title={roleLabel(t, role.name)}
@@ -396,13 +396,25 @@ function RoleRow({
  {roleDescriptionLabel(t, role.description)}
  </span>
  )}
+ <span className="flex min-w-0 items-center gap-2 text-micro text-muted-foreground md:hidden">
+ <span className="truncate">
+ {t('roles.permissionCount', { count: role.permissions?.length || 0 })}
+ </span>
+ {role.userCount > 0 && (
+ <span className="shrink-0">
+ {t('roles.usersLabel')} {role.userCount}
+ </span>
+ )}
+ </span>
  </div>
  </div>
 
- {/* permissions */}
- <div className="hidden min-w-0 flex-wrap items-center gap-1 md:flex">
+ {/* permissions — nowrap so the permission-count badge never wraps to a
+ second line and breaks the row rhythm */}
+ <div className="hidden min-w-0 items-center gap-1 md:flex">
+ <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
  {isWildcard ? (
- <Badge className="gap-1 border-warning/30 bg-warning/10 text-warning text-micro">
+ <Badge className="shrink-0 gap-1 whitespace-nowrap border-warning/30 bg-warning/10 text-warning text-micro">
  <Zap className="h-3 w-3" /> {t('roles.cardFullAdmin')}
  </Badge>
  ) : (
@@ -410,17 +422,18 @@ function RoleRow({
  {permCats.slice(0, 4).map((cat) => {
  const Icon = cat.icon;
  return (
- <Badge key={cat.category} variant="outline" className="gap-1 text-micro">
+ <Badge key={cat.category} variant="outline" className="shrink-0 gap-1 whitespace-nowrap text-micro">
  <Icon className="h-2.5 w-2.5" /> {cat.category} ({cat.count})
  </Badge>
  );
  })}
  {permCats.length > 4 && (
- <Badge variant="secondary" className="text-micro">{t('roles.cardMore', { count: permCats.length - 4 })}</Badge>
+ <Badge variant="secondary" className="shrink-0 whitespace-nowrap text-micro">{t('roles.cardMore', { count: permCats.length - 4 })}</Badge>
  )}
  </>
  )}
- <Badge variant="outline" className="text-micro">
+ </div>
+ <Badge variant="outline" className="shrink-0 whitespace-nowrap text-micro">
  {t('roles.permissionCount', { count: role.permissions?.length || 0 })}
  </Badge>
  </div>
@@ -722,16 +735,19 @@ function StepIndicator({ steps, currentStep, onStepClick, canNavigate }: {
  <button
  onClick={() => canClick && onStepClick(i)}
  disabled={!canClick}
- className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-mini font-medium transition-all duration-200 ${
+ className={`relative flex items-center gap-1.5 rounded-sm px-3 py-2 text-mini font-medium transition-colors duration-200 ${
  isActive
- ? 'bg-primary text-primary-foreground '
+ ? 'text-foreground'
  : isComplete
- ? 'bg-primary/10 text-primary'
+ ? 'text-primary'
  : canClick
  ? 'text-muted-foreground hover:text-foreground hover:bg-surface-2'
  : 'text-muted-foreground/40 cursor-not-allowed'
  }`}
  >
+ {isActive && (
+ <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+ )}
  <Icon className="h-3 w-3" />
  <span className="hidden sm:inline">{step.label}</span>
  {isComplete && <Check className="h-2.5 w-2.5" />}
@@ -1543,14 +1559,10 @@ function RolesPage() {
  </div>
 
  {viewingRole.permissions?.includes('*') ? (
- <div className="flex flex-col items-center gap-3 rounded-sm border border-warning/20 bg-warning/5 p-6 text-center">
- <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/20">
- <Zap className="h-6 w-6 text-warning" />
- </div>
- <div>
- <div className="text-base font-semibold text-warning">{t('roles.fullAccessTitle')}</div>
- <div className="text-mini text-warning/70">{t('roles.fullAccessDescription')}</div>
- </div>
+ <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm border border-border/60 bg-surface-1/40 px-3 py-2 text-mini text-muted-foreground">
+ <Zap className="h-3 w-3 shrink-0" />
+ <span className="font-medium text-foreground">{t('roles.fullAccessTitle')}</span>
+ <span>{t('roles.fullAccessDescription')}</span>
  </div>
  ) : (
  <div className="grid grid-cols-1 gap-3">

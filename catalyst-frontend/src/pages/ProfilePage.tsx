@@ -276,7 +276,7 @@ export default function ProfilePage() {
 
  {/* Profile Card */}
  <ServerTabCard>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative group">
             {profile?.image ? (
               <img src={profile.image} alt="" className="h-8 w-8 rounded-sm border border-border/60 object-cover" />
@@ -304,13 +304,13 @@ export default function ProfilePage() {
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-2">
-                  <span className="font-display text-data font-semibold tracking-tight text-foreground">{profile?.username || t('account.fallbackName')}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-0 truncate font-display text-data font-semibold tracking-tight text-foreground">{profile?.username || t('account.fallbackName')}</span>
  {authUser?.permissions?.includes('*') && <Badge className="border-warning/40 bg-warning/5 text-warning text-micro">{t('account.superAdmin')}</Badge>}
- <button onClick={startEditProfile} className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+ <button onClick={startEditProfile} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
  </div>
  <div className="mt-1 flex flex-wrap items-center gap-3 text-micro text-muted-foreground">
- <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{profile?.email}</span>
+ <span className="flex min-w-0 items-center gap-1"><Mail className="h-3 w-3 shrink-0" /><span className="truncate">{profile?.email}</span></span>
  {!profile?.emailVerified && (
  <button onClick={() => resendVerifyMutation.mutate()} disabled={resendVerifyMutation.isPending} className="flex h-6 items-center gap-1 rounded-sm border border-warning/30 px-1.5 text-micro font-medium text-warning hover:bg-warning/10">
  {resendVerifyMutation.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <MailCheck className="h-2.5 w-2.5" />}
@@ -324,7 +324,7 @@ export default function ProfilePage() {
  )}
  </div>
 
- <div className="flex flex-col items-end gap-2">
+ <div className="flex flex-col gap-2 sm:items-end">
  <div className="flex gap-2">
  <Badge variant={t2fa ? 'outline' : 'secondary'} className={`text-micro ${t2fa ? 'border-success/40 text-success' : ''}`}>
  {t2fa ? <ShieldCheck className="mr-1 h-3 w-3" /> : <ShieldOff className="mr-1 h-3 w-3" />}{t('account.twoFactorBadge')}
@@ -350,14 +350,14 @@ export default function ProfilePage() {
  <div className="space-y-3">
  <div className="relative">
  <Input type={showCurPw ? 'text' : 'password'} autoComplete="current-password" value={curPw} onChange={(e) => setCurPw(e.target.value)} placeholder={t('password.currentPlaceholder')} className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 pr-10 text-mini" />
- <button onClick={() => setShowCurPw(!showCurPw)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">{showCurPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+ <button onClick={() => setShowCurPw(!showCurPw)} className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">{showCurPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
  </div>
  <div className="relative">
  <Input type={showNewPw ? 'text' : 'password'} autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder={t('password.newPlaceholder')} className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 pr-10 text-mini" />
- <button onClick={() => setShowNewPw(!showNewPw)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">{showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+ <button onClick={() => setShowNewPw(!showNewPw)} className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">{showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
  </div>
- <label className="flex cursor-pointer items-center gap-2 text-mini text-muted-foreground">
- <input type="checkbox" checked={revokeOthers} onChange={(e) => setRevokeOthers(e.target.checked)} className="rounded-sm border-border text-primary" />
+ <label className="flex min-h-7 cursor-pointer items-center gap-2 text-mini text-muted-foreground">
+ <input type="checkbox" checked={revokeOthers} onChange={(e) => setRevokeOthers(e.target.checked)} className="h-4 w-4 shrink-0 rounded-sm border-border text-primary" />
  {t('password.signOutOthers')}
  </label>
  <Button size="sm" onClick={() => changePwMutation.mutate()} disabled={!curPw || !newPw || changePwMutation.isPending} className="h-8 w-full px-3 text-mini">
@@ -476,7 +476,7 @@ export default function ProfilePage() {
  sessions.map((s) => {
  const { browser, os, mobile } = parseUA(s.userAgent);
  return (
- <div key={s.id} className="flex items-center justify-between rounded-sm border border-b border-border/50 py-2 last:border-b-0 hover:bg-surface-1/40">
+ <div key={s.id} className="flex items-center justify-between border-b border-border/50 py-2 last:border-b-0 hover:bg-surface-1/40">
  <div className="flex items-center gap-2.5 min-w-0">
  <Monitor className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
  <div className="min-w-0">

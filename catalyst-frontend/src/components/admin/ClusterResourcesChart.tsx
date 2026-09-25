@@ -292,7 +292,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
  <XAxis
  dataKey="time"
- tick={{ fontSize: 10 }}
+ tick={{ fontSize: 11 }}
  className="text-muted-foreground"
  axisLine={false}
  tickLine={false}
@@ -300,7 +300,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  />
  <YAxis
  domain={getYDomain()}
- tick={{ fontSize: 10 }}
+ tick={{ fontSize: 11 }}
  tickFormatter={(v) => `${v}${getUnit()}`}
  className="text-muted-foreground"
  axisLine={false}

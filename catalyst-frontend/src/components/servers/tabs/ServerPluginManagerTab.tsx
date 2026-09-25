@@ -57,6 +57,8 @@ import ConfirmDialog from '../../shared/ConfirmDialog';
 import UpdateConfirmModal, {
  type UpdateItem,
 } from './UpdateConfirmModal';
+import ServerTabCard from './ServerTabCard';
+import TabEmptyState from './TabEmptyState';
 import TabHeader from './TabHeader';
 
 // ── Animation Variants ──
@@ -76,6 +78,30 @@ const itemVariants: Variants = {
  transition: { type: 'spring', stiffness: 300, damping: 24 },
  },
 };
+
+/**
+ * Provider icons are proxied through the node and 404 often; without a failure
+ * state the browser paints a torn-page glyph. Fall back to the letter tile.
+ */
+function ResultThumb({ src, fallbackLabel }: { src?: string; fallbackLabel: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-border/50 bg-surface-2 text-mini font-semibold text-muted-foreground">
+        {fallbackLabel || 'PL'}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="h-8 w-8 shrink-0 rounded-sm border border-border/50 object-cover"
+    />
+  );
+}
 
 const RESULTS_PER_PAGE = 12;
 
@@ -183,12 +209,12 @@ function VersionSelector({
       )}
      </div>
      {isError ? (
-      <p className="text-xs text-danger">{t('tabs.plugins.versionsFailed')}</p>
+      <p className="text-mini text-danger">{t('tabs.plugins.versionsFailed')}</p>
      ) : (
       <div className="flex items-end gap-2">
        <div className="relative flex-1">
         <select
-         className="w-full appearance-none rounded-sm border border-border bg-surface-2 px-3 py-2 pr-8 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+         className="h-7 w-full appearance-none rounded-sm border border-border/60 bg-background/40 px-2 pr-8 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
          value={selectedVersion}
          onChange={(event) => onVersionChange(event.target.value)}
          disabled={isLoading}
@@ -666,10 +692,19 @@ export default function ServerPluginManagerTab({
  // ── Guard ──
  if (!pluginManagerConfig) {
  return (
- <EmptyState
+ <div className="space-y-4">
+ <TabHeader
+ icon={Puzzle}
+ title={t('tabs.plugins.title')}
+ description={t('tabs.plugins.description')}
+ />
+ <ServerTabCard>
+ <TabEmptyState
  title={t('tabs.plugins.unavailableTitle')}
  description={t('tabs.plugins.unavailableDescription')}
  />
+ </ServerTabCard>
+ </div>
  );
  }
 
@@ -689,13 +724,13 @@ export default function ServerPluginManagerTab({
  actions={(
  <div className="flex items-center gap-2">
  {installedPlugins.length > 0 && (
- <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
+ <Badge variant="outline" className="h-7 gap-1.5 px-2.5 text-mini">
  <Package className="h-2.5 w-2.5" />
  {t('tabs.plugins.installedCount', { count: installedPlugins.length })}
  </Badge>
  )}
  {pluginsWithUpdates.length > 0 && (
- <Badge variant="warning" className="h-8 gap-1.5 px-3 text-xs">
+ <Badge variant="warning" className="h-7 gap-1.5 px-2.5 text-mini">
  <ArrowUpCircle className="h-2.5 w-2.5" />
  {t('tabs.plugins.updatesBadge', { count: pluginsWithUpdates.length })}
  </Badge>
@@ -706,14 +741,14 @@ export default function ServerPluginManagerTab({
  </motion.div>
 
  {/* ── Sub-tab toggle ── */}
- <motion.div variants={itemVariants} className="flex items-center gap-1 rounded-sm border border-border bg-card p-1 backdrop-blur-sm">
+ <motion.div variants={itemVariants} className="flex items-center gap-1 rounded-sm border border-border/60 bg-card p-1">
  {(['browse', 'installed'] as const).map((tab) => (
  <button
  key={tab}
  type="button"
- className={`relative flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold transition-colors duration-200 ${
+ className={`relative flex h-7 items-center gap-2 rounded-sm px-3 text-mini font-semibold transition-colors ${
  pluginSubTab === tab
- ? 'bg-primary text-primary-foreground shadow-sm'
+ ? 'bg-primary text-primary-foreground'
  : 'text-muted-foreground hover:text-foreground'
  }`}
  onClick={() => {
@@ -743,7 +778,7 @@ export default function ServerPluginManagerTab({
  {/* ── Filters ── */}
  <motion.div
  variants={itemVariants}
- className="rounded-sm border border-border/50 bg-card p-2.5 backdrop-blur-sm"
+ className="rounded-sm border border-border/50 bg-card p-2.5"
  >
  <div className="flex flex-wrap items-center gap-2.5">
  {/* Search */}
@@ -762,7 +797,7 @@ export default function ServerPluginManagerTab({
 
  {/* Game version — provider-agnostic Minecraft version filter */}
  <select
- className="h-9 rounded-sm border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+ className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={pluginGameVersion}
  onChange={(e) => setPluginGameVersion(e.target.value)}
  aria-label={t('tabs.plugins.filterByGameVersion')}
@@ -782,7 +817,7 @@ export default function ServerPluginManagerTab({
 
  {/* Provider */}
  <select
- className="h-9 rounded-sm border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+ className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={pluginProvider}
  onChange={(e) => setPluginProvider(e.target.value)}
  >
@@ -815,14 +850,14 @@ export default function ServerPluginManagerTab({
  variants={itemVariants}
  className="flex flex-wrap items-center justify-between gap-2"
  >
- <div className="flex flex-wrap items-center gap-1 rounded-sm border border-border/50 bg-card p-1 backdrop-blur-sm">
+ <div className="flex flex-wrap items-center gap-1 rounded-sm border border-border/50 bg-card p-1">
  {pluginSortOptions(t).map(({ id, label, icon: SortIcon }) => (
  <button
  key={id}
  type="button"
- className={`flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors duration-200 ${
+ className={`flex h-7 items-center gap-1.5 rounded-sm px-2.5 text-mini font-medium transition-colors ${
  pluginSort === id
- ? 'bg-primary text-primary-foreground shadow-sm'
+ ? 'bg-primary text-primary-foreground'
  : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
  }`}
  onClick={() => setPluginSort(id)}
@@ -896,13 +931,10 @@ export default function ServerPluginManagerTab({
  </motion.div>
  ) : (
  <>
- {/* Result cards — each card owns its entrance animation (direct props,
-     not inherited variants): orchestrated staggered entrances can strand
-     late children in the "hidden" state when a re-render lands mid-flight,
-     which showed up as cards silently missing until a re-mount. */}
- <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
- <AnimatePresence>
- {pluginResults.map((entry: any, index: number) => {
+ {/* Browsing results are deck rows: one flat, striped panel with a single
+     container-level entrance — no per-card animation, lift, blur or shadow. */}
+ <motion.div variants={itemVariants} className="deck-rows">
+ {pluginResults.map((entry: any) => {
  const id =
  pluginProvider === 'paper'
  ? encodeURIComponent(
@@ -988,23 +1020,10 @@ export default function ServerPluginManagerTab({
  const updatedLabel = formatRelativeTime(updatedValue);
 
  return (
- <motion.div
+ <div
  key={String(id)}
- initial={{ opacity: 0, y: 8 }}
- animate={{
- opacity: 1,
- y: 0,
- transition: {
- duration: 0.22,
- delay: Math.min(index * 0.03, 0.15),
- ease: 'easeOut',
- },
- }}
- exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.12 } }}
- className={`group relative cursor-pointer rounded-sm border p-4 transition-colors duration-200 ${
- isActive
- ? 'border-primary/50 bg-primary-muted/50 ring-1 ring-primary/20'
- : 'border-border/50 bg-card backdrop-blur-sm hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg'
+ className={`group relative cursor-pointer px-3 py-2.5 transition-colors ${
+ isActive ? 'bg-primary-muted/40' : ''
  }`}
  onClick={() => {
  setSelectedPlugin(
@@ -1014,18 +1033,7 @@ export default function ServerPluginManagerTab({
  }}
  >
  <div className="flex items-start gap-3">
- {imageUrl ? (
- <img
- src={imageUrl}
- alt=""
- loading="lazy"
- className="h-11 w-11 shrink-0 rounded-sm object-cover ring-1 ring-border/50"
- />
- ) : (
- <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-mini font-semibold text-muted-foreground">
- {fallbackLabel || 'PL'}
- </div>
- )}
+ <ResultThumb src={typeof imageUrl === 'string' ? imageUrl : undefined} fallbackLabel={fallbackLabel} />
  <div className="min-w-0 flex-1">
  <div className="flex items-start justify-between gap-2">
  <span className="truncate text-sm font-semibold text-foreground">
@@ -1099,11 +1107,10 @@ export default function ServerPluginManagerTab({
  />
  )}
  </AnimatePresence>
- </motion.div>
+ </div>
  );
  })}
- </AnimatePresence>
- </div>
+ </motion.div>
 
  {/* Bottom pagination */}
  {totalHits > RESULTS_PER_PAGE && (
@@ -1143,9 +1150,9 @@ export default function ServerPluginManagerTab({
  <button
  key={pageNum}
  type="button"
- className={`h-8 min-w-8 rounded-sm px-2 text-xs font-medium type-numeric transition-colors ${
+ className={`h-7 min-w-7 rounded-sm px-2 text-mini font-medium type-numeric transition-colors ${
  searchPage === pageNum
- ? 'bg-primary text-primary-foreground shadow-sm'
+ ? 'bg-primary text-primary-foreground'
  : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
  }`}
  onClick={() => setSearchPage(pageNum)}
@@ -1201,7 +1208,7 @@ export default function ServerPluginManagerTab({
  </div>
 
  <select
- className="h-9 rounded-sm border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+ className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={pluginInstalledFilter}
  onChange={(e) =>
  setPluginInstalledFilter(
@@ -1216,7 +1223,7 @@ export default function ServerPluginManagerTab({
  </select>
 
  <select
- className="h-9 rounded-sm border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+ className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={pluginInstalledSort}
  onChange={(e) =>
  setPluginInstalledSort(
@@ -1310,7 +1317,7 @@ export default function ServerPluginManagerTab({
  {filteredInstalledPlugins.length > 0 && (
  <button
  type="button"
- className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+ className="text-mini text-muted-foreground transition-colors hover:text-foreground"
  onClick={() => {
  if (
  selectedPluginFiles.size ===
@@ -1356,7 +1363,7 @@ export default function ServerPluginManagerTab({
  />
  </motion.div>
  ) : (
- <div className="overflow-hidden rounded-sm border border-border bg-card backdrop-blur-sm">
+ <div className="overflow-hidden rounded-sm border border-border/60 bg-card">
  <AnimatePresence>
  {filteredInstalledPlugins.map((plugin: any) => {
  const isSelected = selectedPluginFiles.has(

@@ -6,6 +6,7 @@ import PluginErrorBoundary from '../plugins/PluginErrorBoundary';
 import { useAuthStore } from '../stores/authStore';
 import { hasAnyPermission } from '../components/auth/ProtectedRoute';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
+import NotFoundPage from './NotFoundPage';
 
 /**
  * Renders the plugin page that matches the current dynamic route.
@@ -15,8 +16,8 @@ import LoadingSpinner from '../components/shared/LoadingSpinner';
  * The URL path segment is matched against plugin route paths.
  * The route param `:pluginRouteName` comes from App.tsx's catch-all route.
  *
- * Waits for plugins to finish loading before redirecting to dashboard on miss,
- * and enforces each route's requiredPermissions when present.
+ * Waits for plugins to finish loading before rendering the not-found page on a
+ * miss, and enforces each route's requiredPermissions when present.
  */
 export default function PluginRoutePage() {
   const { pluginRouteName } = useParams<{ pluginRouteName: string }>();
@@ -43,7 +44,7 @@ export default function PluginRoutePage() {
   const matched = routes.find((r) => r.path === currentPath);
 
   if (!matched) {
-    return <Navigate to="/dashboard" replace />;
+    return <NotFoundPage />;
   }
 
   if (

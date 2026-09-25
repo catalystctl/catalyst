@@ -386,6 +386,13 @@
       "node": "Node: {{name}}",
       "pagination": "Page {{page}} of {{totalPages}} · {{total}} entries",
       "port": "Port {{port}}",
+      "powerResult": {
+        "acked": "Accepted by node",
+        "failed": "Failed",
+        "sent": "Sent to node",
+        "timeout": "Timed out",
+        "unknown": "Node response"
+      },
       "previous": "Previous",
       "statusSummary": "Status: {{status}}",
       "system": "System",

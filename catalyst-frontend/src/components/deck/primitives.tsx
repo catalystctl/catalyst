@@ -157,7 +157,7 @@ export function StatusLed({
 }
 
 const GAME_HUES: { match: RegExp; hue: string; glyph: string }[] = [
-  { match: /minecraft|paper|spigot|bukkit|fabric|forge|purpur/i, hue: 'var(--game-minecraft)', glyph: 'MC' },
+  { match: /minecraft|paper|spigot|bukkit|fabric|forge|purpur|folia|vanilla|velocity|waterfall|bungee/i, hue: 'var(--game-minecraft)', glyph: 'MC' },
   { match: /counter-?strike|cs2|csgo|cs16|counterstrike/i, hue: 'var(--game-cs)', glyph: 'CS' },
   { match: /rust/i, hue: 'var(--game-rust)', glyph: 'RU' },
   { match: /ark/i, hue: 'var(--game-ark)', glyph: 'AR' },

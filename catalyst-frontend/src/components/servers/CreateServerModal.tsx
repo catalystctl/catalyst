@@ -433,7 +433,7 @@ function CreateServerModal() {
 
  <Button
  size="sm"
- className="h-8 px-3 text-mini"
+ className="h-8 rounded-sm px-3 text-mini shadow-none"
  onClick={() => { setStep('details'); setOpen(true); }}
  >
  <Plus className="h-3.5 w-3.5" />
@@ -461,7 +461,7 @@ function CreateServerModal() {
  disabled={!canNavigate}
  onClick={() => { if (canNavigate) setStep(key); }}
  className={cn(
- 'relative flex h-7 min-w-0 items-center gap-1.5 px-2 text-mini transition-colors',
+ 'relative flex h-7 min-w-0 items-center gap-1.5 px-1.5 text-mini transition-colors sm:px-2',
  canNavigate ? 'cursor-pointer' : 'cursor-not-allowed opacity-40',
  isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
  )}
@@ -485,7 +485,7 @@ function CreateServerModal() {
  index + 1
  )}
  </span>
- <span className="hidden truncate sm:block">{stepNames[key]}</span>
+ <span className="truncate">{stepNames[key]}</span>
  </button>
  {index < stepOrder.length - 1 && (
  <span className="h-4 w-px shrink-0 bg-border/60" aria-hidden />
@@ -702,18 +702,18 @@ function CreateServerModal() {
  <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setOpen(false)}>
  {t('common:actions.cancel')}
  </Button>
- <div className="flex items-center gap-2">
+ <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
  {stepIndex > 0 ? (
  <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(stepOrder[stepIndex - 1])}>
  {t('common:actions.back')}
  </Button>
  ) : null}
  {stepIndex < stepOrder.length - 1 ? (
- <Button size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(stepOrder[stepIndex + 1])} disabled={!canGoNext}>
+ <Button size="sm" className="h-8 px-3 text-mini disabled:bg-surface-3 disabled:text-muted-foreground" onClick={() => setStep(stepOrder[stepIndex + 1])} disabled={!canGoNext}>
  {t('common:actions.next')}
  </Button>
  ) : (
- <Button size="sm" className="h-8 px-3 text-mini" onClick={() => mutation.mutate()} disabled={disableSubmit}>
+ <Button size="sm" className="h-8 px-3 text-mini disabled:bg-surface-3 disabled:text-muted-foreground" onClick={() => mutation.mutate()} disabled={disableSubmit}>
  {mutation.isPending ? t('createServer.creating') : t('createServer.submit')}
  </Button>
  )}

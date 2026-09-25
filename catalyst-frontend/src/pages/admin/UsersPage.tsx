@@ -96,16 +96,19 @@ function StepIndicator({ steps, currentStep, onStepClick, canNavigate }: {
  <button
  onClick={() => canClick && onStepClick(i)}
  disabled={!canClick}
- className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-mini font-medium transition-all duration-200 ${
+ className={`relative flex items-center gap-1.5 rounded-sm px-3 py-2 text-mini font-medium transition-colors duration-200 ${
  isActive
- ? 'bg-primary text-primary-foreground'
+ ? 'text-foreground'
  : isComplete
- ? 'bg-primary/10 text-primary'
+ ? 'text-primary'
  : canClick
  ? 'text-muted-foreground hover:text-foreground hover:bg-surface-2'
  : 'text-muted-foreground/40 cursor-not-allowed'
  }`}
  >
+ {isActive && (
+ <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+ )}
  <Icon className="h-3 w-3" />
  <span className="hidden sm:inline">{step.label}</span>
  {isComplete && <Check className="h-2.5 w-2.5" />}
@@ -401,6 +404,7 @@ function UsersPage() {
  const clearFilters = () => {
  setRoleFilter('');
  setStatusFilter('');
+ setSearch('');
  setPage(1);
  };
 
@@ -1022,9 +1026,10 @@ function UsersPage() {
  </div>
  )}
 
- {/* Bulk actions strip */}
- {selectedIds.length > 0 && (
- <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-primary/5 px-3 py-1.5">
+ {/* Bulk actions strip — swapped into the column-header slot so entering
+ selection does not reflow the table you were reading */}
+ {selectedIds.length > 0 ? (
+ <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-primary/5 px-3 py-1.5">
  <div className="flex items-center gap-3">
  <span className="text-mini text-foreground">
  {t('users.selectedCount', { count: selectedIds.length })}
@@ -1041,11 +1046,11 @@ function UsersPage() {
  <Button variant="outline" size="sm" onClick={() => handleBulkBan(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-destructive hover:border-destructive/20 hover:bg-destructive/5 hover:text-destructive">
  <Ban className="h-3 w-3" /> {t('users.ban')}
  </Button>
- <Button variant="outline" size="sm" onClick={() => handleBulkUnban(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-success hover:border-success/20 hover:bg-success/5 hover:text-success">
+ <Button variant="outline" size="sm" onClick={() => handleBulkUnban(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-muted-foreground">
  <CheckCircle className="h-3 w-3" /> {t('users.unban')}
  </Button>
  {selectedIds.some((id) => !users.find((u) => u.id === id)?.emailVerified) && (
- <Button variant="outline" size="sm" onClick={() => handleBulkVerifyEmails(selectedIds)} disabled={verifyEmailMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-success hover:border-success/20 hover:bg-success/5 hover:text-success">
+ <Button variant="outline" size="sm" onClick={() => handleBulkVerifyEmails(selectedIds)} disabled={verifyEmailMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-muted-foreground">
  <MailCheck className="h-3 w-3" /> {t('users.verifyEmails')}
  </Button>
  )}
@@ -1055,9 +1060,8 @@ function UsersPage() {
  </Button>
  </div>
  </div>
- )}
-
- {/* Column header — same grid as the rows, so columns always line up */}
+ ) : (
+ /* Column header — same grid as the rows, so columns always line up */
  <div
  className={cn(
  GRID,
@@ -1079,12 +1083,13 @@ function UsersPage() {
  aria-label={t('users.selectAll')}
  className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
  />
- <span className="type-overline">{t('users.title')}</span>
+ <span className="type-overline">{t('common:roles.user')}</span>
  </span>
  <span className="type-overline hidden justify-self-end md:inline-flex">{t('users.roleLabel')}</span>
  <span className="type-overline hidden justify-self-end md:inline-flex">{t('users.statusLabel')}</span>
  <span className="type-overline justify-self-end">{t('users.more')}</span>
  </div>
+ )}
 
  {/* Rows */}
  <div className="max-h-[calc(100dvh-20rem)] min-w-0 overflow-y-auto bg-background/25">
@@ -1140,6 +1145,7 @@ function UsersPage() {
  : [...prev, user.id],
  )
  }
+ onClick={(e) => e.stopPropagation()}
  className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
  />
  <StatusLed
@@ -1199,7 +1205,7 @@ function UsersPage() {
  {user.banned ? (
  <button
  className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
- onClick={() => handleBulkUnban([user.id], user.username)}
+ onClick={(e) => { e.stopPropagation(); handleBulkUnban([user.id], user.username); }}
  disabled={banMutation.isPending || unbanMutation.isPending}
  title={t('users.unban')}
  >
@@ -1208,7 +1214,7 @@ function UsersPage() {
  ) : (
  <button
  className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
- onClick={() => handleBulkBan([user.id], user.username)}
+ onClick={(e) => { e.stopPropagation(); handleBulkBan([user.id], user.username); }}
  disabled={banMutation.isPending || unbanMutation.isPending}
  title={t('users.ban')}
  >
@@ -1218,7 +1224,7 @@ function UsersPage() {
  {!user.emailVerified && (
  <button
  className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
- onClick={() => verifyEmailMutation.mutate(user.id)}
+ onClick={(e) => { e.stopPropagation(); verifyEmailMutation.mutate(user.id); }}
  disabled={verifyEmailMutation.isPending}
  title={t('users.verifyEmailAction')}
  >
@@ -1307,7 +1313,7 @@ function UsersPage() {
  title={search.trim() || hasActiveFilters ? t('users.emptyFilteredTitle') : t('users.emptyTitle')}
  description={search.trim() || hasActiveFilters ? t('users.emptyFilteredDescription') : t('users.emptyDescription')}
  action={
- hasActiveFilters ? (
+ search.trim() || hasActiveFilters ? (
  <Button variant="outline" size="sm" className="h-7 rounded-sm px-2.5 text-mini" onClick={clearFilters}>
  <X className="mr-1.5 h-3.5 w-3.5" />
  {t('users.clearFilters')}
@@ -1406,12 +1412,10 @@ function UsersPage() {
  key="step-account"
  className="space-y-5"
  >
- <div className="text-mini font-semibold uppercase tracking-wide text-muted-foreground">
- {t('users.accountCredentials')}
- </div>
+ <BracketLabel tone="muted">{t('users.accountCredentials')}</BracketLabel>
  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
  <label className="block space-y-1.5">
- <span className="text-mini font-medium text-muted-foreground">
+ <span className="type-overline">
  {t('users.emailLabel')} <span className="text-destructive">*</span>
  </span>
  <Input
@@ -1422,7 +1426,7 @@ function UsersPage() {
  />
  </label>
  <label className="block space-y-1.5">
- <span className="text-mini font-medium text-muted-foreground">
+ <span className="type-overline">
  {t('users.usernameLabel')} <span className="text-destructive">*</span>
  </span>
  <Input
@@ -1432,7 +1436,7 @@ function UsersPage() {
  />
  </label>
  <label className="block space-y-1.5">
- <span className="text-mini font-medium text-muted-foreground">
+ <span className="type-overline">
  {editingUserId ? t('users.newPasswordLabel') : t('users.passwordLabel')}
  {!editingUserId && <span className="text-destructive"> *</span>}
  </span>
@@ -1490,7 +1494,7 @@ function UsersPage() {
  value={editingUserId ? editRoleSearch : roleSearch}
  onChange={(e) => editingUserId ? setEditRoleSearch(e.target.value) : setRoleSearch(e.target.value)}
  placeholder={t('users.searchRoles')}
- className="h-8 pl-8 text-mini"
+ className="pl-8 text-mini"
  />
  </div>
  </div>
@@ -1530,7 +1534,7 @@ function UsersPage() {
  value={editingUserId ? editServerSearch : serverSearch}
  onChange={(e) => editingUserId ? setEditServerSearch(e.target.value) : setServerSearch(e.target.value)}
  placeholder={t('users.searchServers')}
- className="h-8 pl-8 text-mini"
+ className="pl-8 text-mini"
  />
  </div>
  </div>

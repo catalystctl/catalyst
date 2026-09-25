@@ -110,7 +110,7 @@ function Breadcrumbs() {
     >
       {!skipDashboardHome && (
         <Link
-          className="shrink-0 rounded-md px-1.5 py-0.5 font-medium transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="inline-flex min-h-7 shrink-0 items-center rounded-md px-1.5 font-medium transition-colors hover:bg-surface-2 hover:text-foreground"
           to="/dashboard"
         >
           {t('nav.dashboard')}
@@ -123,14 +123,15 @@ function Breadcrumbs() {
           )}
           {crumb.isLast ? (
             <span
-              className={`truncate px-1.5 py-0.5 font-medium text-foreground ${crumb.label.endsWith('…') ? 'font-mono text-mini tabular-nums' : ''}`}
+              className={`inline-flex min-h-7 min-w-0 items-center px-1.5 font-medium text-foreground ${crumb.label.endsWith('…') ? 'font-mono text-mini tabular-nums' : ''}`}
               aria-current="page"
+              title={crumb.label}
             >
-              {crumb.label}
+              <span className="truncate">{crumb.label}</span>
             </span>
           ) : (
             <Link
-              className="shrink-0 rounded-md px-1.5 py-0.5 font-medium transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="inline-flex min-h-7 shrink-0 items-center rounded-md px-1.5 font-medium transition-colors hover:bg-surface-2 hover:text-foreground"
               to={crumb.href}
             >
               {crumb.label}
