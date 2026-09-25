@@ -24,24 +24,17 @@
     "warningFreshInstall": "This will create a new server with the same configuration. A fresh install will run on the new server."
   },
   "console": {
-    "autoScroll": "Auto-scroll",
-    "clear": "Clear",
     "connection": {
       "connecting": "Connecting",
       "disconnected": "Disconnected",
       "live": "Live",
       "reconnecting": "Reconnecting"
     },
-    "filterPlaceholder": "Filter output…",
     "lines_one": "{{count}} line",
     "lines_other": "{{count}} lines",
-    "pageDescription": "Real-time output and command input",
-    "pageTitle": "Console",
     "placeholderConnectToSend": "Connect to send commands",
     "placeholderReconnecting": "Reconnecting…",
-    "placeholderSuspended": "Server suspended",
     "placeholderTypeCommand": "Type a command…",
-    "placeholderTypeCommandHistory": "Type a command… (↑↓ for history)",
     "send": "Send",
     "streams": {
       "stderr": "stderr",
@@ -49,7 +42,6 @@
       "stdout": "stdout",
       "system": "system"
     },
-    "suspendedNotice": "Server suspended — console input disabled.",
     "tab": {
       "bufferSize": "Buffer size",
       "clearConsole": "Clear console",
@@ -212,12 +204,6 @@
     "selectAllocation": "Select allocation",
     "swapMb": "Swap (MB)"
   },
-  "files": {
-    "description": "{{name}} · Upload, edit, and manage server files.",
-    "noServerDescription": "Select a server to manage its files.",
-    "noServerTitle": "No server selected",
-    "title": "Files"
-  },
   "filters": {
     "allStatuses": "All statuses",
     "clear": "Clear",
@@ -331,7 +317,6 @@
     "title": "Transfer server",
     "transfer": "Transfer"
   },
-  "unknownServer": "Unknown server",
   "updateServer": {
     "backupAllocation": "Backup allocation (MB)",
     "backupAllocationHint": "Set to 0 to disable backups. Local and Stream modes require an allocation.",

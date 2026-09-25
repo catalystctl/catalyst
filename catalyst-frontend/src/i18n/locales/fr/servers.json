@@ -24,25 +24,18 @@
     "warningFreshInstall": "Un nouveau serveur avec la même configuration sera créé. Une nouvelle installation sera exécutée sur le nouveau serveur."
   },
   "console": {
-    "autoScroll": "Défilement automatique",
-    "clear": "Effacer",
     "connection": {
       "connecting": "Connexion…",
       "disconnected": "Déconnecté",
       "live": "En direct",
       "reconnecting": "Reconnexion…"
     },
-    "filterPlaceholder": "Filtrer la sortie…",
     "lines_one": "{{count}} ligne",
     "lines_many": "{{count}} lignes",
     "lines_other": "{{count}} lignes",
-    "pageDescription": "Sortie en temps réel et saisie de commandes",
-    "pageTitle": "Console",
     "placeholderConnectToSend": "Connectez-vous pour envoyer des commandes",
     "placeholderReconnecting": "Reconnexion…",
-    "placeholderSuspended": "Serveur suspendu",
     "placeholderTypeCommand": "Saisissez une commande…",
-    "placeholderTypeCommandHistory": "Saisissez une commande… (↑↓ pour l’historique)",
     "send": "Envoyer",
     "streams": {
       "stderr": "Sortie d’erreur",
@@ -50,7 +43,6 @@
       "stdout": "Sortie standard",
       "system": "Système"
     },
-    "suspendedNotice": "Serveur suspendu — saisie de la console désactivée.",
     "tab": {
       "bufferSize": "Taille du tampon",
       "clearConsole": "Effacer la console",
@@ -214,12 +206,6 @@
     "selectAllocation": "Sélectionner une allocation",
     "swapMb": "Swap (MB)"
   },
-  "files": {
-    "description": "{{name}} · Téléversez, modifiez et gérez les fichiers du serveur.",
-    "noServerDescription": "Sélectionnez un serveur pour gérer ses fichiers.",
-    "noServerTitle": "Aucun serveur sélectionné",
-    "title": "Fichiers"
-  },
   "filters": {
     "allStatuses": "Tous les états",
     "clear": "Effacer",
@@ -333,7 +319,6 @@
     "title": "Transférer le serveur",
     "transfer": "Transférer"
   },
-  "unknownServer": "Serveur inconnu",
   "updateServer": {
     "backupAllocation": "Allocation de sauvegarde (MB)",
     "backupAllocationHint": "Définissez 0 pour désactiver les sauvegardes. Les modes « Système de fichiers partagé » et « Flux » nécessitent une allocation.",
