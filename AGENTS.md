@@ -54,7 +54,7 @@ non-trivial, all of them:
 
 ## Conventions
 
-- Conventional commits: the release workflow derives minor/patch bumps from them (`feat:` minor, `fix:` patch).
+- Conventional commits: the release workflow derives minor/patch bumps from them (`feat:` minor, `fix:` and `chore(deps):` patch — dependency overhauls must ship; other `chore`/`ci`/`build`/`style` never bump).
 - Tests live next to the code (`src/__tests__/`, `src/**/__tests__/`). Backend tests hit the real dev database and must clean up the rows they create.
 - When behaviour changes, update the matching doc (`docs/i18n.md`, the relevant `catalyst-doc` page, or the generated API reference).
 - Comments stay short and factual; explain non-obvious constraints only.

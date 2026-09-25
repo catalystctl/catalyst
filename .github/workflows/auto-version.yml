@@ -85,7 +85,19 @@ jobs:
           while IFS= read -r msg || [[ -n "$msg" ]]; do
             [ -z "$msg" ] && continue
 
-            # Skip chore and release commits (never trigger a bump)
+            # Dependency overhauls change what every image and binary ships,
+            # so chore(deps) must release — treat it as a patch bump. (#266
+            # landed as chore(deps) and shipped no artifacts for two days.)
+            if echo "$msg" | grep -qE '^chore\(deps\):'; then
+              if [ "$BUMP" = "none" ]; then
+                BUMP="patch"
+                echo "Found chore(deps) in commit: $msg"
+              fi
+              continue
+            fi
+
+            # Skip chore and release commits (never trigger a bump;
+            # chore(deps) is handled above and does bump)
             if echo "$msg" | grep -qE '^(chore|ci|build|style)(\([^)]*\))?:'; then
               echo "Skipping chore/ci/build/style commit: $msg"
               continue
