@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, X, ArrowUpCircle, BellOff, Clock, BellRing, Ban } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
  Dialog,
@@ -14,6 +13,7 @@ import {
  DialogFooter,
 } from '@/components/ui/dialog';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
+import { PANEL_VERSION } from '../../utils/version';
 import { useAuthStore } from '../../stores/authStore';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -84,6 +84,13 @@ export default function UpdateNotification() {
  const canUpdate = hasAdminWrite && updateData?.isDocker;
  const latestVersion = updateData?.latestVersion ?? '';
 
+ // Dev preview: `?update=1` forces the flyout, which otherwise cannot appear
+ // locally because canUpdate requires a Docker deployment.
+ const previewUpdate =
+   import.meta.env.DEV &&
+   typeof window !== 'undefined' &&
+   new URLSearchParams(window.location.search).has('update');
+
  // Post-update reload: greet the admin with a completion toast exactly once.
  // This component lives in AppLayout so it re-runs after the auto-reload.
  const reloadedRef = useRef(false);
@@ -137,11 +144,10 @@ export default function UpdateNotification() {
  if (!hasAdminWrite) return null;
 
  const visible =
- canUpdate &&
- updateData?.updateAvailable &&
- !sessionDismissed &&
- !isGloballyDismissed() &&
- !isVersionDismissed(latestVersion);
+   (canUpdate || previewUpdate) &&
+   (updateData?.updateAvailable || previewUpdate) &&
+   (previewUpdate ||
+     (!sessionDismissed && !isGloballyDismissed() && !isVersionDismissed(latestVersion)));
 
  return (
  <>
@@ -154,15 +160,15 @@ export default function UpdateNotification() {
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
  className="pointer-events-none fixed right-3 top-14 z-40 flex justify-end lg:right-5 lg:top-16"
  >
- <Card className="pointer-events-auto flex w-[min(24rem,calc(100vw-1.5rem))] items-start gap-3 border border-border/50 bg-card px-3 py-2.5 shadow-elevated lg:items-center">
+ <div className="deck-panel pointer-events-auto flex w-[min(24rem,calc(100vw-1.5rem))] items-start gap-3 px-3 py-2.5 shadow-elevated lg:items-center">
  <ArrowUpCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary lg:mt-0" />
 
  <div className="flex min-w-0 flex-1 flex-col">
  <span className="text-sm font-medium leading-tight text-foreground">
- {t('updateNotification.available', { version: String(updateData.latestVersion).replace(/^v/i, '') })}
+ {t('updateNotification.available', { version: String(updateData?.latestVersion ?? updateData?.currentVersion ?? PANEL_VERSION).replace(/^v/i, '') })}
  </span>
  <span className="type-meta mt-0.5">
- {t('updateNotification.currentVersion', { version: String(updateData.currentVersion).replace(/^v/i, '') })}
+ {t('updateNotification.currentVersion', { version: String(updateData?.currentVersion ?? PANEL_VERSION).replace(/^v/i, '') })}
  </span>
  </div>
 
@@ -170,7 +176,7 @@ export default function UpdateNotification() {
  <Button
  size="sm"
  variant="default"
- className="h-7 gap-1.5 text-xs"
+ className="h-7 gap-1.5 text-mini"
  disabled={triggering}
  onClick={handleTriggerUpdate}
  >
@@ -180,7 +186,7 @@ export default function UpdateNotification() {
  <button
  type="button"
  onClick={handleQuickDismiss}
- className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  title={t('updateNotification.dismissForNow')}
  aria-label={t('updateNotification.dismissTitle')}
  >
@@ -189,14 +195,14 @@ export default function UpdateNotification() {
  <button
  type="button"
  onClick={handleOpenModal}
- className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  title={t('updateNotification.dismissOptions')}
  aria-label={t('updateNotification.openDismissOptions')}
  >
  <BellOff className="h-3.5 w-3.5" />
  </button>
  </div>
- </Card>
+ </div>
  </motion.div>
  )}
  </AnimatePresence>
@@ -219,7 +225,7 @@ export default function UpdateNotification() {
  <button
  type="button"
  onClick={() => handleDismissChoice('session')}
- className="flex items-start gap-3 rounded-md border border-border/50 bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+ className="flex items-start gap-3 rounded-sm border border-border/60 bg-surface-1/40 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
  >
  <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  <div className="flex flex-col gap-0.5">
@@ -234,7 +240,7 @@ export default function UpdateNotification() {
  <button
  type="button"
  onClick={() => handleDismissChoice('version')}
- className="flex items-start gap-3 rounded-md border border-border/50 bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+ className="flex items-start gap-3 rounded-sm border border-border/60 bg-surface-1/40 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
  >
  <BellRing className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  <div className="flex flex-col gap-0.5">
@@ -251,7 +257,7 @@ export default function UpdateNotification() {
  <button
  type="button"
  onClick={() => handleDismissChoice('global')}
- className="flex items-start gap-3 rounded-md border border-warning/20 bg-warning/5 px-4 py-3 text-left transition-colors hover:bg-warning/10"
+ className="flex items-start gap-3 rounded-sm border border-warning/25 bg-warning/5 px-3 py-2.5 text-left transition-colors hover:bg-warning/10"
  >
  <Ban className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
  <div className="flex flex-col gap-0.5">

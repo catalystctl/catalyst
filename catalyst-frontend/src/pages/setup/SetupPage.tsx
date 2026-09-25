@@ -11,6 +11,7 @@ import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { describeError } from '../../utils/errors';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
+import { BracketLabel } from '../../components/deck/primitives';
 import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generatePalette';
 import { cn } from '../../lib/utils';
 import type { ThemeColors } from '../../services/api/theme';
@@ -30,8 +31,6 @@ import {
  X,
  Shuffle,
 } from 'lucide-react';
-import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 
 const stepIcons = [Sparkles, User, Palette];
 
@@ -41,11 +40,11 @@ function Swatch({ color, label }: { color: string; label?: string }) {
  return (
  <div className="group/swatch flex flex-col items-center gap-1">
  <div
- className="h-10 w-full rounded-md ring-1 ring-black/5 transition-transform hover:scale-105"
+ className="h-9 w-full rounded-sm ring-1 ring-border/70 transition-transform group-hover/swatch:-translate-y-0.5"
  style={{ backgroundColor: color }}
  />
  {label && (
- <span className="text-[11px] font-medium text-muted-foreground">
+ <span className="font-mono text-micro text-muted-foreground">
  {label}
  </span>
  )}
@@ -106,9 +105,15 @@ function SetupPage() {
  const checkStatus = async () => {
  try {
  const data = await apiClient.get<{ setupRequired: boolean }>('/api/setup/status');
- if (!data.setupRequired) {
- setAlreadySetup(true);
- navigate('/login', { replace: true });
+ // Dev preview: `?preview=1` renders the wizard on an already-set-up panel
+ // so its states can be reviewed. Submitting is unchanged.
+ const previewWizard =
+   import.meta.env.DEV &&
+   typeof window !== 'undefined' &&
+   new URLSearchParams(window.location.search).has('preview');
+ if (!data.setupRequired && !previewWizard) {
+   setAlreadySetup(true);
+   navigate('/login', { replace: true });
  }
  } catch (err) {
  reportSystemError({
@@ -299,9 +304,9 @@ function SetupPage() {
 
  // ── Input class ──
  const inputClass =
- 'w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary';
+ 'h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40';
 
- const labelClass = 'block text-sm text-muted-foreground';
+ const labelClass = 'block text-mini text-muted-foreground';
 
  return (
  <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
@@ -309,42 +314,33 @@ function SetupPage() {
  <LanguageSwitcher variant="compact" />
  </div>
  <div className="relative z-10 w-full max-w-lg space-y-4">
- <ServerTabCard>
+ <div className="deck-panel px-3 py-3 sm:px-4 sm:py-4">
  {/* ── Step indicator ── */}
- <div className="mb-8 flex items-center justify-center gap-2">
+ <div className="mb-6 flex flex-wrap items-center gap-2">
  {stepLabels.map((label, i) => {
  const Icon = stepIcons[i];
  const isActive = i === currentStep;
  const isComplete = i < currentStep;
  return (
- <div key={label} className="flex items-center">
- <div className="flex flex-col items-center gap-1.5">
+ <div key={label} className="flex flex-1 items-center gap-2">
  <div
  className={cn(
- 'flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all duration-300',
+ 'flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 font-display text-micro font-semibold transition-colors sm:px-2.5',
  isActive
- ? 'border-primary bg-primary/10 text-primary'
+ ? 'border-primary/50 bg-primary/10 text-primary'
  : isComplete
- ? 'border-primary bg-primary text-primary-foreground'
- : 'border-surface-3 text-muted-foreground',
+ ? 'border-success/40 text-success'
+ : 'border-border/60 text-muted-foreground',
  )}
  >
- {isComplete ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
- </div>
- <span
- className={cn(
- 'text-[11px] font-medium transition-colors',
- isActive ? 'text-foreground' : 'text-muted-foreground',
- )}
- >
- {label}
- </span>
+ {isComplete ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+ <span>{label}</span>
  </div>
  {i < 2 && (
- <div
+ <span
  className={cn(
- 'mx-3 mb-5 h-0.5 w-10 transition-colors duration-300',
- i < currentStep ? 'bg-primary' : 'bg-surface-3',
+ 'hidden h-px flex-1 transition-colors sm:block',
+ i < currentStep ? 'bg-primary/60' : 'bg-border/50',
  )}
  />
  )}
@@ -355,7 +351,7 @@ function SetupPage() {
 
  {/* ── Error display ── */}
  {error && (
- <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+ <div className="mb-4 rounded-sm border border-danger/25 bg-danger/5 px-3 py-2.5 text-mini text-danger">
  {error}
  </div>
  )}
@@ -366,11 +362,10 @@ function SetupPage() {
  {/* ─── STEP 1: Welcome & Identity ─── */}
  {currentStep === 0 && (
  <div key="step-1">
- <TabHeader
- icon={Sparkles}
- title={t('welcome.title')}
- description={t('welcome.description')}
- />
+ <div>
+ <BracketLabel>{t('welcome.title')}</BracketLabel>
+ <p className="type-meta mt-1">{t('welcome.description')}</p>
+ </div>
 
  <div className="mt-6 space-y-5">
  {/* Panel name */}
@@ -397,20 +392,20 @@ function SetupPage() {
  <img
  src={logoDataUri}
  alt={t('welcome.logoPreviewAlt')}
- className="h-16 w-16 rounded-lg border border-border object-contain p-1"
+ className="h-16 w-16 rounded-sm border border-border object-contain p-1"
  />
  <button
  type="button"
  onClick={clearLogo}
- className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive/50 text-destructive-foreground shadow-sm transition-colors hover:bg-destructive"
+ className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-sm bg-danger/70 text-primary-foreground transition-colors hover:bg-danger"
  >
  <X className="h-3 w-3" />
  </button>
  </div>
  ) : (
- <label className="flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-surface-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
+ <label className="flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border border-dashed border-border/60 transition-colors hover:border-primary/50 hover:bg-primary/5">
  <Upload className="h-5 w-5 text-muted-foreground" />
- <span className="text-[9px] text-muted-foreground">{t('common:actions.upload')}</span>
+ <span className="text-micro text-muted-foreground">{t('common:actions.upload')}</span>
  <input
  type="file"
  accept="image/*"
@@ -420,11 +415,11 @@ function SetupPage() {
  </label>
  )}
  <div className="flex-1 pt-1">
- <p className="text-xs text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {t('welcome.logoHint')}
  </p>
  {!logoDataUri && (
- <label className="mt-1.5 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-primary-600 transition-colors hover:text-primary">
+ <label className="mt-1.5 inline-flex cursor-pointer items-center gap-1 text-mini font-medium text-primary transition-colors hover:text-primary/80">
  {t('welcome.chooseFile')}
  <input
  type="file"
@@ -441,23 +436,23 @@ function SetupPage() {
  {/* Preview card */}
  <div className="space-y-2">
  <label className={labelClass}>{t('welcome.preview')}</label>
- <div className="flex items-center gap-3 rounded-md border border-border/50 bg-surface-2/50 p-4">
- <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
+ <div className="flex items-center gap-3 rounded-sm border border-border/60 bg-surface-1/40 p-3">
+ <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10">
  {logoDataUri ? (
  <img
  src={logoDataUri}
  alt={t('welcome.logoAlt')}
- className="h-7 w-7 rounded object-contain"
+ className="h-7 w-7 rounded-sm object-contain"
  />
  ) : (
  <Sparkles className="h-5 w-5 text-primary" />
  )}
  </div>
  <div>
- <p className="text-sm font-semibold text-foreground">
+ <p className="font-display text-mini font-semibold text-foreground">
  {t('welcome.panelPreview', { panelName: panelName || 'Catalyst' })}
  </p>
- <p className="text-xs text-muted-foreground">{t('welcome.productTagline')}</p>
+ <p className="text-mini text-muted-foreground">{t('welcome.productTagline')}</p>
  </div>
  </div>
  </div>
@@ -468,11 +463,10 @@ function SetupPage() {
  {/* ─── STEP 2: Admin Account ─── */}
  {currentStep === 1 && (
  <div key="step-2">
- <TabHeader
- icon={User}
- title={t('admin.title')}
- description={t('admin.description')}
- />
+ <div>
+ <BracketLabel>{t('admin.title')}</BracketLabel>
+ <p className="type-meta mt-1">{t('admin.description')}</p>
+ </div>
 
  <div className="mt-6 space-y-4">
  {/* Email */}
@@ -575,7 +569,7 @@ function SetupPage() {
  </button>
  </div>
  {confirmPassword && password !== confirmPassword && (
- <p className="text-xs text-destructive">{t('admin.passwordMismatch')}</p>
+ <p className="text-mini text-danger">{t('admin.passwordMismatch')}</p>
  )}
  </div>
  </div>
@@ -585,45 +579,39 @@ function SetupPage() {
  {/* ─── STEP 3: Appearance (Palette Studio) ─── */}
  {currentStep === 2 && (
  <div key="step-3">
- <TabHeader
- icon={Palette}
- title={t('appearance.title')}
- description={t('appearance.description')}
- />
+ <div>
+ <BracketLabel>{t('appearance.title')}</BracketLabel>
+ <p className="type-meta mt-1">{t('appearance.description')}</p>
+ </div>
 
  <div className="mt-6 space-y-6">
  {/* Seed color picker */}
  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
  <div className="group relative flex-shrink-0">
  <div
- className="h-20 w-20 cursor-pointer rounded-lg ring-1 ring-black/5 transition-all duration-300 group-hover:scale-105"
- style={{
- backgroundColor: isSeedValid ? seedColor : '#71717a',
- boxShadow: isSeedValid
- ? `0 12px 32px ${seedColor}30, 0 4px 12px ${seedColor}15`
- : '0 4px 12px rgba(0,0,0,0.15)',
- }}
+ className="h-20 w-20 cursor-pointer rounded-sm ring-1 ring-border/70 transition-transform group-hover:-translate-y-0.5"
+ style={{ backgroundColor: isSeedValid ? seedColor : 'hsl(var(--muted))' }}
  />
  <input
  type="color"
- value={isSeedValid ? seedColor : '#71717a'}
+ value={isSeedValid ? seedColor : '#c48d5a'}
  onChange={(e) => setSeedColor(e.target.value)}
- className="absolute inset-0 h-full w-full cursor-pointer rounded-lg opacity-0"
+ className="absolute inset-0 h-full w-full cursor-pointer rounded-sm opacity-0"
  />
  </div>
  <div className="flex-1 space-y-3">
  <div>
- <label className="mb-1 block text-xs font-medium text-foreground">{t('appearance.seedColor')}</label>
+ <label className="mb-1 block text-mini font-medium text-foreground">{t('appearance.seedColor')}</label>
  <div className="flex items-center gap-2">
  <input
  type="text"
  value={seedColor}
  onChange={(e) => setSeedColor(e.target.value)}
  placeholder="#c48d5a"
- className={`w-36 rounded-lg border bg-card px-3 py-2 font-mono text-sm transition-colors focus:outline-none focus:ring-2 ${
+ className={`h-8 w-36 rounded-sm border bg-background/40 px-2.5 font-mono text-mini outline-none transition-colors focus:ring-1 ${
  isSeedValid
- ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
- : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/20'
+ ? 'border-border/60 text-foreground focus:border-primary focus:ring-primary/40'
+ : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/40'
  }`}
  />
  <button
@@ -636,7 +624,7 @@ function SetupPage() {
  .padStart(6, '0'),
  )
  }
- className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
  title={t('appearance.randomColor')}
  >
  <Shuffle className="h-4 w-4" />
@@ -644,7 +632,7 @@ function SetupPage() {
  {isSeedValid && (() => {
  const hsl = hexToHSL(seedColor);
  return (
- <span className="text-xs tabular-nums text-muted-foreground">
+ <span className="font-mono text-mini tabular-nums text-muted-foreground">
  HSL({hsl.h}°, {hsl.s}%, {hsl.l}%)
  </span>
  );
@@ -654,10 +642,10 @@ function SetupPage() {
 
  {/* Harmony modes */}
  <div>
- <label className="mb-2 block text-xs font-medium text-foreground">
+ <label className="mb-1.5 block text-mini font-medium text-foreground">
  {t('appearance.colorHarmony')}
  </label>
- <div className="flex flex-wrap gap-1.5">
+ <div className="flex flex-wrap gap-1">
  {(
  [
  { id: 'auto' as const, label: t('harmony.auto') },
@@ -675,9 +663,9 @@ function SetupPage() {
  key={m.id}
  type="button"
  onClick={() => setHarmonyMode(m.id)}
- className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition-all ${
+ className={`rounded-sm px-2.5 py-1 text-micro font-medium transition-colors ${
  harmonyMode === m.id
- ? 'bg-primary text-primary-foreground shadow-sm'
+ ? 'bg-primary text-primary-foreground'
  : 'bg-surface-2 text-muted-foreground hover:bg-surface-3 hover:text-foreground'
  }`}
  >
@@ -691,7 +679,7 @@ function SetupPage() {
 
  {/* Generated palette preview */}
  {generatedPalette && (
- <div className="space-y-4 rounded-xl border border-border bg-surface-1/50 p-4">
+ <div className="space-y-4 rounded-sm border border-border/50 bg-surface-1/40 p-3">
  {/* Brand colors */}
  <div>
  <p className="type-overline mb-2">
@@ -705,10 +693,10 @@ function SetupPage() {
  ].map(({ label, color }) => (
  <div key={label}>
  <Swatch color={color} />
- <p className="mt-1.5 text-center text-[10px] font-medium text-muted-foreground">
+ <p className="mt-1.5 text-center text-micro font-medium text-muted-foreground">
  {label}
  </p>
- <p className="text-center font-mono text-[9px] text-muted-foreground/70">
+ <p className="text-center font-mono text-micro text-muted-foreground/70">
  {color}
  </p>
  </div>
@@ -732,7 +720,7 @@ function SetupPage() {
  ).map(({ label, key }) => (
  <span
  key={label}
- className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium"
+ className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-micro font-medium"
  style={{
  backgroundColor: `${generatedPalette.themeColors[key]}18`,
  color: generatedPalette.themeColors[key],
@@ -753,7 +741,7 @@ function SetupPage() {
  <p className="type-overline mb-2">
  {t('appearance.darkSurfaces')}
  </p>
- <div className="rounded-lg bg-surface-0 p-3">
+ <div className="rounded-sm bg-surface-0 p-3">
  <div className="flex gap-1">
  {[
  { label: 'BG', key: 'darkBackground' as const },
@@ -778,7 +766,7 @@ function SetupPage() {
  <p className="type-overline mb-2">
  {t('appearance.lightSurfaces')}
  </p>
- <div className="rounded-lg border border-border p-3">
+ <div className="rounded-sm border border-border/50 p-3">
  <div className="flex gap-1">
  {[
  { label: 'BG', key: 'lightBackground' as const },
@@ -811,14 +799,14 @@ function SetupPage() {
  setTheme('dark');
  }}
  className={cn(
- 'flex flex-1 items-center justify-center gap-2 rounded-lg border-2 px-4 py-3 transition-all duration-200',
+ 'flex flex-1 items-center justify-center gap-2 rounded-sm border px-4 py-2 text-mini font-medium transition-colors',
  defaultTheme === 'dark'
- ? 'border-primary bg-primary/10 text-primary'
- : 'border-surface-3 text-muted-foreground hover:border-foreground/20',
+ ? 'border-primary/50 bg-primary/10 text-primary'
+ : 'border-border/60 text-muted-foreground hover:border-foreground/20',
  )}
  >
  <Moon className="h-4 w-4" />
- <span className="text-sm font-medium">{t('appearance.dark')}</span>
+ <span>{t('appearance.dark')}</span>
  </button>
  <button
  type="button"
@@ -827,14 +815,14 @@ function SetupPage() {
  setTheme('light');
  }}
  className={cn(
- 'flex flex-1 items-center justify-center gap-2 rounded-lg border-2 px-4 py-3 transition-all duration-200',
+ 'flex flex-1 items-center justify-center gap-2 rounded-sm border px-4 py-2 text-mini font-medium transition-colors',
  defaultTheme === 'light'
- ? 'border-primary bg-primary/10 text-primary'
- : 'border-surface-3 text-muted-foreground hover:border-foreground/20',
+ ? 'border-primary/50 bg-primary/10 text-primary'
+ : 'border-border/60 text-muted-foreground hover:border-foreground/20',
  )}
  >
  <Sun className="h-4 w-4" />
- <span className="text-sm font-medium">{t('appearance.light')}</span>
+ <span>{t('appearance.light')}</span>
  </button>
  </div>
  </div>
@@ -842,45 +830,45 @@ function SetupPage() {
  {/* Live preview */}
  <div className="space-y-2">
  <label className={labelClass}>{t('appearance.livePreview')}</label>
- <div className="overflow-hidden rounded-lg border border-border">
+ <div className="overflow-hidden rounded-sm border border-border/60">
  {/* Mock header */}
  <div
- className="flex items-center gap-2 px-4 py-2.5"
+ className="flex items-center gap-2 px-3 py-2"
  style={{ backgroundColor: primaryColor }}
  >
  <Monitor className="h-4 w-4 text-primary-foreground" />
- <span className="text-sm font-semibold text-primary-foreground">
+ <span className="font-display text-mini font-semibold text-primary-foreground">
  {panelName || 'Catalyst'}
  </span>
  </div>
  {/* Mock content */}
- <div className="space-y-3 p-4">
+ <div className="space-y-3 p-3">
  <div className="flex items-center gap-2">
- <div className="h-2.5 w-24 rounded-full bg-surface-3" />
+ <div className="h-2 w-24 bg-surface-3" />
  <div
- className="h-2.5 w-16 rounded-full"
+ className="h-2 w-16"
  style={{ backgroundColor: accentColor, opacity: 0.4 }}
  />
  </div>
  <div className="grid grid-cols-2 gap-2">
- <div className="rounded-md border border-border p-2.5">
- <div className="h-2 w-14 rounded bg-surface-3" />
- <div className="mt-1.5 h-1.5 w-10 rounded bg-surface-3/60" />
+ <div className="rounded-sm border border-border/60 p-2.5">
+ <div className="h-2 w-14 bg-surface-3" />
+ <div className="mt-1.5 h-1.5 w-10 bg-surface-3/60" />
  </div>
- <div className="rounded-md border border-border p-2.5">
- <div className="h-2 w-12 rounded bg-surface-3" />
- <div className="mt-1.5 h-1.5 w-8 rounded bg-surface-3/60" />
+ <div className="rounded-sm border border-border/60 p-2.5">
+ <div className="h-2 w-12 bg-surface-3" />
+ <div className="mt-1.5 h-1.5 w-8 bg-surface-3/60" />
  </div>
  </div>
  <div className="flex gap-2">
  <div
- className="h-7 flex-1 rounded-md text-center text-[10px] font-medium leading-7 text-primary-foreground"
+ className="flex h-7 flex-1 items-center justify-center rounded-sm text-micro font-medium text-primary-foreground"
  style={{ backgroundColor: primaryColor }}
  >
  {t('appearance.primaryButton')}
  </div>
  <div
- className="h-7 flex-1 rounded-md text-center text-[10px] font-medium leading-7 text-primary-foreground"
+ className="flex h-7 flex-1 items-center justify-center rounded-sm text-micro font-medium text-primary-foreground"
  style={{ backgroundColor: accentColor }}
  >
  {t('appearance.accentButton')}
@@ -899,7 +887,7 @@ function SetupPage() {
  <button
  type="button"
  onClick={goBack}
- className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="pressable flex h-8 items-center gap-1.5 rounded-sm px-3 font-display text-mini font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <ArrowLeft className="h-4 w-4" />
  {t('common:actions.back')}
@@ -911,7 +899,7 @@ function SetupPage() {
  {currentStep < 2 ? (
  <button
  type="submit"
- className="flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90"
+ className="pressable flex h-8 items-center gap-1.5 rounded-sm bg-primary px-4 font-display text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
  >
  {t('common:actions.next')}
  <ArrowRight className="h-4 w-4" />
@@ -920,11 +908,11 @@ function SetupPage() {
  <button
  type="submit"
  disabled={isSubmitting}
- className="flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90 disabled:opacity-70"
+ className="pressable flex h-8 items-center gap-1.5 rounded-sm bg-primary px-4 font-display text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70"
  >
  {isSubmitting ? (
  <>
- <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+ <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
  {t('submit.completing')}
  </>
  ) : (
@@ -939,10 +927,10 @@ function SetupPage() {
  </form>
 
  {/* Step counter */}
- <p className="mt-4 text-center text-xs text-muted-foreground/60">
+ <p className="mt-4 text-center text-mini text-muted-foreground/60">
  {t('steps.progress', { current: currentStep + 1, total: 3 })}
  </p>
- </ServerTabCard>
+ </div>
  </div>
 
  <BrandFooter />

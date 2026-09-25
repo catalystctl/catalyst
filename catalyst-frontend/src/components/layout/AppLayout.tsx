@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import UpdateNotification from '../shared/UpdateNotification';
 import UploadProgressIndicator from '../files/UploadProgressIndicator';
 import DownloadProgressIndicator from '../files/DownloadProgressIndicator';
-import { isDemoMode } from '../../demo/isDemo';
+import { showsDemoChrome } from '../../demo/isDemo';
 
 function AppLayout() {
   useServerStateUpdates();
@@ -46,7 +46,7 @@ function AppLayout() {
   return (
     // Demo builds render a fixed h-8 banner above everything: shift the shell
     // below it and shrink to fit so nothing overlaps and no page scroll appears.
-    <div className={cn('app-shell flex font-sans', isDemoMode ? 'mt-8 h-[calc(100dvh-2rem)]' : 'h-[100dvh]')}>
+    <div className={cn('app-shell flex font-sans', showsDemoChrome ? 'mt-8 h-[calc(100dvh-2rem)]' : 'h-[100dvh]')}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:m-2 focus:rounded-sm focus:bg-card focus:px-3 focus:py-2 focus:text-foreground">{t('shell.skipToContent')}</a>
       <UpdateNotification />
       {/* Mobile overlay */}
@@ -59,7 +59,7 @@ function AppLayout() {
       )}
 
       {/* Mobile header */}
-      <div className={cn('fixed left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 lg:hidden', isDemoMode ? 'top-8' : 'top-0')}>
+      <div className={cn('fixed left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 lg:hidden', showsDemoChrome ? 'top-8' : 'top-0')}>
         <button
           type="button"
           onClick={() => setIsMobileSidebarOpen(true)}
@@ -91,7 +91,7 @@ function AppLayout() {
         id="mobile-sidebar"
         className={cn(
           'fixed left-0 z-50 transform transition-transform duration-200 ease-standard lg:static lg:transform-none',
-          isDemoMode ? 'top-8 bottom-0 z-[70]' : 'inset-y-0',
+          showsDemoChrome ? 'top-8 bottom-0 z-[70]' : 'inset-y-0',
           isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
