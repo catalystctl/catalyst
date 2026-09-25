@@ -22,7 +22,6 @@ import {
  Loader2,
  AlertTriangle,
  Menu,
- HardDrive,
  Search,
  Shield,
 } from 'lucide-react';
@@ -797,7 +796,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <motion.button
  variants={itemVariants}
  type="button"
- className="lg:hidden flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground"
+ className="lg:hidden flex items-center gap-2 rounded-md border border-border/50 bg-card px-3 py-2 text-sm font-medium text-muted-foreground"
  onClick={() => setShowSidebar(!showSidebar)}
  >
  <Menu className="h-4 w-4" />
@@ -822,18 +821,15 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  variants={itemVariants}
  className={`
  fixed inset-y-0 left-0 z-50 w-64 transform rounded-none border-r border-border bg-card p-3 transition-transform duration-300 ease-out
- lg:static lg:z-auto lg:w-auto lg:transform-none lg:rounded-xl lg:border lg:transition-none lg:shadow-sm
+ lg:static lg:z-auto lg:w-auto lg:transform-none lg:rounded-md lg:border lg:transition-none lg:shadow-sm
  ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
  `}
  >
  <div className="flex items-center justify-between mb-3">
  <div className="flex items-center gap-2">
- <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
- <HardDrive className="h-3.5 w-3.5 text-primary" />
- </div>
- <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+ <span className="type-overline">
  {t('files.manager.directoryTree')}
- </div>
+ </span>
  </div>
  <button
  type="button"
@@ -858,7 +854,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {/* Main content */}
  <motion.div variants={itemVariants} className="space-y-3 min-w-0">
  {/* Breadcrumb + toolbar */}
- <div className="rounded-xl border border-border bg-card px-4 py-3 dark:border-border dark:bg-surface-1">
+ <div className="rounded-md border border-border/50 bg-card px-4 py-3">
  {/* Breadcrumbs */}
  <nav className="flex items-center gap-1 text-xs text-muted-foreground overflow-x-auto scrollbar-hide pb-2">
  <button
@@ -967,7 +963,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  className="flex items-center gap-2 overflow-hidden"
  >
  <div className="hidden sm:block h-4 w-px bg-border/60" />
- <span className="text-xs font-medium text-primary tabular-nums">
+ <span className="type-numeric text-xs text-foreground">
  {selectedEntries.length}
  </span>
  {canWrite && (
@@ -1032,12 +1028,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, y: 0 }}
  exit={{ opacity: 0, y: -8 }}
  transition={{ duration: 0.2 }}
- className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-danger/20 bg-danger-muted px-4 py-3 dark:border-danger/15 dark:bg-danger-muted/30"
+ className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-md border border-danger/20 bg-danger-muted px-4 py-3 dark:border-danger/15 dark:bg-danger-muted/30"
  >
  <div className="flex items-center gap-2">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-danger/10">
  <Trash2 className="h-4 w-4 text-danger" />
- </div>
  <span className="text-sm text-danger">
  {t('files.manager.deleteConfirm', { count: selectedEntries.length })}
  </span>
@@ -1065,7 +1059,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 
  {/* File list — drop target for explorer uploads (no Upload modal required) */}
  <div
- className={`relative rounded-xl border bg-card dark:bg-surface-1 h-[calc(100vh-280px)] min-h-[200px] overflow-hidden transition-colors ${
+ className={`relative rounded-md border bg-card h-[calc(100vh-280px)] min-h-[200px] overflow-hidden transition-colors ${
  isFileDropActive
  ? 'border-primary ring-2 ring-primary/30'
  : 'border-border dark:border-border'
@@ -1354,16 +1348,16 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </DialogDescription>
  </DialogHeader>
  <DialogBody className="space-y-3">
- <div className="rounded-lg border border-border bg-surface-2 p-3 dark:border-border dark:bg-surface-2">
+ <div className="rounded-md border border-border/50 bg-surface-2 p-3">
  <div className="flex justify-between text-sm">
  <span className="text-muted-foreground">{t('files.manager.currentLimit')}</span>
- <span className="font-medium text-foreground">
+ <span className="type-numeric text-foreground">
  {formatNumber(bufferError?.currentMaxBufferMb ?? 0)} MB
  </span>
  </div>
  <div className="mt-1 flex justify-between text-sm">
  <span className="text-muted-foreground">{t('files.manager.recommended')}</span>
- <span className="font-medium text-primary">
+ <span className="type-numeric text-foreground">
  {formatNumber(bufferError?.recommendedMaxBufferMb ?? 0)} MB
  </span>
  </div>
@@ -1645,7 +1639,7 @@ function ArchiveListing({
  return (
  <table className="w-full text-left text-sm">
  <thead>
- <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+ <tr className="border-b border-border type-overline">
  <th className="px-4 py-2.5">{t('files.list.name')}</th>
  <th className="px-4 py-2.5 text-right">{t('files.list.size')}</th>
  </tr>
@@ -1664,17 +1658,15 @@ function ArchiveListing({
  onClick={() => item.isDirectory && onNavigate('/' + item.name)}
  disabled={!item.isDirectory}
  >
- <div className={`flex h-6 w-6 items-center justify-center rounded-md ${item.isDirectory ? 'bg-primary-500/10' : 'bg-surface-2 dark:bg-surface-3'}`}>
- {item.isDirectory ? (
+  {item.isDirectory ? (
  <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
  ) : (
  <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  )}
- </div>
  <span className={item.isDirectory ? 'font-medium' : ''}>{item.displayName}</span>
  </button>
  </td>
- <td className="px-4 py-2 text-right text-xs tabular-nums text-muted-foreground">
+ <td className="px-4 py-2 text-right type-numeric text-xs text-muted-foreground">
  {item.isDirectory ? '—' : formatSize(item.size)}
  </td>
  </tr>

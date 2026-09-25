@@ -290,13 +290,13 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  {fields.map(({ label, value, key }) => (
  <div
  key={key}
- className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 dark:bg-surface-2/50"
+ className="flex items-center justify-between rounded-md bg-surface-2 px-3 py-2 dark:bg-surface-2/50"
  >
  <div className="min-w-0">
  <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
  {label}
  </span>
- <p className="truncate font-mono text-sm text-foreground">
+ <p className="truncate font-mono text-sm tabular-nums text-foreground">
  {value}
  </p>
  </div>
@@ -316,12 +316,12 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  ))}
 
  {/* Password field */}
- <div className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 dark:bg-surface-2/50">
+ <div className="flex items-center justify-between rounded-md bg-surface-2 px-3 py-2 dark:bg-surface-2/50">
  <div className="min-w-0 flex-1">
  <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
  {t('files.sftp.password')}
  </span>
- <p className="truncate font-mono text-sm text-foreground">
+ <p className="truncate font-mono text-sm tabular-nums text-foreground">
  {password && !isExpired
  ? (showPassword ? password : '••••••••••••••••')
  : isExpired
@@ -364,12 +364,12 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
 
  {/* Quick connect URI */}
  {password && !isExpired && (
- <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 dark:border-border dark:bg-surface-2/50">
+ <div className="rounded-md border border-border/50 bg-surface-2 px-3 py-2 dark:bg-surface-2/50">
  <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
  {t('files.sftp.quickConnectUri')}
  </span>
  <div className="flex items-center gap-2">
- <code className="flex-1 truncate text-xs text-foreground">
+ <code className="flex-1 truncate font-mono text-xs tabular-nums text-foreground">
  sftp://{serverId}@{sftpInfo.host}:{sftpInfo.port}
  </code>
  <button
@@ -403,7 +403,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  <h3 className="text-sm font-semibold text-foreground dark:text-foreground">
  {t('files.sftp.activeSessions')}
  </h3>
- <span className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-xs text-muted-foreground dark:bg-surface-2/50">
+ <span className="rounded-full border border-border/50 bg-surface-2 px-2.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground dark:bg-surface-2/50">
  {tokens.length}
  </span>
  </div>
@@ -427,9 +427,9 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  {t('files.sftp.noSessions')}
  </div>
  ) : (
- <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+ <div className="divide-y divide-border overflow-hidden rounded-md border border-border/50">
  {/* Table header */}
- <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 bg-surface-2/80 px-3 py-2 text-xs font-medium text-muted-foreground dark:bg-surface-2/40">
+ <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 bg-surface-2/80 px-3 py-2 type-overline text-muted-foreground dark:bg-surface-2/40">
  <span>{t('files.sftp.user')}</span>
  <span className="w-28 text-right">{t('files.sftp.expires')}</span>
  <span className="w-24 text-right">{t('files.sftp.created')}</span>
@@ -451,7 +451,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  {token.username || token.email}
  </span>
  {token.isSelf && (
- <span className="rounded bg-primary-500/10 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:text-primary-400">
+ <span className="rounded-full border border-border/50 bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
  {t('files.sftp.you')}
  </span>
  )}
@@ -460,12 +460,12 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  </div>
 
  {/* Expires */}
- <span className={`w-28 text-right text-xs ${expired ? 'text-destructive' : 'text-muted-foreground'}`}>
+ <span className={`w-28 text-right font-mono text-xs tabular-nums ${expired ? 'text-destructive' : 'text-muted-foreground'}`}>
  {expired ? t('files.sftp.expired') : formatExpiry(token.expiresAt)}
  </span>
 
  {/* Created */}
- <span className="w-24 text-right text-xs text-muted-foreground">
+ <span className="w-24 text-right font-mono text-xs tabular-nums text-muted-foreground">
  {formatTimeAgo(token.createdAt)}
  </span>
 

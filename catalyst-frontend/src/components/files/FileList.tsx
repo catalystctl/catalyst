@@ -189,9 +189,7 @@ function FileList({
  if (isError) {
  return (
  <div className="flex flex-col h-full items-center justify-center gap-2 px-4">
- <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger-muted">
  <Folder className="h-6 w-6 text-danger" />
- </div>
  <p className="text-sm font-medium text-destructive">{t('files.list.loadFailed')}</p>
  <p className="text-xs text-muted-foreground">{t('files.list.loadFailedHint')}</p>
  </div>
@@ -210,7 +208,7 @@ function FileList({
  }
 
  const thBase =
- 'cursor-pointer select-none px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground';
+ 'cursor-pointer select-none px-3 py-2.5 text-left type-overline transition-colors hover:text-foreground';
 
  const totalHeight = files.length * ROW_HEIGHT;
 
@@ -314,13 +312,9 @@ function FileList({
  }}
  >
  {entry.isDirectory ? (
- <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-500/10">
  <Folder className="h-4 w-4 shrink-0 text-primary" />
- </div>
  ) : (
- <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 dark:bg-surface-3">
  <FileTypeIcon name={entry.name} className="h-4 w-4" />
- </div>
  )}
  {isRenaming ? (
  <InlineRenameInput
@@ -344,7 +338,7 @@ function FileList({
  </div>
 
  {/* Mode */}
- <div className="hidden sm:block w-20 px-3 font-mono text-[11px] text-muted-foreground tabular-nums">
+ <div className="hidden sm:block w-20 px-3 type-numeric text-[11px] text-muted-foreground">
  {formatFileMode(entry.mode)}
  </div>
 
@@ -354,14 +348,14 @@ function FileList({
  <span className="text-xs text-muted-foreground">—</span>
  ) : (
  <div className="flex flex-col gap-0.5">
- <span className="text-xs text-muted-foreground tabular-nums">
+ <span className="type-numeric text-xs text-muted-foreground">
  {formatBytes(entry.size)}
  </span>
  {/* Subtle size bar for files > 1KB */}
  {entry.size > 1024 && (
  <div className="h-1 w-full max-w-[60px] overflow-hidden rounded-full bg-surface-3 dark:bg-surface-3/50">
  <div
- className="h-full rounded-full bg-primary/30"
+ className="h-full rounded-full bg-muted-foreground/20"
  style={{
  width: `${Math.min(100, Math.log10(entry.size + 1) * 8)}%`,
  }}
@@ -373,9 +367,9 @@ function FileList({
  </div>
 
  {/* Modified */}
- <div className="hidden lg:block w-40 px-3 text-xs text-muted-foreground">
+ <div className="hidden lg:block w-40 px-3 font-mono text-xs tabular-nums text-muted-foreground">
  {entry.modified ? (
- <span className="tabular-nums" title={formatDateTime(entry.modified)}>
+ <span className="font-mono tabular-nums" title={formatDateTime(entry.modified)}>
  {formatDate(entry.modified)}{' '}
  <span className="text-muted-foreground/60">
  {formatDateTime(entry.modified, { hour: '2-digit', minute: '2-digit' })}
@@ -416,7 +410,7 @@ function FileList({
  {/* Footer */}
  <div className="flex-none border-t border-border bg-surface-1/80 backdrop-blur-sm dark:bg-surface-0/80">
  <div className="flex items-center justify-between px-4 py-2">
- <span className="text-[11px] text-muted-foreground">
+ <span className="type-meta">
  {t('files.list.itemCount', { count: files.length })}
  {totalSize > 0 && (
  <span className="ml-2 text-muted-foreground/60">
@@ -425,7 +419,7 @@ function FileList({
  )}
  </span>
  {selectedPaths.size > 0 && (
- <span className="text-[11px] font-medium text-primary">
+ <span className="text-[11px] font-medium text-foreground">
  {t('files.list.selected', { count: selectedPaths.size })}
  </span>
  )}

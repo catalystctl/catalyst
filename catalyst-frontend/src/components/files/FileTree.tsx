@@ -91,7 +91,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
           )}
           <span className="truncate font-medium">{entry.name}</span>
           {childDirectories.length > 0 && isExpanded && (
-            <span className="ml-auto mr-1 text-[9px] text-muted-foreground/50 tabular-nums">
+            <span className="ml-auto mr-1 font-mono text-[9px] tabular-nums text-muted-foreground/50">
               {childDirectories.length}
             </span>
           )}

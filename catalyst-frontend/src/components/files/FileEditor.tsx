@@ -161,9 +161,7 @@ function FileEditor({
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
  {fileInfo && (
- <div className={`flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 dark:bg-surface-3`}>
- <FileCode className={`h-3.5 w-3.5 ${fileInfo.color}`} />
- </div>
+ <FileCode className={`h-3.5 w-3.5 shrink-0 ${fileInfo.color}`} />
  )}
  <h3 className="truncate text-sm font-semibold text-foreground dark:text-foreground">
  {file.name}
@@ -186,7 +184,7 @@ function FileEditor({
  )}
  </div>
  </div>
- <p className="mt-0.5 truncate text-xs text-muted-foreground dark:text-muted-foreground ml-8">
+ <p className="mt-0.5 ml-5.5 truncate font-mono text-xs tabular-nums text-muted-foreground">
  {file.path}
  </p>
  </div>
@@ -235,7 +233,7 @@ function FileEditor({
  </div>
 
  {/* Editor */}
- <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border dark:border-border">
+ <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/50">
  {isLoading ? (
  <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
  <div className="flex flex-col items-center gap-2">

@@ -70,41 +70,28 @@ function DownloadProgressIndicator() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.96 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="pointer-events-auto w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-border/70 bg-card shadow-elevated"
+              className="pointer-events-auto w-[min(20rem,calc(100vw-2rem))] rounded-md border border-border/50 bg-card shadow-elevated"
               role="status"
               aria-live="polite"
               aria-label={`${title} — ${session.files.map((f) => f.name).join(', ')}`}
             >
               <div className="flex items-center gap-2.5 px-3 py-2.5">
-                <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-                    hasError
-                      ? 'bg-danger-muted text-danger'
-                      : isCanceled
-                        ? 'bg-surface-2 text-muted-foreground'
-                        : isActive
-                          ? 'bg-primary/10 text-primary'
-                          : 'bg-success-muted text-success'
-                  }`}
-                >
-                  {hasError ? (
-                    <AlertTriangle className="h-4 w-4" />
-                  ) : isCanceled ? (
-                    <X className="h-4 w-4" />
-                  ) : isActive ? (
-                    <Download className="h-4 w-4" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
-                </div>
-
+                {hasError ? (
+                  <AlertTriangle className="h-4 w-4 text-danger" />
+                ) : isCanceled ? (
+                  <X className="h-4 w-4 text-muted-foreground" />
+                ) : isActive ? (
+                  <Download className="h-4 w-4 text-info" />
+                ) : (
+                  <Check className="h-4 w-4 text-success" />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-xs font-semibold text-foreground">
                       {title}
                     </span>
                     {isActive && totals.total > 0 && (
-                      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                      <span className="shrink-0 text-[11px] font-mono tabular-nums text-muted-foreground">
                         {overall}%
                       </span>
                     )}
@@ -117,7 +104,7 @@ function DownloadProgressIndicator() {
                   {isActive && (
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-3">
                       <motion.div
-                        className={`h-full rounded-full ${hasError ? 'bg-danger' : 'bg-primary'}`}
+                        className={`h-full rounded-full ${hasError ? 'bg-danger' : 'bg-info'}`}
                         initial={false}
                         animate={{ width: `${overall}%` }}
                         transition={{ duration: 0.2 }}
@@ -125,7 +112,7 @@ function DownloadProgressIndicator() {
                     </div>
                   )}
                   {isActive && totals.total > 0 && (
-                    <div className="mt-1 text-[10px] tabular-nums text-muted-foreground">
+                    <div className="mt-1 text-[10px] font-mono tabular-nums text-muted-foreground">
                       {t('files.download.of', {
                         loaded: formatBytes(totals.loaded),
                         total: formatBytes(totals.total),

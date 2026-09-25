@@ -44,7 +44,7 @@ function BackupList({
 
  if (!sorted.length) {
  return (
-        <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-10 text-center text-sm text-muted-foreground">
+        <div className="rounded-md border border-dashed border-border/50 bg-card px-6 py-10 text-center type-meta">
           {t('backups.list.empty')}
         </div>
  );
@@ -57,16 +57,15 @@ function BackupList({
  return (
  <div
  key={backup.id}
- className="group relative rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ className="rounded-md border border-border/50 bg-card px-4 py-3 transition-colors duration-150 hover:border-primary/30"
  >
- <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
  <div className="flex flex-wrap items-center justify-between gap-3">
  <div>
  <div className="flex items-center gap-2">
- <div className="text-sm font-semibold font-mono tabular-nums text-foreground">{backup.name}</div>
+ <div className="type-numeric truncate text-sm text-foreground">{backup.name}</div>
  <BackupStatusBadge status={status} />
  </div>
- <div className="mt-1 text-xs text-muted-foreground">
+ <div className="type-meta mt-1">
  {t('backups.list.created', { date: formatDateTime(backup.createdAt) })}
  {backup.restoredAt ? ` · ${t('backups.list.restored', { date: formatDateTime(backup.restoredAt) })}` : ''}
  </div>
@@ -74,7 +73,7 @@ function BackupList({
  <div className="flex flex-wrap items-center gap-2 text-xs">
  {backup.download ? (
  <button
- className="rounded-md border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground hover:border-border disabled:opacity-60"
+ className="rounded-md border border-border/50 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-60"
  onClick={backup.download}
  disabled={Boolean(backup.downloadProgress) || isSuspended}
  >
@@ -93,34 +92,34 @@ function BackupList({
  ) : null}
  </div>
  </div>
- <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-5">
- <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.size')}</div>
- <div className="text-sm font-semibold font-mono tabular-nums text-foreground">
+ <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+ <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
+ <div className="type-overline">{t('backups.list.size')}</div>
+ <div className="type-numeric text-sm text-foreground">
  {formatBackupSize(toNumber(backup.sizeMb))}
  </div>
  </div>
- <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.storage')}</div>
- <div className="text-sm font-semibold font-mono tabular-nums text-foreground">
+ <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
+ <div className="type-overline">{t('backups.list.storage')}</div>
+ <div className="type-numeric text-sm text-foreground">
  {backup.storageMode ?? 'local'}
  </div>
  </div>
- <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.compressed')}</div>
- <div className="text-sm font-semibold font-mono tabular-nums text-foreground">
+ <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
+ <div className="type-overline">{t('backups.list.compressed')}</div>
+ <div className="type-numeric text-sm text-foreground">
  {backup.compressed === false ? t('common:actions.no') : t('common:actions.yes')}
  </div>
  </div>
- <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.checksum')}</div>
- <div className="text-[11px] font-mono text-muted-foreground/50">
+ <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
+ <div className="type-overline">{t('backups.list.checksum')}</div>
+ <div className="font-mono text-[11px] tabular-nums text-muted-foreground">
  {backup.checksum ? `${backup.checksum.slice(0, 12)}...` : t('backups.list.notAvailable')}
  </div>
  </div>
- <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('backups.list.path')}</div>
- <div className="text-[11px] text-muted-foreground truncate">{backup.path}</div>
+ <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
+ <div className="type-overline">{t('backups.list.path')}</div>
+ <div className="truncate font-mono text-[11px] text-muted-foreground">{backup.path}</div>
  </div>
  </div>
  </div>

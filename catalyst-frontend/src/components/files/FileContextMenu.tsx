@@ -115,7 +115,7 @@ function FileContextMenu({
  >
  <div
  ref={menuRef}
- className="w-52 rounded-xl border border-border bg-card p-1 shadow-xl dark:border-border dark:bg-surface-1"
+ className="w-52 rounded-md border border-border/50 bg-card p-1 shadow-xl"
  >
  <button type="button" className={itemClass} onClick={wrap(onOpen)}>
  {entry.isDirectory ? (

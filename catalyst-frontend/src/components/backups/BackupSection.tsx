@@ -23,7 +23,7 @@ import { notifySuccess } from '../../utils/notify';
 import { formatBytes, formatPercent } from '../../utils/formatters';
 import { useBackupDownloadStore } from '../../stores/backupDownloadStore';
 import { useAuthStore } from '../../stores/authStore';
-import { Shield, HardDrive } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { reportSystemError } from '../../services/api/systemErrors';
 
 const formatProgress = (
@@ -180,14 +180,14 @@ function BackupSection({
  ) : null}
 
  <ServerTabCard>
- <SectionHeader icon={HardDrive} title={t('backups.settings.title')} description={t('backups.settings.description')} />
+ <SectionHeader title={t('backups.settings.title')} description={t('backups.settings.description')} />
  <div className="grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-3">
  <div>
- <label className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <label className="type-overline">
  {t('backups.settings.storageMode')}
  </label>
  <select
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={storageMode}
  onChange={(event) => setStorageMode(event.target.value as BackupStorageMode)}
  disabled={isSuspended || !canWrite}
@@ -199,11 +199,11 @@ function BackupSection({
  </select>
  </div>
  <div>
- <label className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <label className="type-overline">
  {t('backups.settings.keepLastN')}
  </label>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  type="number"
  min={0}
  max={1000}
@@ -213,11 +213,11 @@ function BackupSection({
  />
  </div>
  <div>
- <label className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <label className="type-overline">
  {t('backups.settings.maxAgeDays')}
  </label>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  type="number"
  min={0}
  max={3650}
@@ -230,11 +230,11 @@ function BackupSection({
  {storageMode === 's3' ? (
  <div className="grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-2">
  <label className="block">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.bucket')}
  </span>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={s3Bucket}
  onChange={(event) => setS3Bucket(event.target.value)}
  placeholder="catalyst-backups"
@@ -242,11 +242,11 @@ function BackupSection({
  />
  </label>
  <label className="block">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.region')}
  </span>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={s3Region}
  onChange={(event) => setS3Region(event.target.value)}
  placeholder="us-east-1"
@@ -254,11 +254,11 @@ function BackupSection({
  />
  </label>
  <label className="block sm:col-span-2">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.endpoint')}
  </span>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={s3Endpoint}
  onChange={(event) => setS3Endpoint(event.target.value)}
  placeholder="https://s3.amazonaws.com"
@@ -266,11 +266,11 @@ function BackupSection({
  />
  </label>
  <label className="block">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.accessKeyId')}
  </span>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={s3AccessKeyId}
  onChange={(event) => setS3AccessKeyId(event.target.value)}
  placeholder="AKIA..."
@@ -278,13 +278,13 @@ function BackupSection({
  />
  </label>
  <label className="block">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.secretAccessKey')}
  </span>
  <input
  type="password"
  autoComplete="off"
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={s3SecretAccessKey}
  onChange={(event) => setS3SecretAccessKey(event.target.value)}
  placeholder="••••••••"
@@ -306,11 +306,11 @@ function BackupSection({
  {storageMode === 'sftp' ? (
  <div className="grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-2">
  <label className="block">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.host')}
  </span>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={sftpHost}
  onChange={(event) => setSftpHost(event.target.value)}
  placeholder="sftp.example.com"
@@ -318,11 +318,11 @@ function BackupSection({
  />
  </label>
  <label className="block">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.port')}
  </span>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={sftpPort}
  onChange={(event) => setSftpPort(event.target.value)}
  type="number"
@@ -332,11 +332,11 @@ function BackupSection({
  />
  </label>
  <label className="block">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.username')}
  </span>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={sftpUsername}
  onChange={(event) => setSftpUsername(event.target.value)}
  placeholder="backup-user"
@@ -344,13 +344,13 @@ function BackupSection({
  />
  </label>
  <label className="block">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.password')}
  </span>
  <input
  type="password"
  autoComplete="off"
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={sftpPassword}
  onChange={(event) => setSftpPassword(event.target.value)}
  placeholder="••••••••"
@@ -358,12 +358,12 @@ function BackupSection({
  />
  </label>
  <label className="block sm:col-span-2">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.privateKey')}
  </span>
   {/* sphinx:ignore secret:private-key - UI placeholder, not a credential */}
   <textarea
-  className="mt-1 min-h-[88px] w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+  className="mt-1 min-h-[88px] w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
   value={sftpPrivateKey}
   onChange={(event) => setSftpPrivateKey(event.target.value)}
   placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
@@ -371,13 +371,13 @@ function BackupSection({
   />
   </label>
   <label className="block sm:col-span-2">
-  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+  <span className="type-overline">
   {t('backups.settings.privateKeyPassphrase')}
  </span>
  <input
  type="password"
  autoComplete="off"
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={sftpPrivateKeyPassphrase}
  onChange={(event) => setSftpPrivateKeyPassphrase(event.target.value)}
  placeholder="••••••••"
@@ -385,11 +385,11 @@ function BackupSection({
  />
  </label>
  <label className="block sm:col-span-2">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline">
  {t('backups.settings.basePath')}
  </span>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={sftpBasePath}
  onChange={(event) => setSftpBasePath(event.target.value)}
  placeholder="/backups"
@@ -401,7 +401,7 @@ function BackupSection({
  <div className="flex flex-wrap items-center gap-2 text-xs">
  <button
  type="button"
- className="rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+ className="rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
  onClick={async () => {
  try {
  const parsedCount = retentionCount.trim() === '' ? undefined : Number(retentionCount);
@@ -512,11 +512,11 @@ function BackupSection({
  <TabErrorState message={t('backups.loadFailed')} />
  ) : backups.length ? (
  <div className="space-y-3">
- <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+ <div className="type-meta flex flex-wrap items-center justify-between gap-2">
  <span>{t('backups.pagination.count', { count: data?.total ?? backups.length })}</span>
  <div className="flex items-center gap-2">
  <button
- className="rounded-md border border-border/40 px-2 py-1 text-xs text-muted-foreground hover:border-primary/30 disabled:opacity-60"
+ className="rounded-md border border-border/50 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-60"
  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
  disabled={page === 1}
  >
@@ -526,7 +526,7 @@ function BackupSection({
  {t('backups.pagination.pageOf', { page, totalPages })}
  </span>
  <button
- className="rounded-md border border-border/40 px-2 py-1 text-xs text-muted-foreground hover:border-primary/30 disabled:opacity-60"
+ className="rounded-md border border-border/50 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-60"
  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
  disabled={page >= totalPages}
  >

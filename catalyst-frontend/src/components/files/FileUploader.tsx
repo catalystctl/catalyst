@@ -49,9 +49,6 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  {!inModal && (
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
- <Upload className="h-4 w-4 text-primary" />
- </div>
  <div>
  <h3 className="text-sm font-semibold text-foreground dark:text-foreground">{t('files.uploader.title')}</h3>
  <p className="text-[11px] text-muted-foreground">{t('files.uploader.target')} <span className="font-mono">{path}</span></p>
@@ -68,7 +65,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  )}
 
  <div
- className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 transition-all duration-200 ${
+ className={`flex flex-col items-center justify-center rounded-md border-2 border-dashed px-6 py-8 transition-all duration-200 ${
  isDragActive
  ? 'border-primary bg-primary-500/5 scale-[1.02]'
  : 'border-border bg-surface-1/50 hover:border-primary/40 hover:bg-surface-1 dark:border-border dark:bg-surface-2/30 dark:hover:border-primary/30'
@@ -153,24 +150,22 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  return (
  <div
  key={idx}
- className="flex items-center gap-3 rounded-lg border border-border bg-surface-1 px-3 py-2 dark:border-border dark:bg-surface-2/50"
+ className="flex items-center gap-3 rounded-md border border-border/50 bg-surface-1 px-3 py-2 dark:bg-surface-2/50"
  >
- <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 dark:bg-surface-3">
  {isDone ? (
  <Check className="h-4 w-4 text-success" />
  ) : (
  <FileTypeIcon name={name} className="h-4 w-4" />
  )}
- </div>
  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={name}>
  {name}
  </span>
- <span className="text-[11px] tabular-nums text-muted-foreground w-8 text-right">
+ <span className="text-[11px] font-mono tabular-nums text-muted-foreground w-8 text-right">
  {isDone ? t('files.uploader.done') : `${pct}%`}
  </span>
  <div className="h-1.5 w-20 flex-shrink-0 overflow-hidden rounded-full bg-surface-3 dark:bg-surface-3">
  <motion.div
- className={`h-full rounded-full ${isDone ? 'bg-success' : 'bg-primary'}`}
+ className={`h-full rounded-full ${isDone ? 'bg-success' : 'bg-info'}`}
  initial={{ width: 0 }}
  animate={{ width: `${pct}%` }}
  transition={{ duration: 0.2 }}
@@ -204,7 +199,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  animate={{ opacity: 1, y: 0 }}
  exit={{ opacity: 0, y: -8 }}
  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
- className="rounded-xl border border-border bg-card p-4 dark:border-border dark:bg-surface-1 shadow-sm"
+ className="rounded-md border border-border/50 bg-card p-4 shadow-sm"
  >
  {content}
  </motion.div>
