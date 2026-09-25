@@ -1,6 +1,7 @@
 import { NavLink, Link, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   LayoutDashboard,
   Server,
@@ -14,6 +15,8 @@ import {
   LogOut,
   MoreHorizontal,
   Search,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -24,13 +27,18 @@ import { usePluginTabs } from '../../plugins/hooks';
 import { PANEL_VERSION } from '../../utils/version';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 import { cn } from '@/lib/utils';
+import { StatusLed } from '../deck/primitives';
 import NavSectionsMenu from './NavSectionsMenu';
+import { buildGroups, buildMain, type NavLinkItem } from './navSections';
 
 /**
- * Cabinet rail — the deck's primary navigation. Deliberately a fixed 56px icon
- * rail rather than a 240px labelled sidebar (the generic-admin gesture): hot
- * paths stay one click away, every other destination lives in the sections
- * popover and the Ctrl+K palette. See docs/design/deck-identity.md.
+ * Navigation with two densities over one source of truth.
+ *
+ * Collapsed (default) is the 56px cabinet rail: hot paths stay one click away
+ * and every other destination lives in the sections popover and Ctrl+K.
+ * Expanded is a labelled, sectioned sidebar for people who prefer to read the
+ * map rather than memorise it. Both render the same `buildMain`/`buildGroups`
+ * data with the same RBAC filtering, so nothing can drift between them.
  */
 const PRIMARY = [
   { to: '/dashboard', labelKey: 'layout:nav.dashboard', icon: LayoutDashboard },
@@ -43,41 +51,77 @@ const ADMIN_PRIMARY = [
   { to: '/admin/alerts', labelKey: 'layout:nav.alerts', icon: Bell, perms: ['alert.read', 'admin.read', 'admin.write'] },
 ] as const;
 
-function RailLink({
+/**
+ * The one active destination for a pathname: the *longest* nav target that
+ * matches. A plain prefix test marked `/admin` active on `/admin/nodes`, so a
+ * labelled sidebar highlighted two rows at once.
+ */
+function useActiveTarget() {
+  const { pathname } = useLocation();
+  return useCallback(
+    (targets: string[]) => {
+      let best: string | null = null;
+      for (const to of targets) {
+        if (pathname !== to && !pathname.startsWith(`${to}/`)) continue;
+        if (!best || to.length > best.length) best = to;
+      }
+      return best;
+    },
+    [pathname],
+  );
+}
+
+/** One destination. Icon-only + tooltip when collapsed, icon + label when expanded. */
+function NavRow({
   to,
   label,
   icon: Icon,
+  expanded,
+  active,
 }: {
   to: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  expanded: boolean;
+  active: boolean;
 }) {
-  const { pathname } = useLocation();
-  // Computed here rather than via NavLink's function className: Radix's
-  // TooltipTrigger asChild stringifies a function className when it clones
-  // the child, which silently drops the link's styling.
-  const isActive = pathname === to || pathname.startsWith(`${to}/`);
+
+  const className = cn(
+    'relative flex items-center rounded-sm text-muted-foreground transition-colors',
+    'hover:bg-surface-2 hover:text-foreground',
+    expanded ? 'h-8 w-full gap-2 px-2 text-mini' : 'h-9 w-9 justify-center',
+    active && 'bg-primary/10 text-foreground',
+  );
+
+  const body = (
+    <>
+      {active && (
+        <span
+          className={cn(
+            'absolute left-0 w-[2px] -translate-y-1/2 bg-primary',
+            expanded ? 'top-1/2 h-4' : 'top-1/2 h-4',
+          )}
+          aria-hidden
+        />
+      )}
+      <Icon className="h-4 w-4 shrink-0" />
+      {expanded && <span className="truncate">{label}</span>}
+    </>
+  );
+
+  if (expanded) {
+    return (
+      <NavLink to={to} title={label} className={className}>
+        {body}
+      </NavLink>
+    );
+  }
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <NavLink
-          to={to}
-          aria-label={label}
-          className={cn(
-            'relative flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
-            isActive
-              ? 'bg-primary/15 text-foreground'
-              : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
-          )}
-        >
-          {isActive && (
-            <span
-              className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 bg-primary"
-              aria-hidden
-            />
-          )}
-          <Icon className="h-4 w-4" />
+        <NavLink to={to} aria-label={label} className={className}>
+          {body}
         </NavLink>
       </TooltipTrigger>
       <TooltipContent side="right">{label}</TooltipContent>
@@ -85,7 +129,66 @@ function RailLink({
   );
 }
 
-function Sidebar() {
+/** Collapsed-only rail button with a tooltip. */
+function RailButton({
+  label,
+  onClick,
+  children,
+  danger,
+  expanded,
+}: {
+  label: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+  danger?: boolean;
+  expanded: boolean;
+}) {
+  const button = (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
+        'flex items-center rounded-sm text-muted-foreground transition-colors',
+        expanded ? 'h-8 w-full gap-2 px-2 text-mini hover:bg-surface-2 hover:text-foreground' : 'h-9 w-9 justify-center',
+        danger ? 'hover:bg-danger/10 hover:text-danger' : 'hover:bg-surface-2 hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+
+  if (expanded) {
+    return (
+      <div className="flex w-full items-center" title={label}>
+        {button}
+      </div>
+    );
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <div className="type-overline px-2 pb-0.5 pt-3">{children}</div>;
+}
+
+/** Permission-filtered groups, shared by both densities. */
+function visibleGroups(t: TFunction, permissions: string[]) {
+  return buildGroups(t)
+    .map((group) => ({
+      ...group,
+      links: group.links.filter((link) => hasAnyPermission(permissions, link.permissions ?? [])),
+    }))
+    .filter((group) => group.links.length > 0);
+}
+
+export default function Sidebar() {
   const { t } = useTranslation('layout');
   const { data: updateData } = useUpdateCheck();
   const theme = useUIStore((s) => s.theme);
@@ -93,6 +196,8 @@ function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const themeSettings = useThemeStore((s) => s.themeSettings);
+  const expanded = useThemeStore((s) => s.navExpanded);
+  const toggleNav = useThemeStore((s) => s.toggleNav);
   const pluginTabs = usePluginTabs('admin');
   const [sectionsOpen, setSectionsOpen] = useState(false);
 
@@ -107,148 +212,212 @@ function Sidebar() {
   const canViewVersion = hasAnyPermission(permissions, ['admin.read', 'admin.write']);
 
   const adminLinks = ADMIN_PRIMARY.filter((link) => hasAnyPermission(permissions, [...link.perms]));
+  const groups = visibleGroups(t, permissions);
+  const activeTarget = useActiveTarget();
+  const pluginRows: NavLinkItem[] = pluginTabs.map((tab) => ({
+    to: `/admin/plugin/${tab.id}`,
+    label: tab.label,
+    icon: tab.id.includes('ticket') ? Ticket : Plug,
+  }));
+
+  const mainLinks = buildMain(t);
+  const allTargets = [
+    ...mainLinks.map((l) => l.to),
+    ...groups.flatMap((group) => group.links.map((l) => l.to)),
+    ...pluginRows.map((r) => r.to),
+  ];
+  const isActive = activeTarget(allTargets) !== null ? (to: string) => activeTarget(allTargets) === to : () => false;
+
+  const themeIcon = theme === 'dark' ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />;
+  const themeLabel = theme === 'dark' ? t('sidebar.lightMode') : t('sidebar.darkMode');
 
   return (
     <TooltipProvider>
-      <aside className="flex h-full w-14 flex-col items-center border-r border-border/70 bg-surface-1/40 py-2">
-        <Link
-          to="/dashboard"
-          className="mb-2 flex h-9 w-9 items-center justify-center"
-          aria-label={panelName}
-        >
-          <img
-            src={logoUrl}
-            alt=""
-            className="h-6 w-6 rounded-sm"
-            onError={(event) => {
-              event.currentTarget.style.display = 'none';
-            }}
-          />
-        </Link>
-
-        <span className="deck-hatch mb-2 h-[2px] w-5" aria-hidden />
-
-        <nav className="flex flex-col items-center gap-1">
-          {PRIMARY.map((link) => (
-            <RailLink key={link.to} to={link.to} label={t(link.labelKey)} icon={link.icon} />
-          ))}
-          {adminLinks.map((link) => (
-            <RailLink key={link.to} to={link.to} label={t(link.labelKey)} icon={link.icon} />
-          ))}
-          {pluginTabs.map((tab) => (
-            <RailLink
-              key={tab.id}
-              to={`/admin/plugin/${tab.id}`}
-              label={tab.label}
-              icon={tab.id.includes('ticket') ? Ticket : Plug}
+      <aside
+        className={cn(
+          'flex h-full flex-col border-r border-border/70 bg-surface-1/40 py-2 transition-[width] duration-200 ease-standard',
+          expanded ? 'w-56 px-2' : 'w-14 items-center',
+        )}
+      >
+        {/* Brand row: wordmark when expanded, toggle in the top-right corner */}
+        <div className={cn('mb-2 flex items-center', expanded ? 'w-full gap-2' : 'flex-col gap-2')}>
+          <Link
+            to="/dashboard"
+            className={cn('flex h-9 items-center gap-2 rounded-sm px-1.5', expanded && 'min-w-0 flex-1')}
+            aria-label={panelName}
+          >
+            <img
+              src={logoUrl}
+              alt=""
+              className="h-6 w-6 shrink-0 rounded-sm"
+              onError={(event) => {
+                event.currentTarget.style.display = 'none';
+              }}
             />
-          ))}
+            {expanded && (
+              <span className="truncate font-display text-mini font-semibold uppercase tracking-[0.16em] text-foreground">
+                {panelName}
+              </span>
+            )}
+          </Link>
+          {expanded && (
+            <RailButton label={t('shell.collapseNav')} onClick={toggleNav} expanded={false}>
+              <PanelLeftClose className="h-4 w-4" />
+            </RailButton>
+          )}
+        </div>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label={t('shell.sections')}
-                aria-expanded={sectionsOpen}
-                onClick={() => setSectionsOpen(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{t('shell.sections')}</TooltipContent>
-          </Tooltip>
+        {!expanded && <span className="deck-hatch mb-2 h-[2px] w-5" aria-hidden />}
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label={t('shell.openSearch', { shortcut: 'Ctrl+K' })}
-                onClick={() => window.dispatchEvent(new CustomEvent('catalyst:open-search'))}
-                className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-              >
-                <Search className="h-4 w-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{t('shell.searchButton')}</TooltipContent>
-          </Tooltip>
+        <nav
+          className={cn(
+            'flex min-h-0 flex-col',
+            expanded ? 'w-full flex-1 gap-0.5 overflow-y-auto' : 'items-center gap-1',
+          )}
+        >
+          {!expanded && (
+            <RailButton label={t('shell.expandNav')} onClick={toggleNav} expanded={false}>
+              <PanelLeftOpen className="h-4 w-4" />
+            </RailButton>
+          )}
+
+          {expanded ? (
+            <>
+              {mainLinks.map((link) => (
+                <NavRow key={link.to} to={link.to} label={link.label} icon={link.icon} expanded active={isActive(link.to)} />
+              ))}
+              {groups.map((group) => (
+                <div key={group.id} className="flex flex-col">
+                  <SectionLabel>{group.title}</SectionLabel>
+                  {group.links.map((link) => (
+                    <NavRow key={link.to} to={link.to} label={link.label} icon={link.icon} expanded active={isActive(link.to)} />
+                  ))}
+                  {group.id === 'extensions' &&
+                    pluginRows.map((row) => (
+                      <NavRow key={row.to} to={row.to} label={row.label} icon={row.icon} expanded active={isActive(row.to)} />
+                    ))}
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {PRIMARY.map((link) => (
+                <NavRow key={link.to} to={link.to} label={t(link.labelKey)} icon={link.icon} expanded={false} active={isActive(link.to)} />
+              ))}
+              {adminLinks.map((link) => (
+                <NavRow key={link.to} to={link.to} label={t(link.labelKey)} icon={link.icon} expanded={false} active={isActive(link.to)} />
+              ))}
+              {pluginRows.map((row) => (
+                <NavRow key={row.to} to={row.to} label={row.label} icon={row.icon} expanded={false} active={isActive(row.to)} />
+              ))}
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={t('shell.sections')}
+                    aria-expanded={sectionsOpen}
+                    onClick={() => setSectionsOpen(true)}
+                    className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{t('shell.sections')}</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={t('shell.openSearch', { shortcut: 'Ctrl+K' })}
+                    onClick={() => window.dispatchEvent(new CustomEvent('catalyst:open-search'))}
+                    className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <Search className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{t('shell.searchButton')}</TooltipContent>
+              </Tooltip>
+            </>
+          )}
         </nav>
 
-        <div className="flex-1" />
+        {!expanded && <div className="flex-1" />}
 
-        <div className="flex flex-col items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                aria-label={theme === 'dark' ? t('sidebar.lightMode') : t('sidebar.darkMode')}
-                className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-              >
-                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {theme === 'dark' ? t('sidebar.light') : t('sidebar.dark')}
-            </TooltipContent>
-          </Tooltip>
+        {/* Footer: same controls, labelled when expanded */}
+        <div className={cn('flex flex-col', expanded ? 'w-full gap-0.5 border-t border-border/50 pt-2' : 'items-center gap-1')}>
+          <RailButton label={themeLabel} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} expanded={expanded}>
+            {themeIcon}
+            {expanded && <span className="truncate">{themeLabel}</span>}
+          </RailButton>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <NavLink
-                to="/profile"
-                aria-label={displayName}
-                className="flex h-9 w-9 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-muted-foreground ring-1 ring-border"
-              >
+          {expanded ? (
+            <NavLink
+              to="/profile"
+              className="flex h-9 w-full items-center gap-2 rounded-sm px-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              title={`${displayName} · ${user?.role ? user.role : t('sidebar.fallbackRole')}`}
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold ring-1 ring-border">
                 {user?.image ? (
                   <img src={user.image} alt="" className="h-full w-full rounded-sm object-cover" />
                 ) : (
                   initials
                 )}
-              </NavLink>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {displayName} · {user?.role ? user.role : t('sidebar.fallbackRole')}
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={logout}
-                aria-label={t('sidebar.logout')}
-                className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{t('sidebar.logout')}</TooltipContent>
-          </Tooltip>
-
-          {canViewVersion && (
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-mini text-foreground">{displayName}</span>
+                <span className="truncate text-micro">{user?.role ? user.role : t('sidebar.fallbackRole')}</span>
+              </span>
+            </NavLink>
+          ) : (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link
-                  to="/admin/system"
-                  aria-label={`v${PANEL_VERSION}`}
-                  className={cn(
-                    'flex h-6 items-center justify-center text-micro',
-                    updateData?.updateAvailable ? 'text-warning' : 'text-muted-foreground/50',
-                  )}
+                <NavLink
+                  to="/profile"
+                  aria-label={displayName}
+                  className="flex h-9 w-9 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-muted-foreground ring-1 ring-border"
                 >
-                  ●
-                </Link>
+                  {user?.image ? (
+                    <img src={user.image} alt="" className="h-full w-full rounded-sm object-cover" />
+                  ) : (
+                    initials
+                  )}
+                </NavLink>
               </TooltipTrigger>
               <TooltipContent side="right">
-                {updateData?.updateAvailable
+                {displayName} · {user?.role ? user.role : t('sidebar.fallbackRole')}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          <RailButton label={t('sidebar.logout')} onClick={logout} danger expanded={expanded}>
+            <LogOut className="h-4 w-4 shrink-0" />
+            {expanded && <span className="truncate">{t('sidebar.logout')}</span>}
+          </RailButton>
+
+          {canViewVersion && (
+            <Link
+              to="/admin/system"
+              aria-label={`v${PANEL_VERSION}`}
+              title={
+                updateData?.updateAvailable
                   ? t('sidebar.updateTooltip', {
                       current: updateData.currentVersion,
                       latest: updateData.latestVersion,
                     })
-                  : t('sidebar.versionTooltip', { version: PANEL_VERSION })}
-              </TooltipContent>
-            </Tooltip>
+                  : t('sidebar.versionTooltip', { version: PANEL_VERSION })
+              }
+              className={cn(
+                'flex items-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground',
+                expanded ? 'h-8 w-full gap-2 px-2 text-micro' : 'h-9 w-9 justify-center',
+              )}
+            >
+              {/* Update state rides the LED tone; the rail keeps its h-9 hit box
+                  instead of collapsing to the old 14×24 glyph. */}
+              <StatusLed tone={updateData?.updateAvailable ? 'hazard' : 'idle'} />
+              {expanded && <span className="truncate font-mono">v{PANEL_VERSION}</span>}
+            </Link>
           )}
         </div>
       </aside>
@@ -257,5 +426,3 @@ function Sidebar() {
     </TooltipProvider>
   );
 }
-
-export default Sidebar;
