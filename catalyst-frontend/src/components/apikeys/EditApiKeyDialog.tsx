@@ -107,7 +107,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
  <DialogBody className="space-y-5">
  {isAgentKey && (
- <div className="flex items-center gap-1.5 rounded-md border border-warning/30/40 bg-warning/5 px-3 py-1.5 dark:border-warning/20 dark:bg-warning/15">
+ <div className="flex items-center gap-1.5 rounded-md border border-warning/30 bg-warning/5 px-3 py-1.5 dark:border-warning/20 dark:bg-warning/15">
  <Server className="h-3.5 w-3.5 shrink-0 text-warning dark:text-warning" />
  <span className="text-xs text-warning dark:text-warning">
  {t('apiKeys.editDialog.agentNotice')}
@@ -116,13 +116,13 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  )}
 
  {error && (
- <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive dark:border-destructive/20 dark:bg-destructive/15 dark:text-destructive">
+ <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive dark:border-destructive/20 dark:bg-destructive/15 dark:text-destructive">
  {error}
  </div>
  )}
 
  <div className="space-y-1.5">
- <label className="text-xs font-medium text-foreground dark:text-foreground">{t('apiKeys.form.name')}</label>
+ <label className="type-overline">{t('apiKeys.form.name')}</label>
  <Input
  type="text"
  placeholder={t('apiKeys.form.namePlaceholder')}
@@ -130,13 +130,13 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  onChange={(e) => setName(e.target.value)}
  required
  />
- <p className="text-[11px] text-muted-foreground">{t('apiKeys.form.nameHint')}</p>
+ <p className="type-meta">{t('apiKeys.form.nameHint')}</p>
  </div>
 
- <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2/50 px-4 py-3 dark:bg-surface-2/30">
+ <div className="flex items-center justify-between rounded-md border border-border/50 bg-surface-2/50 px-4 py-3 dark:bg-surface-2/30">
  <div>
  <span className="text-sm font-medium text-foreground dark:text-foreground">{t('common:actions.enabled')}</span>
- <p className="text-[11px] text-muted-foreground">
+ <p className="type-meta">
  {t('apiKeys.editDialog.disabledHint')}
  </p>
  </div>
@@ -147,7 +147,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  </div>
 
  <div className="space-y-1.5">
- <label className="text-xs font-medium text-foreground dark:text-foreground">{t('apiKeys.form.rateLimit')}</label>
+ <label className="type-overline">{t('apiKeys.form.rateLimit')}</label>
  <div className="flex items-center gap-2">
  <Input
  type="number"
@@ -168,15 +168,15 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  />
  <span className="text-sm text-muted-foreground">{t('apiKeys.editDialog.seconds')}</span>
  </div>
- <p className="text-[11px] text-muted-foreground">{t('apiKeys.editDialog.rateLimitHint')}</p>
+ <p className="type-meta">{t('apiKeys.editDialog.rateLimitHint')}</p>
  </div>
 
- <div className="rounded-lg border border-border/50 bg-surface-2/40 px-4 py-3 dark:bg-surface-2/20">
+ <div className="rounded-md border border-border/50 bg-surface-2/40 px-4 py-3 dark:bg-surface-2/20">
  <div className="flex items-center justify-between gap-2">
- <span className="text-xs font-medium text-foreground">{t('apiKeys.form.permissions')}</span>
+ <span className="type-overline">{t('apiKeys.form.permissions')}</span>
  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('apiKeys.editDialog.readOnly')}</span>
  </div>
- <p className="mt-1 text-[11px] text-muted-foreground">
+ <p className="type-meta mt-1">
  {t('apiKeys.editDialog.permissionsFixed')}
  </p>
  <div className="mt-2 flex flex-wrap gap-1.5">
@@ -187,11 +187,11 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <span key={p} className="rounded-md border border-border/50 bg-card px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{p}</span>
  ))
  ) : (
- <span className="text-[11px] text-muted-foreground">{t('apiKeys.editDialog.noPermissions')}</span>
+ <span className="type-meta">{t('apiKeys.editDialog.noPermissions')}</span>
  )}
  </div>
  {apiKey.expiresAt && (
- <p className="mt-2 text-[11px] text-muted-foreground">{t('apiKeys.editDialog.expires', { date: formatDateTime(apiKey.expiresAt) })}</p>
+ <p className="type-meta mt-2">{t('apiKeys.editDialog.expires', { date: formatDateTime(apiKey.expiresAt) })}</p>
  )}
  </div>
  </DialogBody>

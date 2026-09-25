@@ -24,13 +24,11 @@ function ErrorFallback({ message, onRetry }: { message?: string; onRetry: () => 
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md overflow-hidden rounded-lg border border-danger/25 bg-danger/5">
+      <div className="w-full max-w-md overflow-hidden rounded-md border border-danger/25 bg-danger/5">
         <div className="flex items-start gap-2.5 px-3 py-2.5">
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-danger/30 bg-danger/10 text-danger">
-            <AlertTriangle className="h-4 w-4" />
-          </div>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold tracking-tight text-foreground">
+            <h1 className="type-overline">
               {t('errorBoundary.title')}
             </h1>
             <p className="type-meta mt-0.5">

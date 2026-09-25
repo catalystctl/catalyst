@@ -1081,7 +1081,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
  className="relative mx-auto max-w-2xl mt-[8vh]"
  >
- <div className="overflow-hidden rounded-xl border border-border bg-card shadow-elevated">
+ <div className="overflow-hidden rounded-md border border-border/50 bg-card shadow-elevated">
  {/* ── Search Input ── */}
  <div className="flex items-center border-b border-border px-4">
  <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -1101,7 +1101,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  type="button"
  onClick={onClose}
  aria-label={t('search.close')}
- className="ml-2 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="ml-2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <X className="h-4 w-4" />
  </button>
@@ -1166,10 +1166,10 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  {/* Group header */}
  <div className="sticky top-0 z-10 flex items-center gap-2 bg-card px-4 py-1.5">
  <CatIcon className={cn('h-3 w-3', meta.color)} />
- <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+ <span className="type-overline">
  {meta.label}
  </span>
- <span className="text-[10px] text-muted-foreground/40">
+ <span className="type-numeric text-[10px] text-muted-foreground/40">
  {items.length}
  </span>
  </div>
@@ -1193,19 +1193,12 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  : 'text-foreground hover:bg-surface-2',
  )}
  >
- <div
- className={cn(
- 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors',
- isSelected ? 'bg-primary/15' : 'bg-surface-2',
- )}
- >
  <Icon
  className={cn(
- 'h-4 w-4 transition-colors',
+ 'h-4 w-4 shrink-0 transition-colors',
  isSelected ? 'text-primary' : 'text-muted-foreground',
  )}
  />
- </div>
 
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
@@ -1218,7 +1211,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  </span>
  )}
  </div>
- <p className="truncate text-xs text-muted-foreground">
+ <p className="truncate type-meta">
  {item.description}
  </p>
  </div>
@@ -1260,7 +1253,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  {t('search.hints.close')}
  </span>
  </div>
- <div className="text-[11px] text-muted-foreground/40">
+ <div className="type-numeric text-[11px] text-muted-foreground/40">
  {t('search.resultCount', { count: flatItems.length })}
  </div>
  </div>

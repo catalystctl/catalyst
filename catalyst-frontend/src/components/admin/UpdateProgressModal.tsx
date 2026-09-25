@@ -151,14 +151,14 @@ function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
   };
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-black">
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
-        <div className="flex items-center gap-1.5 text-[11px] text-white/60">
+    <div className="overflow-hidden rounded-lg border border-border bg-surface-0">
+      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Terminal className="h-3.5 w-3.5" />
           <span>{t('update.logs.title')}</span>
           {live && (
-            <span className="ml-1 inline-flex items-center gap-1 text-white/50">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+            <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
               {t('update.logs.live')}
             </span>
           )}
@@ -167,7 +167,7 @@ function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
           <button
             type="button"
             onClick={handleCopy}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
           >
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
             {copied ? t('common:actions.copied') : t('common:actions.copy')}
@@ -179,13 +179,13 @@ function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
         className="h-64 overflow-y-auto px-3 py-2 font-mono text-[11px] leading-relaxed"
       >
         {logs.length === 0 ? (
-          <div className="flex items-center gap-2 text-white/40">
+          <div className="flex items-center gap-2 text-muted-foreground/70">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             {t('update.logs.waiting')}
           </div>
         ) : (
           logs.map((line, i) => (
-            <div key={i} className="whitespace-pre-wrap break-words text-white/80">
+            <div key={i} className="whitespace-pre-wrap break-words text-foreground/80">
               {line}
             </div>
           ))

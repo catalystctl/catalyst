@@ -11,8 +11,8 @@ function Pagination({ page, totalPages, onPageChange, className }: Props) {
   const { t } = useTranslation('common');
 
   return (
-    <div className={`flex items-center justify-between py-2 text-xs text-muted-foreground ${className ?? ''}`}>
-      <span>
+    <div className={`flex items-center justify-between py-2 type-meta ${className ?? ''}`}>
+      <span className="font-mono tabular-nums">
         {t('pagination.pageOf', { page, totalPages })}
       </span>
       <div className="flex gap-2">

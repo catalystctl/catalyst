@@ -80,7 +80,7 @@ function RuleRow({
  const { t } = useTranslation('alerts');
  const isOwner = !rule.userId || !user?.id || rule.userId === user.id;
  return (
- <div className="group relative flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
+ <div className="group relative flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/50 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
  <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
@@ -92,7 +92,7 @@ function RuleRow({
  <Badge variant="secondary" className="text-[10px]">{rule.target}</Badge>
  )}
  </div>
- <div className="mt-0.5 text-xs text-muted-foreground">
+ <div className="mt-0.5 type-meta">
  {rule.description || rule.type.replace('_', ' ')}
  </div>
  </div>
@@ -144,7 +144,7 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  : 'group-hover:bg-primary/50';
 
  return (
- <div className="group relative rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
+ <div className="group relative rounded-md border border-border/50 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
  <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 ${severityAccent}`} />
  <div className="flex items-start justify-between gap-3">
  <div className="min-w-0 flex-1">
@@ -158,9 +158,9 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  <Badge variant="secondary" className="text-[10px]">{t('alertRow.resolved')}</Badge>
  )}
  </div>
- <p className="mt-1.5 text-xs text-muted-foreground">{alert.message}</p>
- <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
- <span>{formatDateTime(alert.createdAt)}</span>
+ <p className="mt-1.5 type-meta">{alert.message}</p>
+ <div className="mt-2 flex flex-wrap items-center gap-2 type-meta">
+ <span className="type-numeric">{formatDateTime(alert.createdAt)}</span>
  {showAdminTargets && (
  <Badge variant="secondary" className="text-[10px]">
  {alert.nodeId ? t('target.node') : alert.serverId ? t('target.server') : t('target.global')}
@@ -198,7 +198,7 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  {delivery.status}
  </span>
  </div>
- <div className="mt-0.5 text-[11px] text-muted-foreground">{delivery.target}</div>
+ <div className="mt-0.5 type-meta">{delivery.target}</div>
  {delivery.lastError && (
  <div className="mt-0.5 text-[10px] text-destructive">{delivery.lastError}</div>
  )}
@@ -486,7 +486,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  />
  </div>
  {hasRules ? (
- <Badge variant="secondary" className="mt-0.5 text-[10px]">
+ <Badge variant="secondary" className="mt-0.5 type-numeric text-[10px]">
  {t('page.ruleCount', { count: alertRules.length })}
  </Badge>
  ) : null}
@@ -528,7 +528,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <select
  value={filterResolved}
  onChange={(e) => setFilterResolved(e.target.value as 'false' | 'true' | 'all')}
- className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  aria-label={t('page.filterAria')}
  >
  <option value="false">{t('page.filterUnresolved')}</option>
@@ -592,7 +592,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </DialogHeader>
 
  <DialogToolbar>
- <div className="flex gap-1 rounded-lg border border-border/30 bg-surface-2/20 p-1">
+ <div className="flex gap-1 rounded-md border border-border/50 bg-surface-2/20 p-1">
  {ruleStepOrder.map((key, index) => {
  const isActive = ruleStep === key;
  const canNav = canNavigateRuleStep(index);
@@ -628,32 +628,32 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.ruleName')}</span>
+ <span className="type-overline">{t('ruleModal.ruleName')}</span>
  <Input value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder={t('ruleModal.namePlaceholder')} />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.descriptionLabel')}</span>
+ <span className="type-overline">{t('ruleModal.descriptionLabel')}</span>
  <Input value={ruleDescription} onChange={(e) => setRuleDescription(e.target.value)} placeholder={t('ruleModal.descriptionPlaceholder')} />
  </label>
  </div>
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.ruleType')}</span>
+ <span className="type-overline">{t('ruleModal.ruleType')}</span>
  <select
  value={ruleType}
  onChange={(e) => setRuleType(e.target.value as AlertType)}
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
  >
  {ruleTypeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
  </select>
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.target')}</span>
+ <span className="type-overline">{t('ruleModal.target')}</span>
  <select
  value={ruleTarget}
  onChange={(e) => setRuleTarget(e.target.value as 'global' | 'server' | 'node')}
  disabled={!showAdminTargets}
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
+ className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
  >
  <option value="global">{t('target.global')}</option>
  <option value="server">{t('target.server')}</option>
@@ -661,12 +661,12 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </select>
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.targetId')}</span>
+ <span className="type-overline">{t('ruleModal.targetId')}</span>
  <select
  value={ruleTargetId}
  onChange={(e) => setRuleTargetId(e.target.value)}
  disabled={!showAdminTargets || ruleTarget === 'global'}
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
+ className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
  >
  <option value="">{ruleTarget === 'global' ? t('ruleModal.notRequired') : selectedTargetLabel || t('ruleModal.selectTarget')}</option>
  {targetOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
@@ -681,27 +681,27 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {ruleType === 'resource_threshold' && (
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.cpuThreshold')}</span>
+ <span className="type-overline">{t('ruleModal.cpuThreshold')}</span>
  <Input type="number" min={1} max={100} value={cpuThreshold} onChange={(e) => setCpuThreshold(e.target.value)} />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.memoryThreshold')}</span>
+ <span className="type-overline">{t('ruleModal.memoryThreshold')}</span>
  <Input type="number" min={1} max={100} value={memoryThreshold} onChange={(e) => setMemoryThreshold(e.target.value)} />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.diskThreshold')}</span>
+ <span className="type-overline">{t('ruleModal.diskThreshold')}</span>
  <Input type="number" min={1} max={100} value={diskThreshold} onChange={(e) => setDiskThreshold(e.target.value)} />
  </label>
  </div>
  )}
  {ruleType === 'node_offline' && (
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.offlineThreshold')}</span>
+ <span className="type-overline">{t('ruleModal.offlineThreshold')}</span>
  <Input type="number" min={1} value={offlineThreshold} onChange={(e) => setOfflineThreshold(e.target.value)} />
  </label>
  )}
  {ruleType === 'server_crashed' && (
- <div className="rounded-lg border border-border/50 bg-surface-2/40 px-4 py-3 text-xs text-muted-foreground">
+ <div className="rounded-md border border-border/50 bg-surface-2/40 px-4 py-3 type-meta">
  {t('ruleModal.serverCrashedHint')}
  </div>
  )}
@@ -713,7 +713,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
  <div className="space-y-2">
  <div className="flex items-center justify-between">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.webhookUrls')}</span>
+ <span className="type-overline">{t('ruleModal.webhookUrls')}</span>
  <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setWebhookTargets((c) => [...c, ''])}>{t('ruleModal.add')}</button>
  </div>
  {webhookTargets.map((value, i) => (
@@ -729,7 +729,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </div>
  <div className="space-y-2">
  <div className="flex items-center justify-between">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.emailRecipients')}</span>
+ <span className="type-overline">{t('ruleModal.emailRecipients')}</span>
  <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setEmailTargets((c) => [...c, ''])}>{t('ruleModal.add')}</button>
  </div>
  {emailTargets.map((value, i) => (
@@ -745,12 +745,12 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </div>
  </div>
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
- <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+ <label className="flex items-center gap-2 type-overline cursor-pointer">
  <input type="checkbox" checked={notifyOwner} onChange={(e) => setNotifyOwner(e.target.checked)} className="h-4 w-4 rounded border-border bg-card text-primary" />
  {t('ruleModal.notifyOwner')}
  </label>
  <label className="block space-y-1 sm:col-span-2">
- <span className="text-xs font-medium text-muted-foreground">{t('ruleModal.cooldown')}</span>
+ <span className="type-overline">{t('ruleModal.cooldown')}</span>
  <Input type="number" min={1} value={cooldownMinutes} onChange={(e) => setCooldownMinutes(e.target.value)} />
  </label>
  </div>

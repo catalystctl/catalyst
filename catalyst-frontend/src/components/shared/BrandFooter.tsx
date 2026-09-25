@@ -1,6 +1,6 @@
 export function BrandFooter() {
   return (
-    <footer className="absolute bottom-4 right-4 text-xs text-muted-foreground">
+    <footer className="absolute bottom-4 right-4 type-meta">
       <a
         href="https://github.com/catalystctl/catalyst"
         target="_blank"

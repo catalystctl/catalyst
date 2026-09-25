@@ -2,7 +2,7 @@ import { Skeleton } from './Skeleton';
 
 export function ServerCardSkeleton() {
  return (
- <div className="rounded-xl border border-border bg-card p-4">
+ <div className="rounded-md border border-border/50 bg-card p-4">
  <div className="flex items-start justify-between">
  <div className="space-y-2 flex-1">
  <Skeleton height={20} width="60%" className="h-5" />

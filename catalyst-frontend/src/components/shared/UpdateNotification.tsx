@@ -154,16 +154,14 @@ export default function UpdateNotification() {
  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
  className="pointer-events-none fixed right-3 top-14 z-40 flex justify-end lg:right-5 lg:top-16"
  >
- <Card className="pointer-events-auto flex w-[min(24rem,calc(100vw-1.5rem))] items-start gap-3 border border-border/70 bg-card px-3 py-2.5 shadow-elevated lg:items-center">
- <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
- <ArrowUpCircle className="h-4 w-4 text-primary" />
- </div>
+ <Card className="pointer-events-auto flex w-[min(24rem,calc(100vw-1.5rem))] items-start gap-3 border border-border/50 bg-card px-3 py-2.5 shadow-elevated lg:items-center">
+ <ArrowUpCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary lg:mt-0" />
 
  <div className="flex min-w-0 flex-1 flex-col">
  <span className="text-sm font-medium leading-tight text-foreground">
  {t('updateNotification.available', { version: String(updateData.latestVersion).replace(/^v/i, '') })}
  </span>
- <span className="mt-0.5 text-xs text-muted-foreground">
+ <span className="type-meta mt-0.5">
  {t('updateNotification.currentVersion', { version: String(updateData.currentVersion).replace(/^v/i, '') })}
  </span>
  </div>
@@ -221,14 +219,12 @@ export default function UpdateNotification() {
  <button
  type="button"
  onClick={() => handleDismissChoice('session')}
- className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+ className="flex items-start gap-3 rounded-md border border-border/50 bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
  >
- <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
- <Clock className="h-3.5 w-3.5" />
- </div>
+ <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  <div className="flex flex-col gap-0.5">
  <span className="text-sm font-medium text-foreground">{t('updateNotification.dismissSessionTitle')}</span>
- <span className="text-xs text-muted-foreground">
+ <span className="type-meta">
  {t('updateNotification.dismissSessionDescription')}
  </span>
  </div>
@@ -238,14 +234,12 @@ export default function UpdateNotification() {
  <button
  type="button"
  onClick={() => handleDismissChoice('version')}
- className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+ className="flex items-start gap-3 rounded-md border border-border/50 bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
  >
- <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
- <BellRing className="h-3.5 w-3.5" />
- </div>
+ <BellRing className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  <div className="flex flex-col gap-0.5">
  <span className="text-sm font-medium text-foreground">{t('updateNotification.dismissVersionTitle')}</span>
- <span className="text-xs text-muted-foreground">
+ <span className="type-meta">
  {t('updateNotification.dismissVersionDescription', {
  version: `v${updateData?.latestVersion}`,
  })}
@@ -257,14 +251,12 @@ export default function UpdateNotification() {
  <button
  type="button"
  onClick={() => handleDismissChoice('global')}
- className="flex items-start gap-3 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-left transition-colors hover:bg-warning/10"
+ className="flex items-start gap-3 rounded-md border border-warning/20 bg-warning/5 px-4 py-3 text-left transition-colors hover:bg-warning/10"
  >
- <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
- <Ban className="h-3.5 w-3.5" />
- </div>
+ <Ban className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
  <div className="flex flex-col gap-0.5">
  <span className="text-sm font-medium text-foreground">{t('updateNotification.dismissGlobalTitle')}</span>
- <span className="text-xs text-muted-foreground">
+ <span className="type-meta">
  {t('updateNotification.dismissGlobalDescription')}
  </span>
  </div>

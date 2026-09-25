@@ -75,7 +75,7 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
  return (
  <div className={cn('space-y-1', className)}>
  <div className="flex items-center justify-between text-xs">
- <span className="text-muted-foreground">{t('passwordStrength.title')}</span>
+ <span className="type-overline">{t('passwordStrength.title')}</span>
  <span
  className={cn(
  'font-medium',

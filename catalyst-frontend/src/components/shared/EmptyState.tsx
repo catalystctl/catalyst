@@ -6,8 +6,8 @@ type Props = {
 
 function EmptyState({ title, description, action }: Props) {
   return (
-    <div className="rounded-lg border border-dashed border-border/70 bg-card px-3 py-6 text-center">
-      <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
+    <div className="rounded-md border border-dashed border-border/50 bg-card px-3 py-6 text-center">
+      <h3 className="type-overline">{title}</h3>
       {description ? (
         <p className="type-meta mx-auto mt-1.5 max-w-md">{description}</p>
       ) : null}

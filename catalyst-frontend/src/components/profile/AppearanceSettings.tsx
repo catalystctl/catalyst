@@ -19,18 +19,18 @@ function PersonalColorField({
   const isValid = /^#[0-9A-Fa-f]{6}$/.test(value);
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium text-foreground">{label}</label>
+      <label className="type-overline">{label}</label>
       <div className="flex items-center gap-2">
         <div className="relative flex-shrink-0">
           <div
-            className="h-9 w-9 cursor-pointer rounded-lg ring-1 ring-black/10"
+            className="h-9 w-9 cursor-pointer rounded-md ring-1 ring-border/60"
             style={{ backgroundColor: isValid ? value : fallback }}
           />
           <input
             type="color"
             value={isValid ? value : fallback}
             onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 h-full w-full cursor-pointer rounded-lg opacity-0"
+            className="absolute inset-0 h-full w-full cursor-pointer rounded-md opacity-0"
           />
         </div>
         <input
@@ -38,7 +38,7 @@ function PersonalColorField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={fallback}
-          className="w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+          className="w-full rounded-md border border-border/50 bg-card px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
         />
       </div>
     </div>
@@ -76,7 +76,7 @@ export default function AppearanceSettings() {
       <SectionHeader icon={Palette} title={t('appearance.title')} description={t('appearance.description')} />
       <div className="space-y-5">
         <div>
-          <p className="mb-2 text-xs font-medium text-foreground">{t('appearance.themeMode')}</p>
+          <p className="type-overline mb-2">{t('appearance.themeMode')}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {modes.map(({ id, label, icon: Icon, hint }) => {
               const active = (themePreference || 'panel') === id;
@@ -103,7 +103,7 @@ export default function AppearanceSettings() {
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium text-foreground">{t('appearance.accentColors')}</p>
+            <p className="type-overline">{t('appearance.accentColors')}</p>
             {hasCustom && (
               <button
                 type="button"
@@ -137,20 +137,20 @@ export default function AppearanceSettings() {
           </div>
           <div className="mt-3 flex gap-1.5">
             {[primary, secondary, accent].map((c, i) => (
-              <div key={i} className="h-6 flex-1 rounded-md ring-1 ring-black/10" style={{ backgroundColor: c }} />
+              <div key={i} className="h-6 flex-1 rounded-md ring-1 ring-border/60" style={{ backgroundColor: c }} />
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="type-meta mt-2">
             {hasCustom ? t('appearance.usingCustom') : t('appearance.usingDefaults')} {t('appearance.changesApplyInstantly')}
           </p>
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-medium text-foreground">{t('common:language.label')}</p>
+          <p className="type-overline mb-2">{t('common:language.label')}</p>
           <div className="max-w-xs">
             <LanguageSwitcher />
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">{t('common:language.description')}</p>
+          <p className="type-meta mt-2">{t('common:language.description')}</p>
         </div>
       </div>
     </ServerTabCard>

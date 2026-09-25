@@ -7,7 +7,7 @@ interface TableSkeletonProps {
 
 export function TableSkeleton({ rows = 5, columns = 4 }: TableSkeletonProps) {
  return (
- <div className="rounded-xl border border-border/30 bg-card overflow-hidden">
+ <div className="rounded-md border border-border/50 bg-card overflow-hidden">
  {/* Header */}
  <div className="border-b border-border/30 bg-surface-2 px-4 py-3 grid gap-4"
  style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>

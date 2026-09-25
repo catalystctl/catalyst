@@ -379,7 +379,7 @@ export function NodeAssignmentsSelector({
  return (
  <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
+          <div className="type-overline">
             {t('nodeAssignments.header', {
               label: label ?? t('nodeAssignments.defaultLabel'),
               value: selectedNodes.length,
