@@ -525,7 +525,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
         role="log"
         aria-label={t('console.xterm.ariaLabel')}
         aria-live="polite"
-        className="console-output xterm-console-host min-h-0 w-full flex-1 overflow-hidden bg-card [&_.xterm]:h-full [&_.xterm]:w-full"
+        className="console-output xterm-console-host min-h-0 w-full flex-1 overflow-hidden bg-card px-2 py-1.5 sm:px-3 sm:py-2 [&_.xterm]:h-full [&_.xterm]:w-full"
       />
 
 
