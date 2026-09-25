@@ -35,11 +35,19 @@ function AppLayout() {
   useEffect(() => setIsMobileSidebarOpen(false), [pathname]);
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsMobileSidebarOpen(false); }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close); }, []);
 
+  // The cabinet rail's search button lives in a different subtree to the
+  // palette, so it signals through a window event.
+  useEffect(() => {
+    const open = () => setIsSearchOpen(true);
+    window.addEventListener('catalyst:open-search', open);
+    return () => window.removeEventListener('catalyst:open-search', open);
+  }, []);
+
   return (
     // Demo builds render a fixed h-8 banner above everything: shift the shell
     // below it and shrink to fit so nothing overlaps and no page scroll appears.
     <div className={cn('app-shell flex font-sans', isDemoMode ? 'mt-8 h-[calc(100dvh-2rem)]' : 'h-[100dvh]')}>
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:m-2 focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-foreground">{t('shell.skipToContent')}</a>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:m-2 focus:rounded-sm focus:bg-card focus:px-3 focus:py-2 focus:text-foreground">{t('shell.skipToContent')}</a>
       <UpdateNotification />
       {/* Mobile overlay */}
       {isMobileSidebarOpen && (
@@ -51,34 +59,34 @@ function AppLayout() {
       )}
 
       {/* Mobile header */}
-      <div className={cn('fixed left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 shadow-panel lg:hidden', isDemoMode ? 'top-8' : 'top-0')}>
+      <div className={cn('fixed left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 lg:hidden', isDemoMode ? 'top-8' : 'top-0')}>
         <button
           type="button"
           onClick={() => setIsMobileSidebarOpen(true)}
-          className="pressable flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"
           aria-label={t('shell.openMenu')}
           aria-expanded={isMobileSidebarOpen}
           aria-controls="mobile-sidebar"
         >
           <Menu className="h-4 w-4" />
         </button>
-        <span className="font-display text-sm font-semibold tracking-tight text-foreground">
-          {panelName}
+        <span className="flex items-center gap-2">
+          <span className="deck-hatch h-[3px] w-5" aria-hidden />
+          <span className="font-display text-mini font-semibold uppercase tracking-[0.18em] text-foreground">
+            {panelName}
+          </span>
         </span>
         <button
           type="button"
           onClick={() => setIsSearchOpen(true)}
-          className="pressable flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"
           aria-label={t('common:actions.search')}
         >
           <Search className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Sidebar */}
-      {/* Demo: start below the fixed banner and stack above it. The shell
-        uses isolation:isolate, so the drawer's z-50 is trapped inside the
-        shell context and the root-level banner would otherwise paint over it. */}
+      {/* Cabinet rail (desktop) / drawer (mobile) */}
       <div
         id="mobile-sidebar"
         className={cn(
@@ -90,7 +98,7 @@ function AppLayout() {
         <button
           type="button"
           onClick={() => setIsMobileSidebarOpen(false)}
-          className="pressable absolute right-2 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground lg:hidden"
+          className="absolute right-2 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground lg:hidden"
           aria-label={t('shell.closeMenu')}
         >
           <X className="h-4 w-4" />
@@ -101,43 +109,43 @@ function AppLayout() {
       <main
         id="main-content"
         className={cn(
-          // Spell out each side: py-* would make tailwind-merge drop the
-          // pt-[4.5rem] that clears the fixed mobile header (content slid
-          // underneath it on every mobile page).
           'relative flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-[4.5rem] lg:px-6',
-          isServerWorkspace ? 'pb-3 lg:pb-3 lg:pt-3' : 'lg:pb-6 lg:pt-6',
+          isServerWorkspace ? 'pb-3 lg:pb-3 lg:pt-3' : 'lg:pb-6 lg:pt-4',
         )}
       >
         <div
           className={cn(
             'mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col',
-            isServerWorkspace ? 'gap-2' : 'gap-4',
+            isServerWorkspace ? 'gap-2' : 'gap-3',
           )}
         >
-          <div className="flex items-center justify-between gap-3">
-            <Breadcrumbs />
+          {/* Marquee — the cabinet gesture: wayfinding, fleet health, search */}
+          <header className="flex items-center justify-between gap-3 border-b border-border/60 pb-2">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="deck-hatch hidden h-4 w-1 lg:block" aria-hidden />
+              <Breadcrumbs />
+            </div>
             <div className="flex items-center gap-2">
               <FleetHeartbeat />
               <button
                 type="button"
                 onClick={() => setIsSearchOpen(true)}
-                className="pressable hidden min-w-[200px] items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-panel hover:border-primary/25 hover:text-foreground lg:flex"
+                className="hidden min-w-[190px] items-center gap-2 rounded-sm border border-border/70 bg-card px-3 py-1.5 text-mini text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground lg:flex"
                 aria-label={t('shell.openSearch', { shortcut })}
               >
                 <Search className="h-3.5 w-3.5" />
                 <span className="flex-1 text-left">{t('shell.searchButton')}</span>
-                <kbd className="hidden rounded-md border border-border bg-surface-2/80 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground sm:inline-block">
+                <kbd className="hidden rounded-sm border border-border/70 bg-surface-2/80 px-1.5 py-0.5 font-mono text-micro text-muted-foreground sm:inline-block">
                   {shortcut}
                 </kbd>
               </button>
             </div>
-          </div>
+          </header>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <Outlet />
           </div>
         </div>
       </main>
-
 
       <SearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <div className="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col gap-2 lg:bottom-6 lg:right-6">

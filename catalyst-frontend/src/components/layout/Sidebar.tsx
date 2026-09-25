@@ -1,611 +1,259 @@
-import { NavLink, useLocation, Link } from 'react-router-dom';
+import { NavLink, Link, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  LayoutDashboard,
+  Server,
+  Network,
+  Users,
+  Bell,
+  Ticket,
+  Plug,
+  Sun,
+  Moon,
+  LogOut,
+  MoreHorizontal,
+  Search,
+} from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { hasAnyPermission } from '../auth/ProtectedRoute';
-import {
-  LayoutDashboard,
-  Server,
-  ChevronDown,
-  ChevronRight,
-  ChevronLeft,
-  BarChart3,
-  Users,
-  Network,
-  FileText,
-  Bell,
-  Database,
-  Settings,
-  Shield,
-  Palette,
-  Sun,
-  Moon,
-  LogOut,
-  Key,
-  Plug,
-  Activity,
-  Lock,
-  ArrowRightLeft,
-  Bug,
-  Ticket,
-} from 'lucide-react';
-import { useState, MouseEvent, useMemo, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
-import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { usePluginTabs, usePluginRoutes } from '../../plugins/hooks';
-import { PluginSlot } from '../../plugins/PluginSlot';
+import { usePluginTabs } from '../../plugins/hooks';
 import { PANEL_VERSION } from '../../utils/version';
-import { roleLabel } from '../../utils/constants';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
-import { useDashboardStats } from '../../hooks/useDashboard';
+import { cn } from '@/lib/utils';
+import NavSectionsMenu from './NavSectionsMenu';
 
-// Expanded admin sections persist across page refreshes.
-const SIDEBAR_EXPANDED_KEY = 'catalyst.sidebar.expandedSections';
+/**
+ * Cabinet rail — the deck's primary navigation. Deliberately a fixed 56px icon
+ * rail rather than a 240px labelled sidebar (the generic-admin gesture): hot
+ * paths stay one click away, every other destination lives in the sections
+ * popover and the Ctrl+K palette. See docs/design/deck-identity.md.
+ */
+const PRIMARY = [
+  { to: '/dashboard', labelKey: 'layout:nav.dashboard', icon: LayoutDashboard },
+  { to: '/servers', labelKey: 'layout:nav.servers', icon: Server },
+] as const;
 
-function readExpandedSections(): string[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(SIDEBAR_EXPANDED_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
-  } catch {
-    return [];
-  }
-}
+const ADMIN_PRIMARY = [
+  { to: '/admin/nodes', labelKey: 'layout:nav.nodes', icon: Network, perms: ['node.read', 'admin.read', 'admin.write'] },
+  { to: '/admin/users', labelKey: 'layout:nav.users', icon: Users, perms: ['user.read', 'admin.read', 'admin.write'] },
+  { to: '/admin/alerts', labelKey: 'layout:nav.alerts', icon: Bell, perms: ['alert.read', 'admin.read', 'admin.write'] },
+] as const;
 
-const buildMainLinks = (t: TFunction): MenuItemProps[] => [
-  { to: '/dashboard', label: t('layout:nav.dashboard'), icon: LayoutDashboard },
-  { to: '/servers', label: t('layout:nav.servers'), icon: Server },
-  { to: '/tickets', label: t('layout:nav.tickets'), icon: Ticket },
-];
-
-interface AdminSection {
-  id: string;
-  title: string;
-  links: MenuItemProps[];
-}
-
-const buildAdminSections = (t: TFunction): AdminSection[] => [
-  {
-    id: 'administration',
-    title: t('layout:sections.administration'),
-    links: [
-      {
-        to: '/admin',
-        label: t('layout:nav.overview'),
-        icon: BarChart3,
-        permissions: ['admin.read', 'admin.write'],
-      },
-    ],
-  },
-  {
-    id: 'infrastructure',
-    title: t('layout:sections.infrastructure'),
-    links: [
-      {
-        to: '/admin/nodes',
-        label: t('layout:nav.nodes'),
-        icon: Network,
-        permissions: [
-          'node.read',
-          'node.create',
-          'node.update',
-          'node.delete',
-          'admin.read',
-          'admin.write',
-        ],
-      },
-      {
-        to: '/admin/servers',
-        label: t('layout:nav.allServers'),
-        icon: Server,
-        permissions: ['admin.read', 'admin.write'],
-      },
-      {
-        to: '/admin/templates',
-        label: t('layout:nav.templates'),
-        icon: FileText,
-        permissions: [
-          'template.read',
-          'template.create',
-          'template.update',
-          'template.delete',
-          'admin.read',
-          'admin.write',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'access-control',
-    title: t('layout:sections.accessControl'),
-    links: [
-      {
-        to: '/admin/users',
-        label: t('layout:nav.users'),
-        icon: Users,
-        permissions: [
-          'user.read',
-          'user.create',
-          'user.update',
-          'user.delete',
-          'user.set_roles',
-          'admin.read',
-          'admin.write',
-        ],
-      },
-      {
-        to: '/admin/roles',
-        label: t('layout:nav.roles'),
-        icon: Shield,
-        permissions: [
-          'role.read',
-          'role.create',
-          'role.update',
-          'role.delete',
-          'admin.read',
-          'admin.write',
-        ],
-      },
-      {
-        to: '/admin/api-keys',
-        label: t('layout:nav.apiKeys'),
-        icon: Key,
-        permissions: ['apikey.manage', 'admin.read', 'admin.write'],
-      },
-    ],
-  },
-  {
-    id: 'configuration',
-    title: t('layout:sections.configuration'),
-    links: [
-      {
-        to: '/admin/database',
-        label: t('layout:nav.databases'),
-        icon: Database,
-        permissions: ['admin.read', 'admin.write'],
-      },
-      { to: '/admin/system', label: t('layout:nav.system'), icon: Settings, permissions: ['admin.write'] },
-      {
-        to: '/admin/security',
-        label: t('layout:nav.security'),
-        icon: Lock,
-        permissions: ['admin.read', 'admin.write'],
-      },
-      {
-        to: '/admin/migration',
-        label: t('layout:nav.migration'),
-        icon: ArrowRightLeft,
-        permissions: ['admin.read', 'admin.write'],
-      },
-    ],
-  },
-  {
-    id: 'monitoring',
-    title: t('layout:sections.monitoring'),
-    links: [
-      {
-        to: '/admin/alerts',
-        label: t('layout:nav.alerts'),
-        icon: Bell,
-        permissions: [
-          'alert.read',
-          'alert.create',
-          'alert.update',
-          'alert.delete',
-          'admin.read',
-          'admin.write',
-        ],
-      },
-      {
-        to: '/admin/audit-logs',
-        label: t('layout:nav.auditLogs'),
-        icon: Activity,
-        permissions: ['admin.read', 'admin.write'],
-      },
-      {
-        to: '/admin/system-errors',
-        label: t('layout:nav.systemErrors'),
-        icon: Bug,
-        permissions: ['admin.read', 'admin.write'],
-      },
-    ],
-  },
-  {
-    id: 'extensions',
-    title: t('layout:sections.extensions'),
-    links: [
-      {
-        to: '/admin/plugins',
-        label: t('layout:nav.plugins'),
-        icon: Plug,
-        permissions: ['admin.read', 'admin.write'],
-      },
-      { to: '/admin/theme-settings', label: t('layout:nav.theme'), icon: Palette, permissions: ['admin.write'] },
-    ],
-  },
-];
-
-interface MenuItemProps {
+function RailLink({
+  to,
+  label,
+  icon: Icon,
+}: {
   to: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  collapsed?: boolean;
-  /** Used for admin section filtering only; not rendered by MenuItem. */
-  permissions?: string[];
-  /** Live status count; nothing renders while the stat is unavailable. */
-  count?: number;
-  /** `warning` tints the count only when it is above zero. */
-  countTone?: 'default' | 'warning';
-}
-
-function MenuItem({ to, label, icon: Icon, collapsed, count, countTone = 'default' }: MenuItemProps) {
-  const location = useLocation();
-  const isActive =
-    location.pathname === to || (to !== '/admin' && location.pathname.startsWith(`${to}/`));
-  const showCount = typeof count === 'number';
-  const countIsWarning = countTone === 'warning' && (count ?? 0) > 0;
-
-  if (collapsed) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-      <NavLink
-        to={to}
-        className={cn(
-          'pressable relative flex h-8 w-8 items-center justify-center rounded-md transition-colors duration-200',
-          isActive
-            ? 'bg-primary/10 text-foreground'
-            : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
-        )}
-        aria-label={label}
-      >
-        {isActive && (
-          <span className="absolute -left-1.5 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-        )}
-        <Icon className="h-4 w-4" />
-        {countIsWarning && (
-          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />
-        )}
-      </NavLink>
-        </TooltipTrigger>
-        <TooltipContent side="right">{label}</TooltipContent>
-      </Tooltip>
-    );
-  }
+}) {
+  const { pathname } = useLocation();
+  // Computed here rather than via NavLink's function className: Radix's
+  // TooltipTrigger asChild stringifies a function className when it clones
+  // the child, which silently drops the link's styling.
+  const isActive = pathname === to || pathname.startsWith(`${to}/`);
 
   return (
-    <NavLink
-      to={to}
-      className={cn(
-        'pressable group relative flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors duration-200',
-        isActive
-          ? 'bg-primary/10 text-foreground'
-          : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
-      )}
-    >
-      {isActive && (
-        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
-      )}
-      <Icon className="h-4 w-4 shrink-0 opacity-90" />
-      <span className="truncate">{label}</span>
-      {showCount && (
-        <span
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <NavLink
+          to={to}
+          aria-label={label}
           className={cn(
-            'ml-auto shrink-0 font-mono text-[10px] tabular-nums',
-            countIsWarning ? 'text-warning' : 'text-muted-foreground/70',
+            'relative flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+            isActive
+              ? 'bg-primary/15 text-foreground'
+              : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
           )}
-          aria-hidden
         >
-          {count}
-        </span>
-      )}
-    </NavLink>
-  );
-}
-
-interface SectionProps {
-  id: string;
-  title: string;
-  links: MenuItemProps[];
-  expanded?: boolean;
-  onToggle?: (id: string) => void;
-  collapsed?: boolean;
-}
-
-function Section({ id, title, links, expanded = false, onToggle, collapsed }: SectionProps) {
-  const location = useLocation();
-
-  const hasActiveLink = links.some(
-    (link) => location.pathname === link.to || (link.to !== '/admin' && location.pathname.startsWith(`${link.to}/`)),
-  );
-  const shouldExpand = expanded || hasActiveLink;
-
-  const toggleExpanded = (e: MouseEvent) => {
-    e.preventDefault();
-    onToggle?.(id);
-  };
-
-  if (links.length === 0) return null;
-
-  if (collapsed) {
-    return (
-      <div className="space-y-1">
-        {links.map((link) => (
-          <MenuItem key={link.to} {...link} collapsed />
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1">
-      <button
-        type="button"
-        onClick={toggleExpanded}
-        aria-expanded={shouldExpand}
-        aria-controls={`section-${id}`}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:text-foreground"
-      >
-        <span className="type-overline shrink-0">{title}</span>
-        <span className="h-px min-w-4 flex-1 bg-border/50" aria-hidden />
-        {shouldExpand ? (
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
-        ) : (
-          <ChevronRight className="h-3 w-3 shrink-0 opacity-70" />
-        )}
-      </button>
-      {shouldExpand && (
-        <div id={`section-${id}`} className="relative ml-3 space-y-0.5 border-l border-border/70 pl-2.5">
-          {links.map((link) => (
-            <MenuItem key={link.to} {...link} />
-          ))}
-        </div>
-      )}
-    </div>
+          {isActive && (
+            <span
+              className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 bg-primary"
+              aria-hidden
+            />
+          )}
+          <Icon className="h-4 w-4" />
+        </NavLink>
+      </TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
 function Sidebar() {
-  const { data: updateData } = useUpdateCheck();
-  const { data: stats } = useDashboardStats();
   const { t } = useTranslation('layout');
+  const { data: updateData } = useUpdateCheck();
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const themeSettings = useThemeStore((s) => s.themeSettings);
-  const sidebarCollapsed = useThemeStore((s) => s.sidebarCollapsed);
-  const [isLargeViewport, setIsLargeViewport] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches);
-  const toggleSidebar = useThemeStore((s) => s.toggleSidebar);
   const pluginTabs = usePluginTabs('admin');
-  const pluginRoutes = usePluginRoutes();
-  const [expandedIds, setExpandedIds] = useState<string[]>(readExpandedSections);
+  const [sectionsOpen, setSectionsOpen] = useState(false);
 
-  const toggleSection = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id];
-      try {
-        window.localStorage.setItem(SIDEBAR_EXPANDED_KEY, JSON.stringify(next));
-      } catch {
-        // Storage may be unavailable (private mode); menu still works for this page view.
-      }
-      return next;
-    });
-  };
-
-  // Show main "Tickets" nav only when the ticketing user route is loaded.
-  const hasUserTicketPage = pluginRoutes.some(
-    (r) => r.path === '/ticketing-plugin' || r.path === '/tickets',
-  );
-
-  const filteredSections = useMemo(() => {
-    const userPermissions = user?.permissions || [];
-    const sections = buildAdminSections(t)
-      .map((section) => ({
-        ...section,
-        links: section.links.filter((link) => hasAnyPermission(userPermissions, link.permissions)),
-      }))
-      .filter((section) => section.links.length > 0);
-
-    // Inject enabled plugin admin tabs (e.g. Ticketing)
-    if (pluginTabs.length > 0 && hasAnyPermission(userPermissions, ['admin.read', 'admin.write'])) {
-      sections.push({
-        id: 'plugins',
-        title: t('sections.plugins'),
-        links: pluginTabs.map((tab) => ({
-          to: `/admin/plugin/${tab.id}`,
-          label: tab.label,
-          icon: tab.id.includes('ticket') ? Ticket : Plug,
-          permissions: tab.requiredPermissions?.length
-            ? tab.requiredPermissions
-            : ['admin.read', 'admin.write'],
-        })),
-      });
-    }
-
-    return sections;
-  }, [user, pluginTabs, t]);
-
-  const displayName = user?.firstName || user?.lastName
-    ? [user.firstName, user.lastName].filter(Boolean).join(' ')
-    : user?.username || t('sidebar.fallbackUser');
-  const initials =
-    displayName.slice(0, 2).toUpperCase() ||
-    user?.email?.slice(0, 2).toUpperCase() ||
-    'U';
+  const permissions = user?.permissions ?? [];
+  const displayName =
+    user?.firstName || user?.lastName
+      ? [user.firstName, user.lastName].filter(Boolean).join(' ')
+      : user?.username || t('sidebar.fallbackUser');
+  const initials = displayName.slice(0, 2).toUpperCase() || 'U';
   const panelName = themeSettings?.panelName || 'Catalyst';
   const logoUrl = themeSettings?.logoUrl || '/logo.png';
+  const canViewVersion = hasAnyPermission(permissions, ['admin.read', 'admin.write']);
 
-  useEffect(() => { const media = window.matchMedia('(min-width: 1024px)'); const update = () => setIsLargeViewport(media.matches); update(); media.addEventListener('change', update); return () => media.removeEventListener('change', update); }, []);
-  const collapsed = sidebarCollapsed && isLargeViewport;
-  const canViewVersion = hasAnyPermission(user?.permissions || [], ['admin.read', 'admin.write']);
+  const adminLinks = ADMIN_PRIMARY.filter((link) => hasAnyPermission(permissions, [...link.perms]));
 
   return (
     <TooltipProvider>
-    <aside
-      className={cn(
-        'flex h-full flex-col border-r border-border/80 bg-card shadow-panel transition-all duration-200 ease-standard',
-        collapsed ? 'w-60 lg:w-16' : 'w-60',
-      )}
-    >
-      {/* Logo */}
-      <div
-        className={cn(
-          'flex items-center border-b border-border/70',
-          collapsed ? 'justify-center px-3 py-2.5' : 'gap-2.5 px-3 py-2.5',
-        )}
-      >
+      <aside className="flex h-full w-14 flex-col items-center border-r border-border/70 bg-surface-1/40 py-2">
         <Link
           to="/dashboard"
-          className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-2.5')}
+          className="mb-2 flex h-9 w-9 items-center justify-center"
+          aria-label={panelName}
         >
           <img
             src={logoUrl}
-            alt={t('sidebar.logoAlt', { panelName })}
-            className="h-8 w-8 rounded-md border border-border/70"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
+            alt=""
+            className="h-7 w-7 rounded-sm"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
             }}
           />
-          {!collapsed && (
-            <span className="font-display text-sm font-semibold tracking-tight text-foreground">
-              {panelName}
-            </span>
-          )}
         </Link>
-      </div>
 
-      {/* Navigation */}
-      <div className={cn('flex-1 overflow-y-auto', collapsed ? 'px-2 py-3' : 'px-3 py-3')}>
-        <div className="space-y-0.5">
-          {buildMainLinks(t)
-            .filter((link) => link.to !== '/tickets' || hasUserTicketPage)
-            .map((link) => (
-              <MenuItem
-                key={link.to}
-                {...link}
-                collapsed={collapsed}
-                count={link.to === '/servers' ? stats?.servers : undefined}
-              />
-            ))}
-        </div>
+        <span className="deck-hatch mb-2 h-[3px] w-6" aria-hidden />
 
-        {filteredSections.length > 0 && (
-          <div className={cn('border-t border-border/70 pt-3', collapsed ? 'mt-3' : 'mt-4')}>
-            <div className={cn(collapsed ? 'space-y-2' : 'space-y-2.5')}>
-              {filteredSections.map((section) => (
-                <Section
-                  key={section.id}
-                  id={section.id}
-                  title={section.title}
-                  links={section.links.map((link) =>
-                    link.to === '/admin/alerts'
-                      ? { ...link, count: stats?.alertsUnacknowledged, countTone: 'warning' as const }
-                      : link,
+        <nav className="flex flex-col items-center gap-1">
+          {PRIMARY.map((link) => (
+            <RailLink key={link.to} to={link.to} label={t(link.labelKey)} icon={link.icon} />
+          ))}
+          {adminLinks.map((link) => (
+            <RailLink key={link.to} to={link.to} label={t(link.labelKey)} icon={link.icon} />
+          ))}
+          {pluginTabs.map((tab) => (
+            <RailLink
+              key={tab.id}
+              to={`/admin/plugin/${tab.id}`}
+              label={tab.label}
+              icon={tab.id.includes('ticket') ? Ticket : Plug}
+            />
+          ))}
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('shell.sections')}
+                aria-expanded={sectionsOpen}
+                onClick={() => setSectionsOpen(true)}
+                className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{t('shell.sections')}</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('shell.openSearch', { shortcut: 'Ctrl+K' })}
+                onClick={() => window.dispatchEvent(new CustomEvent('catalyst:open-search'))}
+                className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{t('shell.searchButton')}</TooltipContent>
+          </Tooltip>
+        </nav>
+
+        <div className="flex-1" />
+
+        <div className="flex flex-col items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                aria-label={theme === 'dark' ? t('sidebar.lightMode') : t('sidebar.darkMode')}
+                className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {theme === 'dark' ? t('sidebar.light') : t('sidebar.dark')}
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <NavLink
+                to="/profile"
+                aria-label={displayName}
+                className="flex h-9 w-9 items-center justify-center rounded-sm bg-primary/15 font-display text-micro font-semibold text-primary ring-1 ring-primary/40"
+              >
+                {user?.image ? (
+                  <img src={user.image} alt="" className="h-full w-full rounded-sm object-cover" />
+                ) : (
+                  initials
+                )}
+              </NavLink>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {displayName} · {user?.role ? user.role : t('sidebar.fallbackRole')}
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={logout}
+                aria-label={t('sidebar.logout')}
+                className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{t('sidebar.logout')}</TooltipContent>
+          </Tooltip>
+
+          {canViewVersion && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  to="/admin/system"
+                  aria-label={`v${PANEL_VERSION}`}
+                  className={cn(
+                    'flex h-6 items-center justify-center text-[9px]',
+                    updateData?.updateAvailable ? 'text-warning' : 'text-muted-foreground/50',
                   )}
-                  expanded={expandedIds.includes(section.id)}
-                  onToggle={toggleSection}
-                  collapsed={collapsed}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* User Section */}
-      <div className={cn('border-t border-border/70', collapsed ? 'p-2' : 'p-3')}>
-        <NavLink
-          to="/profile"
-          className={cn(
-            'pressable flex items-center gap-2.5 rounded-md p-1.5 transition-colors hover:bg-surface-2',
-            collapsed && 'justify-center',
+                >
+                  ●
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {updateData?.updateAvailable
+                  ? t('sidebar.updateTooltip', {
+                      current: updateData.currentVersion,
+                      latest: updateData.latestVersion,
+                    })
+                  : t('sidebar.versionTooltip', { version: PANEL_VERSION })}
+              </TooltipContent>
+            </Tooltip>
           )}
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-primary text-xs font-semibold text-primary-foreground ring-1 ring-primary/30">
-            {user?.image
-              ? <img src={user.image} alt={displayName} className="h-full w-full object-cover" />
-              : initials
-            }
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-foreground">{displayName}</div>
-              <div className="type-meta truncate">{user?.role ? roleLabel(t, user.role) : t('sidebar.fallbackRole')}</div>
-            </div>
-          )}
-        </NavLink>
-
-        <div className={cn('mt-2 flex', collapsed ? 'flex-col gap-1' : 'gap-1.5')}>
-          <button
-            type="button"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className={cn(
-              'pressable flex h-8 items-center justify-center gap-1.5 rounded-md border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground',
-              collapsed ? 'w-8' : 'flex-1 px-2 text-[11px] font-medium',
-            )}
-            aria-label={theme === 'dark' ? t('sidebar.lightMode') : t('sidebar.darkMode')}
-            title={theme === 'dark' ? t('sidebar.lightMode') : t('sidebar.darkMode')}
-          >
-            {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            {!collapsed && (theme === 'dark' ? t('sidebar.light') : t('sidebar.dark'))}
-          </button>
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="pressable flex h-8 w-8 items-center justify-center rounded-md border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-            aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
-            title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
-          >
-            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={logout}
-            className="pressable flex h-8 w-8 items-center justify-center rounded-md border border-border/80 text-danger transition-colors hover:bg-danger/10"
-            aria-label={t('sidebar.logout')}
-            title={t('sidebar.logout')}
-          >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Plugin extension point */}
-      {!collapsed && (
-        <PluginSlot
-          name="sidebar-bottom"
-          className="border-t border-border/70 px-3 py-2 space-y-1"
-        />
-      )}
-
-      {/* Version + update status */}
-      {canViewVersion && <div className={cn('border-t border-border/70', collapsed ? 'px-2 py-1.5' : 'px-3 py-2')}>
-        <Link
-          to="/admin/system"
-          className={cn(
-            'flex items-center justify-center gap-1.5 rounded-md font-mono transition-colors hover:text-foreground',
-            collapsed ? 'text-[9px]' : 'text-[10px]',
-            updateData?.updateAvailable
-              ? 'text-warning hover:text-warning'
-              : 'text-muted-foreground/55 hover:text-foreground/70',
-          )}
-          title={
-            updateData?.updateAvailable
-              ? t('sidebar.updateTooltip', { current: updateData.currentVersion, latest: updateData.latestVersion })
-              : t('sidebar.versionTooltip', { version: PANEL_VERSION })
-          }
-        >
-          <span>v{PANEL_VERSION}</span>
-          {!collapsed && updateData?.updateAvailable && <span className="text-warning">{t('sidebar.outOfDate')}</span>}
-          {collapsed && updateData?.updateAvailable && <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />}
-        </Link>
-      </div>}
-    </aside>
+      <NavSectionsMenu open={sectionsOpen} onOpenChange={setSectionsOpen} />
     </TooltipProvider>
   );
 }

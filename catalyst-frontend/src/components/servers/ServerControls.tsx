@@ -11,11 +11,15 @@ import { Button } from '@/components/ui/button';
 import { agentApi } from '../../services/api/agent';
 import { getApiErrorCode } from '../../i18n/api-errors';
 import type { Server, ServerStatus } from '../../types/server';
+import { Play, Square, RotateCw, OctagonX, Ban } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type Props = {
   serverId: string;
   status: ServerStatus;
   permissions?: string[];
+  /** Dense surfaces (browser rows) render icon-only controls. */
+  compact?: boolean;
 };
 
 const OPTIMISTIC_STATUS: Record<string, ServerStatus> = {
@@ -30,7 +34,7 @@ const STOPPABLE: ServerStatus[] = ['running', 'starting', 'error', 'crashed'];
 const RESTARTABLE: ServerStatus[] = ['running', 'stopped', 'error', 'crashed'];
 const KILLABLE: ServerStatus[] = ['running', 'starting', 'stopping', 'error', 'crashed'];
 
-function ServerControls({ serverId, status, permissions }: Props) {
+function ServerControls({ serverId, status, permissions, compact = false }: Props) {
   const { t } = useTranslation('servers');
   const queryClient = useQueryClient();
   const [showKillConfirm, setShowKillConfirm] = useState(false);
@@ -183,64 +187,89 @@ function ServerControls({ serverId, status, permissions }: Props) {
     cancelInstall.isPending ||
     enableHostNetwork.isPending;
 
+  const actions = [
+    canStart && {
+      key: 'start',
+      show: true,
+      label: start.isPending ? t('controls.starting') : t('controls.start'),
+      icon: Play,
+      className: 'bg-success text-success-foreground hover:bg-success/90',
+      disabled: busy || !STARTABLE.includes(status),
+      pending: start.isPending,
+      onClick: () => start.mutate(),
+    },
+    canStop && {
+      key: 'stop',
+      show: true,
+      label: stop.isPending ? t('controls.stopping') : t('controls.stop'),
+      icon: Square,
+      variant: 'secondary' as const,
+      disabled: busy || !STOPPABLE.includes(status),
+      pending: stop.isPending,
+      onClick: () => stop.mutate(),
+    },
+    canRestart && {
+      key: 'restart',
+      show: true,
+      label: restart.isPending ? t('controls.restarting') : t('controls.restart'),
+      icon: RotateCw,
+      variant: 'outline' as const,
+      disabled: busy || !RESTARTABLE.includes(status),
+      pending: restart.isPending,
+      onClick: () => restart.mutate(),
+    },
+    canKill && {
+      key: 'kill',
+      show: true,
+      label: t('controls.kill'),
+      icon: OctagonX,
+      variant: 'destructive' as const,
+      disabled: busy || !KILLABLE.includes(status),
+      pending: kill.isPending,
+      onClick: () => setShowKillConfirm(true),
+    },
+    canCancelInstall && status === 'installing' && {
+      key: 'cancel-install',
+      show: true,
+      label: cancelInstall.isPending ? t('controls.cancelling') : t('controls.cancelInstall'),
+      icon: Ban,
+      variant: 'destructive' as const,
+      disabled: busy,
+      pending: cancelInstall.isPending,
+      onClick: () => setShowCancelInstallConfirm(true),
+    },
+  ].filter(Boolean) as {
+    key: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    className?: string;
+    variant?: 'secondary' | 'outline' | 'destructive';
+    disabled: boolean;
+    pending: boolean;
+    onClick: () => void;
+  }[];
+
   return (
     <>
-      <div className="flex flex-wrap gap-1.5 text-xs">
-        {canStart && (
-          <Button
-            size="sm"
-            className="bg-success text-success-foreground hover:bg-success/90"
-            disabled={busy || !STARTABLE.includes(status)}
-            aria-busy={start.isPending}
-            onClick={() => start.mutate()}
-          >
-            {start.isPending ? t('controls.starting') : t('controls.start')}
-          </Button>
-        )}
-        {canStop && (
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy || !STOPPABLE.includes(status)}
-            aria-busy={stop.isPending}
-            onClick={() => stop.mutate()}
-          >
-            {stop.isPending ? t('controls.stopping') : t('controls.stop')}
-          </Button>
-        )}
-        {canRestart && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy || !RESTARTABLE.includes(status)}
-            aria-busy={restart.isPending}
-            onClick={() => restart.mutate()}
-          >
-            {restart.isPending ? t('controls.restarting') : t('controls.restart')}
-          </Button>
-        )}
-        {canKill && (
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={busy || !KILLABLE.includes(status)}
-            aria-busy={kill.isPending}
-            onClick={() => setShowKillConfirm(true)}
-          >
-            {t('controls.kill')}
-          </Button>
-        )}
-        {canCancelInstall && status === 'installing' && (
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={busy}
-            aria-busy={cancelInstall.isPending}
-            onClick={() => setShowCancelInstallConfirm(true)}
-          >
-            {cancelInstall.isPending ? t('controls.cancelling') : t('controls.cancelInstall')}
-          </Button>
-        )}
+      <div className={cn(compact ? 'flex items-center gap-1' : 'flex flex-wrap gap-1.5 text-xs')}>
+        {actions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <Button
+              key={action.key}
+              size={compact ? 'icon-sm' : 'sm'}
+              variant={compact ? (action.variant ?? 'default') : action.variant}
+              className={action.className}
+              disabled={action.disabled}
+              aria-busy={action.pending}
+              aria-label={compact ? action.label : undefined}
+              title={compact ? action.label : undefined}
+              onClick={action.onClick}
+            >
+              {compact ? <Icon className="h-3.5 w-3.5" /> : action.label}
+            </Button>
+          );
+        })}
       </div>
 
       <ConfirmDialog

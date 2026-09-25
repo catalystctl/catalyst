@@ -178,7 +178,7 @@ export function ServerTab({ serverId }: { serverId: string }) {
  </div>
 
  <div className="bg-purple-500/10 border border-purple-500/20 rounded-md p-4">
- <h3 className="text-lg font-semibold mb-2 text-purple-400">🚀 Plugin Context</h3>
+ <h3 className="text-lg font-semibold mb-2 text-primary">🚀 Plugin Context</h3>
  <p className="text-sm text-foreground/80">
  Server-specific tabs receive the <code className="bg-surface-1 px-1 rounded">serverId</code> prop,
  allowing plugins to provide server-specific functionality and data.

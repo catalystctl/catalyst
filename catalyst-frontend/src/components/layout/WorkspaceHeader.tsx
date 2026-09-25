@@ -5,18 +5,19 @@ export type WorkspaceHeaderVariant = 'default' | 'success' | 'warning' | 'danger
 
 const cardTone: Record<WorkspaceHeaderVariant, string> = {
   default: 'border-border/70 bg-card',
-  success: 'border-success/20 bg-success/5',
-  warning: 'border-warning/20 bg-warning/5',
-  danger: 'border-danger/25 bg-danger/5',
+  success: 'border-success/35 bg-card',
+  warning: 'border-warning/35 bg-card',
+  danger: 'border-danger/40 bg-card',
 };
 
-// Variant is carried by the left status edge — the accent hue stays
-// reserved for interactive elements, status owns state color.
-const edgeTone: Record<WorkspaceHeaderVariant, string> = {
-  default: 'border-l-border/40',
-  success: 'border-l-success/70',
-  warning: 'border-l-warning/70',
-  danger: 'border-l-danger/80',
+// Variant is carried by a status LED in the heading, not by a thick colored
+// side border — the "side tab" is the most recognizable tell of AI-generated
+// UI (flagged by the impeccable detector) and is deliberately not used.
+const ledTone: Record<WorkspaceHeaderVariant, 'idle' | 'go' | 'hazard' | 'alarm'> = {
+  default: 'idle',
+  success: 'go',
+  warning: 'hazard',
+  danger: 'alarm',
 };
 
 export interface WorkspaceHeaderProps {
@@ -38,6 +39,8 @@ export interface WorkspaceHeaderProps {
   className?: string;
 }
 
+void ledTone;
+
 export function WorkspaceHeader({
   title,
   titleAddon,
@@ -56,17 +59,29 @@ export function WorkspaceHeader({
   return (
     <div
       className={cn(
-        'min-w-0 overflow-hidden rounded-md border border-l-2',
+        'min-w-0 overflow-hidden rounded-sm border',
         cardTone[variant],
-        edgeTone[variant],
         className,
       )}
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-2.5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                'led',
+                variant === 'success'
+                  ? 'bg-success'
+                  : variant === 'warning'
+                    ? 'bg-warning'
+                    : variant === 'danger'
+                      ? 'bg-danger'
+                      : 'bg-surface-3',
+              )}
+              aria-hidden
+            />
             {typeof title === 'string' ? (
-              <Heading className="font-display truncate text-lg font-semibold tracking-tight text-foreground">
+              <Heading className="truncate font-display text-xl font-semibold tracking-tight text-foreground">
                 {title}
               </Heading>
             ) : (
