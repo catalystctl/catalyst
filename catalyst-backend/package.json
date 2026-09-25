@@ -11,7 +11,7 @@
 		"@peculiar/asn1-schema": "2.6.0"
 	},
 	"scripts": {
-		"dev": "tsx watch src/index.ts -- --host",
+		"dev": "tsx watch --exclude '../../catalyst-plugins/.cache/**' src/index.ts -- --host",
 		"build": "tsc && node scripts/fix-esm-extensions.mjs",
 		"typecheck": "tsc -p tsconfig.typecheck.json",
 		"start": "node dist/index.js --host",
