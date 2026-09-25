@@ -110,7 +110,7 @@ function Combobox({
  role="combobox"
  aria-expanded={open}
  className={cn(
- 'flex h-10 w-full items-center justify-between rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background',
+ 'flex h-9 w-full items-center justify-between rounded-md border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors duration-200 ease-standard hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2 focus:ring-offset-background focus:border-primary',
  className,
  )}
  >
@@ -126,7 +126,7 @@ function Combobox({
  >
  <div onKeyDown={handleKeyDown}>
  {searchPlaceholder ? (
- <div className="flex items-center border-b border-border px-3">
+ <div className="flex items-center border-b border-border/50 px-3">
  <Search className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  <input
  autoFocus
@@ -142,7 +142,7 @@ function Combobox({
  ) : null}
  <div ref={listRef} className="max-h-56 overflow-y-auto py-1">
  {filtered.length === 0 ? (
- <div className="py-6 text-center text-sm text-muted-foreground">
+ <div className="type-meta py-6 text-center">
  {emptyMessage ?? t('combobox.noMatches')}
  </div>
  ) : (
@@ -154,7 +154,7 @@ function Combobox({
  'relative flex w-full cursor-pointer items-center rounded-sm px-3 py-1.5 text-left text-sm outline-none',
  idx === focusIdx
  ? 'bg-primary/10 text-foreground'
- : 'text-foreground hover:bg-muted',
+ : 'text-foreground hover:bg-surface-2',
  )}
  onClick={() => select(option.value)}
  onMouseEnter={() => setFocusIdx(idx)}
