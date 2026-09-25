@@ -14,11 +14,13 @@ RUN apk add --no-cache python3 make g++
 # Create a minimal monorepo root so pnpm can resolve workspace dependencies.
 # The root pnpm-lock.yaml + .npmrc + pnpm-workspace.yaml drive the install,
 # but only the backend workspace is materialised in the image.
-# devDeps here must match the root package.json specifiers — pnpm
-# --frozen-lockfile validates the lockfile specifiers match the manifest.
+# The synthesized root manifest is derived from the real root package.json:
+# pnpm --frozen-lockfile rejects specifier drift, and a hardcoded copy of
+# the devDeps went stale once already (#266 renamed the typescript aliases).
 COPY pnpm-lock.yaml .npmrc ./
 COPY pnpm-workspace.yaml ./
-RUN printf '%s\n' '{"name":"catalyst","private":true,"devDependencies":{"@commitlint/cli":"^21.2.1","@commitlint/config-conventional":"^21.2.0","husky":"^9.1.7","typescript":"~6.0.3"}}' > package.json
+COPY package.json /tmp/root-package.json
+RUN node -e "const fs=require('fs');const p=require('/tmp/root-package.json');fs.writeFileSync('package.json',JSON.stringify({name:p.name,private:true,devDependencies:p.devDependencies}))"
 
 # Copy backend manifest first for dependency-layer caching
 COPY catalyst-backend/package.json ./catalyst-backend/
