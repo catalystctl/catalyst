@@ -7,7 +7,6 @@ import { useServers } from '../../hooks/useServers';
 import type { Server, ServerListParams, ServerStatus } from '../../types/server';
 import { useAuthStore } from '../../stores/authStore';
 import {
-  ActivityBars,
   BracketLabel,
   GameChip,
   Meter,
@@ -321,8 +320,6 @@ function ServersPage() {
   }, [data, user?.id]);
 
   const totalServers = data?.length ?? 0;
-  const online = statusCounts.running;
-  const fleetPct = totalServers > 0 ? (online / totalServers) * 100 : 0;
   const hasFilters = Boolean(search || status);
 
   const moveFocus = (dir: 1 | -1) => {
@@ -343,16 +340,7 @@ function ServersPage() {
 
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <span className="flex items-center gap-2">
-            <StatusLed tone={online > 0 ? 'go' : 'idle'} pulse={online > 0} />
-            <Segmented className="text-mini">
-              {online}/{totalServers}
-            </Segmented>
-            <ActivityBars value={fleetPct} bars={7} tone="state" />
-          </span>
-          {canCreateServer && <CreateServerModal />}
-        </div>
+        {canCreateServer && <CreateServerModal />}
       </header>
 
       {/* ── The deck: controls, columns, rows and footer in one frame ── */}
