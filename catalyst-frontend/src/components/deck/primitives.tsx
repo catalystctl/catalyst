@@ -30,8 +30,10 @@ export function BracketLabel({
   return <span className={cn('deck-label', toneClass, className)}>{children}</span>;
 }
 
+// Only abnormal load earns colour; healthy values stay neutral so the eye is
+// not pulled by fifteen bars per screen.
 const toneBar = (value: number) =>
-  value >= 90 ? 'bg-danger' : value >= 75 ? 'bg-warning' : 'bg-primary';
+  value >= 90 ? 'bg-danger' : value >= 75 ? 'bg-warning' : 'bg-muted-foreground/45';
 
 /**
  * ActivityBars — the signature element: five discrete bars showing a live
@@ -40,24 +42,32 @@ const toneBar = (value: number) =>
  */
 export function ActivityBars({
   value,
-  bars = 5,
+  bars = 3,
   className,
+  tone = 'severity',
 }: {
   value: number | null;
   bars?: number;
   className?: string;
+  /**
+   * `severity` colours by load (≥75 warning, ≥90 danger) — correct for CPU/RAM.
+   * `state` fills with the success hue — correct for "how much of the fleet is
+   * up", where 100% is good rather than alarming.
+   */
+  tone?: 'severity' | 'state';
 }) {
   const v = value == null ? 0 : Math.min(100, Math.max(0, value));
   const filled = value == null ? 0 : Math.max(v > 0 ? 1 : 0, Math.round((v / 100) * bars));
+  const fill = tone === 'state' ? 'bg-success' : toneBar(v);
   return (
     <span className={cn('inline-flex items-end gap-[2px]', className)} aria-hidden>
       {Array.from({ length: bars }).map((_, i) => (
         <span
           key={i}
           className={cn(
-            'w-[3px] rounded-[1px]',
-            i === 0 ? 'h-1.5' : i === 1 ? 'h-2' : i === 2 ? 'h-2.5' : i === 3 ? 'h-3' : 'h-3.5',
-            i < filled ? toneBar(v) : 'bg-surface-3',
+            'w-[2px] rounded-[1px]',
+            i === 0 ? 'h-[3px]' : i === 1 ? 'h-[5px]' : 'h-[7px]',
+            i < filled ? fill : 'bg-surface-3',
           )}
         />
       ))}
@@ -111,7 +121,7 @@ export function StatusLed({
   return (
     <span className={cn('relative flex h-2 w-2 shrink-0', className)} aria-hidden>
       {pulse && (
-        <span className={cn('absolute inline-flex h-full w-full animate-ping rounded-full opacity-40', color)} />
+        <span className={cn('deck-led-pulse absolute inline-flex h-full w-full rounded-full', color)} />
       )}
       <span className={cn('led relative', color)} />
     </span>
@@ -141,14 +151,14 @@ export function GameChip({ game, className }: { game?: string | null; className?
     <span
       title={title}
       className={cn(
-        'inline-flex h-5 min-w-[1.6rem] items-center justify-center rounded-[3px] px-1',
-        'font-display text-micro font-semibold tracking-wide',
+        'inline-flex h-4 min-w-[1.35rem] items-center justify-center rounded-sm px-0.5',
+        'font-display text-micro font-semibold',
         className,
       )}
       style={{
         color: `hsl(${hue})`,
-        backgroundColor: `hsl(${hue} / 0.14)`,
-        boxShadow: `inset 0 0 0 1px hsl(${hue} / 0.35)`,
+        backgroundColor: `hsl(${hue} / 0.10)`,
+        boxShadow: `inset 0 0 0 1px hsl(${hue} / 0.28)`,
       }}
     >
       {glyph}
@@ -170,11 +180,11 @@ export function MetricCluster({
 }) {
   return (
     <span className={cn('flex items-center gap-2', className)}>
-      <span className="w-8 shrink-0 font-display text-micro tracking-[0.12em] text-muted-foreground">
+      <span className="shrink-0 type-overline w-8">
         {label}
       </span>
       <ActivityBars value={value} />
-      <Segmented muted={value == null} className="min-w-[5rem] text-right">
+      <Segmented muted={value == null} className="min-w-[3.25rem] text-right">
         {display}
       </Segmented>
     </span>

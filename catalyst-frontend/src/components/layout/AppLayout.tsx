@@ -130,7 +130,7 @@ function AppLayout() {
               <button
                 type="button"
                 onClick={() => setIsSearchOpen(true)}
-                className="hidden min-w-[190px] items-center gap-2 rounded-sm border border-border/70 bg-card px-3 py-1.5 text-mini text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground lg:flex"
+                className="hidden h-8 min-w-48 items-center gap-2 rounded-sm border border-border/70 bg-card px-3 text-mini text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground lg:flex"
                 aria-label={t('shell.openSearch', { shortcut })}
               >
                 <Search className="h-3.5 w-3.5" />

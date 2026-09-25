@@ -420,9 +420,11 @@ function CreateServerModal() {
  `}</style>
 
  <Button
+ size="sm"
+ className="h-8 px-3 text-mini"
  onClick={() => { setStep('details'); setOpen(true); }}
  >
- <Plus className="h-4 w-4" />
+ <Plus className="h-3.5 w-3.5" />
  {t('createServer.newServer')}
  </Button>
 

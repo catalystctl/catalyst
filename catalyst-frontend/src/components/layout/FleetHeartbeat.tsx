@@ -34,7 +34,7 @@ export default function FleetHeartbeat() {
     >
       <span className="relative flex h-1.5 w-1.5">
         {online > 0 && (
-          <span className={cn('absolute inline-flex h-full w-full animate-ping rounded-full opacity-50', tone)} />
+          <span className={cn('deck-led-pulse absolute inline-flex h-full w-full rounded-full', tone)} />
         )}
         <span className={cn('relative inline-flex h-1.5 w-1.5 rounded-full', tone)} />
       </span>

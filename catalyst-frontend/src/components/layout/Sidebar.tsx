@@ -119,14 +119,14 @@ function Sidebar() {
           <img
             src={logoUrl}
             alt=""
-            className="h-7 w-7 rounded-sm"
+            className="h-6 w-6 rounded-sm"
             onError={(event) => {
               event.currentTarget.style.display = 'none';
             }}
           />
         </Link>
 
-        <span className="deck-hatch mb-2 h-[3px] w-6" aria-hidden />
+        <span className="deck-hatch mb-2 h-[2px] w-5" aria-hidden />
 
         <nav className="flex flex-col items-center gap-1">
           {PRIMARY.map((link) => (
@@ -198,7 +198,7 @@ function Sidebar() {
               <NavLink
                 to="/profile"
                 aria-label={displayName}
-                className="flex h-9 w-9 items-center justify-center rounded-sm bg-primary/15 font-display text-micro font-semibold text-primary ring-1 ring-primary/40"
+                className="flex h-9 w-9 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-muted-foreground ring-1 ring-border"
               >
                 {user?.image ? (
                   <img src={user.image} alt="" className="h-full w-full rounded-sm object-cover" />
@@ -233,7 +233,7 @@ function Sidebar() {
                   to="/admin/system"
                   aria-label={`v${PANEL_VERSION}`}
                   className={cn(
-                    'flex h-6 items-center justify-center text-[9px]',
+                    'flex h-6 items-center justify-center text-micro',
                     updateData?.updateAvailable ? 'text-warning' : 'text-muted-foreground/50',
                   )}
                 >
