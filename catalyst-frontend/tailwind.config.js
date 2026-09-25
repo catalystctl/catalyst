@@ -13,7 +13,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['"DM Sans Variable"', 'DM Sans', 'system-ui', 'sans-serif'],
-        display: ['"Outfit Variable"', 'Outfit', 'system-ui', 'sans-serif'],
+        display: ['"Oxanium Variable"', 'Oxanium', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono Variable"', 'JetBrains Mono', 'Fira Code', 'monospace'],
       },
       colors: {

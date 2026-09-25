@@ -3,97 +3,120 @@
 @config "../../tailwind.config.js";
 
 /*
- * Precision Console design tokens
- * All color values are HSL channels without `hsl()` so themeStore can
- * rewrite them at runtime from Theme Settings.
- *
- * These values are the pre-paint FALLBACK mirroring the shipped runtime
- * defaults in themeStore.ts (defaultThemeSettings/defaultThemeColors):
- * warm graphite surfaces + copper primary. Keep both in sync — the runtime
- * rewrites almost every var below at boot, but zinc/scrollbar/shadow come
- * from here. `--accent-teal` is a legacy var name kept for xtermTheme and
- * themeStore compatibility; the fallback hue is copper, not teal.
+ * Catalyst — "Server Browser" deck tokens.
+ * See docs/design/deck-identity.md for the contract and the anti-default
+ * audit behind it. Values are HSL channels without hsl() so themeStore can
+ * rewrite them at runtime from Theme Settings; those below are the pre-paint
+ * fallback mirroring themeStore's shipped defaults (cool graphite chassis +
+ * arcade-magenta signal). Identity lives in structure, type and the activity
+ * cluster, so it survives an admin re-hue.
  */
 :root {
-  --accent-teal: 29 47% 56%;
-  --accent-teal-light: 35 55% 62%;
-  --accent-teal-muted: 29 47% 56% / 0.15;
+  /* Chassis — cool graphite, tinted, never pure black or white */
+  --ink: 217 2% 7%;
+  --panel: 218 2% 11%;
+  --panel-2: 219 3% 14%;
+  --edge: 214 14% 85%;
+  --chalk: 216 28% 12%;
+  --dust: 215 12% 42%;
 
-  --success: 160 84% 39%;
-  --success-muted: 160 84% 39% / 0.15;
-  --warning: 38 92% 50%;
-  --warning-muted: 38 92% 50% / 0.15;
-  --danger: 0 84% 60%;
-  --danger-muted: 0 84% 60% / 0.15;
-  --info: 217 91% 60%;
-  --info-muted: 217 91% 60% / 0.15;
+  /* Signal — interactive only */
+  --signal: 340 82% 47%;
+  --signal-deep: 340 85% 38%;
 
-  --background: 30 10% 96%;
-  --foreground: 36 12% 8%;
-  --muted: 40 9% 93%;
-  --muted-foreground: 36 6% 48%;
-  --popover: 30 20% 98%;
-  --popover-foreground: 36 12% 8%;
-  --card: 30 20% 98%;
-  --card-foreground: 36 12% 8%;
-  --border: 36 8% 88%;
-  --input: 36 8% 88%;
-  --primary: var(--accent-teal);
+  --accent-teal: 340 82% 47%;
+  --accent-teal-light: 340 90% 58%;
+  --accent-teal-muted: 340 82% 47% / 0.15;
+
+  /* Status — state only */
+  --success: 153 55% 32%;
+  --success-muted: 153 55% 32% / 0.15;
+  --warning: 39 92% 42%;
+  --warning-muted: 39 92% 42% / 0.15;
+  --danger: 0 72% 48%;
+  --danger-muted: 0 72% 48% / 0.15;
+  --info: 216 80% 45%;
+  --info-muted: 216 80% 45% / 0.15;
+
+  /* Game identity — glyph chips only, never surfaces */
+  --game-minecraft: 128 45% 42%;
+  --game-cs: 36 80% 45%;
+  --game-rust: 12 55% 45%;
+  --game-ark: 175 45% 38%;
+  --game-valheim: 213 40% 52%;
+  --game-generic: 215 10% 48%;
+
+  --background: 214 18% 95%;
+  --foreground: 216 28% 12%;
+  --muted: 214 16% 92%;
+  --muted-foreground: 215 12% 42%;
+  --popover: 210 25% 99%;
+  --popover-foreground: 216 28% 12%;
+  --card: 210 25% 99%;
+  --card-foreground: 216 28% 12%;
+  --border: 214 14% 85%;
+  --input: 214 14% 85%;
+  --primary: var(--signal);
   --primary-foreground: 0 0% 100%;
-  --secondary: 40 8% 93%;
-  --secondary-foreground: 250 10% 11%;
-  --accent: var(--accent-teal);
+  --secondary: 214 16% 92%;
+  --secondary-foreground: 216 28% 12%;
+  --accent: var(--signal);
   --accent-foreground: 0 0% 100%;
   --destructive: var(--danger);
   --destructive-foreground: 0 0% 100%;
-  --ring: var(--accent-teal);
+  --ring: var(--signal);
   --primary-muted: var(--accent-teal-muted);
   --success-foreground: 0 0% 100%;
   --danger-foreground: 0 0% 100%;
   --info-foreground: 0 0% 100%;
 
-  --radius: 0.625rem;
+  /* Shape — industrial, not SaaS-rounded */
+  --radius: 0.25rem;
 
-  --primary-50: 29 47% 95%;
-  --primary-100: 30 45% 90%;
-  --primary-200: 30 46% 80%;
-  --primary-300: 29 47% 70%;
-  --primary-400: 29 47% 62%;
-  --primary-500: 29 47% 56%;
-  --primary-600: 29 47% 46%;
-  --primary-700: 29 50% 37%;
-  --primary-800: 29 50% 28%;
-  --primary-900: 29 55% 18%;
-  --primary-950: 29 55% 9%;
+  /* Documented type ramp — replaces ad-hoc text-[10px]/text-[11px] literals */
+  --text-micro: 0.6875rem;
+  --text-mini: 0.75rem;
+  --text-data: 0.8125rem;
 
-  --zinc-50: 30 20% 98%;
-  --zinc-100: 30 10% 95%;
-  --zinc-200: 36 8% 90%;
-  --zinc-300: 36 6% 84%;
-  --zinc-400: 37 4% 60%;
-  --zinc-500: 37 4% 46%;
-  --zinc-600: 34 5% 34%;
-  --zinc-700: 32 6% 24%;
-  --zinc-800: 30 7% 16%;
-  --zinc-900: 30 10% 8%;
-  --zinc-950: 30 11% 6%;
+  --primary-50: 340 100% 97%;
+  --primary-100: 340 100% 94%;
+  --primary-200: 340 95% 87%;
+  --primary-300: 340 95% 78%;
+  --primary-400: 340 100% 70%;
+  --primary-500: 340 82% 47%;
+  --primary-600: 340 85% 40%;
+  --primary-700: 340 85% 32%;
+  --primary-800: 340 80% 24%;
+  --primary-900: 340 75% 16%;
+  --primary-950: 340 70% 9%;
 
-  --surface-0: 30 10% 96%;
-  --surface-1: 60 20% 99%;
-  --surface-2: 40 9% 93%;
-  --surface-3: 36 8% 88%;
+  --zinc-50: 214 20% 98%;
+  --zinc-100: 214 18% 95%;
+  --zinc-200: 214 14% 89%;
+  --zinc-300: 214 12% 82%;
+  --zinc-400: 215 11% 65%;
+  --zinc-500: 215 10% 50%;
+  --zinc-600: 216 11% 38%;
+  --zinc-700: 217 12% 28%;
+  --zinc-800: 218 13% 19%;
+  --zinc-900: 218 14% 13%;
+  --zinc-950: 219 16% 8%;
 
-  --scrollbar-track: 30 10% 96%;
-  --scrollbar-thumb: 36 8% 85%;
-  --scrollbar-thumb-hover: 36 6% 48%;
+  --surface-0: 214 18% 95%;
+  --surface-1: 210 25% 99%;
+  --surface-2: 214 16% 92%;
+  --surface-3: 214 12% 86%;
+
+  --scrollbar-track: 214 18% 95%;
+  --scrollbar-thumb: 214 12% 80%;
+  --scrollbar-thumb-hover: 215 10% 55%;
 
   /* Modal scrim — intentionally dark in both themes (dimming, not theming). */
-  --scrim: 0 0% 0% / 0.55;
+  --scrim: 217 20% 4% / 0.62;
 
-  --shadow-surface: 0 1px 2px 0 rgb(21 18 38 / 0.04);
-  --shadow-elevated: 0 8px 24px -8px rgb(21 18 38 / 0.12), 0 2px 6px -2px rgb(21 18 38 / 0.06);
-  --shadow-panel: 0 0 0 1px hsl(var(--border) / 0.7);
-
+  --shadow-surface: 0 1px 2px 0 rgb(14 17 22 / 0.06);
+  --shadow-elevated: 0 10px 30px -12px rgb(14 17 22 / 0.22), 0 2px 6px -2px rgb(14 17 22 / 0.08);
+  --shadow-panel: 0 0 0 1px hsl(var(--border) / 0.8);
 
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --duration-fast: 120ms;
@@ -104,60 +127,88 @@
   --sonner-text: hsl(var(--foreground));
   --sonner-success: hsl(var(--success));
   --sonner-error: hsl(var(--danger));
-  --sonner-info: hsl(var(--accent-teal));
+  --sonner-info: hsl(var(--signal));
   --sonner-warning: hsl(var(--warning));
 
   color-scheme: light;
 }
 
 .dark {
-  /* Mirrors defaultThemeColors dark* values (#161412 family) so the
-     pre-paint fallback matches what themeStore paints at boot. */
-  --background: 30 10% 8%;
-  --foreground: 0 4% 95%;
-  --muted: 34 10% 13%;
-  --muted-foreground: 37 4% 60%;
-  --popover: 36 10% 10%;
-  --popover-foreground: 0 4% 95%;
-  --card: 36 10% 10%;
-  --card-foreground: 0 4% 95%;
-  --border: 44 10% 21%;
-  --input: 44 10% 21%;
-  --primary: var(--accent-teal);
-  --primary-foreground: 30 10% 8%;
-  --secondary: 34 10% 13%;
-  --secondary-foreground: 0 4% 95%;
-  --accent: var(--accent-teal);
-  --accent-foreground: 30 10% 8%;
+  /* Flagship theme. Mirrors themeStore's shipped dark defaults. */
+  --ink: 217 2% 7%;
+  --panel: 218 2% 11%;
+  --panel-2: 219 3% 14%;
+  --edge: 215 5% 21%;
+  --chalk: 220 20% 93%;
+  --dust: 216 13% 63%;
+
+  --signal: 340 100% 62%;
+  --signal-deep: 340 90% 52%;
+  --accent-teal: 340 100% 62%;
+  --accent-teal-light: 340 95% 70%;
+  --accent-teal-muted: 340 100% 62% / 0.16;
+
+  --success: 153 60% 53%;
+  --success-muted: 153 60% 53% / 0.16;
+  --warning: 39 100% 56%;
+  --warning-muted: 39 100% 56% / 0.16;
+  --danger: 0 100% 68%;
+  --danger-muted: 0 100% 68% / 0.16;
+  --info: 216 100% 72%;
+  --info-muted: 216 100% 72% / 0.16;
+
+  --game-minecraft: 128 45% 55%;
+  --game-cs: 36 80% 60%;
+  --game-rust: 12 55% 58%;
+  --game-ark: 175 45% 52%;
+  --game-valheim: 213 40% 65%;
+  --game-generic: 215 10% 58%;
+
+  --background: 217 2% 7%;
+  --foreground: 220 20% 93%;
+  --muted: 219 3% 14%;
+  --muted-foreground: 216 13% 63%;
+  --popover: 218 2% 11%;
+  --popover-foreground: 220 20% 93%;
+  --card: 218 2% 11%;
+  --card-foreground: 220 20% 93%;
+  --border: 215 5% 21%;
+  --input: 215 5% 21%;
+  --primary: var(--signal);
+  --primary-foreground: 217 2% 7%;
+  --secondary: 219 3% 14%;
+  --secondary-foreground: 220 20% 93%;
+  --accent: var(--signal);
+  --accent-foreground: 217 2% 7%;
   --destructive: var(--danger);
   --destructive-foreground: 0 0% 100%;
-  --ring: var(--accent-teal);
+  --ring: var(--signal);
 
-  --primary-muted: 29 47% 56% / 0.15;
-  --success-foreground: 30 10% 8%;
+  --primary-muted: 340 100% 62% / 0.16;
+  --success-foreground: 217 2% 7%;
   --danger-foreground: 0 0% 100%;
-  --info-foreground: 30 10% 8%;
+  --info-foreground: 217 2% 7%;
 
-  --surface-0: 30 10% 8%;
-  --surface-1: 34 10% 13%;
-  --surface-2: 38 11% 19%;
-  --surface-3: 40 10% 28%;
+  --surface-0: 217 2% 7%;
+  --surface-1: 219 3% 14%;
+  --surface-2: 217 4% 17%;
+  --surface-3: 217 6% 21%;
 
   --scrollbar-track: transparent;
-  --scrollbar-thumb: 38 11% 22%;
-  --scrollbar-thumb-hover: 37 4% 40%;
+  --scrollbar-thumb: 217 6% 21%;
+  --scrollbar-thumb-hover: 216 10% 38%;
 
-  --shadow-surface: 0 1px 2px 0 rgb(0 0 0 / 0.35);
-  --shadow-elevated: 0 12px 32px -10px rgb(0 0 0 / 0.55), 0 2px 8px -2px rgb(0 0 0 / 0.4);
-  --shadow-panel: 0 0 0 1px rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-surface: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-elevated: 0 14px 34px -14px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.45);
+  --shadow-panel: 0 0 0 1px rgb(255 255 255 / 0.045);
 
   --sonner-background: hsl(var(--surface-1));
   --sonner-border: hsl(var(--border));
   --sonner-text: hsl(var(--foreground));
-  --sonner-success: hsl(160 84% 50%);
-  --sonner-error: hsl(0 84% 60%);
-  --sonner-info: hsl(var(--accent-teal));
-  --sonner-warning: hsl(38 92% 50%);
+  --sonner-success: hsl(var(--success));
+  --sonner-error: hsl(var(--danger));
+  --sonner-info: hsl(var(--signal));
+  --sonner-warning: hsl(var(--warning));
 
   color-scheme: dark;
 }
@@ -194,7 +245,7 @@ body {
 }
 
 .font-display {
-  font-family: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
+  font-family: 'Oxanium Variable', 'Oxanium', system-ui, sans-serif;
   letter-spacing: -0.02em;
 }
 
@@ -497,4 +548,73 @@ select option {
   .pressable:active:not(:disabled) {
     transform: none;
   }
+}
+
+/* ── Deck primitives (see docs/design/deck-identity.md) ── */
+
+/* Documented type ramp — use these instead of text-[10px]/text-[11px] */
+.text-micro { font-size: var(--text-micro); line-height: 1.35; }
+.text-mini { font-size: var(--text-mini); line-height: 1.4; }
+.text-data { font-size: var(--text-data); line-height: 1.45; }
+
+/*
+ * Bracket label — the section device. A filled square plus a letterspaced
+ * display label; deliberately NOT an overline closed by a long hairline
+ * (that device is the "broadsheet" lane the design audit rules out).
+ */
+.deck-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Oxanium Variable', 'Oxanium', system-ui, sans-serif;
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+.deck-label::before {
+  content: '';
+  width: 0.375rem;
+  height: 0.375rem;
+  flex: none;
+  background: hsl(var(--signal));
+}
+.deck-label--muted::before { background: hsl(var(--muted-foreground) / 0.45); }
+.deck-label--hazard::before { background: hsl(var(--warning)); }
+.deck-label--alarm::before { background: hsl(var(--danger)); }
+
+/* Browser rows: square corners, zebra striping, signal-tinted hover */
+.deck-rows {
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.deck-rows > * + * { border-top: 1px solid hsl(var(--border) / 0.4); }
+.deck-rows > *:nth-child(even) { background: hsl(var(--surface-1) / 0.5); }
+.deck-rows > *:hover { background: hsl(var(--signal) / 0.07); }
+
+/* Status LED — crisp ring, never a blur glow */
+.led {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  flex: none;
+  box-shadow: inset 0 0 0 1px hsl(var(--background) / 0.55);
+}
+
+/* Marquee hatch motif — the cabinet gesture */
+.deck-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    hsl(var(--border) / 0.85) 0 1.5px,
+    transparent 1.5px 5px
+  );
+}
+
+/* Square-cornered control surfaces inside the deck */
+.deck-panel {
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: var(--radius);
+  background: hsl(var(--card));
 }
