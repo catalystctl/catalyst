@@ -33,10 +33,52 @@ function transitionalStage(state: string): string | undefined {
 }
 
 
+const METRICS_FLUSH_MS = 400;
+
+/** Any list-shaped servers cache: ['servers'], ['servers', null] or ['servers', filters]. */
+function isServerListKey(queryKey: unknown): boolean {
+  if (!Array.isArray(queryKey) || queryKey[0] !== 'servers') return false;
+  if (queryKey.length === 1) return true;
+  if (queryKey.length === 2 && queryKey[1] === null) return true;
+  return queryKey.length >= 2 && typeof queryKey[1] === 'object' && queryKey[1] !== null;
+}
+
+/**
+ * Resource-stats payload → the fields list rows render. The agent reports
+ * `cpu`/`memory` aliases and may send memory as a percentage, so both are
+ * accepted (mirrors useServerMetrics).
+ */
+function metricPatch(row: Record<string, any>, d: Record<string, any>): Record<string, any> {
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const cpu = num(d.cpuPercent) ?? num(d.cpu);
+  const memoryUsageMb = num(d.memoryUsageMb);
+  const memoryPercent = num(d.memory);
+  const diskUsageMb = num(d.diskUsageMb);
+  const diskTotalMb = num(d.diskTotalMb);
+  const diskIoMb = num(d.diskIoMb);
+  const patch: Record<string, any> = {};
+  if (cpu !== undefined) patch.cpuPercent = cpu;
+  if (memoryUsageMb !== undefined) patch.memoryUsageMb = memoryUsageMb;
+  if (memoryPercent !== undefined) patch.memoryPercent = memoryPercent;
+  else if (memoryUsageMb !== undefined && num(row.allocatedMemoryMb)) {
+    patch.memoryPercent = Math.min(100, (memoryUsageMb / Number(row.allocatedMemoryMb)) * 100);
+  }
+  if (diskUsageMb !== undefined) patch.diskUsageMb = diskUsageMb;
+  if (diskTotalMb !== undefined) patch.diskTotalMb = diskTotalMb;
+  if (diskIoMb !== undefined) patch.diskIoMb = diskIoMb;
+  if (d.networkRxBytes !== undefined) patch.networkRxBytes = Number(d.networkRxBytes);
+  if (d.networkTxBytes !== undefined) patch.networkTxBytes = Number(d.networkTxBytes);
+  return patch;
+}
+
 export function useServerStateUpdates() {
   const queryClient = useQueryClient();
   const pendingUpdates = useRef<Map<string, { state: string; data: Record<string, unknown> }>>(new Map());
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Live telemetry from the global stream, coalesced: a 30-server fleet emits
+  // a few hundred metric events a second and each flush re-renders the list.
+  const pendingMetrics = useRef<Map<string, Record<string, unknown>>>(new Map());
+  const metricsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isProcessing = useRef(false);
 
   const processUpdates = useCallback(() => {
@@ -120,6 +162,57 @@ export function useServerStateUpdates() {
     isProcessing.current = false;
   }, [queryClient]);
 
+  const flushMetrics = useCallback(() => {
+    metricsTimer.current = null;
+    const pending = pendingMetrics.current;
+    if (!pending.size) return;
+    const updates = new Map(pending);
+    pendingMetrics.current = new Map();
+    const q = queryClient as any;
+
+    // List rows (the fleet table) …
+    q.setQueriesData(
+      {
+        predicate: (query: Query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === 'servers' &&
+          isServerListKey(query.queryKey),
+      },
+      (prev: any) => {
+        if (!Array.isArray(prev)) return prev;
+        let changed = false;
+        const next = prev.map((row: any) => {
+          const d = updates.get(row?.id) ?? updates.get(row?.uuid);
+          if (!d) return row;
+          changed = true;
+          return { ...row, ...metricPatch(row, d) };
+        });
+        return changed ? next : prev;
+      },
+    );
+
+    // … and the single-server cache.
+    q.setQueriesData(
+      {
+        predicate: (query: Query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === 'servers' &&
+          query.queryKey.length >= 2 &&
+          typeof query.queryKey[1] === 'string',
+      },
+      (prev: any) => {
+        if (!prev || typeof prev !== 'object' || Array.isArray(prev)) return prev;
+        const d = updates.get(prev.id) ?? updates.get(prev.uuid);
+        return d ? { ...prev, ...metricPatch(prev, d) } : prev;
+      },
+    );
+  }, [queryClient]);
+
+  const scheduleMetrics = useCallback(() => {
+    if (metricsTimer.current) return;
+    metricsTimer.current = setTimeout(flushMetrics, METRICS_FLUSH_MS);
+  }, [flushMetrics]);
+
   const scheduleProcess = useCallback(() => {
     if (debounceTimer.current) return;
     debounceTimer.current = setTimeout(() => {
@@ -134,6 +227,14 @@ export function useServerStateUpdates() {
       (type: ServerEventType, data: Record<string, unknown>) => {
         const serverId = String(data.serverId ?? '');
         if (!serverId) return;
+
+        // Live CPU/memory/disk for every visible server. Previously dropped, so
+        // the fleet table only refreshed its readings on a full refetch.
+        if (type === 'resource_stats') {
+          pendingMetrics.current.set(serverId, data);
+          scheduleMetrics();
+          return;
+        }
 
         if (type === 'server_state_update' || type === 'server_state') {
           // Queue update instead of processing immediately
@@ -327,6 +428,9 @@ export function useServerStateUpdates() {
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current);
       }
+      if (metricsTimer.current) {
+        clearTimeout(metricsTimer.current);
+      }
     };
-  }, [queryClient, scheduleProcess]);
+  }, [queryClient, scheduleProcess, scheduleMetrics]);
 }
