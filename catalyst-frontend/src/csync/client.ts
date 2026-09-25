@@ -55,9 +55,16 @@ export class QueryCache {
     const hash = hashQueryKey(options.queryKey);
     let query = this.queries.get(hash);
     if (!query) {
-      query = new QueryClass(options.queryKey, options);
-      this.queries.set(hash, query);
-      this.notify({ type: 'added', query });
+      const created = new QueryClass(options.queryKey, options);
+      this.queries.set(hash, created);
+      // `build()` runs during React's render phase (useQuery -> ensureQuery).
+      // Notifying synchronously there reaches every other subscriber of the
+      // same query while the current component is still rendering, which React
+      // reports as "Cannot update a component (`App`) while rendering a
+      // different component (`LoginPage`)". The query is already in the cache,
+      // so defer the announcement to the next microtask.
+      queueMicrotask(() => this.notify({ type: 'added', query: created }));
+      query = created;
     } else {
       query.queryKey = options.queryKey;
       query.queryHash = hash;

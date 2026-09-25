@@ -197,12 +197,18 @@ describe('csync core', () => {
     ).toBe(true);
   });
 
-  it('getQueryCache().subscribe emits updated events', () => {
+  it('getQueryCache().subscribe emits updated events', async () => {
     const events: string[] = [];
     const unsub = client.getQueryCache().subscribe((e) => {
       events.push(e.type);
     });
     client.setQueryData(['profile'], { name: 'Ada' });
+    // `added` is announced on the next microtask: a query is built during
+    // React's render phase, and notifying synchronously there reaches other
+    // subscribers of the same query mid-render (React's "cannot update a
+    // component while rendering a different component"). `updated` stays
+    // synchronous because it follows a real data write.
+    await Promise.resolve();
     expect(events).toContain('added');
     expect(events).toContain('updated');
     unsub();
