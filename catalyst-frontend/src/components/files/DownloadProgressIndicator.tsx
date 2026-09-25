@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Download, X, AlertTriangle } from 'lucide-react';
+import { X } from 'lucide-react';
+import { StatusLed } from '../deck/primitives';
 import { useDownloadStore, COMPLETED_DOWNLOAD_TTL_MS } from '../../stores/downloadStore';
 import { formatBytes } from '../../utils/formatters';
 
@@ -70,41 +71,37 @@ function DownloadProgressIndicator() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.96 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="pointer-events-auto w-[min(20rem,calc(100vw-2rem))] rounded-md border border-border/50 bg-card shadow-elevated"
+              className="deck-panel pointer-events-auto w-[min(20rem,calc(100vw-2rem))] px-3 py-2"
               role="status"
               aria-live="polite"
               aria-label={`${title} — ${session.files.map((f) => f.name).join(', ')}`}
             >
-              <div className="flex items-center gap-2.5 px-3 py-2.5">
-                {hasError ? (
-                  <AlertTriangle className="h-4 w-4 text-danger" />
-                ) : isCanceled ? (
-                  <X className="h-4 w-4 text-muted-foreground" />
-                ) : isActive ? (
-                  <Download className="h-4 w-4 text-info" />
-                ) : (
-                  <Check className="h-4 w-4 text-success" />
-                )}
+              <div className="flex items-start gap-2">
+                <StatusLed
+                  tone={hasError ? 'alarm' : isCanceled ? 'idle' : isActive ? 'info' : 'go'}
+                  pulse={isActive}
+                  className="mt-0.5"
+                />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs font-semibold text-foreground">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-mini font-semibold text-foreground">
                       {title}
                     </span>
                     {isActive && totals.total > 0 && (
-                      <span className="shrink-0 text-[11px] font-mono tabular-nums text-muted-foreground">
+                      <span className="shrink-0 font-mono text-micro tabular-nums text-info">
                         {overall}%
                       </span>
                     )}
                   </div>
-                  <div className="truncate text-[11px] text-muted-foreground">
+                  <div className="truncate text-micro text-muted-foreground">
                     {session.files.length === 1
                       ? session.files[0].name
                       : t('files.download.fileCount', { count: session.files.length })}
                   </div>
                   {isActive && (
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-3">
+                    <div className="mt-1 h-1 overflow-hidden rounded-sm bg-surface-3">
                       <motion.div
-                        className={`h-full rounded-full ${hasError ? 'bg-danger' : 'bg-info'}`}
+                        className="h-full rounded-sm bg-info"
                         initial={false}
                         animate={{ width: `${overall}%` }}
                         transition={{ duration: 0.2 }}
@@ -112,7 +109,7 @@ function DownloadProgressIndicator() {
                     </div>
                   )}
                   {isActive && totals.total > 0 && (
-                    <div className="mt-1 text-[10px] font-mono tabular-nums text-muted-foreground">
+                    <div className="mt-1 font-mono text-micro tabular-nums text-muted-foreground">
                       {t('files.download.of', {
                         loaded: formatBytes(totals.loaded),
                         total: formatBytes(totals.total),
@@ -120,32 +117,25 @@ function DownloadProgressIndicator() {
                     </div>
                   )}
                   {hasError && (
-                    <div className="mt-0.5 truncate text-[11px] text-danger">
+                    <div className="mt-0.5 truncate text-micro text-danger">
                       {session.files.find((f) => f.errorMessage)?.errorMessage ??
                         t('files.download.filesFailed')}
                     </div>
                   )}
                 </div>
 
-                {isActive ? (
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-                    aria-label={t('files.download.cancel')}
-                    onClick={() => cancelSession(session.id)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-                    aria-label={t('files.progress.dismiss')}
-                    onClick={() => dismissSession(session.id)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1 hover:text-foreground"
+                  aria-label={
+                    isActive ? t('files.download.cancel') : t('files.progress.dismiss')
+                  }
+                  onClick={() =>
+                    isActive ? cancelSession(session.id) : dismissSession(session.id)
+                  }
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </div>
             </motion.div>
           );

@@ -50,13 +50,13 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2">
  <div>
- <h3 className="text-sm font-semibold text-foreground dark:text-foreground">{t('files.uploader.title')}</h3>
- <p className="text-[11px] text-muted-foreground">{t('files.uploader.target')} <span className="font-mono">{path}</span></p>
+ <h3 className="font-display text-data font-semibold text-foreground">{t('files.uploader.title')}</h3>
+ <p className="text-micro text-muted-foreground">{t('files.uploader.target')} <span className="font-mono tabular-nums">{path}</span></p>
  </div>
  </div>
  <button
  type="button"
- className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  onClick={onClose}
  >
  <X className="h-4 w-4" />
@@ -65,11 +65,11 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  )}
 
  <div
- className={`flex flex-col items-center justify-center rounded-md border-2 border-dashed px-6 py-8 transition-all duration-200 ${
+ className={`flex flex-col items-center justify-center rounded-sm border border-dashed px-6 py-8 transition-colors ${
  isDragActive
- ? 'border-primary bg-primary-500/5 scale-[1.02]'
- : 'border-border bg-surface-1/50 hover:border-primary/40 hover:bg-surface-1 dark:border-border dark:bg-surface-2/30 dark:hover:border-primary/30'
- } ${inModal ? '' : 'mt-4'}`}
+ ? 'border-primary bg-primary/10'
+ : 'border-border/60 bg-surface-1/40 hover:border-primary/40'
+ } ${inModal ? '' : 'mt-3'}`}
  onDragEnter={(e) => {
  if (!isFileDrag(e.dataTransfer)) return;
  e.preventDefault();
@@ -96,17 +96,12 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  });
  }}
  >
- <motion.div
- animate={isDragActive ? { scale: 1.1, y: -4 } : { scale: 1, y: 0 }}
- transition={{ duration: 0.2 }}
- >
- <Upload className={`mb-3 h-10 w-10 ${isDragActive ? 'text-primary' : 'text-muted-foreground/40'}`} />
- </motion.div>
- <p className={`text-sm font-medium ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`}>
+ <Upload className={`mb-2 h-5 w-5 ${isDragActive ? 'text-primary' : 'text-muted-foreground/50'}`} />
+ <p className={`text-mini font-medium ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`}>
  {isDragActive ? t('files.uploader.dropHere') : t('files.uploader.dragHere')}
  </p>
- <p className="mt-1 text-xs text-muted-foreground/60">{t('files.uploader.orSelect')}</p>
- <div className="mt-4">
+ <p className="mt-0.5 text-micro text-muted-foreground/60">{t('files.uploader.orSelect')}</p>
+ <div className="mt-3 flex items-center gap-2">
  <input
  ref={inputRef}
  type="file"
@@ -116,7 +111,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  />
  <button
  type="button"
- className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  onClick={() => inputRef.current?.click()}
  disabled={isUploading}
  >
@@ -125,7 +120,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  {isUploading && (
  <button
  type="button"
- className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 px-4 py-2 text-xs font-semibold text-danger transition-colors hover:bg-danger-muted"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-danger/30 px-3 text-mini font-semibold text-danger transition-colors hover:bg-danger/10"
  onClick={handleCancel}
  >
  <X className="h-3.5 w-3.5" />
@@ -142,7 +137,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  initial={{ opacity: 0, height: 0 }}
  animate={{ opacity: 1, height: 'auto' }}
  exit={{ opacity: 0, height: 0 }}
- className="mt-4 space-y-2 overflow-hidden"
+ className="mt-3 overflow-hidden rounded-sm border border-border/40"
  >
  {fileNames.map((name, idx) => {
  const pct = fileProgress[idx] ?? 0;
@@ -150,22 +145,22 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  return (
  <div
  key={idx}
- className="flex items-center gap-3 rounded-md border border-border/50 bg-surface-1 px-3 py-2 dark:bg-surface-2/50"
+ className={`flex items-center gap-2 px-3 py-1.5 ${idx > 0 ? 'border-t border-border/40' : ''}`}
  >
  {isDone ? (
  <Check className="h-4 w-4 text-success" />
  ) : (
  <FileTypeIcon name={name} className="h-4 w-4" />
  )}
- <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={name}>
+ <span className="min-w-0 flex-1 truncate text-mini text-muted-foreground" title={name}>
  {name}
  </span>
- <span className="text-[11px] font-mono tabular-nums text-muted-foreground w-8 text-right">
+ <span className="w-10 text-right font-mono text-micro tabular-nums text-muted-foreground">
  {isDone ? t('files.uploader.done') : `${pct}%`}
  </span>
- <div className="h-1.5 w-20 flex-shrink-0 overflow-hidden rounded-full bg-surface-3 dark:bg-surface-3">
+ <div className="h-1 w-20 flex-shrink-0 overflow-hidden rounded-sm bg-surface-3">
  <motion.div
- className={`h-full rounded-full ${isDone ? 'bg-success' : 'bg-info'}`}
+ className={`h-full rounded-sm ${isDone ? 'bg-success' : 'bg-info'}`}
  initial={{ width: 0 }}
  animate={{ width: `${pct}%` }}
  transition={{ duration: 0.2 }}
@@ -182,7 +177,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  <motion.div
  initial={{ opacity: 0 }}
  animate={{ opacity: 1 }}
- className="mt-3 flex items-center gap-1.5 text-xs text-success"
+ className="mt-2 flex items-center gap-1.5 text-mini text-success"
  >
  <Check className="h-3.5 w-3.5" />
  {t('files.uploader.allUploaded')}
@@ -199,7 +194,7 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  animate={{ opacity: 1, y: 0 }}
  exit={{ opacity: 0, y: -8 }}
  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
- className="rounded-md border border-border/50 bg-card p-4 shadow-sm"
+ className="deck-panel p-3"
  >
  {content}
  </motion.div>

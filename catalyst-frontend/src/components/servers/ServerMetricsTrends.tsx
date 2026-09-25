@@ -8,6 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { ServerMetricsPoint } from '../../types/server';
 import { formatBytes } from '../../utils/formatters';
+import { cn } from '@/lib/utils';
 
 type TrendCard = {
  label: string;
@@ -49,9 +50,9 @@ function ServerMetricsTrends({
  const netRxHistory = history.map((point) => toNullableNumber(point.networkRxBytes));
  const netTxHistory = history.map((point) => toNullableNumber(point.networkTxBytes));
  const throughput = netRxHistory.map((rx, i) => {
-   const tx = netTxHistory[i];
-   if (rx == null || tx == null) return null;
-   return Math.round((rx + tx) * 100) / 100;
+ const tx = netTxHistory[i];
+ if (rx == null || tx == null) return null;
+ return Math.round((rx + tx) * 100) / 100;
  });
  const lastThroughput = [...throughput].reverse().find((v) => v != null) ?? 0;
 
@@ -109,24 +110,16 @@ function ServerMetricsTrends({
  ];
 
  return (
- <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+ <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
  {cards.map((card) => (
- <div
- key={card.label}
- className="rounded-md border border-border/50 bg-card transition-colors hover:border-primary/20"
- >
- <div className="p-4">
- <div className="flex items-center justify-between">
- <div>
- <div className="type-overline">
- {card.label}
+ <div key={card.label} className="deck-panel flex flex-col overflow-hidden">
+ <div className="flex items-center justify-between gap-3 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <span className="type-overline">{card.label}</span>
+ <span className="text-micro text-muted-foreground/70">{resolvedTimeRangeLabel}</span>
  </div>
- <div className={`type-numeric text-lg ${card.color}`}>{card.value}</div>
- </div>
- <div className="type-meta">{resolvedTimeRangeLabel}</div>
- </div>
- <div className="mt-3">
- <div className="h-24 w-full">
+ <div className="flex flex-1 flex-col p-3">
+ <div className={cn('type-numeric text-data', card.color)}>{card.value}</div>
+ <div className="mt-2 h-24 w-full">
  <ResponsiveContainer width="100%" height="100%">
  <LineChart data={card.data}>
  <YAxis hide domain={['auto', 'auto']} />
@@ -154,7 +147,6 @@ function ServerMetricsTrends({
  />
  </LineChart>
  </ResponsiveContainer>
- </div>
  </div>
  </div>
  </div>

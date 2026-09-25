@@ -563,7 +563,7 @@ export default function ServerAdminTab({
  // ── Guard ──
  if (!canAdminWrite) {
  return (
- <div className="rounded-md border border-danger/30 bg-danger-muted px-4 py-6 text-center text-sm text-danger">
+ <div className="rounded-sm border border-danger/30 bg-danger-muted px-4 py-6 text-center text-sm text-danger">
  <Shield className="mx-auto mb-2 h-8 w-8 opacity-50" />
  {t('tabs.admin.accessRequired')}
  </div>
@@ -610,7 +610,7 @@ export default function ServerAdminTab({
                 {envVars.map((row, idx) => (
                   <div key={idx} className="group flex items-center gap-2">
                     <input
-                      className="w-[130px] shrink-0 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground focus:border-primary focus:outline-none"
+                      className="w-[130px] shrink-0 rounded-sm border border-border/40 bg-card px-2.5 py-1.5 font-mono text-mini uppercase text-foreground focus:border-primary focus:outline-none"
                       value={row.key}
                       onChange={(e) => {
                         const next = [...envVars];
@@ -621,9 +621,9 @@ export default function ServerAdminTab({
                       placeholder="KEY"
                       disabled={isSuspended}
                     />
-                    <span className="text-[10px] text-muted-foreground">=</span>
+                    <span className="text-micro text-muted-foreground">=</span>
                     <input
-                      className="min-w-0 flex-1 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono tabular-nums text-[11px] text-foreground focus:border-primary focus:outline-none"
+                      className="min-w-0 flex-1 rounded-sm border border-border/40 bg-card px-2.5 py-1.5 font-mono tabular-nums text-mini text-foreground focus:border-primary focus:outline-none"
                       value={row.value}
                       onChange={(e) => {
                         const next = [...envVars];
@@ -636,7 +636,7 @@ export default function ServerAdminTab({
                     />
                     <button
                       type="button"
-                      className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-danger"
+                      className="shrink-0 rounded-sm p-1 text-muted-foreground hover:text-danger"
                       onClick={() => {
                         setEnvVars(envVars.filter((_, i) => i !== idx));
                         setEnvDirty(true);
@@ -651,7 +651,7 @@ export default function ServerAdminTab({
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
-                    className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground"
+                    className="rounded-sm border border-border h-7 px-2 text-micro text-muted-foreground"
                     onClick={() => {
                       setEnvVars([...envVars, { key: '', value: '' }]);
                       setEnvDirty(true);
@@ -663,7 +663,7 @@ export default function ServerAdminTab({
                   {envDirty && (
                     <button
                       type="button"
-                      className="rounded-md bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground disabled:opacity-50"
+                      className="rounded-sm bg-primary h-8 px-3 text-micro font-semibold text-primary-foreground disabled:opacity-50"
                       onClick={() => envMutation.mutate()}
                       disabled={isSuspended || envMutation.isPending}
                     >
@@ -720,18 +720,18 @@ export default function ServerAdminTab({
                         image: img.image,
                       })
                     }
-                    className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left ${
+                    className={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left ${
                       isActive ? 'bg-primary/5' : 'hover:bg-surface-2'
                     }`}
                   >
                     <div className="min-w-0">
                       <div className="text-xs font-medium text-foreground">{img.label ?? img.name}</div>
-                      <div className="truncate font-mono tabular-nums text-[10px] text-muted-foreground">{img.image}</div>
+                      <div className="truncate font-mono tabular-nums text-micro text-muted-foreground">{img.image}</div>
                     </div>
                     {isActive ? (
                       <span className="type-meta">{t('tabs.admin.active')}</span>
                     ) : canEdit ? (
-                      <span className="text-[10px] text-primary">{t('tabs.admin.use')}</span>
+                      <span className="text-micro text-primary">{t('tabs.admin.use')}</span>
                     ) : null}
                   </button>
                 );
@@ -748,7 +748,7 @@ export default function ServerAdminTab({
               type="button"
               onClick={() => setRebuildConfirm(true)}
               disabled={!canEdit}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              className="rounded-sm bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
             >
               {t('tabs.admin.rebuild')}
             </button>
@@ -758,7 +758,7 @@ export default function ServerAdminTab({
               type="button"
               onClick={() => setReinstallConfirm(true)}
               disabled={!canEditWhenStopped}
-              className="rounded-md border border-warning/30 px-3 py-1.5 text-xs font-semibold text-warning disabled:opacity-50"
+              className="rounded-sm border border-warning/30 px-3 py-1.5 text-xs font-semibold text-warning disabled:opacity-50"
             >
               {t('tabs.admin.reinstall')}
             </button>
@@ -768,7 +768,7 @@ export default function ServerAdminTab({
               type="button"
               onClick={() => setKillConfirm(true)}
               disabled={server.status !== 'running' && server.status !== 'starting' && server.status !== 'stopping'}
-              className="rounded-md bg-danger px-3 py-1.5 text-xs font-semibold text-danger-foreground disabled:opacity-50"
+              className="rounded-sm bg-danger px-3 py-1.5 text-xs font-semibold text-danger-foreground disabled:opacity-50"
             >
               {t('tabs.admin.kill')}
             </button>
@@ -808,7 +808,7 @@ export default function ServerAdminTab({
         <ServerTabCard>
           <SectionHeader icon={Network} title={t('tabs.admin.ports')} />
           {allocationsError && (
-            <div className="mb-3 rounded-md border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
+            <div className="mb-3 rounded-sm border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
               {allocationsError}
             </div>
           )}
@@ -818,7 +818,7 @@ export default function ServerAdminTab({
  <div className="space-y-2">
  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] text-xs">
  <select
- className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none disabled:opacity-50"
+ className="rounded-sm border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-50"
  value={selectedAllocationId}
  onChange={(e) => {
  const nextId = e.target.value;
@@ -841,7 +841,7 @@ export default function ServerAdminTab({
  ))}
  </select>
  <input
- className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none sm:w-28"
+ className="rounded-sm border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none sm:w-28"
  value={newContainerPort}
  onChange={(e) => onNewContainerPortChange(e.target.value)}
  placeholder={t('tabs.admin.containerPortPlaceholder')}
@@ -852,10 +852,10 @@ export default function ServerAdminTab({
  />
  </div>
  {availableNodeAllocationsError ? (
- <p className="text-[10px] text-warning">{availableNodeAllocationsError}</p>
+ <p className="text-micro text-warning">{availableNodeAllocationsError}</p>
  ) : null}
  {!availableNodeAllocationsError && safeAvailableNodeAllocations.length === 0 ? (
- <p className="text-[10px] text-muted-foreground">
+ <p className="text-micro text-muted-foreground">
  {t('tabs.admin.noFreeAllocations')}
  {server.nodeId ? (
  <>
@@ -874,7 +874,7 @@ export default function ServerAdminTab({
  ) : null}
  <button
  type="button"
- className="w-full rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+ className="w-full rounded-sm bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  onClick={onAddAllocation}
  disabled={!canEditAllocations || addAllocationPending || !selectedAllocationId}
  >
@@ -893,14 +893,13 @@ export default function ServerAdminTab({
  safeAllocations.map((alloc) => (
  <div
  key={`${alloc.containerPort}-${alloc.hostPort}-${alloc.allocationId ?? 'legacy'}`}
- className={`group relative flex items-center justify-between rounded-md border px-3 py-2 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02] ${
+ className={`group relative flex items-center justify-between rounded-sm border px-3 py-2 transition-colors duration-150 hover:border-primary/20 hover:bg-primary/[0.02] ${
  alloc.isPrimary
  ? 'border-primary/30 bg-primary/5'
  : 'border-border/30 bg-surface-2/20'
  }`}
  >
- <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
- <div className="flex min-w-0 flex-wrap items-center gap-2">
+  <div className="flex min-w-0 flex-wrap items-center gap-2">
  {alloc.isPrimary ? (
  <Star className="h-3 w-3 shrink-0 fill-primary text-primary" />
  ) : (
@@ -913,13 +912,13 @@ export default function ServerAdminTab({
  <span className="text-muted-foreground">→</span>
  <code className="text-xs font-mono tabular-nums text-foreground">{alloc.containerPort}</code>
  {alloc.alias ? (
- <span className="truncate text-[10px] text-muted-foreground">({alloc.alias})</span>
+ <span className="truncate text-micro text-muted-foreground">({alloc.alias})</span>
  ) : null}
  {alloc.isPrimary && (
- <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">{t('tabs.admin.primary')}</span>
+ <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-micro font-semibold uppercase text-primary">{t('tabs.admin.primary')}</span>
  )}
  {!alloc.isPrimary && (
- <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{t('tabs.admin.secondary')}</span>
+ <span className="rounded-sm bg-surface-2 px-1.5 py-0.5 text-micro font-medium uppercase text-muted-foreground">{t('tabs.admin.secondary')}</span>
  )}
  </div>
  {!alloc.isPrimary && (
@@ -928,7 +927,7 @@ export default function ServerAdminTab({
  type="button"
  onClick={() => onSetPrimary(alloc.containerPort)}
  disabled={!canEditAllocations || setPrimaryPending}
- className="rounded border border-border px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-50"
+ className="rounded border border-border px-1.5 py-0.5 text-micro font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-50"
  >
  {t('tabs.admin.setPrimary')}
  </button>
@@ -936,7 +935,7 @@ export default function ServerAdminTab({
  type="button"
  onClick={() => handleRemoveAllocation(alloc.containerPort)}
  disabled={!canEditAllocations || removeAllocationPending || removeAllocationHotPending}
- className="rounded border border-danger/30 px-1.5 py-0.5 text-[9px] font-medium text-danger transition-colors hover:border-danger/50 disabled:opacity-50"
+ className="rounded border border-danger/30 px-1.5 py-0.5 text-micro font-medium text-danger transition-colors hover:border-danger/50 disabled:opacity-50"
  >
  {t('common:actions.remove')}
  </button>
@@ -960,7 +959,7 @@ export default function ServerAdminTab({
           <div className="min-w-[160px] flex-1">
             <label className="type-overline">{t('tabs.admin.restartPolicyLabel')}</label>
             <select
-              className="mt-1 w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground focus:border-primary focus:outline-none"
+              className="mt-1 w-full rounded-sm border border-border/40 bg-card px-3 py-2 text-xs text-foreground focus:border-primary focus:outline-none"
               value={restartPolicy}
               onChange={(e) => onRestartPolicyChange(e.target.value as 'always' | 'on-failure' | 'never')}
               disabled={isSuspended}
@@ -973,7 +972,7 @@ export default function ServerAdminTab({
           <div className="min-w-[120px]">
             <label className="type-overline">{t('tabs.admin.maxCrashes')}</label>
             <input
-              className="mt-1 w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground focus:border-primary focus:outline-none"
+              className="mt-1 w-full rounded-sm border border-border/40 bg-card px-3 py-2 text-xs text-foreground focus:border-primary focus:outline-none"
               type="number"
               min={0}
               max={100}
@@ -985,7 +984,7 @@ export default function ServerAdminTab({
           <div className="flex gap-2">
             <button
               type="button"
-              className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              className="rounded-sm bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
               onClick={onSaveRestartPolicy}
               disabled={isSuspended || restartPolicyPending}
             >
@@ -993,7 +992,7 @@ export default function ServerAdminTab({
             </button>
             <button
               type="button"
-              className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground disabled:opacity-50"
+              className="rounded-sm border border-border px-3 py-2 text-xs text-muted-foreground disabled:opacity-50"
               onClick={onResetCrashCount}
               disabled={isSuspended || resetCrashCountPending}
             >
@@ -1045,7 +1044,7 @@ export default function ServerAdminTab({
  />
  </div>
  {transferCandidatesQuery.isError ? (
- <p className="mt-1 text-[10px] text-warning">
+ <p className="mt-1 text-micro text-warning">
  {t('tabs.admin.usersLoadFailed')}
  </p>
  ) : null}
@@ -1054,18 +1053,18 @@ export default function ServerAdminTab({
  type="button"
  onClick={() => setTransferOwnerConfirm(true)}
  disabled={!newOwnerId.trim() || isSuspended || newOwnerId === server.ownerId}
- className="rounded-md border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-foreground transition-all hover:bg-warning disabled:opacity-50"
+ className="rounded-sm border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-warning disabled:opacity-50"
  >
  {t('tabs.admin.transfer')}
  </button>
  </div>
 
  {currentOwnerDisplay && (
- <div className="mt-3 rounded-md border border-border/30 bg-surface-2/20 px-3 py-2">
+ <div className="mt-3 rounded-sm border border-border/30 bg-surface-2/20 px-3 py-2">
  <div className="type-overline">{t('tabs.admin.currentOwner')}</div>
  <div className="mt-0.5 text-xs font-medium text-foreground">{currentOwnerDisplay.primary}</div>
  {currentOwnerDisplay.secondary ? (
- <div className="mt-0.5 text-[10px] text-muted-foreground">{currentOwnerDisplay.secondary}</div>
+ <div className="mt-0.5 text-micro text-muted-foreground">{currentOwnerDisplay.secondary}</div>
  ) : null}
  </div>
  )}
@@ -1076,18 +1075,18 @@ export default function ServerAdminTab({
  <SectionHeader icon={AlertTriangle} title={t('tabs.admin.suspension')} accent="warning" description={t('tabs.admin.suspensionDescription')} />
 
  {server.status === 'suspended' ? (
- <div className="flex items-center justify-between rounded-md border border-warning/20 bg-warning/5 p-3">
+ <div className="flex items-center justify-between rounded-sm border border-warning/20 bg-warning/5 p-3">
  <div>
  <div className="text-xs font-medium text-foreground">{t('tabs.admin.suspended')}</div>
  {server.suspensionReason && (
- <div className="mt-0.5 text-[10px] text-muted-foreground">{t('tabs.admin.suspendReason', { reason: server.suspensionReason })}</div>
+ <div className="mt-0.5 text-micro text-muted-foreground">{t('tabs.admin.suspendReason', { reason: server.suspensionReason })}</div>
  )}
  </div>
  <button
  type="button"
  onClick={() => onUnsuspend()}
  disabled={unsuspendPending}
- className="shrink-0 rounded-md border border-success/30 bg-success px-3 py-1.5 text-[10px] font-semibold text-foreground transition-all hover:bg-success disabled:opacity-50"
+ className="shrink-0 rounded-sm border border-success/30 bg-success px-3 py-1.5 text-micro font-semibold text-foreground transition-colors hover:bg-success disabled:opacity-50"
  >
  {t('tabs.admin.unsuspend')}
  </button>
@@ -1097,7 +1096,7 @@ export default function ServerAdminTab({
  <div className="flex-1 min-w-[200px]">
  <label className="type-overline">{t('tabs.admin.suspensionReasonLabel')}</label>
  <input
- className="mt-1 w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-sm border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={suspendReason}
  onChange={(e) => onSuspendReasonChange(e.target.value)}
  placeholder={t('tabs.admin.suspensionReasonPlaceholder')}
@@ -1107,7 +1106,7 @@ export default function ServerAdminTab({
  type="button"
  onClick={() => onSuspend(suspendReason.trim() || undefined)}
  disabled={suspendPending}
- className="rounded-md bg-danger px-3 py-2 text-xs font-semibold text-foreground transition-all hover:bg-danger disabled:opacity-50"
+ className="rounded-sm bg-danger px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-danger disabled:opacity-50"
  >
  {t('tabs.admin.suspend')}
  </button>
@@ -1117,7 +1116,7 @@ export default function ServerAdminTab({
  </div>
 
  {/* ── Danger Zone ── */}
- <div className="rounded-md border border-danger/30 bg-danger/5 p-5">
+ <div className="rounded-sm border border-danger/30 bg-danger/5 p-5">
  <SectionHeader icon={Skull} title={t('tabs.admin.dangerZone')} accent="danger" description={t('tabs.admin.dangerZoneDescription')} />
 
  <DeleteServerDialog

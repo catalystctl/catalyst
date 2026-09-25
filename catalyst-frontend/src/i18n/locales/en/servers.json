@@ -273,12 +273,10 @@
       "other": "Other",
       "owned": "Owned"
     },
-    "description": "Manage your game servers, monitor resources, and control power states.",
     "empty": "No servers match these filters.",
     "overline": "Fleet",
     "stats": {
-      "issues": "Issues",
-      "total": "Total"
+      "issues": "Issues"
     },
     "title": "Servers"
   },

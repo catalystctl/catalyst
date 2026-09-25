@@ -18,7 +18,7 @@ export type ServerNavTab = {
 };
 
 const TAB_CLASS =
-  'flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40';
+  'relative flex h-7 shrink-0 items-center gap-1.5 rounded-sm px-2.5 text-mini font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40';
 
 function TabButton({ tab, hidden }: { tab: ServerNavTab; hidden?: boolean }) {
   const Icon = tab.icon;
@@ -32,11 +32,14 @@ function TabButton({ tab, hidden }: { tab: ServerNavTab; hidden?: boolean }) {
       className={cn(
         TAB_CLASS,
         tab.active
-          ? 'bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:bg-surface-2/60 hover:text-foreground',
+          ? 'text-foreground'
+          : 'text-muted-foreground hover:text-foreground',
       )}
       onClick={hidden ? undefined : tab.onSelect}
     >
+      {tab.active && (
+        <span className="absolute inset-x-1.5 bottom-0 h-[2px] bg-primary" aria-hidden />
+      )}
       <Icon className="h-3.5 w-3.5" />
       <span>{tab.label}</span>
     </button>
@@ -108,7 +111,7 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
   const overflowActive = overflow.some((tab) => tab.active);
 
   return (
-    <div ref={containerRef} className="relative min-w-0 w-full overflow-hidden border-t border-border/40 px-1.5 py-1">
+    <div ref={containerRef} className="relative min-w-0 w-full overflow-hidden border-t border-border/50 px-1.5 py-1">
       <div
         ref={measureRef}
         className="pointer-events-none invisible absolute left-1.5 top-1 flex w-max flex-nowrap items-center gap-0.5"
@@ -137,8 +140,8 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
                 className={cn(
                   TAB_CLASS,
                   overflowActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-surface-2/60 hover:text-foreground',
+                    ? 'text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
                 aria-label={t('tabBar.moreTabs')}
               >

@@ -9,11 +9,23 @@ import RestoreBackupDialog from './RestoreBackupDialog';
 import DeleteBackupDialog from './DeleteBackupDialog';
 
 const toNumber = (value: unknown) => {
- const parsed = Number(value);
- return Number.isFinite(parsed) ? parsed : 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 };
 
 type BackupWithDownload = Backup & { download?: () => void; downloadProgress?: string };
+
+/**
+ * One grid template shared by the column header and every row, so columns line
+ * up exactly at each breakpoint. Hidden cells drop out of grid placement.
+ *   base : identity · actions
+ *   md   : identity · size · actions
+ *   xl   : identity · size · storage · compressed · checksum · path · actions
+ */
+const GRID =
+ 'grid grid-cols-1 items-center gap-x-3 gap-y-1 ' +
+ 'md:grid-cols-[minmax(0,1fr)_6rem_11rem] ' +
+ 'xl:grid-cols-[minmax(0,1fr)_6rem_5.5rem_5.5rem_9rem_minmax(0,1fr)_11rem]';
 
 function BackupList({
  serverId,
@@ -44,38 +56,94 @@ function BackupList({
 
  if (!sorted.length) {
  return (
-        <div className="rounded-md border border-dashed border-border/50 bg-card px-6 py-10 text-center type-meta">
-          {t('backups.list.empty')}
-        </div>
+ <div className="deck-panel px-3 py-10 text-center type-meta">
+ {t('backups.list.empty')}
+ </div>
  );
  }
 
  return (
- <div className="space-y-3">
- {sorted.map((backup) => {
+ <div className="deck-panel overflow-hidden">
+ {/* Column header — same grid template as the rows */}
+ <div className={`${GRID} sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 px-3 py-1.5 text-muted-foreground/70 md:grid`}>
+ <span className="type-overline">{t('files.list.name')}</span>
+ <span className="type-overline hidden justify-end md:inline-flex">{t('backups.list.size')}</span>
+ <span className="type-overline hidden justify-end xl:inline-flex">{t('backups.list.storage')}</span>
+ <span className="type-overline hidden justify-end xl:inline-flex">{t('backups.list.compressed')}</span>
+ <span className="type-overline hidden justify-end xl:inline-flex">{t('backups.list.checksum')}</span>
+ <span className="type-overline hidden xl:inline-flex">{t('backups.list.path')}</span>
+ <span className="type-overline justify-self-end">{t('files.sftp.actions')}</span>
+ </div>
+
+ {sorted.map((backup, index) => {
  const status = getBackupStatus(backup);
+ const downloading = Boolean(backup.downloadProgress);
  return (
  <div
  key={backup.id}
- className="rounded-md border border-border/50 bg-card px-4 py-3 transition-colors duration-150 hover:border-primary/30"
+ className={`${GRID} px-3 py-2 transition-colors hover:bg-surface-1/40 ${
+ index > 0 ? 'border-t border-border/40' : ''
+ }`}
  >
- <div className="flex flex-wrap items-center justify-between gap-3">
- <div>
- <div className="flex items-center gap-2">
- <div className="type-numeric truncate text-sm text-foreground">{backup.name}</div>
+ {/* identity + timestamps */}
+ <div className="flex min-w-0 flex-col leading-tight">
+ <span className="flex min-w-0 items-center gap-2">
+ <span className="truncate text-data font-semibold text-foreground">{backup.name}</span>
  <BackupStatusBadge status={status} />
+ </span>
+ <span className="flex flex-wrap items-center gap-x-3 font-mono text-micro tabular-nums text-muted-foreground/70">
+ <span>{t('backups.list.created', { date: formatDateTime(backup.createdAt) })}</span>
+ {backup.restoredAt ? (
+ <span>{t('backups.list.restored', { date: formatDateTime(backup.restoredAt) })}</span>
+ ) : null}
+ </span>
  </div>
- <div className="type-meta mt-1">
- {t('backups.list.created', { date: formatDateTime(backup.createdAt) })}
- {backup.restoredAt ? ` · ${t('backups.list.restored', { date: formatDateTime(backup.restoredAt) })}` : ''}
- </div>
- </div>
- <div className="flex flex-wrap items-center gap-2 text-xs">
+
+ {/* size */}
+ <span className="hidden justify-end md:flex">
+ <span className="font-mono text-micro tabular-nums text-foreground">
+ {formatBackupSize(toNumber(backup.sizeMb))}
+ </span>
+ </span>
+
+ {/* storage */}
+ <span className="hidden justify-end xl:flex">
+ <span className="truncate font-mono text-micro text-muted-foreground">
+ {backup.storageMode ?? 'local'}
+ </span>
+ </span>
+
+ {/* compressed */}
+ <span className="hidden justify-end xl:flex">
+ <span className="text-micro text-muted-foreground">
+ {backup.compressed === false ? t('common:actions.no') : t('common:actions.yes')}
+ </span>
+ </span>
+
+ {/* checksum */}
+ <span className="hidden justify-end xl:flex">
+ <span className="truncate font-mono text-micro tabular-nums text-muted-foreground">
+ {backup.checksum ? `${backup.checksum.slice(0, 12)}...` : t('backups.list.notAvailable')}
+ </span>
+ </span>
+
+ {/* path */}
+ <span className="hidden min-w-0 xl:flex">
+ <span className="truncate font-mono text-micro text-muted-foreground">{backup.path}</span>
+ </span>
+
+ {/* actions */}
+ <span className="col-span-full flex shrink-0 flex-wrap items-center justify-start gap-1 md:col-auto md:justify-end">
  {backup.download ? (
  <button
- className="rounded-md border border-border/50 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-60"
+ type="button"
+ className={`inline-flex h-7 items-center rounded-sm border px-2 text-mini font-medium transition-colors disabled:opacity-60 ${
+ downloading
+ ? 'border-info/30 font-mono tabular-nums text-info'
+ : 'border-border/60 text-muted-foreground hover:bg-surface-1/40 hover:text-foreground'
+ }`}
  onClick={backup.download}
- disabled={Boolean(backup.downloadProgress) || isSuspended}
+ disabled={downloading || isSuspended}
  >
  {backup.downloadProgress ?? t('common:actions.download')}
  </button>
@@ -90,38 +158,7 @@ function BackupList({
  {allowDelete ? (
  <DeleteBackupDialog serverId={serverId} backup={backup} disabled={isSuspended} />
  ) : null}
- </div>
- </div>
- <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
- <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
- <div className="type-overline">{t('backups.list.size')}</div>
- <div className="type-numeric text-sm text-foreground">
- {formatBackupSize(toNumber(backup.sizeMb))}
- </div>
- </div>
- <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
- <div className="type-overline">{t('backups.list.storage')}</div>
- <div className="type-numeric text-sm text-foreground">
- {backup.storageMode ?? 'local'}
- </div>
- </div>
- <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
- <div className="type-overline">{t('backups.list.compressed')}</div>
- <div className="type-numeric text-sm text-foreground">
- {backup.compressed === false ? t('common:actions.no') : t('common:actions.yes')}
- </div>
- </div>
- <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
- <div className="type-overline">{t('backups.list.checksum')}</div>
- <div className="font-mono text-[11px] tabular-nums text-muted-foreground">
- {backup.checksum ? `${backup.checksum.slice(0, 12)}...` : t('backups.list.notAvailable')}
- </div>
- </div>
- <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-2">
- <div className="type-overline">{t('backups.list.path')}</div>
- <div className="truncate font-mono text-[11px] text-muted-foreground">{backup.path}</div>
- </div>
- </div>
+ </span>
  </div>
  );
  })}

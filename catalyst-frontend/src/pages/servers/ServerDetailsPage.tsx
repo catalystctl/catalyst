@@ -1103,7 +1103,7 @@ function ServerDetailsPage() {
         banners={
           <>
             {isSuspended && (
-              <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-danger/30 bg-danger-muted px-2.5 py-1 text-xs text-danger">
+              <div className="mx-3 mb-2 flex h-7 items-center gap-2 rounded-sm border border-danger/30 bg-danger/10 px-2.5 text-mini text-danger">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 <span className="font-semibold">{t('common:status.suspended')}</span>
                 {server?.suspensionReason && (
@@ -1112,7 +1112,7 @@ function ServerDetailsPage() {
               </div>
             )}
             {server?.status === 'cloning' && (
-              <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-info/30 bg-info-muted px-2.5 py-1 text-xs text-info">
+              <div className="mx-3 mb-2 flex h-7 items-center gap-2 rounded-sm border border-info/30 bg-info/10 px-2.5 text-mini text-info">
                 <Copy className="h-3.5 w-3.5 shrink-0 animate-pulse" />
                 <span className="font-semibold">{t('common:status.cloning')}</span>
                 <span className="text-info/80">{t('details.cloningNotice')}</span>
@@ -1138,7 +1138,7 @@ function ServerDetailsPage() {
       <ErrorBoundary
         resetKey={tab ?? activeTab}
         fallback={
-          <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-md border border-border/50 bg-card px-4 py-10 text-center">
+          <div className="flex min-h-[12rem] flex-col items-center justify-center gap-3 rounded-sm border border-border/50 bg-background/25 px-4 py-10 text-center">
             <p className="text-sm font-medium text-foreground">{t('details.tabErrorTitle')}</p>
             <p className="type-meta max-w-md">
               {t('details.tabErrorDescription')}
@@ -1404,7 +1404,7 @@ function ServerDetailsPage() {
  const ptab = filteredServerPluginTabs.find((t) => t.id === activePluginTabId);
  if (!ptab) {
  return (
- <div className="rounded-lg border border-border bg-card p-12 text-center">
+ <div className="rounded-sm border border-border/50 bg-background/25 p-12 text-center">
  <h2 className="mb-2 text-xl font-semibold text-foreground">{t('details.pluginTabNotFoundTitle')}</h2>
  <p className="text-muted-foreground">
  {t('details.pluginTabNotFoundDescription')}

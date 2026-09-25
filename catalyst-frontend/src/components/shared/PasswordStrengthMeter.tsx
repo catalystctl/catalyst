@@ -74,11 +74,11 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
 
  return (
  <div className={cn('space-y-1', className)}>
- <div className="flex items-center justify-between text-xs">
+ <div className="flex items-center justify-between text-mini">
  <span className="type-overline">{t('passwordStrength.title')}</span>
  <span
  className={cn(
- 'font-medium',
+ 'font-mono tabular-nums font-semibold',
  strength.score <= 1 && 'text-destructive',
  strength.score === 2 && 'text-danger',
  strength.score === 3 && 'text-warning',
@@ -88,9 +88,9 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
  {strengthLabel(t, strength.level)}
  </span>
  </div>
- <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
+ <div className="h-1 w-full overflow-hidden rounded-sm bg-surface-3">
  <div
- className={cn('h-full rounded-full transition-all duration-300', strength.color)}
+ className={cn('h-full rounded-sm transition-all duration-300', strength.color)}
  style={{ width: `${((strength.score + 1) / 5) * 100}%` }}
  />
  </div>

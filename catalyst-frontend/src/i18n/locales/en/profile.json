@@ -97,8 +97,7 @@
       "searchPlaceholder": "Name, node ID, or key…",
       "showAgentKeys_one": "Show agent keys ({{count}})",
       "showAgentKeys_other": "Show agent keys ({{count}})",
-      "status": "Status: {{status}}",
-      "title": "Filters"
+      "status": "Status: {{status}}"
     },
     "form": {
       "allMine": "All my permissions",

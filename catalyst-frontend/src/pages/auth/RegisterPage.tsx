@@ -10,7 +10,6 @@ import { reportSystemError } from '../../services/api/systemErrors';
 import { describeError } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,15 +54,15 @@ function RegisterPage() {
  <div className="absolute right-4 top-4 z-20">
  <LanguageSwitcher variant="compact" />
  </div>
- <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
- <CardContent className="px-3 py-4 sm:px-4">
+ <div className="deck-panel w-full max-w-md">
+ <div className="px-3 py-4 sm:px-4">
  <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">{t('register.title')}</h1>
- <p className="type-meta mt-0.5">
+ <p className="type-meta mt-1">
  {t('register.subtitle')}
  </p>
 
  {error ? (
- <div className="mt-4 rounded-lg border border-destructive/20 bg-destructive/10/60 px-4 py-3 text-sm text-destructive">
+ <div className="mt-4 rounded-sm border border-danger/25 bg-danger/5 px-3 py-2.5 text-mini text-danger">
  {error}
  </div>
  ) : null}
@@ -76,10 +75,11 @@ function RegisterPage() {
  type="text"
  autoComplete="username"
  placeholder={t('fields.usernamePlaceholder')}
+ className="h-8 rounded-sm text-mini"
  {...register('username')}
  />
  {errors.username ? (
- <p className="text-xs text-destructive">{errors.username.message}</p>
+ <p className="text-mini text-danger">{errors.username.message}</p>
  ) : null}
  </div>
 
@@ -90,9 +90,10 @@ function RegisterPage() {
  type="email"
  autoComplete="email"
  placeholder={t('fields.emailPlaceholder')}
+ className="h-8 rounded-sm text-mini"
  {...register('email')}
  />
- {errors.email ? <p className="text-xs text-destructive">{errors.email.message}</p> : null}
+ {errors.email ? <p className="text-mini text-danger">{errors.email.message}</p> : null}
  </div>
 
  <div className="space-y-2">
@@ -102,15 +103,16 @@ function RegisterPage() {
  type="password"
  autoComplete="new-password"
  placeholder="••••••••"
+ className="h-8 rounded-sm text-mini"
  {...register('password')}
  />
  <PasswordStrengthMeter password={passwordValue} />
  {errors.password ? (
- <p className="text-xs text-destructive">{errors.password.message}</p>
+ <p className="text-mini text-danger">{errors.password.message}</p>
  ) : null}
  </div>
 
- <Button type="submit" className="w-full" disabled={isLoading}>
+ <Button type="submit" size="sm" className="h-8 w-full text-mini" disabled={isLoading}>
  {isLoading ? t('register.submitting') : t('register.submit')}
  </Button>
  </form>
@@ -124,8 +126,8 @@ function RegisterPage() {
  {t('register.signInLink')}
  </Link>
  </p>
- </CardContent>
- </Card>
+ </div>
+ </div>
  </div>
  );
 }

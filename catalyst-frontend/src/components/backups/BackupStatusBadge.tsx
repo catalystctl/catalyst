@@ -21,22 +21,33 @@ function backupStatusLabel(t: TFunction, status: BackupStatus): string {
   }
 }
 
-const colorMap: Record<BackupStatus, string> = {
- completed: 'bg-success/10 text-success border-success/20',
- in_progress: 'bg-warning/10 text-warning border-warning/20',
- failed: 'bg-danger/10 text-danger border-danger/20',
- restored: 'bg-primary/10 text-primary border-primary/20',
- unknown: 'bg-surface-2/40 text-muted-foreground border-border/30',
+// State colour only: the LED carries the tone, the label stays quiet.
+const dotMap: Record<BackupStatus, string> = {
+  completed: 'bg-success',
+  in_progress: 'bg-warning',
+  failed: 'bg-danger',
+  restored: 'bg-info',
+  unknown: 'bg-surface-3',
+};
+
+const textMap: Record<BackupStatus, string> = {
+  completed: 'text-success',
+  in_progress: 'text-warning',
+  failed: 'text-danger',
+  restored: 'text-info',
+  unknown: 'text-muted-foreground',
 };
 
 function BackupStatusBadge({ status }: { status: BackupStatus }) {
   const { t } = useTranslation('server-tabs');
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${
-        colorMap[status]
-      }`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-surface-1/60 px-1.5 py-0.5 text-micro font-medium ${textMap[status]}`}
     >
+      <span
+        className={`h-1.5 w-1.5 shrink-0 ${dotMap[status]} ${status === 'in_progress' ? 'deck-led-pulse' : ''}`}
+        aria-hidden
+      />
       {backupStatusLabel(t, status)}
     </span>
   );

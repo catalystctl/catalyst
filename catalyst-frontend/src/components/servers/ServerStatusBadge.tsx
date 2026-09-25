@@ -1,48 +1,40 @@
-import { Square, Loader2, AlertTriangle, ArrowRightLeft, Ban, Copy, HardDriveDownload, Archive, OctagonX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ServerStatus } from '../../types/server';
 import { serverStatusLabel } from '../../utils/constants';
+import { StatusLed } from '../deck/primitives';
+import { cn } from '@/lib/utils';
 
-// Live heartbeat for the running state — a pinging dot instead of a static
-// glyph, so an up server is visibly *alive* at a glance. Reduced-motion
-// users get the static dot (globals.css disables animations).
-const RunningPulse = () => (
-  <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
-    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-50" />
-    <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
-  </span>
-);
-
-const colorMap: Record<ServerStatus, string> = {
-  stopped: 'bg-surface-3 text-muted-foreground',
-  installing: 'bg-primary-muted text-primary',
-  starting: 'bg-primary-muted text-primary',
-  running: 'bg-success-muted text-success',
-  stopping: 'bg-warning-muted text-warning',
-  crashed: 'bg-danger-muted text-danger',
-  transferring: 'bg-info-muted text-info',
-  cloning: 'bg-info-muted text-info',
-  suspended: 'bg-danger-muted text-danger',
-  restoring: 'bg-info-muted text-info',
-  creating_backup: 'bg-info-muted text-info',
-  archived: 'bg-surface-3 text-muted-foreground',
-  error: 'bg-danger-muted text-danger',
+// State colour lives on the LED and the label; the badge surface stays neutral.
+const toneMap: Record<ServerStatus, 'go' | 'hazard' | 'alarm' | 'idle' | 'info'> = {
+  stopped: 'idle',
+  archived: 'idle',
+  running: 'go',
+  stopping: 'hazard',
+  suspended: 'hazard',
+  crashed: 'alarm',
+  error: 'alarm',
+  installing: 'info',
+  starting: 'info',
+  transferring: 'info',
+  cloning: 'info',
+  restoring: 'info',
+  creating_backup: 'info',
 };
 
-const iconMap: Record<ServerStatus, React.ReactNode> = {
-  stopped: <Square className="h-3 w-3" />,
-  installing: <Loader2 className="h-3 w-3 animate-spin" />,
-  starting: <Loader2 className="h-3 w-3 animate-spin" />,
-  running: <RunningPulse />,
-  stopping: <Loader2 className="h-3 w-3 animate-spin" />,
-  crashed: <AlertTriangle className="h-3 w-3" />,
-  transferring: <ArrowRightLeft className="h-3 w-3" />,
-  cloning: <Copy className="h-3 w-3 animate-pulse" />,
-  suspended: <Ban className="h-3 w-3" />,
-  restoring: <HardDriveDownload className="h-3 w-3 animate-pulse" />,
-  creating_backup: <Archive className="h-3 w-3 animate-pulse" />,
-  archived: <Archive className="h-3 w-3" />,
-  error: <OctagonX className="h-3 w-3" />,
+const textMap: Record<ServerStatus, string> = {
+  stopped: 'text-muted-foreground',
+  archived: 'text-muted-foreground',
+  running: 'text-success',
+  stopping: 'text-warning',
+  suspended: 'text-warning',
+  crashed: 'text-danger',
+  error: 'text-danger',
+  installing: 'text-info',
+  starting: 'text-info',
+  transferring: 'text-info',
+  cloning: 'text-info',
+  restoring: 'text-info',
+  creating_backup: 'text-info',
 };
 
 const TRANSITIONAL: ServerStatus[] = [
@@ -82,19 +74,22 @@ function ServerStatusBadge({ status, operationStage, operationProgress }: Props)
 
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold ${colorMap[status]}`}
+      className={cn(
+        'inline-flex max-w-full items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/60 px-2 py-0.5 text-micro font-medium',
+        textMap[status],
+      )}
       aria-label={title}
       title={title}
     >
-      {iconMap[status]}
+      <StatusLed tone={toneMap[status]} pulse={status === 'running'} />
       <span className="truncate">{label}</span>
       {showProgress && (
         <span
-          className="ml-0.5 h-1 w-8 overflow-hidden rounded-full bg-foreground/15"
+          className="ml-0.5 h-1 w-8 overflow-hidden rounded-sm bg-foreground/15"
           aria-hidden
         >
           <span
-            className="block h-full rounded-full bg-current transition-[width] duration-300"
+            className="block h-full rounded-sm bg-current transition-[width] duration-300"
             style={{ width: `${Math.min(100, Math.max(0, operationProgress!))}%` }}
           />
         </span>

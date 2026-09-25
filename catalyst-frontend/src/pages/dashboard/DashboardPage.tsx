@@ -6,16 +6,12 @@ import { useMemo } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useDashboardStats, useDashboardActivity, useResourceStats } from '../../hooks/useDashboard';
 import { useServers } from '../../hooks/useServers';
-import { ArrowRight, LayoutDashboard } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import type { DashboardActivity } from '../../services/api/dashboard';
-import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
-import SectionHeader from '../../components/servers/tabs/SectionHeader';
-import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
-import TabErrorState from '../../components/servers/tabs/TabErrorState';
-import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { PluginSlot } from '../../plugins/PluginSlot';
 import { serverStatusLabel } from '../../utils/constants';
+import { BracketLabel, Meter, StatusLed } from '../../components/deck/primitives';
+import { Skeleton } from '../../components/shared/Skeleton';
 import { cn } from '@/lib/utils';
 
 // Statuses that mean "this server needs an operator" on the fleet wall.
@@ -29,20 +25,28 @@ interface AttentionItem {
   to: string;
 }
 
-/** Fleet vital tile: overline label, big mono value, optional sub + meter bar. */
-function VitalsTile({
+type LedTone = 'go' | 'hazard' | 'alarm' | 'idle' | 'info';
+
+/** Load severity belongs on the reading; the meter is only a glance. */
+function severityClass(value: number | null) {
+  if (value == null) return undefined;
+  return value >= 90 ? 'text-danger' : value >= 75 ? 'text-warning' : undefined;
+}
+
+/** One vitals reading: overline label, mono value, optional meter + sub. */
+function VitalsRow({
   label,
   value,
   sub,
   to,
-  bar,
+  meter,
   tone = 'default',
 }: {
   label: string;
   value: string;
   sub?: React.ReactNode;
   to?: string;
-  bar?: React.ReactNode;
+  meter?: number | null;
   tone?: 'default' | 'warning' | 'danger';
 }) {
   const valueCls =
@@ -50,20 +54,21 @@ function VitalsTile({
       ? 'text-danger'
       : tone === 'warning'
         ? 'text-warning'
-        : 'text-foreground';
-  const cls =
-    'flex min-w-0 flex-col gap-0.5 rounded-md border border-border/40 bg-surface-2/20 px-3 py-2.5';
+        : severityClass(meter ?? null);
   const body = (
     <>
-      <span className="type-overline">{label}</span>
-      <span className={cn('type-numeric text-lg leading-6', valueCls)}>{value}</span>
-      {sub ? <span className="type-meta truncate">{sub}</span> : null}
-      {bar}
+      <span className="type-overline w-24 shrink-0">{label}</span>
+      <span className={cn('w-24 shrink-0 font-mono text-sm font-semibold tabular-nums', valueCls)}>
+        {value}
+      </span>
+      {meter !== undefined ? <Meter value={meter} width="w-16" /> : null}
+      <span className="min-w-0 flex-1 truncate text-right type-meta">{sub}</span>
     </>
   );
+  const cls = 'flex items-center gap-3 px-3 py-2 transition-colors';
   if (to) {
     return (
-      <Link to={to} className={cn(cls, 'pressable transition-colors hover:border-primary/30')}>
+      <Link to={to} className={cn(cls, 'hover:bg-surface-1/40')}>
         {body}
       </Link>
     );
@@ -71,45 +76,31 @@ function VitalsTile({
   return <div className={cls}>{body}</div>;
 }
 
-function FleetMeter({ percent, cls }: { percent: number; cls: string }) {
-  return (
-    <span className="mt-1.5 block h-1 w-full overflow-hidden rounded-full bg-surface-3">
-      <span
-        className={cn('block h-full rounded-full transition-all duration-500', cls)}
-        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-      />
-    </span>
-  );
-}
-
 function AttentionRow({ item }: { item: AttentionItem }) {
   return (
     <Link
       to={item.to}
-      className="group flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-surface-2"
+      className="group flex items-center gap-2.5 px-3 py-2 transition-colors hover:bg-surface-1/40"
     >
-      <span
-        className={cn(
-          'h-1.5 w-1.5 shrink-0 rounded-full',
-          item.tone === 'danger' ? 'bg-danger' : 'bg-warning',
-        )}
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">{item.title}</span>
-        <span className="type-meta block truncate">{item.detail}</span>
+      <StatusLed tone={item.tone === 'danger' ? 'alarm' : 'hazard'} />
+      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span className="truncate font-display text-data font-semibold text-foreground group-hover:text-primary">
+          {item.title}
+        </span>
+        <span className="type-overline shrink-0">{item.detail}</span>
       </span>
       <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </Link>
   );
 }
 
-// Status-carrier dot per activity type — replaces the old generic icon chip.
-const activityTone: Record<DashboardActivity['type'], string> = {
-  server: 'bg-primary',
-  backup: 'bg-info',
-  node: 'bg-warning',
-  alert: 'bg-danger',
-  user: 'bg-foreground/30',
+// Status-carrier LED per activity type.
+const activityTone: Record<DashboardActivity['type'], LedTone> = {
+  server: 'info',
+  backup: 'go',
+  node: 'hazard',
+  alert: 'alarm',
+  user: 'idle',
 };
 
 function DashboardPage() {
@@ -183,37 +174,63 @@ function DashboardPage() {
   const showResourceTiles = canReadNodes;
 
   return (
-    <div className="space-y-4">
-      <TabHeader
-        icon={LayoutDashboard}
-        title={t('title')}
-        description={t('description', { name: user?.firstName || user?.lastName
-          ? [user.firstName, user.lastName].filter(Boolean).join(' ')
-          : user?.username || t('accountFallback') })}
-        actions={alertsUnacked > 0 ? (
-          <div className="rounded-full border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs font-medium text-warning">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* ── Deck header ── */}
+      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
+            {t('title')}
+          </h1>
+          <p className="type-meta">
+            {t('description', { name: user?.firstName || user?.lastName
+              ? [user.firstName, user.lastName].filter(Boolean).join(' ')
+              : user?.username || t('accountFallback') })}
+          </p>
+        </div>
+        {alertsUnacked > 0 && (
+          <span className="flex h-8 items-center gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 font-display text-mini text-warning">
+            <StatusLed tone="hazard" pulse />
             {t('pendingAlerts', { count: alertsUnacked })}
-          </div>
-        ) : undefined}
-        />
+          </span>
+        )}
+      </header>
 
-      {/* ── Fleet vitals strip ── */}
-      <ServerTabCard>
-        <SectionHeader title={t('vitals.title')} />
+      {/* ── Fleet vitals: one framed panel of readings ── */}
+      <section className="deck-panel overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-border/50 bg-surface-1/40 px-3 py-2">
+          <BracketLabel>{t('vitals.title')}</BracketLabel>
+          <Link
+            to="/servers"
+            className="flex items-center gap-1 text-micro text-muted-foreground transition-colors hover:text-primary"
+          >
+            {t('activity.viewAll')}
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+
         {statsLoading ? (
-          <TabLoadingState rows={2} />
+          <div className="space-y-2 px-3 py-3">
+            <Skeleton height={12} className="h-3 w-2/3" />
+            <Skeleton height={12} className="h-3 w-1/2" />
+          </div>
         ) : statsError ? (
-          <TabErrorState title={t('overview.errorTitle')} description={t('overview.errorDescription')} />
+          <div className="flex items-start gap-2.5 px-3 py-3">
+            <StatusLed tone="alarm" className="mt-1" />
+            <div className="min-w-0">
+              <p className="text-mini text-danger">{t('overview.errorTitle')}</p>
+              <p className="type-meta mt-0.5">{t('overview.errorDescription')}</p>
+            </div>
+          </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <VitalsTile
+          <div>
+            <VitalsRow
               label={t('vitals.servers')}
               value={`${formatNumber(serversOnline)}/${formatNumber(serversTotal)}`}
               sub={t('overview.serversRunning', { servers: serversOnline })}
               to="/servers"
             />
             {canReadNodes && (
-              <VitalsTile
+              <VitalsRow
                 label={t('vitals.nodes')}
                 value={`${formatNumber(nodesOnline)}/${formatNumber(nodesTotal)}`}
                 sub={t('overview.nodesConnected', { nodes: nodesOnline })}
@@ -222,17 +239,17 @@ function DashboardPage() {
             )}
             {showResourceTiles && (
               <>
-                <VitalsTile
+                <VitalsRow
                   label={t('resources.cpu')}
                   value={resourcesError || !resources ? '—' : `${formatNumber(resources.cpuUtilization)}%`}
-                  bar={<FleetMeter percent={resources?.cpuUtilization ?? 0} cls="bg-primary" />}
+                  meter={resourcesError || !resources ? null : resources.cpuUtilization}
                 />
-                <VitalsTile
+                <VitalsRow
                   label={t('resources.memory')}
                   value={resourcesError || !resources ? '—' : `${formatNumber(resources.memoryUtilization)}%`}
-                  bar={<FleetMeter percent={resources?.memoryUtilization ?? 0} cls="bg-success" />}
+                  meter={resourcesError || !resources ? null : resources.memoryUtilization}
                 />
-                <VitalsTile
+                <VitalsRow
                   label={t('vitals.network')}
                   value={
                     resourcesError || !resources
@@ -243,7 +260,7 @@ function DashboardPage() {
               </>
             )}
             {showAlertsTile && (
-              <VitalsTile
+              <VitalsRow
                 label={t('vitals.alerts')}
                 value={formatNumber(alertsUnacked)}
                 sub={
@@ -257,42 +274,42 @@ function DashboardPage() {
             )}
           </div>
         )}
-      </ServerTabCard>
+      </section>
 
       {/* ── Attention + activity ── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <ServerTabCard className="lg:col-span-2">
-          <SectionHeader
-            title={t('attention.title')}
-            accent={attentionItems.length > 0 ? 'warning' : 'primary'}
-          />
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
+        <section className="deck-panel overflow-hidden lg:col-span-2">
+          <div className="border-b border-border/50 bg-surface-1/40 px-3 py-2">
+            <BracketLabel tone={attentionItems.length > 0 ? 'hazard' : 'muted'}>
+              {t('attention.title')}
+            </BracketLabel>
+          </div>
           {attentionItems.length > 0 ? (
-            <div className="-mx-1 space-y-0.5">
+            <div>
               {attentionItems.map((item) => (
                 <AttentionRow key={item.key} item={item} />
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-3 rounded-md px-2 py-3">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-40" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-              </span>
+            <div className="flex items-center gap-2.5 px-3 py-3">
+              <StatusLed tone="go" pulse />
               <div className="min-w-0">
-                <div className="text-sm font-medium text-foreground">{t('attention.allClear')}</div>
+                <div className="font-display text-data font-semibold text-foreground">
+                  {t('attention.allClear')}
+                </div>
                 <div className="type-meta">{t('attention.allClearDetail')}</div>
               </div>
             </div>
           )}
-        </ServerTabCard>
+        </section>
 
-        <ServerTabCard className="lg:col-span-3">
-          <div className="flex items-center justify-between">
-            <SectionHeader title={t('activity.title')} />
+        <section className="deck-panel overflow-hidden lg:col-span-3">
+          <div className="flex items-center justify-between gap-3 border-b border-border/50 bg-surface-1/40 px-3 py-2">
+            <BracketLabel>{t('activity.title')}</BracketLabel>
             {isAdmin && (
               <Link
                 to="/admin/audit-logs"
-                className="mb-3 flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+                className="flex items-center gap-1 text-micro text-muted-foreground transition-colors hover:text-primary"
               >
                 {t('activity.viewAll')}
                 <ArrowRight className="h-3 w-3" />
@@ -301,28 +318,35 @@ function DashboardPage() {
           </div>
 
           {activitiesLoading ? (
-            <TabLoadingState rows={3} />
+            <div className="space-y-2 px-3 py-3">
+              <Skeleton height={12} className="h-3 w-3/4" />
+              <Skeleton height={12} className="h-3 w-2/3" />
+              <Skeleton height={12} className="h-3 w-1/2" />
+            </div>
           ) : activitiesError ? (
-            <TabErrorState title={t('activity.errorTitle')} description={t('activity.errorDescription')} />
+            <div className="flex items-start gap-2.5 px-3 py-3">
+              <StatusLed tone="alarm" className="mt-1" />
+              <div className="min-w-0">
+                <p className="text-mini text-danger">{t('activity.errorTitle')}</p>
+                <p className="type-meta mt-0.5">{t('activity.errorDescription')}</p>
+              </div>
+            </div>
           ) : activities && activities.length > 0 ? (
-            <div className="-mx-1 space-y-0.5">
+            <div>
               {activities.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-start gap-3 rounded-md px-2 py-2 transition-colors hover:bg-surface-2"
+                  className="flex items-start gap-2.5 px-3 py-2 transition-colors hover:bg-surface-1/40"
                 >
-                  <span
-                    className={cn(
-                      'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
-                      activityTone[item.type] ?? 'bg-foreground/30',
-                    )}
-                  />
+                  <StatusLed tone={activityTone[item.type] ?? 'idle'} className="mt-1" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-foreground">{item.title}</div>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="truncate font-display text-data font-semibold text-foreground">
+                      {item.title}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-mini text-muted-foreground">
                       <span className="truncate">{item.detail}</span>
                       <span className="shrink-0">·</span>
-                      <span className="shrink-0 font-mono text-[10px] tabular-nums">
+                      <span className="shrink-0 font-mono tabular-nums text-micro">
                         {item.timestamp ? formatRelativeTime(item.timestamp) : item.time}
                       </span>
                     </div>
@@ -331,9 +355,12 @@ function DashboardPage() {
               ))}
             </div>
           ) : (
-            <TabEmptyState title={t('activity.emptyTitle')} description={t('activity.emptyDescription')} />
+            <div className="px-3 py-3">
+              <p className="type-overline">{t('activity.emptyTitle')}</p>
+              <p className="type-meta mt-1">{t('activity.emptyDescription')}</p>
+            </div>
           )}
-        </ServerTabCard>
+        </section>
 
         {/* Plugin extension point — plugins register via components: [{ slot: 'dashboard-widgets', … }] */}
         <PluginSlot

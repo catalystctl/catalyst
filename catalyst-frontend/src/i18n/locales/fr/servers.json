@@ -275,12 +275,10 @@
       "other": "Autres",
       "owned": "Possédés"
     },
-    "description": "Gérez vos serveurs de jeu, surveillez les ressources et contrôlez les états d’alimentation.",
     "empty": "Aucun serveur ne correspond à ces filtres.",
     "overline": "Parc",
     "stats": {
-      "issues": "Problèmes",
-      "total": "Total"
+      "issues": "Problèmes"
     },
     "title": "Serveurs"
   },

@@ -6,23 +6,20 @@ interface TabLoadingStateProps {
 }
 
 /**
- * Standardized loading state for server detail tabs.
- * Shimmer-style skeleton rows.
+ * Standardized loading state for server detail tabs. Flat pulse rows — no
+ * gradient shimmer and no nested rounded cards.
  */
 export default function TabLoadingState({
  rows = 3,
  rowHeight = 'h-14',
 }: TabLoadingStateProps) {
  return (
- <div className="space-y-2.5">
+ <div className="space-y-1.5">
  {Array.from({ length: rows }).map((_, i) => (
  <div
  key={i}
- className={`${rowHeight} overflow-hidden rounded-md bg-surface-2/60`}
- >
- {/* Shimmer overlay */}
- <div className="h-full w-full animate-pulse bg-gradient-to-r from-transparent via-surface-3/30 to-transparent bg-[length:200%_100%]" />
- </div>
+ className={`${rowHeight} animate-pulse rounded-sm bg-surface-2/60`}
+ />
  ))}
  </div>
  );

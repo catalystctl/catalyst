@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { FileEntry } from '../../types/file';
 import { formatBytes, formatFileMode } from '../../utils/formatters';
 import { formatDate, formatDateTime } from '@/i18n/format';
-import EmptyState from '../shared/EmptyState';
 import FileContextMenu from './FileContextMenu';
 import { FileTypeIcon } from './FileTypeIcon';
 import { getFileTypeInfo } from './fileTypes';
@@ -44,7 +43,21 @@ const isArchive = (name: string) =>
  name.endsWith('.tar.gz') || name.endsWith('.tgz') || name.endsWith('.zip');
 
 const ROW_HEIGHT = 44;
-const HEADER_HEIGHT = 40;
+
+/**
+ * One grid template shared by the column header and every row, so columns line
+ * up exactly at each breakpoint. Hidden cells drop out of grid placement, which
+ * is why the visible order matches each template.
+ *   base : select · name · actions
+ *   sm   : select · name · mode · actions
+ *   md   : select · name · mode · size · actions
+ *   lg   : select · name · mode · size · modified · actions
+ */
+const GRID =
+ 'grid grid-cols-[1.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 ' +
+ 'sm:grid-cols-[1.75rem_minmax(0,1fr)_4.5rem_2.25rem] ' +
+ 'md:grid-cols-[1.75rem_minmax(0,1fr)_4.5rem_5.5rem_2.25rem] ' +
+ 'lg:grid-cols-[1.75rem_minmax(0,1fr)_4.5rem_5.5rem_10rem_2.25rem]';
 
 function SortIndicator({
  field,
@@ -57,9 +70,9 @@ function SortIndicator({
 }) {
  if (field !== active) return null;
  return direction === 'asc' ? (
- <ArrowUp className="inline h-3 w-3 ml-0.5" />
+ <ArrowUp className="ml-1 inline h-3 w-3" />
  ) : (
- <ArrowDown className="inline h-3 w-3 ml-0.5" />
+ <ArrowDown className="ml-1 inline h-3 w-3" />
  );
 }
 
@@ -92,7 +105,7 @@ function InlineRenameInput({
  return (
  <input
  ref={inputRef}
- className="w-full max-w-xs rounded-md border border-primary bg-card px-2 py-0.5 text-sm text-foreground outline-none shadow-sm dark:bg-surface-2 dark:text-foreground"
+ className="w-full max-w-xs rounded-sm border border-primary bg-background/60 px-2 py-0.5 font-mono text-mini text-foreground outline-none"
  value={value}
  onChange={(e) => setValue(e.target.value)}
  onBlur={() => onSubmit(entry, value)}
@@ -177,75 +190,86 @@ function FileList({
  };
  }, [contextMenuPosition, closeContextMenu]);
 
+ // Loading/empty/error stay in the frame the caller supplies — no blank bands.
  if (isLoading) {
  return (
- <div className="flex flex-col h-full items-center justify-center gap-3">
- <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
- <p className="text-sm text-muted-foreground">{t('files.list.scanning')}</p>
+ <div className="flex flex-col">
+ {Array.from({ length: 8 }).map((_, index) => (
+ <div
+ key={index}
+ className={`${GRID} px-3 py-2 ${index > 0 ? 'border-t border-border/40' : ''}`}
+ >
+ <div className="h-3.5 w-3.5 animate-pulse rounded-sm bg-surface-3" />
+ <div className="flex items-center gap-2">
+ <div className="h-3.5 w-3.5 animate-pulse rounded-sm bg-surface-3" />
+ <div className="h-3 w-40 animate-pulse rounded-sm bg-surface-3" />
+ </div>
+ </div>
+ ))}
+ <p className="border-t border-border/40 px-3 py-1.5 text-micro text-muted-foreground">
+ {t('files.list.scanning')}
+ </p>
  </div>
  );
  }
 
  if (isError) {
  return (
- <div className="flex flex-col h-full items-center justify-center gap-2 px-4">
- <Folder className="h-6 w-6 text-danger" />
- <p className="text-sm font-medium text-destructive">{t('files.list.loadFailed')}</p>
- <p className="text-xs text-muted-foreground">{t('files.list.loadFailedHint')}</p>
+ <div className="flex h-full flex-col items-center justify-center gap-1 px-4 py-10 text-center">
+ <Folder className="h-5 w-5 text-danger" />
+ <p className="text-mini font-medium text-danger">{t('files.list.loadFailed')}</p>
+ <p className="text-micro text-muted-foreground">{t('files.list.loadFailedHint')}</p>
  </div>
  );
  }
 
  if (!files.length) {
  return (
- <div className="flex h-full items-center justify-center p-6">
- <EmptyState
- title={t('files.list.emptyTitle')}
- description={t('files.list.emptyDescription')}
- />
+ <div className="flex h-full flex-col items-center justify-center gap-1 px-4 py-10 text-center">
+ <p className="type-overline">{t('files.list.emptyTitle')}</p>
+ <p className="type-meta max-w-md">{t('files.list.emptyDescription')}</p>
  </div>
  );
  }
 
  const thBase =
- 'cursor-pointer select-none px-3 py-2.5 text-left type-overline transition-colors hover:text-foreground';
+ 'cursor-pointer select-none text-left type-overline transition-colors hover:text-foreground';
 
  const totalHeight = files.length * ROW_HEIGHT;
 
+ const selectBox = (selected: boolean, extra = '') =>
+ `flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${extra} ${
+ selected
+ ? 'border-primary bg-primary text-primary-foreground'
+ : 'border-border/60 bg-card'
+ }`;
+
  return (
  <div className="flex flex-col h-full">
- {/* Fixed header */}
- <div className="flex-none border-b border-border bg-surface-1/80 backdrop-blur-sm dark:bg-surface-0/80">
- <div className="flex items-center" style={{ height: HEADER_HEIGHT }}>
- <div className="w-10 px-3 flex items-center">
+ {/* Column header — same grid template as the rows */}
+ <div className={`${GRID} flex-none border-b border-border/50 bg-surface-1 px-3 py-1.5 text-muted-foreground/70`}>
+ <div className="flex items-center">
  <button
  type="button"
  onClick={onSelectAll}
- className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
- allSelected
- ? 'border-primary bg-primary text-primary-foreground'
- : selectedPaths.size > 0
- ? 'border-primary bg-primary/30'
- : 'border-border bg-card dark:border-border dark:bg-surface-2'
- }`}
+ className={selectBox(allSelected, selectedPaths.size > 0 && !allSelected ? 'border-primary' : '')}
  >
  {allSelected && <Check className="h-3 w-3" />}
  </button>
  </div>
- <div className={`${thBase} flex-1 min-w-0`} onClick={() => onSort('name')}>
+ <button type="button" className={thBase} onClick={() => onSort('name')}>
  {t('files.list.name')} <SortIndicator field="name" active={sortField} direction={sortDirection} />
- </div>
- <div className={`${thBase} hidden sm:block w-20`} onClick={() => onSort('mode')}>
+ </button>
+ <button type="button" className={`${thBase} hidden sm:block`} onClick={() => onSort('mode')}>
  {t('files.list.mode')} <SortIndicator field="mode" active={sortField} direction={sortDirection} />
- </div>
- <div className={`${thBase} hidden md:block w-24`} onClick={() => onSort('size')}>
+ </button>
+ <button type="button" className={`${thBase} hidden md:block`} onClick={() => onSort('size')}>
  {t('files.list.size')} <SortIndicator field="size" active={sortField} direction={sortDirection} />
- </div>
- <div className={`${thBase} hidden lg:block w-40`} onClick={() => onSort('modified')}>
+ </button>
+ <button type="button" className={`${thBase} hidden lg:block`} onClick={() => onSort('modified')}>
  {t('files.list.modified')} <SortIndicator field="modified" active={sortField} direction={sortDirection} />
- </div>
- <div className="w-10 px-3" />
- </div>
+ </button>
+ <span className="sr-only">{t('files.contextMenu.fileActions')}</span>
  </div>
 
  {/* Virtual scroll container */}
@@ -260,12 +284,10 @@ function FileList({
  data-index={virtualRow.index}
  initial={{ opacity: 0 }}
  animate={{ opacity: 1 }}
- transition={{ duration: 0.15, delay: Math.min(virtualRow.index * 0.005, 0.2) }}
- className={`absolute left-0 right-0 flex items-center group transition-colors ${
- selected
- ? 'bg-primary-500/5 dark:bg-primary-500/10 border-l-2 border-l-primary'
- : 'border-l-2 border-l-transparent hover:bg-surface-2 dark:hover:bg-surface-2/50'
- }`}
+ transition={{ duration: 0.12 }}
+ className={`${GRID} absolute left-0 right-0 group px-3 py-1.5 transition-colors ${
+ virtualRow.index > 0 ? 'border-t border-border/40' : ''
+ } ${selected ? 'bg-primary/10' : 'hover:bg-surface-1/40'}`}
  style={{
  height: ROW_HEIGHT,
  transform: `translateY(${virtualRow.start}px)`,
@@ -280,7 +302,7 @@ function FileList({
  }}
  >
  {/* Selection checkbox */}
- <div className="w-10 px-3 flex items-center">
+ <div className="flex items-center">
  <button
  type="button"
  onClick={(e) => {
@@ -291,28 +313,24 @@ function FileList({
  onSelect(entry, !selected);
  }
  }}
- className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
- selected
- ? 'border-primary bg-primary text-primary-foreground'
- : 'border-border bg-card dark:border-border dark:bg-surface-2 group-hover:border-primary/50'
- }`}
+ aria-label={entry.name}
+ className={selectBox(selected, 'group-hover:border-primary/50')}
  >
  {selected && <Check className="h-3 w-3" />}
  </button>
  </div>
 
  {/* Name */}
- <div className="flex items-center gap-2.5 flex-1 min-w-0 px-3">
  <button
  type="button"
- className="flex items-center gap-2.5 text-left min-w-0 w-full"
+ className="flex min-w-0 items-center gap-2 text-left"
  onClick={(e) => {
  e.stopPropagation();
  onOpen(entry);
  }}
  >
  {entry.isDirectory ? (
- <Folder className="h-4 w-4 shrink-0 text-primary" />
+ <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
  ) : (
  <FileTypeIcon name={entry.name} className="h-4 w-4" />
  )}
@@ -323,65 +341,45 @@ function FileList({
  onCancel={onRenameCancel}
  />
  ) : (
- <div className="min-w-0 flex flex-col">
- <span className="truncate text-sm font-medium text-foreground dark:text-foreground">
- {entry.name}
- </span>
+ <span className="flex min-w-0 items-baseline gap-2">
+ <span className="truncate text-data text-foreground">{entry.name}</span>
  {info && (
- <span className="text-[10px] text-muted-foreground leading-tight">
+ <span className="hidden shrink-0 text-micro text-muted-foreground/70 xl:inline">
  {info.label}
  </span>
  )}
- </div>
+ </span>
  )}
  </button>
- </div>
 
  {/* Mode */}
- <div className="hidden sm:block w-20 px-3 type-numeric text-[11px] text-muted-foreground">
+ <span className="hidden font-mono text-micro tabular-nums text-muted-foreground sm:block">
  {formatFileMode(entry.mode)}
- </div>
+ </span>
 
  {/* Size */}
- <div className="hidden md:block w-24 px-3">
- {entry.isDirectory ? (
- <span className="text-xs text-muted-foreground">—</span>
- ) : (
- <div className="flex flex-col gap-0.5">
- <span className="type-numeric text-xs text-muted-foreground">
- {formatBytes(entry.size)}
+ <span className="hidden font-mono text-micro tabular-nums text-muted-foreground md:block">
+ {entry.isDirectory ? '—' : formatBytes(entry.size)}
  </span>
- {/* Subtle size bar for files > 1KB */}
- {entry.size > 1024 && (
- <div className="h-1 w-full max-w-[60px] overflow-hidden rounded-full bg-surface-3 dark:bg-surface-3/50">
- <div
- className="h-full rounded-full bg-muted-foreground/20"
- style={{
- width: `${Math.min(100, Math.log10(entry.size + 1) * 8)}%`,
- }}
- />
- </div>
- )}
- </div>
- )}
- </div>
 
  {/* Modified */}
- <div className="hidden lg:block w-40 px-3 font-mono text-xs tabular-nums text-muted-foreground">
+ <span
+ className="hidden truncate font-mono text-micro tabular-nums text-muted-foreground lg:block"
+ title={entry.modified ? formatDateTime(entry.modified) : undefined}
+ >
  {entry.modified ? (
- <span className="font-mono tabular-nums" title={formatDateTime(entry.modified)}>
+ <>
  {formatDate(entry.modified)}{' '}
  <span className="text-muted-foreground/60">
  {formatDateTime(entry.modified, { hour: '2-digit', minute: '2-digit' })}
  </span>
- </span>
+ </>
  ) : (
  '—'
  )}
- </div>
+ </span>
 
  {/* Actions */}
- <div className="w-10 px-3">
  <div className="flex justify-end opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:focus-within:opacity-100 has-[button[data-state=open]]:opacity-100">
  <FileContextMenu
  entry={entry}
@@ -399,7 +397,6 @@ function FileList({
  onDelete={() => onDelete(entry)}
  />
  </div>
- </div>
  </motion.div>
  );
  })}
@@ -408,22 +405,20 @@ function FileList({
  </div>
 
  {/* Footer */}
- <div className="flex-none border-t border-border bg-surface-1/80 backdrop-blur-sm dark:bg-surface-0/80">
- <div className="flex items-center justify-between px-4 py-2">
- <span className="type-meta">
+ <div className="flex flex-none items-center justify-between gap-2 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <span className="text-micro text-muted-foreground">
  {t('files.list.itemCount', { count: files.length })}
  {totalSize > 0 && (
- <span className="ml-2 text-muted-foreground/60">
+ <span className="ml-2 font-mono tabular-nums text-muted-foreground/70">
  {t('files.list.totalSize', { size: formatBytes(totalSize) })}
  </span>
  )}
  </span>
  {selectedPaths.size > 0 && (
- <span className="text-[11px] font-medium text-foreground">
+ <span className="text-micro font-medium text-foreground">
  {t('files.list.selected', { count: selectedPaths.size })}
  </span>
  )}
- </div>
  </div>
 
  {/* Context menu */}

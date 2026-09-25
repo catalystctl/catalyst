@@ -131,8 +131,6 @@
     "title": "Attributions du nœud"
   },
   "card": {
-    "agentVersion": "Version {{version}} de l’agent",
-    "cores": "cœurs",
     "cpu": "CPU",
     "effectiveCpu": "effectif : {{cores}} cœurs ({{percent}} %)",
     "effectiveMemory": "effectif : {{gb}} GB ({{percent}} %)",

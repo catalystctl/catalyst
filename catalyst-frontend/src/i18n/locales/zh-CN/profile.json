@@ -95,8 +95,7 @@
       "search": "搜索：{{query}}",
       "searchPlaceholder": "名称、节点 ID 或密钥…",
       "showAgentKeys_other": "显示 Agent 密钥（{{count}}）",
-      "status": "状态：{{status}}",
-      "title": "筛选条件"
+      "status": "状态：{{status}}"
     },
     "form": {
       "allMine": "我的全部权限",

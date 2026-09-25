@@ -169,6 +169,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  <label className="type-overline">{t('apiKeys.form.name')}</label>
  <Input
  type="text"
+ className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
  placeholder={t('apiKeys.form.namePlaceholder')}
  value={formData.name}
  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -180,21 +181,21 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  <div className="space-y-2">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2">
- <Shield className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+ <Shield className="h-3.5 w-3.5 text-muted-foreground" />
  <label className="type-overline">{t('apiKeys.form.permissions')}</label>
  </div>
  {selectedCount >= 0 && (
- <Badge variant="outline" className="type-numeric text-[10px]">
+ <Badge variant="outline" className="font-mono text-micro tabular-nums">
  {t('apiKeys.form.selectedCount', { count: selectedCount })}
  </Badge>
  )}
  </div>
 
- <div className="flex items-center justify-between rounded-md border border-border/50 bg-surface-2/50 px-4 py-3 dark:bg-surface-2/30">
+ <div className="flex items-center justify-between gap-3 rounded-sm border border-border/50 px-3 py-2">
  <div className="flex items-center gap-2.5">
- <ShieldCheck className="h-4 w-4 text-success dark:text-success" />
+ <ShieldCheck className="h-3.5 w-3.5 text-success dark:text-success" />
  <div>
- <span className="text-sm font-medium text-foreground dark:text-foreground">
+ <span className="text-mini font-semibold text-foreground dark:text-foreground">
  {t('apiKeys.form.allMine')}
  </span>
  <p className="type-meta">
@@ -213,15 +214,15 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </div>
 
  {!formData.allPermissions && (
- <div className="rounded-md border border-border/50 overflow-hidden">
+ <div className="overflow-hidden rounded-sm border border-border/50">
  <div className="max-h-64 overflow-y-auto">
  {catalogLoading ? (
  <div className="flex items-center justify-center py-8">
- <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
- <span className="ml-2 text-sm text-muted-foreground">{t('apiKeys.form.loading')}</span>
+ <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+ <span className="ml-2 text-mini text-muted-foreground">{t('apiKeys.form.loading')}</span>
  </div>
  ) : availablePermissions.length === 0 ? (
- <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+ <div className="type-meta px-3 py-6 text-center">
  {t('apiKeys.form.noneAvailable')}
  </div>
  ) : (
@@ -236,7 +237,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  <button
  type="button"
  onClick={() => toggleCategory(cat.id)}
- className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-surface-2/50"
+ className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-surface-1/40"
  >
  <input
  type="checkbox"
@@ -246,11 +247,11 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  }}
  onChange={(e) => { e.stopPropagation(); selectCategoryAll(cat); }}
  onClick={(e) => e.stopPropagation()}
- className="rounded border-border text-primary-600 focus:ring-primary dark:border-border"
+ className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary focus:ring-primary"
  />
  <span className="flex-1">
- <span className="text-sm font-medium text-foreground dark:text-foreground">{cat.label}</span>
- <span className="ml-2 type-numeric">({cat.permissions.length})</span>
+ <span className="text-mini font-medium text-foreground dark:text-foreground">{cat.label}</span>
+ <span className="ml-2 font-mono text-micro tabular-nums text-muted-foreground">({cat.permissions.length})</span>
  </span>
  {expanded ? (
  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -260,20 +261,20 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </button>
 
  {expanded && (
- <div className="border-t border-border/50 bg-surface-1/50 px-4 pb-2 pt-1 dark:bg-surface-1/30">
+ <div className="border-t border-border/50 px-3 pb-2 pt-1">
  {cat.permissions.map((perm) => (
  <label
  key={perm.value}
- className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-2/50 cursor-pointer"
+ className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2 py-1.5 text-mini transition-colors hover:bg-surface-1/40"
  >
  <input
  type="checkbox"
  checked={formData.permissions.includes(perm.value)}
  onChange={() => togglePermission(perm.value)}
- className="rounded border-border text-primary-600 focus:ring-primary dark:border-border"
+ className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary focus:ring-primary"
  />
  <span className="text-foreground dark:text-foreground">{perm.label}</span>
- <code className="ml-auto font-mono text-[10px] text-muted-foreground">{perm.value}</code>
+ <code className="ml-auto font-mono text-micro tabular-nums text-muted-foreground">{perm.value}</code>
  </label>
  ))}
  </div>
@@ -287,7 +288,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  )}
 
  {!formData.allPermissions && selectedCount === 0 && (
- <p className="text-[11px] text-warning dark:text-warning">
+ <p className="text-mini text-warning dark:text-warning">
  ⚠ {t('apiKeys.form.selectAtLeastOne')}
  </p>
  )}
@@ -298,7 +299,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  <select
  value={formData.expiresIn}
  onChange={(e) => setFormData({ ...formData, expiresIn: Number(e.target.value) })}
- className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40 dark:border-border/60 dark:bg-background/40 dark:text-foreground"
  >
  {expirationOptions.map((opt) => (
  <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -315,16 +316,16 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  max={10000}
  value={formData.rateLimitMax}
  onChange={(e) => setFormData({ ...formData, rateLimitMax: Number(e.target.value) })}
- className="w-32"
+ className="h-8 w-32 rounded-sm border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums"
  />
- <span className="text-sm text-muted-foreground">{t('apiKeys.form.perMinute')}</span>
+ <span className="text-mini text-muted-foreground">{t('apiKeys.form.perMinute')}</span>
  </div>
  <p className="type-meta">{t('apiKeys.form.rateLimitHint')}</p>
  </div>
  </DialogBody>
  <DialogFooter>
- <Button variant="outline" size="sm" type="button" onClick={handleClose}>{t('common:actions.cancel')}</Button>
- <Button size="sm" type="submit" disabled={createApiKey.isPending || (!formData.allPermissions && formData.permissions.length === 0)}>
+ <Button variant="outline" size="sm" type="button" className="h-8 px-3 text-mini" onClick={handleClose}>{t('common:actions.cancel')}</Button>
+ <Button size="sm" type="submit" className="h-8 px-3 text-mini" disabled={createApiKey.isPending || (!formData.allPermissions && formData.permissions.length === 0)}>
  {createApiKey.isPending ? t('apiKeys.createDialog.creating') : t('apiKeys.createDialog.submit')}
  </Button>
  </DialogFooter>
@@ -332,9 +333,9 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  ) : (
  <>
  <DialogBody className="space-y-4">
- <div className="flex items-start gap-2.5 rounded-md border border-warning/30 bg-warning/5 p-3 dark:border-warning/20 dark:bg-warning/15">
- <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning dark:text-warning" />
- <p className="text-sm text-warning dark:text-warning">
+ <div className="flex items-start gap-2.5 rounded-sm border border-warning/30 bg-warning/5 px-3 py-2 dark:border-warning/20 dark:bg-warning/15">
+ <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning dark:text-warning" />
+ <p className="text-mini text-warning dark:text-warning">
  {t('apiKeys.createDialog.keepCopyWarning')}
  </p>
  </div>
@@ -345,12 +346,12 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  <input
  readOnly
  value={createdKey}
- className="min-w-0 flex-1 rounded-md border border-border/50 bg-card px-3 py-2 font-mono text-sm text-foreground focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
+ className="h-8 min-w-0 flex-1 rounded-sm border border-border/60 bg-surface-0 px-2.5 font-mono text-mini tabular-nums text-foreground focus:outline-none dark:border-border/60 dark:bg-surface-0 dark:text-foreground"
  onFocus={(e) => e.target.select()}
  />
  <button
  onClick={handleCopy}
- className="shrink-0 rounded-md border border-border/50 p-2 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:border-border"
+ className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:border-border/60"
  >
  {copied ? (
  <CheckCircle2 className="h-4 w-4 text-success" />
@@ -361,16 +362,16 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  </div>
  </div>
 
- <div className="min-w-0 rounded-md border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
+ <div className="min-w-0 rounded-sm border border-border/50 bg-surface-0 p-3 dark:bg-surface-0">
  <h4 className="type-overline mb-2">{t('apiKeys.createDialog.usageExample')}</h4>
- <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all text-xs text-foreground dark:text-foreground">
+ <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all font-mono text-micro tabular-nums text-foreground dark:text-foreground">
  <code>{`curl -H "Authorization: Bearer ${createdKey}" \\
  ${window.location.origin}/api/servers`}</code>
  </pre>
  </div>
  </DialogBody>
  <DialogFooter>
- <Button size="sm" onClick={handleClose}>{t('done')}</Button>
+ <Button size="sm" className="h-8 px-3 text-mini" onClick={handleClose}>{t('done')}</Button>
  </DialogFooter>
  </>
  )}

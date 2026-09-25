@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { Check, Copy, MailWarning, RefreshCw } from 'lucide-react';
 import {
   Dialog,
@@ -12,6 +13,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+
+/** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
+const fieldClass =
+  'h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40';
+/** Labelled block on the dialog surface — never a nested rounded card. */
+const blockClass = 'rounded-sm border border-border/50 bg-surface-1/40 p-3';
 
 type InviteLinkModalProps = {
   email: string;
@@ -63,54 +70,58 @@ export default function InviteLinkModal({
               : t('inviteLink.description')}
           </DialogDescription>
         </DialogHeader>
-        <DialogBody>
-          <div className="type-meta mb-3">
-            <Trans
-              ns="servers"
-              i18nKey="inviteLink.inviteFor"
-              values={{ email }}
-              components={{ strong: <span className="font-semibold text-foreground" /> }}
-            />
+        <DialogBody className="space-y-3">
+          <div className={`${blockClass} space-y-3`}>
+            <div className="type-meta">
+              <Trans
+                ns="servers"
+                i18nKey="inviteLink.inviteFor"
+                values={{ email }}
+                components={{ strong: <span className="font-semibold text-foreground" /> }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                readOnly
+                value={url}
+                onFocus={(e) => e.currentTarget.select()}
+                className={cn(fieldClass, 'font-mono')}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 gap-1.5 px-3 text-mini"
+                onClick={copy}
+                title={t('inviteLink.copyLink')}
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-success" /> {t('common:actions.copied')}
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" /> {t('common:actions.copy')}
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Input
-              readOnly
-              value={url}
-              onFocus={(e) => e.currentTarget.select()}
-              className="font-mono text-xs"
-            />
-            <Button
-              variant="outline"
-              className="shrink-0 gap-1.5"
-              onClick={copy}
-              title={t('inviteLink.copyLink')}
-            >
-              {copied ? (
-                <>
-                  <Check className="h-3.5 w-3.5 text-success" /> {t('common:actions.copied')}
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5" /> {t('common:actions.copy')}
-                </>
-              )}
-            </Button>
-          </div>
-          <p className="type-meta mt-3">
+          <p className="type-meta">
             {t('inviteLink.warning')}
           </p>
         </DialogBody>
         <DialogFooter>
           <Button
             variant="outline"
-            className="gap-1.5"
+            size="sm"
+            className="h-8 gap-1.5 px-3 text-mini"
             onClick={onRegenerate}
             disabled={regeneratePending}
           >
             <RefreshCw className={`h-3.5 w-3.5 ${regeneratePending ? 'animate-spin' : ''}`} />
             {t('inviteLink.regenerate')}
           </Button>
-          <Button onClick={onClose}>{t('inviteLink.done')}</Button>
+          <Button size="sm" className="h-8 px-3 text-mini" onClick={onClose}>{t('inviteLink.done')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

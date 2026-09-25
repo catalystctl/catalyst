@@ -43,6 +43,8 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
     <div>
       <Button
         type="button"
+        size="sm"
+        className="h-8 px-3 text-mini"
         onClick={() => {
           if (!disabled) setOpen(true);
         }}
@@ -70,10 +72,15 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
             </div>
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" className="h-8 px-3 text-mini" onClick={() => setOpen(false)}>
               {t('common:actions.cancel')}
             </Button>
-            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || disabled}>
+            <Button
+              size="sm"
+              className="h-8 px-3 text-mini"
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isPending || disabled}
+            >
               {t('backups.create.action')}
             </Button>
           </DialogFooter>

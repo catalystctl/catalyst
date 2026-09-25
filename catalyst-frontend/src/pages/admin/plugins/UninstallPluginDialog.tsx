@@ -65,11 +65,11 @@ export function UninstallPluginDialog({
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               {enabled && (
-                <Badge variant="outline" className="text-[11px]">
+                <Badge variant="outline" className="text-micro">
                   {t('pluginsAdmin.currentlyEnabledBadge')}
                 </Badge>
               )}
-              <Badge variant="secondary" className="text-[11px]">
+              <Badge variant="secondary" className="text-micro">
                 {t('pluginsAdmin.codeDeletedBadge')}
               </Badge>
             </div>
@@ -78,7 +78,7 @@ export function UninstallPluginDialog({
               {t('pluginsAdmin.uninstallBody')}
             </p>
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/60 bg-surface-2/20 px-4 py-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-border/60 bg-surface-1/40 px-3 py-2.5">
               <Checkbox
                 checked={purgeData}
                 onCheckedChange={(v) => setPurgeData(v === true)}
@@ -89,14 +89,14 @@ export function UninstallPluginDialog({
                 <span className="block text-sm font-medium text-foreground">
                   {t('pluginsAdmin.uninstallPurgeLabel')}
                 </span>
-                <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                <span className="mt-0.5 block text-mini leading-relaxed text-muted-foreground">
                   {t('pluginsAdmin.uninstallPurgeDescription')}
                 </span>
               </span>
             </label>
 
             {purgeData && (
-              <p className="flex items-start gap-1.5 text-xs leading-relaxed text-danger">
+              <p className="flex items-start gap-1.5 text-mini leading-relaxed text-danger">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {t('pluginsAdmin.uninstallPurgeWarning')}
               </p>
@@ -104,12 +104,19 @@ export function UninstallPluginDialog({
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={busy}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-3 text-mini"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+          >
             {t('common:actions.cancel')}
           </Button>
           <Button
             size="sm"
             variant="destructive"
+            className="h-8 px-3 text-mini"
             onClick={() => onConfirm(purgeData)}
             disabled={busy}
             data-testid="plugin-uninstall-confirm-button"

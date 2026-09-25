@@ -6,6 +6,7 @@ import { ArrowDown, Check, Copy, Download, Search, Trash2, X } from 'lucide-reac
 import XtermConsole, { type XtermConsoleHandle } from '../../components/console/XtermConsole';
 import { storage } from '../../services/storage/localStorage';
 import { Button } from '@/components/ui/button';
+import { StatusLed } from '../deck/primitives';
 import { cn } from '@/lib/utils';
 import { consoleStreamLabel } from '../../utils/constants';
 
@@ -36,27 +37,11 @@ interface Props {
 
 const ALL_STREAMS = ['stdout', 'stderr', 'system', 'stdin'] as const;
 
-const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: string }> = {
-  stdout: {
-    dot: 'bg-success',
-    active: 'border-success/50 bg-success-muted text-success',
-    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
-  },
-  stderr: {
-    dot: 'bg-danger',
-    active: 'border-danger/50 bg-danger-muted text-danger',
-    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
-  },
-  system: {
-    dot: 'bg-info',
-    active: 'border-info/50 bg-info-muted text-info',
-    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
-  },
-  stdin: {
-    dot: 'bg-warning',
-    active: 'border-warning/50 bg-warning-muted text-warning',
-    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
-  },
+const STREAM_COLORS: Record<string, string> = {
+  stdout: 'bg-success',
+  stderr: 'bg-danger',
+  system: 'bg-info',
+  stdin: 'bg-warning',
 };
 
 const SCROLLBACK_OPTIONS = [500, 1000, 2000] as const;
@@ -195,6 +180,12 @@ export default function ServerConsoleTab({
           ? t('console.connection.connecting')
           : t('console.connection.live');
   const connection = { label: connectionLabel, tone: connectionTone(streamStatus, isConnected) };
+  const connectionLed: 'go' | 'hazard' | 'idle' =
+    streamStatus === 'error' || streamStatus === 'closed'
+      ? 'idle'
+      : streamStatus === 'reconnecting' || streamStatus === 'connecting' || !isConnected
+        ? 'hazard'
+        : 'go';
   const commandPlaceholder = !canSend
     ? streamStatus === 'reconnecting'
       ? t('console.placeholderReconnecting')
@@ -203,13 +194,13 @@ export default function ServerConsoleTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border/50 bg-card">
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 bg-card px-2 py-1.5">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden deck-panel">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 bg-surface-1/40 px-2 py-1.5">
 
 
 
-          <span className={cn('flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium', connection.tone)}>
-            <span className={cn('h-1.5 w-1.5 rounded-full', isConnected ? 'animate-pulse bg-success' : 'bg-warning')} />
+          <span className={cn('flex items-center gap-1.5 text-mini font-medium', connection.tone)}>
+            <StatusLed tone={connectionLed} pulse={streamStatus !== 'error' && streamStatus !== 'closed' && isConnected} />
             {connection.label}
           </span>
 
@@ -217,7 +208,6 @@ export default function ServerConsoleTab({
 
           {ALL_STREAMS.map((stream) => {
             const isActive = activeStreams.has(stream);
-            const styles = STREAM_COLORS[stream];
             return (
               <button
                 key={stream}
@@ -232,20 +222,20 @@ export default function ServerConsoleTab({
                     return next;
                   })
                 }
-                className={cn('flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium transition-colors', isActive ? styles.active : styles.inactive)}
+                className={cn('flex h-7 items-center gap-1.5 rounded-sm border px-2 text-mini font-medium transition-colors', isActive ? 'border-border/70 bg-surface-2/60 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
               >
-                <span className={cn('h-1.5 w-1.5 rounded-full', isActive ? styles.dot : 'bg-muted-foreground')} />
+                <span className={cn('h-1.5 w-1.5 rounded-full', isActive ? STREAM_COLORS[stream] : 'bg-muted-foreground')} />
                 {consoleStreamLabel(t, stream)}
               </button>
             );
           })}
 
           {searchOpen ? (
-            <div className="flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-0.5">
+            <div className="flex h-7 items-center gap-1 rounded-sm border border-border/60 bg-surface-2 px-2">
               <Search className="h-3 w-3 text-muted-foreground" />
               <input
                 ref={searchRef}
-                className="w-32 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 sm:w-40"
+                className="w-32 bg-transparent text-mini text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 sm:w-40"
                 value={searchQuery}
                 aria-label={t('console.tab.findAriaLabel')}
                 onChange={(event) => setSearchQuery(event.target.value)}
@@ -259,7 +249,7 @@ export default function ServerConsoleTab({
                 placeholder={t('console.tab.findPlaceholder')}
               />
               {searchQuery ? (
-                <span className="type-numeric text-[10px] text-muted-foreground">{searchMatchCount}</span>
+                <span className="type-numeric text-micro text-muted-foreground">{searchMatchCount}</span>
               ) : null}
               <button
                 type="button"
@@ -282,7 +272,7 @@ export default function ServerConsoleTab({
                 setSearchOpen(true);
                 window.setTimeout(() => searchRef.current?.focus(), 50);
               }}
-              className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               <Search className="h-3.5 w-3.5" />
             </button>
@@ -293,7 +283,7 @@ export default function ServerConsoleTab({
           </label>
           <select
             id="console-scrollback"
-            className="h-6 rounded-md border border-border bg-transparent px-1.5 text-[10px] text-muted-foreground outline-none hover:border-border"
+            className="h-7 rounded-sm border border-border/60 bg-transparent px-1.5 text-micro text-muted-foreground outline-none hover:border-border"
             value={scrollback}
             onChange={(event) => {
               const value = Number(event.target.value);
@@ -310,7 +300,7 @@ export default function ServerConsoleTab({
 
           <div className="flex-1" />
 
-          <span className="type-numeric text-[10px] text-muted-foreground">{t('console.lines', { count: visibleEntries.length })}</span>
+          <span className="type-numeric text-micro text-muted-foreground">{t('console.lines', { count: visibleEntries.length })}</span>
 
           <button
             type="button"
@@ -322,7 +312,7 @@ export default function ServerConsoleTab({
               storage.set('console.follow', next);
             }}
             className={cn(
-              'flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium transition-colors',
+              'flex h-7 items-center gap-1 rounded-sm px-2 text-mini font-medium transition-colors',
               autoScroll ? 'bg-primary-muted text-primary' : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
             )}
           >
@@ -372,7 +362,7 @@ export default function ServerConsoleTab({
           className="min-h-[280px] flex-1"
         />
 
-        <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-border/70 bg-card px-3 py-2">
+        <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-border/50 bg-surface-1/40 px-3 py-2">
           <span className="select-none font-mono text-sm font-semibold text-primary" aria-hidden>
             $
           </span>

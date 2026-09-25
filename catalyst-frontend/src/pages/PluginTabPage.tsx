@@ -8,8 +8,7 @@ import PluginErrorBoundary from '../plugins/PluginErrorBoundary';
 import { useAuthStore } from '../stores/authStore';
 import { hasAnyPermission } from '../components/auth/ProtectedRoute';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
-import TabHeader from '../components/servers/tabs/TabHeader';
-import TabEmptyState from '../components/servers/tabs/TabEmptyState';
+import { BracketLabel } from '../components/deck/primitives';
 
 interface PluginTabPageProps {
   location: 'admin' | 'server';
@@ -29,20 +28,28 @@ export default function PluginTabPage({ location, serverId }: PluginTabPageProps
   }, [initialized, loading, reloadPlugins]);
 
   if (!initialized || loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="deck-panel flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   const tab = pluginTabs.find((t) => t.id === pluginTabId);
 
   if (!tab) {
     return (
-      <div className="space-y-3">
-        <TabHeader
-          icon={Puzzle}
-          title={t('tabNotFound.title')}
-          description={t('tabNotFound.description')}
-        />
-        <TabEmptyState title={t('tabNotFound.unavailable')} />
+      <div className="deck-panel overflow-hidden">
+        <div className="flex items-start gap-2.5 border-b border-border/50 bg-surface-1/40 px-3 py-2.5">
+          <Puzzle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <BracketLabel>{t('tabNotFound.title')}</BracketLabel>
+            <p className="type-meta mt-1">{t('tabNotFound.description')}</p>
+          </div>
+        </div>
+        <div className="px-3 py-5 text-center">
+          <p className="type-overline">{t('tabNotFound.unavailable')}</p>
+        </div>
       </div>
     );
   }

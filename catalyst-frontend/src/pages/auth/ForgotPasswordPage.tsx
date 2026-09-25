@@ -8,7 +8,6 @@ import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,13 +51,13 @@ function ForgotPasswordPage() {
  <div className="absolute right-4 top-4 z-20">
  <LanguageSwitcher variant="compact" />
  </div>
- <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
- <CardContent className="px-3 py-4 sm:px-4">
+ <div className="deck-panel w-full max-w-md">
+ <div className="px-3 py-4 sm:px-4">
  <div className="flex items-start gap-2.5">
- <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+ <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-sm border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
  <div className="min-w-0">
  <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">{t('forgotPassword.title')}</h1>
- <p className="type-meta mt-0.5">
+ <p className="type-meta mt-1">
  {t('forgotPassword.subtitle')}
  </p>
  </div>
@@ -66,12 +65,12 @@ function ForgotPasswordPage() {
 
  {isSubmitted ? (
  <div className="mt-6 space-y-4">
- <div className="rounded-lg border border-success/20 bg-success/5 px-4 py-4">
- <p className="text-sm text-success">
+ <div className="rounded-sm border border-success/25 bg-success/5 px-3 py-3">
+ <p className="text-mini text-success">
  {t('forgotPassword.success')}
  </p>
  </div>
- <Button asChild className="w-full">
+ <Button asChild size="sm" className="h-8 w-full text-mini">
  <Link to="/login">{t('forgotPassword.backToLogin')}</Link>
  </Button>
  </div>
@@ -86,25 +85,26 @@ function ForgotPasswordPage() {
  placeholder={t('fields.emailPlaceholder')}
  value={email}
  onChange={(e) => setEmail(e.target.value)}
+ className="h-8 rounded-sm text-mini"
  />
  </div>
 
- <Button type="submit" className="w-full" disabled={isLoading}>
+ <Button type="submit" size="sm" className="h-8 w-full text-mini" disabled={isLoading}>
  {isLoading ? t('forgotPassword.submitting') : t('forgotPassword.submit')}
  </Button>
 
  <div className="text-center">
  <Link
  to="/login"
- className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
+ className="text-mini font-medium text-primary transition-colors hover:text-primary/80"
  >
  {t('forgotPassword.backToLogin')}
  </Link>
  </div>
  </form>
  )}
- </CardContent>
- </Card>
+ </div>
+ </div>
  <BrandFooter />
  </div>
  );

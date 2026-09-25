@@ -22,6 +22,15 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
+
+/** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
+const fieldClass =
+  'h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40';
+/** Labelled block on the dialog surface — never a nested rounded card. */
+const blockClass = 'rounded-sm border border-border/50 bg-surface-1/40 p-3';
+/** 1px separator for stacked fields inside a block. */
+const dividerClass = 'border-t border-border/50 pt-3';
 
 type Props = {
   serverId: string;
@@ -300,7 +309,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     <>
       {controlledOpen === undefined && (
         <button
-          className="rounded-md border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground disabled:opacity-60 dark:hover:border-primary/30"
+          className="h-8 rounded-sm border border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
           onClick={() => {
             if (!disabled) setOpen(true);
           }}
@@ -318,147 +327,160 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="update-server-name">{t('fields.name')}</Label>
-              <Input
-                id="update-server-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="minecraft-01"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="update-server-memory">{t('fields.memoryMb')}</Label>
-              <Input
-                id="update-server-memory"
-                value={memory}
-                onChange={(e) => setMemory(e.target.value)}
-                type="number"
-                min={256}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="update-server-cpu">{t('updateServer.cpuCores')}</Label>
-              <Input
-                id="update-server-cpu"
-                value={cpu}
-                onChange={(e) => setCpu(e.target.value)}
-                type="number"
-                min={1}
-                step={1}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="update-server-disk">{t('fields.diskMb')}</Label>
-              <Input
-                id="update-server-disk"
-                value={disk}
-                onChange={(e) => setDisk(e.target.value)}
-                type="number"
-                min={1024}
-                step={1024}
-              />
-              {isRunning && isShrink ? (
-                <span className="text-xs text-warning">
-                  {t('updateServer.shrinkWarning')}
+            <div className={`${blockClass} space-y-3`}>
+              <div className="space-y-1.5">
+                <Label htmlFor="update-server-name" compact>{t('fields.name')}</Label>
+                <Input
+                  id="update-server-name"
+                  className={fieldClass}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="minecraft-01"
+                />
+              </div>
+              <div className={cn('space-y-1.5', dividerClass)}>
+                <Label htmlFor="update-server-memory" compact>{t('fields.memoryMb')}</Label>
+                <Input
+                  id="update-server-memory"
+                  className={cn(fieldClass, 'font-mono tabular-nums')}
+                  value={memory}
+                  onChange={(e) => setMemory(e.target.value)}
+                  type="number"
+                  min={256}
+                />
+              </div>
+              <div className={cn('space-y-1.5', dividerClass)}>
+                <Label htmlFor="update-server-cpu" compact>{t('updateServer.cpuCores')}</Label>
+                <Input
+                  id="update-server-cpu"
+                  className={cn(fieldClass, 'font-mono tabular-nums')}
+                  value={cpu}
+                  onChange={(e) => setCpu(e.target.value)}
+                  type="number"
+                  min={1}
+                  step={1}
+                />
+              </div>
+              <div className={cn('space-y-1.5', dividerClass)}>
+                <Label htmlFor="update-server-disk" compact>{t('fields.diskMb')}</Label>
+                <Input
+                  id="update-server-disk"
+                  className={cn(fieldClass, 'font-mono tabular-nums')}
+                  value={disk}
+                  onChange={(e) => setDisk(e.target.value)}
+                  type="number"
+                  min={1024}
+                  step={1024}
+                />
+                {isRunning && isShrink ? (
+                  <span className="text-micro text-warning">
+                    {t('updateServer.shrinkWarning')}
+                  </span>
+                ) : null}
+              </div>
+              <div className={cn('space-y-1.5', dividerClass)}>
+                <Label htmlFor="update-server-db" compact>{t('updateServer.databaseAllocation')}</Label>
+                <Input
+                  id="update-server-db"
+                  className={cn(fieldClass, 'font-mono tabular-nums')}
+                  value={databaseAllocation}
+                  onChange={(e) => setDatabaseAllocation(e.target.value)}
+                  type="number"
+                  min={0}
+                  step={1}
+                />
+                <span className="type-meta">
+                  {t('updateServer.databaseAllocationHint')}
                 </span>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="update-server-db">{t('updateServer.databaseAllocation')}</Label>
-              <Input
-                id="update-server-db"
-                value={databaseAllocation}
-                onChange={(e) => setDatabaseAllocation(e.target.value)}
-                type="number"
-                min={0}
-                step={1}
-              />
-              <span className="type-meta">
-                {t('updateServer.databaseAllocationHint')}
-              </span>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="update-server-backup-allocation">{t('updateServer.backupAllocation')}</Label>
-              <Input
-                id="update-server-backup-allocation"
-                value={backupAllocationMb}
-                onChange={(e) => setBackupAllocationMb(e.target.value)}
-                type="number"
-                min={0}
-                step={128}
-              />
-              <span className="type-meta">
-                {t('updateServer.backupAllocationHint')}
-              </span>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="update-server-backup-retention">{t('updateServer.backupRetention')}</Label>
-              <Input
-                id="update-server-backup-retention"
-                value={backupRetentionCount}
-                onChange={(e) => setBackupRetentionCount(e.target.value)}
-                type="number"
-                min={0}
-                max={1000}
-                step={1}
-              />
-              <span className="type-meta">
-                {t('updateServer.backupRetentionHint')}
-              </span>
+              </div>
+              <div className={cn('space-y-1.5', dividerClass)}>
+                <Label htmlFor="update-server-backup-allocation" compact>{t('updateServer.backupAllocation')}</Label>
+                <Input
+                  id="update-server-backup-allocation"
+                  className={cn(fieldClass, 'font-mono tabular-nums')}
+                  value={backupAllocationMb}
+                  onChange={(e) => setBackupAllocationMb(e.target.value)}
+                  type="number"
+                  min={0}
+                  step={128}
+                />
+                <span className="type-meta">
+                  {t('updateServer.backupAllocationHint')}
+                </span>
+              </div>
+              <div className={cn('space-y-1.5', dividerClass)}>
+                <Label htmlFor="update-server-backup-retention" compact>{t('updateServer.backupRetention')}</Label>
+                <Input
+                  id="update-server-backup-retention"
+                  className={cn(fieldClass, 'font-mono tabular-nums')}
+                  value={backupRetentionCount}
+                  onChange={(e) => setBackupRetentionCount(e.target.value)}
+                  type="number"
+                  min={0}
+                  max={1000}
+                  step={1}
+                />
+                <span className="type-meta">
+                  {t('updateServer.backupRetentionHint')}
+                </span>
+              </div>
             </div>
             {isIpamNetwork ? (
-              <div className="space-y-2">
+              <div className={`${blockClass} space-y-3`}>
                 <p className="type-meta">
                   {t('updateServer.primaryIpHint')}
                 </p>
-                <Label htmlFor="update-server-ip">{t('updateServer.primaryIp')}</Label>
-                <select
-                  id="update-server-ip"
-                  className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
-                  value={primaryIp}
-                  onChange={(event) => setPrimaryIp(event.target.value)}
-                  disabled={isRunning}
-                >
-                  <option value="">{t('fields.autoAssign')}</option>
-                  {server?.primaryIp ? (
-                    <option value={server.primaryIp}>{t('updateServer.currentIp', { ip: server.primaryIp })}</option>
-                  ) : null}
-                  {availableIps
-                    .filter((ip) => ip !== server?.primaryIp)
-                    .map((ip) => (
-                      <option key={ip} value={ip}>
-                        {ip}
-                      </option>
-                    ))}
-                </select>
-                {ipLoadError ? <p className="text-xs text-warning">{ipLoadError}</p> : null}
+                <div className="space-y-1.5">
+                  <Label htmlFor="update-server-ip" compact>{t('updateServer.primaryIp')}</Label>
+                  <select
+                    id="update-server-ip"
+                    className={cn(fieldClass, 'font-mono tabular-nums disabled:opacity-50')}
+                    value={primaryIp}
+                    onChange={(event) => setPrimaryIp(event.target.value)}
+                    disabled={isRunning}
+                  >
+                    <option value="">{t('fields.autoAssign')}</option>
+                    {server?.primaryIp ? (
+                      <option value={server.primaryIp}>{t('updateServer.currentIp', { ip: server.primaryIp })}</option>
+                    ) : null}
+                    {availableIps
+                      .filter((ip) => ip !== server?.primaryIp)
+                      .map((ip) => (
+                        <option key={ip} value={ip}>
+                          {ip}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                {ipLoadError ? <p className="text-micro text-warning">{ipLoadError}</p> : null}
                 {!ipLoadError && availableIps.length === 0 ? (
                   <p className="type-meta">{t('fields.noIps')}</p>
                 ) : null}
               </div>
             ) : isBridgeNetwork ? (
-              <div className="space-y-2">
+              <div className={`${blockClass} space-y-3`}>
                 <p className="type-meta">
                   {t('updateServer.primaryAllocationHint')}
                 </p>
-                <Label htmlFor="update-server-alloc">{t('updateServer.primaryAllocation')}</Label>
-                <select
-                  id="update-server-alloc"
-                  className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
-                  value={allocationId}
-                  onChange={(event) => setAllocationId(event.target.value)}
-                  disabled={isRunning}
-                >
-                  <option value="">{t('fields.selectAllocation')}</option>
-                  {availableAllocations.map((allocation) => (
-                    <option key={allocation.id} value={allocation.id}>
-                      {allocation.ip}:{allocation.port}
-                      {allocation.alias ? ` (${allocation.alias})` : ''}
-                    </option>
-                  ))}
-                </select>
-                {allocLoadError ? <p className="text-xs text-warning">{allocLoadError}</p> : null}
+                <div className="space-y-1.5">
+                  <Label htmlFor="update-server-alloc" compact>{t('updateServer.primaryAllocation')}</Label>
+                  <select
+                    id="update-server-alloc"
+                    className={cn(fieldClass, 'font-mono tabular-nums disabled:opacity-50')}
+                    value={allocationId}
+                    onChange={(event) => setAllocationId(event.target.value)}
+                    disabled={isRunning}
+                  >
+                    <option value="">{t('fields.selectAllocation')}</option>
+                    {availableAllocations.map((allocation) => (
+                      <option key={allocation.id} value={allocation.id}>
+                        {allocation.ip}:{allocation.port}
+                        {allocation.alias ? ` (${allocation.alias})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {allocLoadError ? <p className="text-micro text-warning">{allocLoadError}</p> : null}
                 {!allocLoadError && availableAllocations.length === 0 ? (
                   <p className="type-meta">{t('updateServer.noAllocations')}</p>
                 ) : null}
@@ -466,10 +488,12 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
             ) : null}
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setOpen(false)}>
               {t('common:actions.cancel')}
             </Button>
             <Button
+              size="sm"
+              className="h-8 px-3 text-mini"
               onClick={handleSave}
               disabled={
                 mutation.isPending ||

@@ -85,13 +85,13 @@ export default function ServerUsersTab({
  <SectionHeader icon={UserPlus} title={t('tabs.users.inviteSection')} />
  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
  <input
- className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="rounded-sm border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={inviteEmail}
  onChange={(e) => onInviteEmailChange(e.target.value)}
  placeholder="user@example.com"
  />
  <select
- className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="rounded-sm border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={invitePreset}
  onChange={(e) =>
  onInvitePresetChange(e.target.value as 'readOnly' | 'power' | 'full' | 'custom')
@@ -104,7 +104,7 @@ export default function ServerUsersTab({
  </select>
  <button
  type="button"
- className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+ className="rounded-sm bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  onClick={onCreateInvite}
  disabled={!inviteEmail.trim() || createInvitePending}
  >
@@ -114,7 +114,7 @@ export default function ServerUsersTab({
  {invitePreset === 'custom' && (
  <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
  {permissionOptions.map((perm) => (
- <label key={perm} className="flex items-center gap-2 text-[11px] text-muted-foreground">
+ <label key={perm} className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
  className="h-3.5 w-3.5 rounded border-border/40 bg-card text-primary-600"
@@ -127,7 +127,7 @@ export default function ServerUsersTab({
  )
  }
  />
- <span className="font-mono tabular-nums text-[10px]">{perm}</span>
+ <span className="font-mono tabular-nums text-micro">{perm}</span>
  </label>
  ))}
  </div>
@@ -142,27 +142,26 @@ export default function ServerUsersTab({
  permissionsData.map((entry) => (
  <div
  key={entry.id}
- className="group relative rounded-md border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ className="group relative rounded-sm border border-border/30 px-4 py-3 transition-colors duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
  >
- <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
-
+ 
  <div className="flex flex-wrap items-center justify-between gap-3">
  <div>
  <div className="text-sm font-semibold text-foreground">
  {entry.user.username}
  </div>
- <div className="font-mono tabular-nums text-[10px] text-muted-foreground/50">
+ <div className="font-mono tabular-nums text-micro text-muted-foreground/50">
  {entry.user.email}
  </div>
  </div>
  {entry.userId === ownerId ? (
- <span className="rounded border border-primary/15 bg-primary/5 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">
+ <span className="rounded border border-primary/15 bg-primary/5 px-2 py-0.5 text-micro font-semibold uppercase text-primary">
  {t('tabs.users.owner')}
  </span>
  ) : (
  <button
  type="button"
- className="rounded-md border border-danger/20 px-2 py-1 text-[10px] font-medium text-danger transition-all hover:border-danger/40 hover:bg-danger/5 disabled:opacity-50"
+ className="rounded-sm border border-danger/20 h-7 px-2 text-micro font-medium text-danger transition-colors hover:border-danger/40 hover:bg-danger/5 disabled:opacity-50"
  onClick={() => onRemoveAccess(entry.userId)}
  disabled={removeAccessPending}
  >
@@ -193,7 +192,7 @@ export default function ServerUsersTab({
                               <button
                                 key={`${entry.id}-${perm}`}
                                 type="button"
-                                className={`rounded-md border px-1.5 py-0.5 font-mono tabular-nums text-[10px] ${
+                                className={`rounded-sm border px-1.5 py-0.5 font-mono tabular-nums text-micro ${
                                   on
                                     ? 'border-primary/30 bg-primary/10 text-foreground'
                                     : 'border-border text-muted-foreground'
@@ -223,7 +222,7 @@ export default function ServerUsersTab({
  <div className="mt-3">
  <button
  type="button"
- className="rounded-md bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+ className="rounded-sm bg-primary h-8 px-3 text-micro font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  onClick={() => onSaveAccess(entry)}
  disabled={saveAccessPending}
  >
@@ -250,19 +249,18 @@ export default function ServerUsersTab({
  invites.map((invite) => (
  <div
  key={invite.id}
- className="group relative flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/30 px-3 py-2 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ className="group relative flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border/30 px-3 py-2 transition-colors duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
  >
- <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
- <div>
+  <div>
  <div className="text-xs font-medium text-foreground">{invite.email}</div>
- <div className="font-mono text-[10px] tabular-nums text-muted-foreground/40">
+ <div className="font-mono text-micro tabular-nums text-muted-foreground/40">
  {t('tabs.users.expires', { date: formatDateTime(invite.expiresAt) })}
  </div>
  </div>
  <div className="flex items-center gap-1.5">
  <button
  type="button"
- className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground disabled:opacity-50"
+ className="flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-50"
  onClick={() => onCopyInviteLink(invite)}
  title={t('tabs.users.copyInviteLinkTitle')}
  >
@@ -270,7 +268,7 @@ export default function ServerUsersTab({
  </button>
  <button
  type="button"
- className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground disabled:opacity-50"
+ className="flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-50"
  onClick={() => onRegenerateInvite(invite.id)}
  disabled={regenerateInvitePending}
  title={t('tabs.users.regenerateTitle')}
@@ -279,7 +277,7 @@ export default function ServerUsersTab({
  </button>
  <button
  type="button"
- className="rounded-md border border-danger/20 px-2 py-0.5 text-[10px] font-medium text-danger transition-all hover:border-danger/40 hover:bg-danger/5 disabled:opacity-50"
+ className="rounded-sm border border-danger/20 px-2 py-0.5 text-micro font-medium text-danger transition-colors hover:border-danger/40 hover:bg-danger/5 disabled:opacity-50"
  onClick={() => onCancelInvite(invite.id)}
  disabled={cancelInvitePending}
  >

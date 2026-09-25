@@ -230,12 +230,12 @@ function NodeDetailsPage() {
           <>
             <Badge
               variant={node.isOnline ? 'success' : 'secondary'}
-              className="shrink-0 gap-1 text-[10px]"
+              className="shrink-0 gap-1 text-micro"
             >
               {node.isOnline ? t('common:status.online') : t('common:status.offline')}
             </Badge>
             {node.agentVersion && stats?.agentUpdateAvailable && (
-              <Badge variant="warning" className="shrink-0 gap-1 font-mono text-[10px]">
+              <Badge variant="warning" className="shrink-0 gap-1 font-mono text-micro">
                 <AlertTriangle className="h-2.5 w-2.5" />
                 v{node.agentVersion} → v{stats.latestAgentVersion}
               </Badge>
@@ -330,12 +330,12 @@ function NodeDetailsPage() {
             </h3>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[10px] tabular-nums">
+            <Badge variant="outline" className="text-micro tabular-nums">
               {serverCount}
             </Badge>
             <Link
               to="/servers"
-              className="text-[10px] font-medium text-primary hover:text-primary/80"
+              className="text-micro font-medium text-primary hover:text-primary/80"
             >
               {t('servers.viewAll')}
             </Link>
@@ -356,11 +356,11 @@ function NodeDetailsPage() {
                   >
                     {server.name}
                   </Link>
-                  <div className="text-[11px] text-muted-foreground/50">{server.status}</div>
+                  <div className="text-mini text-muted-foreground/50">{server.status}</div>
                 </div>
                 <Link
                   to={`/servers/${server.id}`}
-                  className="ml-3 flex shrink-0 items-center gap-1 rounded-md border border-border/30 px-2 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-all hover:border-primary/50 hover:text-primary group-hover:opacity-100"
+                  className="ml-3 flex shrink-0 items-center gap-1 h-6 rounded-sm border border-border/40 px-2 text-micro text-muted-foreground opacity-0 transition-colors hover:border-primary/50 hover:text-primary group-hover:opacity-100"
                 >
                   {t('servers.open')}
                   <ExternalLink className="h-2.5 w-2.5" />
@@ -390,26 +390,26 @@ function NodeDetailsPage() {
               {t('import.button')}
             </Button>
           </div>
-          <div className="text-[11px] text-muted-foreground/50">
+          <div className="text-mini text-muted-foreground/50">
             {t('discovered.count', { total: unregisteredContainers.length })}
           </div>
           <div className="mt-2 divide-y divide-border/20">
             {unregisteredContainers.map((c: any) => (
               <div key={c.containerId} className="flex items-center justify-between py-1.5 first:pt-0 last:pb-0">
                 <div className="min-w-0 flex-1 overflow-hidden">
-                  <div className="font-mono text-[11px] font-medium text-foreground">{c.containerId}</div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground/50">
+                  <div className="font-mono text-mini font-medium text-foreground">{c.containerId}</div>
+                  <div className="flex flex-wrap items-center gap-1.5 text-micro text-muted-foreground/50">
                     <span>{c.image || t('import.unknownImage')}</span>
                     <Badge
                       variant={c.status?.includes('Up') ? 'success' : 'secondary'}
-                      className="text-[9px]"
+                      className="text-micro"
                     >
                       {c.status?.includes('Up') ? t('common:status.running') : t('common:status.stopped')}
                     </Badge>
                     {c.networkMode && (
                       <Badge
                         variant={c.networkMode === 'host' ? 'warning' : 'outline'}
-                        className="text-[9px]"
+                        className="text-micro"
                       >
                         {c.networkMode === 'host' ? t('import.host') : t('import.bridge')}
                       </Badge>

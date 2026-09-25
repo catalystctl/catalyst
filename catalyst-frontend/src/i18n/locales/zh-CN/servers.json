@@ -271,12 +271,10 @@
       "other": "其他",
       "owned": "我的"
     },
-    "description": "管理您的游戏服务器、监控资源并控制电源状态。",
     "empty": "没有符合筛选条件的服务器。",
     "overline": "集群",
     "stats": {
-      "issues": "异常",
-      "total": "总数"
+      "issues": "异常"
     },
     "title": "服务器"
   },

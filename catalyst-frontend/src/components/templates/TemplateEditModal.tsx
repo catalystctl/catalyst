@@ -470,7 +470,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <>
  {controlledOpen === undefined && (
  <button
- className="rounded-md border border-border/40 bg-card px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+ className="h-8 rounded-sm border border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
  onClick={() => {
  resetFromTemplate();
  setOpen(true);
@@ -492,6 +492,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <Button
  variant="outline"
  size="sm"
+ className="h-8 px-3 text-mini"
  onClick={() => importFileRef.current?.click()}
  >
  {t('form.import')}
@@ -505,9 +506,9 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </div>
  </DialogToolbar>
- <DialogBody className="space-y-6 text-sm text-muted-foreground">
+ <DialogBody className="space-y-6">
  {importError ? (
- <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+ <p className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-mini text-danger">
  {importError}
  </p>
  ) : null}
@@ -515,7 +516,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.name')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={name}
  onChange={(event) => setName(event.target.value)}
  />
@@ -523,7 +524,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.author')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={author}
  onChange={(event) => setAuthor(event.target.value)}
  />
@@ -543,10 +544,10 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <img
  src={nest.icon}
  alt=""
- className="h-4 w-4 rounded object-cover"
+ className="h-4 w-4 rounded-sm object-cover"
  />
  ) : (
- <span className="flex h-4 w-4 items-center justify-center rounded bg-surface-2 text-[9px] font-bold uppercase text-muted-foreground">
+ <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-muted-foreground">
  {nest.name.slice(0, 2)}
  </span>
  )}
@@ -580,7 +581,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.version')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={version}
  onChange={(event) => setVersion(event.target.value)}
  />
@@ -588,7 +589,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.iconUrl')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={iconUrl}
  onChange={(event) => setIconUrl(event.target.value)}
  placeholder="https://example.com/icon.png"
@@ -598,13 +599,13 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.description')}</span>
  <textarea
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={2}
  value={description}
  onChange={(event) => setDescription(event.target.value)}
  />
  </label>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="type-overline">
    {t('form.runtimeImages')}
  </div>
@@ -612,7 +613,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.containerImage')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={image}
  onChange={(event) => setImage(event.target.value)}
  />
@@ -620,7 +621,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.defaultImage')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={defaultImage}
  onChange={(event) => setDefaultImage(event.target.value)}
  />
@@ -628,19 +629,19 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1 md:col-span-2">
  <span className="type-overline">{t('form.installImage')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={installImage}
  onChange={(event) => setInstallImage(event.target.value)}
  />
  </label>
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-card p-3 transition-colors">
+ <div className="space-y-2 border-t border-border/50 pt-3">
  <div className="flex flex-wrap items-center justify-between gap-2">
  <div className="type-overline">
    {t('form.imageVariants')}
  </div>
  <button
- className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+ className="h-7 rounded-sm border border-border/60 px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
  onClick={() => setImageOptions((prev) => [...prev, createImageOptionDraft()])}
  type="button"
  >
@@ -655,9 +656,9 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
  >
  <label className="block space-y-1">
- <span className="text-xs text-muted-foreground">{t('form.name')}</span>
+ <span className="type-overline">{t('form.name')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={option.name}
  onChange={(event) =>
  setImageOptions((prev) =>
@@ -671,9 +672,9 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs text-muted-foreground">{t('form.variantLabel')}</span>
+ <span className="type-overline">{t('form.variantLabel')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={option.label ?? ''}
  onChange={(event) =>
  setImageOptions((prev) =>
@@ -687,9 +688,9 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs text-muted-foreground">{t('form.variantImage')}</span>
+ <span className="type-overline">{t('form.variantImage')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={option.image}
  onChange={(event) =>
  setImageOptions((prev) =>
@@ -703,7 +704,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  />
  </label>
  <button
- className="rounded-full border border-destructive/20 px-2 py-1 text-xs font-semibold text-destructive transition-colors hover:border-destructive"
+ className="h-7 rounded-sm border border-danger/30 px-2.5 text-mini font-medium text-danger transition-colors hover:border-danger/60"
  onClick={() =>
  setImageOptions((prev) =>
  prev.filter((_, itemIndex) => itemIndex !== index),
@@ -723,14 +724,14 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  )}
  </div>
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="type-overline">
    {t('form.commandsConfig')}
  </div>
  <label className="block space-y-1">
  <span className="type-overline">{t('form.configFile')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={configFile}
  onChange={(event) => setConfigFile(event.target.value)}
  placeholder="/config/server.properties"
@@ -739,7 +740,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.configFiles')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={configFiles.join(', ')}
  onChange={(event) => {
  const next = event.target.value
@@ -754,7 +755,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.startupCommand')}</span>
  <textarea
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={2}
  value={startup}
  onChange={(event) => setStartup(event.target.value)}
@@ -764,7 +765,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1 md:col-span-2">
  <span className="type-overline">{t('form.stopCommand')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={stopCommand}
  onChange={(event) => setStopCommand(event.target.value)}
  />
@@ -772,7 +773,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.signal')}</span>
  <select
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={sendSignalTo}
  onChange={(event) =>
  setSendSignalTo(event.target.value as 'SIGTERM' | 'SIGINT' | 'SIGKILL')
@@ -787,14 +788,14 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.installScript')}</span>
  <textarea
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={5}
  value={installScript}
  onChange={(event) => setInstallScript(event.target.value)}
  />
  </label>
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="type-overline">
    {t('form.resourcesPorts')}
  </div>
@@ -802,7 +803,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.ports')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={supportedPorts}
  onChange={(event) => setSupportedPorts(event.target.value)}
  />
@@ -810,7 +811,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.allocatedMemory')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  type="number"
  min={128}
  value={allocatedMemoryMb}
@@ -820,7 +821,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.allocatedCpu')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  type="number"
  min={1}
  step={1}
@@ -830,13 +831,13 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </label>
  </div>
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="flex flex-wrap items-center justify-between gap-2">
  <h3 className="type-overline">
    {t('form.variables')}
  </h3>
  <button
- className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+ className="h-7 rounded-sm border border-border/60 px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
  onClick={() => setVariables((prev) => [...prev, createVariableDraft()])}
  type="button"
  >
@@ -846,7 +847,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  {variables.map((variable, index) => (
  <div
  key={variable.id}
- className="rounded-md border border-border/50 bg-card p-3 transition-colors hover:border-primary"
+ className="border-b border-border/50 pb-3 last:border-b-0 last:pb-0"
  >
  <div className="flex items-center justify-between gap-2">
  <div className="type-overline">
@@ -854,7 +855,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </div>
  {variables.length > 1 ? (
  <button
- className="text-xs text-destructive transition-colors hover:text-destructive"
+ className="text-mini text-danger transition-colors hover:text-danger/80"
  onClick={() =>
  setVariables((prev) =>
  prev.filter((_, itemIndex) => itemIndex !== index),
@@ -870,7 +871,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.name')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.name}
  onChange={(event) =>
  setVariables((prev) =>
@@ -886,7 +887,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.default')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.defaultValue}
  onChange={(event) =>
  setVariables((prev) =>
@@ -902,7 +903,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1 md:col-span-2">
  <span className="type-overline">{t('form.description')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.description}
  onChange={(event) =>
  setVariables((prev) =>
@@ -915,10 +916,10 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  }
  />
  </label>
- <label className="flex items-center gap-2 text-xs text-muted-foreground">
+ <label className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
- className="rounded border-border bg-card text-primary focus:ring-primary"
+ className="rounded-sm border-border/60 text-primary focus:ring-primary"
  checked={variable.required}
  onChange={(event) =>
  setVariables((prev) =>
@@ -935,7 +936,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.inputType')}</span>
  <select
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.input}
  onChange={(event) =>
  setVariables((prev) =>
@@ -961,7 +962,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1 md:col-span-2">
  <span className="type-overline">{t('form.rules')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.rules}
  onChange={(event) =>
  setVariables((prev) =>
@@ -979,15 +980,15 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </div>
  ))}
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="type-overline">
    {t('form.advancedFeatures')}
  </div>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
- <label className="flex items-center gap-2 text-xs text-muted-foreground">
+ <label className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
- className="rounded border-border bg-card text-primary focus:ring-primary"
+ className="rounded-sm border-border/60 text-primary focus:ring-primary"
  checked={restartOnExit}
  onChange={(event) => setRestartOnExit(event.target.checked)}
  />
@@ -996,7 +997,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.maxInstances')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  type="number"
  min={1}
  value={maxInstances}
@@ -1004,10 +1005,10 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  placeholder={t('form.maxInstancesPlaceholder')}
  />
  </label>
- <label className="flex items-center gap-2 text-xs text-muted-foreground">
+ <label className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
- className="rounded border-border bg-card text-primary focus:ring-primary"
+ className="rounded-sm border-border/60 text-primary focus:ring-primary"
  checked={fileEditorEnabled}
  onChange={(event) => setFileEditorEnabled(event.target.checked)}
  />
@@ -1016,7 +1017,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.fileEditorRestrictedPaths')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={fileEditorRestrictedPaths}
  onChange={(event) => setFileEditorRestrictedPaths(event.target.value)}
  placeholder="/sensitive, /config"
@@ -1026,7 +1027,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <label className="block space-y-1">
  <span className="type-overline">{t('form.backupPaths')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={backupPaths}
  onChange={(event) => setBackupPaths(event.target.value)}
  placeholder="/world, /plugins, /config"
@@ -1047,7 +1048,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  <DialogFooter className="sm:justify-between">
  <div className="space-y-1">
  {missingFields.length > 0 ? (
- <div className="text-xs">
+ <div className="text-micro">
  <span className="type-overline">
  {t('form.missingFields')}{' '}
  </span>
@@ -1056,16 +1057,16 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  </span>
  </div>
  ) : (
- <span className="text-xs text-muted-foreground">
+ <span className="text-micro text-muted-foreground">
  {t('edit.changesApply')}
  </span>
  )}
  </div>
  <div className="flex gap-2">
- <Button variant="outline" onClick={() => setOpen(false)}>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setOpen(false)}>
  {t('common:actions.cancel')}
  </Button>
- <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
+ <Button size="sm" className="h-8 px-3 text-mini" onClick={() => mutation.mutate()} disabled={disableSubmit}>
  {mutation.isPending ? t('edit.saving') : t('edit.save')}
  </Button>
  </div>

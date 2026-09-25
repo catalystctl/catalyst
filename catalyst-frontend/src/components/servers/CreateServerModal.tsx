@@ -23,6 +23,17 @@ import { getLocalizedErrorMessage, getLocalizedFieldErrors } from '../../i18n/ap
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 import Combobox from '@/components/ui/combobox';
+import { cn } from '@/lib/utils';
+import { BracketLabel } from '@/components/deck/primitives';
+
+/** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
+const fieldClass =
+  'h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40';
+const monoFieldClass = `${fieldClass} font-mono tabular-nums`;
+const textareaClass =
+  'w-full resize-none rounded-sm border border-border/60 bg-background/40 px-2.5 py-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40';
+/** Labelled block on the dialog surface — never a nested rounded card. */
+const blockClass = 'rounded-sm border border-border/50 bg-surface-1/40 p-3';
 
 function CreateServerModal() {
  const { t } = useTranslation('servers');
@@ -414,9 +425,10 @@ function CreateServerModal() {
 
  return (
  <>
+ {/* Fade-only step transition; the deck avoids lateral motion. */}
  <style>{`
- @keyframes step-enter { from { opacity:0; transform:translateX(12px) } to { opacity:1; transform:translateX(0) } }
- .step-content-enter { animation: step-enter .25s cubic-bezier(.16,1,.3,1) forwards }
+ @keyframes step-enter { from { opacity:0 } to { opacity:1 } }
+ .step-content-enter { animation: step-enter .18s cubic-bezier(.4,0,.2,1) forwards }
  `}</style>
 
  <Button
@@ -435,40 +447,48 @@ function CreateServerModal() {
  <DialogDescription>{t('createServer.description')}</DialogDescription>
  </DialogHeader>
 
- {/* Progress Stepper */}
+ {/* Step rail — segmented, square markers, signal underline for the active step */}
  <DialogToolbar>
- <div className="flex items-center">
+ <div className="flex items-center gap-1">
  {stepOrder.map((key, index) => {
  const isActive = step === key;
  const isCompleted = stepValidMap[key] && stepIndex > index;
  const canNavigate = canNavigateTo(index);
  return (
- <div key={key} className="flex flex-1 items-center min-w-0">
+ <div key={key} className="flex min-w-0 flex-1 items-center gap-1">
  <button
  type="button"
  disabled={!canNavigate}
  onClick={() => { if (canNavigate) setStep(key); }}
- className={`flex items-center gap-2.5 transition-all duration-200 ${canNavigate ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
+ className={cn(
+ 'relative flex h-7 min-w-0 items-center gap-1.5 px-2 text-mini transition-colors',
+ canNavigate ? 'cursor-pointer' : 'cursor-not-allowed opacity-40',
+ isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+ )}
  >
- <div className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-all duration-300 ${
- isActive ? 'border-primary bg-primary text-primary-foreground' :
- isCompleted ? 'border-success bg-success text-success-foreground' :
- 'border-border bg-card text-muted-foreground'
- }`}>
+ {isActive && (
+ <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+ )}
+ <span
+ className={cn(
+ 'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm font-mono text-micro tabular-nums',
+ isActive
+ ? 'bg-primary text-primary-foreground'
+ : isCompleted
+ ? 'bg-success/15 text-success'
+ : 'border border-border/60 text-muted-foreground',
+ )}
+ >
  {isCompleted ? (
- <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
+ <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
  ) : (
  index + 1
  )}
- </div>
- <span className={`hidden sm:block text-xs font-semibold whitespace-nowrap ${
- isActive ? 'text-primary dark:text-primary-400' : isCompleted ? 'text-foreground dark:text-zinc-300' : 'text-muted-foreground'
- }`}>
- {stepNames[key]}
  </span>
+ <span className="hidden truncate sm:block">{stepNames[key]}</span>
  </button>
  {index < stepOrder.length - 1 && (
- <div className={`mx-2 sm:mx-3 h-px flex-1 transition-all duration-500 ${isCompleted ? 'bg-success' : 'bg-border'}`}/>
+ <span className="h-4 w-px shrink-0 bg-border/60" aria-hidden />
  )}
  </div>
  );
@@ -479,114 +499,120 @@ function CreateServerModal() {
  {/* Content Area */}
  <DialogBody>
  <div key={step} className="step-content-enter">
- <div className="mx-auto max-w-2xl space-y-5">
+ <div className="space-y-3">
 
  {/* --- DETAILS STEP --- */}
  {step === 'details' ? (
- <div className="space-y-5">
+ <div className="space-y-3">
+ <div className={`${blockClass} space-y-3`}>
  <label className="block space-y-1.5">
  <span className="type-overline">{t('createServer.fields.name')}</span>
- <input className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={name} onChange={(e) => setName(e.target.value)} placeholder="my-awesome-server"/>
+ <input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="my-awesome-server"/>
  </label>
  <label className="block space-y-1.5">
- <span className="type-overline">{t('createServer.fields.description')} <span className="text-xs font-normal text-muted-foreground">{t('createServer.fields.optional')}</span></span>
- <textarea rows={3} className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('createServer.fields.descriptionPlaceholder')}/>
+ <span className="type-overline">{t('createServer.fields.description')} <span className="text-micro font-normal text-muted-foreground">{t('createServer.fields.optional')}</span></span>
+ <textarea rows={3} className={textareaClass} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('createServer.fields.descriptionPlaceholder')}/>
  </label>
- <div className="grid gap-4 sm:grid-cols-2">
+ </div>
+ <div className={`${blockClass} space-y-3`}>
+ <div className="grid gap-3 sm:grid-cols-2">
  <div className="space-y-1.5">
  <span className="type-overline">{t('createServer.fields.template')}</span>
- <Combobox value={templateId} onChange={(newTemplateId) => { setTemplateId(newTemplateId); setImageVariant(''); const template = templates.find((t) => t.id === newTemplateId); if (template?.variables) { const defaultEnv: Record<string, string> = {}; template.variables.filter((v) => v.name !== 'SERVER_DIR').forEach((v) => { defaultEnv[v.name] = v.default; }); setEnvironment(defaultEnv); } else { setEnvironment({}); } }} options={templates.map((t) => ({ value: t.id, label: t.name, keywords: [t.name, t.description || ''].filter(Boolean) }))} placeholder={t('createServer.fields.templatePlaceholder')} searchPlaceholder={t('createServer.fields.templateSearchPlaceholder')}/>
+ <Combobox value={templateId} onChange={(newTemplateId) => { setTemplateId(newTemplateId); setImageVariant(''); const template = templates.find((t) => t.id === newTemplateId); if (template?.variables) { const defaultEnv: Record<string, string> = {}; template.variables.filter((v) => v.name !== 'SERVER_DIR').forEach((v) => { defaultEnv[v.name] = v.default; }); setEnvironment(defaultEnv); } else { setEnvironment({}); } }} options={templates.map((t) => ({ value: t.id, label: t.name, keywords: [t.name, t.description || ''].filter(Boolean) }))} placeholder={t('createServer.fields.templatePlaceholder')} searchPlaceholder={t('createServer.fields.templateSearchPlaceholder')} className={fieldClass}/>
  </div>
  <div className="space-y-1.5">
  <span className="type-overline">{t('createServer.fields.node')}</span>
- <Combobox value={nodeId} onChange={(newNodeId) => setNodeId(newNodeId)} options={availableNodes.map((n) => ({ value: n.id, label: n.name, keywords: [n.name] }))} placeholder={t('createServer.fields.nodePlaceholder')} searchPlaceholder={t('createServer.fields.nodeSearchPlaceholder')}/>
+ <Combobox value={nodeId} onChange={(newNodeId) => setNodeId(newNodeId)} options={availableNodes.map((n) => ({ value: n.id, label: n.name, keywords: [n.name] }))} placeholder={t('createServer.fields.nodePlaceholder')} searchPlaceholder={t('createServer.fields.nodeSearchPlaceholder')} className={fieldClass}/>
  </div>
  </div>
  {selectedTemplate?.images?.length ? (
  <label className="block space-y-1.5">
  <span className="type-overline">{t('createServer.fields.imageVariant')}</span>
- <select className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={imageVariant} onChange={(e) => setImageVariant(e.target.value)}>
+ <select className={fieldClass} value={imageVariant} onChange={(e) => setImageVariant(e.target.value)}>
  <option value="">{t('createServer.fields.useDefaultImage')}</option>
  {selectedTemplate.images.map((option) => (<option key={option.name} value={option.name}>{option.label ?? option.name}</option>))}
  </select>
  </label>
  ) : null}
  </div>
+ </div>
  ) : null}
 
  {/* --- RESOURCES STEP --- */}
  {step === 'resources' ? (
- <div className="space-y-5">
- <div className="rounded-md border border-border/50 bg-card p-5 sm:p-6">
- <h3 className="type-overline mb-5">{t('createServer.resources.title')}</h3>
- <div className="grid gap-4 sm:grid-cols-3">
+ <div className={`${blockClass} space-y-3`}>
+ <BracketLabel>{t('createServer.resources.title')}</BracketLabel>
+ <div className="grid gap-3 sm:grid-cols-3">
  <label className="block space-y-1.5">
  <span className="type-overline">{t('fields.memoryMb')}</span>
- <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={memory} onChange={(e) => setMemory(e.target.value)} type="number" min={256}/>
+ <input className={monoFieldClass} value={memory} onChange={(e) => setMemory(e.target.value)} type="number" min={256}/>
  </label>
  <label className="block space-y-1.5">
  <span className="type-overline">{t('fields.cpuCores')}</span>
- <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={cpu} onChange={(e) => setCpu(e.target.value)} type="number" min={1} step={1}/>
+ <input className={monoFieldClass} value={cpu} onChange={(e) => setCpu(e.target.value)} type="number" min={1} step={1}/>
  </label>
  <label className="block space-y-1.5">
  <span className="type-overline">{t('fields.diskMb')}</span>
- <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={disk} onChange={(e) => setDisk(e.target.value)} type="number" min={1024} step={1024}/>
+ <input className={monoFieldClass} value={disk} onChange={(e) => setDisk(e.target.value)} type="number" min={1024} step={1024}/>
  </label>
  <label className="block space-y-1.5">
  <span className="type-overline">{t('fields.swapMb')}</span>
- <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={allocatedSwapMb} onChange={(e) => setAllocatedSwapMb(e.target.value)} type="number" min={0} step={128}/>
+ <input className={monoFieldClass} value={allocatedSwapMb} onChange={(e) => setAllocatedSwapMb(e.target.value)} type="number" min={0} step={128}/>
  <p className="type-meta">{t('fields.leaveBlankDefaults')}</p>
  </label>
  <label className="block space-y-1.5">
  <span className="type-overline">{t('fields.backupMb')}</span>
- <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={backupAllocationMb} onChange={(e) => setBackupAllocationMb(e.target.value)} type="number" min={0} step={128}/>
+ <input className={monoFieldClass} value={backupAllocationMb} onChange={(e) => setBackupAllocationMb(e.target.value)} type="number" min={0} step={128}/>
  <p className="type-meta">{t('fields.leaveBlankDefaults')}</p>
  </label>
  <label className="block space-y-1.5">
  <span className="type-overline">{t('fields.databaseAllocation')}</span>
- <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={databaseAllocation} onChange={(e) => setDatabaseAllocation(e.target.value)} type="number" min={0} step={1}/>
+ <input className={monoFieldClass} value={databaseAllocation} onChange={(e) => setDatabaseAllocation(e.target.value)} type="number" min={0} step={1}/>
  <p className="type-meta">{t('fields.leaveBlankDefaults')}</p>
  </label>
- </div>
  </div>
  </div>
  ) : null}
 
  {/* --- NETWORK STEP --- */}
  {step === 'build' ? (
- <div className="space-y-5">
+ <div className="space-y-3">
+ <div className={`${blockClass} space-y-3`}>
  <label className="block space-y-1.5">
  <span className="type-overline">{t('fields.networkMode')}</span>
- <select className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={networkMode} onChange={(e) => setNetworkMode(e.target.value)}>
+ <select className={fieldClass} value={networkMode} onChange={(e) => setNetworkMode(e.target.value)}>
  <option value="host">{t('networkModes.host')}</option>
  <option value="macvlan">{t('networkModes.macvlan')}</option>
  </select>
  </label>
+ <div className="border-t border-border/50 pt-3">
  <label className="block space-y-1.5">
  <span className="type-overline">{t('createServer.network.primaryPort')}</span>
- <input className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400 disabled:opacity-50" value={port} onChange={(e) => setPort(e.target.value)} type="number" min={1024} max={65535} readOnly={networkMode === 'host'} disabled={networkMode === 'host'}/>
+ <input className={cn(monoFieldClass, 'disabled:opacity-50')} value={port} onChange={(e) => setPort(e.target.value)} type="number" min={1024} max={65535} readOnly={networkMode === 'host'} disabled={networkMode === 'host'}/>
  <p className="type-meta">{networkMode === 'host' ? t('createServer.network.primaryPortFromAllocation') : t('createServer.network.primaryPortHint')}</p>
  </label>
+ </div>
+ </div>
 
  {networkMode === 'macvlan' ? (
- <div className="rounded-md border border-border/50 bg-card p-5 space-y-4">
- <h4 className="type-overline">{t('createServer.network.macvlanTitle')}</h4>
+ <div className={`${blockClass} space-y-3`}>
+ <BracketLabel>{t('createServer.network.macvlanTitle')}</BracketLabel>
  <label className="block space-y-1.5">
  <span className="type-overline">{t('createServer.network.interface')}</span>
- <select className="w-full rounded-md border border-border/40 bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={macvlanInterface} onChange={(e) => setMacvlanInterface(e.target.value)}>
+ <select className={fieldClass} value={macvlanInterface} onChange={(e) => setMacvlanInterface(e.target.value)}>
  <option value="">{t('createServer.network.selectInterface')}</option>
  {nodeIpPools.map((pool) => (<option key={pool.id} value={pool.networkName}>{t('createServer.network.interfaceOption', { network: pool.networkName, cidr: pool.cidr, count: pool.availableCount })}</option>))}
  </select>
  </label>
  {nodeIpPools.length === 0 && nodeId ? (<p className="type-meta">{t('createServer.network.noInterfaces')}</p>) : null}
  {macvlanInterface ? (
- <label className="block space-y-1.5">
+ <label className="block space-y-1.5 border-t border-border/50 pt-3">
  <span className="type-overline">{t('createServer.network.ipAllocation')}</span>
- <select className="w-full rounded-md border border-border/40 bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={primaryIp} onChange={(e) => setPrimaryIp(e.target.value)}>
+ <select className={cn(fieldClass, 'font-mono')} value={primaryIp} onChange={(e) => setPrimaryIp(e.target.value)}>
  <option value="">{t('fields.autoAssign')}</option>
  {availableIps.map((ip) => (<option key={ip} value={ip}>{ip}</option>))}
  </select>
- {ipLoadError ? (<p className="text-xs text-warning">{ipLoadError}</p>) : null}
+ {ipLoadError ? (<p className="text-micro text-warning">{ipLoadError}</p>) : null}
  {!ipLoadError && availableIps.length === 0 ? (<p className="type-meta">{t('fields.noIps')}</p>) : null}
  </label>
  ) : null}
@@ -594,49 +620,49 @@ function CreateServerModal() {
  ) : null}
 
  {networkMode === 'host' ? (
- <div className="space-y-4">
- <div className="rounded-md border border-border/50 bg-card p-5 space-y-3">
+ <div className="space-y-3">
+ <div className={`${blockClass} space-y-3`}>
  <div>
- <h4 className="type-overline">{t('createServer.network.primaryAllocation')}</h4>
- <p className="type-meta mt-0.5">{t('createServer.network.primaryAllocationHint')}</p>
+ <BracketLabel>{t('createServer.network.primaryAllocation')}</BracketLabel>
+ <p className="type-meta mt-1">{t('createServer.network.primaryAllocationHint')}</p>
  </div>
- <label className="block space-y-1.5">
+ <label className="block space-y-1.5 border-t border-border/50 pt-3">
  <span className="type-overline">{t('createServer.network.allocation')}</span>
- <div className="flex flex-col sm:flex-row gap-2">
- <select className="flex-1 rounded-md border border-border/40 bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={allocationId} onChange={(event) => setAllocationId(event.target.value)}>
+ <div className="flex flex-col gap-2 sm:flex-row">
+ <select className={cn(fieldClass, 'font-mono sm:flex-1')} value={allocationId} onChange={(event) => setAllocationId(event.target.value)}>
  <option value="">{t('fields.selectAllocation')}</option>
  {availableAllocations.map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
  </select>
- <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 shrink-0 rounded-md border border-border/40 bg-card px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary-500 hover:text-primary-600 dark:hover:border-primary/30 dark:hover:text-primary-400" title={t('createServer.network.createAllocationsHint')}>
+ <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 text-mini text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground" title={t('createServer.network.createAllocationsHint')}>
  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg> {t('createServer.network.newAllocation')}
  </a>
  </div>
  </label>
- {allocLoadError ? (<p className="text-xs text-warning">{allocLoadError}</p>) : null}
+ {allocLoadError ? (<p className="text-micro text-warning">{allocLoadError}</p>) : null}
  {!allocLoadError && availableAllocations.length === 0 ? (
  <p className="type-meta">{t('fields.noAllocations')}{' '}<a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">{t('fields.createOne')}</a></p>
  ) : null}
  </div>
 
- <div className="rounded-md border border-border/50 bg-card p-5 space-y-3">
+ <div className={`${blockClass} space-y-3`}>
  <div>
- <h4 className="type-overline">{t('createServer.network.additionalBindings')}</h4>
- <p className="type-meta mt-0.5">{t('createServer.network.additionalBindingsHint')}</p>
+ <BracketLabel>{t('createServer.network.additionalBindings')}</BracketLabel>
+ <p className="type-meta mt-1">{t('createServer.network.additionalBindingsHint')}</p>
  </div>
- <div className="space-y-2.5">
+ <div className="space-y-2 border-t border-border/50 pt-3">
  {additionalBindings.map((binding, index) => (
- <div key={`${binding.allocationId}-${index}`} className="flex flex-col sm:flex-row gap-2">
- <select className="flex-1 rounded-md border border-border/40 bg-background px-3 py-2 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={binding.allocationId} onChange={(event) => { const next = [...additionalBindings]; const allocation = availableAllocations.find((a) => a.id === event.target.value); next[index] = { allocationId: event.target.value, containerPort: allocation ? String(allocation.port) : binding.containerPort }; setAdditionalBindings(next); }}>
+ <div key={`${binding.allocationId}-${index}`} className="flex flex-col gap-2 sm:flex-row">
+ <select className={cn(fieldClass, 'font-mono sm:flex-1')} value={binding.allocationId} onChange={(event) => { const next = [...additionalBindings]; const allocation = availableAllocations.find((a) => a.id === event.target.value); next[index] = { allocationId: event.target.value, containerPort: allocation ? String(allocation.port) : binding.containerPort }; setAdditionalBindings(next); }}>
  <option value="">{t('fields.selectAllocation')}</option>
  {availableAllocations.filter((a) => a.id !== allocationId && !additionalBindings.some((b, i) => i !== index && b.allocationId === a.id)).map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
  </select>
  <div className="flex gap-2">
- <input className="w-full sm:w-24 rounded-md border border-border/40 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" type="number" min={1} max={65535} value={binding.containerPort} onChange={(event) => { const next = [...additionalBindings]; next[index] = { ...next[index], containerPort: event.target.value }; setAdditionalBindings(next); }} placeholder={t('createServer.network.portPlaceholder')}/>
- <button type="button" className="shrink-0 rounded-md border border-danger/20 px-2.5 py-2 text-xs font-semibold text-danger transition-all duration-200 hover:border-danger/40 hover:bg-danger-muted" onClick={() => { setAdditionalBindings(additionalBindings.filter((_, i) => i !== index)); }}>{t('common:actions.remove')}</button>
+ <input className={cn(monoFieldClass, 'sm:w-24')} type="number" min={1} max={65535} value={binding.containerPort} onChange={(event) => { const next = [...additionalBindings]; next[index] = { ...next[index], containerPort: event.target.value }; setAdditionalBindings(next); }} placeholder={t('createServer.network.portPlaceholder')}/>
+ <button type="button" className="h-8 shrink-0 rounded-sm border border-danger/30 px-2.5 text-mini font-medium text-danger transition-colors hover:border-danger/50 hover:bg-danger/10" onClick={() => { setAdditionalBindings(additionalBindings.filter((_, i) => i !== index)); }}>{t('common:actions.remove')}</button>
  </div>
  </div>
  ))}
- <button type="button" className="rounded-md border border-dashed border-border bg-transparent px-4 py-2 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary/40 hover:text-primary dark:hover:border-primary/30 dark:hover:text-primary-400" onClick={() => setAdditionalBindings([...additionalBindings, { allocationId: '', containerPort: '' }])}>
+ <button type="button" className="h-8 rounded-sm border border-dashed border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground" onClick={() => setAdditionalBindings([...additionalBindings, { allocationId: '', containerPort: '' }])}>
  {t('createServer.network.addBinding')}
  </button>
  </div>
@@ -648,26 +674,24 @@ function CreateServerModal() {
 
  {/* --- STARTUP STEP --- */}
  {step === 'startup' ? (
- <>
- {templateVariables.length > 0 ? (
- <div className="space-y-4">
- <h3 className="type-overline">{t('createServer.startup.environmentVariables')}</h3>
+ templateVariables.length > 0 ? (
+ <div className={`${blockClass} space-y-3`}>
+ <BracketLabel>{t('createServer.startup.environmentVariables')}</BracketLabel>
  {templateVariables.map((variable) => (
  <label key={variable.name} className="block space-y-1.5">
- <span className="type-overline">{variable.name}{variable.required ? <span className="ml-1 text-danger">*</span> : null}</span>
+ <span className="font-mono text-micro text-muted-foreground">{variable.name}{variable.required ? <span className="ml-1 text-danger">*</span> : null}</span>
  {variable.description ? (<p className="type-meta">{variable.description}</p>) : null}
  {variable.input === 'checkbox' ? (
- <input type="checkbox" className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/30 focus:ring-offset-0 dark:bg-surface-1 dark:text-primary-400" checked={environment[variable.name] === 'true' || environment[variable.name] === '1'} onChange={(e) => { const useNumeric = variable.default === '1' || variable.default === '0'; setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.checked ? (useNumeric ? '1' : 'true') : (useNumeric ? '0' : 'false') })); }}/>
+ <input type="checkbox" className="h-4 w-4 rounded-sm border-border/60 bg-background/40 text-primary focus:ring-1 focus:ring-primary/40 focus:ring-offset-0" checked={environment[variable.name] === 'true' || environment[variable.name] === '1'} onChange={(e) => { const useNumeric = variable.default === '1' || variable.default === '0'; setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.checked ? (useNumeric ? '1' : 'true') : (useNumeric ? '0' : 'false') })); }}/>
  ) : (
- <input className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" type={variable.input === 'number' ? 'number' : 'text'} value={environment[variable.name] || ''} onChange={(e) => setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.value }))} placeholder={variable.default}/>
+ <input className={variable.input === 'number' ? monoFieldClass : fieldClass} type={variable.input === 'number' ? 'number' : 'text'} value={environment[variable.name] || ''} onChange={(e) => setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.value }))} placeholder={variable.default}/>
  )}
  </label>
  ))}
  </div>
  ) : (
- <div className="rounded-md border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground dark:bg-muted/20">{t('createServer.startup.noVariables')}</div>
- )}
- </>
+ <div className="rounded-sm border border-border/50 bg-surface-1/40 px-3 py-2.5 text-mini text-muted-foreground">{t('createServer.startup.noVariables')}</div>
+ )
  ) : null}
 
  </div>
@@ -675,21 +699,21 @@ function CreateServerModal() {
  </DialogBody>
 
  <DialogFooter className="sm:justify-between">
- <Button variant="outline" onClick={() => setOpen(false)}>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setOpen(false)}>
  {t('common:actions.cancel')}
  </Button>
  <div className="flex items-center gap-2">
  {stepIndex > 0 ? (
- <Button variant="outline" onClick={() => setStep(stepOrder[stepIndex - 1])}>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(stepOrder[stepIndex - 1])}>
  {t('common:actions.back')}
  </Button>
  ) : null}
  {stepIndex < stepOrder.length - 1 ? (
- <Button onClick={() => setStep(stepOrder[stepIndex + 1])} disabled={!canGoNext}>
+ <Button size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(stepOrder[stepIndex + 1])} disabled={!canGoNext}>
  {t('common:actions.next')}
  </Button>
  ) : (
- <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
+ <Button size="sm" className="h-8 px-3 text-mini" onClick={() => mutation.mutate()} disabled={disableSubmit}>
  {mutation.isPending ? t('createServer.creating') : t('createServer.submit')}
  </Button>
  )}

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@/csync';
 import { Download, Loader2, Server, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { StatusLed } from '../deck/primitives';
 import { nodesApi } from '../../services/api/nodes';
 import { templatesApi } from '../../services/api/templates';
 import { adminApi } from '../../services/api/admin';
@@ -184,16 +185,16 @@ export default function ServerImportModal({
  </DialogHeader>
 
  <DialogBody>
- <div className="mb-4 text-sm text-muted-foreground">
+ <div className="mb-3 type-meta">
  {t('import.found', { total: containers.length })}
  </div>
 
  {containers.length === 0 ? (
- <div className="py-8 text-center text-sm text-muted-foreground">
+ <div className="py-8 text-center type-meta">
  {t('import.empty')}
  </div>
  ) : (
- <div className="space-y-3">
+ <div className="divide-y divide-border/50">
  {containers.map((container) => {
  const isExpanded = importingId === container.containerId;
  const form = getForm(container.containerId);
@@ -201,50 +202,47 @@ export default function ServerImportModal({
  return (
  <div
  key={container.containerId}
- className="rounded-md border border-border/50 bg-surface-2/30 p-4"
+ className="py-3"
  >
- <div className="flex items-center justify-between">
- <div className="flex min-w-0 flex-1 items-center gap-3">
- <Server className="h-4 w-4 shrink-0 text-muted-foreground" />
+ <div className="flex items-center justify-between gap-3">
+ <div className="flex min-w-0 flex-1 items-center gap-2.5">
+ <Server className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  <div className="min-w-0 overflow-hidden">
- <div className="text-sm font-mono font-medium tabular-nums text-foreground">
+ <div className="font-mono text-data font-medium tabular-nums text-foreground">
  {container.containerId}
  </div>
- <div className="flex items-center gap-2 text-xs text-muted-foreground">
- <span>{container.image || t('import.unknownImage')}</span>
- <Badge
- variant={
- container.status.includes('Up')
- ? 'success'
- : 'secondary'
- }
- className="text-[10px]"
- >
+ <div className="flex items-center gap-2 text-micro text-muted-foreground">
+ <span className="truncate">{container.image || t('import.unknownImage')}</span>
+ <span className="flex shrink-0 items-center gap-1.5">
+ <StatusLed
+ tone={container.status.includes('Up') ? 'go' : 'idle'}
+ pulse={container.status.includes('Up')}
+ />
  {container.status.includes('Up') ? t('common:status.running') : t('common:status.stopped')}
- </Badge>
+ </span>
  {container.networkMode && (
  <Badge
  variant={container.networkMode === 'host' ? 'warning' : 'outline'}
- className="text-[10px]"
+ className="shrink-0 text-micro"
  >
  {container.networkMode === 'host' ? t('import.hostNetwork') : t('import.bridge')}
  </Badge>
  )}
  </div>
  {container.startupCommand && (
- <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/60" title={container.startupCommand}>
+ <div className="mt-1 truncate font-mono text-micro text-muted-foreground/60" title={container.startupCommand}>
  {container.startupCommand.length > 120 ? container.startupCommand.slice(0, 120) + '…' : container.startupCommand}
  </div>
  )}
  {container.envVarNames && container.envVarNames.length > 0 && (
  <div className="mt-1 flex flex-wrap gap-1">
  {container.envVarNames.slice(0, 8).map((name) => (
- <span key={name} className="rounded bg-surface-2/50 px-1 py-0.5 text-[9px] text-muted-foreground">
+ <span key={name} className="rounded-sm border border-border/50 px-1 py-0.5 font-mono text-micro tabular-nums text-muted-foreground">
  {name}
  </span>
  ))}
  {container.envVarNames.length > 8 && (
- <span className="text-[9px] text-muted-foreground">{t('import.moreEnvVars', { total: container.envVarNames.length - 8 })}</span>
+ <span className="text-micro text-muted-foreground">{t('import.moreEnvVars', { total: container.envVarNames.length - 8 })}</span>
  )}
  </div>
  )}
@@ -261,7 +259,7 @@ export default function ServerImportModal({
  fetchSuggestions(container.containerId);
  }
  }}
- className="gap-1.5"
+ className="h-8 shrink-0 gap-1.5 px-3 text-mini"
  >
  {isExpanded ? (
  <>
@@ -278,10 +276,10 @@ export default function ServerImportModal({
  </div>
 
  {isExpanded && (
- <div className="mt-4 space-y-3 border-t border-border/30 pt-4">
+ <div className="mt-3 space-y-3 border-t border-border/50 pt-3">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.serverName')}</label>
+ <label className="mb-1 block type-overline">{t('import.serverName')}</label>
  <input
  type="text"
  value={form.name}
@@ -289,11 +287,11 @@ export default function ServerImportModal({
  updateForm(container.containerId, { name: e.target.value })
  }
  placeholder={t('import.namePlaceholder')}
- className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.template')}</label>
+ <label className="mb-1 block type-overline">{t('import.template')}</label>
  <Combobox
  options={templateOptions}
  value={form.templateId}
@@ -304,16 +302,16 @@ export default function ServerImportModal({
  />
  {suggestions[container.containerId] && suggestions[container.containerId].length > 0 && (
  <div className="mt-1 flex flex-wrap items-center gap-1">
- <span className="text-[10px] text-muted-foreground">{t('import.suggested')}</span>
+ <span className="type-overline">{t('import.suggested')}</span>
  {suggestions[container.containerId].slice(0, 3).map((s) => (
  <button
  key={s.templateId}
  type="button"
  onClick={() => updateForm(container.containerId, { templateId: s.templateId })}
- className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+ className={`rounded-sm border border-border/50 px-1.5 py-0.5 font-mono text-micro tabular-nums transition-colors ${
  form.templateId === s.templateId
- ? 'bg-primary/20 text-primary font-medium'
- : 'bg-surface-2/50 text-muted-foreground hover:bg-primary/10'
+ ? 'bg-primary/10 text-foreground'
+ : 'text-muted-foreground hover:text-foreground'
  }`}
  title={s.matchReasons.join('; ')}
  >
@@ -324,7 +322,7 @@ export default function ServerImportModal({
  )}
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.owner')}</label>
+ <label className="mb-1 block type-overline">{t('import.owner')}</label>
  <Combobox
  options={userOptions}
  value={form.ownerId}
@@ -335,18 +333,18 @@ export default function ServerImportModal({
  />
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.primaryPort')}</label>
+ <label className="mb-1 block type-overline">{t('import.primaryPort')}</label>
  <input
  type="number"
  value={form.primaryPort}
  onChange={(e) =>
  updateForm(container.containerId, { primaryPort: e.target.value })
  }
- className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.memoryMb')}</label>
+ <label className="mb-1 block type-overline">{t('import.memoryMb')}</label>
  <input
  type="number"
  value={form.allocatedMemoryMb}
@@ -356,11 +354,11 @@ export default function ServerImportModal({
  })
  }
  placeholder="1024"
- className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
  </div>
  <div>
- <label className="mb-1 block text-xs font-medium text-muted-foreground">{t('import.cpuCores')}</label>
+ <label className="mb-1 block type-overline">{t('import.cpuCores')}</label>
  <input
  type="number"
  value={form.allocatedCpuCores}
@@ -370,15 +368,16 @@ export default function ServerImportModal({
  })
  }
  placeholder="1"
- className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
  </div>
  </div>
 
- <div className="flex justify-end gap-2 pt-2">
+ <div className="flex justify-end gap-2 pt-1">
  <Button
    size="sm"
    variant="outline"
+   className="h-8 px-3 text-mini"
    onClick={() => setImportingId(null)}
  >
    {t('common:actions.cancel')}
@@ -389,7 +388,7 @@ export default function ServerImportModal({
  disabled={
  !form.name || !form.templateId || !form.ownerId || importMutation.isPending
  }
- className="gap-1.5"
+ className="h-8 gap-1.5 px-3 text-mini"
  >
  {importMutation.isPending ? (
  <Loader2 className="h-3 w-3 animate-spin" />
@@ -409,7 +408,7 @@ export default function ServerImportModal({
  </DialogBody>
 
  <DialogFooter>
- <Button variant="outline" onClick={onClose}>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={onClose}>
    {t('common:actions.cancel')}
  </Button>
  </DialogFooter>

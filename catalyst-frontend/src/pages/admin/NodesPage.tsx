@@ -5,7 +5,6 @@ import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
- Server,
  Search,
  Filter,
  ArrowUpDown,
@@ -16,11 +15,12 @@ import {
  MapPin,
  AlertTriangle,
 } from 'lucide-react';
+import { BracketLabel, Segmented, StatusLed } from '../../components/deck/primitives';
+import { cn } from '@/lib/utils';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import NodeCreateModal from '../../components/nodes/NodeCreateModal';
 import LocationsManagerModal from '../../components/nodes/LocationsManagerModal';
-import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import {
  Select,
@@ -45,34 +45,32 @@ import { locationsApi } from '../../services/api/locations';
 import type { Location } from '../../services/api/locations';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { formatDateTime } from '@/i18n/format';
-import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
-import StatGrid from '../../components/servers/tabs/StatGrid';
-import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
-
 // ── Helpers ──
 const formatMemory = (mb: number) => {
  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
  return `${mb} MB`;
 };
 
+/**
+ * One grid template shared by the column header and every row, so columns line
+ * up exactly. Only fixed / minmax(0,1fr) tracks — never `auto`, which makes the
+ * header and rows compute different widths.
+ *   base : identity · actions
+ *   md   : identity · servers · cores · memory · actions
+ */
+const GRID =
+ 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+ 'md:grid-cols-[minmax(0,1fr)_5rem_5rem_6.5rem_8.5rem]';
+
 // ── Skeleton Loader ──
 function TableSkeleton() {
  return (
- <div className="space-y-1">
+ <div>
  {Array.from({ length: 6 }).map((_, i) => (
- <div key={i} className="flex items-center gap-4 rounded-lg px-4 py-3.5">
- <div className="h-4 w-4 animate-pulse rounded bg-surface-3" />
- <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
- <div className="flex-1 space-y-2">
- <div className="h-4 w-36 animate-pulse rounded bg-surface-3" />
- <div className="h-3 w-52 animate-pulse rounded bg-surface-2" />
- </div>
- <div className="hidden h-5 w-20 animate-pulse rounded-full bg-surface-3 sm:block" />
- <div className="hidden h-4 w-20 animate-pulse rounded bg-surface-3 md:block" />
- <div className="hidden h-4 w-24 animate-pulse rounded bg-surface-3 lg:block" />
- <div className="flex gap-1">
- <div className="h-7 w-16 animate-pulse rounded-md bg-surface-3" />
+ <div key={i} className={cn(GRID, 'border-t border-border/40 py-2 pl-3 pr-3')}>
+ <div className="flex items-center gap-2">
+ <div className="h-2 w-2 animate-pulse rounded-full bg-surface-3" />
+ <div className="h-3.5 w-40 animate-pulse bg-surface-3" />
  </div>
  </div>
  ))}
@@ -81,24 +79,27 @@ function TableSkeleton() {
 }
 
 // ── Location Section Header ──
-// Typographic overline + hairline rule, consistent with SectionHeader.
-function LocationSectionHeader({ location, count }: { location: Location | null; count: number }) {
+function LocationSectionHeader({
+ location,
+ count,
+ trailing,
+}: {
+ location: Location | null;
+ count: number;
+ trailing?: React.ReactNode;
+}) {
  const { t } = useTranslation('admin-infra');
  const name = location ? location.name : t('nodes.unassigned');
  return (
- <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2.5 backdrop-blur-sm">
- <div className="flex items-center gap-3">
- <h3 className="type-overline shrink-0">
- {name}
- </h3>
- <span className="h-px min-w-4 flex-1 bg-border/50" aria-hidden />
- <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
- {t('nodes.locationNodeCount', { count })}
- </span>
- </div>
+ <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/50 bg-surface-1 px-3 py-1.5">
+ <BracketLabel tone="muted">{name}</BracketLabel>
+ <Segmented muted>{t('nodes.locationNodeCount', { count })}</Segmented>
  {location?.description && (
- <p className="type-meta mt-0.5 hidden sm:block">{location.description}</p>
+ <span className="hidden min-w-0 truncate text-micro text-muted-foreground md:inline">
+ {location.description}
+ </span>
  )}
+ {trailing}
  </div>
  );
 }
@@ -126,14 +127,23 @@ function NodeRow({
  const memoryGB = node.maxMemoryMb ? (node.maxMemoryMb / 1024).toFixed(1) : '0';
  const lastSeen = node.lastSeenAt ? formatDateTime(node.lastSeenAt) : 'n/a';
 
+ const outdated = Boolean(
+ latestAgentVersion &&
+ node.agentVersion &&
+ compareVersions(node.agentVersion, latestAgentVersion),
+ );
+
  return (
  <div
- key={node.id}
- className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 ${
- isSelected ? 'bg-primary/5' : ''
- }`}
+ role="row"
+ className={cn(
+ GRID,
+ 'group py-1.5 pl-3 pr-3 transition-colors hover:bg-surface-1/40',
+ isSelected && 'bg-primary/5',
+ )}
  >
- {/* Checkbox */}
+ {/* identity — checkbox, LED, name, state; carries host/location/last-seen */}
+ <div className="flex min-w-0 items-center gap-2">
  {canDelete && (
  <input
  type="checkbox"
@@ -143,90 +153,63 @@ function NodeRow({
  prev.includes(node.id) ? prev.filter((id) => id !== node.id) : [...prev, node.id],
  )
  }
- className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary"
+ className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
  />
  )}
-
- {/* Online indicator — pulsing dot, no icon tile */}
- <div className="relative flex h-2 w-2 shrink-0 items-center">
- {node.isOnline && (
- <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-50" />
- )}
- <span
- className={`relative inline-flex h-2 w-2 rounded-full ${
- node.isOnline ? 'bg-success' : 'bg-surface-3'
- }`}
- />
- </div>
-
- {/* Node info — primary column */}
- <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2.5 flex-wrap">
+ <StatusLed tone={node.isOnline ? 'go' : 'idle'} pulse={node.isOnline} />
+ <div className="flex min-w-0 flex-col leading-tight">
+ <span className="flex min-w-0 items-baseline gap-2">
  <Link
  to={`/admin/nodes/${node.id}`}
- className="truncate font-display text-sm font-semibold text-foreground transition-colors hover:text-primary"
+ title={node.name}
+ className="truncate font-display text-data font-semibold tracking-tight text-foreground transition-colors hover:text-primary"
  >
  {node.name}
  </Link>
  <span
- className={`shrink-0 font-mono text-[10px] ${
- node.isOnline ? 'text-success' : 'text-muted-foreground'
- }`}
+ className={cn(
+ 'shrink-0 text-micro uppercase',
+ node.isOnline ? 'text-success' : 'text-muted-foreground',
+ )}
  >
  {node.isOnline ? t('common:status.online') : t('common:status.offline')}
  </span>
  {/* Agent version — warning only when outdated */}
  {node.agentVersion && (
  <span
- className={`flex shrink-0 items-center gap-1 font-mono text-[10px] ${
- latestAgentVersion && compareVersions(node.agentVersion, latestAgentVersion)
- ? 'text-warning'
- : 'text-muted-foreground/70'
- }`}
- >
- {latestAgentVersion && compareVersions(node.agentVersion, latestAgentVersion) && (
- <AlertTriangle className="h-2.5 w-2.5" />
+ className={cn(
+ 'hidden shrink-0 items-center gap-1 font-mono text-micro sm:flex',
+ outdated ? 'text-warning' : 'text-muted-foreground/70',
  )}
+ >
+ {outdated && <AlertTriangle className="h-2.5 w-2.5" />}
  {t('nodes.agentVersionShort', { version: node.agentVersion })}
  </span>
  )}
- </div>
- <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
- <span className="font-mono text-[11px] opacity-70">
+ </span>
+ <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-muted-foreground">
+ <span className="truncate font-mono">
  {node.hostname ?? t('nodes.hostnameUnavailable')}
  </span>
- {node.location && <span>{node.location.name}</span>}
- <span className="hidden sm:inline">{t('nodes.lastSeen', { time: lastSeen })}</span>
+ {node.location && <span className="truncate">{node.location.name}</span>}
+ <span className="hidden truncate sm:inline">
+ {t('nodes.lastSeen', { time: lastSeen })}
+ </span>
+ </span>
  </div>
  </div>
 
- {/* Resource stats — visible on larger screens */}
- <div className="hidden items-center gap-4 lg:flex">
- <div className="text-right">
- <div className="type-numeric text-xs text-foreground">
- {serverCount}
- </div>
- <div className="text-[11px] text-muted-foreground">{t('nodes.stat.servers')}</div>
- </div>
- <div className="text-right">
- <div className="type-numeric text-xs text-foreground">
+ {/* capacity columns — header labels them, rows carry only the value */}
+ <Segmented className="hidden justify-self-end md:inline-flex">{serverCount}</Segmented>
+ <Segmented className="hidden justify-self-end md:inline-flex">
  {node.maxCpuCores ?? 0}
- </div>
- <div className="text-[11px] text-muted-foreground">{t('nodes.stat.cores')}</div>
- </div>
- <div className="text-right">
- <div className="type-numeric text-xs text-foreground">
- {memoryGB} GB
- </div>
- <div className="text-[11px] text-muted-foreground">{t('nodes.stat.memory')}</div>
- </div>
- </div>
+ </Segmented>
+ <Segmented className="hidden justify-self-end md:inline-flex">{memoryGB} GB</Segmented>
 
- {/* Action buttons */}
- <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+ <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
  <Link
  to={`/admin/nodes/${node.id}`}
- className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+ className="flex h-7 items-center gap-1 rounded-sm border border-border/60 px-2 text-micro text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
  >
  <ExternalLink className="h-3 w-3" />
  <span className="hidden sm:inline">{t('nodes.manage')}</span>
@@ -236,7 +219,7 @@ function NodeRow({
  <DropdownMenu>
  <DropdownMenuTrigger asChild>
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
  title={t('common:actions.more')}
  >
  <MoreHorizontal className="h-3.5 w-3.5" />
@@ -244,7 +227,7 @@ function NodeRow({
  </DropdownMenuTrigger>
  <DropdownMenuContent align="end">
  <DropdownMenuItem asChild>
- <Link to={`/admin/nodes/${node.id}`} className="gap-2 text-xs">
+ <Link to={`/admin/nodes/${node.id}`} className="gap-2 text-mini">
  <ExternalLink className="h-3.5 w-3.5" />
  {t('nodes.manage')}
  </Link>
@@ -253,7 +236,7 @@ function NodeRow({
  <DropdownMenuItem
  onClick={() => handleBulkDelete([node.id], node.name)}
  disabled={deleteMutation.isPending}
- className="gap-2 text-xs text-destructive"
+ className="gap-2 text-mini text-destructive"
  >
  <Trash2 className="h-3.5 w-3.5" />
  {t('common:actions.delete')}
@@ -261,7 +244,7 @@ function NodeRow({
  </DropdownMenuContent>
  </DropdownMenu>
  )}
- </div>
+ </span>
  </div>
  );
 }
@@ -437,31 +420,8 @@ function AdminNodesPage() {
  const showGroupedView = selectedLocationId === null && locations.length > 0;
 
  // Helper to render node rows (used in both grouped and flat views)
- const renderNodeRows = (groupNodes: NodeInfo[], showSelectAll?: boolean) => (
- <>
- {showSelectAll && canDelete && (
- <div className="flex items-center gap-3 border-b border-border px-4 py-2">
- <label className="flex items-center gap-2">
- <input
- type="checkbox"
- checked={groupNodes.length > 0 && groupNodes.every((n) => selectedIds.includes(n.id))}
- onChange={() =>
- setSelectedIds((prev) => {
- const groupIds = groupNodes.map((n) => n.id);
- if (groupIds.every((id) => prev.includes(id))) {
- return prev.filter((id) => !groupIds.includes(id));
- }
- return Array.from(new Set([...prev, ...groupIds]));
- })
- }
- className="h-4 w-4 rounded border-border bg-card text-primary"
- />
- <span className="text-xs font-medium text-muted-foreground">{t('nodes.selectAllInSection')}</span>
- </label>
- </div>
- )}
- <div className="divide-y divide-border/50">
- {groupNodes.map((node) => (
+ const renderNodeRows = (groupNodes: NodeInfo[]) =>
+ groupNodes.map((node) => (
  <NodeRow
  key={node.id}
  node={node}
@@ -472,10 +432,18 @@ function AdminNodesPage() {
  deleteMutation={deleteMutation}
  latestAgentVersion={updateData?.latestVersion}
  />
- ))}
- </div>
- </>
- );
+ ));
+
+ /** Toggle one grouped section's ids without disturbing other selections. */
+ const toggleGroupSelection = (groupNodes: NodeInfo[]) => {
+ const ids = groupNodes.map((n) => n.id);
+ setSelectedIds((prev) => {
+ if (ids.every((id) => prev.includes(id))) {
+ return prev.filter((id) => !ids.includes(id));
+ }
+ return Array.from(new Set([...prev, ...ids]));
+ });
+ };
 
  const summaryStats = [
  { label: t('nodes.stats.nodes'), value: nodes.length },
@@ -487,68 +455,104 @@ function AdminNodesPage() {
  ];
 
  return (
- <div className="space-y-5">
- {/* ── Header ── */}
- <TabHeader
- icon={Server}
- title={t('nodes.title')}
- description={t('nodes.description')}
- actions={
- <div className="flex items-center gap-2">
+ <div className="flex min-h-0 flex-1 flex-col gap-3">
+ {/* ── Deck header ── */}
+ <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+ <div className="flex min-w-0 flex-col gap-1">
+ <BracketLabel>{t('layout:sections.infrastructure')}</BracketLabel>
+ <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
+ {t('nodes.title')}
+ </h1>
+ <p className="text-mini text-muted-foreground">{t('nodes.description')}</p>
+ </div>
+ <div className="flex flex-wrap items-center gap-2">
  {canWrite && <NodeCreateModal />}
  {canWrite && (
  <button
- className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
+ type="button"
  onClick={() => setLocationsModalOpen(true)}
+ className="flex h-8 items-center gap-1.5 rounded-sm border border-border/60 px-3 text-mini text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
  >
  <MapPin className="h-3.5 w-3.5" />
  {t('nodes.locations')}
  </button>
  )}
  </div>
- }
- />
+ </header>
 
- {/* ── Summary Stats ── */}
- {isLoading ? (
- <TabLoadingState rows={1} rowHeight="h-16" />
- ) : (
- <StatGrid items={summaryStats} columns={3} />
+ {/* ── The deck: tabs, controls, columns, rows and totals in one frame ── */}
+ <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+ {/* Control strip */}
+ <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ {locations.length > 0 && (
+ <div className="flex items-center gap-0.5 overflow-x-auto">
+ <RailTab
+ active={selectedLocationId === null}
+ onClick={() => setSelectedLocationId(null)}
+ label={t('nodes.allLocations')}
+ count={nodes.length}
+ />
+ {locations.map((location) => {
+ const count = locationCounts.counts.get(location.id) || 0;
+ if (count === 0) return null;
+ return (
+ <RailTab
+ key={location.id}
+ active={selectedLocationId === location.id}
+ onClick={() => setSelectedLocationId(location.id)}
+ icon={<MapPin className="h-3 w-3" />}
+ label={location.name}
+ count={count}
+ />
+ );
+ })}
+ {locationCounts.unassignedCount > 0 && (
+ <RailTab
+ active={selectedLocationId === '__unassigned__'}
+ onClick={() => setSelectedLocationId('__unassigned__')}
+ icon={<MapPin className="h-3 w-3" />}
+ label={t('nodes.unassigned')}
+ count={locationCounts.unassignedCount}
+ />
+ )}
+ </div>
  )}
 
- {/* ── Search & Controls Bar ── */}
- <div className="flex flex-wrap items-center gap-2.5">
- {/* Search input */}
- <div className="relative min-w-[200px] flex-1 max-w-sm">
- <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
- <Input
+ {locations.length > 0 && <span className="mx-1 h-5 w-px bg-border/60" aria-hidden />}
+
+ <label className="relative flex min-w-[12rem] flex-1 items-center">
+ <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
+ <input
+ type="search"
  value={search}
  onChange={(e) => setSearch(e.target.value)}
  placeholder={t('nodes.searchPlaceholder')}
- className="pl-9"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
- </div>
+ </label>
 
- {/* Filter toggle */}
- <Button
- variant={hasActiveFilters ? 'default' : 'outline'}
- size="sm"
+ <button
+ type="button"
  onClick={() => setShowFilters(!showFilters)}
- className="gap-2"
+ className={cn(
+ 'flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 text-mini transition-colors',
+ hasActiveFilters
+ ? 'border-primary/50 text-foreground'
+ : 'text-muted-foreground hover:text-foreground',
+ )}
  >
- <Filter className="h-3.5 w-3.5" />
+ <Filter className="h-3 w-3" />
  {t('nodes.filters')}
  {hasActiveFilters && (
- <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground/20 text-[10px] font-bold">
+ <span className="font-mono text-micro tabular-nums text-primary">
  {[statusFilter, selectedLocationId].filter(Boolean).length}
  </span>
  )}
- </Button>
+ </button>
 
- {/* Sort */}
  <Select value={sort} onValueChange={setSort}>
- <SelectTrigger className="w-40 gap-2 text-xs">
- <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+ <SelectTrigger className="h-7 w-40 gap-2 rounded-sm border-border/60 text-mini">
+ <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
@@ -561,80 +565,15 @@ function AdminNodesPage() {
  </SelectContent>
  </Select>
 
- {/* Results count */}
- <span className="text-xs text-muted-foreground">
+ <span className="ml-auto font-mono text-micro tabular-nums text-muted-foreground">
  {t('nodes.resultCount', { shown: filteredNodes.length, total: nodes.length })}
  </span>
  </div>
 
- {/* ── Location Selector Tabs ── */}
- {locations.length > 0 && (
- <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
- <button
- className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
- selectedLocationId === null
- ? 'bg-primary text-primary-foreground '
- : 'bg-surface-2 text-muted-foreground hover:text-foreground'
- }`}
- onClick={() => setSelectedLocationId(null)}
- >
- {t('nodes.allLocations')}
- <span
- className={`text-[10px] ${selectedLocationId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
- >
- {nodes.length}
- </span>
- </button>
- {locations.map((location) => {
- const count = locationCounts.counts.get(location.id) || 0;
- if (count === 0) return null;
- return (
- <button
- key={location.id}
- className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
- selectedLocationId === location.id
- ? 'bg-primary text-primary-foreground '
- : 'bg-surface-2 text-muted-foreground hover:text-foreground'
- }`}
- onClick={() => setSelectedLocationId(location.id)}
- >
- <MapPin className="h-3.5 w-3.5" />
- {location.name}
- <span
- className={`text-[10px] ${selectedLocationId === location.id ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
- >
- {count}
- </span>
- </button>
- );
- })}
- {locationCounts.unassignedCount > 0 && (
- <button
- className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
- selectedLocationId === '__unassigned__'
- ? 'bg-primary text-primary-foreground '
- : 'bg-surface-2 text-muted-foreground hover:text-foreground'
- }`}
- onClick={() => setSelectedLocationId('__unassigned__')}
- >
- <MapPin className="h-3.5 w-3.5" />
- {t('nodes.unassigned')}
- <span
- className={`text-[10px] ${selectedLocationId === '__unassigned__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
- >
- {locationCounts.unassignedCount}
- </span>
- </button>
- )}
- </div>
- )}
-
- {/* ── Expandable Filter Panel ── */}
+ {/* Expandable filter panel */}
  {showFilters && (
- <div className="overflow-hidden">
- <ServerTabCard>
- <div className="flex flex-wrap items-end gap-4">
- <label className="space-y-1.5">
+ <div className="flex flex-wrap items-end gap-4 border-b border-border/50 bg-surface-1/20 px-3 py-2">
+ <label className="flex flex-col gap-1">
  <span className="type-overline">{t('nodes.filter.status')}</span>
  <Select
  value={statusFilter || 'all'}
@@ -642,7 +581,7 @@ function AdminNodesPage() {
  setStatusFilter(value === 'all' ? '' : value);
  }}
  >
- <SelectTrigger className="w-44">
+ <SelectTrigger className="h-7 w-44 rounded-sm border-border/60 text-mini">
  <SelectValue placeholder={t('nodes.filter.allStatuses')} />
  </SelectTrigger>
  <SelectContent>
@@ -653,7 +592,7 @@ function AdminNodesPage() {
  </Select>
  </label>
  {locations.length > 0 && (
- <label className="space-y-1.5">
+ <label className="flex flex-col gap-1">
  <span className="type-overline">{t('nodes.filter.location')}</span>
  <Select
  value={selectedLocationId || 'all'}
@@ -661,7 +600,7 @@ function AdminNodesPage() {
  setSelectedLocationId(value === 'all' ? null : value);
  }}
  >
- <SelectTrigger className="w-44">
+ <SelectTrigger className="h-7 w-44 rounded-sm border-border/60 text-mini">
  <SelectValue placeholder={t('nodes.filter.allLocations')} />
  </SelectTrigger>
  <SelectContent>
@@ -686,107 +625,55 @@ function AdminNodesPage() {
  </label>
  )}
  {hasActiveFilters && (
- <Button
- variant="ghost"
- size="sm"
+ <button
+ type="button"
  onClick={clearFilters}
- className="gap-1.5 text-xs"
+ className="flex h-7 items-center gap-1.5 rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <X className="h-3 w-3" />
  {t('nodes.clearAll')}
- </Button>
+ </button>
  )}
- </div>
- </ServerTabCard>
  </div>
  )}
 
- {/* ── Bulk Actions Bar ── */}
+ {/* Bulk actions strip */}
  {selectedIds.length > 0 && canDelete && (
- <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 px-4 py-2.5">
+ <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-primary/5 px-3 py-1.5">
  <div className="flex items-center gap-3">
- <span className="text-sm font-medium text-foreground">
+ <span className="text-mini text-foreground">
  {t('nodes.selectedCount', { value: selectedIds.length })}
  </span>
  <button
+ type="button"
  onClick={() => setSelectedIds([])}
- className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+ className="text-micro text-muted-foreground transition-colors hover:text-foreground"
  >
  {t('nodes.clearSelection')}
  </button>
  </div>
- <div className="flex items-center gap-1.5">
  <Button
  variant="destructive"
  size="sm"
  onClick={() => handleBulkDelete(selectedIds, t('nodes.selectedLabel', { value: selectedIds.length }))}
  disabled={deleteMutation.isPending}
- className="gap-1.5 text-xs"
+ className="h-7 gap-1.5 px-2.5 text-mini"
  >
  <Trash2 className="h-3 w-3" />
  {t('common:actions.delete')}
  </Button>
  </div>
- </div>
  )}
 
- {/* ── Node List ── */}
- {showGroupedView ? (
- /* ── Grouped by Location View ── */
- <div className="space-y-4">
- {isLoading ? (
- <ServerTabCard>
- <TableSkeleton />
- </ServerTabCard>
- ) : groupedByLocation.length > 0 ? (
- groupedByLocation.map(([locationId, groupNodes]) => {
- const location = locationId ? (locationMap.get(locationId) ?? null) : null;
- return (
+ {/* Column header — same grid as the rows, so columns always line up */}
  <div
- key={locationId ?? '__unassigned__'}
- className="overflow-hidden rounded-md border border-border bg-card "
- >
- <LocationSectionHeader location={location} count={groupNodes.length} />
- {renderNodeRows(groupNodes, true)}
- </div>
- );
- })
- ) : (
- <ServerTabCard>
- <EmptyState
- title={search.trim() || statusFilter ? t('nodes.empty.notFound') : t('nodes.empty.none')}
- description={
- search.trim() || statusFilter
- ? t('nodes.empty.adjustFilters')
- : t('nodes.empty.installAgent')
- }
- action={
- hasActiveFilters ? (
- <Button variant="outline" size="sm" onClick={clearFilters}>
- <X className="mr-1.5 h-3.5 w-3.5" />
- {t('nodes.clearFilters')}
- </Button>
- ) : canWrite && !search.trim() ? (
- <NodeCreateModal />
- ) : undefined
- }
- />
- </ServerTabCard>
+ className={cn(
+ GRID,
+ 'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
  )}
- </div>
- ) : (
- /* ── Flat List View (single location selected or no locations exist) ── */
- <div className="overflow-hidden rounded-md border border-border bg-card ">
- {isLoading ? (
- <div className="p-4">
- <TableSkeleton />
- </div>
- ) : filteredNodes.length > 0 ? (
- <>
- {/* Select-all header */}
+ >
+ <span className="flex items-center gap-2">
  {canDelete && (
- <div className="flex items-center gap-3 border-b border-border px-4 py-2">
- <label className="flex items-center gap-2">
  <input
  type="checkbox"
  checked={allSelected}
@@ -798,33 +685,76 @@ function AdminNodesPage() {
  return Array.from(new Set([...prev, ...filteredIds]));
  })
  }
- className="h-4 w-4 rounded border-border bg-card text-primary"
+ aria-label={t('nodes.selectAll')}
+ className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
  />
- <span className="text-xs font-medium text-muted-foreground">
- {t('nodes.selectAll')}
- </span>
- </label>
- </div>
  )}
-
- {/* Node rows */}
- <div className="divide-y divide-border/50">
- {filteredNodes.map((node: NodeInfo) => (
- <NodeRow
- key={node.id}
- node={node}
- isSelected={selectedIds.includes(node.id)}
- canDelete={canDelete}
- setSelectedIds={setSelectedIds}
- handleBulkDelete={handleBulkDelete}
- deleteMutation={deleteMutation}
- latestAgentVersion={updateData?.latestVersion}
- />
- ))}
+ <span className="type-overline">{t('nodes.title')}</span>
+ </span>
+ <span className="type-overline hidden justify-self-end md:inline-flex">{t('nodes.stat.servers')}</span>
+ <span className="type-overline hidden justify-self-end md:inline-flex">{t('nodes.stat.cores')}</span>
+ <span className="type-overline hidden justify-self-end md:inline-flex">{t('nodes.stat.memory')}</span>
+ <span className="type-overline justify-self-end">{t('nodes.manage')}</span>
  </div>
- </>
+
+ {/* Rows */}
+ <div className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25">
+ {isLoading ? (
+ <TableSkeleton />
+ ) : showGroupedView ? (
+ groupedByLocation.length > 0 ? (
+ groupedByLocation.map(([locationId, groupNodes]) => {
+ const location = locationId ? (locationMap.get(locationId) ?? null) : null;
+ const groupSelected = groupNodes.length > 0 && groupNodes.every((n) => selectedIds.includes(n.id));
+ return (
+ <div key={locationId ?? '__unassigned__'}>
+ <LocationSectionHeader
+ location={location}
+ count={groupNodes.length}
+ trailing={
+ canDelete ? (
+ <label className="ml-auto flex items-center gap-1.5 text-micro text-muted-foreground">
+ <input
+ type="checkbox"
+ checked={groupSelected}
+ onChange={() => toggleGroupSelection(groupNodes)}
+ className="h-3.5 w-3.5 rounded-sm border-border bg-card text-primary"
+ />
+ {t('nodes.selectAllInSection')}
+ </label>
+ ) : undefined
+ }
+ />
+ {renderNodeRows(groupNodes)}
+ </div>
+ );
+ })
  ) : (
- <div className="p-6">
+ <div className="p-3">
+ <EmptyState
+ title={search.trim() || statusFilter ? t('nodes.empty.notFound') : t('nodes.empty.none')}
+ description={
+ search.trim() || statusFilter
+ ? t('nodes.empty.adjustFilters')
+ : t('nodes.empty.installAgent')
+ }
+ action={
+ hasActiveFilters ? (
+ <Button variant="outline" size="sm" className="h-7 px-2.5 text-mini" onClick={clearFilters}>
+ <X className="mr-1.5 h-3.5 w-3.5" />
+ {t('nodes.clearFilters')}
+ </Button>
+ ) : canWrite && !search.trim() ? (
+ <NodeCreateModal />
+ ) : undefined
+ }
+ />
+ </div>
+ )
+ ) : filteredNodes.length > 0 ? (
+ renderNodeRows(filteredNodes)
+ ) : (
+ <div className="p-3">
  <EmptyState
  title={
  search.trim() || hasActiveFilters ? t('nodes.empty.notFound') : t('nodes.empty.none')
@@ -836,7 +766,7 @@ function AdminNodesPage() {
  }
  action={
  hasActiveFilters ? (
- <Button variant="outline" size="sm" onClick={clearFilters}>
+ <Button variant="outline" size="sm" className="h-7 px-2.5 text-mini" onClick={clearFilters}>
  <X className="mr-1.5 h-3.5 w-3.5" />
  {t('nodes.clearFilters')}
  </Button>
@@ -848,7 +778,19 @@ function AdminNodesPage() {
  </div>
  )}
  </div>
- )}
+
+ {/* Footer strip — fleet totals */}
+ <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
+ {summaryStats.map((stat) => (
+ <span key={stat.label} className="flex items-center gap-1.5">
+ <span className="type-overline">{stat.label}</span>
+ <Segmented muted className="text-micro">
+ {stat.value}
+ </Segmented>
+ </span>
+ ))}
+ </div>
+ </div>
 
  {/* ── Delete Confirmation Dialog ── */}
  <LocationsManagerModal open={locationsModalOpen} onOpenChange={setLocationsModalOpen} />
@@ -866,7 +808,7 @@ function AdminNodesPage() {
  You are about to delete <span className="font-semibold">{'{{label}}'}</span>.
  </Trans>
  </p>
- <p className="text-xs text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {t('nodes.deleteDialog.warning')}
  </p>
  </div>
@@ -879,6 +821,39 @@ function AdminNodesPage() {
  loading={deleteMutation.isPending}
  />
  </div>
+ );
+}
+
+/** Location rail tab — underline marker for the active location. */
+function RailTab({
+ active,
+ onClick,
+ icon,
+ label,
+ count,
+}: {
+ active: boolean;
+ onClick: () => void;
+ icon?: React.ReactNode;
+ label: string;
+ count: number;
+}) {
+ return (
+ <button
+ type="button"
+ onClick={onClick}
+ className={cn(
+ 'relative flex h-7 shrink-0 items-center gap-1.5 px-2.5 text-mini transition-colors',
+ active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+ )}
+ >
+ {active && (
+ <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+ )}
+ {icon}
+ <span className="whitespace-nowrap">{label}</span>
+ <span className="font-mono text-micro tabular-nums text-muted-foreground/80">{count}</span>
+ </button>
  );
 }
 

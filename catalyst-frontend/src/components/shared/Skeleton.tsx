@@ -16,7 +16,7 @@ const roundedClasses = {
  full: 'rounded-full',
 };
 
-export function Skeleton({ className, width, height, rounded = 'md' }: SkeletonProps) {
+export function Skeleton({ className, width, height, rounded = 'sm' }: SkeletonProps) {
  return (
  <div
  className={cn(
@@ -34,12 +34,12 @@ export function Skeleton({ className, width, height, rounded = 'md' }: SkeletonP
 
 export function SkeletonText({ lines = 3, className }: { lines?: number; className?: string }) {
  return (
- <div className={cn('space-y-2', className)}>
+ <div className={cn('space-y-1.5', className)}>
  {Array.from({ length: lines }).map((_, i) => (
  <Skeleton
  key={i}
- height={14}
- className="h-3.5"
+ height={12}
+ className="h-3"
  rounded="sm"
  />
  ))}

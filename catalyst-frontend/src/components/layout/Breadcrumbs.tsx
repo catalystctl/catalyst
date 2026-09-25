@@ -123,7 +123,7 @@ function Breadcrumbs() {
           )}
           {crumb.isLast ? (
             <span
-              className={`truncate px-1.5 py-0.5 font-medium text-foreground ${crumb.label.endsWith('…') ? 'font-mono text-[11px] tabular-nums' : ''}`}
+              className={`truncate px-1.5 py-0.5 font-medium text-foreground ${crumb.label.endsWith('…') ? 'font-mono text-mini tabular-nums' : ''}`}
               aria-current="page"
             >
               {crumb.label}

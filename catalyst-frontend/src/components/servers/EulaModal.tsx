@@ -62,16 +62,16 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
             {eulaText || t('eula.textUnavailable')}
           </div>
           {!canAccept && (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-micro text-muted-foreground">
               {t('eula.scrollHint')}
             </p>
           )}
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={onDecline} disabled={isLoading}>
+          <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={onDecline} disabled={isLoading}>
             {t('eula.decline')}
           </Button>
-          <Button onClick={onAccept} disabled={isLoading || !canAccept}>
+          <Button size="sm" className="h-8 px-3 text-mini" onClick={onAccept} disabled={isLoading || !canAccept}>
             {isLoading ? t('eula.submitting') : t('eula.accept')}
           </Button>
         </DialogFooter>

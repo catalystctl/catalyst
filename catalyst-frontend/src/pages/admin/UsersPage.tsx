@@ -5,7 +5,6 @@ import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
- Users,
  UserPlus,
  Search,
  Filter,
@@ -34,9 +33,9 @@ import {
  User,
  MailCheck,
 } from 'lucide-react';
-import TabHeader from '../../components/servers/tabs/TabHeader';
-import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import { BracketLabel, Segmented, StatusLed } from '../../components/deck/primitives';
+import { cn } from '@/lib/utils';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import Pagination from '../../components/shared/Pagination';
 import { Input } from '../../components/ui/input';
@@ -97,7 +96,7 @@ function StepIndicator({ steps, currentStep, onStepClick, canNavigate }: {
  <button
  onClick={() => canClick && onStepClick(i)}
  disabled={!canClick}
- className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+ className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-mini font-medium transition-all duration-200 ${
  isActive
  ? 'bg-primary text-primary-foreground'
  : isComplete
@@ -128,7 +127,7 @@ function RoleChip({ role, selected, onToggle }: { role: { id: string; name: stri
  <button
  type="button"
  onClick={onToggle}
- className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+ className={`inline-flex items-center gap-1.5 rounded-sm border px-3 py-1.5 text-mini font-medium transition-all duration-150 ${
  selected
  ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
  : 'border-border/30 bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground'
@@ -147,7 +146,7 @@ function ServerChip({ server, selected, onToggle }: { server: { id: string; name
  <button
  type="button"
  onClick={onToggle}
- className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+ className={`inline-flex items-center gap-1.5 rounded-sm border px-3 py-1.5 text-mini font-medium transition-all duration-150 ${
  selected
  ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
  : 'border-border/30 bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground'
@@ -182,14 +181,14 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  {(lastLogin || lastIp) && (
  <div className="flex flex-wrap items-center gap-2">
  {lastIp && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-surface-2 px-2.5 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/30 bg-surface-2 px-2.5 py-1.5 text-mini">
  <Globe className="h-3 w-3 text-muted-foreground" />
  <span className="text-muted-foreground">{t('users.lastIpLabel')}</span>
  <span className="font-mono text-foreground">{lastIp}</span>
  </div>
  )}
  {lastLogin && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-surface-2 px-2.5 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/30 bg-surface-2 px-2.5 py-1.5 text-mini">
  <Clock className="h-3 w-3 text-muted-foreground" />
  <span className="text-muted-foreground">{t('users.lastSignIn')}</span>
  <span className="text-foreground">{formatDateTime(lastLogin)}</span>
@@ -199,30 +198,30 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  )}
 
  {/* 2FA status */}
- <div className="rounded-xl border border-border/30 bg-card p-4">
+ <div className="rounded-sm border border-border/30 bg-card p-4">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-3">
  <ShieldCheck className={`h-4 w-4 shrink-0 ${twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
  <div>
  <div className="text-sm font-medium text-foreground">{t('users.twoFactorAuth')}</div>
- <div className="text-[11px] text-muted-foreground">
+ <div className="text-micro text-muted-foreground">
  {has2fa ? (twoFactorEnabled ? t('users.enabledAndEnforced') : t('users.setUpNotEnforced')) : t('users.notSetUp')}
  </div>
  </div>
  </div>
  <div className="flex items-center gap-1.5">
  {has2fa && !twoFactorEnabled && (
- <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={loading} onClick={() => onEnforce2fa(true)}>
+ <Button variant="outline" size="sm" className="gap-1 text-mini" disabled={loading} onClick={() => onEnforce2fa(true)}>
  <ShieldCheck className="h-3 w-3" /> {t('users.enforce')}
  </Button>
  )}
  {twoFactorEnabled && has2fa && (
- <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={loading} onClick={() => onEnforce2fa(false)}>
+ <Button variant="outline" size="sm" className="gap-1 text-mini" disabled={loading} onClick={() => onEnforce2fa(false)}>
  {t('users.unenforce')}
  </Button>
  )}
  {has2fa && (
- <Button variant="outline" size="sm" className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20" disabled={loading} onClick={onWipe2fa}>
+ <Button variant="outline" size="sm" className="gap-1 text-mini text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20" disabled={loading} onClick={onWipe2fa}>
  <Trash2 className="h-3 w-3" /> {t('users.wipeTwoFactor')}
  </Button>
  )}
@@ -231,19 +230,19 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  </div>
 
  {/* Passkeys */}
- <div className="rounded-xl border border-border/30 bg-card p-4">
+ <div className="rounded-sm border border-border/30 bg-card p-4">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-3">
  <Fingerprint className={`h-4 w-4 shrink-0 ${passkeys.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
  <div>
  <div className="text-sm font-medium text-foreground">{t('users.passkeys')}</div>
- <div className="text-[11px] text-muted-foreground">
+ <div className="text-micro text-muted-foreground">
  {passkeys.length ? t('users.passkeysRegistered', { count: passkeys.length }) : t('users.noPasskeys')}
  </div>
  </div>
  </div>
  {passkeys.length > 0 && (
- <Button variant="outline" size="sm" className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20" disabled={loading} onClick={onWipePasskeys}>
+ <Button variant="outline" size="sm" className="gap-1 text-mini text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20" disabled={loading} onClick={onWipePasskeys}>
  <Trash2 className="h-3 w-3" /> {t('users.wipeAll')}
  </Button>
  )}
@@ -251,9 +250,9 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  {passkeys.length > 0 && (
  <div className="mt-3 space-y-1.5">
  {passkeys.map((pk) => (
- <div key={pk.id} className="flex items-center justify-between rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
+ <div key={pk.id} className="flex items-center justify-between rounded-sm bg-surface-2/50 px-3 py-2 text-mini">
  <span className="text-muted-foreground">{pk.name || t('users.unnamedPasskey')}</span>
- <span className="text-[10px] text-muted-foreground/60">{formatDate(pk.createdAt)}</span>
+ <span className="text-micro text-muted-foreground/60">{formatDate(pk.createdAt)}</span>
  </div>
  ))}
  </div>
@@ -261,30 +260,30 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  </div>
 
  {/* Linked SSO accounts */}
- <div className="rounded-xl border border-border/30 bg-card p-4">
+ <div className="rounded-sm border border-border/30 bg-card p-4">
  <div className="flex items-center gap-2 mb-3">
  <Link2 className="h-4 w-4 text-muted-foreground" />
  <span className="text-sm font-medium text-foreground">{t('users.linkedAccounts')}</span>
  </div>
  {accounts.length === 0 ? (
- <p className="text-xs text-muted-foreground">{t('users.noLinkedAccounts')}</p>
+ <p className="text-mini text-muted-foreground">{t('users.noLinkedAccounts')}</p>
  ) : (
  <div className="space-y-2">
  {accounts.map((account) => {
  const isSSO = account.providerId !== 'credential';
  return (
- <div key={account.id} className="flex items-center justify-between rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
+ <div key={account.id} className="flex items-center justify-between rounded-sm bg-surface-2/50 px-3 py-2 text-mini">
  <div className="flex items-center gap-2">
  <KeyRound className={`h-3.5 w-3.5 ${isSSO ? 'text-primary' : 'text-muted-foreground'}`} />
  <span className="text-foreground">{providerLabel(t, account.providerId)}</span>
  {isSSO && (
- <span className="text-[10px] font-mono text-muted-foreground/60">
+ <span className="text-micro font-mono text-muted-foreground/60">
  {account.accountId.slice(0, 12)}…
  </span>
  )}
  </div>
  {isSSO && (
- <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-[11px] text-destructive hover:bg-destructive/5 hover:text-destructive" disabled={loading} onClick={() => onUnlink(account.id, account.providerId)}>
+ <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-micro text-destructive hover:bg-destructive/5 hover:text-destructive" disabled={loading} onClick={() => onUnlink(account.id, account.providerId)}>
  <Unlink className="h-3 w-3" /> {t('users.unlink')}
  </Button>
  )}
@@ -307,6 +306,16 @@ const SSO_PROVIDER_NAMES: Record<string, string> = {
 };
 
 /** Resolve the display label for an SSO provider id. */
+/**
+ * One grid template shared by the column header and every row so columns line
+ * up. Fixed / minmax(0,1fr) tracks only — never `auto`.
+ *   base : identity · actions
+ *   md   : identity · role · status · actions
+ */
+const GRID =
+ 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+ 'md:grid-cols-[minmax(0,1fr)_10rem_8rem_9rem]';
+
 function providerLabel(t: TFunction<'admin-access'>, providerId: string): string {
  if (providerId === 'credential') return t('users.providerCredential');
  return SSO_PROVIDER_NAMES[providerId] ?? providerId;
@@ -869,97 +878,67 @@ function UsersPage() {
  const editingUser = editingUserId ? users.find((u) => u.id === editingUserId) : null;
 
  return (
- <div className="space-y-5">
- <TabHeader
- icon={Users}
- title={t('users.title')}
- description={t('users.description')}
- actions={
- <div className="flex flex-wrap gap-2">
- {isLoading ? (
- <>
- <div className="h-8 w-24 animate-pulse rounded-lg bg-surface-3" />
- <div className="h-8 w-24 animate-pulse rounded-lg bg-surface-3" />
- </>
- ) : (
- <>
- <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
- <span className="h-2 w-2 rounded-full bg-surface-3" />
- {t('users.count', { count: data?.pagination?.total ?? 0 })}
- </Badge>
- {roles.length > 0 && (
- <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
- <Shield className="h-2.5 w-2.5" />
- {t('users.roleCount', { count: roles.length })}
- </Badge>
- )}
- {bannedCount > 0 && (
- <Badge variant="destructive" className="h-8 gap-1.5 px-3 text-xs">
- <Ban className="h-2.5 w-2.5" />
- {t('users.bannedCount', { count: bannedCount })}
- </Badge>
- )}
- {unverifiedCount > 0 && (
- <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs text-warning border-warning/30">
- <MailCheck className="h-2.5 w-2.5" />
- {t('users.unverifiedCount', { count: unverifiedCount })}
- </Badge>
- )}
- </>
- )}
+ <div className="flex min-h-0 flex-1 flex-col gap-3">
+ {/* ── Deck header ── */}
+ <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+ <div className="flex min-w-0 flex-col gap-1">
+ <BracketLabel>{t('layout:sections.accessControl')}</BracketLabel>
+ <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
+ {t('users.title')}
+ </h1>
+ <p className="text-mini text-muted-foreground">{t('users.description')}</p>
+ </div>
  <Button
  size="sm"
  onClick={() => {
  resetCreateForm();
  setIsCreateOpen(true);
  }}
- className="gap-1.5"
+ className="h-8 gap-1.5 rounded-sm px-3 text-mini"
  >
  <UserPlus className="h-3.5 w-3.5" />
  {t('users.createTitle')}
  </Button>
- </div>
- }
- />
+ </header>
 
- {/* ── Search & Controls Bar ── */}
- <div
- className="flex flex-wrap items-center gap-2.5"
- >
- {/* Search input */}
- <div className="relative min-w-[200px] flex-1 max-w-sm">
- <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
- <Input
+ {/* ── The deck: controls, columns, rows and totals in one frame ── */}
+ <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+ {/* Control strip */}
+ <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <label className="relative flex min-w-[12rem] flex-1 items-center">
+ <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
+ <input
+ type="search"
  value={search}
  onChange={(event) => {
  setSearch(event.target.value);
  setPage(1);
  }}
  placeholder={t('users.searchPlaceholder')}
- className="pl-9"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
- </div>
+ </label>
 
- {/* Filter toggle */}
- <Button
- variant={hasActiveFilters ? 'default' : 'outline'}
- size="sm"
+ <button
+ type="button"
  onClick={() => setShowFilters(!showFilters)}
- className="gap-2"
+ className={cn(
+ 'flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 text-mini transition-colors',
+ hasActiveFilters ? 'border-primary/50 text-foreground' : 'text-muted-foreground hover:text-foreground',
+ )}
  >
- <Filter className="h-3.5 w-3.5" />
+ <Filter className="h-3 w-3" />
  {t('filters')}
  {hasActiveFilters && (
- <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground/20 text-[10px] font-bold">
+ <span className="font-mono text-micro tabular-nums text-primary">
  {[roleFilter, statusFilter].filter(Boolean).length}
  </span>
  )}
- </Button>
+ </button>
 
- {/* Sort */}
  <Select value={sort} onValueChange={setSort}>
- <SelectTrigger className="w-40 gap-2 text-xs">
- <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+ <SelectTrigger className="h-7 w-40 gap-2 rounded-sm border-border/60 text-mini">
+ <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
@@ -972,21 +951,16 @@ function UsersPage() {
  </SelectContent>
  </Select>
 
- {/* Results count */}
- <span className="text-xs text-muted-foreground">
+ <span className="ml-auto font-mono text-micro tabular-nums text-muted-foreground">
  {t('users.showing', { shown: filteredUsers.length, total: data?.pagination?.total ?? users.length })}
  </span>
  </div>
 
- {/* ── Expandable Filter Panel ── */}
+ {/* Expandable filter panel */}
  {showFilters && (
- <div
- className="overflow-hidden"
- >
- <div className="rounded-xl border border-border/30 bg-card/80 p-4 backdrop-blur-sm">
- <div className="flex flex-wrap items-end gap-4">
- <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">{t('users.roleLabel')}</span>
+ <div className="flex flex-wrap items-end gap-4 border-b border-border/50 bg-surface-1/20 px-3 py-2">
+ <label className="flex flex-col gap-1">
+ <span className="type-overline">{t('users.roleLabel')}</span>
  <Select
  value={roleFilter || 'all'}
  onValueChange={(value) => {
@@ -994,7 +968,7 @@ function UsersPage() {
  setPage(1);
  }}
  >
- <SelectTrigger className="w-44">
+ <SelectTrigger className="h-7 w-44 rounded-sm border-border/60 text-mini">
  <SelectValue placeholder={t('users.allRoles')} />
  </SelectTrigger>
  <SelectContent>
@@ -1008,8 +982,8 @@ function UsersPage() {
  </SelectContent>
  </Select>
  </label>
- <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">{t('users.statusLabel')}</span>
+ <label className="flex flex-col gap-1">
+ <span className="type-overline">{t('users.statusLabel')}</span>
  <Select
  value={statusFilter || 'all'}
  onValueChange={(value) => {
@@ -1017,7 +991,7 @@ function UsersPage() {
  setPage(1);
  }}
  >
- <SelectTrigger className="w-44">
+ <SelectTrigger className="h-7 w-44 rounded-sm border-border/60 text-mini">
  <SelectValue placeholder={t('users.allStatuses')} />
  </SelectTrigger>
  <SelectContent>
@@ -1036,66 +1010,61 @@ function UsersPage() {
  </Select>
  </label>
  {hasActiveFilters && (
- <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 text-xs">
+ <button
+ type="button"
+ onClick={clearFilters}
+ className="flex h-7 items-center gap-1.5 rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ >
  <X className="h-3 w-3" />
  {t('users.clearAll')}
- </Button>
+ </button>
  )}
- </div>
- </div>
  </div>
  )}
 
- {/* ── Bulk Actions Bar ── */}
+ {/* Bulk actions strip */}
  {selectedIds.length > 0 && (
- <div
- className="overflow-hidden"
- >
- <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
+ <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-primary/5 px-3 py-1.5">
  <div className="flex items-center gap-3">
- <span className="text-sm font-medium text-foreground">
+ <span className="text-mini text-foreground">
  {t('users.selectedCount', { count: selectedIds.length })}
  </span>
  <button
+ type="button"
  onClick={() => setSelectedIds([])}
- className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+ className="text-micro text-muted-foreground transition-colors hover:text-foreground"
  >
  {t('users.clearSelection')}
  </button>
  </div>
- <div className="flex items-center gap-1.5">
- <Button variant="outline" size="sm" onClick={() => handleBulkBan(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20">
+ <div className="flex flex-wrap items-center gap-1.5">
+ <Button variant="outline" size="sm" onClick={() => handleBulkBan(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-destructive hover:border-destructive/20 hover:bg-destructive/5 hover:text-destructive">
  <Ban className="h-3 w-3" /> {t('users.ban')}
  </Button>
- <Button variant="outline" size="sm" onClick={() => handleBulkUnban(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20">
+ <Button variant="outline" size="sm" onClick={() => handleBulkUnban(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-success hover:border-success/20 hover:bg-success/5 hover:text-success">
  <CheckCircle className="h-3 w-3" /> {t('users.unban')}
  </Button>
  {selectedIds.some((id) => !users.find((u) => u.id === id)?.emailVerified) && (
- <Button variant="outline" size="sm" onClick={() => handleBulkVerifyEmails(selectedIds)} disabled={verifyEmailMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20">
+ <Button variant="outline" size="sm" onClick={() => handleBulkVerifyEmails(selectedIds)} disabled={verifyEmailMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-success hover:border-success/20 hover:bg-success/5 hover:text-success">
  <MailCheck className="h-3 w-3" /> {t('users.verifyEmails')}
  </Button>
  )}
- <div className="mx-1 h-4 w-px bg-border" />
- <Button variant="destructive" size="sm" onClick={() => handleBulkDelete(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs">
+ <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+ <Button variant="destructive" size="sm" onClick={() => handleBulkDelete(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini">
  <Trash2 className="h-3 w-3" /> {t('common:actions.delete')}
  </Button>
  </div>
  </div>
- </div>
  )}
 
- {/* ── User List ── */}
- <div>
- <div className="rounded-xl border border-border/30 bg-card/80 shadow-sm">
- {isLoading ? (
- <div className="p-4">
- <TabLoadingState rows={6} />
- </div>
- ) : filteredUsers.length > 0 ? (
- <>
- {/* Select-all header */}
- <div className="flex items-center gap-3 border-b border-border/30 px-4 py-2">
- <label className="flex items-center gap-2">
+ {/* Column header — same grid as the rows, so columns always line up */}
+ <div
+ className={cn(
+ GRID,
+ 'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+ )}
+ >
+ <span className="flex items-center gap-2">
  <input
  type="checkbox"
  checked={allSelected}
@@ -1107,28 +1076,60 @@ function UsersPage() {
  return Array.from(new Set([...prev, ...filteredIds]));
  })
  }
- className="h-4 w-4 rounded border-border/40 bg-card text-primary-600"
+ aria-label={t('users.selectAll')}
+ className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
  />
- <span className="text-xs font-medium text-muted-foreground">
- {t('users.selectAll')}
+ <span className="type-overline">{t('users.title')}</span>
  </span>
- </label>
+ <span className="type-overline hidden justify-self-end md:inline-flex">{t('users.roleLabel')}</span>
+ <span className="type-overline hidden justify-self-end md:inline-flex">{t('users.statusLabel')}</span>
+ <span className="type-overline justify-self-end">{t('users.more')}</span>
  </div>
 
- {/* User rows */}
- <div className="divide-y divide-border/50">
- {filteredUsers.map((user: AdminUser) => {
+ {/* Rows */}
+ <div className="max-h-[calc(100dvh-20rem)] min-w-0 overflow-y-auto bg-background/25">
+ {isLoading ? (
+ <div>
+ {Array.from({ length: 6 }).map((_, index) => (
+ <div key={index} className={cn(GRID, 'border-t border-border/40 py-2 pl-3 pr-3')}>
+ <div className="flex items-center gap-2">
+ <div className="h-2 w-2 animate-pulse rounded-full bg-surface-3" />
+ <div className="h-3.5 w-40 animate-pulse bg-surface-3" />
+ </div>
+ </div>
+ ))}
+ </div>
+ ) : filteredUsers.length > 0 ? (
+ filteredUsers.map((user: AdminUser) => {
  const isSelected = selectedIds.includes(user.id);
+ const isActiveView = viewingUser?.id === user.id;
+ const roleNames = user.roles.length > 0
+ ? user.roles.map((role) => roleLabel(t, role.name)).join(', ')
+ : '—';
+ const statusLabel = user.banned
+ ? t('users.statusBanned')
+ : user.emailVerified
+ ? t('users.statusActive')
+ : t('users.statusUnverified');
+ const statusClass = user.banned
+ ? 'text-danger'
+ : user.emailVerified
+ ? 'text-success'
+ : 'text-warning';
 
  return (
  <div
  key={user.id}
- className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 cursor-pointer ${
- isSelected ? 'bg-primary/5' : viewingUser?.id === user.id ? 'bg-primary/5 border-l-2 border-primary' : ''
- }`}
+ role="row"
  onClick={() => startView(user)}
+ className={cn(
+ GRID,
+ 'group cursor-pointer py-1.5 pl-3 pr-3 transition-colors hover:bg-surface-1/40',
+ (isSelected || isActiveView) && 'bg-primary/5',
+ )}
  >
- {/* Checkbox */}
+ {/* identity */}
+ <div className="flex min-w-0 items-center gap-2">
  <input
  type="checkbox"
  checked={isSelected}
@@ -1139,73 +1140,65 @@ function UsersPage() {
  : [...prev, user.id],
  )
  }
- className="h-4 w-4 flex-shrink-0 rounded border-border/40 bg-card text-primary-600"
+ className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary"
  />
-
- {/* User info — primary column */}
- <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2.5">
- <span className="truncate font-semibold text-foreground transition-colors">
+ <StatusLed
+ tone={user.banned ? 'alarm' : user.emailVerified ? 'go' : 'hazard'}
+ pulse={!user.banned && user.emailVerified}
+ />
+ <div className="flex min-w-0 flex-col leading-tight">
+ <span
+ className="truncate font-display text-data font-semibold tracking-tight text-foreground"
+ title={user.username}
+ >
  {user.username}
  </span>
- {user.banned ? (
- <Badge variant="destructive" className="gap-1 text-[11px]">
- <Ban className="h-2.5 w-2.5" />
- {t('users.statusBanned')}
- </Badge>
- ) : (
- <Badge variant="success" className="gap-1 text-[11px]">
- <span className="relative flex h-1.5 w-1.5">
- <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
- <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
- </span>
- {t('users.statusActive')}
- </Badge>
- )}
- </div>
- <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
- <span className="flex items-center gap-1">
+ <span className="flex min-w-0 items-center gap-2 text-micro text-muted-foreground">
  <Mail className="h-3 w-3 shrink-0" />
- <span className="truncate">{user.email}</span>
- </span>
- <span className="hidden font-mono text-[11px] opacity-60 sm:inline">
- {user.id}
- </span>
- {user.roles.length > 0 && (
- <span className="hidden items-center gap-1 sm:flex">
- <Shield className="h-3 w-3 shrink-0" />
- {user.roles.map((role) => roleLabel(t, role.name)).join(', ')}
- </span>
- )}
- <span className="hidden md:inline">
+ <span className="truncate" title={user.email}>{user.email}</span>
+ <span className="hidden truncate font-mono opacity-60 sm:inline" title={user.id}>{user.id}</span>
+ <span className="hidden shrink-0 sm:inline">
  {t('users.createdOn', { date: formatDate(user.createdAt) })}
  </span>
  {user.twoFactorEnabled && (
- <span className="hidden items-center gap-1 lg:flex">
+ <span className="hidden shrink-0 items-center gap-1 lg:flex">
  <ShieldCheck className="h-3 w-3 text-success" />
  {t('users.twoFactorShort')}
  </span>
  )}
- {!user.emailVerified && (
- <span className="hidden items-center gap-1 lg:flex text-warning">
- <MailCheck className="h-3 w-3" />
- {t('users.statusUnverified')}
- </span>
- )}
  {(user.passkeys?.length ?? 0) > 0 && (
- <span className="hidden items-center gap-1 lg:flex">
+ <span className="hidden shrink-0 items-center gap-1 lg:flex">
  <Fingerprint className="h-3 w-3 text-success" />
  {t('users.keyCount', { count: user.passkeys?.length ?? 0 })}
  </span>
  )}
+ <span className={cn('shrink-0 uppercase md:hidden', statusClass)}>{statusLabel}</span>
+ </span>
  </div>
  </div>
 
- {/* Action buttons */}
- <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+ {/* role */}
+ <span className="hidden min-w-0 justify-self-end md:flex">
+ {user.roles.length > 0 ? (
+ <span className="flex min-w-0 items-center gap-1 text-micro text-muted-foreground" title={roleNames}>
+ <Shield className="h-3 w-3 shrink-0" />
+ <span className="truncate">{roleNames}</span>
+ </span>
+ ) : (
+ <span className="text-micro text-muted-foreground/40">—</span>
+ )}
+ </span>
+
+ {/* status */}
+ <span className="hidden min-w-0 justify-self-end md:flex">
+ <span className={cn('truncate text-micro uppercase', statusClass)}>{statusLabel}</span>
+ </span>
+
+ {/* actions */}
+ <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
  {user.banned ? (
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
  onClick={() => handleBulkUnban([user.id], user.username)}
  disabled={banMutation.isPending || unbanMutation.isPending}
  title={t('users.unban')}
@@ -1214,7 +1207,7 @@ function UsersPage() {
  </button>
  ) : (
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={() => handleBulkBan([user.id], user.username)}
  disabled={banMutation.isPending || unbanMutation.isPending}
  title={t('users.ban')}
@@ -1224,7 +1217,7 @@ function UsersPage() {
  )}
  {!user.emailVerified && (
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
  onClick={() => verifyEmailMutation.mutate(user.id)}
  disabled={verifyEmailMutation.isPending}
  title={t('users.verifyEmailAction')}
@@ -1234,7 +1227,7 @@ function UsersPage() {
  )}
 
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={(e) => { e.stopPropagation(); startView(user); }}
  title={t('users.viewDetails')}
  >
@@ -1243,7 +1236,7 @@ function UsersPage() {
  <DropdownMenu>
  <DropdownMenuTrigger asChild>
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
  title={t('users.more')}
  onClick={(e) => e.stopPropagation()}
  >
@@ -1251,17 +1244,14 @@ function UsersPage() {
  </button>
  </DropdownMenuTrigger>
  <DropdownMenuContent align="end">
- <DropdownMenuItem
- onClick={() => startView(user)}
- className="gap-2 text-xs"
- >
+ <DropdownMenuItem onClick={() => startView(user)} className="gap-2 text-mini">
  <Eye className="h-3.5 w-3.5" />
  {t('users.view')}
  </DropdownMenuItem>
  <DropdownMenuItem
  onClick={() => handleEditUser(user)}
  disabled={updateMutation.isPending}
- className="gap-2 text-xs"
+ className="gap-2 text-mini"
  >
  <Pencil className="h-3.5 w-3.5" />
  {t('common:actions.edit')}
@@ -1271,7 +1261,7 @@ function UsersPage() {
  <DropdownMenuItem
  onClick={() => handleBulkUnban([user.id], user.username)}
  disabled={banMutation.isPending || unbanMutation.isPending}
- className="gap-2 text-xs text-success"
+ className="gap-2 text-mini text-success"
  >
  <CheckCircle className="h-3.5 w-3.5" />
  {t('users.unban')}
@@ -1280,7 +1270,7 @@ function UsersPage() {
  <DropdownMenuItem
  onClick={() => handleBulkBan([user.id], user.username)}
  disabled={banMutation.isPending || unbanMutation.isPending}
- className="gap-2 text-xs text-destructive"
+ className="gap-2 text-mini text-destructive"
  >
  <Ban className="h-3.5 w-3.5" />
  {t('users.ban')}
@@ -1290,7 +1280,7 @@ function UsersPage() {
  <DropdownMenuItem
  onClick={() => verifyEmailMutation.mutate(user.id)}
  disabled={verifyEmailMutation.isPending}
- className="gap-2 text-xs text-success"
+ className="gap-2 text-mini text-success"
  >
  <MailCheck className="h-3.5 w-3.5" />
  {t('users.verifyEmailMenuItem')}
@@ -1300,43 +1290,30 @@ function UsersPage() {
  <DropdownMenuItem
  onClick={() => setDeletingUser({ id: user.id, username: user.username })}
  disabled={deleteMutation.isPending}
- className="gap-2 text-xs text-destructive"
+ className="gap-2 text-mini text-destructive"
  >
  <Trash2 className="h-3.5 w-3.5" />
  {t('common:actions.delete')}
  </DropdownMenuItem>
  </DropdownMenuContent>
  </DropdownMenu>
- </div>
+ </span>
  </div>
  );
- })}
- </div>
-
- {/* Pagination */}
- {pagination && pagination.totalPages > 1 ? (
- <div className="border-t border-border/30 px-4 py-3">
- <Pagination
- page={pagination.page}
- totalPages={pagination.totalPages}
- onPageChange={setPage}
- />
- </div>
- ) : null}
- </>
+ })
  ) : (
- <div className="p-6">
+ <div className="p-3">
  <TabEmptyState
  title={search.trim() || hasActiveFilters ? t('users.emptyFilteredTitle') : t('users.emptyTitle')}
  description={search.trim() || hasActiveFilters ? t('users.emptyFilteredDescription') : t('users.emptyDescription')}
  action={
  hasActiveFilters ? (
- <Button variant="outline" size="sm" onClick={clearFilters}>
+ <Button variant="outline" size="sm" className="h-7 rounded-sm px-2.5 text-mini" onClick={clearFilters}>
  <X className="mr-1.5 h-3.5 w-3.5" />
  {t('users.clearFilters')}
  </Button>
  ) : (
- <Button size="sm" onClick={() => { resetCreateForm(); setIsCreateOpen(true); }} className="gap-1.5">
+ <Button size="sm" className="h-7 gap-1.5 rounded-sm px-2.5 text-mini" onClick={() => { resetCreateForm(); setIsCreateOpen(true); }}>
  <UserPlus className="h-3.5 w-3.5" />
  {t('users.createTitle')}
  </Button>
@@ -1344,6 +1321,45 @@ function UsersPage() {
  }
  />
  </div>
+ )}
+ </div>
+
+ {/* Pagination */}
+ {pagination && pagination.totalPages > 1 ? (
+ <div className="border-t border-border/50 px-3 py-2">
+ <Pagination
+ page={pagination.page}
+ totalPages={pagination.totalPages}
+ onPageChange={setPage}
+ />
+ </div>
+ ) : null}
+
+ {/* Footer strip — directory totals */}
+ <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <span className="flex items-center gap-1.5">
+ <StatusLed tone="idle" />
+ <Segmented muted className="text-micro">
+ {t('users.count', { count: data?.pagination?.total ?? 0 })}
+ </Segmented>
+ </span>
+ {roles.length > 0 && (
+ <span className="flex items-center gap-1.5">
+ <Shield className="h-3 w-3 text-muted-foreground" />
+ <Segmented muted className="text-micro">{t('users.roleCount', { count: roles.length })}</Segmented>
+ </span>
+ )}
+ {bannedCount > 0 && (
+ <span className="flex items-center gap-1.5">
+ <StatusLed tone="alarm" />
+ <Segmented muted className="text-micro">{t('users.bannedCount', { count: bannedCount })}</Segmented>
+ </span>
+ )}
+ {unverifiedCount > 0 && (
+ <span className="flex items-center gap-1.5">
+ <StatusLed tone="hazard" />
+ <Segmented muted className="text-micro">{t('users.unverifiedCount', { count: unverifiedCount })}</Segmented>
+ </span>
  )}
  </div>
  </div>
@@ -1390,12 +1406,12 @@ function UsersPage() {
  key="step-account"
  className="space-y-5"
  >
- <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+ <div className="text-mini font-semibold uppercase tracking-wide text-muted-foreground">
  {t('users.accountCredentials')}
  </div>
  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
  <label className="block space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">
+ <span className="text-mini font-medium text-muted-foreground">
  {t('users.emailLabel')} <span className="text-destructive">*</span>
  </span>
  <Input
@@ -1406,7 +1422,7 @@ function UsersPage() {
  />
  </label>
  <label className="block space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">
+ <span className="text-mini font-medium text-muted-foreground">
  {t('users.usernameLabel')} <span className="text-destructive">*</span>
  </span>
  <Input
@@ -1416,7 +1432,7 @@ function UsersPage() {
  />
  </label>
  <label className="block space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">
+ <span className="text-mini font-medium text-muted-foreground">
  {editingUserId ? t('users.newPasswordLabel') : t('users.passwordLabel')}
  {!editingUserId && <span className="text-destructive"> *</span>}
  </span>
@@ -1433,15 +1449,15 @@ function UsersPage() {
  {/* Validation hints */}
  {!editingUserId && (
  <div className="flex flex-wrap gap-2">
- <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${createEmail.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
+ <div className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-micro ${createEmail.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
  {createEmail.trim() ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
  {t('users.emailSet')}
  </div>
- <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${createUsername.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
+ <div className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-micro ${createUsername.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
  {createUsername.trim() ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
  {t('users.usernameSet')}
  </div>
- <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${createPassword.trim().length >= 8 ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
+ <div className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-micro ${createPassword.trim().length >= 8 ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
  {createPassword.trim().length >= 8 ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
  {t('users.characters8')}
  </div>
@@ -1463,7 +1479,7 @@ function UsersPage() {
  <Shield className="h-4 w-4 text-primary" />
  <span className="text-sm font-semibold text-foreground">{t('users.rolesHeading')}</span>
  {(editingUserId ? editRoleIds : createRoleIds).length > 0 && (
- <Badge variant="default" className="tabular-nums text-[10px]">
+ <Badge variant="default" className="tabular-nums text-micro">
  {(editingUserId ? editRoleIds : createRoleIds).length}
  </Badge>
  )}
@@ -1474,7 +1490,7 @@ function UsersPage() {
  value={editingUserId ? editRoleSearch : roleSearch}
  onChange={(e) => editingUserId ? setEditRoleSearch(e.target.value) : setRoleSearch(e.target.value)}
  placeholder={t('users.searchRoles')}
- className="h-8 pl-8 text-xs"
+ className="h-8 pl-8 text-mini"
  />
  </div>
  </div>
@@ -1491,7 +1507,7 @@ function UsersPage() {
  />
  ))}
  {(editingUserId ? filteredEditRoles : filteredModalRoles).length === 0 && (
- <span className="text-xs text-muted-foreground italic">{t('users.noRolesMatch')}</span>
+ <span className="text-mini text-muted-foreground italic">{t('users.noRolesMatch')}</span>
  )}
  </div>
  </div>
@@ -1503,7 +1519,7 @@ function UsersPage() {
  <Server className="h-4 w-4 text-primary" />
  <span className="text-sm font-semibold text-foreground">{t('users.serverAccess')}</span>
  {(editingUserId ? editServerIds : createServerIds).length > 0 && (
- <Badge className="tabular-nums text-[10px] border-primary/30 bg-primary/10 text-primary">
+ <Badge className="tabular-nums text-micro border-primary/30 bg-primary/10 text-primary">
  {(editingUserId ? editServerIds : createServerIds).length}
  </Badge>
  )}
@@ -1514,7 +1530,7 @@ function UsersPage() {
  value={editingUserId ? editServerSearch : serverSearch}
  onChange={(e) => editingUserId ? setEditServerSearch(e.target.value) : setServerSearch(e.target.value)}
  placeholder={t('users.searchServers')}
- className="h-8 pl-8 text-xs"
+ className="h-8 pl-8 text-mini"
  />
  </div>
  </div>
@@ -1531,7 +1547,7 @@ function UsersPage() {
  />
  ))}
  {(editingUserId ? filteredEditServers : filteredModalServers).length === 0 && (
- <span className="text-xs text-muted-foreground italic">{t('users.noServersMatch')}</span>
+ <span className="text-mini text-muted-foreground italic">{t('users.noServersMatch')}</span>
  )}
  </div>
  </div>
@@ -1570,7 +1586,7 @@ function UsersPage() {
  </DialogBody>
 
  <DialogFooter className="sm:justify-between">
- <div className="text-xs text-muted-foreground">
+ <div className="text-mini text-muted-foreground">
  {wizardStep === 0 && !editingUserId && t('users.allFieldsRequired')}
  {wizardStep === 0 && editingUserId && t('users.leavePasswordBlank')}
  </div>
@@ -1643,50 +1659,50 @@ function UsersPage() {
  <>
  <div className="flex flex-wrap items-center gap-2">
  {viewingUser.banned ? (
- <Badge variant="destructive" className="gap-1 text-[11px]">
+ <Badge variant="destructive" className="gap-1 text-micro">
  <Ban className="h-2.5 w-2.5" />
  {t('users.statusBanned')}
  </Badge>
  ) : (
- <Badge variant="success" className="gap-1 text-[11px]">
+ <Badge variant="success" className="gap-1 text-micro">
  <CheckCircle className="h-2.5 w-2.5" /> {t('users.statusActive')}
  </Badge>
  )}
  </div>
 
  <div className="flex flex-wrap gap-2 md:gap-3">
- <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/30 bg-card/80 px-3 py-1.5 text-mini">
  <Shield className="h-3 w-3 text-primary" />
  <span className="text-muted-foreground">{t('users.rolesHeading')}</span>
  <span className="font-semibold tabular-nums text-foreground">{viewingUser.roles.length}</span>
  </div>
  {viewingUser.twoFactorEnabled && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/30 bg-card/80 px-3 py-1.5 text-mini">
  <ShieldCheck className="h-3 w-3 text-success" />
  <span className="text-success">{t('users.twoFactorEnabled')}</span>
  </div>
  )}
  {(viewingUser.passkeys?.length ?? 0) > 0 && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/30 bg-card/80 px-3 py-1.5 text-mini">
  <Fingerprint className="h-3 w-3 text-primary" />
  <span className="text-muted-foreground">{t('users.passkeys')}</span>
  <span className="font-semibold tabular-nums text-foreground">{viewingUser.passkeys?.length ?? 0}</span>
  </div>
  )}
- <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/30 bg-card/80 px-3 py-1.5 text-mini">
  <Clock className="h-3 w-3 text-muted-foreground" />
  <span className="text-muted-foreground">{t('created')}</span>
  <span className="font-medium text-foreground">{formatDate(viewingUser.createdAt)}</span>
  </div>
  {viewingUser.lastSuccessfulLogin && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/30 bg-card/80 px-3 py-1.5 text-mini">
  <Clock className="h-3 w-3 text-muted-foreground" />
  <span className="text-muted-foreground">{t('users.lastLogin')}</span>
  <span className="font-medium text-foreground">{formatDate(viewingUser.lastSuccessfulLogin)}</span>
  </div>
  )}
  {viewingUser.lastSignInIp && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/80 px-3 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/30 bg-card/80 px-3 py-1.5 text-mini">
  <Globe className="h-3 w-3 text-muted-foreground" />
  <span className="text-muted-foreground">{t('users.lastIp')}</span>
  <span className="font-mono font-medium text-foreground">{viewingUser.lastSignInIp}</span>
@@ -1695,14 +1711,14 @@ function UsersPage() {
  </div>
 
  {viewingUser.roles.length > 0 && (
- <div className="rounded-xl border border-border/30 p-4">
+ <div className="rounded-sm border border-border/30 p-4">
  <div className="flex items-center gap-2 mb-3">
  <Shield className="h-4 w-4 text-primary" />
  <span className="text-sm font-semibold text-foreground">{t('users.rolesHeading')}</span>
  </div>
  <div className="flex flex-wrap gap-2">
  {viewingUser.roles.map((role) => (
- <span key={role.id} className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary">
+ <span key={role.id} className="inline-flex items-center gap-1.5 rounded-sm border border-primary/20 bg-primary/5 px-3 py-1.5 text-mini font-medium text-primary">
  <Shield className="h-3 w-3" />
  {roleLabel(t, role.name)}
  </span>
@@ -1718,31 +1734,31 @@ function UsersPage() {
  const hasContent = accounts.length > 0 || passkeys.length > 0 || has2fa;
  if (!hasContent) return null;
  return (
- <div className="rounded-xl border border-border/30 p-4 space-y-3">
+ <div className="rounded-sm border border-border/30 p-4 space-y-3">
  <div className="flex items-center gap-2 mb-1">
  <Lock className="h-4 w-4 text-muted-foreground" />
  <span className="text-sm font-semibold text-foreground">{t('users.authentication')}</span>
  </div>
 
  {has2fa && (
- <div className="flex items-center gap-2 rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
+ <div className="flex items-center gap-2 rounded-sm bg-surface-2/50 px-3 py-2 text-mini">
  <ShieldCheck className={`h-4 w-4 ${viewingUser.twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
  <span className="text-foreground">{t('users.twoFactorAuth')}</span>
- <Badge variant={viewingUser.twoFactorEnabled ? 'success' : 'outline'} className="text-[10px] ml-auto">
+ <Badge variant={viewingUser.twoFactorEnabled ? 'success' : 'outline'} className="text-micro ml-auto">
  {viewingUser.twoFactorEnabled ? t('users.enforced') : t('users.configured')}
  </Badge>
  </div>
  )}
 
  {passkeys.length > 0 && (
- <div className="rounded-lg bg-surface-2/50 px-3 py-2">
- <div className="flex items-center gap-2 text-xs mb-2">
+ <div className="rounded-sm bg-surface-2/50 px-3 py-2">
+ <div className="flex items-center gap-2 text-mini mb-2">
  <Fingerprint className="h-4 w-4 text-primary" />
  <span className="text-foreground">{t('users.passkeyCount', { count: passkeys.length })}</span>
  </div>
  <div className="space-y-1">
  {passkeys.map((pk) => (
- <div key={pk.id} className="flex items-center justify-between text-[11px] text-muted-foreground pl-6">
+ <div key={pk.id} className="flex items-center justify-between text-micro text-muted-foreground pl-6">
  <span>{pk.name || t('users.unnamedPasskey')}</span>
  <span className="text-muted-foreground/60">{formatDate(pk.createdAt)}</span>
  </div>
@@ -1752,8 +1768,8 @@ function UsersPage() {
  )}
 
  {accounts.length > 0 && (
- <div className="rounded-lg bg-surface-2/50 px-3 py-2">
- <div className="flex items-center gap-2 text-xs mb-2">
+ <div className="rounded-sm bg-surface-2/50 px-3 py-2">
+ <div className="flex items-center gap-2 text-mini mb-2">
  <Link2 className="h-4 w-4 text-muted-foreground" />
  <span className="text-foreground">{t('users.linkedAccountsView')}</span>
  </div>
@@ -1761,7 +1777,7 @@ function UsersPage() {
  {accounts.map((account) => {
  const isSSO = account.providerId !== 'credential';
  return (
- <div key={account.id} className="flex items-center gap-2 text-[11px] pl-6">
+ <div key={account.id} className="flex items-center gap-2 text-micro pl-6">
  <KeyRound className={`h-3 w-3 ${isSSO ? 'text-primary' : 'text-muted-foreground'}`} />
  <span className="text-foreground">{providerLabel(t, account.providerId)}</span>
  {isSSO && (
@@ -1777,7 +1793,7 @@ function UsersPage() {
  );
  })()}
 
- <div className="space-y-1 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
+ <div className="space-y-1 border-t border-border/50 pt-3 text-micro text-muted-foreground">
  <div>{t('users.userId')} <span className="font-mono">{viewingUser.id}</span></div>
  {viewingUser.updatedAt !== viewingUser.createdAt && (
  <div>{t('updatedAt', { date: formatDate(viewingUser.updatedAt), time: formatTime(viewingUser.updatedAt) })}</div>
@@ -1796,11 +1812,11 @@ function UsersPage() {
  {t('users.editUser')}
  </Button>
  {!viewingUser.banned ? (
- <Button variant="outline" size="sm" onClick={() => setBanTargets({ userIds: [viewingUser.id], label: viewingUser.username })} disabled={banMutation.isPending} className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20">
+ <Button variant="outline" size="sm" onClick={() => setBanTargets({ userIds: [viewingUser.id], label: viewingUser.username })} disabled={banMutation.isPending} className="gap-1.5 text-mini text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20">
  <Ban className="h-3.5 w-3.5" /> {t('users.ban')}
  </Button>
  ) : (
- <Button variant="outline" size="sm" onClick={() => handleBulkUnban([viewingUser.id], viewingUser.username)} disabled={unbanMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20">
+ <Button variant="outline" size="sm" onClick={() => handleBulkUnban([viewingUser.id], viewingUser.username)} disabled={unbanMutation.isPending} className="gap-1.5 text-mini text-success hover:bg-success/5 hover:text-success hover:border-success/20">
  <CheckCircle className="h-3.5 w-3.5" /> {t('users.unban')}
  </Button>
  )}
@@ -1838,7 +1854,7 @@ function UsersPage() {
  {t('users.dialogs.reasonLabel')}
  </span>
  <input
- className="w-full rounded-lg border border-border/30 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+ className="w-full rounded-sm border border-border/30 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
  value={banReason}
  onChange={(event) => setBanReason(event.target.value)}
  placeholder={t('users.dialogs.reasonPlaceholder')}
@@ -1946,7 +1962,7 @@ function UsersPage() {
  Remove all {'{{count}}'} passkeys from {'{{username}}'}?
  </Trans>
  </p>
- <p className="text-xs text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {t('users.dialogs.wipePasskeysWarning')}
  </p>
  </div>
@@ -1975,7 +1991,7 @@ function UsersPage() {
  Remove two-factor authentication from {'{{username}}'}?
  </Trans>
  </p>
- <p className="text-xs text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {t('users.dialogs.wipeTwoFactorWarning')}
  </p>
  </div>
@@ -2013,7 +2029,7 @@ function UsersPage() {
  Disable 2FA enforcement for {'{{username}}'}?
  </Trans>}
  </p>
- <p className="text-xs text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {enforce2faTarget?.enforce
  ? t('users.dialogs.enforceWarning')
  : t('users.dialogs.disableEnforcementWarning')}
@@ -2050,7 +2066,7 @@ function UsersPage() {
  Unlink {'{{provider}}'} from {'{{username}}'}?
  </Trans>
  </p>
- <p className="text-xs text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {t('users.dialogs.unlinkWarning')}
  </p>
  </div>

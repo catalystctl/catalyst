@@ -40,6 +40,7 @@ import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
 import { notifyError } from '../../../utils/notify';
 import { formatDateTime, formatTime } from '../../../i18n/format';
+import { BracketLabel } from '@/components/deck/primitives';
 
 /** Host label for a marketplace URL that never throws on malformed input. */
 function sourceHostLabel(url: string): string {
@@ -238,45 +239,46 @@ export function MarketplaceDialog({
             {/* In-panel source manager: add more marketplaces without env edits. */}
             <section
               aria-label={t('pluginsAdmin.marketplaces')}
-              className="rounded-lg border border-border/60 bg-surface-2/20 px-4 py-3"
+              className="deck-panel"
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-foreground">
-                  {t('pluginsAdmin.marketplaces')}
+              <div className="flex items-center justify-between gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+                <div className="flex items-center gap-2">
+                  <BracketLabel tone="muted">{t('pluginsAdmin.marketplaces')}</BracketLabel>
                   {sources && sources.length > 0 && (
-                    <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+                    <span className="font-mono text-micro tabular-nums text-muted-foreground">
                       {sources.length}
                     </span>
                   )}
-                </p>
-                <p className="text-[11px] text-muted-foreground">{t('pluginsAdmin.browsedTogether')}</p>
+                </div>
+                <p className="text-micro text-muted-foreground">{t('pluginsAdmin.browsedTogether')}</p>
               </div>
+              <div className="p-3">
               {sourcesLoading ? (
-                <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 py-3 text-mini text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('pluginsAdmin.loadingMarketplaces')}
                 </div>
               ) : sources && sources.length > 0 ? (
-                <ul className="mt-2 divide-y divide-border/40">
+                <ul className="divide-y divide-border/40">
                   {sources.map((source) => {
                     const health = healthByUrl.get(source.url);
                     const busy = pendingSourceId === source.id;
                     return (
-                      <li key={source.id} className="flex items-center gap-2 py-2">
+                      <li key={source.id} className="flex items-center gap-2 py-1.5">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="max-w-full truncate text-xs font-medium text-foreground">
+                            <span className="max-w-full truncate text-mini font-medium text-foreground">
                               {source.label?.trim() || sourceHostLabel(source.url)}
                             </span>
-                            <Badge variant="outline" className="text-[10px]">
+                            <Badge variant="outline" className="text-micro">
                               {originLabel(source.origin)}
                             </Badge>
                             {!source.enabled ? (
-                              <Badge variant="secondary" className="text-[10px]">
+                              <Badge variant="secondary" className="text-micro">
                                 {t('common:actions.disabled')}
                               </Badge>
                             ) : health ? (
                               <span
-                                className="font-mono text-[10px] text-muted-foreground"
+                                className="font-mono text-micro tabular-nums text-muted-foreground"
                                 title={health.error ?? source.url}
                               >
                                 {health.ok ? t('pluginsAdmin.pluginCount', { count: health.entryCount }) : health.error}
@@ -284,7 +286,7 @@ export function MarketplaceDialog({
                             ) : null}
                           </div>
                           <p
-                            className="max-w-full truncate font-mono text-[10px] text-muted-foreground/70"
+                            className="max-w-full truncate font-mono text-micro text-muted-foreground/70"
                             title={source.url}
                           >
                             {source.url}
@@ -318,7 +320,7 @@ export function MarketplaceDialog({
                             </Button>
                           </>
                         ) : (
-                          <Badge variant="secondary" className="shrink-0 text-[10px]">
+                          <Badge variant="secondary" className="shrink-0 text-micro">
                             {t('pluginsAdmin.alwaysOn')}
                           </Badge>
                         )}
@@ -327,7 +329,7 @@ export function MarketplaceDialog({
                   })}
                 </ul>
               ) : (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="text-mini text-muted-foreground">
                   {t('pluginsAdmin.noMarketplaceConfigured')}
                 </p>
               )}
@@ -348,18 +350,19 @@ export function MarketplaceDialog({
                   placeholder="https://example.com/index.json"
                   aria-label={t('pluginsAdmin.newSourceUrlAria')}
                   inputMode="url"
-                  className="flex-1 font-mono text-xs"
+                  className="h-7 flex-1 rounded-sm font-mono text-mini"
                 />
                 <Input
                   value={newSourceLabel}
                   onChange={(e) => setNewSourceLabel(e.target.value)}
                   placeholder={t('pluginsAdmin.labelOptionalPlaceholder')}
                   aria-label={t('pluginsAdmin.newSourceLabelAria')}
-                  className="sm:w-36"
+                  className="h-7 rounded-sm text-mini sm:w-36"
                 />
                 <Button
                   type="submit"
                   size="sm"
+                  className="h-8 px-3 text-mini"
                   disabled={!newSourceUrl.trim() || pendingSourceId === 'new'}
                 >
                   {pendingSourceId === 'new' ? (
@@ -370,6 +373,7 @@ export function MarketplaceDialog({
                   {t('pluginsAdmin.add')}
                 </Button>
               </form>
+              </div>
             </section>
 
             <div className="flex items-center gap-2">
@@ -379,7 +383,7 @@ export function MarketplaceDialog({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('pluginsAdmin.searchPlaceholder')}
-                  className="pl-8"
+                  className="h-7 rounded-sm pl-8 text-mini"
                   aria-label={t('pluginsAdmin.searchAria')}
                 />
               </div>
@@ -398,7 +402,7 @@ export function MarketplaceDialog({
                 )}
               </Button>
               {lastChecked && (
-                <span className="shrink-0 text-[11px] text-muted-foreground" title={formatDateTime(lastChecked)}>
+                <span className="shrink-0 font-mono text-micro tabular-nums text-muted-foreground" title={formatDateTime(lastChecked)}>
                   {t('pluginsAdmin.checkedAt', { time: formatTime(lastChecked) })}
                 </span>
               )}
@@ -409,65 +413,65 @@ export function MarketplaceDialog({
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : !data || data.sources.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-                <p className="text-sm font-medium text-foreground">{t('pluginsAdmin.emptyMarketplaceTitle')}</p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              <div className="rounded-sm border border-dashed border-border/50 px-4 py-6 text-center">
+                <p className="text-data font-medium text-foreground">{t('pluginsAdmin.emptyMarketplaceTitle')}</p>
+                <p className="mt-1 text-mini leading-relaxed text-muted-foreground">
                   {t('pluginsAdmin.emptyDescription')}
                 </p>
               </div>
             ) : filteredEntries.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-                <p className="text-sm text-muted-foreground">{t('pluginsAdmin.noSearchResults')}</p>
+              <div className="rounded-sm border border-dashed border-border/50 px-4 py-6 text-center">
+                <p className="text-mini text-muted-foreground">{t('pluginsAdmin.noSearchResults')}</p>
               </div>
             ) : (
-              <ul className="divide-y divide-border/40 rounded-lg border border-border/60">
+              <ul className="divide-y divide-border/40">
                 {filteredEntries.map((entry) => (
-                  <li key={`${entry.name}:${entry.version ?? ''}`} className="flex items-start gap-3 px-4 py-3">
+                  <li key={`${entry.name}:${entry.version ?? ''}`} className="flex items-start gap-3 py-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-foreground">
                           {entry.displayName ?? entry.name}
                         </span>
                         {entry.version && (
-                          <span className="type-meta font-mono text-[11px] text-muted-foreground">
+                          <span className="font-mono text-micro tabular-nums text-muted-foreground">
                             v{entry.version}
                           </span>
                         )}
                         {entry.licensing && (
-                          <Badge variant="outline" className="shrink-0 gap-1 border-accent/40 text-accent text-[10px]">
+                          <Badge variant="outline" className="shrink-0 gap-1 border-primary/40 text-primary text-micro">
                             {t('pluginsAdmin.licensedBadge')}
                           </Badge>
                         )}
                         {entry.updateAvailable ? (
-                          <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
+                          <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-micro">
                             {entry.installedVersion
                               ? t('pluginsAdmin.updateAvailable', { from: entry.installedVersion, to: entry.version })
                               : t('pluginsAdmin.updateTo', { version: entry.version })}
                           </Badge>
                         ) : entry.installed ? (
-                          <Badge variant="secondary" className="gap-1 text-[10px]">
+                          <Badge variant="secondary" className="gap-1 text-micro">
                             <PackageCheck className="h-3 w-3" />
                             {t('pluginsAdmin.installed')}
                           </Badge>
                         ) : null}
                       </div>
-                      <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      <p className="mt-0.5 line-clamp-2 text-mini leading-relaxed text-muted-foreground">
                         {entry.description}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         {entry.author && (
-                          <span className="text-[11px] text-muted-foreground/70">{entry.author}</span>
+                          <span className="text-micro text-muted-foreground/70">{entry.author}</span>
                         )}
                         {entry.sourceUrl && (data?.sources.length ?? 0) > 1 && (
                           <span
-                            className="max-w-full truncate font-mono text-[10px] text-muted-foreground/60"
+                            className="max-w-full truncate font-mono text-micro text-muted-foreground/60"
                             title={entry.sourceUrl}
                           >
                             {t('pluginsAdmin.viaHost', { host: sourceHostLabel(entry.sourceUrl) })}
                           </span>
                         )}
                         {(entry.tags ?? []).slice(0, 4).map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-[10px]">
+                          <Badge key={tag} variant="outline" className="text-micro">
                             {tag}
                           </Badge>
                         ))}
@@ -476,7 +480,7 @@ export function MarketplaceDialog({
                             href={entry.homepage}
                             target="_blank"
                             rel="noreferrer noopener"
-                            className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:underline"
+                            className="inline-flex items-center gap-0.5 text-micro text-primary hover:underline"
                           >
                             {t('pluginsAdmin.homepage')}
                             <ExternalLink className="h-3 w-3" />
@@ -486,6 +490,7 @@ export function MarketplaceDialog({
                     </div>
                     <Button
                       size="sm"
+                      className="h-8 px-3 text-mini"
                       variant={entry.updateAvailable ? 'default' : entry.installed ? 'outline' : 'default'}
                       onClick={() => installMutation.mutate({ entry })}
                       disabled={installingName === entry.name || (entry.installed && !entry.updateAvailable)}
@@ -512,7 +517,7 @@ export function MarketplaceDialog({
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" size="sm" className="h-8 px-3 text-mini" onClick={() => onOpenChange(false)}>
             {t('common:actions.close')}
           </Button>
         </DialogFooter>

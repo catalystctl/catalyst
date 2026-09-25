@@ -54,21 +54,21 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
     <div className="relative">
       {depth > 0 && (
         <div
-          className="absolute top-0 bottom-0 w-px bg-border/40 dark:bg-border/20"
+          className="absolute top-0 bottom-0 w-px bg-border/40"
           style={{ left: depth * 12 + 6 }}
         />
       )}
       <div
-        className={`flex items-center gap-0.5 rounded-md py-1 transition-all duration-150 ${
+        className={`flex items-center gap-0.5 rounded-sm py-1 transition-colors ${
           isActive
-            ? 'bg-primary-500/10 text-primary shadow-[inset_2px_0_0_0_hsl(var(--primary))]'
-            : 'text-muted-foreground hover:bg-surface-2 dark:text-muted-foreground dark:hover:bg-surface-2/50'
+            ? 'bg-primary/10 text-foreground'
+            : 'text-muted-foreground hover:bg-surface-1/40 hover:text-foreground'
         }`}
         style={{ paddingLeft: depth * 12 }}
       >
         <button
           type="button"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-transform duration-150 hover:text-foreground"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
           onClick={(e) => {
             e.stopPropagation();
             onToggle(entry.path);
@@ -81,17 +81,17 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
         </button>
         <button
           type="button"
-          className="flex flex-1 items-center gap-1.5 truncate px-1 py-0.5 text-left text-xs"
+          className="flex flex-1 items-center gap-1.5 truncate px-1 py-0.5 text-left text-mini"
           onClick={() => onNavigate(entry.path)}
         >
           {isExpanded ? (
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           ) : (
-            <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-muted-foreground/70" />
+            <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
           )}
           <span className="truncate font-medium">{entry.name}</span>
           {childDirectories.length > 0 && isExpanded && (
-            <span className="ml-auto mr-1 font-mono text-[9px] tabular-nums text-muted-foreground/50">
+            <span className="mr-1 ml-auto font-mono text-micro tabular-nums text-muted-foreground/50">
               {childDirectories.length}
             </span>
           )}
@@ -112,13 +112,13 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
                   style={{ paddingLeft: (depth + 1) * 12 + 24 }}
                   className="flex items-center gap-1.5 py-1"
                 >
-                  <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-pulse" />
-                  <span className="text-[11px] text-muted-foreground/60">{t('files.tree.scanning')}</span>
+                  <div className="h-1.5 w-1.5 animate-pulse rounded-sm bg-surface-3" />
+                  <span className="text-micro text-muted-foreground/60">{t('files.tree.scanning')}</span>
                 </div>
               ) : isActuallyEmpty ? (
                 <div
                   style={{ paddingLeft: (depth + 1) * 12 + 24 }}
-                  className="text-[11px] text-muted-foreground/50 py-1"
+                  className="py-1 text-micro text-muted-foreground/50"
                 >
                   {t('files.tree.emptyFolder')}
                 </div>
@@ -140,7 +140,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
                     <div
                       key={file.path}
                       style={{ paddingLeft: (depth + 1) * 12 + 16 }}
-                      className="flex w-full items-center gap-1.5 truncate rounded-md py-1 text-left text-xs text-muted-foreground/60"
+                      className="flex w-full items-center gap-1.5 truncate rounded-sm py-1 text-left text-mini text-muted-foreground/60"
                       title={file.name}
                     >
                       <File className="h-3 w-3 shrink-0 text-muted-foreground/50" />
@@ -182,31 +182,31 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
   };
 
   return (
-    <div className="space-y-0.5 text-sm">
+    <div className="space-y-0.5">
       <button
         type="button"
-        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-all duration-150 ${
+        className={`flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-mini transition-colors ${
           normalizePath(activePath) === '/'
-            ? 'bg-primary-500/10 text-primary shadow-[inset_2px_0_0_0_hsl(var(--primary))]'
-            : 'text-muted-foreground hover:bg-surface-2 dark:text-muted-foreground dark:hover:bg-surface-2/50'
+            ? 'bg-primary/10 text-foreground'
+            : 'text-muted-foreground hover:bg-surface-1/40 hover:text-foreground'
         }`}
         onClick={() => onNavigate('/')}
       >
-        <Server className="h-3.5 w-3.5 shrink-0 text-primary" />
+        <Server className="h-3.5 w-3.5 shrink-0 text-foreground" />
         <span className="font-medium">{t('files.tree.serverRoot')}</span>
       </button>
 
       {isLoading ? (
-        <div className="space-y-1 px-2 py-1">
+        <div className="space-y-0.5 px-2 py-1">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-2 py-1.5">
-              <div className="h-3.5 w-3.5 rounded-sm bg-muted animate-pulse" />
-              <div className="h-3 w-20 rounded-sm bg-muted animate-pulse" />
+              <div className="h-3.5 w-3.5 animate-pulse rounded-sm bg-surface-3" />
+              <div className="h-3 w-20 animate-pulse rounded-sm bg-surface-3" />
             </div>
           ))}
         </div>
       ) : isError ? (
-        <div className="px-2 py-2 text-[11px] text-destructive">{t('files.tree.loadFailed')}</div>
+        <div className="px-2 py-2 text-micro text-danger">{t('files.tree.loadFailed')}</div>
       ) : directories.length ? (
         directories.map((entry) => (
           <FileTreeNode
@@ -221,7 +221,7 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
           />
         ))
       ) : (
-        <div className="px-2 py-2 text-[11px] text-muted-foreground/60">{t('files.tree.noFolders')}</div>
+        <div className="px-2 py-2 text-micro text-muted-foreground/60">{t('files.tree.noFolders')}</div>
       )}
     </div>
   );

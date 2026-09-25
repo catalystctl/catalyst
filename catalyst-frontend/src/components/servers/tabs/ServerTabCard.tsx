@@ -5,12 +5,17 @@ interface ServerTabCardProps {
   className?: string;
 }
 
+/**
+ * The deck surface for a tab section: one `.deck-panel` frame (1px edge, 4px
+ * radius) with internal padding. Sections inside it separate with 1px rules
+ * rather than nested rounded cards.
+ */
 export default function ServerTabCard({
   children,
   className = '',
 }: ServerTabCardProps) {
   return (
-    <div className={`overflow-hidden rounded-md border border-border/50 bg-card px-3 py-2.5 ${className}`}>
+    <div className={`deck-panel overflow-hidden px-3 py-2.5 ${className}`}>
       {children}
     </div>
   );

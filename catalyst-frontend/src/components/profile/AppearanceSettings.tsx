@@ -23,14 +23,14 @@ function PersonalColorField({
       <div className="flex items-center gap-2">
         <div className="relative flex-shrink-0">
           <div
-            className="h-9 w-9 cursor-pointer rounded-md ring-1 ring-border/60"
+            className="h-8 w-8 cursor-pointer rounded-sm ring-1 ring-border/60"
             style={{ backgroundColor: isValid ? value : fallback }}
           />
           <input
             type="color"
             value={isValid ? value : fallback}
             onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 h-full w-full cursor-pointer rounded-md opacity-0"
+            className="absolute inset-0 h-full w-full cursor-pointer rounded-sm opacity-0"
           />
         </div>
         <input
@@ -38,7 +38,7 @@ function PersonalColorField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={fallback}
-          className="w-full rounded-md border border-border/50 bg-card px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+          className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
         />
       </div>
     </div>
@@ -86,15 +86,15 @@ export default function AppearanceSettings() {
                   type="button"
                   onClick={() => setThemePreference(id)}
                   title={hint}
-                  className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-xs transition-all ${
+                  className={`flex flex-col items-center gap-1 rounded-sm border px-2 py-2 text-mini transition-colors ${
                     active
-                      ? 'border-primary bg-primary/5 text-foreground'
-                      : 'border-border/30 text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                      ? 'border-primary/60 bg-primary/5 text-foreground'
+                      : 'border-border/60 text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
                   <span className="font-medium">{label}</span>
-                  <span className="text-[10px] opacity-70">{hint}</span>
+                  <span className="text-micro opacity-70">{hint}</span>
                 </button>
               );
             })}
@@ -108,7 +108,7 @@ export default function AppearanceSettings() {
               <button
                 type="button"
                 onClick={clearPersonalTheme}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                className="flex h-7 items-center gap-1 rounded-sm px-2 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
               >
                 <RotateCcw className="h-3 w-3" />
                 {t('appearance.panelDefaults')}
@@ -137,7 +137,7 @@ export default function AppearanceSettings() {
           </div>
           <div className="mt-3 flex gap-1.5">
             {[primary, secondary, accent].map((c, i) => (
-              <div key={i} className="h-6 flex-1 rounded-md ring-1 ring-border/60" style={{ backgroundColor: c }} />
+              <div key={i} className="h-5 flex-1 rounded-sm ring-1 ring-border/60" style={{ backgroundColor: c }} />
             ))}
           </div>
           <p className="type-meta mt-2">

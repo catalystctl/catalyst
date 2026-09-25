@@ -12,14 +12,13 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import ServerTabCard from '../servers/tabs/ServerTabCard';
 import SectionHeader from '../servers/tabs/SectionHeader';
 import StatGrid from '../servers/tabs/StatGrid';
-import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
+import { Meter, StatusLed } from '../deck/primitives';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import {
   Activity,
   AlertTriangle,
   CheckCircle,
-  Clock,
   FileText,
   HardDrive,
   Loader2,
@@ -31,7 +30,6 @@ import {
   Settings,
   Terminal,
   Upload,
-  Wifi,
   WifiOff,
   Zap,
   ChevronDown,
@@ -111,8 +109,8 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
   return (
     <ServerTabCard className="overflow-hidden">
       {/* ── Tab Strip ── */}
-      <div className="-mx-5 -mt-4 mb-0 border-b border-border/30 bg-surface-2/40">
-        <div className="flex items-center gap-0 overflow-x-auto px-1">
+      <div className="-mx-3 -mt-2.5 mb-0 border-b border-border/50 bg-surface-1/40">
+        <div className="flex items-center gap-0.5 overflow-x-auto px-1">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const Icon = tab.icon;
@@ -124,19 +122,19 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative flex shrink-0 items-center gap-1.5 px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors ${
+                className={`relative flex h-7 shrink-0 items-center gap-1.5 px-2.5 type-overline transition-colors ${
                   isActive
-                    ? 'text-primary'
-                    : 'text-muted-foreground/50 hover:text-muted-foreground'
+                    ? 'text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Icon className="h-3 w-3" />
                 {tabLabels[tab.id]}
                 {showDot && (
-                  <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
+                  <StatusLed tone="hazard" className="absolute right-0.5 top-1 h-1.5 w-1.5" />
                 )}
                 {isActive && (
-                  <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-primary" />
+                  <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
                 )}
               </button>
             );
@@ -145,7 +143,7 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
       </div>
 
       {/* ── Tab Content ── */}
-      <div className="pt-4">
+      <div className="pt-3">
         {!isOnline && activeTab !== 'actions' ? (
           <AgentOfflineState />
         ) : (
@@ -184,11 +182,11 @@ function AgentOfflineState() {
   const { t } = useTranslation('nodes');
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <WifiOff className="h-5 w-5 text-muted-foreground/40" />
+      <WifiOff className="h-4 w-4 text-muted-foreground/50" />
       <p className="mt-3 text-sm font-medium text-muted-foreground">
         {t('agent.offlineTitle')}
       </p>
-      <p className="mt-1 text-xs text-muted-foreground/50">
+      <p className="type-meta mt-1 opacity-70">
         {t('agent.offlineHint')}
       </p>
     </div>
@@ -222,29 +220,15 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
   const res = stats?.resources;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Connection badge */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          {node.isOnline ? (
-            <Wifi className="h-3.5 w-3.5 text-success" />
-          ) : (
-            <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
+          <StatusLed tone={node.isOnline ? 'go' : 'idle'} pulse={node.isOnline} />
           <div>
-            <span className="text-xs font-semibold text-foreground">{t('agent.connection')}</span>
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              {node.isOnline ? (
-                <>
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
-                  </span>
-                  {t('agent.connected')}
-                </>
-              ) : (
-                t('agent.disconnected')
-              )}
+            <span className="text-mini font-semibold text-foreground">{t('agent.connection')}</span>
+            <div className="type-overline">
+              {node.isOnline ? t('agent.connected') : t('agent.disconnected')}
             </div>
           </div>
         </div>
@@ -253,7 +237,7 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
           size="sm"
           onClick={() => ping()}
           disabled={!node.isOnline || isPinging}
-          className="gap-1.5 text-xs"
+          className="h-8 gap-1.5 px-3 text-mini"
         >
           {isPinging ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
           {t('agent.ping')}
@@ -317,27 +301,21 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
         <div className="space-y-3">
           <SectionHeader icon={MonitorDot} title={t('agent.liveResources')} />
           {[
-            { label: t('card.cpu'), pct: res.actualCpuPercent, color: 'bg-primary' },
+            { label: t('card.cpu'), pct: res.actualCpuPercent },
             {
               label: t('card.memory'),
               pct: res.actualMemoryTotalMb
                 ? (res.actualMemoryUsageMb / res.actualMemoryTotalMb) * 100
                 : 0,
-              color: 'bg-success',
             },
-            { label: t('agent.disk'), pct: res.actualDiskTotalMb ? (res.actualDiskUsageMb / res.actualDiskTotalMb) * 100 : 0, color: 'bg-warning' },
+            { label: t('agent.disk'), pct: res.actualDiskTotalMb ? (res.actualDiskUsageMb / res.actualDiskTotalMb) * 100 : 0 },
           ].map((m) => (
-            <div key={m.label} className="space-y-1">
-              <div className="flex items-center justify-between text-[10px]">
-                <span className="type-overline">{m.label}</span>
-                <span className="font-mono tabular-nums text-foreground">{m.pct.toFixed(1)}%</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-                <div
-                  className={`h-full rounded-full ${m.color} transition-all duration-700`}
-                  style={{ width: `${Math.min(100, Math.max(0, m.pct))}%` }}
-                />
-              </div>
+            <div key={m.label} className="flex items-center gap-3">
+              <span className="type-overline w-16 shrink-0">{m.label}</span>
+              <Meter value={m.pct} width="w-full" />
+              <span className="shrink-0 font-mono text-micro tabular-nums text-foreground">
+                {m.pct.toFixed(1)}%
+              </span>
             </div>
           ))}
         </div>
@@ -464,76 +442,76 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
           variant={isStreaming ? 'outline' : 'default'}
           size="sm"
           onClick={toggleStream}
-          className="gap-1.5 text-xs"
+          className="h-8 gap-1.5 px-3 text-mini"
         >
           {isStreaming ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
           {isStreaming ? t('agent.pause') : t('agent.live')}
         </Button>
 
         {isStreaming && (
-          <Badge variant="outline" className="gap-1 text-[10px] text-success">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
-            </span>
+          <span className="flex items-center gap-1.5 type-overline text-success">
+            <StatusLed tone="go" pulse />
             {t('agent.polling')}
-          </Badge>
+          </span>
         )}
 
         <Button
           variant="outline"
           size="sm"
           onClick={handleRefresh}
-          className="gap-1.5 text-xs"
+          className="h-8 gap-1.5 px-3 text-mini"
         >
           <RefreshCw className="h-3 w-3" />
           {t('common:actions.refresh')}
         </Button>
 
         {/* Level filter */}
-        <div className="flex items-center rounded-md border border-border/30 bg-surface-2/40">
+        <div className="flex items-center gap-0.5">
           {LEVEL_OPTIONS.map((level) => (
             <button
               key={level}
               onClick={() => setLevelFilter(level)}
-              className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+              className={`relative h-7 px-2 type-overline transition-colors ${
                 levelFilter === level
-                  ? 'text-primary'
-                  : 'text-muted-foreground/40 hover:text-muted-foreground'
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {level}
+              {levelFilter === level && (
+                <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+              )}
             </button>
           ))}
         </div>
 
         {/* Search */}
         <div className="relative flex-1 min-w-[140px]">
-          <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/40" />
+          <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/60" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('agent.filterLogs')}
-            className="w-full rounded-md border border-border/30 bg-surface-2/40 py-1 pl-7 pr-2 text-xs text-foreground placeholder:text-muted-foreground/30 focus:border-primary/30 focus:outline-none"
+            className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
           />
         </div>
 
-        <Button variant="ghost" size="sm" onClick={clearLogs} className="gap-1 text-xs text-muted-foreground">
+        <Button variant="ghost" size="sm" onClick={clearLogs} className="h-8 gap-1 px-3 text-mini text-muted-foreground">
           <Trash2 className="h-3 w-3" />
           {t('agent.clear')}
         </Button>
       </div>
 
       {/* Log count */}
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground/40">
+      <div className="flex items-center justify-between text-micro text-muted-foreground/70">
         <span>{t('agent.entries', { count: filteredLogs.length })}{levelFilter !== 'all' ? ` (${levelFilter})` : ''}</span>
         <label className="flex items-center gap-1 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={autoScroll}
             onChange={(e) => setAutoScroll(e.target.checked)}
-            className="h-3 w-3 rounded border-border/40"
+            className="h-3 w-3 rounded-sm border-border/40"
           />
           {t('agent.autoScroll')}
         </label>
@@ -542,14 +520,14 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
       {/* Log viewer */}
       <div
         ref={logContainerRef}
-        className="max-h-[400px] overflow-y-auto rounded-md border border-border/50 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground"
+        className="max-h-[400px] overflow-y-auto rounded-sm border border-border/50 bg-surface-0 p-3 font-mono text-micro leading-relaxed text-foreground"
       >
         {isLoading && logs.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-muted-foreground/40">
+          <div className="flex items-center justify-center py-8 text-muted-foreground/60">
             <Loader2 className="h-4 w-4 animate-spin mr-2" /> {t('agent.loadingLogs')}
           </div>
         ) : filteredLogs.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground/30">
+          <div className="py-8 text-center text-muted-foreground/60">
             {t('agent.noLogEntries')}{levelFilter !== 'all' ? t('agent.noLogEntriesLevel', { level: levelFilter }) : ''}
           </div>
         ) : (
@@ -558,11 +536,11 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
               key={`${entry.timestamp}-${entry.target}-${i}`}
               className="flex gap-2 border-b border-border/20 py-0.5 hover:bg-surface-1"
             >
-              <span className="shrink-0 text-muted-foreground/30 tabular-nums w-[70px]">
+              <span className="shrink-0 text-muted-foreground/60 tabular-nums w-[70px]">
                 {formatTimestamp(entry.timestamp)}
               </span>
               <span
-                className={`shrink-0 rounded px-1 py-px text-[9px] font-bold uppercase border ${LOG_LEVEL_COLORS[entry.level] || LOG_LEVEL_COLORS.trace}`}
+                className={`shrink-0 rounded-sm border px-1 py-px text-micro font-semibold uppercase ${LOG_LEVEL_COLORS[entry.level] || LOG_LEVEL_COLORS.trace}`}
               >
                 {entry.level.padEnd(5)}
               </span>
@@ -628,27 +606,24 @@ function AgentUpdateTab({
   const isUpdating = updateStatus?.status && updateStatus.status !== 'idle' && updateStatus.status !== 'failed';
 
   return (
-    <div className="space-y-4">
-      {/* Version comparison */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1 rounded-md border border-border/50 bg-surface-2/30 px-4 py-3">
+    <div className="space-y-3">
+      {/* Version comparison — one frame, hairline cells */}
+      <div className="flex items-stretch overflow-hidden rounded-sm border border-border/50">
+        <div className="min-w-0 flex-1 px-3 py-2">
           <div className="type-overline">{t('agent.current')}</div>
-          <div className="type-numeric mt-1 text-lg text-foreground">
+          <div className="mt-0.5 font-mono text-data tabular-nums text-foreground">
             v{String(agentVersion ?? '?').replace(/^v/i, '')}
           </div>
         </div>
-        <div className="flex flex-col items-center gap-1">
-          <div className="h-px w-6 bg-border/30" />
-          <ChevronDown className="h-4 w-4 text-muted-foreground/30 -rotate-90" />
-          <div className="h-px w-6 bg-border/30" />
+        <div className="flex w-8 shrink-0 items-center justify-center border-x border-border/50 bg-surface-1/40">
+          <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/60" />
         </div>
-        <div className={`flex-1 rounded-md border px-4 py-3 ${
-          updateAvailable
-            ? 'border-warning/30 bg-warning/5'
-            : 'border-success/20 bg-success/5'
-        }`}>
-          <div className="type-overline">{t('agent.latest')}</div>
-          <div className="type-numeric mt-1 text-lg text-foreground">
+        <div className="min-w-0 flex-1 px-3 py-2">
+          <div className="flex items-center gap-1.5">
+            <span className="type-overline">{t('agent.latest')}</span>
+            <StatusLed tone={updateAvailable ? 'hazard' : 'go'} />
+          </div>
+          <div className="mt-0.5 font-mono text-data tabular-nums text-foreground">
             v{String(latestVersion ?? '?').replace(/^v/i, '')}
           </div>
         </div>
@@ -656,45 +631,40 @@ function AgentUpdateTab({
 
       {/* Update status */}
       {updateStatus && updateStatus.status !== 'idle' && (
-        <div className={`rounded-md border px-4 py-3 ${
+        <div className={`rounded-sm border px-3 py-2 ${
           updateStatus.status === 'failed'
             ? 'border-danger/30 bg-danger/5'
             : updateStatus.status === 'restarting'
             ? 'border-success/30 bg-success/5'
-            : 'border-primary/20 bg-primary/5'
+            : 'border-border/50'
         }`}>
-          <div className="flex items-center gap-2 text-sm font-medium">
-            {isUpdating && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-            {updateStatus.status === 'failed' && <AlertTriangle className="h-4 w-4 text-danger" />}
-            {updateStatus.status === 'restarting' && <CheckCircle className="h-4 w-4 text-success" />}
-            <span className="capitalize">{updateStatus.status}</span>
+          <div className="flex items-center gap-2 text-mini font-medium">
+            {isUpdating && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+            {updateStatus.status === 'failed' && <AlertTriangle className="h-3.5 w-3.5 text-danger" />}
+            {updateStatus.status === 'restarting' && <CheckCircle className="h-3.5 w-3.5 text-success" />}
+            <span className="font-mono uppercase">{updateStatus.status}</span>
           </div>
           {updateStatus.status === 'downloading' && (
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-500"
-                style={{ width: `${updateStatus.progress}%` }}
-              />
-            </div>
+            <Meter value={updateStatus.progress} width="w-full" className="mt-2" />
           )}
           {updateStatus.error && (
-            <p className="mt-2 text-xs text-danger/80">{updateStatus.error}</p>
+            <p className="mt-1.5 font-mono text-micro text-danger">{updateStatus.error}</p>
           )}
         </div>
       )}
 
       {/* Action */}
-      <div className="flex items-center justify-between rounded-md border border-border/50 bg-surface-2/20 px-4 py-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 rounded-sm border border-border/50 px-3 py-2">
+        <div className="flex items-center gap-2 text-mini">
           {updateAvailable ? (
             <>
-              <AlertTriangle className="h-4 w-4 text-warning" />
-              <span className="text-sm text-foreground">{t('agent.updateAvailable')}</span>
+              <StatusLed tone="hazard" />
+              <span className="text-foreground">{t('agent.updateAvailable')}</span>
             </>
           ) : (
             <>
-              <CheckCircle className="h-4 w-4 text-success" />
-              <span className="text-sm text-muted-foreground">{t('agent.upToDate')}</span>
+              <StatusLed tone="go" />
+              <span className="text-muted-foreground">{t('agent.upToDate')}</span>
             </>
           )}
         </div>
@@ -703,7 +673,7 @@ function AgentUpdateTab({
           size="sm"
           onClick={() => updateMutation.mutate()}
           disabled={!updateAvailable || updateMutation.isPending || isUpdating}
-          className="gap-1.5 text-xs"
+          className="h-8 gap-1.5 px-3 text-mini"
         >
           {updateMutation.isPending ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -773,26 +743,26 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
       {/* Editor */}
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-4 w-4 animate-spin mr-2 text-muted-foreground/40" />
-          <span className="text-xs text-muted-foreground/40">{t('agent.loadingConfig')}</span>
+          <Loader2 className="h-4 w-4 animate-spin mr-2 text-muted-foreground/60" />
+          <span className="text-mini text-muted-foreground/60">{t('agent.loadingConfig')}</span>
         </div>
       ) : (
         <textarea
           value={editContent ?? ''}
           onChange={(e) => setEditContent(e.target.value)}
           spellCheck={false}
-          className="w-full min-h-[320px] rounded-md border border-border/50 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground focus:border-primary/30 focus:outline-none resize-y"
+          className="w-full min-h-[320px] rounded-sm border border-border/50 bg-surface-0 p-3 font-mono text-micro leading-relaxed text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40 resize-y"
         />
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {hasChanges && (
-            <Badge variant="outline" className="gap-1 text-[10px] border-warning/30 text-warning">
-              <Clock className="h-2.5 w-2.5" />
+            <span className="flex items-center gap-1.5 type-overline text-warning">
+              <StatusLed tone="hazard" />
               {t('agent.unsavedChanges')}
-            </Badge>
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -801,7 +771,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
             size="sm"
             onClick={() => setEditContent(config?.content ?? '')}
             disabled={!hasChanges}
-            className="gap-1.5 text-xs"
+            className="h-8 gap-1.5 px-3 text-mini"
           >
             <RotateCcw className="h-3 w-3" />
             {t('common:actions.reset')}
@@ -811,7 +781,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
             size="sm"
             onClick={() => setShowSaveConfirm(true)}
             disabled={!hasChanges || saveMutation.isPending}
-            className="gap-1.5 text-xs"
+            className="h-8 gap-1.5 px-3 text-mini"
           >
             {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
             {t('common:actions.save')}
@@ -942,18 +912,18 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
   ];
 
   return (
-    <div className="space-y-2">
+    <div className="divide-y divide-border/50">
       {actions.map((action) => {
         const Icon = action.icon;
         return (
           <div
             key={action.id}
-            className="group flex items-center justify-between rounded-md border border-border/50 bg-surface-2/20 px-4 py-3 transition-colors hover:border-border/50"
+            className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
           >
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex min-w-0 items-center gap-2.5">
               <Icon className={`h-3.5 w-3.5 shrink-0 ${action.danger ? 'text-danger' : 'text-muted-foreground'}`} />
               <div className="min-w-0">
-                <div className="text-sm font-medium text-foreground">{action.label}</div>
+                <div className="text-mini font-medium text-foreground">{action.label}</div>
                 <div className="type-meta truncate">{action.description}</div>
               </div>
             </div>
@@ -962,7 +932,7 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
               size="sm"
               onClick={action.onClick}
               disabled={action.disabled}
-              className={`gap-1.5 text-xs shrink-0 ${
+              className={`h-8 shrink-0 gap-1.5 px-3 text-mini ${
                 action.danger
                   ? 'text-danger hover:bg-danger/5 hover:text-danger hover:border-danger/30'
                   : ''

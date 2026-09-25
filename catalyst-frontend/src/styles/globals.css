@@ -308,7 +308,9 @@ body {
 
 /* Type roles — consume these instead of inventing sizes per page */
 .type-overline {
-  font-size: 0.625rem;
+  /* One label step, shared with .deck-label — 10px was off the ramp and read
+     smaller than the 11px micro/meta text it sits beside. */
+  font-size: var(--text-micro);
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;

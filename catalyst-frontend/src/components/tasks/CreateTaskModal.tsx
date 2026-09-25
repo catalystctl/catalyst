@@ -127,7 +127,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
     <div>
       <button
         type="button"
-                className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+        className="inline-flex h-8 items-center rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
         onClick={() => {
           if (!disabled) setOpen(true);
         }}
@@ -157,7 +157,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
               <Label htmlFor="create-task-action">{t('tasks.action')}</Label>
               <select
                 id="create-task-action"
-                className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary/30"
+                className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary"
                 value={action}
                 onChange={(event) => setAction(event.target.value as Task['action'])}
               >
@@ -187,7 +187,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
               />
-              <span className="type-meta">
+              <span className="text-micro text-muted-foreground">
                 {timezoneLabel
                   ? t('tasks.timezone.withLabel', { timezone: timezoneLabel })
                   : t('tasks.timezone.withoutLabel')}
@@ -197,7 +197,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
               <Label htmlFor="create-task-repeat">{t('tasks.repeat')}</Label>
               <select
                 id="create-task-repeat"
-                className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary/30"
+                className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary"
                 value={repeat}
                 onChange={(event) => setRepeat(event.target.value as typeof repeat)}
               >
@@ -213,7 +213,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
                 <Label htmlFor="create-task-weekday">{t('tasks.dayOfWeek')}</Label>
                 <select
                   id="create-task-weekday"
-                  className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary/30"
+                  className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary"
                   value={weekday}
                   onChange={(event) => setWeekday(event.target.value)}
                 >
@@ -229,10 +229,15 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
             ) : null}
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" className="h-8 px-3 text-mini" onClick={() => setOpen(false)}>
               {t('common:actions.cancel')}
             </Button>
-            <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
+            <Button
+              size="sm"
+              className="h-8 px-3 text-mini"
+              onClick={() => mutation.mutate()}
+              disabled={disableSubmit}
+            >
               {mutation.isPending ? t('tasks.create.submitting') : t('common:actions.create')}
             </Button>
           </DialogFooter>

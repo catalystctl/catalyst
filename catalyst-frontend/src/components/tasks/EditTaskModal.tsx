@@ -70,7 +70,7 @@ function EditTaskModal({
   return (
     <div>
       <button
-        className="rounded-md border border-border/50 bg-card px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-60"
+        className="inline-flex h-7 items-center rounded-sm border border-border/60 px-2 text-mini font-semibold text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-60"
         onClick={() => {
           if (!disabled) setOpen(true);
         }}
@@ -105,7 +105,7 @@ function EditTaskModal({
               <Label htmlFor="edit-task-action">{t('tasks.action')}</Label>
               <select
                 id="edit-task-action"
-                className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary/30"
+                className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary"
                 value={action}
                 onChange={(event) => setAction(event.target.value as Task['action'])}
               >
@@ -136,10 +136,15 @@ function EditTaskModal({
             </div>
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" className="h-8 px-3 text-mini" onClick={() => setOpen(false)}>
               {t('common:actions.cancel')}
             </Button>
-            <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
+            <Button
+              size="sm"
+              className="h-8 px-3 text-mini"
+              onClick={() => mutation.mutate()}
+              disabled={disableSubmit}
+            >
               {mutation.isPending ? t('tasks.edit.saving') : t('common:actions.save')}
             </Button>
           </DialogFooter>

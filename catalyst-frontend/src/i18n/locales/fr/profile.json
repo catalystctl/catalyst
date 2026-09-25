@@ -99,8 +99,7 @@
       "showAgentKeys_one": "Afficher la clé d’agent ({{count}})",
       "showAgentKeys_many": "Afficher les clés d’agent ({{count}})",
       "showAgentKeys_other": "Afficher les clés d’agent ({{count}})",
-      "status": "État : {{status}}",
-      "title": "Filtres"
+      "status": "État : {{status}}"
     },
     "form": {
       "allMine": "Toutes mes autorisations",

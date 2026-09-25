@@ -5,7 +5,6 @@ import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { useParams, Link } from 'react-router-dom';
 import {
- Network,
  Plug,
  Globe,
  Search,
@@ -32,13 +31,21 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
-import StatGrid from '../../components/servers/tabs/StatGrid';
-import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
-import SectionHeader from '../../components/servers/tabs/SectionHeader';
-import DataField from '../../components/servers/tabs/DataField';
+import { BracketLabel, Segmented } from '../../components/deck/primitives';
+import { cn } from '@/lib/utils';
+
+/**
+ * One grid template per table, shared by the column header and every row so
+ * columns line up. Fixed / minmax(0,1fr) tracks only — never `auto`.
+ */
+const PORTS_GRID =
+  'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+  'md:grid-cols-[1.5rem_minmax(0,1fr)_6rem_8rem_6.5rem_5rem]';
+
+const POOLS_GRID =
+  'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+  'md:grid-cols-[minmax(0,1fr)_5rem_6rem_5rem_6rem_5rem]';
 
 interface NodeAllocation {
  id: string;
@@ -341,578 +348,659 @@ function NodeAllocationsPage() {
  { label: t('allocations.stats.reserved'), value: ipPoolStats.reserved },
  ];
 
- return (
- <div className="space-y-5">
- {/* Breadcrumb */}
- <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
- <Link to="/admin/nodes" className="flex items-center gap-1 hover:text-foreground transition-colors">
- <ArrowLeft className="h-3 w-3" />
- {t('nodes.title')}
- </Link>
- <span className="text-muted-foreground/30">/</span>
- <span className="text-foreground font-medium">{node?.name || t('common:actions.loading')}</span>
- <span className="text-muted-foreground/30">/</span>
- <span className="text-foreground">{t('allocations.title')}</span>
- </div>
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* Breadcrumb */}
+      <div className="flex flex-wrap items-center gap-2 text-micro text-muted-foreground">
+        <Link to="/admin/nodes" className="flex items-center gap-1 transition-colors hover:text-foreground">
+          <ArrowLeft className="h-3 w-3" />
+          {t('nodes.title')}
+        </Link>
+        <span className="text-muted-foreground/30">/</span>
+        <span className="font-medium text-foreground">{node?.name || t('common:actions.loading')}</span>
+        <span className="text-muted-foreground/30">/</span>
+        <span className="text-foreground">{t('allocations.title')}</span>
+      </div>
 
- {/* Header */}
- <TabHeader
- icon={Network}
- title={t('allocations.title')}
- description={t('allocations.description', { node: node?.name || t('allocations.thisNode') })}
- actions={
- <div className="flex items-center gap-2">
- <div className="hidden sm:flex items-center gap-1.5 rounded-md border border-border/30 bg-surface-2/30 px-2.5 py-1 text-[11px] text-muted-foreground">
- <Plug className="h-3 w-3" />
- {t('allocations.portCount', { value: portStats.total })}
- </div>
- <div className="hidden sm:flex items-center gap-1.5 rounded-md border border-border/30 bg-surface-2/30 px-2.5 py-1 text-[11px] text-muted-foreground">
- <Globe className="h-3 w-3" />
- {t('allocations.poolCount', { value: ipPoolStats.pools })}
- </div>
- </div>
- }
- />
-
- {/* Info note */}
- <ServerTabCard className="!border-info/15 !bg-info/[0.02]">
- <div className="flex items-start gap-2.5">
- <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
- <div className="space-y-1">
- <p className="text-[11px] font-medium text-foreground">{t('allocations.info.title')}</p>
- <ul className="ml-3 list-disc space-y-0.5 text-[11px] text-muted-foreground">
- <li>
- <Trans i18nKey="allocations.info.portAllocations" ns="admin-infra">
- <strong>Port Allocations</strong> — Track IP:Port combinations for proxy/NAT setups (like Pterodactyl)
- </Trans>
- </li>
- <li>
- <Trans i18nKey="allocations.info.ipPools" ns="admin-infra">
- <strong>IP Pools</strong> — Automatic MACVLAN networking with dedicated IPs per server (advanced)
- </Trans>
- </li>
- </ul>
- </div>
- </div>
- </ServerTabCard>
-
- {/* Tabs */}
- <div className="flex gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 ">
- <button
- onClick={() => setActiveTab('ports')}
- className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
- activeTab === 'ports'
- ? 'bg-primary text-primary-foreground '
- : 'text-muted-foreground hover:text-foreground'
- }`}
- >
- <Plug className="h-3.5 w-3.5" />
- {t('allocations.tabs.ports')}
- <span className={`text-[10px] tabular-nums ${activeTab === 'ports' ? 'text-primary-foreground/70' : 'text-muted-foreground/50'}`}>
- {portStats.total}
- </span>
- </button>
- <button
- onClick={() => setActiveTab('ips')}
- className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
- activeTab === 'ips'
- ? 'bg-primary text-primary-foreground '
- : 'text-muted-foreground hover:text-foreground'
- }`}
- >
- <Globe className="h-3.5 w-3.5" />
- {t('allocations.tabs.ips')}
- <span className={`text-[10px] tabular-nums ${activeTab === 'ips' ? 'text-primary-foreground/70' : 'text-muted-foreground/50'}`}>
- {ipPoolStats.pools}
- </span>
- </button>
- </div>
-
- {/* Port Allocations Tab */}
- {activeTab === 'ports' && (
- <div className="space-y-4">
- <StatGrid items={allPortStatItems} columns={4} />
-
- {/* Search and Create */}
- <div className="flex items-center gap-2">
- <div className="relative flex-1 max-w-sm">
- <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
- <input
- type="text"
- value={search}
- onChange={(e) => setSearch(e.target.value)}
- placeholder={t('allocations.searchPlaceholder')}
- className="h-8 w-full rounded-lg border border-border/40 bg-card px-8 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
- />
- </div>
- <button
- onClick={() => setShowCreatePortModal(true)}
- className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
- >
- <Plus className="h-3.5 w-3.5" />
- {t('allocations.createAllocations')}
- </button>
- </div>
-
- {selectedIds.length > 0 && (
- <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
- <div className="flex items-center gap-3">
- <span className="text-sm font-medium text-foreground">
- {t('allocations.selectedCount', { value: selectedIds.length })}
- </span>
- <button
- onClick={() => setSelectedIds([])}
- className="text-xs text-muted-foreground transition-colors hover:text-foreground"
- >
- {t('allocations.clearSelection')}
- </button>
- </div>
- <Button
- variant="destructive"
- size="sm"
- onClick={() => setShowBulkDeleteDialog(true)}
- disabled={bulkDeletePortsMutation.isPending}
- className="gap-1.5 text-xs"
- >
- <Trash2 className="h-3 w-3" />
- {t('common:actions.delete')}
- </Button>
- </div>
- )}
-
- {/* Port Allocations List */}
- {allocationsLoading ? (
- <TabLoadingState rows={5} />
- ) : filteredAllocations.length === 0 ? (
- <TabEmptyState
- title={search.trim() ? t('allocations.empty.noMatches') : t('allocations.empty.noPorts')}
- description={search.trim() ? undefined : t('allocations.empty.noPortsDescription')}
- action={
- !search.trim() ? (
- <button
- onClick={() => setShowCreatePortModal(true)}
- className="rounded-md border border-border/40 bg-card px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:border-primary/20"
- >
- {t('allocations.empty.createFirst')}
- </button>
- ) : undefined
- }
- />
- ) : (
- <div className="space-y-2">
- <div className="flex items-center gap-3 px-1">
- <label className="flex cursor-pointer items-center gap-2">
- <input
- type="checkbox"
- checked={allFilteredSelected}
- ref={(el) => {
- if (el) el.indeterminate = !allFilteredSelected && someFilteredSelected;
- }}
- onChange={toggleSelectAllFiltered}
- disabled={selectableFilteredIds.length === 0}
- className="h-4 w-4 rounded border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
- />
- <span className="text-xs font-medium text-muted-foreground">
- {t('allocations.selectAll')}
- </span>
- </label>
- <span className="text-[11px] text-muted-foreground/60">
- {t('allocations.resultCount', {
- shown: filteredAllocations.length,
- total: allocations.length,
- })}
- </span>
- </div>
- {filteredAllocations.map((allocation) => {
- const isSelected = selectedIds.includes(allocation.id);
- const isAssigned = Boolean(allocation.serverId);
- return (
- <div
- key={allocation.id}
- className={`group relative rounded-lg border px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02] ${
- isSelected ? 'border-primary/30 bg-primary/[0.04]' : 'border-border/30'
- }`}
- >
- <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
- <div className="flex items-center justify-between gap-3">
- <div className="flex items-center gap-3 min-w-0 flex-1">
- <input
- type="checkbox"
- checked={isSelected}
- onChange={() => toggleAllocationSelected(allocation.id)}
- disabled={isAssigned}
- title={
- isAssigned
- ? t('allocations.assignedCannotSelect')
- : t('allocations.selectAllocation', {
- ip: allocation.ip,
- port: allocation.port,
- })
- }
- aria-label={t('allocations.selectAllocation', {
- ip: allocation.ip,
- port: allocation.port,
- })}
- className="h-4 w-4 shrink-0 rounded border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
- />
- <div className="flex items-center gap-4 min-w-0 flex-1">
- <DataField
- label={t('allocations.field.ip')}
- value={allocation.ip}
- copyable
- />
- <DataField
- label={t('allocations.field.port')}
- value={String(allocation.port)}
- copyable
- />
- {allocation.alias && (
- <span className="hidden sm:inline text-xs text-muted-foreground truncate">
- {allocation.alias}
- </span>
- )}
- </div>
- </div>
- <div className="flex items-center gap-2 shrink-0">
- {allocation.serverId ? (
- <span className="inline-flex items-center rounded-full border border-border/30 bg-surface-2/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
- {t('allocations.assigned')}
- </span>
- ) : (
- <span className="inline-flex items-center rounded-full border border-success/20 bg-success/5 px-2 py-0.5 text-[10px] font-medium text-success">
- {t('allocations.available')}
- </span>
- )}
- {!allocation.serverId && (
- <button
- onClick={() => deletePortMutation.mutate(allocation.id)}
- disabled={deletePortMutation.isPending}
- className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-destructive hover:bg-destructive/5"
- title={t('common:actions.delete')}
- >
- <Trash2 className="h-3 w-3" />
- </button>
- )}
- </div>
- </div>
- </div>
- );
- })}
- </div>
- )}
- </div>
- )}
-
- {/* IP Pools Tab */}
- {activeTab === 'ips' && (
- <div className="space-y-4">
- <StatGrid items={allIpStatItems} columns={4} />
-
- {/* Create Pool Button */}
- <div className="flex justify-end">
- <button
- onClick={() => setShowCreatePoolModal(true)}
- className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
- >
- <Plus className="h-3.5 w-3.5" />
- {t('allocations.createPoolButton')}
- </button>
- </div>
-
- {/* IP Pools List */}
- {poolsLoading ? (
- <TabLoadingState rows={4} />
- ) : nodePools.length === 0 ? (
- <TabEmptyState
- title={t('allocations.empty.noPools')}
- description={t('allocations.empty.noPoolsDescription')}
- action={
- <button
- onClick={() => setShowCreatePoolModal(true)}
- className="rounded-md border border-border/40 bg-card px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:border-primary/20"
- >
- {t('allocations.empty.createFirstPool')}
- </button>
- }
- />
- ) : (
- <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
- {nodePools.map((pool: IpPool) => (
- <ServerTabCard key={pool.id} className="relative">
- <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
- <div className="flex items-start justify-between gap-3">
- <div className="min-w-0">
- <SectionHeader
- icon={Globe}
- title={pool.networkName}
- />
- <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
- <code className="rounded bg-surface-2/50 px-1.5 py-0.5 font-mono">{pool.cidr}</code>
- <span>·</span>
- <span>{pool.rangeStart} → {pool.rangeEnd}</span>
- </div>
- </div>
- <button
- onClick={() => deletePoolMutation.mutate(pool.id)}
- disabled={deletePoolMutation.isPending}
- className="rounded p-1.5 text-muted-foreground/40 transition-colors hover:text-destructive hover:bg-destructive/5"
- title={t('common:actions.delete')}
- >
- <Trash2 className="h-3.5 w-3.5" />
- </button>
- </div>
-
- <div className="mt-3 grid grid-cols-3 gap-2">
- <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="type-overline">{t('allocations.stats.available')}</div>
- <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.availableCount}</div>
- </div>
- <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="type-overline">{t('allocations.stats.used')}</div>
- <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.usedCount}</div>
- </div>
- <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="type-overline">{t('allocations.stats.reserved')}</div>
- <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.reservedCount}</div>
- </div>
- </div>
-
- <div className="mt-2 text-[11px] text-muted-foreground">
- {t('allocations.poolTotals', { total: pool.total, gateway: pool.gateway ?? 'n/a' })}
- </div>
-
- {pool.allocations && pool.allocations.length > 0 && (
- <div className="mt-3 border-t border-border/30 pt-3">
- <div className="type-overline mb-2">
- {t('allocations.assignedIps', { value: pool.allocations.length })}
- </div>
- <div className="max-h-32 space-y-1 overflow-y-auto">
- {pool.allocations.map((alloc: any) => (
- <div key={alloc.id} className="flex items-center justify-between text-[11px]">
- <code className="font-mono text-muted-foreground text-[10px]">{alloc.ip}</code>
- <span className="text-muted-foreground/30">→</span>
- <span className="text-foreground truncate max-w-[120px]">{alloc.serverName}</span>
- </div>
- ))}
- </div>
- </div>
- )}
- </ServerTabCard>
- ))}
- </div>
- )}
- </div>
- )}
-
- {/* Create Port Allocations Modal */}
-<Dialog open={showCreatePortModal} onOpenChange={setShowCreatePortModal}>
- <DialogContent size="lg">
-      <DialogHeader icon={<Plug className="h-4 w-4" />}>
-        <DialogTitle>{t('allocations.createPort.title')}</DialogTitle>
-        <DialogDescription>{t('allocations.createPort.description')}</DialogDescription>
-      </DialogHeader>
-
-      <DialogBody className="space-y-4">
-        <ServerTabCard className="!bg-surface-2/20 !border-border/20">
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            <Trans i18nKey="allocations.createPort.ipFormat" ns="admin-infra">
-              <strong>IP format:</strong> Single IP (192.168.1.100), multiple IPs (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24)
-            </Trans>
+      {/* ── Deck header ── */}
+      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <BracketLabel>{t('layout:sections.infrastructure')}</BracketLabel>
+          <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
+            {t('allocations.title')}
+          </h1>
+          <p className="text-mini text-muted-foreground">
+            {t('allocations.description', { node: node?.name || t('allocations.thisNode') })}
           </p>
-          <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-            <Trans i18nKey="allocations.createPort.portFormat" ns="admin-infra">
-              <strong>Port format:</strong> Single port (25565), range (25565-25664), or multiple (25565, 25566, 25567)
-            </Trans>
-          </p>
-        </ServerTabCard>
+        </div>
+        <div className="hidden items-center gap-3 sm:flex">
+          <span className="flex items-center gap-1.5">
+            <Plug className="h-3 w-3 text-muted-foreground" />
+            <Segmented muted>{t('allocations.portCount', { value: portStats.total })}</Segmented>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Globe className="h-3 w-3 text-muted-foreground" />
+            <Segmented muted>{t('allocations.poolCount', { value: ipPoolStats.pools })}</Segmented>
+          </span>
+        </div>
+      </header>
 
-        <label className="block space-y-1.5">
-          <span className="type-overline">{t('allocations.createPort.ipLabel')}</span>
-          <Input
-            type="text"
-            value={ipInput}
-            onChange={(e) => setIpInput(e.target.value)}
-            placeholder={t('allocations.createPort.ipPlaceholder')}
-          />
-        </label>
+      {/* Info note */}
+      <div className="flex items-start gap-2.5 rounded-sm border border-info/20 bg-info/[0.03] px-3 py-2">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
+        <div className="space-y-1">
+          <p className="text-micro font-medium text-foreground">{t('allocations.info.title')}</p>
+          <ul className="ml-3 list-disc space-y-0.5 text-micro text-muted-foreground">
+            <li>
+              <Trans i18nKey="allocations.info.portAllocations" ns="admin-infra">
+                <strong>Port Allocations</strong> — Track IP:Port combinations for proxy/NAT setups (like Pterodactyl)
+              </Trans>
+            </li>
+            <li>
+              <Trans i18nKey="allocations.info.ipPools" ns="admin-infra">
+                <strong>IP Pools</strong> — Automatic MACVLAN networking with dedicated IPs per server (advanced)
+              </Trans>
+            </li>
+          </ul>
+        </div>
+      </div>
 
-        <label className="block space-y-1.5">
-          <span className="type-overline">{t('allocations.createPort.portsLabel')}</span>
-          <Input
-            type="text"
-            value={portsInput}
-            onChange={(e) => setPortsInput(e.target.value)}
-            placeholder={t('allocations.createPort.portsPlaceholder')}
-          />
-        </label>
+      {/* ── The deck: tabs, controls, stats, columns and rows in one frame ── */}
+      <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+        {/* Control strip */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+          <div className="flex items-center gap-0.5">
+            <RailTab
+              active={activeTab === 'ports'}
+              onClick={() => setActiveTab('ports')}
+              icon={<Plug className="h-3 w-3" />}
+              label={t('allocations.tabs.ports')}
+              count={portStats.total}
+            />
+            <RailTab
+              active={activeTab === 'ips'}
+              onClick={() => setActiveTab('ips')}
+              icon={<Globe className="h-3 w-3" />}
+              label={t('allocations.tabs.ips')}
+              count={ipPoolStats.pools}
+            />
+          </div>
 
-        <label className="block space-y-1.5">
-          <span className="type-overline">{t('allocations.createPort.aliasLabel')}</span>
-          <Input
-            type="text"
-            value={aliasInput}
-            onChange={(e) => setAliasInput(e.target.value)}
-            placeholder={t('allocations.createPort.aliasPlaceholder')}
-          />
-        </label>
+          <span className="mx-1 h-5 w-px bg-border/60" aria-hidden />
 
-        <Button variant="link" className="h-auto p-0 text-[11px]" onClick={handleQuickFillPorts}>
-          {t('allocations.createPort.quickFill')}
-        </Button>
-      </DialogBody>
+          {activeTab === 'ports' ? (
+            <>
+              <label className="relative flex min-w-[12rem] flex-1 items-center">
+                <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t('allocations.searchPlaceholder')}
+                  className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+                />
+              </label>
+              <span className="font-mono text-micro tabular-nums text-muted-foreground">
+                {t('allocations.resultCount', {
+                  shown: filteredAllocations.length,
+                  total: allocations.length,
+                })}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowCreatePortModal(true)}
+                className="flex h-7 items-center gap-1.5 rounded-sm border border-primary/50 bg-primary/10 px-2.5 text-mini text-foreground transition-colors hover:bg-primary/20"
+              >
+                <Plus className="h-3 w-3" />
+                {t('allocations.createAllocations')}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowCreatePoolModal(true)}
+              className="ml-auto flex h-7 items-center gap-1.5 rounded-sm border border-primary/50 bg-primary/10 px-2.5 text-mini text-foreground transition-colors hover:bg-primary/20"
+            >
+              <Plus className="h-3 w-3" />
+              {t('allocations.createPoolButton')}
+            </button>
+          )}
+        </div>
 
-      <DialogFooter>
-        <Button variant="outline" onClick={() => setShowCreatePortModal(false)}>
-          {t('common:actions.cancel')}
-        </Button>
-        <Button
-          onClick={() => createPortMutation.mutate()}
-          disabled={!ipInput.trim() || !portsInput.trim() || createPortMutation.isPending}
-        >
-          {createPortMutation.isPending ? t('allocations.createPort.creating') : t('allocations.createPort.submit')}
-        </Button>
-      </DialogFooter>
- </DialogContent>
- </Dialog>
+        {/* Stats strip */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border/50 bg-surface-1/20 px-3 py-1.5">
+          {(activeTab === 'ports' ? allPortStatItems : allIpStatItems).map((stat) => (
+            <span key={stat.label} className="flex items-center gap-1.5">
+              <span className="type-overline">{stat.label}</span>
+              <Segmented muted className="text-micro">
+                {stat.value}
+              </Segmented>
+            </span>
+          ))}
+        </div>
 
- {/* Create IP Pool Modal */}
- <Dialog open={showCreatePoolModal} onOpenChange={setShowCreatePoolModal}>
- <DialogContent size="xl">
- <DialogHeader icon={<Globe className="h-4 w-4" />}>
- <DialogTitle>{t('allocations.createPool.title')}</DialogTitle>
- <DialogDescription>{t('allocations.createPool.description')}</DialogDescription>
- </DialogHeader>
+        {/* Bulk actions strip */}
+        {activeTab === 'ports' && selectedIds.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-primary/5 px-3 py-1.5">
+            <div className="flex items-center gap-3">
+              <span className="text-mini text-foreground">
+                {t('allocations.selectedCount', { value: selectedIds.length })}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="text-micro text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {t('allocations.clearSelection')}
+              </button>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowBulkDeleteDialog(true)}
+              disabled={bulkDeletePortsMutation.isPending}
+              className="h-7 gap-1.5 rounded-sm px-2.5 text-mini"
+            >
+              <Trash2 className="h-3 w-3" />
+              {t('common:actions.delete')}
+            </Button>
+          </div>
+        )}
 
- <DialogBody className="space-y-4">
- <ServerTabCard className="!bg-surface-2/20 !border-border/20">
- <p className="text-[11px] text-muted-foreground leading-relaxed">
- {t('allocations.createPool.intro')}
- </p>
- </ServerTabCard>
+        {activeTab === 'ports' ? (
+          <>
+            {/* Column header */}
+            <div
+              className={cn(
+                PORTS_GRID,
+                'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+              )}
+            >
+              <span className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = !allFilteredSelected && someFilteredSelected;
+                  }}
+                  onChange={toggleSelectAllFiltered}
+                  disabled={selectableFilteredIds.length === 0}
+                  aria-label={t('allocations.selectAll')}
+                  className="h-3.5 w-3.5 rounded-sm border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                />
+              </span>
+              <span className="type-overline">{t('allocations.field.ip')}</span>
+              <span className="type-overline hidden justify-self-end md:inline-flex">{t('allocations.field.port')}</span>
+              <span className="hidden md:block" aria-hidden />
+              <span className="type-overline hidden justify-self-end gap-2 md:inline-flex">
+                {t('allocations.assigned')}
+                <span className="border-l border-border/50 pl-2">{t('allocations.available')}</span>
+              </span>
+              <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
+            </div>
 
- <label className="block space-y-1.5">
- <span className="type-overline">{t('allocations.createPool.networkName')}</span>
- <Input
- type="text"
- value={networkName}
- onChange={(e) => setNetworkName(e.target.value)}
- placeholder="mc-lan"
- />
- </label>
+            {/* Rows */}
+            <div className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25">
+              {allocationsLoading ? (
+                <div>
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <div key={index} className={cn(PORTS_GRID, 'border-t border-border/40 py-2 pl-3 pr-3')}>
+                      <span />
+                      <div className="h-3.5 w-32 animate-pulse bg-surface-3" />
+                    </div>
+                  ))}
+                </div>
+              ) : filteredAllocations.length === 0 ? (
+                <div className="p-3">
+                  <TabEmptyState
+                    title={search.trim() ? t('allocations.empty.noMatches') : t('allocations.empty.noPorts')}
+                    description={search.trim() ? undefined : t('allocations.empty.noPortsDescription')}
+                    action={
+                      !search.trim() ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowCreatePortModal(true)}
+                          className="h-7 rounded-sm border border-border/60 px-3 text-mini font-medium text-primary transition-colors hover:border-primary/40"
+                        >
+                          {t('allocations.empty.createFirst')}
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                </div>
+              ) : (
+                filteredAllocations.map((allocation) => {
+                  const isSelected = selectedIds.includes(allocation.id);
+                  const isAssigned = Boolean(allocation.serverId);
+                  return (
+                    <div
+                      key={allocation.id}
+                      role="row"
+                      className={cn(
+                        PORTS_GRID,
+                        'py-1.5 pl-3 pr-3 transition-colors hover:bg-surface-1/40',
+                        isSelected && 'bg-primary/5',
+                      )}
+                    >
+                      <span className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleAllocationSelected(allocation.id)}
+                          disabled={isAssigned}
+                          title={
+                            isAssigned
+                              ? t('allocations.assignedCannotSelect')
+                              : t('allocations.selectAllocation', {
+                                  ip: allocation.ip,
+                                  port: allocation.port,
+                                })
+                          }
+                          aria-label={t('allocations.selectAllocation', {
+                            ip: allocation.ip,
+                            port: allocation.port,
+                          })}
+                          className="h-3.5 w-3.5 shrink-0 rounded-sm border-border bg-card text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                        />
+                      </span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span
+                          className="truncate font-mono text-data tabular-nums text-foreground"
+                          title={allocation.ip}
+                        >
+                          {allocation.ip}
+                        </span>
+                        <span className="font-mono text-micro text-muted-foreground md:hidden">
+                          :{allocation.port}
+                        </span>
+                      </span>
+                      <Segmented className="hidden justify-self-end md:inline-flex">{allocation.port}</Segmented>
+                      <span className="hidden min-w-0 md:block">
+                        <span
+                          className="block truncate text-micro text-muted-foreground"
+                          title={allocation.alias ?? undefined}
+                        >
+                          {allocation.alias ?? '—'}
+                        </span>
+                      </span>
+                      <span className="hidden justify-self-end overflow-hidden md:flex">
+                        {isAssigned ? (
+                          <span className="truncate text-micro uppercase text-muted-foreground">
+                            {t('allocations.assigned')}
+                          </span>
+                        ) : (
+                          <span className="truncate text-micro uppercase text-success">
+                            {t('allocations.available')}
+                          </span>
+                        )}
+                      </span>
+                      <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
+                        {!allocation.serverId && (
+                          <button
+                            type="button"
+                            onClick={() => deletePortMutation.mutate(allocation.id)}
+                            disabled={deletePortMutation.isPending}
+                            className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+                            title={t('common:actions.delete')}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Column header */}
+            <div
+              className={cn(
+                POOLS_GRID,
+                'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+              )}
+            >
+              <span className="type-overline">{t('allocations.createPool.networkName')}</span>
+              <span className="type-overline hidden justify-self-end md:inline-flex">{t('allocations.stats.totalIps')}</span>
+              <span className="type-overline hidden justify-self-end md:inline-flex">{t('allocations.stats.available')}</span>
+              <span className="type-overline hidden justify-self-end md:inline-flex">{t('allocations.stats.used')}</span>
+              <span className="type-overline hidden justify-self-end md:inline-flex">{t('allocations.stats.reserved')}</span>
+              <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
+            </div>
 
- <label className="block space-y-1.5">
- <span className="type-overline">{t('allocations.createPool.cidr')}</span>
- <Input
- type="text"
- value={cidr}
- onChange={(e) => setCidr(e.target.value)}
- placeholder={t('allocations.createPool.cidrPlaceholder')}
- />
- </label>
+            <div className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25">
+              {poolsLoading ? (
+                <div>
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className={cn(POOLS_GRID, 'border-t border-border/40 py-2 pl-3 pr-3')}>
+                      <div className="h-3.5 w-32 animate-pulse bg-surface-3" />
+                    </div>
+                  ))}
+                </div>
+              ) : nodePools.length === 0 ? (
+                <div className="p-3">
+                  <TabEmptyState
+                    title={t('allocations.empty.noPools')}
+                    description={t('allocations.empty.noPoolsDescription')}
+                    action={
+                      <button
+                        type="button"
+                        onClick={() => setShowCreatePoolModal(true)}
+                        className="h-7 rounded-sm border border-border/60 px-3 text-mini font-medium text-primary transition-colors hover:border-primary/40"
+                      >
+                        {t('allocations.empty.createFirstPool')}
+                      </button>
+                    }
+                  />
+                </div>
+              ) : (
+                nodePools.map((pool: IpPool) => (
+                  <div key={pool.id} className="border-t border-border/40">
+                    <div
+                      role="row"
+                      className={cn(POOLS_GRID, 'py-1.5 pl-3 pr-3 transition-colors hover:bg-surface-1/40')}
+                    >
+                      <div className="flex min-w-0 flex-col leading-tight">
+                        <span
+                          className="truncate font-display text-data font-semibold tracking-tight text-foreground"
+                          title={pool.networkName}
+                        >
+                          {pool.networkName}
+                        </span>
+                        <span className="flex min-w-0 items-center gap-2 text-micro text-muted-foreground">
+                          <span className="shrink-0 font-mono">{pool.cidr}</span>
+                          <span className="truncate">{pool.rangeStart} → {pool.rangeEnd}</span>
+                          <span className="hidden truncate lg:inline">
+                            {t('allocations.poolTotals', { total: pool.total, gateway: pool.gateway ?? 'n/a' })}
+                          </span>
+                        </span>
+                      </div>
+                      <Segmented className="hidden justify-self-end md:inline-flex">{pool.total}</Segmented>
+                      <Segmented className="hidden justify-self-end md:inline-flex">{pool.availableCount}</Segmented>
+                      <Segmented className="hidden justify-self-end md:inline-flex">{pool.usedCount}</Segmented>
+                      <Segmented className="hidden justify-self-end md:inline-flex">{pool.reservedCount}</Segmented>
+                      <span className="col-span-full flex shrink-0 items-center justify-start md:col-auto md:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => deletePoolMutation.mutate(pool.id)}
+                          disabled={deletePoolMutation.isPending}
+                          className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+                          title={t('common:actions.delete')}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </span>
+                    </div>
+                    {pool.allocations && pool.allocations.length > 0 && (
+                      <div className="border-t border-border/40 bg-surface-1/20 px-3 py-1.5">
+                        <div className="type-overline mb-1">
+                          {t('allocations.assignedIps', { value: pool.allocations.length })}
+                        </div>
+                        <div className="max-h-32 space-y-0.5 overflow-y-auto">
+                          {pool.allocations.map((alloc: any) => (
+                            <div key={alloc.id} className="flex items-center gap-2 text-micro">
+                              <span className="font-mono tabular-nums text-muted-foreground">{alloc.ip}</span>
+                              <span className="text-muted-foreground/30">→</span>
+                              <span className="truncate text-foreground">{alloc.serverName}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
- <div className="grid grid-cols-2 gap-4">
- <label className="block space-y-1.5">
- <span className="type-overline">{t('allocations.createPool.gateway')}</span>
- <Input
- type="text"
- value={gateway}
- onChange={(e) => setGateway(e.target.value)}
- placeholder="192.168.50.1"
- />
- </label>
- <label className="block space-y-1.5">
- <span className="type-overline">{t('allocations.createPool.startIp')}</span>
- <Input
- type="text"
- value={startIp}
- onChange={(e) => setStartIp(e.target.value)}
- placeholder="192.168.50.10"
- />
- </label>
- <label className="block space-y-1.5">
- <span className="type-overline">{t('allocations.createPool.endIp')}</span>
- <Input
- type="text"
- value={endIp}
- onChange={(e) => setEndIp(e.target.value)}
- placeholder="192.168.50.200"
- />
- </label>
- <div className="flex items-end">
- <Button
- variant="outline"
- onClick={handleAutoFillPool}
- disabled={!autoFillIp.trim()}
- className="h-8 w-full"
- >
- {t('allocations.createPool.autofill')}
- </Button>
- </div>
- </div>
+      {/* Create Port Allocations Modal */}
+      <Dialog open={showCreatePortModal} onOpenChange={setShowCreatePortModal}>
+        <DialogContent size="lg">
+          <DialogHeader icon={<Plug className="h-4 w-4" />}>
+            <DialogTitle>{t('allocations.createPort.title')}</DialogTitle>
+            <DialogDescription>{t('allocations.createPort.description')}</DialogDescription>
+          </DialogHeader>
 
- <label className="block space-y-1.5">
- <span className="type-overline">{t('allocations.createPool.quickSetupIp')}</span>
- <Input
- type="text"
- value={autoFillIp}
- onChange={(e) => setAutoFillIp(e.target.value)}
- placeholder={node?.publicAddress || '0.0.0.0'}
- />
- </label>
+          <DialogBody className="space-y-4">
+            <div className="rounded-sm border border-border/60 bg-surface-1/30 px-3 py-2">
+              <p className="text-micro leading-relaxed text-muted-foreground">
+                <Trans i18nKey="allocations.createPort.ipFormat" ns="admin-infra">
+                  <strong>IP format:</strong> Single IP (192.168.1.100), multiple IPs (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24)
+                </Trans>
+              </p>
+              <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
+                <Trans i18nKey="allocations.createPort.portFormat" ns="admin-infra">
+                  <strong>Port format:</strong> Single port (25565), range (25565-25664), or multiple (25565, 25566, 25567)
+                </Trans>
+              </p>
+            </div>
 
- <label className="block space-y-1.5">
- <span className="type-overline">{t('allocations.createPool.reservedIps')}</span>
- <Textarea
- value={reserved}
- onChange={(e) => setReserved(e.target.value)}
- rows={2}
- placeholder="192.168.50.20, 192.168.50.21"
- className="resize-none"
- />
- </label>
- </DialogBody>
+            <label className="block space-y-1.5">
+              <span className="type-overline">{t('allocations.createPort.ipLabel')}</span>
+              <Input
+                type="text"
+                value={ipInput}
+                onChange={(e) => setIpInput(e.target.value)}
+                placeholder={t('allocations.createPort.ipPlaceholder')}
+              />
+            </label>
 
- <DialogFooter>
- <Button variant="outline" onClick={() => setShowCreatePoolModal(false)}>
- {t('common:actions.cancel')}
- </Button>
- <Button
- onClick={() => createPoolMutation.mutate()}
- disabled={!networkName || !cidr || createPoolMutation.isPending}
- >
- {createPoolMutation.isPending ? t('allocations.createPool.creating') : t('allocations.createPool.submit')}
- </Button>
- </DialogFooter>
- </DialogContent>
- </Dialog>
+            <label className="block space-y-1.5">
+              <span className="type-overline">{t('allocations.createPort.portsLabel')}</span>
+              <Input
+                type="text"
+                value={portsInput}
+                onChange={(e) => setPortsInput(e.target.value)}
+                placeholder={t('allocations.createPort.portsPlaceholder')}
+              />
+            </label>
 
- <ConfirmDialog
- open={showBulkDeleteDialog}
- title={t('allocations.bulkDelete.title')}
- message={
- <div className="space-y-2">
- <p>
- <Trans
- i18nKey="allocations.bulkDelete.message"
- ns="admin-infra"
- count={selectedIds.length}
- values={{ count: selectedIds.length }}
- >
- You are about to delete <span className="font-semibold">{'{{count}} allocations'}</span>.
- </Trans>
- </p>
- <p className="text-xs text-muted-foreground">{t('allocations.bulkDelete.warning')}</p>
- </div>
- }
- confirmText={t('common:actions.delete')}
- cancelText={t('common:actions.cancel')}
- onConfirm={() => selectedIds.length > 0 && bulkDeletePortsMutation.mutate(selectedIds)}
- onCancel={() => setShowBulkDeleteDialog(false)}
- variant="danger"
- loading={bulkDeletePortsMutation.isPending}
- />
- </div>
- );
+            <label className="block space-y-1.5">
+              <span className="type-overline">{t('allocations.createPort.aliasLabel')}</span>
+              <Input
+                type="text"
+                value={aliasInput}
+                onChange={(e) => setAliasInput(e.target.value)}
+                placeholder={t('allocations.createPort.aliasPlaceholder')}
+              />
+            </label>
+
+            <Button variant="link" className="h-auto p-0 text-micro" onClick={handleQuickFillPorts}>
+              {t('allocations.createPort.quickFill')}
+            </Button>
+          </DialogBody>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setShowCreatePortModal(false)}>
+              {t('common:actions.cancel')}
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 px-3 text-mini"
+              onClick={() => createPortMutation.mutate()}
+              disabled={!ipInput.trim() || !portsInput.trim() || createPortMutation.isPending}
+            >
+              {createPortMutation.isPending ? t('allocations.createPort.creating') : t('allocations.createPort.submit')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create IP Pool Modal */}
+      <Dialog open={showCreatePoolModal} onOpenChange={setShowCreatePoolModal}>
+        <DialogContent size="xl">
+          <DialogHeader icon={<Globe className="h-4 w-4" />}>
+            <DialogTitle>{t('allocations.createPool.title')}</DialogTitle>
+            <DialogDescription>{t('allocations.createPool.description')}</DialogDescription>
+          </DialogHeader>
+
+          <DialogBody className="space-y-4">
+            <div className="rounded-sm border border-border/60 bg-surface-1/30 px-3 py-2">
+              <p className="text-micro leading-relaxed text-muted-foreground">
+                {t('allocations.createPool.intro')}
+              </p>
+            </div>
+
+            <label className="block space-y-1.5">
+              <span className="type-overline">{t('allocations.createPool.networkName')}</span>
+              <Input
+                type="text"
+                value={networkName}
+                onChange={(e) => setNetworkName(e.target.value)}
+                placeholder="mc-lan"
+              />
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className="type-overline">{t('allocations.createPool.cidr')}</span>
+              <Input
+                type="text"
+                value={cidr}
+                onChange={(e) => setCidr(e.target.value)}
+                placeholder={t('allocations.createPool.cidrPlaceholder')}
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-4">
+              <label className="block space-y-1.5">
+                <span className="type-overline">{t('allocations.createPool.gateway')}</span>
+                <Input
+                  type="text"
+                  value={gateway}
+                  onChange={(e) => setGateway(e.target.value)}
+                  placeholder="192.168.50.1"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="type-overline">{t('allocations.createPool.startIp')}</span>
+                <Input
+                  type="text"
+                  value={startIp}
+                  onChange={(e) => setStartIp(e.target.value)}
+                  placeholder="192.168.50.10"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="type-overline">{t('allocations.createPool.endIp')}</span>
+                <Input
+                  type="text"
+                  value={endIp}
+                  onChange={(e) => setEndIp(e.target.value)}
+                  placeholder="192.168.50.200"
+                />
+              </label>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={handleAutoFillPool}
+                  disabled={!autoFillIp.trim()}
+                  className="h-8 w-full rounded-sm text-mini"
+                >
+                  {t('allocations.createPool.autofill')}
+                </Button>
+              </div>
+            </div>
+
+            <label className="block space-y-1.5">
+              <span className="type-overline">{t('allocations.createPool.quickSetupIp')}</span>
+              <Input
+                type="text"
+                value={autoFillIp}
+                onChange={(e) => setAutoFillIp(e.target.value)}
+                placeholder={node?.publicAddress || '0.0.0.0'}
+              />
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className="type-overline">{t('allocations.createPool.reservedIps')}</span>
+              <Textarea
+                value={reserved}
+                onChange={(e) => setReserved(e.target.value)}
+                rows={2}
+                placeholder="192.168.50.20, 192.168.50.21"
+                className="resize-none"
+              />
+            </label>
+          </DialogBody>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setShowCreatePoolModal(false)}>
+              {t('common:actions.cancel')}
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 px-3 text-mini"
+              onClick={() => createPoolMutation.mutate()}
+              disabled={!networkName || !cidr || createPoolMutation.isPending}
+            >
+              {createPoolMutation.isPending ? t('allocations.createPool.creating') : t('allocations.createPool.submit')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={showBulkDeleteDialog}
+        title={t('allocations.bulkDelete.title')}
+        message={
+          <div className="space-y-2">
+            <p>
+              <Trans
+                i18nKey="allocations.bulkDelete.message"
+                ns="admin-infra"
+                count={selectedIds.length}
+                values={{ count: selectedIds.length }}
+              >
+                You are about to delete <span className="font-semibold">{'{{count}} allocations'}</span>.
+              </Trans>
+            </p>
+            <p className="text-mini text-muted-foreground">{t('allocations.bulkDelete.warning')}</p>
+          </div>
+        }
+        confirmText={t('common:actions.delete')}
+        cancelText={t('common:actions.cancel')}
+        onConfirm={() => selectedIds.length > 0 && bulkDeletePortsMutation.mutate(selectedIds)}
+        onCancel={() => setShowBulkDeleteDialog(false)}
+        variant="danger"
+        loading={bulkDeletePortsMutation.isPending}
+      />
+    </div>
+  );
+}
+
+/** Rail tab — underline marker for the active allocation view. */
+function RailTab({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'relative flex h-7 items-center gap-1.5 px-2.5 text-mini transition-colors',
+        active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {active && <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />}
+      {icon}
+      <span className="whitespace-nowrap">{label}</span>
+      <span className="font-mono text-micro tabular-nums text-muted-foreground/80">{count}</span>
+    </button>
+  );
 }
 
 export default NodeAllocationsPage;

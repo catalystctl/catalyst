@@ -41,7 +41,7 @@ function DeleteBackupDialog({
       <Button
         variant="outline"
         size="sm"
-        className="border-danger/20 text-danger hover:border-danger/40 hover:bg-danger/5"
+        className="h-7 border-danger/30 px-2 text-mini text-danger hover:border-danger/50 hover:bg-danger/10"
         onClick={() => {
           if (!disabled) setOpen(true);
         }}

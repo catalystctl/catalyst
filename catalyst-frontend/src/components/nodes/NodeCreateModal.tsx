@@ -10,6 +10,7 @@ import { qk } from '../../lib/queryKeys';
 import { queryClient } from '../../lib/queryClient';
 import { buildDeployCommand } from '../../lib/deploy-command';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { cn } from '@/lib/utils';
 import {
  Select,
  SelectContent,
@@ -204,7 +205,7 @@ function NodeCreateModal(_props: Props) {
  return (
  <div>
  <button
- className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90"
+ className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90"
  onClick={() => {
  setStep(1);
  setOpen(true);
@@ -241,39 +242,33 @@ function NodeCreateModal(_props: Props) {
 
  {/* ── Step indicator ── */}
  <DialogToolbar>
- <div className="flex items-center gap-2">
+ <div className="flex items-center gap-0.5">
+ {[
+ { n: 1, label: t('form.location'), active: step === 1 },
+ { n: 2, label: t('create.stepDetails'), active: step === 2 || step === 3 },
+ { n: 3, label: t('create.stepDeploy'), active: step === 3 },
+ ].map((s) => (
  <div
- className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 1 ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+ key={s.n}
+ className={cn(
+ 'relative flex h-7 items-center gap-1.5 px-2.5 text-mini transition-colors',
+ s.active ? 'text-foreground' : 'text-muted-foreground',
+ )}
  >
  <span
- className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
+ className={cn(
+ 'flex h-4 w-4 items-center justify-center rounded-sm font-mono text-micro tabular-nums',
+ s.active ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground',
+ )}
  >
- 1
+ {s.n}
  </span>
- {t('form.location')}
+ {s.label}
+ {s.active && (
+ <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+ )}
  </div>
- <div className="h-px flex-1 bg-border/30" />
- <div
- className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 2 || step === 3 ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
- >
- <span
- className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 || step === 3 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
- >
- 2
- </span>
- {t('create.stepDetails')}
- </div>
- <div className="h-px flex-1 bg-border/30" />
- <div
- className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 3 ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
- >
- <span
- className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 3 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
- >
- 3
- </span>
- {t('create.stepDeploy')}
- </div>
+ ))}
  </div>
  </DialogToolbar>
 
@@ -281,23 +276,23 @@ function NodeCreateModal(_props: Props) {
  {/* ── Step 1: Location Selection ── */}
  {step === 1 && (
  <div className="flex flex-col items-center px-6 py-10 text-center">
- <h3 className="text-base font-semibold text-foreground">
+ <h3 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
  {t('create.assignTitle')}
  </h3>
- <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+ <p className="mt-2 max-w-md type-meta">
    {t('create.locationsHint')}
  </p>
 
  {locations.length > 0 ? (
  <label className="mt-6 block w-full max-w-xs space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">
- {t('create.selectLocationLabel')} <span className="text-destructive">*</span>
+ <span className="type-overline">
+ {t('create.selectLocationLabel')} <span className="text-danger">*</span>
  </span>
  <Select
  value={locationId || '__none__'}
  onValueChange={(v) => setLocationId(v === '__none__' ? '' : v)}
  >
- <SelectTrigger className="w-full max-w-xs border-border/40">
+ <SelectTrigger className="h-8 w-full max-w-xs rounded-sm border-border/60 bg-background/40 px-2.5 text-mini">
  <SelectValue placeholder={t('create.chooseLocation')} />
  </SelectTrigger>
  <SelectContent>
@@ -307,7 +302,7 @@ function NodeCreateModal(_props: Props) {
  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
  {location.name}
  {location.description && (
- <span className="text-muted-foreground">
+ <span className="type-overline">
  — {location.description}
  </span>
  )}
@@ -318,8 +313,8 @@ function NodeCreateModal(_props: Props) {
  </Select>
  </label>
  ) : (
- <div className="mt-6 rounded-md border border-dashed border-border/50 bg-surface-2/50 px-5 py-4">
- <p className="text-sm text-muted-foreground">
+ <div className="mt-6 rounded-sm border border-dashed border-border/50 px-4 py-3">
+ <p className="type-meta">
  {t('form.noLocations')}{' '}
  <button
  type="button"
@@ -341,58 +336,58 @@ function NodeCreateModal(_props: Props) {
 
  {/* ── Step 2: Node Details Form ── */}
  {step === 2 && (
- <div className="space-y-3 text-sm text-muted-foreground">
+ <div className="space-y-3">
  {locationId && (
- <div className="flex items-center gap-2 rounded-md bg-surface-2/50 px-3 py-2">
+ <div className="flex items-center gap-2 rounded-sm border border-border/50 px-3 py-2">
  <MapPin className="h-4 w-4 text-muted-foreground" />
- <span className="text-xs font-medium text-muted-foreground">
+ <span className="type-overline">
  {t('create.location', { name: locations.find((l) => l.id === locationId)?.name || locationId })}
  </span>
  </div>
  )}
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.name')}</span>
+ <span className="type-overline">{t('form.name')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={name}
  onChange={(event) => setName(event.target.value)}
  placeholder="production-1"
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.description')}</span>
+ <span className="type-overline">{t('form.description')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={description}
  onChange={(event) => setDescription(event.target.value)}
  placeholder={t('form.descriptionPlaceholder')}
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.serverDataDir')}</span>
+ <span className="type-overline">{t('form.serverDataDir')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={serverDataDir}
  onChange={(event) => setServerDataDir(event.target.value)}
  placeholder="/var/lib/catalyst/servers"
  />
- <p className="text-xs text-muted-foreground">
+ <p className="type-overline">
  {t('form.serverDataDirHint')}
  </p>
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.hostname')}</span>
+ <span className="type-overline">{t('form.hostname')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={hostname}
  onChange={(event) => setHostname(event.target.value)}
  placeholder="node1.example.com"
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.publicAddress')}</span>
+ <span className="type-overline">{t('form.publicAddress')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={publicAddress}
  onChange={(event) => setPublicAddress(event.target.value)}
  placeholder="203.0.113.10 or 2001:db8::1"
@@ -400,9 +395,9 @@ function NodeCreateModal(_props: Props) {
  </label>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.memoryMb')}</span>
+ <span className="type-overline">{t('form.memoryMb')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={memory}
  onChange={(event) => setMemory(event.target.value)}
  type="number"
@@ -410,9 +405,9 @@ function NodeCreateModal(_props: Props) {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.cpuCores')}</span>
+ <span className="type-overline">{t('form.cpuCores')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={cpu}
  onChange={(event) => setCpu(event.target.value)}
  type="number"
@@ -423,43 +418,43 @@ function NodeCreateModal(_props: Props) {
  </div>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.memoryOverallocate')}</span>
+ <span className="type-overline">{t('form.memoryOverallocate')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={memoryOverallocate}
  onChange={(event) => setMemoryOverallocate(event.target.value)}
  type="number"
  min={-1}
  />
- <p className="text-xs text-muted-foreground">
+ <p className="type-overline">
  {t('form.overallocateHint')}
  </p>
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.cpuOverallocate')}</span>
+ <span className="type-overline">{t('form.cpuOverallocate')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={cpuOverallocate}
  onChange={(event) => setCpuOverallocate(event.target.value)}
  type="number"
  min={-1}
  />
- <p className="text-xs text-muted-foreground">
+ <p className="type-overline">
  {t('form.overallocateHint')}
  </p>
  </label>
  </div>
 
  {/* SFTP Configuration */}
- <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-3">
+ <div className="rounded-sm border border-border/50 px-3 py-2.5">
  <div className="flex items-center justify-between">
- <span className="text-sm font-medium text-foreground">{t('form.sftpAccess')}</span>
- <label className="flex items-center gap-2 text-xs text-muted-foreground">
+ <span className="text-mini font-semibold text-foreground">{t('form.sftpAccess')}</span>
+ <label className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
  checked={sftpEnabled}
  onChange={(e) => setSftpEnabled(e.target.checked)}
- className="rounded border-border/40 text-primary focus:ring-primary"
+ className="rounded-sm border-border/40 text-primary focus:ring-primary"
  />
  {t('form.enabled')}
  </label>
@@ -467,9 +462,9 @@ function NodeCreateModal(_props: Props) {
  {sftpEnabled && (
  <div className="mt-2">
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.sftpPort')}</span>
+ <span className="type-overline">{t('form.sftpPort')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={sftpPort}
  onChange={(e) => setSftpPort(e.target.value)}
  type="number"
@@ -477,7 +472,7 @@ function NodeCreateModal(_props: Props) {
  max={65535}
  placeholder="2022"
  />
- <p className="text-xs text-muted-foreground">
+ <p className="type-overline">
  {t('create.sftpPortHint')}
  </p>
  </label>
@@ -489,18 +484,18 @@ function NodeCreateModal(_props: Props) {
  <div className="space-y-1">
  <button
  type="button"
- className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+ className="flex items-center gap-1.5 type-overline hover:text-foreground"
  onClick={() => setShowAdvanced(!showAdvanced)}
  >
  {showAdvanced ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
  {t('form.advancedPaths')}
  </button>
  {showAdvanced && (
- <div className="space-y-3 rounded-md border border-border/50 bg-surface-2/30 px-3 py-3">
+ <div className="space-y-3 rounded-sm border border-border/50 px-3 py-2.5">
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.consoleLogDir')}</span>
+ <span className="type-overline">{t('form.consoleLogDir')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={consoleLogDir}
  onChange={(e) => setConsoleLogDir(e.target.value)}
  placeholder={t('form.consoleLogDirPlaceholder')}
@@ -508,18 +503,18 @@ function NodeCreateModal(_props: Props) {
  </label>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.cniConfigDir')}</span>
+ <span className="type-overline">{t('form.cniConfigDir')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={cniDir}
  onChange={(e) => setCniDir(e.target.value)}
  placeholder="/etc/cni/net.d"
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.cniBinDir')}</span>
+ <span className="type-overline">{t('form.cniBinDir')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={cniBinDir}
  onChange={(e) => setCniBinDir(e.target.value)}
  placeholder="/opt/cni/bin"
@@ -528,18 +523,18 @@ function NodeCreateModal(_props: Props) {
  </div>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.cniDataDir')}</span>
+ <span className="type-overline">{t('form.cniDataDir')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={cniDataDir}
  onChange={(e) => setCniDataDir(e.target.value)}
  placeholder="/var/lib/cni/networks"
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.cniResultsDir')}</span>
+ <span className="type-overline">{t('form.cniResultsDir')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={cniResultsDir}
  onChange={(e) => setCniResultsDir(e.target.value)}
  placeholder="/var/lib/cni/results"
@@ -548,18 +543,18 @@ function NodeCreateModal(_props: Props) {
  </div>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.cniBridgeName')}</span>
+ <span className="type-overline">{t('form.cniBridgeName')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={cniBridgeName}
  onChange={(e) => setCniBridgeName(e.target.value)}
  placeholder="catalyst0"
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.cniBridgeSubnet')}</span>
+ <span className="type-overline">{t('form.cniBridgeSubnet')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={cniBridgeSubnet}
  onChange={(e) => setCniBridgeSubnet(e.target.value)}
  placeholder="10.42.0.0/16"
@@ -567,9 +562,9 @@ function NodeCreateModal(_props: Props) {
  </label>
  </div>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.systemdOverrideDir')}</span>
+ <span className="type-overline">{t('form.systemdOverrideDir')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={systemdOverrideDir}
  onChange={(e) => setSystemdOverrideDir(e.target.value)}
  placeholder="/etc/systemd/system/containerd.service.d"
@@ -577,25 +572,25 @@ function NodeCreateModal(_props: Props) {
  </label>
  <div className="grid grid-cols-2 gap-3">
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.agentConfigPath')}</span>
+ <span className="type-overline">{t('form.agentConfigPath')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={agentConfigPath}
  onChange={(e) => setAgentConfigPath(e.target.value)}
  placeholder="/opt/catalyst-agent/config.toml"
  />
  </label>
  <label className="block space-y-1">
- <span className="text-muted-foreground">{t('form.agentReleaseRepo')}</span>
+ <span className="type-overline">{t('form.agentReleaseRepo')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={agentReleaseRepo}
  onChange={(e) => setAgentReleaseRepo(e.target.value)}
  placeholder="catalystctl/catalyst"
  />
  </label>
  </div>
- <p className="text-xs text-muted-foreground">
+ <p className="type-overline">
  {t('form.advancedPathsHint')}
  </p>
  </div>
@@ -607,27 +602,27 @@ function NodeCreateModal(_props: Props) {
  {/* ── Step 3: Deploy Script ── */}
  {step === 3 && (
  <div className="flex flex-col items-center py-4 text-center">
- <CheckCircle className="mb-4 h-6 w-6 text-success" />
- <h3 className="text-base font-semibold text-foreground">
+ <CheckCircle className="mb-3 h-4 w-4 text-success" />
+ <h3 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
  {t('create.registered')}
  </h3>
- <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+ <p className="mt-2 max-w-md type-meta">
  {t('create.runScript', { hostname })}
  </p>
 
  {deployTokenMutation.isPending ? (
- <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+ <div className="mt-6 flex items-center gap-2 text-mini text-muted-foreground">
  <Loader2 className="h-4 w-4 animate-spin" />
  {t('create.generating')}
  </div>
  ) : deployInfo ? (
  <div className="mt-6 w-full min-w-0 space-y-3 text-left">
- <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border/50 bg-surface-2 px-4 py-3 font-mono text-xs tabular-nums text-foreground">
+ <div className="min-w-0 max-w-full overflow-x-auto rounded-sm border border-border/50 bg-surface-0 px-3 py-2 font-mono text-mini tabular-nums text-foreground">
  <code className="block max-w-full break-all whitespace-pre-wrap">
 {buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey)}
  </code>
  </div>
- <div className="flex items-center justify-between text-xs text-muted-foreground">
+ <div className="flex items-center justify-between text-micro text-muted-foreground">
  <span className="font-mono tabular-nums">{t('deploy.tokenExpires', { time: formatDateTime(deployInfo.expiresAt) })}</span>
  <button
  className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80"
@@ -645,11 +640,11 @@ function NodeCreateModal(_props: Props) {
  </div>
  ) : deployTokenMutation.isError ? (
  <div className="mt-6 w-full space-y-3 text-left">
- <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
+ <div className="rounded-sm border border-warning/30 bg-warning/5 px-3 py-2 text-mini text-warning">
  {t('create.deployFailed')}
  </div>
  <button
- className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90"
+ className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90"
  onClick={() => {
  if (createdNodeId) {
  deployTokenMutation.mutate(createdNodeId);
@@ -659,7 +654,7 @@ function NodeCreateModal(_props: Props) {
  {t('common:actions.retry')}
  </button>
  {createdNodeId && (
- <p className="text-xs text-muted-foreground">
+ <p className="type-overline">
  {t('create.orGoTo')}{' '}
  <a href={`/admin/nodes/${createdNodeId}`} className="font-medium text-primary hover:text-primary/80">
    {t('create.nodeSettings')}
@@ -677,6 +672,8 @@ function NodeCreateModal(_props: Props) {
  <div className="flex items-center gap-2">
  <Button
  variant="outline"
+ size="sm"
+ className="h-8 px-3 text-mini"
  onClick={() => {
  setOpen(false);
  resetForm();
@@ -685,25 +682,27 @@ function NodeCreateModal(_props: Props) {
  {t('common:actions.cancel')}
  </Button>
  {step === 2 ? (
- <Button variant="outline" onClick={() => setStep(1)}>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(1)}>
    {t('common:actions.back')}
  </Button>
  ) : null}
  </div>
  ) : null}
  {step === 1 && locations.length > 0 && locationId ? (
- <Button onClick={() => setStep(2)}>
+ <Button size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(2)}>
  {t('create.continue')}
  <ArrowRight className="h-3.5 w-3.5" />
  </Button>
  ) : null}
  {step === 2 ? (
- <Button onClick={() => createMutation.mutate()} disabled={disableSubmit}>
+ <Button size="sm" className="h-8 px-3 text-mini" onClick={() => createMutation.mutate()} disabled={disableSubmit}>
  {createMutation.isPending ? t('create.registering') : t('create.register')}
  </Button>
  ) : null}
  {step === 3 ? (
  <Button
+ size="sm"
+ className="h-8 px-3 text-mini"
  onClick={() => {
  setOpen(false);
  resetForm();

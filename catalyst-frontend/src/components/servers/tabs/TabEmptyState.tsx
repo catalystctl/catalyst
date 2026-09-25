@@ -6,15 +6,19 @@ interface TabEmptyStateProps {
   action?: React.ReactNode;
 }
 
+/**
+ * Empty state that sits inside the deck panel: no nested card, no stretched
+ * height — just a flat centred block so the panel edge stays unbroken.
+ */
 export default function TabEmptyState({
   title,
   description,
   action,
 }: TabEmptyStateProps) {
   return (
-    <div className="flex flex-col items-center rounded-md border border-dashed border-border/50 bg-surface-2/20 px-5 py-7 text-center">
-      <InboxIcon className="h-5 w-5 text-muted-foreground" />
-      <p className="mt-3 text-sm font-medium text-foreground">
+    <div className="flex flex-col items-center px-5 py-6 text-center">
+      <InboxIcon className="h-4 w-4 text-muted-foreground/70" />
+      <p className="mt-2 text-data font-medium text-foreground">
         {title}
       </p>
       {description && (
@@ -22,7 +26,7 @@ export default function TabEmptyState({
           {description}
         </p>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }

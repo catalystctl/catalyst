@@ -161,7 +161,7 @@ export default function NavSectionsMenu({
                 key={link.to}
                 to={link.to}
                 onClick={() => onOpenChange(false)}
-                className="flex items-center gap-1.5 rounded-sm border border-border/60 px-2.5 py-1.5 font-display text-micro uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                className="flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 type-overline text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
               >
                 <link.icon className="h-3.5 w-3.5" />
                 {link.label}

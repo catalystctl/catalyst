@@ -150,9 +150,9 @@ function FileEditor({
  );
 
  const btnSecondary =
- 'inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground';
+ 'inline-flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2 text-mini font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-50';
  const btnPrimary =
- 'inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50';
+ 'inline-flex h-8 items-center gap-1.5 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50';
 
  return (
  <div className="flex h-full flex-col gap-2 sm:gap-3">
@@ -163,7 +163,7 @@ function FileEditor({
  {fileInfo && (
  <FileCode className={`h-3.5 w-3.5 shrink-0 ${fileInfo.color}`} />
  )}
- <h3 className="truncate text-sm font-semibold text-foreground dark:text-foreground">
+ <h3 className="truncate font-display text-data font-semibold text-foreground">
  {file.name}
  </h3>
  <div className="flex items-center gap-1.5">
@@ -171,20 +171,20 @@ function FileEditor({
  <motion.span
  initial={{ opacity: 0, scale: 0.8 }}
  animate={{ opacity: 1, scale: 1 }}
- className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning dark:bg-warning/15 dark:text-warning"
+ className="inline-flex items-center gap-1 rounded-sm bg-warning/10 px-1.5 py-0.5 text-micro font-medium text-warning"
  >
  <Circle className="h-1.5 w-1.5 fill-warning" />
  {t('files.editor.unsaved')}
  </motion.span>
  )}
  {isSuspended && (
- <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive dark:bg-destructive/15 dark:text-destructive">
+ <span className="rounded-sm bg-danger/10 px-1.5 py-0.5 text-micro font-medium text-danger">
  {t('common:status.suspended')}
  </span>
  )}
  </div>
  </div>
- <p className="mt-0.5 ml-5.5 truncate font-mono text-xs tabular-nums text-muted-foreground">
+ <p className="mt-0.5 ml-5.5 truncate font-mono text-micro tabular-nums text-muted-foreground">
  {file.path}
  </p>
  </div>
@@ -223,7 +223,7 @@ function FileEditor({
  </button>
  <button
  type="button"
- className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  onClick={handleClose}
  title={t('common:actions.close')}
  >
@@ -233,9 +233,9 @@ function FileEditor({
  </div>
 
  {/* Editor */}
- <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/50">
+ <div className="min-h-0 flex-1 overflow-hidden rounded-sm border border-border/60">
  {isLoading ? (
- <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
+ <div className="flex h-full items-center justify-center text-mini text-muted-foreground">
  <div className="flex flex-col items-center gap-2">
  <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
  {t('files.editor.loadingContents')}
@@ -244,7 +244,7 @@ function FileEditor({
  ) : (
  <Suspense
  fallback={
- <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
+ <div className="flex h-full items-center justify-center text-mini text-muted-foreground">
  <div className="flex flex-col items-center gap-2">
  <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
  {t('files.editor.loadingEditor')}

@@ -209,7 +209,6 @@
     "deleted_other": "{{count}} templates deleted",
     "deleteTitle": "Delete Templates",
     "deleteWarning": "Templates in use by existing servers cannot be deleted. This action cannot be undone.",
-    "description": "Define server templates with images and start commands.",
     "filters": "Filters",
     "memory": "memory",
     "nestLabel": "Nest",

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Activity, Cpu, HardDrive, MemoryStick } from 'lucide-react';
 import { formatBytes } from '../../utils/formatters';
 import { cn } from '@/lib/utils';
+import { Meter } from '../deck/primitives';
 import type { ServerMetrics } from '../../types/server';
 
 function formatMem(mb: number) {
@@ -14,38 +15,35 @@ function formatMem(mb: number) {
   return `${Math.round(mb)} MB`;
 }
 
+/** Severity belongs on the reading; the meter stays a neutral glance. */
+const severityClass = (percent?: number) =>
+  percent != null && percent >= 90
+    ? 'text-danger'
+    : percent != null && percent >= 75
+      ? 'text-warning'
+      : 'text-foreground';
+
 function HeaderStat({
   icon: Icon,
   label,
   value,
   percent,
-  barClass = 'bg-primary',
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   percent?: number;
-  barClass?: string;
 }) {
-  const hot = percent != null && percent >= 90;
   return (
-    <div className="min-w-[6.75rem]">
-      <div className="flex h-3 items-center gap-1 text-muted-foreground">
+    <div className="min-w-[7rem]">
+      <div className="flex items-center gap-1 text-muted-foreground">
         <Icon className="h-3 w-3" />
         <span className="type-overline">{label}</span>
       </div>
-      <div className="type-numeric mt-0.5 h-4 whitespace-nowrap text-xs font-medium leading-4 text-foreground">
+      <div className={cn('type-numeric mt-1 whitespace-nowrap text-data', severityClass(percent))}>
         {value}
       </div>
-
-      <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-surface-3">
-        {percent != null ? (
-          <div
-            className={cn('h-full rounded-full', hot ? 'bg-danger' : barClass)}
-            style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-          />
-        ) : null}
-      </div>
+      <Meter value={percent ?? null} className="mt-1 w-full" />
     </div>
   );
 }
@@ -113,9 +111,9 @@ export default function ServerHeaderStats({
     diskUsed != null && diskTotal && diskTotal > 0 ? Math.min(100, (diskUsed / diskTotal) * 100) : 0;
 
   return (
-    <div className="hidden items-end gap-4 lg:flex">
+    <div className="hidden items-end gap-5 lg:flex">
       <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
-      <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} barClass="bg-success" />
+      <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
       <HeaderStat icon={HardDrive} label={t('metrics.labels.disk')} value={diskValue} percent={diskPercent} />
       <HeaderStat
         icon={Activity}

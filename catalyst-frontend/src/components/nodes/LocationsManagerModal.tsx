@@ -7,6 +7,7 @@ import { MapPin, Plus, Pencil, Trash2, X } from 'lucide-react';
 import { locationsApi, type Location } from '../../services/api/locations';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import ConfirmDialog from '../shared/ConfirmDialog';
+import { BracketLabel } from '../deck/primitives';
 import { Button } from '@/components/ui/button';
 import {
  Dialog,
@@ -48,11 +49,11 @@ function LocationForm({
  return (
  <div className="space-y-3">
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">
- {t('locations.name')} <span className="text-destructive">*</span>
+ <span className="type-overline">
+ {t('locations.name')} <span className="text-danger">*</span>
  </span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="w-full rounded-sm border border-border/60 bg-background/40 px-2.5 py-1.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={name}
  onChange={(e) => setName(e.target.value)}
  placeholder="US-East"
@@ -60,9 +61,9 @@ function LocationForm({
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('locations.descriptionOptional')}</span>
+ <span className="type-overline">{t('locations.descriptionOptional')}</span>
  <textarea
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ className="w-full rounded-sm border border-border/60 bg-background/40 px-2.5 py-1.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={2}
  value={description}
  onChange={(e) => setDescription(e.target.value)}
@@ -71,13 +72,13 @@ function LocationForm({
  </label>
  <div className="flex justify-end gap-2 pt-1">
  <button
- className="rounded-full border border-border/40 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground"
+ className="h-8 rounded-sm border border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
  onClick={onCancel}
  >
  {t('common:actions.cancel')}
  </button>
  <button
- className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-60"
+ className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
  onClick={() =>
  onSave({
  name: name.trim(),
@@ -212,13 +213,11 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  <DialogBody>
  {/* Inline form */}
  {isFormActive && (
- <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 p-4">
+ <div className="mb-3 rounded-sm border border-border/50 bg-surface-1/40 p-3">
  <div className="mb-3 flex items-center justify-between">
- <span className="text-sm font-semibold text-foreground">
- {editingLocation ? t('locations.edit') : t('locations.new')}
- </span>
+ <BracketLabel>{editingLocation ? t('locations.edit') : t('locations.new')}</BracketLabel>
  <button
- className="rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  onClick={() => {
  setIsCreating(false);
  setEditingLocation(null);
@@ -242,37 +241,37 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
 
  {/* Location list */}
  {isLoading ? (
- <div className="space-y-2">
+ <div className="divide-y divide-border/50">
  {Array.from({ length: 3 }).map((_, i) => (
  <div
  key={i}
- className="flex items-center gap-3 rounded-md border border-border/50 px-4 py-3"
+ className="flex items-center gap-3 py-2.5"
  >
  <div className="flex-1 space-y-1.5">
- <div className="h-4 w-28 animate-pulse rounded bg-surface-3" />
- <div className="h-3 w-48 animate-pulse rounded bg-surface-2" />
+ <div className="h-3.5 w-28 animate-pulse rounded-sm bg-surface-3" />
+ <div className="h-3 w-48 animate-pulse rounded-sm bg-surface-3" />
  </div>
  </div>
  ))}
  </div>
  ) : locations.length === 0 && !isCreating ? (
  <div className="flex flex-col items-center justify-center py-12 text-center">
- <MapPin className="mb-3 h-10 w-10 text-muted-foreground/40" />
- <p className="text-sm font-medium text-muted-foreground">{t('locations.empty')}</p>
- <p className="mt-1 text-xs text-muted-foreground/70">
+ <MapPin className="mb-2 h-4 w-4 text-muted-foreground" />
+ <p className="type-meta">{t('locations.empty')}</p>
+ <p className="type-overline mt-1">
  {t('locations.emptyHint')}
  </p>
  </div>
  ) : (
- <div className="space-y-2">
+ <div className="divide-y divide-border/50">
  {locations.map((location) => (
  <div
  key={location.id}
- className="group flex items-center gap-3 rounded-md border border-border/50 px-4 py-3 transition-colors hover:bg-surface-2/30"
+ className="group flex items-center gap-3 py-2"
  >
  {/* Info */}
  <div className="min-w-0 flex-1">
- <span className="font-medium text-foreground">
+ <span className="font-display text-data font-semibold tracking-tight text-foreground">
  {location.name}
  </span>
  {location.description && (
@@ -288,7 +287,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  {/* Actions */}
  <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  onClick={() => {
  setEditingLocation(location);
  setIsCreating(false);
@@ -298,7 +297,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  <Pencil className="h-3.5 w-3.5" />
  </button>
  <button
- className="rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/5 hover:text-destructive"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-danger transition-colors hover:bg-danger/5 hover:text-danger"
  onClick={() => setDeleteTarget(location)}
  title={t('common:actions.delete')}
  >
@@ -312,11 +311,12 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  </DialogBody>
  {!isFormActive && (
  <DialogFooter className="sm:justify-between">
- <span className="text-xs text-muted-foreground">
+ <span className="text-micro text-muted-foreground">
  {t('locations.count', { count: locations.length })}
  </span>
  <Button
  size="sm"
+ className="h-8 px-3 text-mini"
  onClick={() => {
  setEditingLocation(null);
  setIsCreating(true);
@@ -335,9 +335,9 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  open={!!deleteTarget}
  title={t('locations.deleteTitle')}
  message={
- <div className="space-y-2">
+ <div className="space-y-3">
  <p>{t('locations.deleteConfirm', { name: deleteTarget?.name })}</p>
- <p className="text-xs text-muted-foreground">
+ <p className="type-meta">
    {t('locations.deleteWarning')}
  </p>
  </div>

@@ -40,7 +40,7 @@ import {
  SelectValue,
 } from '../../components/ui/select';
 import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import { BracketLabel, StatusLed } from '../../components/deck/primitives';
 import { formatDateTime } from '../../i18n/format';
 
 // ── Time Window Constants ──
@@ -61,8 +61,8 @@ function timeWindowLabel(t: TFunction<'admin-access'>, value: string): string {
 
 // ── Tooltip Helper ──
 // Radix portal tooltip: the previous custom absolute tooltip was clipped by
-// ServerTabCard overflow-hidden and rendered unreadable underneath content.
-// The portal escapes the card so the text stays visible.
+// the panel's overflow-hidden and rendered unreadable underneath content.
+// The portal escapes the panel so the text stays visible.
 function Tooltip({ text }: { text: string }) {
  return (
  <TooltipProvider>
@@ -72,7 +72,7 @@ function Tooltip({ text }: { text: string }) {
  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60" />
  </span>
  </TooltipTrigger>
- <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+ <TooltipContent side="top" className="max-w-xs text-mini leading-relaxed">
  {text}
  </TooltipContent>
  </UiTooltip>
@@ -98,7 +98,7 @@ function NumberField({
 }) {
  return (
  <label className="block space-y-1">
- <span className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline flex items-center gap-1.5">
  {label}
  {tooltip && <Tooltip text={tooltip} />}
  </span>
@@ -136,7 +136,7 @@ function RateLimitField({
  const { t } = useTranslation('admin-access');
  return (
  <label className="block space-y-1">
- <span className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+ <span className="type-overline flex items-center gap-1.5">
  {label}
  {tooltip && <Tooltip text={tooltip} />}
  </span>
@@ -149,9 +149,9 @@ function RateLimitField({
  max={max}
  className="flex-1"
  />
- <span className="text-xs text-muted-foreground shrink-0">{t('security.per')}</span>
+ <span className="shrink-0 text-mini text-muted-foreground">{t('security.per')}</span>
  <Select value={windowValue} onValueChange={onWindowChange}>
- <SelectTrigger className="w-[100px] shrink-0">
+ <SelectTrigger className="h-7 w-[100px] shrink-0 rounded-sm text-mini">
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
@@ -170,6 +170,8 @@ function RateLimitField({
 // ── Section Wrapper ──
 function Section({
   title,
+  subtitle,
+  icon,
   children,
   footer,
 }: {
@@ -180,11 +182,19 @@ function Section({
   footer?: React.ReactNode;
 }) {
   return (
-    <ServerTabCard>
-      <h3 className="type-overline mb-2">{title}</h3>
-      {children}
-      {footer ? <div className="mt-3 flex justify-end">{footer}</div> : null}
-    </ServerTabCard>
+    <div className="deck-panel">
+      <div className="border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+        <div className="flex items-center gap-2">
+          {icon ? <span className="text-muted-foreground">{icon}</span> : null}
+          <BracketLabel>{title}</BracketLabel>
+        </div>
+        {subtitle ? <p className="mt-0.5 text-micro text-muted-foreground">{subtitle}</p> : null}
+      </div>
+      <div className="p-3">
+        {children}
+        {footer ? <div className="mt-3 flex justify-end border-t border-border/40 pt-2">{footer}</div> : null}
+      </div>
+    </div>
   );
 }
 
@@ -235,7 +245,7 @@ function McpSettingsCard() {
     <Section
       title={t('security.mcpTitle')}
       subtitle={t('security.mcpDescription')}
-      icon={<Bot className="h-4 w-4 text-info" />}
+      icon={<Bot className="h-3.5 w-3.5 text-info" />}
       footer={
         <Button size="sm" disabled={!canSubmit || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
           {saveMutation.isPending ? t('saving') : t('common:actions.save')}
@@ -245,7 +255,7 @@ function McpSettingsCard() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm text-foreground">{t('security.mcpEnable')}</p>
-          <p className="text-[11px] text-muted-foreground">{t('security.mcpEnableDescription')}</p>
+          <p className="text-micro text-muted-foreground">{t('security.mcpEnableDescription')}</p>
         </div>
         <Switch
           checked={enabled}
@@ -284,14 +294,14 @@ function McpSettingsCard() {
           tooltip={t('security.mcpBudgetTooltip')}
         />
         <label className="block space-y-1">
-          <span className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">
+          <span className="type-overline flex items-center gap-1.5">
             {t('security.mcpEndpoint')}
           </span>
-          <Input value={endpoint} readOnly onFocus={(e) => e.target.select()} />
+          <Input value={endpoint} readOnly onFocus={(e) => e.target.select()} className="h-7 rounded-sm font-mono text-mini" />
         </label>
       </div>
-      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{t('security.mcpKeyHint')}</p>
-      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{t('security.mcpConfirmHint')}</p>
+      <p className="mt-3 text-micro leading-relaxed text-muted-foreground">{t('security.mcpKeyHint')}</p>
+      <p className="mt-1 text-micro leading-relaxed text-muted-foreground">{t('security.mcpConfirmHint')}</p>
     </Section>
   );
 }
@@ -312,36 +322,32 @@ function LockoutRow({
  const isIpLockout = lockout.email.startsWith('__ip__:');
  const displayEmail = isIpLockout ? t('security.ipRateLimit') : lockout.email;
  return (
- <div className="group flex flex-wrap items-center gap-4 border-b border-border/30 px-5 py-3.5 last:border-b-0 transition-colors hover:bg-surface-2/30">
- <div className="flex items-center gap-2.5 min-w-0 flex-1">
- {isActive ? (
- <Lock className="h-3.5 w-3.5 shrink-0 text-destructive" />
- ) : (
- <Unlock className="h-3.5 w-3.5 shrink-0 text-warning" />
- )}
+ <div className="group flex flex-wrap items-center gap-4 px-3 py-1.5 transition-colors hover:bg-surface-1/40">
+ <div className="flex min-w-0 flex-1 items-center gap-2.5">
+ <StatusLed tone={isActive ? 'alarm' : 'hazard'} />
  <div className="min-w-0">
- <div className="truncate text-sm font-medium text-foreground">{displayEmail}</div>
- <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
- <span className="font-mono">{lockout.ipAddress}</span>
+ <div className="truncate text-data font-medium text-foreground">{displayEmail}</div>
+ <div className="flex flex-wrap items-center gap-2 text-micro text-muted-foreground">
+ <span className="font-mono tabular-nums">{lockout.ipAddress}</span>
  <span>·</span>
  <span>{t('security.attempts', { count: lockout.failureCount })}</span>
  <span>·</span>
- <span>{t('security.lastFailedAt', { date: formatDateTime(lockout.lastFailedAt) })}</span>
+ <span className="font-mono tabular-nums">{t('security.lastFailedAt', { date: formatDateTime(lockout.lastFailedAt) })}</span>
  </div>
  </div>
  </div>
 
  <div className="flex items-center gap-3">
- <Badge variant={isActive ? 'destructive' : 'secondary'} className="text-[10px] shrink-0">
+ <Badge variant={isActive ? 'destructive' : 'secondary'} className="shrink-0 text-micro">
  {isActive ? t('security.locked') : t('security.expired')}
  </Badge>
  {lockout.lockedUntil && (
- <span className="hidden text-[11px] text-muted-foreground sm:block">
+ <span className="hidden font-mono text-micro tabular-nums text-muted-foreground sm:block">
  {t('security.until', { date: formatDateTime(lockout.lockedUntil) })}
  </span>
  )}
  <button
- className="rounded-md p-1.5 text-muted-foreground opacity-100 transition-colors hover:bg-primary/5 hover:text-primary sm:opacity-0 sm:group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground opacity-100 transition-colors hover:bg-surface-2 hover:text-primary sm:opacity-0 sm:group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-30"
  onClick={onClear}
  disabled={isClearing}
  title={t('security.clearLockout')}
@@ -531,7 +537,7 @@ function SecurityPage() {
       title={t('security.title')}
       description={t('security.description')}
       actions={
-        <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
+        <Button size="sm" className="h-8 px-3 text-mini" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
           {updateMutation.isPending ? t('saving') : t('common:actions.save')}
         </Button>
       }
@@ -542,7 +548,7 @@ function SecurityPage() {
  <Section
  title={t('security.rateLimits')}
  subtitle={t('security.rateLimitsDescription')}
- icon={<Zap className="h-4 w-4 text-warning" />}
+ icon={<Zap className="h-3.5 w-3.5 text-warning" />}
  >
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -617,7 +623,7 @@ function SecurityPage() {
  <Section
  title={t('security.emailVerification')}
  subtitle={t('security.emailVerificationDescription')}
- icon={<MailCheck className="h-4 w-4 text-success" />}
+ icon={<MailCheck className="h-3.5 w-3.5 text-success" />}
  >
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-foreground">{t('security.requireEmailVerification')}</p>
@@ -634,7 +640,7 @@ function SecurityPage() {
  <Section
  title={t('security.lockoutPolicy')}
  subtitle={t('security.lockoutPolicyDescription')}
- icon={<Lock className="h-4 w-4 text-destructive" />}
+ icon={<Lock className="h-3.5 w-3.5 text-destructive" />}
  >
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
  <NumberField
@@ -663,7 +669,7 @@ function SecurityPage() {
  <Section
  title={t('security.fileUploads')}
  subtitle={t('security.fileUploadsDescription')}
- icon={<FolderSync className="h-4 w-4 text-info" />}
+ icon={<FolderSync className="h-3.5 w-3.5 text-info" />}
  >
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <RateLimitField
@@ -700,42 +706,41 @@ function SecurityPage() {
  <McpSettingsCard />
 
  {/* ── Auth Lockouts ── */}
- <ServerTabCard>
- <div className="flex flex-wrap items-center justify-between gap-3">
- <div className="flex items-center gap-2.5">
- <Lock className="h-4 w-4 shrink-0 text-destructive" />
+ <div className="deck-panel">
+ <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <div className="flex items-center gap-2">
+ <Lock className="h-3.5 w-3.5 shrink-0 text-destructive" />
  <div>
- <h2 className="text-sm font-semibold text-foreground">{t('security.authLockouts')}</h2>
- <p className="text-[11px] text-muted-foreground">{t('security.authLockoutsDescription')}</p>
+ <BracketLabel tone="alarm">{t('security.authLockouts')}</BracketLabel>
+ <p className="text-micro text-muted-foreground">{t('security.authLockoutsDescription')}</p>
  </div>
  </div>
  <div className="relative min-w-[180px] max-w-xs">
- <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+ <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
  <Input
  value={search}
  onChange={(e) => { setSearch(e.target.value); setLockoutPage(1); }}
  placeholder={t('security.searchLockouts')}
- className="pl-9"
+ className="h-7 rounded-sm pl-9 text-mini"
  />
  </div>
  </div>
 
- <div className="mt-3 -mx-5 -mb-4">
  {lockoutsLoading ? (
- <div className="space-y-1 px-5 py-4">
+ <div className="space-y-1 p-3">
  {[1, 2, 3].map((i) => (
- <div key={i} className="flex items-center gap-3 py-3">
- <div className="h-8 w-8 animate-pulse rounded-lg bg-surface-3" />
+ <div key={i} className="flex items-center gap-3 py-1.5">
+ <div className="h-2 w-2 animate-pulse rounded-sm bg-surface-3" />
  <div className="flex-1 space-y-1.5">
- <div className="h-3.5 w-36 animate-pulse rounded bg-surface-3" />
- <div className="h-3 w-48 animate-pulse rounded bg-surface-2" />
+ <div className="h-3.5 w-36 animate-pulse rounded-sm bg-surface-3" />
+ <div className="h-3 w-48 animate-pulse rounded-sm bg-surface-2" />
  </div>
  </div>
  ))}
  </div>
  ) : lockouts.length > 0 ? (
  <>
- <div>
+ <div className="divide-y divide-border/40">
  {lockouts.map((lockout) => (
  <LockoutRow
  key={lockout.id}
@@ -746,7 +751,7 @@ function SecurityPage() {
  ))}
  </div>
  {lockoutPagination && lockoutPagination.totalPages > 1 && (
- <div className="flex justify-center border-t border-border/30 pt-3 pb-3">
+ <div className="flex justify-center border-t border-border/40 py-2">
  <Pagination
  page={lockoutPagination.page}
  totalPages={lockoutPagination.totalPages}
@@ -756,7 +761,7 @@ function SecurityPage() {
  )}
  </>
  ) : (
- <div className="px-5 py-8">
+ <div className="p-3">
  <EmptyState
  title={t('security.emptyTitle')}
  description={t('security.emptyDescription')}
@@ -764,7 +769,6 @@ function SecurityPage() {
  </div>
  )}
  </div>
- </ServerTabCard>
  </div>
  );
 }

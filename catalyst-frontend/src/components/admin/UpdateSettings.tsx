@@ -32,15 +32,13 @@ function InfoRow({
  badge?: React.ReactNode;
 }) {
  return (
- <div className="flex items-center justify-between py-2.5">
- <div className="flex items-center gap-2.5">
- <div className="flex h-7 w-7 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
- {icon}
- </div>
- <span className="text-sm text-muted-foreground">{label}</span>
+ <div className="flex items-center justify-between gap-3 py-1.5">
+ <div className="flex items-center gap-2">
+ <span className="text-muted-foreground">{icon}</span>
+ <span className="text-mini text-muted-foreground">{label}</span>
  </div>
  <div className="flex items-center gap-2">
- <span className="text-sm font-medium text-foreground">{value}</span>
+ <span className="font-mono text-mini tabular-nums text-foreground">{value}</span>
  {badge}
  </div>
  </div>
@@ -79,23 +77,24 @@ export default function UpdateSettings() {
  const canTrigger = status?.isDocker && status?.updateAvailable;
 
  return (
- <div className="space-y-4">
+ <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isLoading ? (
             <Skeleton className="h-5 w-20" />
           ) : status?.updateAvailable ? (
-            <Badge variant="success" className="text-xs">
+            <Badge variant="success" className="text-micro">
               {t('update.available')}
             </Badge>
           ) : (
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-micro">
               {t('update.upToDate')}
             </Badge>
           )}
         </div>
         <Button
           size="sm"
+          className="h-8 px-3 text-mini"
           disabled={isLoading || triggerMutation.isPending || !canTrigger}
           onClick={() => {
             setProgressOpen(true);
@@ -117,25 +116,25 @@ export default function UpdateSettings() {
       </div>
 
       {!isLoading && !status?.isDocker && (
-        <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2 text-xs text-warning">
+        <div className="flex items-start gap-2 rounded-sm border border-warning/20 bg-warning/5 px-3 py-1.5 text-mini text-warning">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{t('update.standaloneNotice')}</span>
         </div>
       )}
 
- <div className="divide-y divide-border/50">
+ <div className="divide-y divide-border/40">
  {isLoading ? (
  <>
- <div className="py-3">
+ <div className="py-1.5">
  <Skeleton className="h-5 w-full" />
  </div>
- <div className="py-3">
+ <div className="py-1.5">
  <Skeleton className="h-5 w-full" />
  </div>
- <div className="py-3">
+ <div className="py-1.5">
  <Skeleton className="h-5 w-full" />
  </div>
- <div className="py-3">
+ <div className="py-1.5">
  <Skeleton className="h-5 w-full" />
  </div>
  </>
@@ -152,11 +151,11 @@ export default function UpdateSettings() {
  value={status?.latestVersion ?? t('common:actions.unknown')}
  badge={
  status?.updateAvailable ? (
- <Badge variant="success" className="text-[10px]">
+ <Badge variant="success" className="text-micro">
  {t('update.new')}
  </Badge>
  ) : (
- <Badge variant="outline" className="text-[10px]">
+ <Badge variant="outline" className="text-micro">
  {t('update.latest')}
  </Badge>
  )
@@ -177,7 +176,7 @@ export default function UpdateSettings() {
  value={status?.isDocker ? 'Docker' : t('update.standalone')}
  badge={
  status?.isDocker ? (
- <Badge variant="secondary" className="text-[10px]">
+ <Badge variant="secondary" className="text-micro">
  {t('update.container')}
  </Badge>
  ) : undefined
@@ -195,11 +194,11 @@ export default function UpdateSettings() {
  value={status?.updateAvailable ? t('update.available') : t('update.upToDate')}
  badge={
  status?.updateAvailable ? (
- <Badge variant="destructive" className="text-[10px]">
+ <Badge variant="destructive" className="text-micro">
  {t('update.actionRequired')}
  </Badge>
  ) : (
- <Badge variant="outline" className="text-[10px]">
+ <Badge variant="outline" className="text-micro">
  {t('update.ok')}
  </Badge>
  )

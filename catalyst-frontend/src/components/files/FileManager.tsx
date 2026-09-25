@@ -23,7 +23,6 @@ import {
  AlertTriangle,
  Menu,
  Search,
- Shield,
 } from 'lucide-react';
 import FileEditor from './FileEditor';
 import { describeError } from '../../utils/errors';
@@ -775,11 +774,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 
  // Toolbar button styles
  const tbtn =
- 'inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:bg-surface-2 hover:text-foreground hover:border-border hover:shadow-sm disabled:opacity-40 dark:border-border/40 dark:hover:bg-surface-2 dark:hover:text-foreground';
+ 'inline-flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2 text-mini font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
  const tbtnIcon =
- 'inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 text-muted-foreground transition-all hover:bg-surface-2 hover:text-foreground hover:border-border hover:shadow-sm disabled:opacity-40 dark:border-border/40 dark:hover:bg-surface-2 dark:hover:text-foreground';
+ 'inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
  const tbtnDanger =
- 'inline-flex items-center gap-1.5 rounded-lg border border-danger/20 px-2.5 py-1.5 text-xs font-medium text-danger transition-all hover:bg-danger-muted hover:border-danger/30 disabled:opacity-40 dark:border-danger/20 dark:text-danger dark:hover:bg-danger-muted';
+ 'inline-flex h-7 items-center gap-1.5 rounded-sm border border-danger/30 px-2 text-mini font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40';
 
  return (
  <motion.div
@@ -796,7 +795,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <motion.button
  variants={itemVariants}
  type="button"
- className="lg:hidden flex items-center gap-2 rounded-md border border-border/50 bg-card px-3 py-2 text-sm font-medium text-muted-foreground"
+ className="flex h-8 items-center gap-2 rounded-sm border border-border/60 bg-card px-2.5 text-mini font-medium text-muted-foreground lg:hidden"
  onClick={() => setShowSidebar(!showSidebar)}
  >
  <Menu className="h-4 w-4" />
@@ -821,7 +820,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  variants={itemVariants}
  className={`
  fixed inset-y-0 left-0 z-50 w-64 transform rounded-none border-r border-border bg-card p-3 transition-transform duration-300 ease-out
- lg:static lg:z-auto lg:w-auto lg:transform-none lg:rounded-md lg:border lg:transition-none lg:shadow-sm
+ lg:static lg:z-auto lg:w-auto lg:transform-none lg:rounded-sm lg:border lg:transition-none
  ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
  `}
  >
@@ -833,7 +832,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </div>
  <button
  type="button"
- className="rounded-lg p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground lg:hidden"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground lg:hidden"
  onClick={() => setShowSidebar(false)}
  >
  <X className="h-4 w-4" />
@@ -854,12 +853,12 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {/* Main content */}
  <motion.div variants={itemVariants} className="space-y-3 min-w-0">
  {/* Breadcrumb + toolbar */}
- <div className="rounded-md border border-border/50 bg-card px-4 py-3">
+ <div className="deck-panel px-3 py-2">
  {/* Breadcrumbs */}
- <nav className="flex items-center gap-1 text-xs text-muted-foreground overflow-x-auto scrollbar-hide pb-2">
+ <nav className="flex items-center gap-1 overflow-x-auto pb-1.5 text-mini text-muted-foreground scrollbar-hide">
  <button
  type="button"
- className="flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-surface-2 hover:text-foreground shrink-0 transition-colors"
+ className="flex shrink-0 items-center gap-1 rounded-sm px-1 py-0.5 transition-colors hover:bg-surface-1/40 hover:text-foreground"
  onClick={() => setPath('/')}
  title={t('files.manager.root')}
  >
@@ -871,10 +870,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
  <button
  type="button"
- className={`rounded-md px-1.5 py-0.5 transition-colors whitespace-nowrap ${
+ className={`whitespace-nowrap rounded-sm px-1 py-0.5 transition-colors ${
  idx === breadcrumbs.length - 1
- ? 'font-medium text-foreground hover:text-foreground'
- : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
+ ? 'font-medium text-foreground'
+ : 'text-muted-foreground hover:bg-surface-1/40 hover:text-foreground'
  }`}
  onClick={() => setPath(crumb.path)}
  >
@@ -887,14 +886,14 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {/* Search bar + toolbar */}
  <div className="mt-1 flex flex-wrap items-center gap-2">
  {/* Search */}
- <div className="relative flex-1 min-w-[140px] max-w-xs">
- <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+ <div className="relative min-w-[140px] max-w-xs flex-1">
+ <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
  <input
  type="text"
  placeholder={t('files.manager.filterPlaceholder')}
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
- className="w-full rounded-lg border border-border bg-surface-1 pl-8 pr-3 py-1.5 text-xs text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/20 dark:border-border dark:bg-surface-2"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
  </div>
 
@@ -963,7 +962,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  className="flex items-center gap-2 overflow-hidden"
  >
  <div className="hidden sm:block h-4 w-px bg-border/60" />
- <span className="type-numeric text-xs text-foreground">
+ <span className="font-mono text-micro tabular-nums text-foreground">
  {selectedEntries.length}
  </span>
  {canWrite && (
@@ -1001,7 +1000,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  )}
  <button
  type="button"
- className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  onClick={() => setSelectedPaths(new Set())}
  title={t('files.manager.clearSelection')}
  >
@@ -1013,7 +1012,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </div>
 
  {message && (
- <div className="mt-2 rounded-lg bg-warning-muted px-3 py-1.5 text-xs text-warning flex items-center gap-1.5">
+ <div className="mt-2 flex items-center gap-1.5 rounded-sm border border-warning/25 bg-warning/10 px-2.5 py-1.5 text-mini text-warning">
  <AlertTriangle className="h-3 w-3 shrink-0" />
  {message}
  </div>
@@ -1028,11 +1027,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  animate={{ opacity: 1, y: 0 }}
  exit={{ opacity: 0, y: -8 }}
  transition={{ duration: 0.2 }}
- className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-md border border-danger/20 bg-danger-muted px-4 py-3 dark:border-danger/15 dark:bg-danger-muted/30"
+ className="flex flex-col justify-between gap-2 rounded-sm border border-danger/25 bg-danger/10 px-3 py-2 sm:flex-row sm:items-center"
  >
  <div className="flex items-center gap-2">
  <Trash2 className="h-4 w-4 text-danger" />
- <span className="text-sm text-danger">
+ <span className="text-mini text-danger">
  {t('files.manager.deleteConfirm', { count: selectedEntries.length })}
  </span>
  </div>
@@ -1059,10 +1058,8 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 
  {/* File list — drop target for explorer uploads (no Upload modal required) */}
  <div
- className={`relative rounded-md border bg-card h-[calc(100vh-280px)] min-h-[200px] overflow-hidden transition-colors ${
- isFileDropActive
- ? 'border-primary ring-2 ring-primary/30'
- : 'border-border dark:border-border'
+ className={`deck-panel relative h-[calc(100vh-280px)] min-h-[200px] overflow-hidden transition-colors ${
+ isFileDropActive ? 'border-primary' : ''
  }`}
  onDragEnter={handleExplorerDragEnter}
  onDragOver={handleExplorerDragOver}
@@ -1070,10 +1067,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onDrop={handleExplorerDrop}
  >
  {isFileDropActive && canWrite && !isSuspended && (
- <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-primary/10 backdrop-blur-[1px]">
+ <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-primary/10">
  <Upload className="h-8 w-8 text-primary" />
- <p className="text-sm font-semibold text-primary">{t('files.manager.dropToUpload')}</p>
- <p className="font-mono text-[11px] text-muted-foreground">{path}</p>
+ <p className="text-mini font-semibold text-primary">{t('files.manager.dropToUpload')}</p>
+ <p className="font-mono text-micro tabular-nums text-muted-foreground">{path}</p>
  </div>
  )}
  <FileList
@@ -1208,10 +1205,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  >
  <DialogContent size="sm">
  <form onSubmit={handlePermissionsSubmit} className="flex min-h-0 flex-1 flex-col">
- <DialogHeader
- icon={<Shield className="h-4 w-4" />}
- iconClassName="border-success/20 bg-success/10 text-success"
- >
+ <DialogHeader>
  <DialogTitle>{t('files.manager.editPermissions')}</DialogTitle>
  <DialogDescription className="truncate">
  {permissionsEntry?.path ?? t('files.manager.permissionsDescription')}
@@ -1231,7 +1225,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  placeholder={permissionsEntry?.isDirectory ? '755' : '644'}
  autoFocus
  />
- <p className="text-[11px] text-muted-foreground/70">
+ <p className="text-micro text-muted-foreground/70">
  {t('files.manager.modeHint.prefix')}
  <span className="font-mono text-foreground/80">644</span>
  {t('files.manager.modeHint.forFiles')}
@@ -1240,7 +1234,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </p>
  </div>
  {permissionsError && (
- <div className="rounded-lg border border-danger/20 bg-danger-muted px-3 py-2 text-xs text-danger dark:border-danger/15 dark:bg-danger-muted/30">
+ <div className="rounded-sm border border-danger/25 bg-danger/10 px-3 py-2 text-mini text-danger">
  {permissionsError}
  </div>
  )}
@@ -1269,20 +1263,17 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  }}
  >
  <DialogContent size="xl" className="h-[min(80dvh,40rem)]">
- <DialogHeader
- icon={<Archive className="h-4 w-4" />}
- iconClassName="border-warning/30 bg-warning/10 text-warning"
- >
+ <DialogHeader>
  <DialogTitle className="truncate">
  {archiveBrowsePath?.split('/').pop() || t('files.manager.archive')}
  </DialogTitle>
  <DialogDescription>{t('files.manager.readOnlyPreview')}</DialogDescription>
  </DialogHeader>
  <DialogToolbar>
- <div className="flex items-center gap-1 overflow-x-auto text-xs scrollbar-hide">
+ <div className="flex items-center gap-1 overflow-x-auto text-mini scrollbar-hide">
  <button
  type="button"
- className="shrink-0 rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="shrink-0 rounded-sm px-1 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  onClick={() => setArchiveBrowseDir('/')}
  >
  <Home className="inline h-3 w-3" />
@@ -1295,7 +1286,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
  <button
  type="button"
- className="whitespace-nowrap rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="whitespace-nowrap rounded-sm px-1 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  onClick={() => setArchiveBrowseDir(segPath)}
  >
  {seg}
@@ -1307,8 +1298,8 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </DialogToolbar>
  <DialogBody className="p-0">
  {archiveLoading ? (
- <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
- <Loader2 className="h-6 w-6 animate-spin text-primary" />
+ <div className="flex flex-col items-center justify-center gap-2 py-12 text-mini text-muted-foreground">
+ <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
  {t('files.manager.readingArchive')}
  </div>
  ) : (
@@ -1320,7 +1311,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  )}
  </DialogBody>
  <DialogFooter className="sm:justify-between">
- <span className="text-[11px] text-muted-foreground">
+ <span className="font-mono text-micro tabular-nums text-muted-foreground">
  {t('files.manager.entriesTotal', { count: archiveEntries.length })}
  </span>
  <Button type="button" variant="outline" onClick={() => setArchiveBrowsePath(null)}>
@@ -1338,31 +1329,28 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  }}
  >
  <DialogContent size="sm">
- <DialogHeader
- icon={<AlertTriangle className="h-4 w-4" />}
- iconClassName="border-warning/20 bg-warning/10 text-warning"
- >
+ <DialogHeader>
  <DialogTitle>{t('files.manager.bufferLimitTitle')}</DialogTitle>
  <DialogDescription>
  {t('files.manager.bufferLimitDescription')}
  </DialogDescription>
  </DialogHeader>
  <DialogBody className="space-y-3">
- <div className="rounded-md border border-border/50 bg-surface-2 p-3">
- <div className="flex justify-between text-sm">
+ <div className="rounded-sm border border-border/40 bg-surface-1/40 px-3 py-2">
+ <div className="flex justify-between text-mini">
  <span className="text-muted-foreground">{t('files.manager.currentLimit')}</span>
- <span className="type-numeric text-foreground">
+ <span className="font-mono tabular-nums text-foreground">
  {formatNumber(bufferError?.currentMaxBufferMb ?? 0)} MB
  </span>
  </div>
- <div className="mt-1 flex justify-between text-sm">
+ <div className="mt-1 flex justify-between text-mini">
  <span className="text-muted-foreground">{t('files.manager.recommended')}</span>
- <span className="type-numeric text-foreground">
+ <span className="font-mono tabular-nums text-foreground">
  {formatNumber(bufferError?.recommendedMaxBufferMb ?? 0)} MB
  </span>
  </div>
  </div>
- <p className="text-xs leading-relaxed text-muted-foreground">
+ <p className="text-mini leading-relaxed text-muted-foreground">
  {t('files.manager.bufferAdminHint.prefix')}<span className="font-medium text-foreground">{t('files.manager.bufferAdminHint.maxBufferSetting')}</span>{t('files.manager.bufferAdminHint.middle')}<span className="font-medium text-foreground">{t('files.manager.bufferAdminHint.adminSecurity')}</span>{t('files.manager.bufferAdminHint.suffix')}
  </p>
  </DialogBody>
@@ -1377,7 +1365,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {/* Upload modal */}
  <Dialog open={showUpload} onOpenChange={setShowUpload}>
  <DialogContent size="md">
- <DialogHeader icon={<Upload className="h-4 w-4" />}>
+ <DialogHeader>
  <DialogTitle>{t('files.manager.uploadFiles')}</DialogTitle>
  <DialogDescription>
  {t('files.uploader.target')} <span className="font-mono">{path}</span>
@@ -1411,15 +1399,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  >
  <DialogContent size={createMode === 'file' ? 'md' : 'sm'}>
  <form onSubmit={handleCreateSubmit} className="flex min-h-0 flex-1 flex-col">
- <DialogHeader
- icon={
- createMode === 'directory' ? (
- <FolderPlus className="h-4 w-4" />
- ) : (
- <FilePlus className="h-4 w-4" />
- )
- }
- >
+ <DialogHeader>
  <DialogTitle>
  {createMode === 'directory' ? t('files.manager.createFolder') : t('files.manager.createFile')}
  </DialogTitle>
@@ -1477,10 +1457,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  {/* Compress modal */}
  <Dialog open={showCompress} onOpenChange={setShowCompress}>
  <DialogContent size="sm">
- <DialogHeader
- icon={<Archive className="h-4 w-4" />}
- iconClassName="border-warning/20 bg-warning/10 text-warning"
- >
+ <DialogHeader>
  <DialogTitle>
  {t('files.manager.compressTitle', { count: selectedEntries.length })}
  </DialogTitle>
@@ -1526,10 +1503,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onOpenChange={setShowDecompress}
  >
  <DialogContent size="sm">
- <DialogHeader
- icon={<ArchiveRestore className="h-4 w-4" />}
- iconClassName="border-warning/20 bg-warning/10 text-warning"
- >
+ <DialogHeader>
  <DialogTitle>{t('files.manager.extractArchive')}</DialogTitle>
  <DialogDescription className="truncate">
  {selectedArchive?.name ?? t('files.manager.extractDescription')}
@@ -1575,6 +1549,9 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 /* ── Archive virtual directory listing ── */
 
 type ArchiveItem = { name: string; size: number; isDirectory: boolean; modified?: string };
+
+/** Shared by the archive column header and its rows so sizes stay aligned. */
+const ARCHIVE_GRID = 'grid grid-cols-[minmax(0,1fr)_6rem] items-center gap-x-2';
 
 function formatSize(bytes: number) {
  if (bytes === 0) return '—';
@@ -1629,50 +1606,47 @@ function ArchiveListing({
 
  if (visible.length === 0) {
  return (
- <div className="flex flex-col items-center justify-center py-16 text-sm text-muted-foreground gap-2">
- <Folder className="h-8 w-8 text-muted-foreground/20" />
+ <div className="flex flex-col items-center justify-center gap-2 py-12 text-mini text-muted-foreground">
+ <Folder className="h-5 w-5 text-muted-foreground/30" />
  {t('files.manager.emptyDirectory')}
  </div>
  );
  }
 
  return (
- <table className="w-full text-left text-sm">
- <thead>
- <tr className="border-b border-border type-overline">
- <th className="px-4 py-2.5">{t('files.list.name')}</th>
- <th className="px-4 py-2.5 text-right">{t('files.list.size')}</th>
- </tr>
- </thead>
- <tbody>
- {visible.map((item) => (
- <tr
+ <div className="deck-panel overflow-hidden">
+ {/* Column header — same grid template as the rows */}
+ <div className={`${ARCHIVE_GRID} border-b border-border/50 bg-surface-1 px-3 py-1.5 type-overline text-muted-foreground/70`}>
+ <span>{t('files.list.name')}</span>
+ <span className="text-right">{t('files.list.size')}</span>
+ </div>
+ {visible.map((item, index) => (
+ <div
  key={item.name}
- className="border-b border-border transition-colors hover:bg-surface-2 dark:border-border/40 dark:hover:bg-surface-2/40"
+ className={`${ARCHIVE_GRID} px-3 py-1.5 transition-colors hover:bg-surface-1/40 ${
+ index > 0 ? 'border-t border-border/40' : ''
+ }`}
  onDoubleClick={() => item.isDirectory && onNavigate('/' + item.name)}
  >
- <td className="px-4 py-2">
  <button
  type="button"
- className="flex items-center gap-2.5 text-foreground transition-colors hover:text-foreground"
+ className="flex min-w-0 items-center gap-2 text-left text-data text-foreground disabled:cursor-default"
  onClick={() => item.isDirectory && onNavigate('/' + item.name)}
  disabled={!item.isDirectory}
  >
-  {item.isDirectory ? (
- <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
+ {item.isDirectory ? (
+ <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  ) : (
  <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  )}
- <span className={item.isDirectory ? 'font-medium' : ''}>{item.displayName}</span>
+ <span className="truncate">{item.displayName}</span>
  </button>
- </td>
- <td className="px-4 py-2 text-right type-numeric text-xs text-muted-foreground">
+ <span className="text-right font-mono text-micro tabular-nums text-muted-foreground">
  {item.isDirectory ? '—' : formatSize(item.size)}
- </td>
- </tr>
+ </span>
+ </div>
  ))}
- </tbody>
- </table>
+ </div>
  );
 }
 

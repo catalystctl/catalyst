@@ -53,11 +53,10 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import TabHeader from '../../components/servers/tabs/TabHeader';
-
-import SectionHeader from '../../components/servers/tabs/SectionHeader';
 
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import { BracketLabel, Segmented } from '../../components/deck/primitives';
+import { cn } from '@/lib/utils';
 
 // ── Permission categories ──────────────────────────────────────────────
 const PERMISSION_CATEGORIES = [
@@ -334,7 +333,17 @@ function getPermissionCategories(t: TFunction<'admin-access'>, permissions: stri
 }
 
 // ── Role Card ──
-function RoleCard({
+/**
+ * One grid template shared by the column header and every row so columns line
+ * up. Fixed / minmax(0,1fr) tracks only — never `auto`.
+ *   base : identity · actions
+ *   md   : identity · permissions · scoped · users · actions
+ */
+const GRID =
+ 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+ 'md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7rem_5rem_6.5rem]';
+
+function RoleRow({
  role,
  isActive,
  onView,
@@ -357,38 +366,108 @@ function RoleCard({
 
  return (
  <div
+ role="row"
  onClick={onView}
- className={`group relative cursor-pointer overflow-hidden rounded-xl border p-5 transition-all duration-200 ${
- isActive
- ? 'border-primary/40 bg-primary/5'
- : 'border-border bg-card hover:border-primary/20'
- }`}
+ className={cn(
+ GRID,
+ 'group cursor-pointer py-1.5 pl-3 pr-3 transition-colors hover:bg-surface-1/40',
+ isActive && 'bg-primary/5',
+ )}
  >
-  <div className="flex items-start justify-between gap-3">
- <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2.5">
- {isWildcard ? <KeyRound className="h-4 w-4 shrink-0 text-warning" /> : <Shield className="h-4 w-4 shrink-0 text-primary" />}
- <div className="min-w-0">
- <div className="truncate font-semibold text-foreground">
+ {/* identity */}
+ <div className="flex min-w-0 items-center gap-2">
+ {isWildcard ? (
+ <KeyRound className="h-3.5 w-3.5 shrink-0 text-warning" />
+ ) : (
+ <Shield className="h-3.5 w-3.5 shrink-0 text-primary" />
+ )}
+ <div className="flex min-w-0 flex-col leading-tight">
+ <span
+ className="truncate font-display text-data font-semibold tracking-tight text-foreground"
+ title={roleLabel(t, role.name)}
+ >
  {roleLabel(t, role.name)}
- </div>
+ </span>
  {role.description && (
- <div className="truncate text-xs text-muted-foreground">{roleDescriptionLabel(t, role.description)}</div>
+ <span
+ className="truncate text-micro text-muted-foreground"
+ title={roleDescriptionLabel(t, role.description)}
+ >
+ {roleDescriptionLabel(t, role.description)}
+ </span>
  )}
  </div>
  </div>
+
+ {/* permissions */}
+ <div className="hidden min-w-0 flex-wrap items-center gap-1 md:flex">
+ {isWildcard ? (
+ <Badge className="gap-1 border-warning/30 bg-warning/10 text-warning text-micro">
+ <Zap className="h-3 w-3" /> {t('roles.cardFullAdmin')}
+ </Badge>
+ ) : (
+ <>
+ {permCats.slice(0, 4).map((cat) => {
+ const Icon = cat.icon;
+ return (
+ <Badge key={cat.category} variant="outline" className="gap-1 text-micro">
+ <Icon className="h-2.5 w-2.5" /> {cat.category} ({cat.count})
+ </Badge>
+ );
+ })}
+ {permCats.length > 4 && (
+ <Badge variant="secondary" className="text-micro">{t('roles.cardMore', { count: permCats.length - 4 })}</Badge>
+ )}
+ </>
+ )}
+ <Badge variant="outline" className="text-micro">
+ {t('roles.permissionCount', { count: role.permissions?.length || 0 })}
+ </Badge>
  </div>
 
- <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+ {/* scoped access */}
+ <span className="hidden min-w-0 justify-self-end md:flex">
+ {role.nodeGrantCount > 0 || role.serverGrantCount > 0 ? (
+ <span className="flex flex-col items-end gap-0.5 text-micro text-muted-foreground">
+ {role.nodeGrantCount > 0 && (
+ <span className="flex items-center gap-1">
+ <Globe className="h-3 w-3" /> {t('roles.nodeGrantCount', { count: role.nodeGrantCount })}
+ </span>
+ )}
+ {role.serverGrantCount > 0 && (
+ <span className="flex items-center gap-1">
+ <Server className="h-3 w-3" /> {t('roles.serverGrantCount', { count: role.serverGrantCount })}
+ </span>
+ )}
+ </span>
+ ) : (
+ <span className="text-micro text-muted-foreground/40">—</span>
+ )}
+ </span>
+
+ {/* users */}
+ <span className="hidden items-center justify-self-end md:flex">
+ {role.userCount > 0 ? (
+ <span className="flex items-center gap-1">
+ <Users className="h-3 w-3 text-muted-foreground" />
+ <Segmented muted>{role.userCount}</Segmented>
+ </span>
+ ) : (
+ <span className="text-micro text-muted-foreground/40">—</span>
+ )}
+ </span>
+
+ {/* actions */}
+ <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={(e) => { e.stopPropagation(); onView(); }}
  title={t('roles.actionViewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={(e) => { e.stopPropagation(); onEdit(); }}
  title={t('common:actions.edit')}
  >
@@ -396,7 +475,7 @@ function RoleCard({
  </button>
  {canDelete ? (
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={(e) => { e.stopPropagation(); onDelete(); }}
  disabled={isDeleting}
  title={t('common:actions.delete')}
@@ -404,57 +483,7 @@ function RoleCard({
  <Trash2 className="h-3.5 w-3.5" />
  </button>
  ) : null}
- </div>
- </div>
-
- {/* Permission preview chips */}
- <div className="mt-4 flex flex-wrap gap-1.5">
- {isWildcard ? (
- <Badge className="gap-1 border-warning/30 bg-warning/10 text-warning">
- <Zap className="h-3 w-3" /> {t('roles.cardFullAdmin')}
- </Badge>
- ) : (
- permCats.slice(0, 4).map((cat) => {
- const Icon = cat.icon;
- return (
- <Badge key={cat.category} variant="outline" className="gap-1 text-[10px]">
- <Icon className="h-2.5 w-2.5" /> {cat.category} ({cat.count})
- </Badge>
- );
- })
- )}
- {!isWildcard && permCats.length > 4 && (
- <Badge variant="secondary" className="text-[10px]">{t('roles.cardMore', { count: permCats.length - 4 })}</Badge>
- )}
- </div>
-
- {/* Scoped access badges */}
- {(role.serverGrantCount > 0 || role.nodeGrantCount > 0) && (
- <div className="mt-1.5 flex flex-wrap gap-1.5">
- {role.nodeGrantCount > 0 && (
- <Badge variant="outline" className="gap-1 text-[10px]">
- <Globe className="h-2.5 w-2.5" /> {t('roles.nodeGrantCount', { count: role.nodeGrantCount })}
- </Badge>
- )}
- {role.serverGrantCount > 0 && (
- <Badge variant="outline" className="gap-1 text-[10px]">
- <Server className="h-2.5 w-2.5" /> {t('roles.serverGrantCount', { count: role.serverGrantCount })}
- </Badge>
- )}
- </div>
- )}
-
- {/* Footer */}
- <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
- <Badge variant="outline" className="text-[10px]">
- {t('roles.permissionCount', { count: role.permissions?.length || 0 })}
- </Badge>
- {role.userCount > 0 ? (
- <Badge variant="secondary" className="gap-1 text-[10px]">
- <Users className="h-2.5 w-2.5" /> {role.userCount}
- </Badge>
- ) : null}
- </div>
+ </span>
  </div>
  );
 }
@@ -522,7 +551,7 @@ function ScopedAccessStep({
  key={mode}
  type="button"
  onClick={() => onScopeModeChange(mode)}
- className={`rounded-xl border p-4 text-left transition-all duration-200 ${
+ className={`rounded-sm border p-4 text-left transition-all duration-200 ${
  scopeMode === mode
  ? 'border-primary/40 bg-primary/5'
  : 'border-border bg-card hover:border-primary/20'
@@ -531,7 +560,7 @@ function ScopedAccessStep({
  <div className={`text-sm font-semibold ${scopeMode === mode ? 'text-primary' : 'text-foreground'}`}>
  {title}
  </div>
- <div className="mt-1 text-[11px] text-muted-foreground">{description}</div>
+ <div className="mt-1 text-micro text-muted-foreground">{description}</div>
  </button>
  ))}
  </div>
@@ -547,13 +576,13 @@ function ScopedAccessStep({
  value={search}
  onChange={(e) => onSearchChange(e.target.value)}
  placeholder={t('roles.searchNodes')}
- className="h-8 pl-8 text-xs"
+ className="h-8 pl-8 text-mini"
  />
  </div>
  </div>
 
  {/* All nodes */}
- <label className="mb-2 flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/20">
+ <label className="mb-2 flex cursor-pointer items-center gap-3 rounded-sm border border-border bg-card p-3 transition-colors hover:border-primary/20">
  <input
  type="checkbox"
  className="h-3.5 w-3.5 rounded border-border/40 bg-card text-primary-600"
@@ -561,15 +590,15 @@ function ScopedAccessStep({
  onChange={() => onToggleNode('*')}
  />
  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
- <span className="text-xs font-semibold text-foreground">{t('roles.allNodes')}</span>
- <span className="text-[11px] text-muted-foreground">{t('roles.allNodesDescription')}</span>
+ <span className="text-mini font-semibold text-foreground">{t('roles.allNodes')}</span>
+ <span className="text-micro text-muted-foreground">{t('roles.allNodesDescription')}</span>
  </label>
 
- <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border bg-card p-2">
+ <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-sm border border-border bg-card p-2">
  {filteredNodes.map((node) => (
  <label
  key={node.id}
- className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-primary/5"
+ className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2 py-1.5 text-mini text-foreground transition-colors hover:bg-primary/5"
  >
  <input
  type="checkbox"
@@ -582,7 +611,7 @@ function ScopedAccessStep({
  </label>
  ))}
  {filteredNodes.length === 0 && (
- <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">{t('roles.noNodesMatch')}</div>
+ <div className="px-2 py-3 text-center text-micro text-muted-foreground">{t('roles.noNodesMatch')}</div>
  )}
  </div>
  </div>
@@ -598,15 +627,15 @@ function ScopedAccessStep({
  value={search}
  onChange={(e) => onSearchChange(e.target.value)}
  placeholder={t('roles.searchServers')}
- className="h-8 pl-8 text-xs"
+ className="h-8 pl-8 text-mini"
  />
  </div>
  </div>
- <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border bg-card p-2">
+ <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-sm border border-border bg-card p-2">
  {filteredServers.map((server) => (
  <label
  key={server.id}
- className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-primary/5"
+ className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2 py-1.5 text-mini text-foreground transition-colors hover:bg-primary/5"
  >
  <input
  type="checkbox"
@@ -616,12 +645,12 @@ function ScopedAccessStep({
  />
  <span className="truncate">{server.name}</span>
  {server.nodeName && (
- <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{server.nodeName}</span>
+ <span className="ml-auto shrink-0 text-micro text-muted-foreground">{server.nodeName}</span>
  )}
  </label>
  ))}
  {filteredServers.length === 0 && (
- <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">{t('roles.noServersMatch')}</div>
+ <div className="px-2 py-3 text-center text-micro text-muted-foreground">{t('roles.noServersMatch')}</div>
  )}
  </div>
  </div>
@@ -633,7 +662,7 @@ function ScopedAccessStep({
  <div className="mb-2 flex items-center justify-between gap-3">
  <div className="flex items-center gap-2">
  <span className="text-sm font-semibold text-foreground">{t('roles.permissionsHeading')}</span>
- <Badge variant={selectedPermissions.size > 0 ? 'default' : 'outline'} className="tabular-nums text-[10px]">
+ <Badge variant={selectedPermissions.size > 0 ? 'default' : 'outline'} className="tabular-nums text-micro">
  {t('roles.selectedCount', { count: selectedPermissions.size })}
  </Badge>
  </div>
@@ -643,13 +672,13 @@ function ScopedAccessStep({
  value={permissionSearch}
  onChange={(e) => onPermissionSearchChange(e.target.value)}
  placeholder={t('roles.searchPermissions')}
- className="h-8 pl-8 text-xs"
+ className="h-8 pl-8 text-mini"
  />
  </div>
  </div>
- <div className="grid max-h-52 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border border-border bg-card p-3 sm:grid-cols-2">
+ <div className="grid max-h-52 grid-cols-1 gap-1.5 overflow-y-auto rounded-sm border border-border bg-card p-3 sm:grid-cols-2">
  {filteredPerms.map((perm) => (
- <label key={perm} className="flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+ <label key={perm} className="flex cursor-pointer items-center gap-2 text-micro text-muted-foreground">
  <input
  type="checkbox"
  className="h-3.5 w-3.5 rounded border-border/40 bg-card text-primary-600"
@@ -657,14 +686,14 @@ function ScopedAccessStep({
  onChange={() => onTogglePermission(perm)}
  />
  <span>{serverPermissionLabel(perm)}</span>
- <span className="ml-auto font-mono text-[9px] opacity-60">{perm}</span>
+ <span className="ml-auto font-mono text-micro opacity-60">{perm}</span>
  </label>
  ))}
  {filteredPerms.length === 0 && (
- <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">{t('roles.noPermissionsMatch')}</div>
+ <div className="px-2 py-3 text-center text-micro text-muted-foreground">{t('roles.noPermissionsMatch')}</div>
  )}
  </div>
- <div className="mt-2 text-[11px] text-muted-foreground">
+ <div className="mt-2 text-micro text-muted-foreground">
  {t('roles.scopedHint', { target: scopeMode === 'nodes' ? t('roles.scopedTargetNodes') : t('roles.scopedTargetServers') })}
  </div>
  </div>
@@ -693,7 +722,7 @@ function StepIndicator({ steps, currentStep, onStepClick, canNavigate }: {
  <button
  onClick={() => canClick && onStepClick(i)}
  disabled={!canClick}
- className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+ className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-mini font-medium transition-all duration-200 ${
  isActive
  ? 'bg-primary text-primary-foreground '
  : isComplete
@@ -734,8 +763,8 @@ function PermissionChip({
  <button
  type="button"
  onClick={onToggle}
- className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-all duration-150 ${
- compact ? 'px-1.5 py-0.5 text-[10px]' : ''
+ className={`inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-micro font-medium transition-all duration-150 ${
+ compact ? 'px-1.5 py-0.5 text-micro' : ''
  } ${
  selected
  ? 'border-primary/30 bg-primary/10 text-primary '
@@ -777,7 +806,7 @@ function PermissionCategoryCard({
  if (filteredPerms.length === 0) return null;
 
  return (
- <div className={`rounded-xl border transition-all duration-200 ${someSelected ? category.border : 'border-border'}`}>
+ <div className={`rounded-sm border transition-all duration-200 ${someSelected ? category.border : 'border-border'}`}>
  {/* Category header */}
  <div
  className="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none md:px-4 md:py-3"
@@ -788,7 +817,7 @@ function PermissionCategoryCard({
  </div>
 
  <div className="flex items-center gap-2">
- <span className={`text-[11px] tabular-nums ${someSelected ? category.accent : 'text-muted-foreground'}`}>
+ <span className={`text-micro tabular-nums ${someSelected ? category.accent : 'text-muted-foreground'}`}>
  {selectedCount}/{category.permissions.length}
  </span>
  <div className={`flex h-5 w-9 items-center rounded-full transition-all duration-200 ${
@@ -828,17 +857,17 @@ function PermissionCategoryReadCard({
 }) {
  const { t } = useTranslation('admin-access');
  return (
- <div className={`rounded-xl border ${category.border}`}>
+ <div className={`rounded-sm border ${category.border}`}>
  <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
  <div className="flex items-center gap-2.5">
  <span className="text-sm font-semibold text-foreground">{category.category}</span>
  </div>
- <Badge variant="secondary" className="text-[10px] tabular-nums">{category.count}</Badge>
+ <Badge variant="secondary" className="text-micro tabular-nums">{category.count}</Badge>
  </div>
  <div className="px-4 py-3">
  <div className="flex flex-wrap gap-1.5">
  {permissions.map((perm) => (
- <span key={perm} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] text-foreground">
+ <span key={perm} className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-2 px-2 py-1 text-micro text-foreground">
  <Check className="h-2.5 w-2.5 text-primary" />
  {formatPermission(t, perm)}
  </span>
@@ -866,7 +895,7 @@ function PresetCard({
  <button
  type="button"
  onClick={onApply}
- className={`group flex flex-col items-start gap-2 rounded-md border p-4 text-left transition-all duration-200 ${
+ className={`group flex flex-col items-start gap-2 rounded-sm border p-4 text-left transition-all duration-200 ${
  isActive
  ? 'border-primary/40 bg-primary/5 '
  : 'border-border/50 bg-card hover:border-primary/20'
@@ -876,23 +905,23 @@ function PresetCard({
  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
  <div className="min-w-0 flex-1">
  <div className="text-sm font-semibold text-foreground">{presetLabel(t, preset.key)}</div>
- <div className="text-[11px] text-muted-foreground">{presetDescription(t, preset.key)}</div>
+ <div className="text-micro text-muted-foreground">{presetDescription(t, preset.key)}</div>
  </div>
  </div>
  <div className="flex flex-wrap gap-1">
  {isWildcard ? (
- <Badge className="gap-1 border-warning/30 bg-warning/10 text-warning text-[9px]">
+ <Badge className="gap-1 border-warning/30 bg-warning/10 text-warning text-micro">
  <Zap className="h-2.5 w-2.5" /> {t('roles.permissionLabels.all')}
  </Badge>
  ) : (
  <>
  {preset.permissions.slice(0, 3).map((p) => (
- <Badge key={p} variant="outline" className="text-[9px]">
+ <Badge key={p} variant="outline" className="text-micro">
  {formatPermission(t, p)}
  </Badge>
  ))}
  {preset.permissions.length > 3 && (
- <Badge variant="secondary" className="text-[9px]">+{preset.permissions.length - 3}</Badge>
+ <Badge variant="secondary" className="text-micro">+{preset.permissions.length - 3}</Badge>
  )}
  </>
  )}
@@ -1138,77 +1167,95 @@ function RolesPage() {
  };
 
  return (
- <div className="space-y-5">
- {/* ── Header ── */}
- <TabHeader
- icon={Shield}
- title={t('roles.title')}
- description={t('roles.description')}
- actions={
- <Button size="sm" onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }} className="gap-1.5">
+ <div className="flex min-h-0 flex-1 flex-col gap-3">
+ {/* ── Deck header ── */}
+ <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+ <div className="flex min-w-0 flex-col gap-1">
+ <BracketLabel>{t('layout:sections.accessControl')}</BracketLabel>
+ <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
+ {t('roles.title')}
+ </h1>
+ <p className="text-mini text-muted-foreground">{t('roles.description')}</p>
+ </div>
+ <Button
+ size="sm"
+ onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }}
+ className="h-8 gap-1.5 rounded-sm px-3 text-mini"
+ >
  <Plus className="h-3.5 w-3.5" />
  {t('roles.createTitle')}
  </Button>
- }
- />
+ </header>
 
- {/* ── Search Bar ── */}
- <div className="flex flex-wrap items-center gap-3">
- <div className="relative min-w-[200px] flex-1 max-w-sm">
- <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
- <Input
+ {/* ── The deck: controls, columns and rows in one frame ── */}
+ <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+ {/* Control strip */}
+ <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <label className="relative flex min-w-[12rem] flex-1 items-center">
+ <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
+ <input
+ type="search"
  value={search}
  onChange={(e) => setSearch(e.target.value)}
  placeholder={t('roles.searchPlaceholder')}
- className="pl-9"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
- </div>
- <div className="flex items-center gap-2">
- <Badge variant="outline" className="text-xs">
+ </label>
+ <span className="flex items-center gap-3">
+ <Segmented muted className="text-micro">
  {t('roles.roleCount', { count: roles.length })}
- </Badge>
+ </Segmented>
  {presets.length > 0 && (
- <Badge variant="secondary" className="text-xs">
+ <Segmented muted className="text-micro">
  {t('roles.presetCount', { count: presets.length })}
- </Badge>
+ </Segmented>
  )}
- </div>
+ </span>
  </div>
 
- {/* ── Role Grid ── */}
+ {/* Column header — same grid as the rows, so columns always line up */}
+ <div
+ className={cn(
+ GRID,
+ 'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+ )}
+ >
+ <span className="type-overline">{t('roles.nameLabel')}</span>
+ <span className="type-overline">{t('roles.permissionsHeading')}</span>
+ <span className="type-overline hidden justify-self-end md:inline-flex">{t('roles.nodesHeading')}</span>
+ <span className="type-overline hidden justify-self-end md:inline-flex">{t('roles.usersLabel')}</span>
+ <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
+ </div>
+
+ {/* Rows */}
+ <div className="max-h-[calc(100dvh-20rem)] min-w-0 overflow-y-auto bg-background/25">
  {isLoading ? (
- <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+ <div>
  {[1, 2, 3, 4, 5, 6].map((i) => (
- <div key={i} className="rounded-xl border border-border bg-card p-5">
- <div className="flex items-start gap-3">
- <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
- <div className="flex-1 space-y-2">
- <div className="h-4 w-24 animate-pulse rounded bg-surface-3" />
- <div className="h-3 w-36 animate-pulse rounded bg-surface-2" />
- <div className="flex gap-1.5">
- <div className="h-5 w-14 animate-pulse rounded-full bg-surface-2" />
- <div className="h-5 w-16 animate-pulse rounded-full bg-surface-2" />
- </div>
- </div>
+ <div key={i} className={cn(GRID, 'border-t border-border/40 py-2 pl-3 pr-3')}>
+ <div className="flex items-center gap-2">
+ <div className="h-3.5 w-3.5 animate-pulse bg-surface-3" />
+ <div className="h-3.5 w-28 animate-pulse bg-surface-3" />
  </div>
  </div>
  ))}
  </div>
  ) : filteredRoles.length === 0 ? (
+ <div className="p-3">
  <TabEmptyState
  title={search.trim() ? t('roles.emptyFilteredTitle') : t('roles.emptyTitle')}
  description={search.trim() ? t('roles.emptyFilteredDescription') : t('roles.emptyDescription')}
  action={
- <Button size="sm" onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }} className="gap-1.5">
+ <Button size="sm" className="h-7 gap-1.5 rounded-sm px-2.5 text-mini" onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }}>
  <Plus className="h-3.5 w-3.5" />
  {t('roles.createTitle')}
  </Button>
  }
  />
+ </div>
  ) : (
- <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
- {filteredRoles.map((role: any) => (
- <RoleCard
+ filteredRoles.map((role: any) => (
+ <RoleRow
  key={role.id}
  role={role}
  isActive={viewingRole?.id === role.id}
@@ -1218,9 +1265,10 @@ function RolesPage() {
  canDelete={role.userCount === 0}
  isDeleting={deleteMutation.isPending}
  />
- ))}
- </div>
+ ))
  )}
+ </div>
+ </div>
 
  {/* ── Create/Edit Wizard Modal ── */}
 <Dialog
@@ -1276,14 +1324,14 @@ function RolesPage() {
 
  {/* Basic Info */}
  <div>
- <SectionHeader icon={Info} title={t('roles.roleDetails')} />
+ <BracketLabel tone="muted">{t('roles.roleDetails')}</BracketLabel>
  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('roles.nameLabel')} <span className="text-destructive">*</span></span>
+ <span className="type-overline">{t('roles.nameLabel')} <span className="text-destructive">*</span></span>
  <Input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('roles.namePlaceholder')} />
  </label>
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('roles.descriptionLabel')}</span>
+ <span className="type-overline">{t('roles.descriptionLabel')}</span>
  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('roles.descriptionPlaceholder')} />
  </label>
  </div>
@@ -1297,7 +1345,7 @@ function RolesPage() {
  <div className="flex items-center justify-between gap-3">
  <div className="flex items-center gap-2">
  <span className="text-sm font-semibold text-foreground">{t('roles.permissionsHeading')}</span>
- <Badge variant={selectedPermissions.size > 0 ? 'default' : 'outline'} className="tabular-nums text-[10px]">
+ <Badge variant={selectedPermissions.size > 0 ? 'default' : 'outline'} className="tabular-nums text-micro">
  {t('roles.selectedCount', { count: selectedPermissions.size })}
  </Badge>
  </div>
@@ -1307,7 +1355,7 @@ function RolesPage() {
  value={permissionSearch}
  onChange={(e) => setPermissionSearch(e.target.value)}
  placeholder={t('roles.searchPermissions')}
- className="h-8 pl-8 text-xs"
+ className="h-8 pl-8 text-mini"
  />
  </div>
  </div>
@@ -1316,18 +1364,18 @@ function RolesPage() {
  <button
  type="button"
  onClick={() => togglePermission('*')}
- className={`flex items-center gap-3 rounded-xl border p-4 w-full transition-all duration-200 ${
+ className={`flex items-center gap-3 rounded-sm border p-4 w-full transition-all duration-200 ${
  selectedPermissions.has('*')
  ? 'border-warning/30 bg-warning/5'
  : 'border-border bg-card hover:border-warning/20'
  }`}
  >
- <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10">
+ <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-warning/10">
  <Zap className="h-4 w-4 text-warning" />
  </div>
  <div className="text-left flex-1">
  <div className="text-sm font-semibold text-warning">{t('roles.wildcard')}</div>
- <div className="text-[11px] text-muted-foreground">{t('roles.wildcardDescription')}</div>
+ <div className="text-micro text-muted-foreground">{t('roles.wildcardDescription')}</div>
  </div>
  <div className={`flex h-6 w-11 items-center rounded-full transition-all duration-200 ${
  selectedPermissions.has('*') ? 'bg-warning' : 'bg-surface-3'
@@ -1406,7 +1454,7 @@ function RolesPage() {
  </DialogBody>
 
  <DialogFooter className="sm:justify-between">
- <div className="text-xs text-muted-foreground">
+ <div className="text-mini text-muted-foreground">
  {selectedPermissions.size > 0 && (
  <span>{t('roles.permissionCountSelected', { count: selectedPermissions.size })}</span>
  )}
@@ -1475,19 +1523,19 @@ function RolesPage() {
  {viewingRole && (
  <>
  <div className="flex flex-wrap gap-2 md:gap-3">
- <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border bg-card px-3 py-1.5 text-mini">
  <Shield className="h-3 w-3 text-primary" />
  <span className="text-muted-foreground">{t('roles.permissionsHeading')}</span>
  <span className="font-semibold tabular-nums text-foreground">{viewingRole.permissions?.length || 0}</span>
  </div>
  {(viewingRole.userCount ?? 0) > 0 && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border bg-card px-3 py-1.5 text-mini">
  <Users className="h-3 w-3 text-primary" />
  <span className="text-muted-foreground">{t('roles.usersLabel')}</span>
  <span className="font-semibold tabular-nums text-foreground">{viewingRole.userCount}</span>
  </div>
  )}
- <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border bg-card px-3 py-1.5 text-mini">
  <Clock className="h-3 w-3 text-muted-foreground" />
  <span className="text-muted-foreground">{t('created')}</span>
  <span className="font-medium text-foreground">{viewingRole.createdAt ? formatDate(viewingRole.createdAt) : '—'}</span>
@@ -1495,13 +1543,13 @@ function RolesPage() {
  </div>
 
  {viewingRole.permissions?.includes('*') ? (
- <div className="flex flex-col items-center gap-3 rounded-xl border border-warning/20 bg-warning/5 p-6 text-center">
+ <div className="flex flex-col items-center gap-3 rounded-sm border border-warning/20 bg-warning/5 p-6 text-center">
  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/20">
  <Zap className="h-6 w-6 text-warning" />
  </div>
  <div>
  <div className="text-base font-semibold text-warning">{t('roles.fullAccessTitle')}</div>
- <div className="text-xs text-warning/70">{t('roles.fullAccessDescription')}</div>
+ <div className="text-mini text-warning/70">{t('roles.fullAccessDescription')}</div>
  </div>
  </div>
  ) : (
@@ -1522,7 +1570,7 @@ function RolesPage() {
  </div>
  )}
 
- <div className="space-y-1 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
+ <div className="space-y-1 border-t border-border/50 pt-3 text-micro text-muted-foreground">
  <div>{t('roles.roleId')} <span className="font-mono">{viewingRole.id}</span></div>
  {viewingRole.updatedAt !== viewingRole.createdAt && (
  <div>{t('updatedAt', { date: formatDate(viewingRole.updatedAt), time: formatTime(viewingRole.updatedAt) })}</div>

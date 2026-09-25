@@ -72,19 +72,19 @@ export default function UpdateConfirmModal({
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
-          <div className="mb-4 rounded-lg border border-warning/30 bg-warning-muted p-3">
-            <p className="text-xs text-warning">{warningMessage}</p>
+          <div className="mb-4 rounded-sm border border-warning/30 bg-warning-muted px-3 py-2.5">
+            <p className="text-mini text-warning">{warningMessage}</p>
           </div>
-          <div className="space-y-2">
+          <div>
             {items.map((item) => (
               <div
                 key={item.name}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+                className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-0"
               >
-                <span className="truncate text-sm font-medium text-foreground">
+                <span className="truncate text-data font-medium text-foreground">
                   {item.name}
                 </span>
-                <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                <span className="shrink-0 font-mono text-micro tabular-nums text-muted-foreground">
                   {item.currentVersion.slice(0, 8)} →{' '}
                   <span className="text-warning">{item.latestVersion}</span>
                 </span>

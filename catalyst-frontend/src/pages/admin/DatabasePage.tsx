@@ -7,7 +7,6 @@ import {
  Plus,
  Settings,
  Trash2,
- Server,
  Shield,
  Globe,
  Hash,
@@ -18,7 +17,7 @@ import {
  Loader2,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import { BracketLabel, StatusLed } from '../../components/deck/primitives';
 import StatGrid from '../../components/servers/tabs/StatGrid';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
@@ -93,42 +92,36 @@ function CatalystDbCard({ status }: { status?: DbStatusResult }) {
  : [];
 
  return (
- <ServerTabCard>
- <div className="flex items-start justify-between gap-3">
- <div className="flex items-start gap-3 min-w-0 flex-1">
- <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2">
- <span className="font-semibold text-foreground">{t('database.catalystDatabase')}</span>
- <Badge variant="outline" className="text-[10px] px-1.5 py-0">PostgreSQL</Badge>
- </div>
- <div className="mt-1 flex items-center gap-2">
+ <div className="deck-panel">
+ <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <BracketLabel>{t('database.catalystDatabase')}</BracketLabel>
+ <Badge variant="outline" className="font-mono text-micro">PostgreSQL</Badge>
+ <span className="ml-auto flex items-center gap-2">
  {connected ? (
- <Badge variant="success" className="gap-1 text-[10px] px-1.5 py-0">
+ <Badge variant="success" className="gap-1 text-micro">
  <CheckCircle2 className="h-2.5 w-2.5" /> {t('database.host.connected')}
  </Badge>
  ) : (
- <Badge variant="destructive" className="gap-1 text-[10px] px-1.5 py-0">
+ <Badge variant="destructive" className="gap-1 text-micro">
  <XCircle className="h-2.5 w-2.5" /> {t('database.host.disconnected')}
  </Badge>
  )}
  {status?.latency != null && (
- <span className="text-[11px] text-muted-foreground tabular-nums">{status.latency}ms</span>
+ <span className="font-mono text-micro tabular-nums text-muted-foreground">{status.latency}ms</span>
  )}
- </div>
- </div>
- </div>
+ </span>
  </div>
 
+ <div className="p-3">
  {connected && status && statItems.length > 0 && (
- <div className="mt-4">
  <StatGrid items={statItems} columns={4} />
- </div>
  )}
 
  {!connected && status?.error && (
- <div className="mt-2 text-[11px] text-destructive/80 truncate">{status.error}</div>
+ <div className="truncate font-mono text-micro text-destructive/80">{status.error}</div>
  )}
- </ServerTabCard>
+ </div>
+ </div>
  );
 }
 
@@ -153,38 +146,34 @@ function HostCard({
  const pingLatency = pingResult?.latency;
 
  return (
- <ServerTabCard>
- <div className="flex items-start justify-between gap-3">
- <div className="flex items-start gap-3 min-w-0 flex-1">
- <Server className={`h-4 w-4 shrink-0 ${
- connected === true
- ? 'text-success'
- : connected === false
- ? 'text-destructive'
- : 'text-muted-foreground'
- }`} />
+ <div className="group flex items-start justify-between gap-3 px-3 py-2 transition-colors hover:bg-surface-1/40">
+ <div className="flex min-w-0 flex-1 items-start gap-2.5">
+ <StatusLed
+ tone={connected === true ? 'go' : connected === false ? 'alarm' : 'idle'}
+ className="mt-1.5"
+ />
  <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2">
- <span className="font-semibold text-foreground">{host.name}</span>
+ <div className="flex flex-wrap items-center gap-2">
+ <span className="font-display text-data font-semibold text-foreground">{host.name}</span>
  {connected === true && (
- <Badge variant="success" className="gap-1 text-[10px] px-1.5 py-0">
+ <Badge variant="success" className="gap-1 text-micro">
  <CheckCircle2 className="h-2.5 w-2.5" /> {t('common:status.online')}
  </Badge>
  )}
  {connected === false && (
- <Badge variant="destructive" className="gap-1 text-[10px] px-1.5 py-0">
+ <Badge variant="destructive" className="gap-1 text-micro">
  <XCircle className="h-2.5 w-2.5" /> {t('common:status.offline')}
  </Badge>
  )}
  {pingLoading && (
- <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0">
+ <Badge variant="outline" className="gap-1 text-micro">
  <Loader2 className="h-2.5 w-2.5 animate-spin" /> {t('database.host.checking')}
  </Badge>
  )}
  </div>
- <div className="mt-0.5 text-xs text-muted-foreground font-mono">{host.host}:{host.port}</div>
- <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
- <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+ <div className="mt-0.5 font-mono text-mini tabular-nums text-muted-foreground">{host.host}:{host.port}</div>
+ <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-micro text-muted-foreground">
+ <Badge variant="outline" className="font-mono text-micro">
  {host.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL'}
  </Badge>
  <span className="flex items-center gap-1">
@@ -202,13 +191,13 @@ function HostCard({
  </span>
  )}
  {pingLatency != null && connected === true && (
- <span className="tabular-nums">{pingLatency}ms</span>
+ <span className="font-mono tabular-nums">{pingLatency}ms</span>
  )}
  </div>
 
  {/* Connection details */}
  {connected === true && pingResult && (
- <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+ <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-micro text-muted-foreground">
  {pingResult.version && (
  <span className="flex items-center gap-1">
  {(pingResult.engine === 'postgresql' || host.engine === 'postgresql') ? 'PostgreSQL' : 'MySQL'} v{pingResult.version.split(',')[0]}
@@ -220,16 +209,16 @@ function HostCard({
  </div>
  )}
  {connected === false && pingResult?.error && (
- <div className="mt-2 text-[11px] text-destructive/80 truncate" title={pingResult.error}>
+ <div className="mt-1 truncate font-mono text-micro text-destructive/80" title={pingResult.error}>
  {pingResult.error}
  </div>
  )}
  </div>
  </div>
 
- <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+ <div className="flex shrink-0 items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
  onClick={() => refetchPing()}
  disabled={pingFetching}
  title={t('database.host.testConnection')}
@@ -237,14 +226,14 @@ function HostCard({
  <RefreshCw className={`h-3.5 w-3.5 ${pingFetching ? 'animate-spin' : ''}`} />
  </button>
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary"
  onClick={onEdit}
  title={t('common:actions.edit')}
  >
  <Settings className="h-3.5 w-3.5" />
  </button>
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={onDelete}
  disabled={isDeleting}
  title={t('common:actions.delete')}
@@ -253,7 +242,6 @@ function HostCard({
  </button>
  </div>
  </div>
- </ServerTabCard>
  );
 }
 
@@ -367,59 +355,59 @@ function DatabasePage() {
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <label className="block space-y-1">
- <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+ <span className="type-overline flex items-center gap-1">
  <Database className="h-3 w-3" /> {t('database.form.name')}
  </span>
  <Input
  value={dbName}
  onChange={(e) => setDbName(e.target.value)}
  placeholder="primary-mysql"
- className="border-border/40 bg-card"
+ className="h-8 rounded-sm border-border/40 bg-card text-mini"
  />
  </label>
  <label className="block space-y-1">
- <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+ <span className="type-overline flex items-center gap-1">
  <Globe className="h-3 w-3" /> {t('database.form.host')}
  </span>
  <Input
  value={dbHost}
  onChange={(e) => setDbHost(e.target.value)}
  placeholder="mysql.internal"
- className="border-border/40 bg-card"
+ className="h-8 rounded-sm border-border/40 bg-card text-mini"
  />
  </label>
  <label className="block space-y-1">
- <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+ <span className="type-overline flex items-center gap-1">
  <Hash className="h-3 w-3" /> {t('database.form.port')}
  </span>
  <Input
  value={dbPort}
  onChange={(e) => setDbPort(e.target.value)}
  placeholder={dbEngine === 'postgresql' ? '5432' : '3306'}
- className="border-border/40 bg-card"
+ className="h-8 rounded-sm border-border/40 bg-card text-mini"
  />
  </label>
  <label className="block space-y-1">
- <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+ <span className="type-overline flex items-center gap-1">
  <User className="h-3 w-3" /> {t('database.form.username')}
  </span>
  <Input
  value={dbUsername}
  onChange={(e) => setDbUsername(e.target.value)}
  placeholder="catalyst_admin"
- className="border-border/40 bg-card"
+ className="h-8 rounded-sm border-border/40 bg-card text-mini"
  />
  </label>
  </div>
  <label className="block space-y-1">
- <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+ <span className="type-overline flex items-center gap-1">
  <Database className="h-3 w-3" /> {t('database.form.engine')}
  </span>
  <div className="flex gap-2">
  <button
  type="button"
  onClick={() => { setDbEngine('mysql'); setDbPort('3306'); }}
- className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+ className={`h-8 flex-1 rounded-sm border px-3 text-mini font-medium transition-colors ${
  dbEngine === 'mysql'
  ? 'border-primary bg-primary/10 text-primary'
  : 'border-border/40 bg-card text-muted-foreground hover:bg-muted'
@@ -430,7 +418,7 @@ function DatabasePage() {
  <button
  type="button"
  onClick={() => { setDbEngine('postgresql'); setDbPort('5432'); }}
- className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+ className={`h-8 flex-1 rounded-sm border px-3 text-mini font-medium transition-colors ${
  dbEngine === 'postgresql'
  ? 'border-primary bg-primary/10 text-primary'
  : 'border-border/40 bg-card text-muted-foreground hover:bg-muted'
@@ -442,20 +430,20 @@ function DatabasePage() {
  </label>
  {dbEngine === 'postgresql' && (
  <label className="block space-y-1">
- <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+ <span className="type-overline flex items-center gap-1">
  <Database className="h-3 w-3" /> {t('database.form.database')}
  </span>
  <Input
  value={dbDatabase}
  onChange={(e) => setDbDatabase(e.target.value)}
  placeholder="postgres"
- className="border-border/40 bg-card"
+ className="h-8 rounded-sm border-border/40 bg-card text-mini"
  />
- <span className="text-[10px] text-muted-foreground">{t('database.form.databaseHint')}</span>
+ <span className="text-micro text-muted-foreground">{t('database.form.databaseHint')}</span>
  </label>
  )}
  <label className="block space-y-1">
- <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+ <span className="type-overline flex items-center gap-1">
  <Shield className="h-3 w-3" /> {t('database.form.password')}{editingHost ? t('database.form.passwordEditHint') : ''}
  </span>
  <Input
@@ -464,7 +452,7 @@ function DatabasePage() {
  value={dbPassword}
  onChange={(e) => setDbPassword(e.target.value)}
  placeholder="••••••••"
- className="border-border/40 bg-card"
+ className="h-8 rounded-sm border-border/40 bg-card text-mini"
  />
  </label>
  </div>
@@ -480,13 +468,10 @@ function DatabasePage() {
     description={t('database.description')}
     actions={
       <div className="flex items-center gap-2">
-        <Badge variant="outline" className="text-xs">
-          {t('database.hostCount', { value: databaseHosts.length })}
-        </Badge>
         <Button
           size="sm"
           onClick={() => { resetForm(); setIsCreateOpen(true); }}
-          className="gap-1.5"
+          className="h-8 gap-1.5 px-3 text-mini"
         >
           <Plus className="h-3.5 w-3.5" />
           {t('database.addHost')}
@@ -498,14 +483,14 @@ function DatabasePage() {
  {/* ── Catalyst DB Status ── */}
  <CatalystDbCard status={dbStatus} />
 
- {/* ── Host Grid ── */}
+ {/* ── Hosts ── */}
+ <div className="deck-panel">
+ <div className="flex items-center border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <BracketLabel>{t('database.hostCount', { value: databaseHosts.length })}</BracketLabel>
+ </div>
  {isLoading ? (
- <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
- {[1, 2, 3].map((i) => (
- <ServerTabCard key={i}>
+ <div className="p-3">
  <TabLoadingState rows={1} rowHeight="h-16" />
- </ServerTabCard>
- ))}
  </div>
  ) : databaseHosts.length === 0 ? (
  <TabEmptyState
@@ -515,7 +500,7 @@ function DatabasePage() {
  <Button
  size="sm"
  onClick={() => { resetForm(); setIsCreateOpen(true); }}
- className="gap-1.5"
+ className="h-8 gap-1.5 px-3 text-mini"
  >
  <Plus className="h-3.5 w-3.5" />
  {t('database.addHost')}
@@ -523,7 +508,7 @@ function DatabasePage() {
  }
  />
  ) : (
- <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+ <div className="divide-y divide-border/40">
  {databaseHosts.map((host: any) => (
  <HostCard
  key={host.id}
@@ -535,6 +520,7 @@ function DatabasePage() {
  ))}
  </div>
  )}
+ </div>
 
  {/* ── Create Modal ── */}
  <HostDialog
@@ -549,11 +535,12 @@ function DatabasePage() {
     subtitle={t('database.createDialog.subtitle')}
     footer={
       <>
-        <Button variant="outline" size="sm" onClick={() => { resetForm(); setIsCreateOpen(false); }}>
+        <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => { resetForm(); setIsCreateOpen(false); }}>
           {t('common:actions.cancel')}
         </Button>
         <Button
           size="sm"
+          className="h-8 px-3 text-mini"
           disabled={!canSubmit || createMutation.isPending}
           onClick={() => createMutation.mutate()}
         >
@@ -578,11 +565,12 @@ function DatabasePage() {
     subtitle={t('database.editDialog.subtitle')}
     footer={
       <>
-        <Button variant="outline" size="sm" onClick={() => { setEditingHost(null); resetForm(); }}>
+        <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => { setEditingHost(null); resetForm(); }}>
           {t('common:actions.cancel')}
         </Button>
         <Button
           size="sm"
+          className="h-8 px-3 text-mini"
           disabled={updateMutation.isPending}
           onClick={() => editingHost && updateMutation.mutate({ hostId: editingHost.id })}
         >

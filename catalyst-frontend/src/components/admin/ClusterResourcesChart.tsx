@@ -8,10 +8,10 @@ import {
  ResponsiveContainer,
  Legend,
 } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { BracketLabel, StatusLed } from '@/components/deck/primitives';
 import { Cpu, MemoryStick, Network, Waves, History, Radio } from 'lucide-react';
 import type {
  ClusterMetrics,
@@ -171,41 +171,27 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  const nodesList = data?.nodes ?? historical?.nodes ?? [];
 
  return (
- <Card className="group relative overflow-hidden border-border/80 bg-card shadow-sm transition-all dark:border-border/50 lg:col-span-2">
- <CardHeader className="relative pb-3">
- <div className="flex flex-wrap items-center justify-between gap-3">
- <div className="space-y-1">
- <CardTitle className="flex items-center gap-2.5">
- <Waves className="h-5 w-5 shrink-0 text-muted-foreground" />
- <div>
- <span>{t('chart.title')}</span>
- <p className="text-sm font-normal text-muted-foreground">
+ <div className="deck-panel overflow-hidden">
+ {/* Header strip: identity + live/historical state */}
+ <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <div className="flex flex-wrap items-center gap-2">
+ <Waves className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+ <BracketLabel>{t('chart.title')}</BracketLabel>
+ <span className="text-micro text-muted-foreground">
  {isLive ? t('chart.subtitle.live') : t('chart.subtitle.historical', { range: timeRange })}
- </p>
- </div>
- </CardTitle>
- <CardDescription className="ml-11">
- {isLive ? (
- <Badge
- variant="outline"
- className="border-primary-200/50 bg-primary-50/50 text-primary-700 dark:border-primary-900/50 dark:bg-primary-950/50 dark:text-primary-400"
- >
- <span className="relative flex h-2 w-2">
- <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-400 opacity-75" />
- <span className="relative inline-flex h-2 w-2 rounded-full bg-primary-500" />
  </span>
- <span className="ml-1.5 font-semibold">{t('chart.mode.live')}</span>
- </Badge>
+ {isLive ? (
+ <span className="inline-flex items-center gap-1.5 text-micro text-muted-foreground">
+ <StatusLed tone="go" pulse />
+ {t('chart.mode.live')}
+ </span>
  ) : (
- <Badge
- variant="outline"
- className="border-primary-200/50 bg-primary-50/50 text-primary-700 dark:border-primary-900/50 dark:bg-primary-950/50 dark:text-primary-400"
- >
- <History className="mr-1 h-3 w-3" />
- <span className="font-semibold">{timeRange}</span>
- </Badge>
+ <span className="inline-flex items-center gap-1.5 font-mono text-micro tabular-nums text-muted-foreground">
+ <History className="h-3 w-3" />
+ {timeRange}
+ </span>
  )}
- <span className="mt-1 block text-xs text-muted-foreground">
+ <span className="font-mono text-micro tabular-nums text-muted-foreground">
  {data
  ? t('chart.nodesOnline', { online: data.onlineCount, total: data.nodes.length })
  : historical
@@ -215,7 +201,6 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  })
  : '—'}
  </span>
- </CardDescription>
  </div>
 
  {/* Metric + Mode + Range controls */}
@@ -225,18 +210,18 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  type="single"
  value={dataMode}
  onValueChange={(v) => v && setDataMode(v as DataMode)}
- className="border border-border dark:border-border"
+ className="rounded-sm border border-border/50"
  >
  <ToggleGroupItem
  value="live"
- className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
+ className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
  <Radio className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">{t('chart.mode.live')}</span>
  </ToggleGroupItem>
  <ToggleGroupItem
  value="historical"
- className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
+ className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
  <History className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">{t('chart.mode.historical')}</span>
@@ -249,13 +234,13 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  type="single"
  value={timeRange}
  onValueChange={(v) => v && setTimeRange(v as TimeRange)}
- className="border border-border dark:border-border"
+ className="rounded-sm border border-border/50"
  >
  {TIME_RANGE_OPTIONS.map((opt) => (
  <ToggleGroupItem
  key={opt.value}
  value={opt.value}
- className="px-2.5 text-xs data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
+ className="h-7 px-2 font-mono text-mini tabular-nums data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
  {opt.label}
  </ToggleGroupItem>
@@ -268,37 +253,36 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  type="single"
  value={metric}
  onValueChange={(v) => v && setMetric(v as MetricType)}
- className="border border-border dark:border-border"
+ className="rounded-sm border border-border/50"
  >
  <ToggleGroupItem
  value="cpu"
- className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
+ className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
- <Cpu className="h-4 w-4" />
+ <Cpu className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">{t('chart.metric.cpu')}</span>
  </ToggleGroupItem>
  <ToggleGroupItem
  value="memory"
- className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
+ className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
- <MemoryStick className="h-4 w-4" />
+ <MemoryStick className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">{t('chart.metric.memory')}</span>
  </ToggleGroupItem>
  <ToggleGroupItem
  value="network"
- className="gap-1.5 px-3 data-[state=on]:bg-primary-100 data-[state=on]:text-primary-700 dark:data-[state=on]:bg-primary-900/30 dark:data-[state=on]:text-primary-400"
+ className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
- <Network className="h-4 w-4" />
+ <Network className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">{t('chart.metric.network')}</span>
  </ToggleGroupItem>
  </ToggleGroup>
  </div>
  </div>
- </CardHeader>
- <CardContent>
+
+ <div className="p-3">
  {/* ── Chart area ── */}
- <div className="relative h-72 overflow-hidden rounded-md border border-border/50 bg-card">
- <div className="absolute inset-0 bg-surface-2/20" />
+ <div className="relative h-72 overflow-hidden rounded-sm border border-border/50 bg-card">
  <div className="relative h-full">
  {showLoading ? (
  <Skeleton className="h-full w-full" />
@@ -327,20 +311,20 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  content={({ active, payload, label }) => {
  if (!active || !payload?.length) return null;
  return (
- <div className="rounded-lg border border-border bg-card/95 px-3 py-2 backdrop-blur-sm">
- <p className="mb-2 text-xs font-semibold text-foreground">
+ <div className="rounded-sm border border-border/60 bg-card/95 px-3 py-2">
+ <p className="mb-2 font-mono text-mini tabular-nums text-foreground">
  {label}
  </p>
  {payload.map((entry, index) => (
- <div key={index} className="flex items-center gap-2 text-sm">
+ <div key={index} className="flex items-center gap-2 text-mini">
  <span
- className="h-2 w-2 rounded-full shadow-sm"
+ className="h-2 w-2 rounded-sm"
  style={{ backgroundColor: entry.color }}
  />
  <span className="text-muted-foreground">
  {String(entry.name ?? '').replace(/_/g, ' ')}:
  </span>
- <span className="font-semibold text-foreground dark:text-foreground">
+ <span className="font-mono tabular-nums text-foreground">
  {typeof entry.value === 'number'
  ? entry.value.toFixed(1)
  : entry.value}
@@ -358,7 +342,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  // Strip metric suffix from key in historical mode
  const clean = value.replace(/_(cpu|memory|network)$/, '');
  return (
- <span className="text-xs font-medium text-foreground dark:text-muted-foreground">
+ <span className="text-mini text-muted-foreground">
  {clean.replace(/_/g, ' ')}
  </span>
  );
@@ -391,14 +375,9 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  </ResponsiveContainer>
  ) : (
  <div className="flex h-full items-center justify-center">
- <div className="text-center">
- <div className="relative inline-flex">
- <div className="absolute inset-0 -m-2 rounded-full bg-surface-2 blur-xl" />
- <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-surface-2 shadow-sm">
- <Waves className="h-6 w-6 text-primary-600 dark:text-primary-400" />
- </div>
- </div>
- <p className="mt-3 text-sm font-medium text-muted-foreground">
+ <div className="flex flex-col items-center text-center">
+ <Waves className="h-5 w-5 text-muted-foreground" />
+ <p className="mt-2 text-mini text-muted-foreground">
  {isLive ? t('chart.empty.live') : t('chart.empty.historical')}
  </p>
  </div>
@@ -408,30 +387,30 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  </div>
 
  {/* ── Footer stats ── */}
- <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs">
- <div className="flex items-center gap-4">
- <span className="font-semibold text-foreground">
+ <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2 text-mini">
+ <div className="flex items-center gap-3">
+ <span className="font-display text-data font-semibold text-foreground">
  {getMetricLabel()}
  </span>
  {data && (
  <>
  {metric === 'cpu' && (
- <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground">
+ <Badge variant="secondary" className="font-mono text-micro tabular-nums">
  {t('chart.avg', { value: data.totalCpu })}
- </span>
+ </Badge>
  )}
  {metric === 'memory' && (
- <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground">
+ <Badge variant="secondary" className="font-mono text-micro tabular-nums">
  {t('chart.avg', { value: data.totalMemory })}
- </span>
+ </Badge>
  )}
  {metric === 'network' && (
- <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground">
+ <Badge variant="secondary" className="font-mono text-micro tabular-nums">
  {t('chart.networkThroughput', {
  rx: data.avgNetworkRx.toFixed(1),
  tx: data.avgNetworkTx.toFixed(1),
  })}
- </span>
+ </Badge>
  )}
  </>
  )}
@@ -439,20 +418,17 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  <div className="flex items-center gap-1.5 text-muted-foreground">
  {isLive ? (
  <>
- <span className="relative flex h-1.5 w-1.5">
- <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
- <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
- </span>
+ <StatusLed tone="go" pulse />
  <span className="font-medium">{t('chart.updatesEvery')}</span>
  </>
  ) : (
- <span className="font-medium">
+ <span className="font-mono font-medium tabular-nums">
  {t('chart.dataPoints', { value: chartData.length })}
  </span>
  )}
  </div>
  </div>
- </CardContent>
- </Card>
+ </div>
+ </div>
  );
 }

@@ -71,6 +71,7 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
         <Button
           variant="destructive"
           size="sm"
+          className="h-8 px-3 text-mini"
           onClick={() => { if (!disabled) setOpen(true); }}
           disabled={disabled}
         >

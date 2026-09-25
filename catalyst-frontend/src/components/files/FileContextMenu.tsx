@@ -93,10 +93,10 @@ function FileContextMenu({
  // Render as fixed-position context menu (right-click)
  if (contextPosition) {
  const itemClass =
- 'flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground';
- const itemIconClass = 'h-3.5 w-3.5 shrink-0';
+ 'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-mini text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground';
+ const itemIconClass = 'h-3.5 w-3.5 shrink-0 text-muted-foreground/70';
  const dangerClass =
- 'flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-destructive transition-colors hover:bg-destructive/5 dark:hover:bg-destructive/10';
+ 'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-mini text-danger transition-colors hover:bg-danger/10';
 
  const menuEl = (
  <div
@@ -115,68 +115,68 @@ function FileContextMenu({
  >
  <div
  ref={menuRef}
- className="w-52 rounded-md border border-border/50 bg-card p-1 shadow-xl"
+ className="w-52 rounded-sm border border-border/60 bg-card p-1 shadow-elevated"
  >
  <button type="button" className={itemClass} onClick={wrap(onOpen)}>
  {entry.isDirectory ? (
- <FolderOpen className={`${itemIconClass} text-primary`} />
+ <FolderOpen className={itemIconClass} />
  ) : (
- <FileText className={`${itemIconClass} text-info`} />
+ <FileText className={itemIconClass} />
  )}
  <span className="flex-1 text-left">{entry.isDirectory ? t('files.contextMenu.openFolder') : t('files.contextMenu.openFile')}</span>
- <kbd className="hidden sm:inline text-[10px] text-muted-foreground/40 font-mono">↵</kbd>
+ <kbd className="hidden font-mono text-micro text-muted-foreground/50 sm:inline">↵</kbd>
  </button>
 
  {onDownload && (
  <button type="button" className={itemClass} onClick={wrap(onDownload)}>
- <Download className={`${itemIconClass} text-primary`} />
+ <Download className={itemIconClass} />
  <span className="flex-1 text-left">{t('common:actions.download')}</span>
  </button>
  )}
 
- <div className="my-1 border-t border-border dark:border-border/50" />
+ <div className="my-1 border-t border-border/40" />
 
  {onCopyPath && (
  <button type="button" className={itemClass} onClick={wrap(onCopyPath)}>
- <ClipboardCopy className={`${itemIconClass} text-muted-foreground`} />
+ <ClipboardCopy className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.contextMenu.copyPath')}</span>
  </button>
  )}
  {onRename && (
  <button type="button" className={itemClass} onClick={wrap(onRename)}>
- <Pencil className={`${itemIconClass} text-warning`} />
+ <Pencil className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.contextMenu.rename')}</span>
- <kbd className="hidden sm:inline text-[10px] text-muted-foreground/40 font-mono">F2</kbd>
+ <kbd className="hidden font-mono text-micro text-muted-foreground/50 sm:inline">F2</kbd>
  </button>
  )}
 
- <div className="my-1 border-t border-border dark:border-border/50" />
+ <div className="my-1 border-t border-border/40" />
 
  {onCompress && (
  <button type="button" className={itemClass} onClick={wrap(onCompress)}>
- <Archive className={`${itemIconClass} text-warning`} />
+ <Archive className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.actions.compress')}</span>
  </button>
  )}
  {onDecompress && (
  <button type="button" className={itemClass} onClick={wrap(onDecompress)}>
- <ArchiveRestore className={`${itemIconClass} text-warning`} />
+ <ArchiveRestore className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.actions.extract')}</span>
  </button>
  )}
  {onPermissions && (
  <button type="button" className={itemClass} onClick={wrap(onPermissions)}>
- <Shield className={`${itemIconClass} text-success`} />
+ <Shield className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.contextMenu.permissions')}</span>
  </button>
  )}
 
- <div className="my-1 border-t border-border dark:border-border/50" />
+ <div className="my-1 border-t border-border/40" />
 
  <button type="button" className={dangerClass} onClick={wrap(onDelete)}>
- <Trash2 className={`${itemIconClass} text-destructive`} />
+ <Trash2 className={`${itemIconClass} text-danger`} />
  <span className="flex-1 text-left">{t('common:actions.delete')}</span>
- <kbd className="hidden sm:inline text-[10px] text-destructive/40 font-mono">Del</kbd>
+ <kbd className="hidden font-mono text-micro text-destructive/50 sm:inline">Del</kbd>
  </button>
  </div>
  </div>
@@ -193,7 +193,7 @@ function FileContextMenu({
  <DropdownMenuTrigger asChild>
  <button
  type="button"
- className="flex cursor-pointer items-center justify-center rounded-lg p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  aria-label={t('files.contextMenu.fileActions')}
  onClick={(e) => e.stopPropagation()}
  >
@@ -201,19 +201,19 @@ function FileContextMenu({
  </button>
  </DropdownMenuTrigger>
  <DropdownMenuContent align="end" sideOffset={4} className="w-52">
- <DropdownMenuItem className="gap-2.5 text-xs" onClick={wrap(onOpen)}>
+ <DropdownMenuItem className="gap-2 text-mini" onClick={wrap(onOpen)}>
  {entry.isDirectory ? (
- <FolderOpen className={`${itemIconClass} text-primary`} />
+ <FolderOpen className={itemIconClass} />
  ) : (
- <FileText className={`${itemIconClass} text-info`} />
+ <FileText className={itemIconClass} />
  )}
  <span className="flex-1 text-left">{entry.isDirectory ? t('files.contextMenu.openFolder') : t('files.contextMenu.openFile')}</span>
- <kbd className="hidden sm:inline text-[10px] text-muted-foreground/40 font-mono">↵</kbd>
+ <kbd className="hidden font-mono text-micro text-muted-foreground/50 sm:inline">↵</kbd>
  </DropdownMenuItem>
 
  {onDownload && (
- <DropdownMenuItem className="gap-2.5 text-xs" onClick={wrap(onDownload)}>
- <Download className={`${itemIconClass} text-primary`} />
+ <DropdownMenuItem className="gap-2 text-mini" onClick={wrap(onDownload)}>
+ <Download className={itemIconClass} />
  <span className="flex-1 text-left">{t('common:actions.download')}</span>
  </DropdownMenuItem>
  )}
@@ -221,45 +221,45 @@ function FileContextMenu({
  {(onCopyPath || onRename) && <DropdownMenuSeparator />}
 
  {onCopyPath && (
- <DropdownMenuItem className="gap-2.5 text-xs" onClick={wrap(onCopyPath)}>
- <ClipboardCopy className={`${itemIconClass} text-muted-foreground`} />
+ <DropdownMenuItem className="gap-2 text-mini" onClick={wrap(onCopyPath)}>
+ <ClipboardCopy className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.contextMenu.copyPath')}</span>
  </DropdownMenuItem>
  )}
  {onRename && (
- <DropdownMenuItem className="gap-2.5 text-xs" onClick={wrap(onRename)}>
- <Pencil className={`${itemIconClass} text-warning`} />
+ <DropdownMenuItem className="gap-2 text-mini" onClick={wrap(onRename)}>
+ <Pencil className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.contextMenu.rename')}</span>
- <kbd className="hidden sm:inline text-[10px] text-muted-foreground/40 font-mono">F2</kbd>
+ <kbd className="hidden font-mono text-micro text-muted-foreground/50 sm:inline">F2</kbd>
  </DropdownMenuItem>
  )}
 
  {(onCompress || onDecompress || onPermissions) && <DropdownMenuSeparator />}
 
  {onCompress && (
- <DropdownMenuItem className="gap-2.5 text-xs" onClick={wrap(onCompress)}>
- <Archive className={`${itemIconClass} text-warning`} />
+ <DropdownMenuItem className="gap-2 text-mini" onClick={wrap(onCompress)}>
+ <Archive className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.actions.compress')}</span>
  </DropdownMenuItem>
  )}
  {onDecompress && (
- <DropdownMenuItem className="gap-2.5 text-xs" onClick={wrap(onDecompress)}>
- <ArchiveRestore className={`${itemIconClass} text-warning`} />
+ <DropdownMenuItem className="gap-2 text-mini" onClick={wrap(onDecompress)}>
+ <ArchiveRestore className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.actions.extract')}</span>
  </DropdownMenuItem>
  )}
  {onPermissions && (
- <DropdownMenuItem className="gap-2.5 text-xs" onClick={wrap(onPermissions)}>
- <Shield className={`${itemIconClass} text-success`} />
+ <DropdownMenuItem className="gap-2 text-mini" onClick={wrap(onPermissions)}>
+ <Shield className={itemIconClass} />
  <span className="flex-1 text-left">{t('files.contextMenu.permissions')}</span>
  </DropdownMenuItem>
  )}
 
  <DropdownMenuSeparator />
- <DropdownMenuItem className="gap-2.5 text-xs text-destructive focus:text-destructive" onClick={wrap(onDelete)}>
- <Trash2 className={`${itemIconClass} text-destructive`} />
+ <DropdownMenuItem className="gap-2 text-mini text-danger focus:text-danger" onClick={wrap(onDelete)}>
+ <Trash2 className={`${itemIconClass} text-danger`} />
  <span className="flex-1 text-left">{t('common:actions.delete')}</span>
- <kbd className="hidden sm:inline text-[10px] text-destructive/40 font-mono">Del</kbd>
+ <kbd className="hidden font-mono text-micro text-destructive/50 sm:inline">Del</kbd>
  </DropdownMenuItem>
  </DropdownMenuContent>
  </DropdownMenu>

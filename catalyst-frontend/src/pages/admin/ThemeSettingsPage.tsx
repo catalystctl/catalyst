@@ -15,7 +15,7 @@ import { formatNumber } from '../../i18n/format';
 import { useThemeStore, defaultThemeColors } from '../../stores/themeStore';
 import type { ThemeColors } from '../../services/api/theme';
 import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import { BracketLabel } from '../../components/deck/primitives';
 import {
  Sun,
  Moon,
@@ -136,26 +136,26 @@ function ColorPicker({
  <div className="flex items-center gap-2">
  <div className="relative flex-shrink-0">
  <div
- className="h-8 w-8 cursor-pointer rounded-md ring-1 ring-border"
+ className="h-8 w-8 cursor-pointer rounded-sm ring-1 ring-border"
  style={{ backgroundColor: isValid ? value : 'hsl(var(--muted-foreground))' }}
  />
  <input
  type="color"
  value={isValid ? value : '#000000'}
  onChange={(e) => onChange(e.target.value)}
- className="absolute inset-0 h-full w-full cursor-pointer rounded-md opacity-0"
+ className="absolute inset-0 h-full w-full cursor-pointer rounded-sm opacity-0"
  />
  </div>
  <div className="min-w-0 flex-1">
  {Icon && <Icon className="mb-0.5 h-3 w-3 text-muted-foreground" />}
- <p className="truncate text-[11px] font-medium text-foreground">{label}</p>
+ <p className="truncate text-micro font-medium text-foreground">{label}</p>
  </div>
  <input
  type="text"
  value={value}
  onChange={(e) => onChange(e.target.value)}
  placeholder="#000"
- className={`w-[72px] rounded-md border px-2 py-1 font-mono text-[11px] transition-colors focus:outline-none focus:ring-1 ${
+ className={`w-[72px] rounded-sm border px-2 py-1 font-mono text-micro transition-colors focus:outline-none focus:ring-1 ${
  isValid
  ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
  : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/20'
@@ -169,22 +169,22 @@ function ColorPicker({
  <div className="space-y-2">
  <div className="flex items-center gap-1.5">
  {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
- <label className="text-xs font-medium text-foreground">{label}</label>
+ <label className="type-overline">{label}</label>
  </div>
  {description && (
- <p className="text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+ <p className="text-micro leading-relaxed text-muted-foreground">{description}</p>
  )}
  <div className="flex items-center gap-2">
  <div className="relative flex-shrink-0">
  <div
- className="h-10 w-10 cursor-pointer rounded-lg ring-1 ring-border transition-transform hover:scale-105"
+ className="h-10 w-10 cursor-pointer rounded-sm ring-1 ring-border transition-transform hover:scale-105"
  style={{ backgroundColor: isValid ? value : 'hsl(var(--muted-foreground))' }}
  />
  <input
  type="color"
  value={isValid ? value : '#000000'}
  onChange={(e) => onChange(e.target.value)}
- className="absolute inset-0 h-full w-full cursor-pointer rounded-lg opacity-0"
+ className="absolute inset-0 h-full w-full cursor-pointer rounded-sm opacity-0"
  />
  </div>
  <input
@@ -192,7 +192,7 @@ function ColorPicker({
  value={value}
  onChange={(e) => onChange(e.target.value)}
  placeholder="#000000"
- className={`flex-1 rounded-lg border bg-card px-3 py-2 font-mono text-xs transition-colors focus:outline-none focus:ring-2 ${
+ className={`flex-1 rounded-sm border bg-card px-3 py-2 font-mono text-mini transition-colors focus:outline-none focus:ring-2 ${
  isValid
  ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
  : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/20'
@@ -209,12 +209,12 @@ function Swatch({ color, label, mono }: { color: string; label?: string; mono?: 
  return (
  <div className="group/swatch flex flex-col items-center gap-1">
  <div
- className="h-10 w-full rounded-md ring-1 ring-border transition-transform hover:scale-105"
+ className="h-10 w-full rounded-sm ring-1 ring-border transition-transform hover:scale-105"
  style={{ backgroundColor: color }}
  />
  {label && (
  <span
- className={`text-[10px] font-medium ${mono ? 'font-mono text-[9px]' : ''} text-muted-foreground`}
+ className={`text-micro font-medium ${mono ? 'font-mono text-micro' : ''} text-muted-foreground`}
  >
  {label}
  </span>
@@ -271,7 +271,7 @@ function OidcProviderSection() {
 
  if (isLoading) {
  return (
- <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+ <div className="flex items-center gap-2 py-4 text-mini text-muted-foreground">
  <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-transparent" />
  {t('theme.oauthLoading')}
  </div>
@@ -296,7 +296,7 @@ function OidcProviderSection() {
  {provider.charAt(0).toUpperCase() + provider.slice(1)}
  </span>
  <span
- className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+ className={`rounded-sm border px-2 py-0.5 text-micro font-medium ${
  isConfigured
  ? 'border-success/30 bg-success/10 text-success'
  : 'border-border/60 bg-surface-2 text-foreground/80'
@@ -326,7 +326,7 @@ function OidcProviderSection() {
  }
  />
  {cfg.source === 'database' && cfg.clientSecret && (
- <p className="mt-1 text-[10px] text-muted-foreground">
+ <p className="mt-1 text-micro text-muted-foreground">
  {t('theme.clientSecretMasked')}
  </p>
  )}
@@ -348,7 +348,7 @@ function OidcProviderSection() {
  type="button"
  onClick={() => oidcMutation.mutate(configs)}
  disabled={oidcMutation.isPending}
- className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+ className="inline-flex h-8 items-center gap-2 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  >
  {oidcMutation.isPending ? (
  <>
@@ -362,7 +362,7 @@ function OidcProviderSection() {
  </>
  )}
  </button>
- <p className="text-[11px] text-muted-foreground">
+ <p className="text-micro text-muted-foreground">
  {t('theme.oauthEnvOverride')}
  </p>
  </div>
@@ -385,13 +385,13 @@ function InputField({
 }) {
  return (
  <div>
- <label className="mb-1 block text-xs font-medium text-foreground">{label}</label>
+ <label className="type-overline mb-1 block">{label}</label>
  <input
  type={type}
  value={value}
  onChange={(e) => onChange(e.target.value)}
  placeholder={placeholder}
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 text-mini text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
  </div>
  );
@@ -410,16 +410,16 @@ function PanelSectionHeader({
 }) {
  const { t } = useTranslation('admin-system');
  return (
- <div className="mb-5 flex items-start justify-between">
+ <div className="mb-4 flex items-start justify-between gap-2">
  <div>
- <h3 className="text-sm font-semibold text-foreground">{title}</h3>
- <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+ <BracketLabel>{title}</BracketLabel>
+ <p className="mt-0.5 text-micro text-muted-foreground">{description}</p>
  </div>
  {onReset && (
  <button
  type="button"
  onClick={onReset}
- className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-7 items-center gap-1 rounded-sm px-2 text-micro text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <RotateCcw className="h-3 w-3" />
  {t('common:actions.reset')}
@@ -454,10 +454,10 @@ function ElevationPreview({
  {levels.map(({ color, label }) => (
  <div key={label} className="flex-1 text-center">
  <div
- className="mx-auto h-12 rounded-lg ring-1 ring-border transition-transform hover:scale-105"
+ className="mx-auto h-12 rounded-sm ring-1 ring-border transition-transform hover:scale-105"
  style={{ backgroundColor: color }}
  />
- <span className="mt-1 block text-[9px] font-medium text-muted-foreground">
+ <span className="mt-1 block text-micro font-medium text-muted-foreground">
  {label}
  </span>
  </div>
@@ -901,39 +901,39 @@ function ThemeSettingsPage() {
  />
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
- <label className="mb-1.5 block text-xs font-medium text-foreground">{t('theme.panelName')}</label>
+ <label className="type-overline mb-1.5 block">{t('theme.panelName')}</label>
  <input
  type="text"
  value={panelName}
  onChange={(e) => setPanelName(e.target.value)}
  placeholder="Catalyst"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 text-mini text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
  </div>
  <div />
  <div>
- <label className="mb-1.5 block text-xs font-medium text-foreground">{t('theme.logoUrl')}</label>
+ <label className="type-overline mb-1.5 block">{t('theme.logoUrl')}</label>
  <input
  type="text"
  value={logoUrl}
  onChange={(e) => setLogoUrl(e.target.value)}
  placeholder="https://example.com/logo.png"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 text-mini text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
- <p className="mt-1 text-[10px] text-muted-foreground">
+ <p className="mt-1 text-micro text-muted-foreground">
  {t('theme.logoHint')}
  </p>
  </div>
  <div>
- <label className="mb-1.5 block text-xs font-medium text-foreground">{t('theme.faviconUrl')}</label>
+ <label className="type-overline mb-1.5 block">{t('theme.faviconUrl')}</label>
  <input
  type="text"
  value={faviconUrl}
  onChange={(e) => setFaviconUrl(e.target.value)}
  placeholder="https://example.com/favicon.ico"
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 text-mini text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
- <p className="mt-1 text-[10px] text-muted-foreground">
+ <p className="mt-1 text-micro text-muted-foreground">
  {t('theme.faviconHint')}
  </p>
  </div>
@@ -944,11 +944,11 @@ function ThemeSettingsPage() {
  <PanelSectionHeader title={t('theme.themeMode')} description={t('theme.themeModeDescription')} />
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
- <label className="mb-1.5 block text-xs font-medium text-foreground">{t('theme.defaultTheme')}</label>
+ <label className="type-overline mb-1.5 block">{t('theme.defaultTheme')}</label>
  <select
  value={defaultTheme}
  onChange={(e) => setDefaultTheme(e.target.value)}
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 text-mini text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  >
  <option value="light">{t('theme.light')}</option>
  <option value="dark">{t('theme.dark')}</option>
@@ -956,7 +956,7 @@ function ThemeSettingsPage() {
  </select>
  </div>
  <div>
- <label className="mb-1.5 block text-xs font-medium text-foreground">
+ <label className="type-overline mb-1.5 block">
  {t('theme.availableThemes')}
  </label>
  <div className="flex gap-2">
@@ -967,7 +967,7 @@ function ThemeSettingsPage() {
  ].map(({ id, icon: Icon, color }) => (
  <label
  key={id}
- className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
+ className={`flex cursor-pointer items-center gap-2 rounded-sm border px-3 py-2 text-sm transition-all ${
  enabledThemes.includes(id)
  ? 'border-primary bg-primary/5 text-foreground'
  : 'border-border/30 text-muted-foreground hover:border-primary/30'
@@ -1003,7 +1003,7 @@ function ThemeSettingsPage() {
  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
  <div className="group relative flex-shrink-0">
  <div
- className="h-24 w-24 cursor-pointer rounded-lg ring-1 ring-border transition-all duration-300 group-hover:scale-105"
+ className="h-24 w-24 cursor-pointer rounded-sm ring-1 ring-border transition-all duration-300 group-hover:scale-105"
  style={{
  backgroundColor: isSeedValid ? seedColor : 'hsl(var(--muted-foreground))',
  boxShadow: isSeedValid
@@ -1015,19 +1015,19 @@ function ThemeSettingsPage() {
  type="color"
  value={isSeedValid ? seedColor : DEFAULTS.primaryColor}
  onChange={(e) => setSeedColor(e.target.value)}
- className="absolute inset-0 h-full w-full cursor-pointer rounded-lg opacity-0"
+ className="absolute inset-0 h-full w-full cursor-pointer rounded-sm opacity-0"
  />
  </div>
  <div className="flex-1 space-y-3">
  <div>
- <label className="mb-1 block text-xs font-medium text-foreground">{t('theme.seedColor')}</label>
+ <label className="type-overline mb-1 block">{t('theme.seedColor')}</label>
  <div className="flex items-center gap-2">
  <input
  type="text"
  value={seedColor}
  onChange={(e) => setSeedColor(e.target.value)}
  placeholder="#c48d5a"
- className={`w-36 rounded-lg border bg-card px-3 py-2 font-mono text-sm transition-colors focus:outline-none focus:ring-2 ${
+ className={`w-36 rounded-sm border bg-card px-3 py-2 font-mono text-sm transition-colors focus:outline-none focus:ring-2 ${
  isSeedValid
  ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
  : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/20'
@@ -1043,13 +1043,13 @@ function ThemeSettingsPage() {
  .padStart(6, '0'),
  )
  }
- className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/30 bg-card text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+ className="flex h-9 w-9 items-center justify-center rounded-sm border border-border/30 bg-card text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
  title={t('theme.randomColor')}
  >
  <Shuffle className="h-4 w-4" />
  </button>
  {hsl && (
- <span className="text-xs tabular-nums text-muted-foreground">
+ <span className="text-mini tabular-nums text-muted-foreground">
  {t('theme.hslLabel', { h: hsl.h, s: hsl.s, l: hsl.l })}
  </span>
  )}
@@ -1058,7 +1058,7 @@ function ThemeSettingsPage() {
 
  {/* Harmony modes */}
  <div>
- <label className="mb-2 block text-xs font-medium text-foreground">
+ <label className="type-overline mb-2 block">
  {t('theme.colorHarmony')}
  </label>
  <div className="flex flex-wrap gap-1.5">
@@ -1080,7 +1080,7 @@ function ThemeSettingsPage() {
  key={m.id}
  type="button"
  onClick={() => setHarmonyMode(m.id)}
- className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition-all ${
+ className={`rounded-sm px-3 py-1.5 text-micro font-medium transition-all ${
  harmonyMode === m.id
  ? 'bg-primary text-primary-foreground shadow-sm'
  : 'bg-surface-2 text-muted-foreground hover:bg-surface-3 hover:text-foreground'
@@ -1096,10 +1096,10 @@ function ThemeSettingsPage() {
 
  {/* Generated palette preview */}
  {generatedPalette && (
- <div className="space-y-5 rounded-xl border border-border/30 bg-surface-1/50 p-5">
+ <div className="space-y-4 rounded-sm border border-border/30 bg-surface-1/50 p-3">
  {/* Brand */}
  <div>
- <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+ <p className="mb-2 type-overline">
  {t('theme.brand')}
  </p>
  <div className="grid grid-cols-3 gap-3">
@@ -1110,10 +1110,10 @@ function ThemeSettingsPage() {
  ].map(({ label, color }) => (
  <div key={label}>
  <Swatch color={color} />
- <p className="mt-1.5 text-center text-[10px] font-medium text-muted-foreground">
+ <p className="mt-1.5 text-center text-micro font-medium text-muted-foreground">
  {label}
  </p>
- <p className="text-center font-mono text-[9px] text-muted-foreground/70">
+ <p className="text-center font-mono text-micro text-muted-foreground/70">
  {color}
  </p>
  </div>
@@ -1123,7 +1123,7 @@ function ThemeSettingsPage() {
 
  {/* Semantic */}
  <div>
- <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+ <p className="mb-2 type-overline">
  {t('theme.semantic')}
  </p>
  <div className="flex flex-wrap gap-2">
@@ -1137,7 +1137,7 @@ function ThemeSettingsPage() {
  ).map(({ label, key }) => (
  <span
  key={label}
- className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium"
+ className="inline-flex items-center gap-1.5 rounded-sm px-3 py-1 text-micro font-medium"
  style={{
  backgroundColor: `${generatedPalette.themeColors[key]}18`,
  color: generatedPalette.themeColors[key],
@@ -1155,10 +1155,10 @@ function ThemeSettingsPage() {
 
  {/* Dark surfaces */}
  <div>
- <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+ <p className="mb-2 type-overline">
  {t('theme.darkSurfaces')}
  </p>
- <div className="rounded-lg bg-surface-0 p-3">
+ <div className="rounded-sm bg-surface-0 p-3">
  <div className="flex gap-1">
  {[
  { label: 'BG', key: 'darkBackground' as const },
@@ -1180,10 +1180,10 @@ function ThemeSettingsPage() {
 
  {/* Light surfaces */}
  <div>
- <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+ <p className="mb-2 type-overline">
  {t('theme.lightSurfaces')}
  </p>
- <div className="rounded-lg border border-border/30 p-3">
+ <div className="rounded-sm border border-border/30 p-3">
  <div className="flex gap-1">
  {[
  { label: 'BG', key: 'lightBackground' as const },
@@ -1206,7 +1206,7 @@ function ThemeSettingsPage() {
  <button
  type="button"
  onClick={handleApplyPalette}
- className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90"
+ className="flex h-8 w-full items-center justify-center gap-2 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
  >
  <Wand2 className="h-4 w-4" />
  {t('theme.applyPalette')}
@@ -1226,17 +1226,17 @@ function ThemeSettingsPage() {
  />
  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
  {THEME_PRESETS.map((preset) => (
- <div key={preset.id} className="flex flex-col rounded-xl border border-border/30 bg-card p-4">
+ <div key={preset.id} className="flex flex-col rounded-sm border border-border/30 bg-card p-3">
  <div className="mb-1 flex items-center justify-between">
  <p className="text-sm font-semibold text-foreground">{presetName(t, preset.id)}</p>
  {preset.customCss ? (
- <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t('theme.plusCss')}</span>
+ <span className="rounded-sm bg-primary/10 px-2 py-0.5 text-micro font-medium text-primary">{t('theme.plusCss')}</span>
  ) : null}
  </div>
- <p className="mb-3 min-h-8 text-[11px] leading-relaxed text-muted-foreground">{presetDescription(t, preset.id)}</p>
+ <p className="mb-3 min-h-8 text-micro leading-relaxed text-muted-foreground">{presetDescription(t, preset.id)}</p>
  <div className="mb-3 flex gap-1.5">
  {[preset.primaryColor, preset.secondaryColor, preset.accentColor].map((c, i) => (
- <div key={i} className="h-8 flex-1 rounded-md ring-1 ring-border" style={{ backgroundColor: c }} />
+ <div key={i} className="h-8 flex-1 rounded-sm ring-1 ring-border" style={{ backgroundColor: c }} />
  ))}
  </div>
  <div className="mb-4 flex gap-1">
@@ -1247,7 +1247,7 @@ function ThemeSettingsPage() {
  <button
  type="button"
  onClick={() => handleApplyPreset(preset.id)}
- className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-border/30 bg-surface-1 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-surface-2"
+ className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-sm border border-border/30 bg-surface-1 px-3 py-2 text-mini font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-surface-2"
  >
  <Wand2 className="h-3.5 w-3.5" />
  {t('theme.applyPreset', { name: presetName(t, preset.id) })}
@@ -1255,7 +1255,7 @@ function ThemeSettingsPage() {
  </div>
  ))}
  </div>
- <div className="rounded-xl border border-border/30 bg-surface-1/50 p-4 text-[11px] leading-relaxed text-muted-foreground">
+ <div className="rounded-sm border border-border/30 bg-surface-1/50 p-3 text-micro leading-relaxed text-muted-foreground">
  <p className="mb-1 font-semibold text-foreground">{t('theme.howPresetsWork')}</p>
  {t('theme.howPresetsWorkDescription')}
  </div>
@@ -1277,7 +1277,7 @@ function ThemeSettingsPage() {
  <button
  type="button"
  onClick={handleExportCopy}
- className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
  >
  <Copy className="h-3.5 w-3.5" />
  {t('theme.copyJson')}
@@ -1285,13 +1285,13 @@ function ThemeSettingsPage() {
  <button
  type="button"
  onClick={handleExportDownload}
- className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border/30 bg-card px-3 text-mini font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <Download className="h-3.5 w-3.5" />
  {t('theme.downloadJson')}
  </button>
  </div>
- <pre className="mt-3 max-h-64 overflow-auto rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[10px] leading-relaxed text-muted-foreground">
+ <pre className="mt-3 max-h-64 overflow-auto rounded-sm border border-border/30 bg-surface-0 p-3 font-mono text-micro leading-relaxed text-muted-foreground">
  {exportPreview}
  </pre>
  </div>
@@ -1307,10 +1307,10 @@ function ThemeSettingsPage() {
  placeholder='{"version": 1, "primaryColor": "#c48d5a", ...}'
  rows={8}
  spellCheck={false}
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 font-mono text-mini text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
  {importError && (
- <p className="flex items-center gap-1.5 text-xs text-danger">
+ <p className="flex items-center gap-1.5 text-mini text-danger">
  <AlertTriangle className="h-3.5 w-3.5" />
  {importError}
  </p>
@@ -1320,12 +1320,12 @@ function ThemeSettingsPage() {
  type="button"
  onClick={handleImportApply}
  disabled={!importText.trim()}
- className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  >
  <Upload className="h-3.5 w-3.5" />
  {t('theme.previewImport')}
  </button>
- <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2">
+ <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-sm border border-border/30 bg-card px-3 text-mini font-medium text-foreground transition-colors hover:bg-surface-2">
  <Upload className="h-3.5 w-3.5" />
  {t('theme.chooseJsonFile')}
  <input
@@ -1343,7 +1343,7 @@ function ThemeSettingsPage() {
  />
  </label>
  </div>
- <p className="text-[11px] text-muted-foreground">{t('theme.importHint')}</p>
+ <p className="text-micro text-muted-foreground">{t('theme.importHint')}</p>
  </div>
  </div>
  </div>
@@ -1379,11 +1379,11 @@ function ThemeSettingsPage() {
  onChange={handleAccentColorChange}
  />
  </div>
- <div className="mt-4 flex gap-2 rounded-lg border border-border/30 p-3">
+ <div className="mt-4 flex gap-2 rounded-sm border border-border/30 p-3">
  {[primaryColor, secondaryColor, accentColor].map((color, i) => (
  <div
  key={i}
- className="h-10 flex-1 rounded-md ring-1 ring-border"
+ className="h-10 flex-1 rounded-sm ring-1 ring-border"
  style={{ backgroundColor: color }}
  title={[t('theme.primaryTooltip'), t('theme.secondaryTooltip'), t('theme.accentTooltip')][i]}
  />
@@ -1429,7 +1429,7 @@ function ThemeSettingsPage() {
  icon={Info}
  />
  </div>
- <div className="mt-4 flex flex-wrap gap-2 rounded-lg border border-border/30 p-3">
+ <div className="mt-4 flex flex-wrap gap-2 rounded-sm border border-border/30 p-3">
  {[
  { color: themeColors.successColor, label: t('theme.success') },
  { color: themeColors.warningColor, label: t('theme.warning') },
@@ -1438,7 +1438,7 @@ function ThemeSettingsPage() {
  ].map(({ color, label }) => (
  <span
  key={label}
- className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+ className="inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-mini font-medium"
  style={{ backgroundColor: color ? `${color}18` : undefined, color: color || undefined }}
  >
  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color || undefined }} />
@@ -1550,11 +1550,11 @@ function ThemeSettingsPage() {
  onChange={(e) => updateThemeColor('borderRadius', `${e.target.value}rem`)}
  className="flex-1 accent-primary"
  />
- <span className="w-[72px] rounded-lg border border-border/30 bg-card px-2 py-1.5 text-center font-mono text-xs text-foreground">
+ <span className="w-[72px] rounded-sm border border-border/30 bg-card px-2 py-1.5 text-center font-mono text-mini text-foreground">
  {themeColors.borderRadius || '0.5rem'}
  </span>
  </div>
- <p className="text-[11px] text-muted-foreground">
+ <p className="text-micro text-muted-foreground">
  {t('theme.borderRadiusHint')}
  </p>
  <div className="flex items-end gap-3 pt-2">
@@ -1565,13 +1565,13 @@ function ThemeSettingsPage() {
  Aa
  </div>
  <div
- className="flex h-10 w-24 items-center justify-center bg-primary text-xs font-semibold text-primary-foreground"
+ className="flex h-10 w-24 items-center justify-center bg-primary text-mini font-semibold text-primary-foreground"
  style={{ borderRadius: themeColors.borderRadius || '0.5rem' }}
  >
  {t('theme.buttonPreview')}
  </div>
  <div
- className="flex h-14 flex-1 items-center bg-primary/10 px-4 text-sm font-medium text-primary"
+ className="flex h-14 flex-1 items-center bg-primary/10 px-3 text-mini font-medium text-primary"
  style={{ borderRadius: themeColors.borderRadius || '0.5rem' }}
  >
  {t('theme.cardPreview')}
@@ -1596,14 +1596,14 @@ function ThemeSettingsPage() {
  placeholder="/* Your custom CSS here */&#10;.my-custom-class {&#10; color: red;&#10;}"
  rows={14}
  spellCheck={false}
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 font-mono text-mini text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
- <p className="text-[11px] text-muted-foreground">{t('theme.customCssCounter', { used: formatNumber(customCss.length) })}</p>
+ <p className="text-micro text-muted-foreground">{t('theme.customCssCounter', { used: formatNumber(customCss.length) })}</p>
  <div className="flex items-center gap-2">
  <button
  type="button"
  onClick={handlePreviewCustomCss}
- className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border/30 bg-card px-3 text-mini font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <Eye className="h-3.5 w-3.5" />
  {t('theme.preview')}
@@ -1611,7 +1611,7 @@ function ThemeSettingsPage() {
  <button
  type="button"
  onClick={handleResetCustomCss}
- className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border/30 bg-card px-3 text-mini font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <RotateCcw className="h-3.5 w-3.5" />
  {t('theme.resetToSaved')}
@@ -1634,12 +1634,12 @@ function ThemeSettingsPage() {
 
  // ── Live Preview Strip ──
  const renderLivePreviewStrip = () => (
- <div className="rounded-xl border border-border/30 bg-card p-4">
+ <div className="rounded-sm border border-border/30 bg-card p-3">
  <div className="mb-3 flex items-center justify-between">
- <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+ <span className="type-overline">
  {t('theme.livePreview')}
  </span>
- <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+ <span className="flex items-center gap-1 text-micro text-muted-foreground">
  <span
  className="h-2 w-2 rounded-full"
  style={{ backgroundColor: primaryColor }}
@@ -1650,7 +1650,7 @@ function ThemeSettingsPage() {
  <div className="flex gap-1.5">
  <div className="flex-1 space-y-1">
  <div className="flex h-5 items-center gap-1">
- <span className="text-[9px] font-medium text-muted-foreground">{t('theme.brand')}</span>
+ <span className="text-micro font-medium text-muted-foreground">{t('theme.brand')}</span>
  </div>
  <div className="flex gap-1">
  {[primaryColor, secondaryColor, accentColor].map((c, i) => (
@@ -1665,7 +1665,7 @@ function ThemeSettingsPage() {
  </div>
  <div className="flex-1 space-y-1">
  <div className="flex h-5 items-center gap-1">
- <span className="text-[9px] font-medium text-muted-foreground">{t('theme.semantic')}</span>
+ <span className="text-micro font-medium text-muted-foreground">{t('theme.semantic')}</span>
  </div>
  <div className="flex gap-1">
  {[
@@ -1684,7 +1684,7 @@ function ThemeSettingsPage() {
  </div>
  <div className="flex-[2] space-y-1">
  <div className="flex h-5 items-center gap-1">
- <span className="text-[9px] font-medium text-muted-foreground">{t('theme.surfacesTitle')}</span>
+ <span className="text-micro font-medium text-muted-foreground">{t('theme.surfacesTitle')}</span>
  </div>
  <div className="flex gap-[2px]">
  {(currentTheme === 'dark'
@@ -1729,12 +1729,12 @@ function ThemeSettingsPage() {
  return (
  <div className="mx-auto max-w-5xl space-y-5">
  {hasPersonalOverride && (
- <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4">
+ <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-warning/30 bg-warning/5 p-3">
  <div className="flex items-start gap-2.5">
  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
  <div>
- <p className="text-xs font-semibold text-foreground">{t('theme.personalOverrideTitle')}</p>
- <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+ <p className="text-mini font-semibold text-foreground">{t('theme.personalOverrideTitle')}</p>
+ <p className="mt-0.5 text-micro leading-relaxed text-muted-foreground">
  {t('theme.personalOverrideDescription')}
  </p>
  </div>
@@ -1742,7 +1742,7 @@ function ThemeSettingsPage() {
  <button
  type="button"
  onClick={() => { clearPersonalTheme(); toast.success(t('theme.toastPersonalThemeCleared')); }}
- className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border/30 bg-card px-3 text-mini font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <RotateCcw className="h-3.5 w-3.5" />
  {t('theme.showPanelDefault')}
@@ -1760,7 +1760,7 @@ function ThemeSettingsPage() {
  <button
  type="button"
  onClick={handleResetAll}
- className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border/30 bg-card px-3 text-mini font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <RotateCcw className="h-3.5 w-3.5" />
  {t('theme.resetAll')}
@@ -1769,7 +1769,7 @@ function ThemeSettingsPage() {
  type="button"
  onClick={handleSave}
  disabled={updateMutation.isPending}
- className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+ className="inline-flex h-8 items-center gap-2 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  >
  {updateMutation.isPending ? (
  <>
@@ -1791,19 +1791,19 @@ function ThemeSettingsPage() {
  {/* ── Live Preview Strip ── */}
  {renderLivePreviewStrip()}
 
- <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/30 bg-card px-4 py-3">
- <div className="flex items-center gap-2 text-xs text-muted-foreground">
+ <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border/30 bg-card px-3 py-2">
+ <div className="flex items-center gap-2 text-mini text-muted-foreground">
  <Eye className="h-3.5 w-3.5" />
  {t('theme.previewingMode', { mode: currentTheme === 'dark' ? t('theme.dark').toLowerCase() : t('theme.light').toLowerCase() })}
  </div>
  <div className="flex items-center gap-2">
- <div className="flex gap-1 rounded-lg bg-surface-1 p-1">
+ <div className="flex gap-0.5 rounded-sm bg-surface-1/40 p-0.5">
  {(currentTheme === 'dark' ? ['dark', 'light'] : ['light', 'dark']).map((m) => (
  <button
  key={m}
  type="button"
  onClick={() => setTheme(m as 'light' | 'dark')}
- className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+ className={`flex h-7 items-center gap-1.5 rounded-sm px-2.5 text-mini font-medium transition-colors ${
  (currentTheme === m)
  ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
  : 'text-muted-foreground hover:text-foreground'
@@ -1815,7 +1815,7 @@ function ThemeSettingsPage() {
  ))}
  </div>
  {(contrastInfo.dark !== null || contrastInfo.light !== null) && (
- <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+ <div className="flex items-center gap-2 text-micro text-muted-foreground">
  {contrastInfo.dark !== null && (
  <span title={t('theme.darkContrastTitle')}>{t('theme.contrastValue', { mode: t('theme.dark'), ratio: contrastInfo.dark.toFixed(1) })}</span>
  )}
@@ -1828,7 +1828,7 @@ function ThemeSettingsPage() {
  </div>
 
  {/* ── Tab Navigation ── */}
- <div className="flex gap-1 overflow-x-auto rounded-xl border border-border/30 bg-surface-1 p-1">
+ <div className="flex gap-0.5 overflow-x-auto rounded-sm border border-border/50 bg-surface-1/40 p-0.5">
  {TABS.map((tab) => {
  const Icon = tab.icon;
  const isActive = activeTab === tab.id;
@@ -1837,7 +1837,7 @@ function ThemeSettingsPage() {
  key={tab.id}
  type="button"
  onClick={() => setActiveTab(tab.id)}
- className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
+ className={`flex flex-1 items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-mini font-medium transition-colors ${
  isActive
  ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
  : 'text-muted-foreground hover:bg-surface-2/50 hover:text-foreground'
@@ -1851,9 +1851,9 @@ function ThemeSettingsPage() {
  </div>
 
  {/* ── Active Tab Content ── */}
- <ServerTabCard>
+ <div className="deck-panel p-3">
  {activeTabContent[activeTab]}
- </ServerTabCard>
+ </div>
  </div>
  );
 }

@@ -1,19 +1,15 @@
 import { useTranslation } from 'react-i18next';
+import { StatusLed } from '../deck/primitives';
 
+/** Props unchanged: the deck LED replaces the old pill badge. */
 function NodeStatusBadge({ isOnline }: { isOnline: boolean }) {
- const { t } = useTranslation('nodes');
- return (
- <span
- className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
- isOnline
- ? 'bg-success/5 text-success'
- : 'bg-surface-2 text-muted-foreground'
- }`}
- >
- <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-success/50' : 'bg-muted-foreground'}`} />
- {isOnline ? t('common:status.online') : t('common:status.offline')}
- </span>
- );
+  const { t } = useTranslation('nodes');
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-mini ${isOnline ? 'text-success' : 'text-muted-foreground'}`}>
+      <StatusLed tone={isOnline ? 'go' : 'idle'} pulse={isOnline} />
+      {isOnline ? t('common:status.online') : t('common:status.offline')}
+    </span>
+  );
 }
 
 export default NodeStatusBadge;

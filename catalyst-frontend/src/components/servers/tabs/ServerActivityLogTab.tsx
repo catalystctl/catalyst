@@ -179,12 +179,12 @@ const TONE_BADGE: Record<ActionTone, string> = {
 };
 
 const TONE_AVATAR: Record<ActionTone, string> = {
-  success: 'bg-success/15 text-success',
-  danger: 'bg-destructive/15 text-destructive',
-  warning: 'bg-warning/15 text-warning',
-  info: 'bg-info/15 text-info',
+  success: 'border-success/30 bg-success/10 text-success',
+  danger: 'border-destructive/30 bg-destructive/10 text-destructive',
+  warning: 'border-warning/30 bg-warning/10 text-warning',
+  info: 'border-info/30 bg-info/10 text-info',
 
-  neutral: 'bg-primary/10 text-primary',
+  neutral: 'border-border/50 bg-surface-2 text-muted-foreground',
 };
 
 /** Build a one-line human summary from the most useful detail fields. */
@@ -281,13 +281,11 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
   const hasExpandable = publicEntries.length > 0;
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-border/40 bg-card/40 transition-colors hover:border-border hover:bg-card/70">
-      <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors group-hover:bg-primary/50" />
-
-      <div className="flex items-start gap-3 px-3 py-2.5 sm:px-4">
-        {/* Actor avatar */}
+    <div className="group relative border-b border-border/50 transition-colors last:border-0 hover:bg-surface-1/40">
+      <div className="flex items-start gap-3 px-1 py-2.5 sm:px-2">
+        {/* Actor chip — square, not an icon tile */}
         <div
-          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[10px] font-bold ${TONE_AVATAR[tone]}`}
+          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border font-display text-micro font-semibold ${TONE_AVATAR[tone]}`}
           title={actor}
         >
           {initial}
@@ -296,9 +294,9 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
         {/* Main content — min-w-0 is critical so flex children can shrink/wrap */}
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="truncate text-xs font-semibold text-foreground">{actor}</span>
+            <span className="truncate text-mini font-semibold text-foreground">{actor}</span>
             <span
-              className={`inline-flex max-w-full items-center gap-1 truncate rounded border px-1.5 py-0.5 text-[10px] font-medium ${TONE_BADGE[tone]}`}
+              className={`inline-flex max-w-full items-center gap-1 truncate rounded-sm border px-1.5 py-0.5 text-micro font-medium ${TONE_BADGE[tone]}`}
             >
               <Icon className="h-3 w-3 shrink-0 opacity-80" />
               <span className="truncate">{formatActionLabel(entry.action)}</span>
@@ -315,7 +313,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
               {publicEntries.slice(0, 4).map(([k, v]) => (
                 <span
                   key={k}
-                  className="inline-flex max-w-full items-center gap-1 truncate rounded bg-surface-2/70 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                  className="inline-flex max-w-full items-center gap-1 truncate rounded-sm bg-surface-2/70 px-1.5 py-0.5 text-micro text-muted-foreground"
                 >
                   <span className="font-medium text-muted-foreground/80">{humanizeKey(k)}</span>
                   <span className="truncate text-foreground/80">{formatDetailValue(v)}</span>
@@ -325,13 +323,13 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
           )}
 
           {expanded && hasExpandable && (
-            <dl className="mt-1.5 grid gap-1 rounded-md border border-border/40 bg-surface-1/50 p-2 sm:grid-cols-2">
+            <dl className="mt-2 grid gap-x-4 gap-y-1 border-t border-border/50 pt-2 sm:grid-cols-2">
               {publicEntries.map(([k, v]) => (
                 <div key={k} className="min-w-0 flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
                   <dt className="type-overline shrink-0">
                     {humanizeKey(k)}
                   </dt>
-                  <dd className="type-numeric min-w-0 break-words text-[11px] text-foreground/90">
+                  <dd className="type-numeric min-w-0 break-words text-micro text-foreground/90">
                     {renderExpandedValue(v)}
                   </dd>
                 </div>
@@ -343,7 +341,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
         {/* Timestamp + expand */}
         <div className="flex shrink-0 flex-col items-end gap-1">
           <time
-            className="type-numeric whitespace-nowrap text-[10px] text-muted-foreground/70"
+            className="type-numeric whitespace-nowrap text-micro text-muted-foreground/70"
             dateTime={entry.timestamp}
             title={entry.timestamp}
           >
@@ -353,7 +351,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
             <button
               type="button"
               onClick={() => setExpanded((e) => !e)}
-              className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="inline-flex items-center gap-0.5 rounded-sm px-1.5 py-0.5 text-micro text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
               aria-expanded={expanded}
             >
               {expanded ? t('tabs.activity.less') : t('tabs.activity.details')}
@@ -473,7 +471,7 @@ export default function ServerActivityLogTab({ serverId }: Props) {
             description={t('tabs.activity.emptyDescription')}
           />
         ) : (
-          <div className="space-y-1.5 overflow-x-hidden">
+          <div className="overflow-x-hidden">
             {items.map((entry) => (
               <ActivityRow key={entry.id} entry={entry} />
             ))}
@@ -481,8 +479,8 @@ export default function ServerActivityLogTab({ serverId }: Props) {
         )}
 
         {pagination && pagination.totalPages > 1 && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <span className="type-numeric text-[10px] text-muted-foreground/60">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2">
+            <span className="type-numeric text-micro text-muted-foreground/60">
               {t('tabs.activity.pagination', {
                 page: pagination.page,
                 totalPages: pagination.totalPages,
@@ -492,7 +490,7 @@ export default function ServerActivityLogTab({ serverId }: Props) {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="rounded-md border border-border/40 p-1 text-muted-foreground transition-colors hover:bg-surface-2/50 disabled:opacity-30"
+                className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/50 text-muted-foreground transition-colors hover:bg-surface-2/50 disabled:opacity-30"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1 || isLoading}
                 title={t('tabs.activity.previous')}
@@ -501,7 +499,7 @@ export default function ServerActivityLogTab({ serverId }: Props) {
               </button>
               <button
                 type="button"
-                className="rounded-md border border-border/40 p-1 text-muted-foreground transition-colors hover:bg-surface-2/50 disabled:opacity-30"
+                className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/50 text-muted-foreground transition-colors hover:bg-surface-2/50 disabled:opacity-30"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page >= pagination.totalPages || isLoading}
                 title={t('common:actions.next')}

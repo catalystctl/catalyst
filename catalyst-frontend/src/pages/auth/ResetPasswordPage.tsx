@@ -9,7 +9,6 @@ import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthM
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -90,14 +89,12 @@ function ResetPasswordPage() {
  if (isValidating) {
  return (
  <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
- <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
-        <CardContent className="px-3 py-4 sm:px-4">
-          <div className="flex flex-col items-center text-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
-            <p className="type-meta mt-3">{t('resetPassword.validating')}</p>
-          </div>
- </CardContent>
- </Card>
+ <div className="deck-panel w-full max-w-md">
+ <div className="flex flex-col items-center px-3 py-6 text-center">
+ <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+ <p className="type-meta mt-3">{t('resetPassword.validating')}</p>
+ </div>
+ </div>
  </div>
  );
  }
@@ -108,24 +105,24 @@ function ResetPasswordPage() {
  <div className="absolute right-4 top-4 z-20">
  <LanguageSwitcher variant="compact" />
  </div>
- <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
-        <CardContent className="px-3 py-4 sm:px-4">
-          <div className="flex items-start gap-2.5">
-            <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
-            <div className="min-w-0">
-              <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">{t('resetPassword.invalidTitle')}</h1>
-              <p className="type-meta mt-0.5">
-                {t('resetPassword.invalidDescription')}
-              </p>
-            </div>
-          </div>
+ <div className="deck-panel w-full max-w-md">
+ <div className="px-3 py-4 sm:px-4">
+ <div className="flex items-start gap-2.5">
+ <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-sm border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+ <div className="min-w-0">
+ <h1 className="font-display text-lg font-semibold tracking-tight text-danger">{t('resetPassword.invalidTitle')}</h1>
+ <p className="type-meta mt-1">
+ {t('resetPassword.invalidDescription')}
+ </p>
+ </div>
+ </div>
  <div className="mt-6">
- <Button asChild className="w-full">
+ <Button asChild size="sm" className="h-8 w-full text-mini">
  <Link to="/forgot-password">{t('resetPassword.requestNew')}</Link>
  </Button>
  </div>
- </CardContent>
- </Card>
+ </div>
+ </div>
  </div>
  );
  }
@@ -135,24 +132,24 @@ function ResetPasswordPage() {
  <div className="absolute right-4 top-4 z-20">
  <LanguageSwitcher variant="compact" />
  </div>
- <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated">
-        <CardContent className="px-3 py-4 sm:px-4">
-          <div className="flex items-start gap-2.5">
-            <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-md border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
-            <div className="min-w-0">
-              <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">{t('resetPassword.title')}</h1>
-              <p className="type-meta mt-0.5">{t('resetPassword.subtitle')}</p>
-            </div>
-          </div>
+ <div className="deck-panel w-full max-w-md">
+ <div className="px-3 py-4 sm:px-4">
+ <div className="flex items-start gap-2.5">
+ <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-sm border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+ <div className="min-w-0">
+ <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">{t('resetPassword.title')}</h1>
+ <p className="type-meta mt-1">{t('resetPassword.subtitle')}</p>
+ </div>
+ </div>
 
  {isReset ? (
  <div className="mt-6 space-y-4">
- <div className="rounded-lg border border-success/20 bg-success/5 px-4 py-4">
- <p className="text-sm text-success">
+ <div className="rounded-sm border border-success/25 bg-success/5 px-3 py-3">
+ <p className="text-mini text-success">
  {t('resetPassword.success')}
  </p>
  </div>
- <Button asChild className="w-full">
+ <Button asChild size="sm" className="h-8 w-full text-mini">
  <Link to="/login">{t('resetPassword.continueToLogin')}</Link>
  </Button>
  </div>
@@ -167,6 +164,7 @@ function ResetPasswordPage() {
  placeholder="••••••••"
  value={password}
  onChange={(e) => setPassword(e.target.value)}
+ className="h-8 rounded-sm text-mini"
  />
  <PasswordStrengthMeter password={password} />
  </div>
@@ -180,15 +178,17 @@ function ResetPasswordPage() {
  placeholder="••••••••"
  value={confirmPassword}
  onChange={(e) => setConfirmPassword(e.target.value)}
+ className="h-8 rounded-sm text-mini"
  />
  {confirmPassword && password !== confirmPassword && (
- <p className="text-xs text-destructive">{t('resetPassword.passwordMismatch')}</p>
+ <p className="text-mini text-danger">{t('resetPassword.passwordMismatch')}</p>
  )}
  </div>
 
  <Button
  type="submit"
- className="w-full"
+ size="sm"
+ className="h-8 w-full text-mini"
  disabled={isLoading || (confirmPassword !== '' && password !== confirmPassword)}
  >
  {isLoading ? t('resetPassword.submitting') : t('resetPassword.submit')}
@@ -197,15 +197,15 @@ function ResetPasswordPage() {
  <div className="text-center">
  <Link
  to="/login"
- className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
+ className="text-mini font-medium text-primary transition-colors hover:text-primary/80"
  >
  {t('resetPassword.backToLogin')}
  </Link>
  </div>
  </form>
  )}
- </CardContent>
- </Card>
+ </div>
+ </div>
  </div>
  );
 }

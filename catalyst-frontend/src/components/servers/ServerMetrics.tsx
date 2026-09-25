@@ -1,48 +1,49 @@
 import { useTranslation } from 'react-i18next';
+import { BracketLabel, Meter, Segmented, StatusLed } from '../deck/primitives';
+import { cn } from '@/lib/utils';
 
 type Metric = {
- label: string;
- value: number;
- color: string;
+  label: string;
+  value: number;
 };
 
-function ServerMetrics({ cpu = 0, memory = 0, isLive = true }: { cpu?: number; memory?: number; isLive?: boolean }) {
- const { t } = useTranslation('servers');
- const metrics: Metric[] = [
- { label: t('metrics.labels.cpu'), value: cpu, color: 'bg-primary' },
- { label: t('metrics.labels.memory'), value: memory, color: 'bg-success' },
- ];
+/** Severity belongs on the reading; the meter stays a neutral glance. */
+const severityClass = (value: number) =>
+  value >= 90 ? 'text-danger' : value >= 75 ? 'text-warning' : undefined;
 
- return (
- <div className="space-y-3 rounded-md border border-border/50 bg-card p-4">
- <div className="flex items-center justify-between">
- <h3 className="type-overline">{t('metrics.resourceUsage')}</h3>
- {isLive ? (
- <span className="rounded-full bg-success-muted px-2 py-0.5 text-[11px] font-medium text-success">
- {t('metrics.live')}
- </span>
- ) : (
- <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
- {t('metrics.offline')}
- </span>
- )}
- </div>
- {metrics.map((metric) => (
- <div key={metric.label} className="space-y-1.5">
- <div className="flex items-center justify-between">
- <span className="type-overline">{metric.label}</span>
- <span className="type-numeric text-xs text-foreground">{metric.value.toFixed(0)}%</span>
- </div>
- <div className="h-2 overflow-hidden rounded-full bg-surface-2">
- <div
- className={`h-full rounded-full ${metric.value >= 90 ? 'bg-danger' : metric.color} transition-all duration-500`}
- style={{ width: `${Math.min(100, Math.max(0, metric.value))}%` }}
- />
- </div>
- </div>
- ))}
- </div>
- );
+function ServerMetrics({ cpu = 0, memory = 0, isLive = true }: { cpu?: number; memory?: number; isLive?: boolean }) {
+  const { t } = useTranslation('servers');
+  const metrics: Metric[] = [
+    { label: t('metrics.labels.cpu'), value: cpu },
+    { label: t('metrics.labels.memory'), value: memory },
+  ];
+
+  return (
+    <div className="deck-panel overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+        <BracketLabel>{t('metrics.resourceUsage')}</BracketLabel>
+        <span className="flex items-center gap-1.5 text-micro text-muted-foreground">
+          <StatusLed tone={isLive ? 'go' : 'idle'} pulse={isLive} />
+          {isLive ? t('metrics.live') : t('metrics.offline')}
+        </span>
+      </div>
+
+      <div className="flex flex-col">
+        {metrics.map((metric) => (
+          <div
+            key={metric.label}
+            className="flex items-center gap-3 border-b border-border/40 px-3 py-2 last:border-b-0"
+          >
+            <span className="type-overline w-16 shrink-0">{metric.label}</span>
+            <Meter value={metric.value} width="flex-1" />
+            <Segmented className={cn('min-w-[3rem] text-right', severityClass(metric.value))}>
+              {metric.value.toFixed(0)}%
+            </Segmented>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default ServerMetrics;

@@ -173,7 +173,7 @@ export default function ServerStartupVariablesSection({
  const error = localErrors[variable.name] || (touched.has(variable.name) ? clientValidate(variable, value) : null);
  const disabled = !canEdit || isSuspended || updateMutation.isPending;
  const inputClasses =
- 'w-full rounded-md border bg-card px-2.5 py-1.5 text-xs text-foreground transition-all duration-300 focus:outline-none ' +
+ 'h-7 w-full rounded-sm border bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors ' +
  (error
  ? 'border-danger/40 focus:border-danger'
  : 'border-border/40 focus:border-primary');
@@ -230,7 +230,7 @@ export default function ServerStartupVariablesSection({
             {hasChanges && (
               <button
                 type="button"
-                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-surface-2"
+                className="flex h-7 items-center gap-1 rounded-sm border border-border/60 px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
                 onClick={handleReset}
                 disabled={updateMutation.isPending}
               >
@@ -240,7 +240,7 @@ export default function ServerStartupVariablesSection({
             )}
             <button
               type="button"
-              className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="flex h-7 items-center gap-1 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               onClick={handleSave}
               disabled={!hasChanges || isSuspended || updateMutation.isPending}
             >
@@ -255,11 +255,11 @@ export default function ServerStartupVariablesSection({
         {isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-10 animate-pulse rounded-md bg-surface-2" />
+              <div key={i} className="h-10 animate-pulse rounded-sm bg-surface-2" />
             ))}
           </div>
         ) : isError ? (
-          <div className="flex items-center gap-2 py-3 text-xs text-danger">
+          <div className="flex items-center gap-2 py-3 text-mini text-danger">
             <AlertCircle className="h-4 w-4" />
             {t('tabs.startup.loadFailed')}
           </div>
@@ -274,18 +274,18 @@ export default function ServerStartupVariablesSection({
               return (
                 <div
                   key={variable.name}
-                  className={`flex flex-wrap items-center justify-between gap-3 border-b border-border/40 py-2.5 last:border-0 ${
+                  className={`flex flex-wrap items-center justify-between gap-3 border-b border-border/50 py-2.5 last:border-0 ${
                     error ? 'bg-danger/5' : changed ? 'bg-primary/5' : ''
                   }`}
                 >
                   <div className="min-w-[10rem] flex-1">
-                    <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                      <span className="font-mono text-xs">{variable.name}</span>
+                    <div className="flex items-center gap-1.5 text-mini font-medium text-foreground">
+                      <span className="font-mono text-mini">{variable.name}</span>
                       {variable.required && <span className="text-danger">*</span>}
                       {changed && !error && <CheckCircle2 className="h-3 w-3 text-primary" />}
                     </div>
                     {error && (
-                      <p className="mt-0.5 flex items-center gap-1 text-[11px] text-danger">
+                      <p className="mt-0.5 flex items-center gap-1 text-micro text-danger">
                         <AlertCircle className="h-3 w-3" />
                         {error}
                       </p>

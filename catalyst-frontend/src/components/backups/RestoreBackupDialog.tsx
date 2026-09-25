@@ -42,6 +42,7 @@ function RestoreBackupDialog({
       <Button
         variant="outline"
         size="sm"
+        className="h-7 px-2 text-mini"
         onClick={() => setOpen(true)}
         disabled={disabled}
       >

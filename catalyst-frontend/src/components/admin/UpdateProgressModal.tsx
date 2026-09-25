@@ -23,6 +23,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { BracketLabel, StatusLed } from '@/components/deck/primitives';
 import { qk } from '@/lib/queryKeys';
 import { formatRelativeTime } from '@/i18n/format';
 import { adminApi } from '../../services/api/admin';
@@ -103,7 +104,7 @@ function PhaseStep({
     ) : status === 'failed' ? (
       <XCircle className="h-4 w-4 text-danger" />
     ) : (
-      <span className="h-2 w-2 rounded-full bg-surface-3" />
+      <span className="h-2 w-2 shrink-0 rounded-sm bg-surface-3" />
     );
 
   return (
@@ -116,9 +117,9 @@ function PhaseStep({
           }`}
         >
           {label}
-          {status === 'done' && <span className="ml-2 text-xs font-normal text-success">{t('update.progress.done')}</span>}
+          {status === 'done' && <span className="ml-2 text-mini font-normal text-success">{t('update.progress.done')}</span>}
         </div>
-        <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
+        <div className="mt-0.5 text-mini text-muted-foreground">{description}</div>
       </div>
     </div>
   );
@@ -151,14 +152,14 @@ function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
   };
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface-0">
-      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+    <div className="deck-panel overflow-hidden">
+      <div className="flex items-center justify-between border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+        <div className="flex items-center gap-2 text-micro text-muted-foreground">
           <Terminal className="h-3.5 w-3.5" />
-          <span>{t('update.logs.title')}</span>
+          <BracketLabel tone="muted">{t('update.logs.title')}</BracketLabel>
           {live && (
-            <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
+            <span className="ml-1 inline-flex items-center gap-1.5 text-micro text-muted-foreground">
+              <StatusLed tone="go" pulse />
               {t('update.logs.live')}
             </span>
           )}
@@ -167,7 +168,7 @@ function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
           <button
             type="button"
             onClick={handleCopy}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+            className="flex h-7 items-center gap-1 rounded-sm px-1.5 text-micro text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
           >
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
             {copied ? t('common:actions.copied') : t('common:actions.copy')}
@@ -176,7 +177,7 @@ function UpdateLogViewer({ logs, live }: { logs: string[]; live: boolean }) {
       </div>
       <div
         ref={scrollRef}
-        className="h-64 overflow-y-auto px-3 py-2 font-mono text-[11px] leading-relaxed"
+        className="h-64 overflow-y-auto px-3 py-2 font-mono text-micro leading-relaxed tabular-nums"
       >
         {logs.length === 0 ? (
           <div className="flex items-center gap-2 text-muted-foreground/70">
@@ -288,13 +289,13 @@ export default function UpdateProgressModal({
 
         <DialogBody className="space-y-4">
           {panelBack && (
-            <div className="flex items-center gap-3 rounded-lg border border-success/20 bg-success-muted/30 px-3 py-3">
-              <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
+            <div className="flex items-center gap-3 rounded-sm border border-success/20 bg-success-muted/30 px-3 py-2.5">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
               <div>
                 <div className="text-sm font-medium text-foreground">
                   {t('update.progress.complete')}
                 </div>
-                <div className="mt-0.5 text-xs text-muted-foreground">
+                <div className="mt-0.5 text-mini text-muted-foreground">
                   {t('update.progress.completeDescription')}
                 </div>
               </div>
@@ -303,7 +304,7 @@ export default function UpdateProgressModal({
           {!panelBack && (
             <motion.div layout className="space-y-4">
               {starting ? (
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 rounded-sm border border-border/50 bg-surface-1 px-3 py-1.5 text-mini text-muted-foreground">
                   <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
                   {t('update.progress.starting')}
                 </div>
@@ -325,7 +326,7 @@ export default function UpdateProgressModal({
               )}
 
               {phase === 'failed' && (
-                <div className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger-muted/40 px-3 py-2.5 text-xs text-danger">
+                <div className="flex items-start gap-2 rounded-sm border border-danger/20 bg-danger-muted/40 px-3 py-1.5 text-mini text-danger">
                   <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <div>
                     <div className="font-medium">{t('update.progress.failed')}</div>
@@ -337,7 +338,7 @@ export default function UpdateProgressModal({
               )}
 
               {restarting && (
-                <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2.5 text-xs text-warning">
+                <div className="flex items-start gap-2 rounded-sm border border-warning/20 bg-warning/5 px-3 py-1.5 text-mini text-warning">
                   <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>
                     {t('update.progress.restartingNotice')}
@@ -346,7 +347,7 @@ export default function UpdateProgressModal({
               )}
 
               {state?.startedAt && (
-                <div className="text-[11px] text-muted-foreground">
+                <div className="font-mono text-micro tabular-nums text-muted-foreground">
                   {t('update.progress.started', { time: formatRelativeTime(state.startedAt) })}
                   {state.message && phase === 'pulling' ? ` — ${state.message}` : ''}
                 </div>
@@ -360,6 +361,7 @@ export default function UpdateProgressModal({
           <Button
             size="sm"
             variant="outline"
+            className="h-8 px-3 text-mini"
             disabled={closeBlocked}
             onClick={onClose}
           >

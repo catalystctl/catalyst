@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { describeError } from '../../utils/errors';
+import { cn } from '@/lib/utils';
 
 type VariableDraft = {
  id: string;
@@ -613,7 +614,7 @@ function TemplateCreateModal() {
  <div>
  <div className="flex flex-wrap gap-2">
  <button
- className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+ className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90"
  onClick={() => {
  setImportError('');
  setStep(1);
@@ -623,7 +624,7 @@ function TemplateCreateModal() {
  {t('create.newTemplate')}
  </button>
  <button
- className="rounded-lg border border-border/40 px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+ className="h-8 rounded-sm border border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
  onClick={() => {
  setImportUrl('');
  setImportUrlError('');
@@ -661,36 +662,40 @@ function TemplateCreateModal() {
  </DialogDescription>
  </DialogHeader>
  <DialogToolbar>
- <div className="flex items-center gap-2">
+ <div className="flex items-center gap-0.5">
+ {[
+ { n: 1, label: t('create.stepNest'), active: step === 1 },
+ { n: 2, label: t('create.stepDetails'), active: step === 2 },
+ ].map((s) => (
  <div
- className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 1 ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+ key={s.n}
+ className={cn(
+ 'relative flex h-7 items-center gap-1.5 px-2.5 text-mini transition-colors',
+ s.active ? 'text-foreground' : 'text-muted-foreground',
+ )}
  >
  <span
- className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
+ className={cn(
+ 'flex h-4 w-4 items-center justify-center rounded-sm font-mono text-micro tabular-nums',
+ s.active ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground',
+ )}
  >
- 1
+ {s.n}
  </span>
- {t('create.stepNest')}
+ {s.label}
+ {s.active && (
+ <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+ )}
  </div>
- <div className="h-px flex-1 bg-border" />
- <div
- className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 2 ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
- >
- <span
- className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
- >
- 2
- </span>
- {t('create.stepDetails')}
- </div>
+ ))}
  </div>
  </DialogToolbar>
- <DialogBody className="text-sm text-muted-foreground">
+ <DialogBody>
  {/* ── Step 1: Nest Selection ── */}
  {step === 1 && (
  <div className="flex flex-col items-center py-6 text-center">
  <FolderOpen className="mb-4 h-7 w-7 text-warning" />
- <h3 className="text-base font-semibold text-foreground">
+ <h3 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
  {t('create.assignTitle')}
  </h3>
  <p className="type-meta mt-2 max-w-md leading-relaxed">
@@ -699,7 +704,7 @@ function TemplateCreateModal() {
 
  {nests.length > 0 ? (
  <div className="mt-6 w-full max-w-xs space-y-1.5 text-left">
- <span className="text-xs font-medium text-muted-foreground">{t('create.selectNestLabel')}</span>
+ <span className="type-overline">{t('create.selectNestLabel')}</span>
  <Combobox
  value={nestId || '__none__'}
  onChange={(v) => setNestId(v === '__none__' ? '' : v)}
@@ -713,10 +718,10 @@ function TemplateCreateModal() {
  <img
  src={nest.icon}
  alt=""
- className="h-4 w-4 rounded object-cover"
+ className="h-4 w-4 rounded-sm object-cover"
  />
  ) : (
- <span className="flex h-4 w-4 items-center justify-center rounded bg-surface-2 text-[9px] font-bold uppercase text-muted-foreground">
+ <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-muted-foreground">
  {nest.name.slice(0, 2)}
  </span>
  )}
@@ -732,7 +737,7 @@ function TemplateCreateModal() {
  />
  </div>
  ) : (
- <div className="mt-6 rounded-md border border-dashed border-border/50 bg-surface-2/50 px-5 py-4">
+ <div className="mt-6 rounded-sm border border-dashed border-border/50 px-4 py-3">
  <p className="type-meta">
  {t('create.noNests')}{' '}
  <button
@@ -758,7 +763,7 @@ function TemplateCreateModal() {
  {step === 2 && (
  <div className="space-y-6">
  {importError ? (
- <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+ <p className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-mini text-danger">
  {importError}
  </p>
  ) : null}
@@ -766,7 +771,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.name')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={name}
  onChange={(event) => setName(event.target.value)}
  placeholder="Minecraft Paper"
@@ -775,7 +780,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.author')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={author}
  onChange={(event) => setAuthor(event.target.value)}
  placeholder="Catalyst Maintainers"
@@ -784,7 +789,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.version')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={version}
  onChange={(event) => setVersion(event.target.value)}
  placeholder="1.20.4"
@@ -793,7 +798,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.iconUrl')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={iconUrl}
  onChange={(event) => setIconUrl(event.target.value)}
  placeholder="https://example.com/icon.png"
@@ -802,27 +807,27 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('create.importTemplateLabel')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-muted-foreground hover:file:bg-surface-3"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors file:mr-3 file:h-6 file:rounded-sm file:border-0 file:bg-surface-2 file:px-2.5 file:text-mini file:font-medium file:text-muted-foreground hover:file:bg-surface-3"
  type="file"
  accept="application/json,.json,application/x-yaml,.yaml,.yml"
  onChange={handleImportFile}
  />
  {importError ? (
- <p className="text-xs text-destructive">{importError}</p>
+ <p className="text-mini text-danger">{importError}</p>
  ) : null}
  </label>
  </div>
  <label className="block space-y-1">
  <span className="type-overline">{t('form.description')}</span>
  <textarea
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={2}
  value={description}
  onChange={(event) => setDescription(event.target.value)}
  placeholder={t('form.descriptionPlaceholder')}
  />
  </label>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="type-overline">
    {t('form.runtimeImages')}
  </div>
@@ -830,7 +835,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.containerImage')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={image}
  onChange={(event) => setImage(event.target.value)}
  placeholder="itzg/minecraft-server:latest"
@@ -839,7 +844,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.defaultImage')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={defaultImage}
  onChange={(event) => setDefaultImage(event.target.value)}
  placeholder="eclipse-temurin:21-jre"
@@ -848,20 +853,20 @@ function TemplateCreateModal() {
  <label className="block space-y-1 md:col-span-2">
  <span className="type-overline">{t('form.installImage')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={installImage}
  onChange={(event) => setInstallImage(event.target.value)}
  placeholder="alpine:3.19"
  />
  </label>
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-card p-3 transition-colors">
+ <div className="space-y-2 border-t border-border/50 pt-3">
  <div className="flex flex-wrap items-center justify-between gap-2">
  <div className="type-overline">
    {t('form.imageVariants')}
  </div>
  <button
- className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+ className="h-7 rounded-sm border border-border/60 px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
  onClick={() => setImageOptions((prev) => [...prev, createImageOptionDraft()])}
  type="button"
  >
@@ -876,9 +881,9 @@ function TemplateCreateModal() {
  className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
  >
  <label className="block space-y-1">
- <span className="text-xs text-muted-foreground">{t('form.name')}</span>
+ <span className="type-overline">{t('form.name')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={option.name}
  onChange={(event) =>
  setImageOptions((prev) =>
@@ -892,9 +897,9 @@ function TemplateCreateModal() {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs text-muted-foreground">{t('form.variantLabel')}</span>
+ <span className="type-overline">{t('form.variantLabel')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={option.label ?? ''}
  onChange={(event) =>
  setImageOptions((prev) =>
@@ -908,9 +913,9 @@ function TemplateCreateModal() {
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs text-muted-foreground">{t('form.variantImage')}</span>
+ <span className="type-overline">{t('form.variantImage')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={option.image}
  onChange={(event) =>
  setImageOptions((prev) =>
@@ -924,7 +929,7 @@ function TemplateCreateModal() {
  />
  </label>
  <button
- className="rounded-full border border-destructive/20 px-2 py-1 text-xs font-semibold text-destructive transition-colors hover:border-destructive"
+ className="h-7 rounded-sm border border-danger/30 px-2.5 text-mini font-medium text-danger transition-colors hover:border-danger/60"
  onClick={() =>
  setImageOptions((prev) =>
  prev.filter((_, itemIndex) => itemIndex !== index),
@@ -944,14 +949,14 @@ function TemplateCreateModal() {
  )}
  </div>
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="type-overline">
    {t('form.commandsConfig')}
  </div>
  <label className="block space-y-1">
  <span className="type-overline">{t('form.configFile')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={configFile}
  onChange={(event) => setConfigFile(event.target.value)}
  placeholder="/config/server.properties"
@@ -960,7 +965,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.configFiles')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={configFiles.join(', ')}
  onChange={(event) => {
  const next = event.target.value
@@ -975,7 +980,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.startupCommand')}</span>
  <textarea
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={2}
  value={startup}
  onChange={(event) => setStartup(event.target.value)}
@@ -986,7 +991,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1 md:col-span-2">
  <span className="type-overline">{t('form.stopCommand')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={stopCommand}
  onChange={(event) => setStopCommand(event.target.value)}
  placeholder="stop"
@@ -995,7 +1000,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.signal')}</span>
  <select
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={sendSignalTo}
  onChange={(event) =>
  setSendSignalTo(
@@ -1012,7 +1017,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.installScript')}</span>
  <textarea
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  rows={5}
  value={installScript}
  onChange={(event) => setInstallScript(event.target.value)}
@@ -1020,7 +1025,7 @@ function TemplateCreateModal() {
  />
  </label>
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="type-overline">
    {t('form.resourcesPorts')}
  </div>
@@ -1028,7 +1033,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.ports')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={supportedPorts}
  onChange={(event) => setSupportedPorts(event.target.value)}
  placeholder="25565, 25566"
@@ -1037,7 +1042,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.allocatedMemory')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  type="number"
  min={128}
  value={allocatedMemoryMb}
@@ -1047,7 +1052,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.allocatedCpu')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  type="number"
  min={1}
  step={1}
@@ -1057,13 +1062,13 @@ function TemplateCreateModal() {
  </label>
  </div>
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="flex flex-wrap items-center justify-between gap-2">
  <h3 className="type-overline">
    {t('form.variables')}
  </h3>
  <button
- className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+ className="h-7 rounded-sm border border-border/60 px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
  onClick={() => setVariables((prev) => [...prev, createVariableDraft()])}
  type="button"
  >
@@ -1073,7 +1078,7 @@ function TemplateCreateModal() {
  {variables.map((variable, index) => (
  <div
  key={variable.id}
- className="rounded-md border border-border/50 bg-card p-3 transition-colors hover:border-primary"
+ className="border-b border-border/50 pb-3 last:border-b-0 last:pb-0"
  >
  <div className="flex items-center justify-between gap-2">
  <div className="type-overline">
@@ -1081,7 +1086,7 @@ function TemplateCreateModal() {
  </div>
  {variables.length > 1 ? (
  <button
- className="text-xs text-destructive transition-colors hover:text-destructive"
+ className="text-mini text-danger transition-colors hover:text-danger/80"
  onClick={() =>
  setVariables((prev) =>
  prev.filter((_, itemIndex) => itemIndex !== index),
@@ -1097,7 +1102,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.name')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.name}
  onChange={(event) =>
  setVariables((prev) =>
@@ -1113,7 +1118,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.default')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.defaultValue}
  onChange={(event) =>
  setVariables((prev) =>
@@ -1129,7 +1134,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1 md:col-span-2">
  <span className="type-overline">{t('form.description')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.description}
  onChange={(event) =>
  setVariables((prev) =>
@@ -1142,10 +1147,10 @@ function TemplateCreateModal() {
  }
  />
  </label>
- <label className="flex items-center gap-2 text-xs text-muted-foreground">
+ <label className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
- className="rounded border-border bg-card text-primary focus:ring-primary"
+ className="rounded-sm border-border/60 text-primary focus:ring-primary"
  checked={variable.required}
  onChange={(event) =>
  setVariables((prev) =>
@@ -1162,7 +1167,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.inputType')}</span>
  <select
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.input}
  onChange={(event) =>
  setVariables((prev) =>
@@ -1188,7 +1193,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1 md:col-span-2">
  <span className="type-overline">{t('form.rules')}</span>
  <input
- className="w-full rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={variable.rules}
  onChange={(event) =>
  setVariables((prev) =>
@@ -1206,15 +1211,15 @@ function TemplateCreateModal() {
  </div>
  ))}
  </div>
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
+ <div className="space-y-3 border-t border-border/50 pt-3">
  <div className="type-overline">
    {t('form.advancedFeatures')}
  </div>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
- <label className="flex items-center gap-2 text-xs text-muted-foreground">
+ <label className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
- className="rounded border-border bg-card text-primary focus:ring-primary"
+ className="rounded-sm border-border/60 text-primary focus:ring-primary"
  checked={restartOnExit}
  onChange={(event) => setRestartOnExit(event.target.checked)}
  />
@@ -1223,7 +1228,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.maxInstances')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  type="number"
  min={1}
  value={maxInstances}
@@ -1231,10 +1236,10 @@ function TemplateCreateModal() {
  placeholder={t('form.maxInstancesPlaceholder')}
  />
  </label>
- <label className="flex items-center gap-2 text-xs text-muted-foreground">
+ <label className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
  type="checkbox"
- className="rounded border-border bg-card text-primary focus:ring-primary"
+ className="rounded-sm border-border/60 text-primary focus:ring-primary"
  checked={fileEditorEnabled}
  onChange={(event) => setFileEditorEnabled(event.target.checked)}
  />
@@ -1243,7 +1248,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.fileEditorRestrictedPaths')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={fileEditorRestrictedPaths}
  onChange={(event) => setFileEditorRestrictedPaths(event.target.value)}
  placeholder="/sensitive, /config"
@@ -1253,7 +1258,7 @@ function TemplateCreateModal() {
  <label className="block space-y-1">
  <span className="type-overline">{t('form.backupPaths')}</span>
  <input
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={backupPaths}
  onChange={(event) => setBackupPaths(event.target.value)}
  placeholder="/world, /plugins, /config"
@@ -1276,14 +1281,14 @@ function TemplateCreateModal() {
  <DialogFooter className="sm:justify-between">
  <div className="flex items-center gap-3">
  {step === 2 && (
- <Button variant="outline" onClick={() => setStep(1)}>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(1)}>
  {'\u2190'} {t('common:actions.back')}
  </Button>
  )}
  {step === 2 && (
  <div className="space-y-1">
  {missingFields.length > 0 ? (
- <div className="text-xs">
+ <div className="text-micro">
  <span className="type-overline">
  {t('form.missingFields')}{' '}
  </span>
@@ -1292,7 +1297,7 @@ function TemplateCreateModal() {
  </span>
  </div>
  ) : (
- <span className="text-xs text-muted-foreground">
+ <span className="text-micro text-muted-foreground">
  {t('create.availableNow')}
  </span>
  )}
@@ -1302,6 +1307,8 @@ function TemplateCreateModal() {
  <div className="flex gap-2">
  <Button
  variant="outline"
+ size="sm"
+ className="h-8 px-3 text-mini"
  onClick={() => {
  setOpen(false);
  setImportError('');
@@ -1311,19 +1318,19 @@ function TemplateCreateModal() {
  {t('common:actions.cancel')}
  </Button>
  {step === 1 && (
- <Button variant="outline" onClick={() => setStep(2)}>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(2)}>
  <SkipForward className="h-3.5 w-3.5" />
  {t('create.skip')}
  </Button>
  )}
  {step === 1 && nests.length > 0 && (
- <Button onClick={() => setStep(2)}>
+ <Button size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(2)}>
  {t('create.continue')}
  <ArrowRight className="h-3.5 w-3.5" />
  </Button>
  )}
  {step === 2 && (
- <Button onClick={() => mutation.mutate()} disabled={disableSubmit}>
+ <Button size="sm" className="h-8 px-3 text-mini" onClick={() => mutation.mutate()} disabled={disableSubmit}>
  {mutation.isPending ? t('create.creating') : t('create.submit')}
  </Button>
  )}
@@ -1354,7 +1361,7 @@ function TemplateCreateModal() {
  <div className="space-y-2">
  <div className="flex items-center gap-2">
  <LinkIcon className="h-4 w-4 text-primary" />
- <span className="text-sm font-medium text-foreground">
+ <span className="text-mini font-semibold text-foreground">
  {t('create.fromUrl')}
  </span>
  </div>
@@ -1363,7 +1370,7 @@ function TemplateCreateModal() {
  </p>
  <div className="flex gap-2">
  <Input
- className="flex-1"
+ className="h-8 flex-1 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
  value={importUrl}
  onChange={(e) => {
  setImportUrl(e.target.value);
@@ -1375,6 +1382,8 @@ function TemplateCreateModal() {
  }}
  />
  <Button
+ size="sm"
+ className="h-8 px-3 text-mini"
  onClick={handleImportUrl}
  disabled={!importUrl.trim() || importUrlLoading}
  >
@@ -1383,22 +1392,20 @@ function TemplateCreateModal() {
  </Button>
  </div>
  {importUrlError && (
- <p className="text-xs text-destructive">{importUrlError}</p>
+ <p className="text-mini text-danger">{importUrlError}</p>
  )}
  </div>
 
  {/* Divider */}
- <div className="flex items-center gap-3">
- <div className="h-px flex-1 bg-border" />
- <span className="text-xs font-medium text-muted-foreground">{t('create.or')}</span>
- <div className="h-px flex-1 bg-border" />
+ <div className="flex items-center justify-center">
+ <span className="type-overline">{t('create.or')}</span>
  </div>
 
  {/* Local Upload */}
  <div className="space-y-2">
  <div className="flex items-center gap-2">
  <Upload className="h-4 w-4 text-primary" />
- <span className="text-sm font-medium text-foreground">
+ <span className="text-mini font-semibold text-foreground">
  {t('create.fromLocalFile')}
  </span>
  </div>
@@ -1406,27 +1413,25 @@ function TemplateCreateModal() {
  {t('create.fromLocalFileHint')}
  </p>
  <button
- className="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-border/50 px-4 py-4 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+ className="flex w-full items-center justify-center gap-2 rounded-sm border border-dashed border-border/50 px-4 py-4 text-mini font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
  onClick={() => importFileRef.current?.click()}
  >
  <Upload className="h-4 w-4" />
  {t('create.chooseFile')}{''}
- <span className="text-xs opacity-60">(.json, .yaml, .yml)</span>
+ <span className="text-micro opacity-60">(.json, .yaml, .yml)</span>
  </button>
  </div>
 
  {/* Divider */}
- <div className="flex items-center gap-3">
- <div className="h-px flex-1 bg-border" />
- <span className="text-xs font-medium text-muted-foreground">{t('create.or')}</span>
- <div className="h-px flex-1 bg-border" />
+ <div className="flex items-center justify-center">
+ <span className="type-overline">{t('create.or')}</span>
  </div>
 
  {/* Pterodactyl Batch Import */}
  <div className="space-y-2">
  <div className="flex items-center gap-2">
  <Download className="h-4 w-4 text-primary" />
- <span className="text-sm font-medium text-foreground">
+ <span className="text-mini font-semibold text-foreground">
  {t('create.importAllEggs')}
  </span>
  </div>
@@ -1434,8 +1439,8 @@ function TemplateCreateModal() {
  {t('create.importAllEggsHint')}
  </p>
  {batchImportResult ? (
- <div className="space-y-2 rounded-md border border-border/50 bg-surface-2/50 px-4 py-3">
- <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+ <div className="space-y-2 rounded-sm border border-border/50 px-3 py-2">
+ <div className="flex items-center gap-2 text-mini font-semibold text-foreground">
  <CheckCircle className="h-4 w-4 text-success" />
  {t('create.importComplete')}
  </div>
@@ -1449,13 +1454,13 @@ function TemplateCreateModal() {
  </span>
  )}
  {batchImportResult.errors > 0 && (
- <span className="text-destructive font-medium">
+ <span className="text-danger font-medium">
  {t('create.failedCount', { total: batchImportResult.errors })}
  </span>
  )}
  </div>
  {batchImportResult.errors > 0 && batchImportResult.errorDetails.length > 0 && (
- <details className="text-xs text-muted-foreground">
+ <details className="text-micro text-muted-foreground">
  <summary className="cursor-pointer font-medium hover:text-foreground">
  {t('create.errorDetails')}
  </summary>
@@ -1476,7 +1481,7 @@ function TemplateCreateModal() {
  </div>
  ) : (
  <button
- className="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/30 bg-primary/5 px-4 py-4 text-sm font-medium text-primary transition-colors hover:border-primary/60 hover:bg-primary/10"
+ className="flex w-full items-center justify-center gap-2 rounded-sm border border-dashed border-primary/40 px-4 py-4 text-mini font-medium text-foreground transition-colors hover:border-primary/60 hover:bg-primary/5"
  onClick={handleBatchImport}
  disabled={batchImportLoading}
  >
@@ -1503,6 +1508,8 @@ function TemplateCreateModal() {
  <DialogFooter>
  <Button
  variant="outline"
+ size="sm"
+ className="h-8 px-3 text-mini"
  onClick={() => {
  setImportModalOpen(false);
  setBatchImportLoading(false);

@@ -215,7 +215,6 @@
     "deleted_other": "{{count}} modèles supprimés",
     "deleteTitle": "Supprimer les modèles",
     "deleteWarning": "Les modèles utilisés par des serveurs existants ne peuvent pas être supprimés. Cette action est irréversible.",
-    "description": "Définissez des modèles de serveur avec des images et des commandes de démarrage.",
     "filters": "Filtres",
     "memory": "Mémoire",
     "nestLabel": "Nid",

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Copy } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { serversApi } from '../../services/api/servers';
@@ -26,6 +27,14 @@ import {
 } from '@/components/ui/dialog';
 import type { Server } from '../../types/server';
 import type { CloneServerPayload } from '../../types/server';
+
+/** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
+const fieldClass =
+  'h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40';
+/** Labelled block on the dialog surface — never a nested rounded card. */
+const blockClass = 'rounded-sm border border-border/50 bg-surface-1/40 p-3';
+/** 1px separator for stacked fields inside a block. */
+const dividerClass = 'border-t border-border/50 pt-3';
 
 type Props = {
   server: Server;
@@ -72,7 +81,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
       <div className="flex items-center gap-2">
         <span className="font-medium">{u.username || u.email}</span>
         {u.username && <span className="text-muted-foreground">({u.email})</span>}
-        <span className="ml-auto type-numeric text-[10px] text-muted-foreground">{u.id.slice(0, 8)}…</span>
+        <span className="ml-auto type-numeric text-micro text-muted-foreground">{u.id.slice(0, 8)}…</span>
       </div>
     ),
     keywords: [u.username || '', u.email || '', u.id],
@@ -208,6 +217,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
         <Button
           variant="outline"
           size="sm"
+          className="h-8 px-3 text-mini"
           disabled={disabled || !canClone}
           onClick={() => setOpen(true)}
         >
@@ -222,25 +232,25 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="space-y-4">
-        <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-          <span className="text-muted-foreground">
+        <DialogBody className="space-y-3">
+        <div className="flex items-start gap-2 rounded-sm border border-warning/40 bg-warning/10 p-3 text-mini text-muted-foreground">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+          <span>
             {copyFiles
               ? t('cloneServer.warningCopyFiles')
               : t('cloneServer.warningFreshInstall')}
           </span>
         </div>
 
-        <div className="grid gap-4">
+        <div className={`${blockClass} space-y-3`}>
           {/* Name */}
-          <div className="grid gap-2">
+          <div className="space-y-1.5">
             <label htmlFor="clone-name" className="type-overline">
               {t('fields.name')}
             </label>
             <input
               id="clone-name"
-              className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+              className={fieldClass}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t('cloneServer.namePlaceholder')}
@@ -248,13 +258,13 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           </div>
 
           {/* Node */}
-          <div className="grid gap-2">
+          <div className={cn('space-y-1.5', dividerClass)}>
             <label htmlFor="clone-node" className="type-overline">
               {t('fields.node')}
             </label>
             <select
               id="clone-node"
-              className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+              className={fieldClass}
               value={nodeId}
               onChange={(e) => setNodeId(e.target.value)}
             >
@@ -267,13 +277,13 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           </div>
 
           {/* Network Mode */}
-          <div className="grid gap-2">
+          <div className={cn('space-y-1.5', dividerClass)}>
             <label htmlFor="clone-network" className="type-overline">
               {t('fields.networkMode')}
             </label>
             <select
               id="clone-network"
-              className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+              className={fieldClass}
               value={networkMode}
               onChange={(e) => setNetworkMode(e.target.value)}
             >
@@ -287,12 +297,12 @@ function CloneServerDialog({ server, disabled = false }: Props) {
 
           {/* Allocation (host mode) */}
           {isHostNetwork && (
-            <div className="grid gap-2">
+            <div className={cn('space-y-1.5', dividerClass)}>
               <label className="type-overline">
                 {t('cloneServer.networkAllocation')} <span className="text-danger">*</span>
               </label>
               <select
-                className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                className={cn(fieldClass, 'font-mono tabular-nums')}
                 value={allocationId}
                 onChange={(e) => setAllocationId(e.target.value)}
               >
@@ -305,7 +315,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 ))}
               </select>
               {allocLoadError ? (
-                <p className="text-xs text-warning">{allocLoadError}</p>
+                <p className="text-micro text-warning">{allocLoadError}</p>
               ) : null}
               {!allocLoadError && availableAllocations.length === 0 && nodeId ? (
                 <p className="type-meta">
@@ -325,7 +335,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
 
           {/* Server Owner (admin only) */}
           {isAdmin && (
-            <div className="grid gap-2">
+            <div className={cn('space-y-1.5', dividerClass)}>
               <label className="type-overline">
                 {t('cloneServer.serverOwner')} <span className="text-danger">*</span>
               </label>
@@ -335,6 +345,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 options={userOptions}
                 placeholder={t('cloneServer.ownerPlaceholder')}
                 searchPlaceholder={t('cloneServer.ownerSearchPlaceholder')}
+                className={fieldClass}
               />
               <p className="type-meta">
                 {t('cloneServer.ownerHint')}
@@ -343,43 +354,38 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           )}
 
           {/* Copy Files Toggle */}
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between rounded-md border border-border/40 bg-card px-3 py-2.5">
-              <div className="flex items-center gap-2.5">
-                <Copy className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <p className="type-overline">{t('cloneServer.copyFiles')}</p>
-                  <p className="type-meta">
-                    {t('cloneServer.copyFilesHint')}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={copyFiles}
-                onClick={() => setCopyFiles(!copyFiles)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 ${
-                  copyFiles ? 'bg-primary' : 'bg-surface-3'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-card shadow ring-0 transition duration-200 ease-in-out ${
-                    copyFiles ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </div>
-            {copyFiles && (
-              <p className="text-[11px] text-warning">
-                {t('cloneServer.copyFilesStatusWarning')}
+          <div className={cn('flex items-center justify-between gap-3', dividerClass)}>
+            <div className="min-w-0">
+              <p className="type-overline">{t('cloneServer.copyFiles')}</p>
+              <p className="type-meta">
+                {t('cloneServer.copyFilesHint')}
               </p>
-            )}
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={copyFiles}
+              onClick={() => setCopyFiles(!copyFiles)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 ${
+                copyFiles ? 'bg-primary' : 'bg-surface-3'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-card shadow ring-0 transition duration-200 ease-in-out ${
+                  copyFiles ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
+          {copyFiles && (
+            <p className="text-micro text-warning">
+              {t('cloneServer.copyFilesStatusWarning')}
+            </p>
+          )}
 
           {/* Resources */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="grid gap-2">
+          <div className={cn('grid grid-cols-3 gap-3', dividerClass)}>
+            <div className="space-y-1.5">
               <label htmlFor="clone-memory" className="type-overline">
                 {t('fields.memoryMb')}
               </label>
@@ -387,12 +393,12 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 id="clone-memory"
                 type="number"
                 min={512}
-                className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                className={cn(fieldClass, 'font-mono tabular-nums')}
                 value={memoryMb}
                 onChange={(e) => setMemoryMb(Number(e.target.value))}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="space-y-1.5">
               <label htmlFor="clone-cpu" className="type-overline">
                 {t('fields.cpuCores')}
               </label>
@@ -400,12 +406,12 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 id="clone-cpu"
                 type="number"
                 min={1}
-                className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                className={cn(fieldClass, 'font-mono tabular-nums')}
                 value={cpuCores}
                 onChange={(e) => setCpuCores(Number(e.target.value))}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="space-y-1.5">
               <label htmlFor="clone-disk" className="type-overline">
                 {t('fields.diskMb')}
               </label>
@@ -413,7 +419,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 id="clone-disk"
                 type="number"
                 min={1024}
-                className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                className={cn(fieldClass, 'font-mono tabular-nums')}
                 value={diskMb}
                 onChange={(e) => setDiskMb(Number(e.target.value))}
               />
@@ -425,6 +431,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           <Button
             variant="outline"
             size="sm"
+            className="h-8 px-3 text-mini"
             onClick={() => setOpen(false)}
             disabled={cloneMutation.isPending}
           >
@@ -432,6 +439,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           </Button>
           <Button
             size="sm"
+            className="h-8 px-3 text-mini"
             onClick={() => cloneMutation.mutate()}
             disabled={cloneMutation.isPending || !name.trim() || !allocationValid}
           >

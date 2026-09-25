@@ -86,9 +86,9 @@ export default function ServerDatabasesTab({
  }
  actions={
  canManageDatabases ? (
- <div className="flex flex-wrap items-center gap-2 text-xs">
+ <div className="flex flex-wrap items-center gap-2">
  <select
- className="rounded-md border border-border/40 bg-card px-2 py-1.5 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="h-7 rounded-sm border border-border/60 bg-background/40 pl-2 pr-7 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={databaseHostId}
  onChange={(e) => onDatabaseHostIdChange(e.target.value)}
  disabled={disabled}
@@ -101,7 +101,7 @@ export default function ServerDatabasesTab({
  ))}
  </select>
  <input
- className="rounded-md border border-border/40 bg-card px-2 py-1.5 font-mono text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 font-mono text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={databaseName}
  onChange={(e) => onDatabaseNameChange(e.target.value)}
  placeholder="database_name"
@@ -109,7 +109,7 @@ export default function ServerDatabasesTab({
  />
  <button
  type="button"
- className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+ className="h-8 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  onClick={onCreate}
  disabled={!databaseHostId || createPending || disabled || databaseLimitReached}
  >
@@ -122,7 +122,7 @@ export default function ServerDatabasesTab({
 
  <ServerTabCard>
  {databaseAllocation === 0 && (
- <div className="rounded-lg border border-warning/20 bg-warning/5 px-3 py-2.5 text-[11px] text-warning">
+ <div className="mb-2 rounded-sm border border-warning/30 bg-warning/5 px-3 py-2 text-mini text-warning">
  {t('tabs.databases.allocationUnavailable')}
  </div>
  )}
@@ -137,20 +137,18 @@ export default function ServerDatabasesTab({
  description={t('tabs.databases.emptyDescription')}
  />
  ) : (
- <div className="space-y-2">
+ <div>
  {databases.map((db) => (
  <div
  key={db.id}
- className="group relative rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ className="border-b border-border/50 py-3 last:border-0"
  >
- <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
-
  <div className="flex flex-wrap items-center justify-between gap-3">
- <div>
- <div className="type-numeric text-sm text-foreground">
+ <div className="min-w-0">
+ <div className="type-numeric truncate text-data text-foreground">
  {db.name}
  </div>
- <div className="type-numeric mt-0.5 text-[10px] text-muted-foreground/50">
+ <div className="mt-0.5 truncate font-mono text-micro text-muted-foreground">
  {db.hostName} · {db.host}:{db.port}
  </div>
  </div>
@@ -158,7 +156,7 @@ export default function ServerDatabasesTab({
  <div className="flex items-center gap-1.5">
  <button
  type="button"
- className="rounded-md border border-border/30 px-2 py-1 text-[10px] font-medium text-muted-foreground transition-all hover:border-primary/20 hover:text-foreground disabled:opacity-50"
+ className="h-7 rounded-sm border border-border/60 px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
  onClick={() => onRotate(db.id)}
  disabled={rotatePending || isSuspended}
  >
@@ -166,7 +164,7 @@ export default function ServerDatabasesTab({
  </button>
  <button
  type="button"
- className="rounded-md border border-danger/20 px-2 py-1 text-[10px] font-medium text-danger transition-all hover:border-danger/40 hover:bg-danger/5 disabled:opacity-50"
+ className="h-7 rounded-sm border border-danger/30 px-2.5 text-mini font-medium text-danger transition-colors hover:border-danger/50 hover:bg-danger/5 disabled:opacity-50"
  onClick={() => setPendingDeleteId(db.id)}
  disabled={deletePending || isSuspended}
  >
@@ -175,7 +173,7 @@ export default function ServerDatabasesTab({
  </div>
  )}
  </div>
- <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+ <div className="mt-1 grid grid-cols-1 gap-x-6 sm:grid-cols-3">
  <DataField label={t('tabs.databases.fields.database')} value={db.name} copyable concealable />
  <DataField label={t('tabs.databases.fields.username')} value={db.username} copyable />
  <DataField label={t('tabs.databases.fields.password')} value={db.password} concealable />

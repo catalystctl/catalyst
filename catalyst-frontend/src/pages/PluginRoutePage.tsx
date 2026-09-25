@@ -32,7 +32,11 @@ export default function PluginRoutePage() {
 
   // Wait until plugins have been loaded at least once before deciding 404
   if (!initialized || loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="deck-panel flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   const currentPath = `/${pluginRouteName}`;

@@ -8,17 +8,19 @@ interface TabErrorStateProps {
   onRetry?: () => void;
 }
 
+/**
+ * Error state that sits inside the deck panel: a flat status strip, no nested
+ * rounded card and no icon tile.
+ */
 export default function TabErrorState({ message, title, description, onRetry }: TabErrorStateProps) {
   const { t } = useTranslation('server-tabs');
   const heading = message ?? title ?? t('shared.somethingWentWrong');
 
   return (
-    <div className="rounded-md border border-danger/25 bg-danger/5 px-4 py-3">
-      <div className="flex items-start gap-2.5 text-xs text-danger">
-        <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-danger/10">
-          <AlertCircle className="h-3 w-3" />
-        </div>
-        <div>
+    <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2.5">
+      <div className="flex items-start gap-2 text-mini text-danger">
+        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div className="min-w-0">
           <p>{heading}</p>
           {description && <p className="type-meta mt-1">{description}</p>}
         </div>
@@ -27,7 +29,7 @@ export default function TabErrorState({ message, title, description, onRetry }: 
         <button
           type="button"
           onClick={onRetry}
-          className="mt-2.5 ml-7 rounded-md border border-danger/20 bg-danger/5 px-2.5 py-1 text-[10px] font-semibold text-danger transition-colors hover:bg-danger/10 hover:border-danger/30"
+          className="mt-2 ml-6 h-7 rounded-sm border border-danger/30 px-2.5 text-mini font-semibold text-danger transition-colors hover:bg-danger/10"
         >
           {t('common:actions.retry')}
         </button>

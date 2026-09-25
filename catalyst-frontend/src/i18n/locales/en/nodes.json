@@ -130,8 +130,6 @@
     "title": "Node Assignments"
   },
   "card": {
-    "agentVersion": "Agent v{{version}}",
-    "cores": "cores",
     "cpu": "CPU",
     "effectiveCpu": "effective: {{cores}} cores ({{percent}}%)",
     "effectiveMemory": "effective: {{gb}} GB ({{percent}}%)",

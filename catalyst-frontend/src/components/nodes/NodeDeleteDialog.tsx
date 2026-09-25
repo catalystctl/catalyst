@@ -65,7 +65,7 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
         <Button
           variant="destructive"
           size="sm"
-          className="w-full"
+          className="h-8 w-full px-3 text-mini"
           onClick={() => setOpen(true)}
         >
           {t('common:actions.delete')}

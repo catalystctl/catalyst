@@ -39,7 +39,7 @@ export default function LanguageSwitcher({
         type="button"
         aria-label={t('language.label')}
         title={t('language.label')}
-        className={`inline-flex h-9 w-9 items-center justify-center rounded-md border border-border/50 bg-card/80 text-muted-foreground backdrop-blur-sm transition-colors hover:border-primary/40 hover:text-foreground ${className}`}
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground ${className}`}
       >
         <Globe className="h-4 w-4" />
       </button>
@@ -47,7 +47,7 @@ export default function LanguageSwitcher({
       <button
         type="button"
         aria-label={t('language.label')}
-        className={`inline-flex w-full items-center gap-2 rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors hover:border-primary/40 ${className}`}
+        className={`inline-flex h-8 w-full items-center gap-2 rounded-sm border border-border/60 bg-card px-2.5 text-mini text-foreground transition-colors hover:border-primary/40 ${className}`}
       >
         <Globe className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="flex-1 text-left">{active?.nativeName ?? locale}</span>

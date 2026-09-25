@@ -67,10 +67,10 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
       <Button
         variant="outline"
         size="sm"
-        className="gap-2"
+        className="h-8 gap-2 rounded-sm px-3 text-mini"
       >
         <span>{selectedRange.label}</span>
-        <ChevronDown className={`h-4 w-4 transition ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3.5 w-3.5 transition ${isOpen ? 'rotate-180' : ''}`} />
       </Button>
     </PopoverTrigger>
 
@@ -80,9 +80,9 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
           <button
             key={range.hours}
             type="button"
-            className={`w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-all duration-300 ${
+            className={`w-full rounded-sm px-2 py-1.5 text-left text-mini font-medium transition-colors ${
               selectedRange.label === range.label
-                ? 'bg-primary text-primary-foreground'
+                ? 'bg-primary-muted text-primary'
                 : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
             }`}
             onClick={() => handlePresetClick(range)}
@@ -104,7 +104,7 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
                 value={customHours}
                 onChange={(e) => setCustomHours(e.target.value)}
                 placeholder="24"
-                className="mt-1 h-7 text-xs"
+                className="mt-1 h-7 rounded-sm text-mini"
               />
             </div>
             <div>
@@ -116,14 +116,14 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
                 value={customLimit}
                 onChange={(e) => setCustomLimit(e.target.value)}
                 placeholder="144"
-                className="mt-1 h-7 text-xs"
+                className="mt-1 h-7 rounded-sm text-mini"
               />
             </div>
             <Button
               size="sm"
               onClick={handleCustomSubmit}
               disabled={!customHours || !customLimit}
-              className="w-full text-xs"
+              className="h-7 w-full rounded-sm px-3 text-mini"
             >
               {t('common:actions.apply')}
             </Button>

@@ -36,13 +36,14 @@ import { toast } from 'sonner';
 import { notifyError } from '../../../utils/notify';
 import { formatDateTime } from '../../../i18n/format';
 import { permissionLabel } from './permissionMeta';
+import { BracketLabel } from '@/components/deck/primitives';
 import type { PluginDetails } from '../../../plugins/types';
 
 function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-right text-sm text-foreground">{value}</span>
+      <span className="type-overline shrink-0">{label}</span>
+      <span className="text-right text-mini text-foreground">{value}</span>
     </div>
   );
 }
@@ -61,13 +62,15 @@ function CapabilitySection({
   if (count === 0) return null;
   return (
     <div className="space-y-2">
-      <p className="flex items-center gap-1.5 type-overline">
-        <Icon className="h-3.5 w-3.5" />
-        {title}
-        <Badge variant="secondary" className="ml-0.5 text-[10px]">
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <BracketLabel tone="muted">{title}</BracketLabel>
+        <Badge variant="secondary" className="font-mono text-micro tabular-nums">
           {count}
         </Badge>
-      </p>
+      </div>
       {children}
     </div>
   );
@@ -203,7 +206,7 @@ export function PluginDetailsDialog({
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   {details?.description || t('pluginsAdmin.noDescription')}
                 </p>
-                <div className="divide-y divide-border/40 rounded-lg border border-border/60 bg-surface-2/20 px-4 py-1">
+                <div className="divide-y divide-border/40">
                   <MetaRow label={t('pluginsAdmin.statusLabel')} value={<Badge variant={statusText.variant}>{statusText.text}</Badge>} />
                   <MetaRow label={t('pluginsAdmin.versionLabel')} value={details?.version} />
                   <MetaRow label={t('pluginsAdmin.requiresCatalyst')} value={details?.catalystVersion ?? '—'} />
@@ -212,9 +215,9 @@ export function PluginDetailsDialog({
                       label={t('pluginsAdmin.consentLicensingTitle')}
                       value={
                         <span className="flex flex-col items-start gap-0.5">
-                          <span className="font-mono text-xs">{details.licensing.licenseServer}</span>
+                          <span className="font-mono text-micro">{details.licensing.licenseServer}</span>
                           {details.licensing.encrypted && (
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-micro text-muted-foreground">
                               {t('pluginsAdmin.consentLicensingEncrypted')}
                             </span>
                           )}
@@ -223,12 +226,12 @@ export function PluginDetailsDialog({
                               href={details.licensing.buyUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs font-medium text-accent hover:underline"
+                              className="text-micro font-medium text-primary hover:underline"
                             >
                               {t('pluginsAdmin.consentLicensingBuy')}
                             </a>
                           )}
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-micro text-muted-foreground">
                             {t('pluginsAdmin.licensingKeyHint')}
                           </span>
                         </span>
@@ -257,12 +260,12 @@ export function PluginDetailsDialog({
                 </div>
                 {(details?.dependencies?.length ?? 0) > 0 && (
                   <div>
-                    <p className="mb-1.5 type-overline">
-                      {t('pluginsAdmin.dependsOn')}
-                    </p>
+                    <div className="mb-1.5">
+                      <BracketLabel tone="muted">{t('pluginsAdmin.dependsOn')}</BracketLabel>
+                    </div>
                     <div className="flex flex-wrap gap-1.5">
                       {(details?.dependencies ?? []).map((dep) => (
-                        <Badge key={dep as string} variant="outline">
+                        <Badge key={dep as string} variant="outline" className="font-mono text-micro">
                           {String(dep)}
                         </Badge>
                       ))}
@@ -281,21 +284,21 @@ export function PluginDetailsDialog({
                 </Alert>
 
                 {declared.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-                    <p className="text-sm text-muted-foreground">
+                  <div className="rounded-sm border border-dashed border-border/50 px-4 py-6 text-center">
+                    <p className="text-mini text-muted-foreground">
                       {t('pluginsAdmin.noPermissionsDeclared')}{' '}
-                      <code className="font-mono text-xs">/api/plugins/{pluginName}/</code>.
+                      <code className="font-mono text-micro">/api/plugins/{pluginName}/</code>.
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/40 rounded-lg border border-border/60">
+                  <div className="divide-y divide-border/40">
                     {declared.map((perm) => {
                       const isGranted = draftGrants.includes(perm);
                       const summary = summaryByToken.get(perm);
                       return (
                         <label
                           key={perm}
-                          className="flex cursor-pointer items-start justify-between gap-4 px-4 py-3"
+                          className="flex cursor-pointer items-start justify-between gap-4 py-1.5"
                         >
                           <span className="min-w-0">
                             <span className="flex flex-wrap items-center gap-2">
@@ -303,17 +306,17 @@ export function PluginDetailsDialog({
                                 {summary?.label ?? permissionLabel(perm)}
                               </span>
                               {!isGranted && (
-                                <Badge variant="secondary" className="text-[10px]">
+                                <Badge variant="secondary" className="text-micro">
                                   {t('pluginsAdmin.revoked')}
                                 </Badge>
                               )}
                             </span>
                             {summary && (
-                              <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                              <span className="mt-0.5 block text-mini leading-snug text-muted-foreground">
                                 {summary.description}
                               </span>
                             )}
-                            <code className="mt-0.5 block font-mono text-[11px] text-muted-foreground/70">
+                            <code className="mt-0.5 block font-mono text-micro text-muted-foreground/70">
                               {perm}
                             </code>
                           </span>
@@ -330,11 +333,12 @@ export function PluginDetailsDialog({
 
                 {declared.length > 0 && (
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">
+                    <p className="font-mono text-mini tabular-nums text-muted-foreground">
                       {t('pluginsAdmin.permissionsGrantedCount', { granted: draftGrants.length, total: declared.length })}
                     </p>
                     <Button
                       size="sm"
+                      className="h-8 px-3 text-mini"
                       disabled={!dirty || saveMutation.isPending}
                       onClick={() => saveMutation.mutate(draftGrants)}
                       data-testid="plugin-permissions-save"
@@ -356,10 +360,10 @@ export function PluginDetailsDialog({
                       <ul className="space-y-1">
                         {capabilities!.routes.map((r) => (
                           <li key={`${r.method}:${r.url}`} className="flex items-center gap-2">
-                            <Badge variant="secondary" className="w-16 justify-center font-mono text-[10px]">
+                            <Badge variant="secondary" className="w-16 justify-center font-mono text-micro">
                               {r.method}
                             </Badge>
-                            <code className="truncate font-mono text-xs text-foreground">{r.url}</code>
+                            <code className="truncate font-mono text-micro text-foreground">{r.url}</code>
                           </li>
                         ))}
                       </ul>
@@ -370,7 +374,7 @@ export function PluginDetailsDialog({
                         {capabilities!.tasks.map((t, i) => (
                           <li key={`${t.cron}-${i}`} className="flex items-center gap-2 text-sm text-foreground">
                             <Cable className="h-3 w-3 text-muted-foreground" aria-hidden />
-                            <code className="font-mono text-xs">{t.cron}</code>
+                            <code className="font-mono text-micro tabular-nums">{t.cron}</code>
                           </li>
                         ))}
                       </ul>
@@ -380,7 +384,7 @@ export function PluginDetailsDialog({
                       <ul className="flex flex-wrap gap-1.5">
                         {capabilities!.wsHandlers.map((h) => (
                           <li key={h}>
-                            <Badge variant="outline" className="font-mono text-[11px]">
+                            <Badge variant="outline" className="font-mono text-micro">
                               plugin:{pluginName}:{h}
                             </Badge>
                           </li>
@@ -396,9 +400,9 @@ export function PluginDetailsDialog({
                       <ul className="space-y-1">
                         {Object.entries(capabilities!.events ?? {}).map(([evt, schema]) => (
                           <li key={evt} className="text-sm">
-                            <code className="font-mono text-xs text-foreground">{evt}</code>
+                            <code className="font-mono text-micro text-foreground">{evt}</code>
                             {'description' in (schema as any) && (schema as any).description && (
-                              <span className="ml-2 text-xs text-muted-foreground">
+                              <span className="ml-2 text-micro text-muted-foreground">
                                 {(schema as any).description}
                               </span>
                             )}
@@ -411,7 +415,7 @@ export function PluginDetailsDialog({
                       <ul className="flex flex-wrap gap-1.5">
                         {capabilities!.exposedApis.map((api) => (
                           <li key={api}>
-                            <Badge variant="outline" className="font-mono text-[11px]">
+                            <Badge variant="outline" className="font-mono text-micro">
                               {api}
                             </Badge>
                           </li>
@@ -429,7 +433,7 @@ export function PluginDetailsDialog({
             <Button
               variant="ghost"
               size="sm"
-              className="text-danger hover:text-danger"
+              className="h-8 px-3 text-mini text-danger hover:text-danger"
               onClick={() => onUninstallRequest(pluginName)}
             >
             {t('pluginsAdmin.uninstallEllipsis')}
@@ -437,7 +441,7 @@ export function PluginDetailsDialog({
           ) : (
             <span />
           )}
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" size="sm" className="h-8 px-3 text-mini" onClick={() => onOpenChange(false)}>
             {t('common:actions.close')}
           </Button>
         </DialogFooter>
@@ -448,9 +452,9 @@ export function PluginDetailsDialog({
 function TabEmpty() {
   const { t } = useTranslation('admin-system');
   return (
-    <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-      <Database className="mx-auto mb-2 h-5 w-5 text-muted-foreground/50" />
-      <p className="text-sm text-muted-foreground">
+    <div className="rounded-sm border border-dashed border-border/50 px-4 py-6 text-center">
+      <Database className="mx-auto mb-2 h-4 w-4 text-muted-foreground/50" />
+      <p className="text-mini text-muted-foreground">
         {t('pluginsAdmin.capabilityEmpty')}
       </p>
     </div>

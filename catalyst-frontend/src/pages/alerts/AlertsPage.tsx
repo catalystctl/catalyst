@@ -11,24 +11,21 @@ import {
  Settings,
  Trash2,
  CheckCircle,
- AlertTriangle,
- AlertCircle,
  X,
  ChevronRight,
- BarChart3,
- Activity,
 } from 'lucide-react';
 import { Input } from '../../components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { alertsApi } from '../../services/api/alerts';
 import { useNodes } from '../../hooks/useNodes';
 import { useServers } from '../../hooks/useServers';
 import { useAlertRules } from '../../hooks/useAlertRules';
 import { useAuthStore } from '../../stores/authStore';
-import type { AlertRule, AlertSeverity, AlertType } from '../../types/alert';
+import type { AlertRule, AlertType } from '../../types/alert';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
+import { BracketLabel, Segmented, StatusLed } from '../../components/deck/primitives';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -39,24 +36,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import TabHeader from '../../components/servers/tabs/TabHeader';
-import SectionHeader from '../../components/servers/tabs/SectionHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
-import StatGrid from '../../components/servers/tabs/StatGrid';
-import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
-import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
-// ── Severity Helpers ──
-function severityIcon(severity: AlertSeverity) {
- if (severity === 'critical') return <AlertTriangle className="h-3.5 w-3.5" />;
- if (severity === 'warning') return <AlertCircle className="h-3.5 w-3.5" />;
- return <CheckCircle className="h-3.5 w-3.5" />;
-}
+type LedTone = 'go' | 'hazard' | 'alarm' | 'idle' | 'info';
 
-function severityBadgeVariant(severity: AlertSeverity): 'destructive' | 'outline' | 'secondary' {
- if (severity === 'critical') return 'destructive';
- if (severity === 'warning') return 'outline';
- return 'secondary';
+/** Severity reads as state: LED plus a letter-spaced label, never a badge. */
+function severityTone(severity: string): LedTone {
+ if (severity === 'critical') return 'alarm';
+ if (severity === 'warning') return 'hazard';
+ return 'go';
 }
 
 // ── Alert Rule Row ──
@@ -80,27 +67,25 @@ function RuleRow({
  const { t } = useTranslation('alerts');
  const isOwner = !rule.userId || !user?.id || rule.userId === user.id;
  return (
- <div className="group relative flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/50 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
- <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
+ <div className="group flex flex-wrap items-center justify-between gap-2 px-3 py-2 transition-colors hover:bg-surface-1/40">
  <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2">
- <span className="font-medium text-sm text-foreground">{rule.name}</span>
- <Badge variant={rule.enabled ? 'outline' : 'secondary'} className="text-[10px] border-success/40 text-success">
- {rule.enabled ? t('common:actions.enabled') : t('common:actions.disabled')}
- </Badge>
+ <div className="flex flex-wrap items-center gap-2">
+ <StatusLed tone={rule.enabled ? 'go' : 'idle'} />
+ <span className="truncate font-display text-data font-semibold text-foreground">{rule.name}</span>
+ <span className="type-overline">{rule.enabled ? t('common:actions.enabled') : t('common:actions.disabled')}</span>
  {showAdminTargets && (
- <Badge variant="secondary" className="text-[10px]">{rule.target}</Badge>
+ <span className="type-overline">{rule.target}</span>
  )}
  </div>
  <div className="mt-0.5 type-meta">
  {rule.description || rule.type.replace('_', ' ')}
  </div>
  </div>
- <div className="flex items-center gap-1.5 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+ <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
  {isOwner && (
  <>
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
  onClick={onToggle}
  disabled={isPending}
  title={rule.enabled ? t('common:actions.disable') : t('common:actions.enable')}
@@ -108,14 +93,14 @@ function RuleRow({
  {rule.enabled ? <X className="h-3.5 w-3.5" /> : <CheckCircle className="h-3.5 w-3.5" />}
  </button>
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary"
  onClick={onEdit}
  title={t('common:actions.edit')}
  >
  <Settings className="h-3.5 w-3.5" />
  </button>
  <button
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger disabled:pointer-events-none disabled:opacity-30"
  onClick={onDelete}
  disabled={isPending}
  title={t('common:actions.delete')}
@@ -125,7 +110,7 @@ function RuleRow({
  </>
  )}
  {!isOwner && (
- <span className="text-[10px] text-muted-foreground">{t('ruleRow.readOnly')}</span>
+ <span className="type-overline">{t('ruleRow.readOnly')}</span>
  )}
  </div>
  </div>
@@ -134,37 +119,29 @@ function RuleRow({
 
 // ── Alert Row ──
 function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
- alert: any; showAdminTargets: boolean; onResolve: () => void; isPending: boolean; index: number;
+ alert: any; showAdminTargets: boolean; onResolve: () => void; isPending: boolean;
 }) {
  const { t } = useTranslation('alerts');
- const severityAccent = alert.severity === 'critical'
- ? 'group-hover:bg-danger/50'
- : alert.severity === 'warning'
- ? 'group-hover:bg-warning/50'
- : 'group-hover:bg-primary/50';
 
  return (
- <div className="group relative rounded-md border border-border/50 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
- <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 ${severityAccent}`} />
+ <div className="group px-3 py-2 transition-colors hover:bg-surface-1/40">
  <div className="flex items-start justify-between gap-3">
  <div className="min-w-0 flex-1">
  <div className="flex flex-wrap items-center gap-2">
- <Badge variant={severityBadgeVariant(alert.severity)} className="gap-1 text-[10px]">
- {severityIcon(alert.severity)}
- {alert.severity}
- </Badge>
- <span className="text-sm font-semibold text-foreground">{alert.title}</span>
+ <StatusLed tone={severityTone(alert.severity)} />
+ <span className="type-overline">{alert.severity}</span>
+ <span className="font-display text-data font-semibold text-foreground">{alert.title}</span>
  {alert.resolved && (
- <Badge variant="secondary" className="text-[10px]">{t('alertRow.resolved')}</Badge>
+ <span className="type-overline">{t('alertRow.resolved')}</span>
  )}
  </div>
- <p className="mt-1.5 type-meta">{alert.message}</p>
- <div className="mt-2 flex flex-wrap items-center gap-2 type-meta">
- <span className="type-numeric">{formatDateTime(alert.createdAt)}</span>
+ <p className="mt-1 type-meta">{alert.message}</p>
+ <div className="mt-1 flex flex-wrap items-center gap-2 type-meta">
+ <Segmented muted className="text-micro">{formatDateTime(alert.createdAt)}</Segmented>
  {showAdminTargets && (
- <Badge variant="secondary" className="text-[10px]">
+ <span className="type-overline">
  {alert.nodeId ? t('target.node') : alert.serverId ? t('target.server') : t('target.global')}
- </Badge>
+ </span>
  )}
  {showAdminTargets && alert.server?.name && <span>{t('alertRow.server', { name: alert.server.name })}</span>}
  {showAdminTargets && alert.node?.name && <span>{t('alertRow.node', { name: alert.node.name })}</span>}
@@ -175,7 +152,7 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  <Button
  variant="outline"
  size="sm"
- className="shrink-0 text-[11px] opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+ className="h-7 shrink-0 px-2.5 text-mini opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
  onClick={onResolve}
  disabled={isPending}
  >
@@ -186,21 +163,22 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
 
  {/* Delivery info */}
  {alert.deliveries?.length > 0 && (
- <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+ <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
  {alert.deliveries.map((delivery: any) => (
- <div key={delivery.id} className="rounded-md border border-border/20 bg-surface-2/20 px-3 py-2">
- <div className="flex items-center justify-between text-[11px]">
- <span className="text-muted-foreground">{delivery.channel}</span>
- <span className={
- delivery.status === 'failed' ? 'text-destructive' :
+ <div key={delivery.id} className="rounded-sm border border-border/40 bg-surface-1/30 px-3 py-2">
+ <div className="flex items-center justify-between text-micro">
+ <span className="font-mono text-muted-foreground">{delivery.channel}</span>
+ <span className={cn(
+ 'font-mono',
+ delivery.status === 'failed' ? 'text-danger' :
  delivery.status === 'sent' ? 'text-success' : 'text-muted-foreground'
- }>
+ )}>
  {delivery.status}
  </span>
  </div>
  <div className="mt-0.5 type-meta">{delivery.target}</div>
  {delivery.lastError && (
- <div className="mt-0.5 text-[10px] text-destructive">{delivery.lastError}</div>
+ <div className="mt-0.5 font-mono text-micro text-danger">{delivery.lastError}</div>
  )}
  </div>
  ))}
@@ -443,59 +421,72 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  };
 
  return (
- <div className="space-y-4">
- <TabHeader
- icon={Bell}
- title={showAdminTargets ? t('page.titleAll') : t('page.titleMine')}
- description={showAdminTargets
-  ? t('page.descriptionAll')
-  : t('page.descriptionMine')}
- actions={
- <Button size="sm" onClick={openCreateRule} className="gap-1.5">
+ <div className="flex min-h-0 flex-1 flex-col gap-3">
+ {/* ── Deck header ── */}
+ <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+ <div className="flex min-w-0 flex-col gap-1">
+ <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
+ {showAdminTargets ? t('page.titleAll') : t('page.titleMine')}
+ </h1>
+ <p className="type-meta">
+ {showAdminTargets ? t('page.descriptionAll') : t('page.descriptionMine')}
+ </p>
+ </div>
+ <Button size="sm" onClick={openCreateRule} className="h-8 px-3 text-mini">
  <Plus className="h-3.5 w-3.5" />
  {t('page.createRule')}
  </Button>
- }
- />
+ </header>
 
  {/* ── Stats (admin overview only; header no longer duplicates badges) ── */}
  {alertStats && (
- <ServerTabCard>
- <SectionHeader icon={BarChart3} title={t('page.overview')} />
- <StatGrid
- columns={3}
- items={[
+ <section className="deck-panel overflow-hidden">
+ <div className="border-b border-border/50 bg-surface-1/40 px-3 py-2">
+ <BracketLabel>{t('page.overview')}</BracketLabel>
+ </div>
+ <div className="grid grid-cols-1 sm:grid-cols-3">
+ {[
  { label: t('page.activeAlerts'), value: alertStats?.unresolved ?? unresolvedCount },
  { label: t('page.totalAlerts'), value: alertStats?.total ?? alerts.length },
  { label: t('page.critical'), value: alertStats?.bySeverity?.critical ?? 0 },
- ]}
- />
- </ServerTabCard>
+ ].map((item, i) => (
+ <div
+ key={item.label}
+ className={cn(
+ 'flex items-baseline justify-between gap-3 px-3 py-2',
+ i > 0 && 'border-t border-border/40 sm:border-l sm:border-t-0',
+ )}
+ >
+ <span className="type-overline">{item.label}</span>
+ <span className="font-mono text-sm font-semibold tabular-nums text-foreground">{item.value}</span>
+ </div>
+ ))}
+ </div>
+ </section>
  )}
 
  {/* ── Alert Rules ── */}
- <ServerTabCard>
- <div className="flex flex-wrap items-start justify-between gap-2">
+ <section className="deck-panel overflow-hidden">
+ <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-2">
  <div className="min-w-0 flex-1">
- <SectionHeader
- icon={Settings}
- title={t('page.rulesTitle')}
- description={hasRules
+ <BracketLabel>{t('page.rulesTitle')}</BracketLabel>
+ <p className="type-meta mt-1">
+ {hasRules
    ? t('page.rulesDescription')
    : t('page.rulesDescriptionEmpty')}
- />
+ </p>
  </div>
  {hasRules ? (
- <Badge variant="secondary" className="mt-0.5 type-numeric text-[10px]">
+ <Segmented muted className="text-micro">
  {t('page.ruleCount', { count: alertRules.length })}
- </Badge>
+ </Segmented>
  ) : null}
  </div>
- <div className="space-y-2">
  {hasRules ? (
- alertRules.map((rule) => (
+ <div>
+ {alertRules.map((rule, index) => (
+ <div key={rule.id} className={cn(index > 0 && 'border-t border-border/40')}>
  <RuleRow
- key={rule.id}
  rule={rule}
  showAdminTargets={showAdminTargets}
  user={user}
@@ -504,31 +495,29 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  onDelete={() => setDeletingRule(rule)}
  isPending={updateRuleMutation.isPending || deleteRuleMutation.isPending}
  />
- ))
- ) : (
- <TabEmptyState
- title={t('page.noRulesTitle')}
- description={t('page.noRulesDescription')}
- />
- )}
  </div>
- </ServerTabCard>
+ ))}
+ </div>
+ ) : (
+ <div className="px-3 py-5 text-center">
+ <p className="type-overline">{t('page.noRulesTitle')}</p>
+ <p className="type-meta mx-auto mt-1 max-w-md">{t('page.noRulesDescription')}</p>
+ </div>
+ )}
+ </section>
 
  {/* ── Alert History ── */}
- <ServerTabCard>
- <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
+ <section className="deck-panel flex min-h-0 flex-col overflow-hidden">
+ <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/50 bg-surface-1/40 px-3 py-2">
  <div className="min-w-0 flex-1">
- <SectionHeader
- icon={Activity}
- title={t('page.historyTitle')}
- description={t('page.historyDescription')}
- />
+ <BracketLabel>{t('page.historyTitle')}</BracketLabel>
+ <p className="type-meta mt-1">{t('page.historyDescription')}</p>
  </div>
  <div className="flex flex-wrap items-center gap-2">
  <select
  value={filterResolved}
  onChange={(e) => setFilterResolved(e.target.value as 'false' | 'true' | 'all')}
- className="rounded-md border border-border/50 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="h-7 rounded-sm border border-border/60 bg-background/40 pl-2 pr-7 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  aria-label={t('page.filterAria')}
  >
  <option value="false">{t('page.filterUnresolved')}</option>
@@ -538,6 +527,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <Button
  variant="outline"
  size="sm"
+ className="h-7 px-2.5 text-mini"
  disabled={!canBulkResolve}
  onClick={() => bulkResolveMutation.mutate(unresolvedAlertIds)}
  >
@@ -545,34 +535,40 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </Button>
  </div>
  </div>
- <div className="space-y-2">
  {alertsLoading ? (
- <TabLoadingState rows={3} />
+ <div className="space-y-2 px-3 py-3">
+ {Array.from({ length: 3 }).map((_, i) => (
+ <div key={i} className="h-8 animate-pulse bg-surface-3/60" />
+ ))}
+ </div>
  ) : hasAlerts ? (
- alerts.map((alert, i) => (
+ <div>
+ {alerts.map((alert, index) => (
+ <div key={alert.id} className={cn(index > 0 && 'border-t border-border/40')}>
  <AlertRow
- key={alert.id}
  alert={alert}
- index={i}
  showAdminTargets={showAdminTargets}
  onResolve={() => resolveAlertMutation.mutate(alert.id)}
  isPending={resolveAlertMutation.isPending}
  />
- ))
+ </div>
+ ))}
+ </div>
  ) : (
- <TabEmptyState
- title={filterResolved === 'false' ? t('page.noUnresolved') : filterResolved === 'true' ? t('page.noResolved') : t('page.noAlerts')}
- description={
- !hasRules
+ <div className="px-3 py-5 text-center">
+ <p className="type-overline">
+ {filterResolved === 'false' ? t('page.noUnresolved') : filterResolved === 'true' ? t('page.noResolved') : t('page.noAlerts')}
+ </p>
+ <p className="type-meta mx-auto mt-1 max-w-md">
+ {!hasRules
  ? t('page.emptyNoRules')
  : filterResolved === 'false'
  ? t('page.emptyNothing')
- : t('page.emptyFilter')
- }
- />
- )}
+ : t('page.emptyFilter')}
+ </p>
  </div>
- </ServerTabCard>
+ )}
+ </section>
 
   {/* ── Rule Create/Edit Modal ── */}
 <Dialog
@@ -592,7 +588,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </DialogHeader>
 
  <DialogToolbar>
- <div className="flex gap-1 rounded-md border border-border/50 bg-surface-2/20 p-1">
+ <div className="flex gap-1 rounded-sm border border-border/50 bg-surface-1/40 p-0.5">
  {ruleStepOrder.map((key, index) => {
  const isActive = ruleStep === key;
  const canNav = canNavigateRuleStep(index);
@@ -607,7 +603,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  type="button"
  disabled={!canNav}
  onClick={() => canNav && setRuleStep(key)}
- className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${
+ className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-mini font-medium transition-colors ${
  isActive
  ? 'bg-primary text-primary-foreground '
  : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
@@ -642,7 +638,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <select
  value={ruleType}
  onChange={(e) => setRuleType(e.target.value as AlertType)}
- className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="w-full rounded-sm border border-border/60 bg-background/40 px-2.5 py-1.5 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  >
  {ruleTypeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
  </select>
@@ -653,7 +649,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  value={ruleTarget}
  onChange={(e) => setRuleTarget(e.target.value as 'global' | 'server' | 'node')}
  disabled={!showAdminTargets}
- className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
+ className="w-full rounded-sm border border-border/60 bg-background/40 px-2.5 py-1.5 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40 disabled:opacity-60"
  >
  <option value="global">{t('target.global')}</option>
  <option value="server">{t('target.server')}</option>
@@ -666,7 +662,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  value={ruleTargetId}
  onChange={(e) => setRuleTargetId(e.target.value)}
  disabled={!showAdminTargets || ruleTarget === 'global'}
- className="w-full rounded-md border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
+ className="w-full rounded-sm border border-border/60 bg-background/40 px-2.5 py-1.5 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40 disabled:opacity-60"
  >
  <option value="">{ruleTarget === 'global' ? t('ruleModal.notRequired') : selectedTargetLabel || t('ruleModal.selectTarget')}</option>
  {targetOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
@@ -701,7 +697,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </label>
  )}
  {ruleType === 'server_crashed' && (
- <div className="rounded-md border border-border/50 bg-surface-2/40 px-4 py-3 type-meta">
+ <div className="rounded-sm border border-border/50 bg-surface-1/40 px-3 py-2 type-meta">
  {t('ruleModal.serverCrashedHint')}
  </div>
  )}
@@ -714,13 +710,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="space-y-2">
  <div className="flex items-center justify-between">
  <span className="type-overline">{t('ruleModal.webhookUrls')}</span>
- <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setWebhookTargets((c) => [...c, ''])}>{t('ruleModal.add')}</button>
+ <button type="button" className="text-mini text-primary hover:underline" onClick={() => setWebhookTargets((c) => [...c, ''])}>{t('ruleModal.add')}</button>
  </div>
  {webhookTargets.map((value, i) => (
  <div key={`w-${i}`} className="flex items-center gap-2">
  <Input value={value} onChange={(e) => setWebhookTargets((c) => updateTargetValue(c, i, e.target.value))} placeholder="https://discord.com/api/webhooks/..." />
  {webhookTargets.length > 1 && (
- <button type="button" className="shrink-0 rounded p-1 text-muted-foreground hover:text-destructive" onClick={() => setWebhookTargets((c) => c.filter((_, j) => j !== i))}>
+ <button type="button" className="shrink-0 rounded-sm p-1 text-muted-foreground hover:text-danger" onClick={() => setWebhookTargets((c) => c.filter((_, j) => j !== i))}>
  <X className="h-3.5 w-3.5" />
  </button>
  )}
@@ -730,13 +726,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <div className="space-y-2">
  <div className="flex items-center justify-between">
  <span className="type-overline">{t('ruleModal.emailRecipients')}</span>
- <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setEmailTargets((c) => [...c, ''])}>{t('ruleModal.add')}</button>
+ <button type="button" className="text-mini text-primary hover:underline" onClick={() => setEmailTargets((c) => [...c, ''])}>{t('ruleModal.add')}</button>
  </div>
  {emailTargets.map((value, i) => (
  <div key={`e-${i}`} className="flex items-center gap-2">
  <Input value={value} onChange={(e) => setEmailTargets((c) => updateTargetValue(c, i, e.target.value))} placeholder="alerts@example.com" />
  {emailTargets.length > 1 && (
- <button type="button" className="shrink-0 rounded p-1 text-muted-foreground hover:text-destructive" onClick={() => setEmailTargets((c) => c.filter((_, j) => j !== i))}>
+ <button type="button" className="shrink-0 rounded-sm p-1 text-muted-foreground hover:text-danger" onClick={() => setEmailTargets((c) => c.filter((_, j) => j !== i))}>
  <X className="h-3.5 w-3.5" />
  </button>
  )}
@@ -759,22 +755,23 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </DialogBody>
 
  <DialogFooter className="sm:justify-between">
- <Button variant="outline" size="sm" onClick={() => { setShowRuleModal(false); setEditingRule(null); resetRuleForm(); }}>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => { setShowRuleModal(false); setEditingRule(null); resetRuleForm(); }}>
  {t('common:actions.cancel')}
  </Button>
  <div className="flex items-center gap-2">
  {ruleStepIndex > 0 && (
- <Button variant="outline" size="sm" onClick={() => setRuleStep(ruleStepOrder[ruleStepIndex - 1])}>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setRuleStep(ruleStepOrder[ruleStepIndex - 1])}>
  {t('common:actions.back')}
  </Button>
  )}
  {ruleStepIndex < ruleStepOrder.length - 1 ? (
- <Button size="sm" disabled={!ruleStepValidMap[ruleStep]} onClick={() => setRuleStep(ruleStepOrder[ruleStepIndex + 1])}>
+ <Button size="sm" className="h-8 px-3 text-mini" disabled={!ruleStepValidMap[ruleStep]} onClick={() => setRuleStep(ruleStepOrder[ruleStepIndex + 1])}>
  {t('common:actions.next')}
  </Button>
  ) : (
  <Button
  size="sm"
+ className="h-8 px-3 text-mini"
  disabled={!detailsValid || !conditionsValid || createRuleMutation.isPending || updateRuleMutation.isPending}
  onClick={() => {
  if (editingRule) {

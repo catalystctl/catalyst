@@ -41,7 +41,7 @@ import {
  SelectValue,
 } from '../../components/ui/select';
 import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import { BracketLabel } from '../../components/deck/primitives';
 import StatGrid from '../../components/servers/tabs/StatGrid';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
@@ -247,12 +247,12 @@ function ProgressBar({ progress }: { progress: { total: number; completed: numbe
 
  return (
  <div className="space-y-1">
- <div className="flex justify-between text-xs text-muted-foreground">
+ <div className="flex justify-between text-mini text-muted-foreground">
  <span>{t('migration.progress.completed', { value: progress.completed })}</span>
  <span>{t('migration.progress.failed', { value: progress.failed })}</span>
  <span>{pct}%</span>
  </div>
- <div className="h-2 w-full rounded-full bg-surface-2 overflow-hidden">
+ <div className="h-1 w-full overflow-hidden rounded-sm bg-surface-3">
  <div className="flex h-full">
  <div
  className="h-full bg-success/50 transition-all duration-500"
@@ -281,7 +281,7 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  const showExpanded = expanded || failedSteps.length > 0;
 
  return (
- <div className="mt-2 ml-6 border-l border-border/50 pl-3 space-y-0.5">
+ <div className="mt-1.5 ml-6 space-y-0.5">
  {(showExpanded ? steps : steps.slice(0, 5)).map((step) => {
  const sc = stepStatusConfig[step.status] || stepStatusConfig.pending;
  const StepIcon = sc.icon;
@@ -289,11 +289,11 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  return (
  <div
  key={step.id}
- className={`${sc.bg} rounded px-2 py-1 -mx-2`}
+ className={`${sc.bg} rounded-sm px-2 py-1 -mx-2`}
  >
  <div className="flex items-center gap-2">
  <StepIcon className={`h-3 w-3 flex-shrink-0 ${sc.color} ${step.status === 'running' ? 'animate-spin' : ''}`} />
- <span className="text-xs text-foreground flex-1 truncate">
+ <span className="text-mini text-foreground flex-1 truncate">
  {stepLabel(t, step.action, step.metadata as Record<string, unknown>)}
  {step.sourceId && (
  <span className="text-muted-foreground"> #{step.sourceId}</span>
@@ -304,19 +304,19 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  </span>
  )}
  </span>
- <span className="text-xs text-muted-foreground flex-shrink-0">{formatDuration(step.durationMs)}</span>
+ <span className="text-mini text-muted-foreground flex-shrink-0">{formatDuration(step.durationMs)}</span>
  {step.status === 'failed' && (
  <div className="flex items-center gap-1.5 flex-shrink-0">
  <button
  onClick={() => setErrorStepId(showError ? null : step.id)}
- className="text-xs text-muted-foreground hover:text-foreground"
+ className="text-mini text-muted-foreground hover:text-foreground"
  title={t('migration.steps.toggleErrorDetails')}
  >
  {showError ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
  </button>
  <button
  onClick={() => onRetry(step.id)}
- className="text-xs text-primary hover:text-primary/80"
+ className="text-mini text-primary hover:text-primary/80"
  title={t('common:actions.retry')}
  >
  <RefreshCw className="h-3 w-3" />
@@ -329,7 +329,7 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  </div>
  {showError && step.error && (
  <div className="mt-1 pl-5">
- <p className="text-xs text-destructive bg-danger/5 border border-danger/20 rounded px-2 py-1.5 break-all">
+ <p className="text-mini text-destructive bg-danger/5 border border-danger/20 rounded-sm px-2 py-1.5 break-all">
  {step.error}
  </p>
  </div>
@@ -340,7 +340,7 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  {steps.length > 5 && failedSteps.length === 0 && (
  <button
  onClick={() => setExpanded(!expanded)}
- className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-0.5"
+ className="flex items-center gap-1 text-mini text-muted-foreground hover:text-foreground mt-0.5"
  >
  {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
  {expanded ? t('migration.steps.showLess') : t('migration.steps.more', { value: steps.length - 5 })}
@@ -372,14 +372,14 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  {/* Server resources */}
  <div className="flex flex-wrap gap-x-4 gap-y-1">
  {items.map(item => (
- <span key={item.label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+ <span key={item.label} className="flex items-center gap-1.5 text-mini text-muted-foreground">
  <item.icon className="h-3 w-3 text-muted-foreground" />
  <span className="text-muted-foreground">{item.label}:</span>
  <span className="text-foreground font-medium">{item.value}</span>
  </span>
  ))}
  {server.suspended && (
- <span className="flex items-center gap-1.5 text-xs text-warning">
+ <span className="flex items-center gap-1.5 text-mini text-warning">
  <Pause className="h-3 w-3" />
  {t('common:status.suspended')}
  </span>
@@ -393,17 +393,17 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  {server.allocations.map(allocation => (
  <span
  key={allocation.id}
- className="inline-flex max-w-full items-center gap-1 rounded border border-border/50 bg-surface-2 px-2 py-1 font-mono text-[11px] text-foreground"
+ className="inline-flex max-w-full items-center gap-1 rounded-sm border border-border/50 bg-surface-2 px-2 py-1 font-mono text-micro text-foreground"
  >
  <span className="truncate">{allocation.alias || allocation.ip}:{allocation.port}</span>
  {allocation.primary && (
- <span className="font-sans text-[10px] text-muted-foreground">{t('migration.primary')}</span>
+ <span className="font-sans text-micro text-muted-foreground">{t('migration.primary')}</span>
  )}
  </span>
  ))}
  </div>
  ) : (
- <div className="flex items-center gap-1.5 text-xs text-warning">
+ <div className="flex items-center gap-1.5 text-mini text-warning">
  <AlertTriangle className="h-3 w-3" />
  {t('migration.noAllocations')}
  </div>
@@ -412,27 +412,27 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  <div className="type-overline">{t('migration.sections.imports')}</div>
  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
  {/* Always imported */}
- <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+ <span className="flex items-center gap-1.5 text-mini text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
  {t('migration.alwaysImported.serverConfig')}
  </span>
- <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+ <span className="flex items-center gap-1.5 text-mini text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
  {t('migration.alwaysImported.portAllocations')}
  </span>
- <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+ <span className="flex items-center gap-1.5 text-mini text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
  {t('migration.alwaysImported.startupCommand')}
  </span>
- <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+ <span className="flex items-center gap-1.5 text-mini text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
  {t('migration.alwaysImported.dockerImageOverride')}
  </span>
- <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+ <span className="flex items-center gap-1.5 text-mini text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
  {t('migration.alwaysImported.configFileEditor')}
  </span>
- <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+ <span className="flex items-center gap-1.5 text-mini text-muted-foreground">
  <CheckCircle2 className="h-3 w-3 text-success/60" />
  {t('migration.alwaysImported.swapIoWeight')}
  </span>
@@ -440,7 +440,7 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  {imports.map(item => (
  <span
  key={item.label}
- className={`flex items-center gap-1.5 text-xs ${
+ className={`flex items-center gap-1.5 text-mini ${
  item.count > 0
  ? 'text-muted-foreground'
  : 'text-muted-foreground'
@@ -456,7 +456,7 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  <span className="text-muted-foreground font-medium">({item.count})</span>
  )}
  {item.count === 0 && item.zeroLabel && (
- <span className="text-muted-foreground text-[10px]">
+ <span className="text-muted-foreground text-micro">
  — {item.zeroLabel}
  </span>
  )}
@@ -498,31 +498,31 @@ function NodeMappingSection({
 
  return (
  <div className="space-y-2">
- <label className="text-sm font-medium text-foreground">
+ <label className="type-overline">
  {t('migration.nodeMapping.title')}
  </label>
- <p className="text-xs text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {scope === 'full'
  ? t('migration.nodeMapping.helpFull')
  : t('migration.nodeMapping.helpSelect')}
  </p>
- <div className="max-h-80 overflow-y-auto rounded-lg border border-border bg-surface-1 divide-y divide-border">
+ <div className="max-h-80 divide-y divide-border/40 overflow-y-auto rounded-sm border border-border/50">
  {nodes.map(node => {
  const expanded = expandedNodeId === node.id;
  const nodeServers = serversByNode.get(node.id) || [];
  return (
  <div key={node.id}>
  <div
- className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-surface-2/50 transition-colors"
+ className="flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-surface-1/40"
  onClick={() => setExpandedNodeId(expanded ? null : node.id)}
  >
  <div className="flex-1 min-w-0">
  <div className="text-sm text-foreground truncate flex items-center gap-2">
  {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
  {node.name}
- <span className="text-xs text-muted-foreground font-normal">{t('migration.nodeServerCount', { value: node.serverCount })}</span>
+ <span className="text-mini text-muted-foreground font-normal">{t('migration.nodeServerCount', { value: node.serverCount })}</span>
  </div>
- <div className="text-xs text-muted-foreground">{node.fqdn} · {node.memory} MB</div>
+ <div className="text-mini text-muted-foreground">{node.fqdn} · {node.memory} MB</div>
  </div>
  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
  <div onClick={e => e.stopPropagation()}>
@@ -532,7 +532,7 @@ function NodeMappingSection({
  setNodeMappings(prev => ({ ...prev, [String(node.id)]: v }))
  }
  >
- <SelectTrigger className="w-48 bg-card border-border/40 text-foreground text-xs h-8">
+ <SelectTrigger className="h-7 w-48 rounded-sm border-border/40 bg-card text-mini">
  <SelectValue placeholder={t('migration.selectTargetNode')} />
  </SelectTrigger>
  <SelectContent>
@@ -551,12 +551,12 @@ function NodeMappingSection({
  </div>
  {expanded && (
  <div className="border-t border-border/50 bg-surface-1/50">
- <div className="px-4 py-2 space-y-3">
+ <div className="space-y-3 px-3 py-2">
  <div>
  <div className="type-overline mb-2">
  {t('migration.nodeMapping.configuration')}
  </div>
- <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
+ <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-mini sm:grid-cols-2 lg:grid-cols-3">
  <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.endpoint')}{' '}</dt><dd className="inline text-foreground">{node.scheme || 'https'}://{node.fqdn}:{node.daemonListen ?? 'unknown'}</dd></div>
  <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.location')}{' '}</dt><dd className="inline text-foreground">{node.locationName || t('common:actions.unknown')}</dd></div>
  <div><dt className="inline text-muted-foreground">{t('migration.nodeConfig.sftpPort')}{' '}</dt><dd className="inline text-foreground">{node.daemonSftp ?? 'unknown'}</dd></div>
@@ -576,10 +576,10 @@ function NodeMappingSection({
  {node.allocations.map(allocation => (
  <span
  key={allocation.id}
- className="inline-flex max-w-full items-center gap-1 rounded border border-border/50 bg-surface-2 px-2 py-1 font-mono text-[11px] text-foreground"
+ className="inline-flex max-w-full items-center gap-1 rounded-sm border border-border/50 bg-surface-2 px-2 py-1 font-mono text-micro text-foreground"
  >
  <span className="truncate">{allocation.alias || allocation.ip}:{allocation.port}</span>
- <span className="font-sans text-[10px] text-muted-foreground">{allocation.assigned ? t('migration.assigned') : t('migration.free')}</span>
+ <span className="font-sans text-micro text-muted-foreground">{allocation.assigned ? t('migration.assigned') : t('migration.free')}</span>
  </span>
  ))}
  </div>
@@ -593,9 +593,9 @@ function NodeMappingSection({
  {nodeServers.length > 0 ? (
  <div className="space-y-3">
  {nodeServers.map(s => (
- <div key={s.id} className="rounded-md border border-border/50 bg-surface-1 px-3 py-2">
- <div className="text-xs text-foreground font-medium">{s.name}</div>
- <div className="text-[11px] text-muted-foreground">
+ <div key={s.id} className="border-t border-border/40 py-2 first:border-t-0">
+ <div className="text-mini text-foreground font-medium">{s.name}</div>
+ <div className="text-micro text-muted-foreground">
  {s.nestName}/{s.eggName}
  {s.suspended && (
  <span className="text-warning ml-2">{t('migration.suspendedParen')}</span>
@@ -606,7 +606,7 @@ function NodeMappingSection({
  ))}
  </div>
  ) : (
- <p className="text-xs text-muted-foreground">{t('migration.nodeMapping.noServers')}</p>
+ <p className="text-mini text-muted-foreground">{t('migration.nodeMapping.noServers')}</p>
  )}
  </div>
  </div>
@@ -637,19 +637,19 @@ function ServerMappingList({
 
  return (
  <div className="space-y-2">
- <label className="text-sm font-medium text-foreground">
+ <label className="type-overline">
  {t('migration.serverMapping.title')}
  </label>
- <p className="text-xs text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {t('migration.serverMapping.help')}
  </p>
- <div className="max-h-96 overflow-y-auto rounded-lg border border-border bg-surface-1 divide-y divide-border">
+ <div className="max-h-96 divide-y divide-border/40 overflow-y-auto rounded-sm border border-border/50">
  {servers.map(server => {
  const expanded = expandedId === server.id;
  return (
  <div key={server.id}>
  <div
- className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-surface-2/50 transition-colors"
+ className="flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-surface-1/40"
  onClick={() => setExpandedId(expanded ? null : server.id)}
  >
  <div className="flex-1 min-w-0">
@@ -657,24 +657,24 @@ function ServerMappingList({
  {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
  {server.name}
  {server.backupSlots === 0 && (
- <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/50 border border-warning/30 rounded px-1.5 py-0">
+ <span className="inline-flex items-center gap-1 text-micro text-warning bg-warning/50 border border-warning/30 rounded px-1.5 py-0">
  <AlertTriangle className="h-2.5 w-2.5" />
  {t('migration.noBackups')}
  </span>
  )}
  {server.backupSlots > 0 && server.currentBackups >= server.backupSlots && (
- <span className="inline-flex items-center gap-1 text-[10px] text-warning/80 bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
+ <span className="inline-flex items-center gap-1 text-micro text-warning/80 bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
  <AlertTriangle className="h-2.5 w-2.5" />
  {t('migration.slotsFull')}
  </span>
  )}
  {server.suspended && (
- <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
+ <span className="inline-flex items-center gap-1 text-micro text-warning bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
  {t('common:status.suspended')}
  </span>
  )}
  </div>
- <div className="text-xs text-muted-foreground">
+ <div className="text-mini text-muted-foreground">
  {server.nestName}/{server.eggName} · {server.nodeName}
  <span className="text-muted-foreground ml-2">
  {server.memory} MB · {server.disk} MB · {server.cpu}% CPU
@@ -689,7 +689,7 @@ function ServerMappingList({
  setServerMappings(prev => ({ ...prev, [String(server.id)]: v }))
  }
  >
- <SelectTrigger className="w-48 bg-card border-border/40 text-foreground text-xs h-8">
+ <SelectTrigger className="h-7 w-48 rounded-sm border-border/40 bg-card text-mini">
  <SelectValue placeholder={t('migration.selectTargetNode')} />
  </SelectTrigger>
  <SelectContent>
@@ -707,7 +707,7 @@ function ServerMappingList({
  </div>
  </div>
  {expanded && (
- <div className="px-4 pb-3 border-t border-border/50 bg-surface-1/50">
+ <div className="border-t border-border/40 bg-surface-1/50 px-3 pb-2">
  <ServerImportSummary server={server} />
  </div>
  )}
@@ -730,7 +730,7 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
  return (
  <div className="space-y-2">
  {noSlotServers.length > 0 && (
- <div className="rounded-lg border border-warning/50 bg-warning/30 p-3">
+ <div className="rounded-sm border border-warning/50 bg-warning/30 p-3">
  <div className="flex items-center gap-2 text-warning">
  <AlertTriangle className="h-4 w-4" />
  <span className="text-sm font-medium">{t('migration.backupWarnings.noSlots', { count: noSlotServers.length })}</span>
@@ -738,7 +738,7 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
  <p className="text-sm text-warning/80 mt-1">
  {t('migration.backupWarnings.noSlotsDescription')}
  </p>
- <ul className="text-xs text-warning/70 mt-1 space-y-0.5 ml-4 list-disc">
+ <ul className="text-mini text-warning/70 mt-1 space-y-0.5 ml-4 list-disc">
  {noSlotServers.slice(0, 5).map(s => (
  <li key={s.id}>{s.name}</li>
  ))}
@@ -749,12 +749,12 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
  </div>
  )}
  {fullSlotServers.length > 0 && (
- <div className="rounded-lg border border-warning/50 bg-warning/20 p-3">
+ <div className="rounded-sm border border-warning/50 bg-warning/20 p-3">
  <div className="flex items-center gap-2 text-warning/80">
  <AlertTriangle className="h-4 w-4" />
  <span className="text-sm font-medium">{t('migration.backupWarnings.slotsFull', { count: fullSlotServers.length })}</span>
  </div>
- <p className="text-xs text-warning/60 mt-1">
+ <p className="text-mini text-warning/60 mt-1">
  {t('migration.backupWarnings.slotsFullDescription')}
  </p>
  </div>
@@ -1034,13 +1034,13 @@ export default function MigrationPage() {
  />
 
  {/* Tab Bar */}
- <div className="inline-flex gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 ">
+ <div className="inline-flex gap-0.5 rounded-sm border border-border/50 bg-surface-1/40 p-0.5">
  {tabs.map(tab => (
  <button
  key={tab.id}
  onClick={() => setActiveTab(tab.id)}
  className={cn(
- 'px-3 py-1.5 text-sm font-medium rounded-lg transition-all',
+ 'h-7 rounded-sm px-3 text-mini font-medium transition-colors',
  activeTab === tab.id
  ? 'bg-primary text-primary-foreground '
  : 'text-muted-foreground hover:text-foreground'
@@ -1054,35 +1054,36 @@ export default function MigrationPage() {
  {/* TAB: New Migration */}
  {activeTab === 'new' && (
       <div>
-      <ServerTabCard>
-        <h2 className="font-display text-sm font-semibold text-foreground">{t('migration.connect.title')}</h2>
-        <p className="type-meta mb-4 mt-1">
-          {t('migration.connect.description')}
-        </p>
+      <div className="deck-panel">
+        <div className="border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+          <BracketLabel>{t('migration.connect.title')}</BracketLabel>
+          <p className="mt-0.5 text-micro text-muted-foreground">{t('migration.connect.description')}</p>
+        </div>
+        <div className="p-3">
 
 
  <div className="space-y-4">
  {/* Panel URL */}
  <div className="space-y-1.5">
- <label className="text-sm font-medium text-foreground">{t('migration.connect.panelUrl')}</label>
+ <label className="type-overline">{t('migration.connect.panelUrl')}</label>
  <Input
  value={panelUrl}
  onChange={(e) => setPanelUrl(e.target.value)}
  placeholder="http://panel.example.com"
- className="border-border/40 bg-card"
+ className="h-8 rounded-sm border-border/40 bg-card text-mini"
  />
  </div>
 
  {/* API Key */}
  <div className="space-y-1.5">
- <label className="text-sm font-medium text-foreground">{t('migration.connect.apiKey')}</label>
+ <label className="type-overline">{t('migration.connect.apiKey')}</label>
  <div className="relative">
  <Input
  value={apiKey}
  onChange={(e) => setApiKey(e.target.value)}
  type={showKey ? 'text' : 'password'}
  placeholder="ptla_..."
- className="border-border/40 bg-card pr-10"
+ className="h-8 rounded-sm border-border/40 bg-card pr-10 font-mono text-mini"
  />
  <button
  onClick={() => setShowKey(!showKey)}
@@ -1095,7 +1096,7 @@ export default function MigrationPage() {
 
  {/* Client API Key */}
  <div className="space-y-1.5">
- <label className="text-sm font-medium text-foreground">
+ <label className="type-overline">
  {t('migration.connect.clientApiKey')}{" "}
  <span className="text-muted-foreground font-normal">{t('migration.connect.clientApiKeyHint')}</span>
  </label>
@@ -1105,7 +1106,7 @@ export default function MigrationPage() {
  onChange={(e) => setClientApiKey(e.target.value)}
  type={showClientKey ? 'text' : 'password'}
  placeholder="ptlc_..."
- className="border-border/40 bg-card pr-10"
+ className="h-8 rounded-sm border-border/40 bg-card pr-10 font-mono text-mini"
  />
  <button
  onClick={() => setShowClientKey(!showClientKey)}
@@ -1114,14 +1115,14 @@ export default function MigrationPage() {
  <Eye className="h-4 w-4" />
  </button>
  </div>
- <p className="text-xs text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {t('migration.connect.clientApiKeyNote')}
  </p>
  </div>
 
  {/* Test Result */}
  {testResult && (
- <div className={`rounded-lg border p-4 ${
+ <div className={`rounded-sm border p-3 ${
  testResult.success
  ? 'border-success/30 bg-success/5'
  : 'border-danger/30 bg-danger/5'
@@ -1160,7 +1161,7 @@ export default function MigrationPage() {
  {/* Migration Scope (only shown after successful test) */}
  {testResult?.success && (
  <div className="space-y-3">
- <label className="text-sm font-medium text-foreground">{t('migration.scope.title')}</label>
+ <label className="type-overline">{t('migration.scope.title')}</label>
  <div className="grid grid-cols-3 gap-2">
  {([
  { value: 'full' as const, label: t('migration.scope.full'), desc: t('migration.scope.fullDescription') },
@@ -1174,16 +1175,16 @@ export default function MigrationPage() {
  setNodeMappings({});
  setServerMappings({});
  }}
- className={`rounded-lg border p-3 text-left transition-colors ${
+ className={`rounded-sm border p-2.5 text-left transition-colors ${
  migrationScope === opt.value
  ? 'border-primary bg-primary/10'
  : 'border-border bg-surface-1 hover:border-border'
  }`}
  >
- <div className="text-sm font-medium text-foreground">
+ <div className="text-data font-medium text-foreground">
  {opt.label}
  </div>
- <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
+ <div className="text-mini text-muted-foreground mt-0.5">{opt.desc}</div>
  </button>
  ))}
  </div>
@@ -1223,7 +1224,7 @@ export default function MigrationPage() {
 
  {/* Mapping summary */}
  {testResult?.success && onlineNodes.length > 0 && (
- <div className="text-xs text-muted-foreground space-y-1">
+ <div className="text-mini text-muted-foreground space-y-1">
  {migrationScope === 'server' && (
  <p>{t('migration.summary.serversMapped', { mapped: Object.keys(serverMappings).length, total: testResult.serversList?.length || 0 })}</p>
  )}
@@ -1242,7 +1243,7 @@ export default function MigrationPage() {
  onClick={() => testMutation.mutate()}
  disabled={!panelUrl || !apiKey || testing}
  variant="outline"
- className="gap-2"
+ className="h-8 gap-2 px-3 text-mini"
  >
  {testing ? (
  <Loader2 className="h-4 w-4 animate-spin" />
@@ -1261,7 +1262,7 @@ export default function MigrationPage() {
  ((migrationScope === 'full') && Object.keys(nodeMappings).length !== (testResult.nodesList?.length || 0)) ||
  (migrationScope === 'node' && Object.keys(nodeMappings).length === 0)
  }
- className="gap-2"
+ className="h-8 gap-2 px-3 text-mini"
  >
  {startMutation.isPending ? (
  <Loader2 className="h-4 w-4 animate-spin" />
@@ -1272,7 +1273,8 @@ export default function MigrationPage() {
  </Button>
  </div>
  </div>
- </ServerTabCard>
+ </div>
+ </div>
  </div>
  )}
 
@@ -1280,8 +1282,8 @@ export default function MigrationPage() {
  {activeTab === 'progress' && activeJob && (
  <div className="space-y-5">
  {/* Status Header */}
- <ServerTabCard>
- <div className="flex items-center justify-between mb-4">
+ <div className="deck-panel">
+ <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
  <div className="flex items-center gap-3">
  <StatusBadge status={activeJob.status} />
  <div>
@@ -1303,7 +1305,7 @@ export default function MigrationPage() {
  disabled={pauseMutation.isPending}
  variant="outline"
  size="sm"
- className="gap-1.5"
+ className="h-8 gap-1.5 px-3 text-mini"
  >
  <Pause className="h-3.5 w-3.5" />
  {t('migration.actions.pause')}
@@ -1314,7 +1316,7 @@ export default function MigrationPage() {
  onClick={() => resumeMutation.mutate()}
  disabled={resumeMutation.isPending}
  size="sm"
- className="gap-1.5"
+ className="h-8 gap-1.5 px-3 text-mini"
  >
  <Play className="h-3.5 w-3.5" />
  {t('migration.actions.resume')}
@@ -1326,7 +1328,7 @@ export default function MigrationPage() {
  disabled={cancelMutation.isPending}
  variant="destructive"
  size="sm"
- className="gap-1.5"
+ className="h-8 gap-1.5 px-3 text-mini"
  >
  <X className="h-3.5 w-3.5" />
  {t('common:actions.cancel')}
@@ -1335,6 +1337,7 @@ export default function MigrationPage() {
  </div>
  </div>
 
+ <div className="p-3">
  {/* Progress Bar */}
  <ProgressBar progress={activeJob.progress} />
 
@@ -1344,7 +1347,7 @@ export default function MigrationPage() {
  const runningStep = phaseSteps.find(s => s.status === 'running');
  if (!runningStep) return null;
  return (
- <div className="mt-3 flex items-center gap-2 text-xs text-primary">
+ <div className="mt-3 flex items-center gap-2 text-mini text-primary">
  <Loader2 className="h-3 w-3 animate-spin" />
  <span>
  {stepLabel(t, runningStep.action, runningStep.metadata as Record<string, unknown>)}
@@ -1354,7 +1357,7 @@ export default function MigrationPage() {
  );
  })()}
  {activeJob.error && (
- <div className="mt-4 rounded-lg border border-danger/25 bg-danger/5 p-3">
+ <div className="mt-4 rounded-sm border border-danger/25 bg-danger/5 p-3">
  <div className="flex items-center gap-2 text-destructive">
  <AlertTriangle className="h-4 w-4" />
  <span className="text-sm font-medium">{t('common:status.error')}</span>
@@ -1364,7 +1367,7 @@ export default function MigrationPage() {
  )}
 
  {/* Timing & Stats */}
- <div className="flex gap-6 mt-4 text-xs text-muted-foreground">
+ <div className="flex gap-6 mt-4 text-mini text-muted-foreground">
  <span>{t('migration.progress.started', { date: activeJob.startedAt ? formatDateTime(activeJob.startedAt) : '—' })}</span>
  {['running', 'validating'].includes(activeJob.status) && elapsed > 0 && (
  <span className="text-muted-foreground font-medium">{t('migration.progress.elapsed', { duration: formatDuration(elapsed) })}</span>
@@ -1375,12 +1378,13 @@ export default function MigrationPage() {
  </span>
  )}
  </div>
- </ServerTabCard>
+ </div>
+ </div>
 
  {/* Phase List */}
- <ServerTabCard className="overflow-hidden">
- <div className="pb-3">
- <h3 className="text-sm font-semibold text-foreground">{t('migration.phases.title')}</h3>
+ <div className="deck-panel overflow-hidden">
+ <div className="flex items-center border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <BracketLabel>{t('migration.phases.title')}</BracketLabel>
  </div>
  <div>
  {MIGRATION_PHASES.map((phase) => {
@@ -1397,10 +1401,10 @@ export default function MigrationPage() {
  key={phase.id}
  ref={isCurrentPhase ? activePhaseRef : undefined}
  className={`border-b border-border/50 last:border-0 ${
- isCurrentPhase ? 'bg-surface-2/30' : ''
+ isCurrentPhase ? 'bg-primary/5' : ''
  }`}
  >
- <div className="flex items-center gap-3 px-4 py-3">
+ <div className="flex items-center gap-3 px-3 py-2">
  <div className={`flex-shrink-0 ${sc.color}`}>
  {status === 'running' ? (
  <Loader2 className="h-4 w-4 animate-spin" />
@@ -1410,12 +1414,12 @@ export default function MigrationPage() {
  </div>
  <div className="flex-1 min-w-0">
  <div className="flex items-center gap-2">
- <span className="text-sm font-medium text-foreground">{phaseLabel(t, phase.id)}</span>
+ <span className="text-data font-medium text-foreground">{phaseLabel(t, phase.id)}</span>
  {isCurrentPhase && (
- <Badge variant="default" className="text-[10px] px-1.5 py-0">{t('migration.phases.current')}</Badge>
+ <Badge variant="default" className="text-micro px-1.5 py-0">{t('migration.phases.current')}</Badge>
  )}
  </div>
- <div className="text-xs text-muted-foreground mt-0.5">
+ <div className="text-mini text-muted-foreground mt-0.5">
  {(() => {
  if (steps.length === 0) {
  return t('migration.phases.waiting');
@@ -1433,19 +1437,19 @@ export default function MigrationPage() {
  {failedInPhase > 0 && status !== 'running' && (
  <div className="mt-1.5">
  {steps.filter(s => s.status === 'failed').slice(0, 2).map(s => (
- <div key={s.id} className="text-[11px] text-destructive/80 truncate max-w-md">
+ <div key={s.id} className="text-micro text-destructive/80 truncate max-w-md">
  {stepLabel(t, s.action, s.metadata as Record<string, unknown>)}: {s.error}
  </div>
  ))}
  {failedInPhase > 2 && (
- <div className="text-[11px] text-muted-foreground">
+ <div className="text-micro text-muted-foreground">
  {t('migration.phases.moreErrors', { value: failedInPhase - 2 })}
  </div>
  )}
  </div>
  )}
  </div>
- <span className={`text-xs font-medium ${sc.color}`}>
+ <span className={`text-mini font-medium ${sc.color}`}>
  {stepStatusLabel(t, status)}
  </span>
  </div>
@@ -1456,7 +1460,7 @@ export default function MigrationPage() {
  );
  })}
  </div>
- </ServerTabCard>
+ </div>
  </div>
  )}
 
@@ -1470,14 +1474,14 @@ export default function MigrationPage() {
 
  {/* TAB: History */}
  {activeTab === 'history' && (
- <ServerTabCard className="overflow-hidden">
- <div className="flex items-center justify-between pb-3">
- <h3 className="text-sm font-semibold text-foreground">{t('migration.history.title')}</h3>
+ <div className="deck-panel overflow-hidden">
+ <div className="flex items-center justify-between border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <BracketLabel>{t('migration.history.title')}</BracketLabel>
  <button
  onClick={() => queryClient.invalidateQueries({ queryKey: qk.migrationJobs() })}
- className="text-muted-foreground hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
- <RefreshCw className="h-4 w-4" />
+ <RefreshCw className="h-3.5 w-3.5" />
  </button>
  </div>
  {loadingJobs ? (
@@ -1488,7 +1492,7 @@ export default function MigrationPage() {
  description={t('migration.empty.noJobsDescription')}
  />
  ) : (
- <div className="divide-y divide-border/50">
+ <div className="divide-y divide-border/40">
  {safeJobs.map(job => (
  <button
  key={job.id}
@@ -1496,12 +1500,12 @@ export default function MigrationPage() {
  setActiveJobId(job.id);
  setActiveTab('progress');
  }}
- className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors text-left"
+ className="flex w-full items-center gap-4 px-3 py-1.5 text-left transition-colors hover:bg-surface-1/40"
  >
  <StatusBadge status={job.status} />
  <div className="flex-1 min-w-0">
  <div className="text-sm text-foreground truncate">{job.sourceUrl}</div>
- <div className="text-xs text-muted-foreground">
+ <div className="text-mini text-muted-foreground">
  {t('migration.history.jobSteps', { completed: job.progress?.completed || 0, total: job.progress?.total || 0 })}
  {' · '}
  {formatDate(job.createdAt)}
@@ -1515,7 +1519,7 @@ export default function MigrationPage() {
  ))}
  </div>
  )}
- </ServerTabCard>
+ </div>
  )}
  </div>
  );

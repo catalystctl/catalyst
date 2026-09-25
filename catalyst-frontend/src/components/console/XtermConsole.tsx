@@ -512,18 +512,18 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
 
 
       {isLoading && !hasContent && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-4 py-3 font-mono text-[11px] text-muted-foreground">
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-4 py-3 font-mono text-micro text-muted-foreground">
           <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary" />
           {t('console.xterm.loadingLogs')}
         </div>
       )}
 
       {isError && !hasContent && (
-        <div className="absolute inset-x-4 top-3 z-10 flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div className="absolute inset-x-4 top-3 z-10 flex items-center justify-between rounded-sm border border-danger/30 bg-danger/10 px-3 py-1.5 text-mini text-danger">
           <span>{t('console.xterm.loadError')}</span>
           <button
             type="button"
-            className="pointer-events-auto rounded border border-destructive/30 px-2 py-0.5 transition-colors hover:bg-destructive/20"
+            className="pointer-events-auto h-7 rounded-sm border border-danger/30 px-2 text-mini transition-colors hover:bg-danger/10"
             onClick={() => onRetry?.()}
           >
             {t('common:actions.retry')}
@@ -532,7 +532,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
       )}
 
       {!isLoading && !hasContent && !isError && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-1.5 px-4 py-3 font-mono text-[11px] text-muted-foreground">
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-1.5 px-4 py-3 font-mono text-micro text-muted-foreground">
           <span className="text-primary">$</span>
           <span>{t('console.xterm.empty')}</span>
           {/* Blinking block cursor — pure CSS, keeps i18n catalogs free of glyphs */}
@@ -544,7 +544,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card/95 px-3 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur-sm transition-all hover:border-primary/40 hover:text-foreground"
+          className="absolute bottom-3 left-1/2 z-10 flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-sm border border-border/60 bg-card px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
         >
           <ArrowDown className="h-3 w-3" />
           {t('console.xterm.newOutput')}

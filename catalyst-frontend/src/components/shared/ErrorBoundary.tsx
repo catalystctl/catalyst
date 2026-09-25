@@ -3,6 +3,7 @@ import { Component } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { reportReactError } from '../../lib/error-reporter';
+import { BracketLabel } from '../deck/primitives';
 
 interface Props {
   children: ReactNode;
@@ -24,23 +25,21 @@ function ErrorFallback({ message, onRetry }: { message?: string; onRetry: () => 
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md overflow-hidden rounded-md border border-danger/25 bg-danger/5">
-        <div className="flex items-start gap-2.5 px-3 py-2.5">
+      <div className="deck-panel w-full max-w-md overflow-hidden border-danger/30">
+        <div className="flex items-start gap-2.5 border-b border-border/50 bg-surface-1/40 px-3 py-2.5">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
           <div className="min-w-0">
-            <h1 className="type-overline">
-              {t('errorBoundary.title')}
-            </h1>
-            <p className="type-meta mt-0.5">
+            <BracketLabel tone="alarm">{t('errorBoundary.title')}</BracketLabel>
+            <p className="type-meta mt-1">
               {message ?? t('errorBoundary.message')}
             </p>
           </div>
         </div>
-        <div className="border-t border-border/40 px-3 py-2">
+        <div className="px-3 py-2">
           <button
             type="button"
             onClick={onRetry}
-            className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+            className="pressable flex h-8 items-center rounded-sm bg-primary px-3 font-display text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
           >
             {t('errorBoundary.retry')}
           </button>

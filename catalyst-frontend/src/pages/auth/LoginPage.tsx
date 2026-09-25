@@ -19,7 +19,6 @@ import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { useSetupStatus } from '../../hooks/useSetupStatus';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -283,31 +282,31 @@ function LoginPage() {
  <div className="absolute right-4 top-4 z-20">
  <LanguageSwitcher variant="compact" />
  </div>
- <Card className="w-full max-w-md border-border/80 bg-card/90 shadow-elevated backdrop-blur-sm">
-        <CardContent className="px-3 py-4 sm:px-4">
+ <div className="deck-panel w-full max-w-md">
+        <div className="px-3 py-4 sm:px-4">
           <div className="flex items-start gap-2.5">
             <img
               src={logoUrl}
               alt={t('logoAlt', { panelName })}
-              className="h-8 w-8 rounded-md border border-border/70"
+              className="h-8 w-8 rounded-sm border border-border/70"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/logo.png';
               }}
             />
             <div className="min-w-0">
               <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">{t('login.title')}</h1>
-              <p className="type-meta mt-0.5">{t('login.subtitle', { panelName })}</p>
+              <p className="type-meta mt-1">{t('login.subtitle', { panelName })}</p>
             </div>
           </div>
 
  {error && !authStep && (
- <Alert variant="destructive" className="mt-4">
+ <Alert variant="destructive" className="mt-4 rounded-sm">
  <AlertDescription>{error}</AlertDescription>
  </Alert>
  )}
 
  {ssoError === 'login_required' && !authStep && (
- <Alert className="mt-4 border-info/40 bg-info/5 text-foreground">
+ <Alert className="mt-4 rounded-sm border-info/40 bg-info/5 text-foreground">
  <AlertDescription>
  {t('sso.loginRequired', {
  provider: ssoProvider === 'whmcs' ? 'WHMCS' : 'Paymenter',
@@ -321,7 +320,7 @@ function LoginPage() {
  )}
 
  {oauthError && !authStep && (
- <Alert variant="destructive" className="mt-4">
+ <Alert variant="destructive" className="mt-4 rounded-sm">
  <AlertDescription>
   {oauthProviderLabel
   ? t('sso.oauthFailed', { provider: oauthProviderLabel })
@@ -339,9 +338,10 @@ function LoginPage() {
  type="email"
  autoComplete="username webauthn"
  placeholder={t('fields.emailPlaceholder')}
+ className="h-8 rounded-sm text-mini"
  {...register('email')}
  />
- {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+ {errors.email && <p className="text-mini text-danger">{errors.email.message}</p>}
  </div>
 
  <div className="space-y-2">
@@ -349,7 +349,7 @@ function LoginPage() {
  <Label htmlFor="password">{t('fields.password')}</Label>
  <Link
  to="/forgot-password"
- className="text-xs font-medium text-primary-600 transition-colors hover:text-primary"
+ className="text-mini font-medium text-primary transition-colors hover:text-primary/80"
  >
  {t('login.forgotPassword')}
  </Link>
@@ -359,14 +359,16 @@ function LoginPage() {
  type="password"
  autoComplete="current-password webauthn"
  placeholder="••••••••"
+ className="h-8 rounded-sm text-mini"
  {...register('password')}
  />
- {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+ {errors.password && <p className="text-mini text-danger">{errors.password.message}</p>}
  </div>
 
  <Button
  type="submit"
- className="w-full"
+ size="sm"
+ className="h-8 w-full text-mini"
  disabled={isLoading || authStep === 'passkey'}
  >
  {isLoading ? t('login.submitting') : t('login.submit')}
@@ -393,7 +395,8 @@ function LoginPage() {
  <div className="mt-4">
  <Button
  variant="outline"
- className="w-full"
+ size="sm"
+ className="h-8 w-full text-mini"
  onClick={handlePasskeySignIn}
  disabled={passkeySubmitting}
  >
@@ -404,14 +407,15 @@ function LoginPage() {
  {(showWhmcs || showPaymenter) && (
  <div className="mt-6 space-y-2">
  {showWhmcs && (
- <Button variant="outline" className="w-full" onClick={() => handleProvider('whmcs')}>
+ <Button variant="outline" size="sm" className="h-8 w-full text-mini" onClick={() => handleProvider('whmcs')}>
  {t('sso.continueWithWhmcs')}
  </Button>
  )}
  {showPaymenter && (
  <Button
  variant="outline"
- className="w-full"
+ size="sm"
+ className="h-8 w-full text-mini"
  onClick={() => handleProvider('paymenter')}
  >
  {t('sso.continueWithPaymenter')}
@@ -426,7 +430,8 @@ function LoginPage() {
  <Button
  key={`${provider.plugin}:${provider.id}`}
  variant="outline"
- className="w-full"
+ size="sm"
+ className="h-8 w-full text-mini"
  onClick={() => handlePluginProvider(provider)}
  >
  {t('sso.continueWithProvider', { provider: provider.label })}
@@ -434,8 +439,8 @@ function LoginPage() {
  ))}
  </div>
  )}
- </CardContent>
- </Card>
+ </div>
+ </div>
  <Dialog open={authStep === 'passkey'} onOpenChange={() => setAuthStep(null)}>
  <DialogContent size="sm">
  <DialogHeader>
@@ -445,12 +450,13 @@ function LoginPage() {
  </DialogDescription>
  </DialogHeader>
  <DialogBody className="space-y-3">
- <Button className="w-full" onClick={handlePasskeySignIn} disabled={passkeySubmitting}>
+ <Button size="sm" className="h-8 w-full text-mini" onClick={handlePasskeySignIn} disabled={passkeySubmitting}>
  {passkeySubmitting ? t('passkey.waiting') : t('passkey.use')}
  </Button>
  <Button
  variant="ghost"
- className="w-full"
+ size="sm"
+ className="h-8 w-full text-mini"
  onClick={() => {
  setAllowPasskeyFallback(true);
  void handleSubmit((values) =>
@@ -474,7 +480,7 @@ function LoginPage() {
  </DialogHeader>
  <DialogBody className="space-y-3">
  {totpError && (
- <Alert variant="destructive">
+ <Alert variant="destructive" className="rounded-sm">
  <AlertDescription>{totpError}</AlertDescription>
  </Alert>
  )}
@@ -485,6 +491,7 @@ function LoginPage() {
  value={totpCode}
  onChange={(e) => setTotpCode(e.target.value)}
  placeholder="123456"
+ className="h-8 rounded-sm text-mini"
  />
  <div className="flex items-center gap-2">
  <Checkbox
@@ -496,7 +503,7 @@ function LoginPage() {
  {t('twoFactor.trustDevice')}
  </Label>
  </div>
- <Button className="w-full" onClick={handleTotpSubmit} disabled={totpSubmitting}>
+ <Button size="sm" className="h-8 w-full text-mini" onClick={handleTotpSubmit} disabled={totpSubmitting}>
  {totpSubmitting ? t('twoFactor.verifying') : t('twoFactor.verify')}
  </Button>
  </DialogBody>

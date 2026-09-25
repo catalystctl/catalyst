@@ -1114,7 +1114,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  type="button"
  onClick={() => handleCategoryClick('All')}
  className={cn(
- 'shrink-0 rounded-full px-3 py-1 text-[11px] font-medium transition-all',
+ 'shrink-0 h-7 rounded-sm px-3 text-mini font-medium transition-colors',
  activeCategory === 'All'
  ? 'bg-primary text-primary-foreground shadow-sm'
  : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
@@ -1131,7 +1131,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  type="button"
  onClick={() => handleCategoryClick(cat)}
  className={cn(
- 'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition-all',
+ 'flex h-7 shrink-0 items-center gap-1.5 rounded-sm px-3 text-mini font-medium transition-colors',
  activeCategory === cat
  ? 'bg-primary text-primary-foreground shadow-sm'
  : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
@@ -1169,7 +1169,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  <span className="type-overline">
  {meta.label}
  </span>
- <span className="type-numeric text-[10px] text-muted-foreground/40">
+ <span className="type-numeric text-micro text-muted-foreground/40">
  {items.length}
  </span>
  </div>
@@ -1206,7 +1206,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  {item.label}
  </span>
  {item.badge && (
- <span className="shrink-0 rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+ <span className="shrink-0 rounded-sm bg-surface-3 px-1.5 py-0.5 text-micro font-semibold uppercase text-muted-foreground">
  {item.badge}
  </span>
  )}
@@ -1217,7 +1217,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  </div>
 
  {isSelected && (
- <kbd className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+ <kbd className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-micro text-muted-foreground">
  ↵
  </kbd>
  )}
@@ -1233,27 +1233,27 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
  {/* ── Footer ── */}
  <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
- <div className="flex items-center gap-3 text-[11px] text-muted-foreground/60">
+ <div className="flex items-center gap-3 text-mini text-muted-foreground/60">
  <span className="flex items-center gap-1">
- <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">
+ <kbd className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-micro">
  {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘K' : 'Ctrl+K'}
  </kbd>
  {t('search.hints.open')}
  </span>
  <span className="flex items-center gap-1">
- <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">↑↓</kbd>
+ <kbd className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-micro">↑↓</kbd>
  {t('search.hints.navigate')}
  </span>
  <span className="flex items-center gap-1">
- <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">↵</kbd>
+ <kbd className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-micro">↵</kbd>
  {t('search.hints.select')}
  </span>
  <span className="flex items-center gap-1">
- <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">esc</kbd>
+ <kbd className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-micro">esc</kbd>
  {t('search.hints.close')}
  </span>
  </div>
- <div className="type-numeric text-[11px] text-muted-foreground/40">
+ <div className="type-numeric text-mini text-muted-foreground/40">
  {t('search.resultCount', { count: flatItems.length })}
  </div>
  </div>

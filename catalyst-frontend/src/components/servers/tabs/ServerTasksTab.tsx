@@ -67,21 +67,15 @@ export default function ServerTasksTab({
  <div className="space-y-2">
  {tasks.map((task) => (
  <div
- className="group relative rounded-md border border-border/50 bg-card px-4 py-3 transition-colors duration-150 hover:border-primary/30"
+ className="group relative border-b border-border/40 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-surface-1/40"
  key={task.id}
  >
- {/* Left accent bar */}
- <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-full transition-colors duration-150 ${
- task.enabled === false
- ? 'bg-warning/40 group-hover:bg-warning/70'
- : 'bg-primary/0 group-hover:bg-primary/50'
- }`} />
 
  <div className="flex flex-wrap items-center justify-between gap-2">
  <div className="text-sm font-semibold text-foreground">
  {task.name}
  </div>
- <span className="type-overline rounded-full bg-surface-2/60 px-2 py-0.5">
+ <span className="type-overline rounded-sm bg-surface-2/60 px-2 py-0.5">
  {task.action}
  </span>
  </div>
@@ -90,7 +84,7 @@ export default function ServerTasksTab({
  {task.description}
  </div>
  )}
- <div className="mt-1 font-mono text-[10px] tabular-nums text-muted-foreground/50">
+ <div className="mt-1 font-mono text-micro tabular-nums text-muted-foreground/50">
  {task.schedule}
  </div>
 
@@ -106,7 +100,7 @@ export default function ServerTasksTab({
  />
 
  {task.lastError && (
- <div className="mt-2 rounded-md border border-danger/20 bg-danger/5 px-3 py-1.5 font-mono text-[10px] text-danger">
+ <div className="mt-2 rounded-sm border border-danger/20 bg-danger/5 px-3 py-1.5 font-mono text-micro text-danger">
  {task.lastError}
  </div>
  )}
@@ -119,7 +113,7 @@ export default function ServerTasksTab({
  />
  <button
  type="button"
- className={`rounded-md border px-3 py-1 text-[10px] font-semibold transition-colors duration-200 ${
+ className={`rounded-sm border h-8 px-3 text-micro font-semibold transition-colors duration-200 ${
  task.enabled === false
  ? 'border-success/25 text-success hover:border-success/40 hover:bg-success/5'
  : 'border-warning/25 text-warning hover:border-warning/40 hover:bg-warning/5'
@@ -133,7 +127,7 @@ export default function ServerTasksTab({
  </button>
  <button
  type="button"
- className="rounded-md border border-danger/20 px-3 py-1 text-[10px] font-semibold text-danger transition-colors duration-200 hover:border-danger/40 hover:bg-danger/5"
+ className="rounded-sm border border-danger/20 h-8 px-3 text-micro font-semibold text-danger transition-colors duration-200 hover:border-danger/40 hover:bg-danger/5"
  onClick={() => setPendingDeleteId(task.id)}
  disabled={deletePending || isSuspended}
  >

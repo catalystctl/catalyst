@@ -129,8 +129,6 @@
     "title": "节点分配"
   },
   "card": {
-    "agentVersion": "代理 v{{version}}",
-    "cores": "核心",
     "cpu": "CPU",
     "effectiveCpu": "实际：{{cores}} 核心（{{percent}}%）",
     "effectiveMemory": "实际：{{gb}} GB（{{percent}}%）",

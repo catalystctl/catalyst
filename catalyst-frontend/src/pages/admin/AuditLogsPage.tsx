@@ -21,9 +21,9 @@ import {
  ExternalLink,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import { BracketLabel, StatusLed } from '../../components/deck/primitives';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -92,14 +92,12 @@ function getActionTone(action: string): 'success' | 'warning' | 'danger' | 'neut
  return 'neutral';
 }
 
-function toneDot(tone: 'success' | 'warning' | 'danger' | 'neutral') {
- switch (tone) {
- case 'success': return 'bg-success';
- case 'warning': return 'bg-warning';
- case 'danger': return 'bg-danger';
- case 'neutral': return 'bg-muted-foreground/30';
- }
-}
+const TONE_LED: Record<'success' | 'warning' | 'danger' | 'neutral', 'go' | 'hazard' | 'alarm' | 'idle'> = {
+ success: 'go',
+ warning: 'hazard',
+ danger: 'alarm',
+ neutral: 'idle',
+};
 function formatTimeAgo(t: TFunction<'admin-access'>, date: string): string {
  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
  if (seconds < 60) return t('audit.timeAgoSeconds', { count: seconds });
@@ -158,29 +156,29 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  const hasDetails = publicEntries.length > 0 || Boolean(requestIp) || Boolean(requestUa);
  const tone = getActionTone(log.action);
 
- const toneStyles: Record<string, { bg: string; border: string; text: string; dot: string }> = {
- success: { bg: 'bg-success/5', border: 'border-success/20', text: 'text-success', dot: 'bg-success' },
- danger: { bg: 'bg-destructive/5', border: 'border-destructive/20', text: 'text-destructive', dot: 'bg-destructive' },
- warning: { bg: 'bg-warning/5', border: 'border-warning/20', text: 'text-warning', dot: 'bg-warning' },
- neutral: { bg: 'bg-muted/30', border: 'border-border', text: 'text-muted-foreground', dot: 'bg-muted-foreground/30' },
+ const toneStyles: Record<string, { bg: string; border: string; text: string }> = {
+ success: { bg: 'bg-success/5', border: 'border-success/20', text: 'text-success' },
+ danger: { bg: 'bg-destructive/5', border: 'border-destructive/20', text: 'text-destructive' },
+ warning: { bg: 'bg-warning/5', border: 'border-warning/20', text: 'text-warning' },
+ neutral: { bg: 'bg-muted/30', border: 'border-border', text: 'text-muted-foreground' },
  };
 
  const ts = toneStyles[tone];
 
  const renderValue = (value: unknown, depth = 0): React.ReactNode => {
  if (value === null || value === undefined) return <span className="text-muted-foreground/50 italic">null</span>;
- if (typeof value === 'boolean') return <Badge variant={value ? 'success' : 'secondary'} className="text-[10px] px-1.5 py-0">{String(value)}</Badge>;
+ if (typeof value === 'boolean') return <Badge variant={value ? 'success' : 'secondary'} className="text-micro">{String(value)}</Badge>;
  if (typeof value === 'number') return <span className="tabular-nums text-foreground">{value}</span>;
  if (typeof value === 'string') {
  // Truncate long strings
  if (value.length > 120) return (
  <details className="inline">
  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">{value.slice(0, 120)}…</summary>
- <pre className="mt-1 whitespace-pre-wrap text-xs text-foreground">{value}</pre>
+ <pre className="mt-1 whitespace-pre-wrap text-micro text-foreground">{value}</pre>
  </details>
  );
  // Detect if it looks like an ID (cuid)
- if (/^cmp[a-z0-9]{20,}$/.test(value)) return <code className="rounded bg-muted/50 px-1 py-0.5 text-[11px] font-mono text-muted-foreground">{value.slice(0, 12)}…</code>;
+ if (/^cmp[a-z0-9]{20,}$/.test(value)) return <code className="rounded-sm bg-muted/50 px-1 py-0.5 font-mono text-micro text-muted-foreground">{value.slice(0, 12)}…</code>;
  return <span className="text-foreground">{value}</span>;
  }
  if (Array.isArray(value)) {
@@ -188,7 +186,7 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  return (
  <div className="space-y-1">
  {value.map((item, i) => (
- <div key={i} className="flex items-start gap-1.5 text-xs">
+ <div key={i} className="flex items-start gap-1.5 text-mini">
  <span className="text-muted-foreground/50">{i + 1}.</span>
  {renderValue(item, depth + 1)}
  </div>
@@ -199,11 +197,11 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  if (typeof value === 'object') {
  const entries = Object.entries(value as Record<string, unknown>);
  if (entries.length === 0) return <span className="text-muted-foreground/50 italic">{t('audit.emptyValue')}</span>;
- if (depth >= 2) return <code className="text-[11px] text-muted-foreground">{JSON.stringify(value)}</code>;
+ if (depth >= 2) return <code className="font-mono text-micro text-muted-foreground">{JSON.stringify(value)}</code>;
  return (
- <div className={`rounded-lg border border-border/50 bg-muted/20 p-2 space-y-1.5 ${depth > 0 ? 'ml-2' : ''}`}>
+ <div className={`rounded-sm border border-border/50 bg-surface-1/40 p-2 space-y-1.5 ${depth > 0 ? 'ml-2' : ''}`}>
  {entries.map(([k, v]) => (
- <div key={k} className="flex items-start gap-2 text-xs">
+ <div key={k} className="flex items-start gap-2 text-mini">
  <span className="shrink-0 font-medium text-muted-foreground">{auditDetailLabel(t, k)}</span>
  <span className="flex-1">{renderValue(v, depth + 1)}</span>
  </div>
@@ -232,11 +230,11 @@ return (
 
  <DialogBody className="space-y-5">
  <div className="flex flex-wrap items-center gap-2">
- <span className={`h-2 w-2 rounded-full ${ts.dot}`} />
- <Badge variant="outline" className={`text-[10px] ${ts.border} ${ts.text}`}>
+ <StatusLed tone={TONE_LED[tone]} />
+ <Badge variant="outline" className={`text-micro ${ts.border} ${ts.text}`}>
  {log.action}
  </Badge>
- <Badge variant="secondary" className="gap-1 text-[10px]">
+ <Badge variant="secondary" className="gap-1 text-micro">
  <ResourceIcon resource={log.resource} className="h-2.5 w-2.5" />
  {auditResourceLabel(t, log.resource)}
  </Badge>
@@ -247,7 +245,7 @@ return (
  <ExternalLink className="h-2.5 w-2.5" />
  </Link>
  ) : (
- <code className="text-[11px] text-muted-foreground">{log.resourceId.slice(0, 12)}…</code>
+ <code className="font-mono text-micro text-muted-foreground">{log.resourceId.slice(0, 12)}…</code>
  )
  )}
  </div>
@@ -259,7 +257,7 @@ return (
  <User className="h-4 w-4 shrink-0 text-primary" />
  <div>
  <div className="text-sm font-medium text-foreground">{actorUsername ?? t('audit.detailSystem')}</div>
- <div className="text-[11px] text-muted-foreground">{actorEmail ?? log.userId ?? t('notAvailable')}</div>
+ <div className="font-mono text-micro text-muted-foreground">{actorEmail ?? log.userId ?? t('notAvailable')}</div>
  </div>
  </div>
  </div>
@@ -268,10 +266,10 @@ return (
  <div className="flex items-center gap-2">
  <Clock className="h-4 w-4 text-muted-foreground" />
  <div>
- <div className="type-numeric text-sm text-foreground">
+ <div className="type-numeric text-data text-foreground">
  {formatDateTime(log.timestamp)}
  </div>
- <div className="text-[11px] text-muted-foreground">
+ <div className="text-micro text-muted-foreground">
  {formatTimeAgo(t, log.timestamp)}
  </div>
  </div>
@@ -281,23 +279,23 @@ return (
 
  <div className="flex flex-wrap items-center gap-2">
  {requestIp && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/40 px-2 py-1 text-mini text-muted-foreground">
  <Globe className="h-3 w-3" />
  <span className="font-mono">{requestIp}</span>
  </div>
  )}
  {requestUa && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground max-w-full">
+ <div className="flex max-w-full items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/40 px-2 py-1 text-mini text-muted-foreground">
  <span className="truncate" title={requestUa}>{requestUa}</span>
  </div>
  )}
  {requestMethod && requestPath && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/40 px-2 py-1 text-mini text-muted-foreground">
  <code className="font-mono">{requestMethod} {requestPath}</code>
  </div>
  )}
  {log.userId && (
- <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+ <div className="flex items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/40 px-2 py-1 text-mini text-muted-foreground">
  <Hash className="h-3 w-3" />
  <code>{log.userId.slice(0, 12)}…</code>
  </div>
@@ -311,12 +309,12 @@ return (
  </span>
  <div className="space-y-2">
  {publicEntries.map(([key, value]) => (
- <div key={key} className="rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
+ <div key={key} className="rounded-sm border border-border/50 bg-surface-1/40 px-3 py-2">
  <div className="flex items-start gap-3">
  <span className="shrink-0 type-overline pt-0.5 min-w-[80px]">
  {auditDetailLabel(t, key)}
  </span>
- <div className="flex-1 text-xs min-w-0">
+ <div className="min-w-0 flex-1 text-mini">
  {renderValue(value)}
  </div>
  </div>
@@ -325,14 +323,14 @@ return (
  </div>
  </div>
  ) : (
- <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4 text-center text-xs text-muted-foreground">
+ <div className="rounded-sm border border-dashed border-border/50 px-3 py-3 text-center text-mini text-muted-foreground">
  {t('audit.detailNoDetails')}
  </div>
  )}
  </DialogBody>
 
  <DialogFooter>
- <Button variant="outline" size="sm" onClick={onClose}>{t('common:actions.close')}</Button>
+ <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={onClose}>{t('common:actions.close')}</Button>
  </DialogFooter>
  </DialogContent>
  </Dialog>
@@ -439,28 +437,25 @@ function AuditLogsPage() {
  title={t('audit.title')}
  description={t('audit.description')}
  actions={
- <div className="flex items-center gap-2">
+ <div className="flex flex-wrap items-center gap-2">
  {livePoll && (
- <Badge variant="outline" className="gap-1.5 border-success/30 text-success text-xs">
- <span className="relative flex h-1.5 w-1.5">
- <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
- <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
- </span>
+ <Badge variant="outline" className="gap-1.5 border-success/30 text-success text-micro">
+ <StatusLed tone="go" pulse />
  {t('audit.live')}
  </Badge>
  )}
- <Badge variant="outline" className="text-xs">
+ <Badge variant="outline" className="font-mono text-micro tabular-nums">
  {t('audit.eventCount', { count: pagination?.total ?? 0 })}
  </Badge>
- <Button variant="outline" size="sm" onClick={() => setLivePoll(!livePoll)} className="gap-1.5">
+ <Button variant="outline" size="sm" onClick={() => setLivePoll(!livePoll)} className="h-8 gap-1.5 px-3 text-mini">
  <RefreshCw className={`h-3.5 w-3.5 ${livePoll && isFetching ? 'animate-spin' : ''}`} />
  {livePoll ? t('audit.auto') : t('audit.poll')}
  </Button>
- <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1.5">
+ <Button variant="outline" size="sm" onClick={clearFilters} className="h-8 gap-1.5 px-3 text-mini">
  <RotateCcw className="h-3.5 w-3.5" />
  {t('audit.clear')}
  </Button>
- <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5">
+ <Button variant="outline" size="sm" onClick={handleExport} className="h-8 gap-1.5 px-3 text-mini">
  <Download className="h-3.5 w-3.5" />
  {t('audit.exportCsv')}
  </Button>
@@ -469,11 +464,12 @@ function AuditLogsPage() {
  />
 
  {/* ── Filters ── */}
- <ServerTabCard>
- <div className="flex items-center gap-2 type-overline mb-3">
- <Search className="h-3.5 w-3.5" />
- {t('filters')}
+ <div className="deck-panel">
+ <div className="flex items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+ <Search className="h-3.5 w-3.5 text-muted-foreground" />
+ <BracketLabel tone="muted">{t('filters')}</BracketLabel>
  </div>
+ <div className="p-3">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
  <div className="relative">
  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -481,26 +477,26 @@ function AuditLogsPage() {
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
  placeholder={t('audit.searchPlaceholder')}
- className="border-border/40 bg-card pl-9"
+ className="h-7 rounded-sm border-border/40 bg-card pl-9 text-mini"
  />
  </div>
  <Input
  value={action}
  onChange={(e) => { setAction(e.target.value); setPage(1); }}
  placeholder={t('audit.actionContains')}
- className="border-border/40 bg-card"
+ className="h-7 rounded-sm border-border/40 bg-card font-mono text-mini"
  />
  <Input
  value={resource}
  onChange={(e) => { setResource(e.target.value); setPage(1); }}
  placeholder={t('audit.resourceType')}
- className="border-border/40 bg-card"
+ className="h-7 rounded-sm border-border/40 bg-card font-mono text-mini"
  />
  <Input
  value={userId}
  onChange={(e) => { setUserId(e.target.value); setPage(1); }}
  placeholder={t('audit.userIdPlaceholder')}
- className="border-border/40 bg-card"
+ className="h-7 rounded-sm border-border/40 bg-card font-mono text-mini"
  />
  </div>
  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -508,13 +504,13 @@ function AuditLogsPage() {
  type="datetime-local"
  value={from}
  onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }}
- className="border-border/40 bg-card"
+ className="h-7 rounded-sm border-border/40 bg-card font-mono text-mini"
  />
  <Input
  type="datetime-local"
  value={to}
  onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }}
- className="border-border/40 bg-card"
+ className="h-7 rounded-sm border-border/40 bg-card font-mono text-mini"
  />
  <Select
  value={range || 'custom'}
@@ -533,7 +529,7 @@ function AuditLogsPage() {
  setPage(1);
  }}
  >
- <SelectTrigger className="border-border/40 bg-card">
+ <SelectTrigger className="h-7 rounded-sm border-border/40 bg-card text-mini">
  <SelectValue placeholder={t('audit.quickRange')} />
  </SelectTrigger>
  <SelectContent>
@@ -547,30 +543,37 @@ function AuditLogsPage() {
  </div>
 
  {hasFilters && (
- <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
- <span className="text-[11px] text-muted-foreground">{t('activeLabel')}</span>
- {action && <Badge variant="outline" className="text-[10px]">{t('audit.chipAction', { value: action })}</Badge>}
- {resource && <Badge variant="outline" className="text-[10px]">{t('audit.chipResource', { value: resource })}</Badge>}
- {userId && <Badge variant="outline" className="text-[10px]">{t('audit.chipUser', { value: userId })}</Badge>}
- {range && <Badge variant="outline" className="text-[10px]">{t('audit.chipRange', { value: range })}</Badge>}
+ <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/40 pt-2">
+ <span className="type-overline">{t('activeLabel')}</span>
+ {action && <Badge variant="outline" className="text-micro">{t('audit.chipAction', { value: action })}</Badge>}
+ {resource && <Badge variant="outline" className="text-micro">{t('audit.chipResource', { value: resource })}</Badge>}
+ {userId && <Badge variant="outline" className="text-micro">{t('audit.chipUser', { value: userId })}</Badge>}
+ {range && <Badge variant="outline" className="text-micro">{t('audit.chipRange', { value: range })}</Badge>}
  </div>
  )}
- </ServerTabCard>
+ </div>
+ </div>
 
  {/* ── Log Feed ── */}
  {isLoading ? (
  <TabLoadingState rows={6} rowHeight="h-16" />
  ) : filteredLogs.length > 0 ? (
- <div className="space-y-6">
+ <div className="deck-panel max-h-[calc(100dvh-24rem)] overflow-y-auto">
+ {/* Sticky header strip */}
+ <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/50 bg-surface-1 px-3 py-1.5">
+ <BracketLabel>{t('audit.title')}</BracketLabel>
+ <span className="font-mono text-micro tabular-nums text-muted-foreground">
+ {t('audit.eventCount', { count: filteredLogs.length })}
+ </span>
+ </div>
  {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
  <div key={dateLabel}>
- <div className="mb-3 flex items-center gap-3">
- <h3 className="type-overline">{dateLabel}</h3>
- <div className="h-px flex-1 bg-border" />
- <Badge variant="outline" className="text-[10px]">{entries.length}</Badge>
+ <div className="flex items-center gap-3 border-b border-border/40 bg-surface-1/40 px-3 py-1">
+ <span className="type-overline">{dateLabel}</span>
+ <span className="ml-auto font-mono text-micro tabular-nums text-muted-foreground">{entries.length}</span>
  </div>
 
- <div className="space-y-2">
+ <div className="divide-y divide-border/40">
  {entries.map((log) => {
  const tone = getActionTone(log.action);
  const resourceLink = log.resource === 'server' && log.resourceId ? `/servers/${log.resourceId}` :
@@ -579,42 +582,39 @@ function AuditLogsPage() {
  return (
  <div
  key={log.id}
- className="group relative flex items-start gap-3 rounded-md border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ className="group relative flex items-start gap-3 px-3 py-1.5 transition-colors hover:bg-surface-1/40"
  >
- <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
- <ResourceIcon resource={log.resource} className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-
+ <StatusLed tone={TONE_LED[tone]} className="mt-1.5" />
  <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2">
- <span className="text-sm font-medium text-foreground">
+ <div className="flex flex-wrap items-center gap-2">
+ <span className="text-data font-medium text-foreground">
  {auditActionLabel(t, log.action)}
  </span>
- <span className={`h-1.5 w-1.5 rounded-full ${toneDot(tone)}`} />
- <Badge variant="secondary" className="text-[10px]">{auditResourceLabel(t, log.resource)}</Badge>
+ <Badge variant="secondary" className="text-micro">{auditResourceLabel(t, log.resource)}</Badge>
  </div>
 
- <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+ <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-muted-foreground">
  {log.user?.username && (
  <span className="font-medium text-foreground/70">{log.user.username}</span>
  )}
  {resourceLink ? (
- <Link to={resourceLink} className="inline-flex items-center gap-1 text-primary transition-colors hover:underline">
+ <Link to={resourceLink} className="inline-flex items-center gap-1 font-mono text-primary transition-colors hover:underline">
  {auditResourceLabel(t, log.resource)}:{log.resourceId?.slice(0, 8)}
  <ExternalLink className="h-2.5 w-2.5" />
  </Link>
  ) : log.resourceId ? (
- <span>{auditResourceLabel(t, log.resource)}:{log.resourceId.slice(0, 8)}</span>
+ <span className="font-mono">{auditResourceLabel(t, log.resource)}:{log.resourceId.slice(0, 8)}</span>
  ) : null}
- {log.ipAddress && <span className="opacity-60">{log.ipAddress}</span>}
+ {log.ipAddress && <span className="font-mono opacity-60">{log.ipAddress}</span>}
  </div>
  </div>
 
- <div className="flex shrink-0 flex-col items-end gap-1">
- <span className="text-[11px] text-muted-foreground" title={formatDateTime(log.timestamp)}>
+ <div className="flex shrink-0 items-center gap-1">
+ <span className="font-mono text-micro tabular-nums text-muted-foreground" title={formatDateTime(log.timestamp)}>
  {formatTimeAgo(t, log.timestamp)}
  </span>
  <button
- className="rounded-md p-1 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-primary/10 hover:text-primary"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-colors group-hover:opacity-100 hover:bg-surface-2 hover:text-primary"
  onClick={() => setSelectedLog(log)}
  title={t('audit.viewDetails')}
  >

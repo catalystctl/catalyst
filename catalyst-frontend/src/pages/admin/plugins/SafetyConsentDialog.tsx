@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
+import { BracketLabel, StatusLed } from '@/components/deck/primitives';
 import type { CapabilitySummary, LicensingDisclosure } from '../../../plugins/types';
 
 /** Must match DISCLAIMER_VERSION on the backend (source of truth: server). */
@@ -88,90 +89,93 @@ export function SafetyConsentDialog({
               {t('pluginsAdmin.consentBody')}
             </p>
 
-            <div className="rounded-lg border border-border/60 bg-surface-2/30 p-4">
-              <p className="mb-2 type-overline">
-                {t('pluginsAdmin.consentWillBeAbleTo')}
-              </p>
-              {requestedCapabilities && requestedCapabilities.length > 0 ? (
-                <ul className="space-y-2">
-                  {requestedCapabilities.map((cap) => (
-                    <li key={cap.token} className="flex items-start gap-2">
-                      <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-warning" />
-                      <span className="min-w-0 text-sm text-foreground">
-                        {cap.label}
-                        <span className="block text-xs leading-snug text-muted-foreground">
-                          {cap.description}
+            <div className="deck-panel">
+              <div className="border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+                <BracketLabel tone="hazard">{t('pluginsAdmin.consentWillBeAbleTo')}</BracketLabel>
+              </div>
+              <div className="p-3">
+                {requestedCapabilities && requestedCapabilities.length > 0 ? (
+                  <ul className="divide-y divide-border/40">
+                    {requestedCapabilities.map((cap) => (
+                      <li key={cap.token} className="flex items-start gap-2 py-1.5 first:pt-0 last:pb-0">
+                        <StatusLed tone="hazard" className="mt-1" />
+                        <span className="min-w-0 text-sm text-foreground">
+                          {cap.label}
+                          <span className="block text-mini leading-snug text-muted-foreground">
+                            {cap.description}
+                          </span>
                         </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : requestedPermissions && requestedPermissions.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {requestedPermissions.map((perm) => (
-                    <li key={perm} className="flex items-start gap-2 text-sm text-foreground">
-                      <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-warning" />
-                      <span>{permissionLabels[perm] ?? perm}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {t('pluginsAdmin.consentNoPermissions')}
-                </p>
-              )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : requestedPermissions && requestedPermissions.length > 0 ? (
+                  <ul className="divide-y divide-border/40">
+                    {requestedPermissions.map((perm) => (
+                      <li key={perm} className="flex items-start gap-2 py-1.5 text-sm text-foreground first:pt-0 last:pb-0">
+                        <StatusLed tone="hazard" className="mt-1" />
+                        <span>{permissionLabels[perm] ?? perm}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {t('pluginsAdmin.consentNoPermissions')}
+                  </p>
+                )}
+              </div>
             </div>
 
             {licensing && (
-              <div
-                className="rounded-lg border border-border/60 bg-surface-2/30 p-4"
-                data-testid="plugin-consent-licensing"
-              >
-                <p className="mb-2 type-overline">
-                  {t('pluginsAdmin.consentLicensingTitle')}
-                </p>
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-warning" />
-                    <span className="min-w-0 text-sm text-foreground">
-                      {t('pluginsAdmin.consentLicensingContacts', {
-                        hosts: licensing.contactHosts.join(', '),
-                      })}
-                    </span>
-                  </li>
-                  {licensing.encrypted && (
-                    <li className="flex items-start gap-2">
-                      <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-warning" />
+              <div className="deck-panel" data-testid="plugin-consent-licensing">
+                <div className="border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+                  <BracketLabel tone="hazard">
+                    {t('pluginsAdmin.consentLicensingTitle')}
+                  </BracketLabel>
+                </div>
+                <div className="p-3">
+                  <ul className="divide-y divide-border/40">
+                    <li className="flex items-start gap-2 py-1.5 first:pt-0">
+                      <StatusLed tone="hazard" className="mt-1" />
                       <span className="min-w-0 text-sm text-foreground">
-                        {t('pluginsAdmin.consentLicensingEncrypted')}
+                        {t('pluginsAdmin.consentLicensingContacts', {
+                          hosts: licensing.contactHosts.join(', '),
+                        })}
                       </span>
                     </li>
+                    {licensing.encrypted && (
+                      <li className="flex items-start gap-2 py-1.5">
+                        <StatusLed tone="hazard" className="mt-1" />
+                        <span className="min-w-0 text-sm text-foreground">
+                          {t('pluginsAdmin.consentLicensingEncrypted')}
+                        </span>
+                      </li>
+                    )}
+                    <li className="flex items-start gap-2 py-1.5 last:pb-0">
+                      <StatusLed tone="hazard" className="mt-1" />
+                      <span className="min-w-0 text-sm text-foreground">
+                        {t('pluginsAdmin.consentLicensingServer', { server: licensing.licenseServer })}
+                      </span>
+                    </li>
+                  </ul>
+                  {licensing.buyUrl && (
+                    <a
+                      href={licensing.buyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex font-mono text-mini text-primary hover:underline"
+                    >
+                      {t('pluginsAdmin.consentLicensingBuy')}
+                    </a>
                   )}
-                  <li className="flex items-start gap-2">
-                    <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-warning" />
-                    <span className="min-w-0 text-sm text-foreground">
-                      {t('pluginsAdmin.consentLicensingServer', { server: licensing.licenseServer })}
-                    </span>
-                  </li>
-                </ul>
-                {licensing.buyUrl && (
-                  <a
-                    href={licensing.buyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 inline-flex text-sm font-medium text-accent hover:underline"
-                  >
-                    {t('pluginsAdmin.consentLicensingBuy')}
-                  </a>
-                )}
+                </div>
               </div>
             )}
 
-            <p className="text-xs leading-relaxed text-muted-foreground">
+            <p className="text-mini leading-relaxed text-muted-foreground">
               {t('pluginsAdmin.consentRisk')}
             </p>
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-danger/30 bg-danger/5 px-4 py-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-danger/30 bg-danger/5 px-3 py-2.5">
               <Checkbox
                 checked={acknowledged}
                 onCheckedChange={(v) => setAcknowledged(v === true)}
@@ -184,7 +188,7 @@ export function SafetyConsentDialog({
             </label>
 
             {!acknowledged && (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-mini text-muted-foreground">
                 <AlertTriangle className="h-3 w-3 text-warning" />
                 {t('pluginsAdmin.consentTickToContinue')}
               </p>
@@ -192,12 +196,19 @@ export function SafetyConsentDialog({
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={busy}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-3 text-mini"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+          >
             {t('common:actions.cancel')}
           </Button>
           <Button
             size="sm"
             variant="destructive"
+            className="h-8 px-3 text-mini"
             onClick={onAccept}
             disabled={!acknowledged || busy}
             data-testid="plugin-safety-accept"

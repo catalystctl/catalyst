@@ -7,7 +7,6 @@ import { queryClient } from '@/lib/queryClient';
 import {
   ChevronRight,
   CircleAlert,
-  Puzzle,
   RefreshCw,
   Search,
   Settings,
@@ -34,8 +33,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import { BracketLabel, StatusLed } from '../../components/deck/primitives';
+import { cn } from '@/lib/utils';
 
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { PluginDetailsDialog } from './plugins/PluginDetailsDialog';
@@ -72,6 +71,12 @@ function statusText(t: TFunction<'admin-system'>, status: string) {
 
 // ── Plugin Row ───────────────────────────────────────────────────────────────
 
+/**
+ * One grid template shared by the column header and every row so the actions
+ * column lines up. Fixed / minmax(0,1fr) tracks only — never `auto`.
+ */
+const GRID = 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_11rem]';
+
 function PluginRow({
   plugin,
   isProcessing,
@@ -99,56 +104,62 @@ function PluginRow({
 
   return (
     <div
-      className="group flex cursor-pointer flex-wrap items-center gap-3 border-b border-border/40 py-3 last:border-0 hover:bg-surface-2/30"
+      className={cn(GRID, 'group cursor-pointer py-2 pl-3 pr-3 transition-colors hover:bg-surface-1/40')}
       onClick={onDetails}
       data-testid={`plugin-row-${plugin.name}`}
     >
-      <Puzzle className={`h-4 w-4 shrink-0 ${
-        plugin.enabled ? 'text-success' : plugin.error ? 'text-danger' : 'text-muted-foreground'
-      }`} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-foreground">{plugin.displayName}</span>
-          <Badge variant={statusBadgeVariant(plugin.status, plugin.error)} className="text-[10px]">
-            {statusText(t, plugin.status)}
-          </Badge>
-          {updateAvailable && (
-            <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
-              {t('pluginsAdmin.updateAvailable', { from: plugin.version, to: latestMarketplaceVersion })}
- </Badge>
-          )}
-          {plugin.legacyAcceptance && (
-            <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
- <CircleAlert className="h-3 w-3" />
-              {t('pluginsAdmin.reviewAccess')}
- </Badge>
-          )}
-          {!plugin.enabled && revoked > 0 && (
-            <span className="flex items-center gap-1 text-[11px] text-muted-foreground" title={t('pluginsAdmin.permissionsGrantedTitle')}>
-              <ShieldCheck className="h-3 w-3" />
-              {t('pluginsAdmin.permissionsGranted', { granted: declaredCount - revoked, declared: declaredCount })}
- </span>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <StatusLed
+          tone={plugin.enabled ? 'go' : plugin.error ? 'alarm' : 'idle'}
+          pulse={plugin.enabled}
+        />
+        <div className="flex min-w-0 flex-col leading-tight">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="truncate font-display text-data font-semibold tracking-tight text-foreground">
+              {plugin.displayName}
+            </span>
+            <Badge variant={statusBadgeVariant(plugin.status, plugin.error)} className="text-micro">
+              {statusText(t, plugin.status)}
+            </Badge>
+            {updateAvailable && (
+              <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-micro">
+                {t('pluginsAdmin.updateAvailable', { from: plugin.version, to: latestMarketplaceVersion })}
+              </Badge>
+            )}
+            {plugin.legacyAcceptance && (
+              <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-micro">
+                <CircleAlert className="h-3 w-3" />
+                {t('pluginsAdmin.reviewAccess')}
+              </Badge>
+            )}
+            {!plugin.enabled && revoked > 0 && (
+              <span className="flex items-center gap-1 text-micro text-muted-foreground" title={t('pluginsAdmin.permissionsGrantedTitle')}>
+                <ShieldCheck className="h-3 w-3" />
+                {t('pluginsAdmin.permissionsGranted', { granted: declaredCount - revoked, declared: declaredCount })}
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 truncate text-micro text-muted-foreground" title={plugin.description}>
+            {plugin.description}
+            {' — '}
+            <span className="font-mono">{plugin.name}@{plugin.version}</span>
+            {caps && (caps.routes > 0 || caps.tasks > 0) && (
+              <> · {[
+                caps.routes > 0 && t('pluginsAdmin.routeCount', { count: caps.routes }),
+                caps.tasks > 0 && t('pluginsAdmin.taskCount', { count: caps.tasks }),
+              ].filter(Boolean).join(', ')}</>
+            )}
+          </p>
+          {plugin.error && (
+            <p className="mt-0.5 truncate text-micro text-danger" title={plugin.error}>{plugin.error}</p>
           )}
         </div>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {plugin.description}
-          {' — '}
-          <span className="font-mono">{plugin.name}@{plugin.version}</span>
-          {caps && (caps.routes > 0 || caps.tasks > 0) && (
-            <> · {[
-              caps.routes > 0 && t('pluginsAdmin.routeCount', { count: caps.routes }),
-              caps.tasks > 0 && t('pluginsAdmin.taskCount', { count: caps.tasks }),
-            ].filter(Boolean).join(', ')}</>
-          )}
-        </p>
-        {plugin.error && (
-          <p className="mt-0.5 truncate text-[11px] text-danger">{plugin.error}</p>
-        )}
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 items-center justify-start gap-1.5 md:justify-end">
         <Button
           variant={plugin.enabled ? 'outline' : 'default'}
           size="sm"
+          className="h-7 rounded-sm px-2.5 text-mini"
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
           disabled={isProcessing || plugin.status === 'error'}
         >
@@ -279,8 +290,8 @@ function PluginSettingsModal({
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : Object.keys(config).length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-              <p className="text-sm text-muted-foreground">{t('pluginsAdmin.noConfigOptions')}</p>
+            <div className="rounded-sm border border-dashed border-border/50 bg-surface-1/30 px-3 py-6 text-center">
+              <p className="text-mini text-muted-foreground">{t('pluginsAdmin.noConfigOptions')}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -298,9 +309,9 @@ function PluginSettingsModal({
 
                 return (
                   <div key={key} className="space-y-1.5">
-                    <label className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{label}</label>
+                    <label className="type-overline">{label}</label>
                     {description && (
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+                      <p className="text-micro leading-relaxed text-muted-foreground">{description}</p>
                     )}
                     {fieldType === 'boolean' ? (
                       <label className="flex cursor-pointer items-center gap-2 pt-1">
@@ -312,7 +323,7 @@ function PluginSettingsModal({
                               ? { ...(value as Record<string, any>), default: e.target.checked }
                               : e.target.checked)
                           }
-                          className="h-4 w-4 rounded border-border bg-card text-primary"
+                          className="h-4 w-4 rounded-sm border-border bg-card text-primary"
                         />
                         <span className="text-sm text-muted-foreground">
                           {effectiveValue ? t('common:actions.enabled') : t('common:actions.disabled')}
@@ -339,7 +350,7 @@ function PluginSettingsModal({
                             ? { ...(value as Record<string, any>), default: newVal }
                             : newVal);
                         }}
-                        className="flex h-9 w-full rounded-md border border-border bg-card px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex h-9 w-full rounded-sm border border-border bg-card px-3 py-1 text-mini text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {/* Empty placeholder only if current value is not in the list */}
                         {!selectOptions.some((o) => o.value === String(effectiveValue ?? '')) && (
@@ -373,7 +384,7 @@ function PluginSettingsModal({
                             ? { ...(value as Record<string, any>), default: e.target.value }
                             : e.target.value)
                         }
-                        className="flex min-h-[80px] w-full resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex min-h-[80px] w-full resize-none rounded-sm border border-border bg-transparent px-3 py-2 text-mini shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     ) : (
                       <Input
@@ -584,104 +595,125 @@ export default function PluginsPage() {
   );
 
   return (
-    <div className="space-y-5">
-      {/* ── Header ── */}
-      <TabHeader
-        icon={Puzzle}
-        title={t('pluginsAdmin.pluginsTitle')}
-        description={t('pluginsAdmin.pluginsDescription')}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setMarketplaceOpen(true)}>
-              <Store className="h-3.5 w-3.5" />
-              {t('pluginsAdmin.marketplace')}
-            </Button>
-            <Badge variant="outline" className="text-[11px]">
-              {t('pluginsAdmin.installedCount', { count: totalCount })}
-            </Badge>
-            <Badge variant="secondary" className="text-[11px]">
-              {t('pluginsAdmin.enabledCount', { count: enabledCount })}
-            </Badge>
-          </div>
-        }
-      />
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* ── Deck header ── */}
+      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <BracketLabel>{t('layout:sections.extensions')}</BracketLabel>
+          <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
+            {t('pluginsAdmin.pluginsTitle')}
+          </h1>
+          <p className="text-mini text-muted-foreground">{t('pluginsAdmin.pluginsDescription')}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" className="h-8 rounded-sm px-3 text-mini" onClick={() => setMarketplaceOpen(true)}>
+            <Store className="h-3.5 w-3.5" />
+            {t('pluginsAdmin.marketplace')}
+          </Button>
+          <Badge variant="outline" className="text-micro">
+            {t('pluginsAdmin.installedCount', { count: totalCount })}
+          </Badge>
+          <Badge variant="secondary" className="text-micro">
+            {t('pluginsAdmin.enabledCount', { count: enabledCount })}
+          </Badge>
+        </div>
+      </header>
 
-      {/* ── Toolbar ── */}
-      {plugins && plugins.length > 0 && (
-        <ServerTabCard className="!py-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative sm:w-72">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
-              <Input
+      {/* ── The deck: controls, column header and rows in one frame ── */}
+      <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+        {plugins && plugins.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+            <label className="relative flex min-w-[12rem] flex-1 items-center">
+              <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('pluginsAdmin.searchPluginsPlaceholder')}
-                className="pl-8"
                 aria-label={t('pluginsAdmin.searchPluginsAria')}
+                className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
               />
-            </div>
-            <div className="flex items-center gap-1" role="tablist" aria-label={t('pluginsAdmin.filterAria')}>
+            </label>
+            <div className="flex items-center gap-0.5" role="tablist" aria-label={t('pluginsAdmin.filterAria')}>
               {filterOptions.map(({ key, label, count }) => (
                 <button
                   key={key}
                   role="tab"
                   aria-selected={statusFilter === key}
                   onClick={() => setStatusFilter(key)}
-                  className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  className={cn(
+                    'relative flex h-7 items-center gap-1.5 px-2.5 text-mini transition-colors',
                     statusFilter === key
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
-                  }`}
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
                 >
+                  {statusFilter === key && (
+                    <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+                  )}
                   {label}
-                  <span className="ml-1.5 opacity-60">{count}</span>
+                  <span className="font-mono text-micro tabular-nums text-muted-foreground/80">{count}</span>
                 </button>
               ))}
             </div>
           </div>
-        </ServerTabCard>
-      )}
+        )}
 
-      {/* ── Plugin List ── */}
-      {isLoading ? (
-        <ServerTabCard>
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 animate-pulse rounded-md bg-surface-2" />
-            ))}
-          </div>
-        </ServerTabCard>
-      ) : !plugins || plugins.length === 0 ? (
-        <TabEmptyState
-          title={t('pluginsAdmin.noPluginsTitle')}
-          description={t('pluginsAdmin.noPluginsDescription')}
-        />
-      ) : filteredPlugins.length === 0 ? (
-        <TabEmptyState
-          title={t('pluginsAdmin.noMatchesTitle')}
-          description={t('pluginsAdmin.noMatchesDescription', { query: searchQuery })}
-        />
-      ) : (
-        <ServerTabCard>
-          {filteredPlugins.map((plugin) => (
-            <PluginRow
-              key={plugin.name}
-              plugin={plugin}
-              isProcessing={processingPlugin === plugin.name}
-              latestMarketplaceVersion={
-                marketplaceByName.get(plugin.name)?.updateAvailable
-                  ? marketplaceByName.get(plugin.name)?.version
-                  : undefined
-              }
-              onToggle={() => requestToggle(plugin)}
-              onReload={() => reloadMutation.mutate(plugin.name)}
-              onSettings={() => setSettingsPlugin(plugin.name)}
-              onDetails={() => setDetailsPlugin(plugin.name)}
-              onUninstall={() => setUninstallTarget(plugin)}
-            />
-          ))}
-        </ServerTabCard>
-      )}
+        {/* Column header — same grid as the rows, so columns line up */}
+        <div
+          className={cn(
+            GRID,
+            'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+          )}
+        >
+          <span className="type-overline">{t('pluginsAdmin.pluginsTitle')}</span>
+          <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
+        </div>
+
+        <div className="max-h-[calc(100dvh-18rem)] min-w-0 overflow-y-auto bg-background/25">
+          {isLoading ? (
+            <div>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className={cn(GRID, 'border-t border-border/40 py-2 pl-3 pr-3')}>
+                  <div className="h-3.5 w-40 animate-pulse bg-surface-3" />
+                </div>
+              ))}
+            </div>
+          ) : !plugins || plugins.length === 0 ? (
+            <div className="p-3">
+              <TabEmptyState
+                title={t('pluginsAdmin.noPluginsTitle')}
+                description={t('pluginsAdmin.noPluginsDescription')}
+              />
+            </div>
+          ) : filteredPlugins.length === 0 ? (
+            <div className="p-3">
+              <TabEmptyState
+                title={t('pluginsAdmin.noMatchesTitle')}
+                description={t('pluginsAdmin.noMatchesDescription', { query: searchQuery })}
+              />
+            </div>
+          ) : (
+            filteredPlugins.map((plugin) => (
+              <PluginRow
+                key={plugin.name}
+                plugin={plugin}
+                isProcessing={processingPlugin === plugin.name}
+                latestMarketplaceVersion={
+                  marketplaceByName.get(plugin.name)?.updateAvailable
+                    ? marketplaceByName.get(plugin.name)?.version
+                    : undefined
+                }
+                onToggle={() => requestToggle(plugin)}
+                onReload={() => reloadMutation.mutate(plugin.name)}
+                onSettings={() => setSettingsPlugin(plugin.name)}
+                onDetails={() => setDetailsPlugin(plugin.name)}
+                onUninstall={() => setUninstallTarget(plugin)}
+              />
+            ))
+          )}
+        </div>
+      </div>
 
       {/* ── Settings Modal ── */}
       <PluginSettingsModal

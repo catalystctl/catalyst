@@ -13,6 +13,12 @@ interface SftpConnectionInfoProps {
  isOwner: boolean;
 }
 
+/**
+ * One fixed grid template shared by the session table header and its rows —
+ * `auto` tracks would let the two drift apart.
+ */
+const SESSION_GRID = 'grid grid-cols-[minmax(0,1fr)_7rem_6rem_4rem] gap-x-2';
+
 /** Time until we consider the token "expiring soon" and show a warning (1 minute) */
 const EXPIRY_WARNING_MS = 60 * 1000;
 
@@ -175,13 +181,13 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
 
  if (isLoading) {
  return (
- <div className="text-sm text-muted-foreground dark:text-muted-foreground">{t('files.sftp.loading')}</div>
+ <div className="deck-panel px-3 py-2 text-mini text-muted-foreground">{t('files.sftp.loading')}</div>
  );
  }
 
  if (!sftpInfo) {
  return (
- <div className="text-sm text-muted-foreground dark:text-muted-foreground">
+ <div className="deck-panel px-3 py-2 text-mini text-muted-foreground">
  {t('files.sftp.loadFailed')}
  </div>
  );
@@ -190,7 +196,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  if (!sftpInfo.enabled) {
  return (
  <div className="space-y-3">
- <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/50/10 px-3 py-2 text-sm text-warning">
+ <div className="flex items-center gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 py-1.5 text-mini text-warning">
  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
  {t('files.sftp.disabled')}
  </div>
@@ -210,54 +216,54 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
 
  return (
  <div className="space-y-5">
- <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+ <p className="text-mini text-muted-foreground">
  {t('files.sftp.description')}
  </p>
 
  {/* Expiry status banner */}
  {isExpired ? (
- <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/50/10 px-3 py-2.5 text-sm text-destructive">
+ <div className="flex items-center gap-2 rounded-sm border border-danger/30 bg-danger/10 px-3 py-1.5 text-mini text-danger">
  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
  <span className="font-medium">{t('files.sftp.expiredBanner')}</span>
  <button
  type="button"
  onClick={() => rotateMutation.mutate(selectedTtl)}
  disabled={rotateMutation.isPending}
- className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-destructive/50/20 px-2.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/50/30 disabled:opacity-50"
+ className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-sm border border-danger/30 px-2 text-mini font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
  >
  <RefreshCw className={`h-3 w-3 ${rotateMutation.isPending ? 'animate-spin' : ''}`} />
  {t('files.sftp.rotateNow')}
  </button>
  </div>
  ) : isExpiringSoon ? (
- <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/50/10 px-3 py-2.5 text-sm text-warning">
+ <div className="flex items-center gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 py-1.5 text-mini text-warning">
  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
  <span className="font-medium">{t('files.sftp.expiresSoon', { time: formatExpiry(sftpInfo.expiresAt) })}</span>
  <button
  type="button"
  onClick={() => rotateMutation.mutate(selectedTtl)}
  disabled={rotateMutation.isPending}
- className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-warning/50/20 px-2.5 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/50/30 disabled:opacity-50"
+ className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-sm border border-warning/30 px-2 text-mini font-medium text-warning transition-colors hover:bg-warning/10 disabled:opacity-50"
  >
  <RefreshCw className={`h-3 w-3 ${rotateMutation.isPending ? 'animate-spin' : ''}`} />
  {t('files.sftp.rotate')}
  </button>
  </div>
  ) : sftpInfo.expiresAt ? (
- <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/50/5 px-3 py-2 text-xs text-success dark:text-success">
- <div className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-success/50" />
+ <div className="flex items-center gap-2 rounded-sm border border-success/25 bg-success/10 px-3 py-1.5 text-mini text-success">
+ <div className="h-1.5 w-1.5 flex-shrink-0 rounded-sm bg-success" />
  {t('files.sftp.activeWithTime', { time: formatExpiry(sftpInfo.expiresAt) })}
  </div>
  ) : null}
 
  {/* TTL selector + Rotate */}
  <div className="flex flex-wrap items-end gap-3">
- <label className="block text-xs text-muted-foreground">
+ <label className="block text-mini text-muted-foreground">
  <span className="flex items-center gap-1">
  {t('files.sftp.tokenLifetime')}
  <span className="group relative">
  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground" />
- <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-56 -translate-x-1/2 rounded-lg border border-border bg-card px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2">
+ <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-56 -translate-x-1/2 rounded-sm border border-border/60 bg-surface-1 px-2 py-1.5 text-micro leading-relaxed text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
  {t('files.sftp.tokenLifetimeHelp')}
  </span>
  </span>
@@ -265,7 +271,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  <select
  value={selectedTtl ?? ''}
  onChange={(e) => setSelectedTtl(Number(e.target.value) || undefined)}
- className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+ className="mt-1 h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors hover:border-primary/50 focus:border-primary"
  >
  {ttlOptions.map((opt) => (
  <option key={opt.value} value={opt.value}>
@@ -278,7 +284,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  type="button"
  onClick={() => rotateMutation.mutate(selectedTtl)}
  disabled={rotateMutation.isPending}
- className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
  >
  <RefreshCw className={`h-3.5 w-3.5 ${rotateMutation.isPending ? 'animate-spin' : ''}`} />
  {isExpired ? t('files.sftp.generateNew') : t('files.sftp.rotatePassword')}
@@ -286,24 +292,22 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  </div>
 
  {/* Connection fields */}
- <div className="grid gap-2">
+ <div className="deck-panel divide-y divide-border/40">
  {fields.map(({ label, value, key }) => (
  <div
  key={key}
- className="flex items-center justify-between rounded-md bg-surface-2 px-3 py-2 dark:bg-surface-2/50"
+ className="flex items-center gap-3 px-3 py-1.5"
  >
- <div className="min-w-0">
- <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
+ <span className="type-overline w-24 shrink-0">
  {label}
  </span>
- <p className="truncate font-mono text-sm tabular-nums text-foreground">
+ <span className="min-w-0 flex-1 truncate font-mono text-data tabular-nums text-foreground">
  {value}
- </p>
- </div>
+ </span>
  <button
  type="button"
  onClick={() => copyToClipboard(value, key, label)}
- className="ml-2 flex-shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-surface-3 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
+ className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  title={t('files.sftp.copyLabel', { label })}
  >
  {copiedField === key ? (
@@ -316,26 +320,24 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  ))}
 
  {/* Password field */}
- <div className="flex items-center justify-between rounded-md bg-surface-2 px-3 py-2 dark:bg-surface-2/50">
- <div className="min-w-0 flex-1">
- <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
+ <div className="flex items-center gap-3 px-3 py-1.5">
+ <span className="type-overline w-24 shrink-0">
  {t('files.sftp.password')}
  </span>
- <p className="truncate font-mono text-sm tabular-nums text-foreground">
+ <span className="min-w-0 flex-1 truncate font-mono text-data tabular-nums text-foreground">
  {password && !isExpired
  ? (showPassword ? password : '••••••••••••••••')
  : isExpired
  ? t('files.sftp.expiredRotate')
  : t('files.sftp.noToken')}
- </p>
- </div>
- <div className="ml-2 flex flex-shrink-0 items-center gap-1">
+ </span>
+ <div className="flex flex-shrink-0 items-center gap-1">
  {password && !isExpired && (
  <>
  <button
  type="button"
  onClick={() => setShowPassword(!showPassword)}
- className="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-3 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  title={showPassword ? t('files.sftp.hidePassword') : t('files.sftp.showPassword')}
  >
  {showPassword ? (
@@ -347,7 +349,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  <button
  type="button"
  onClick={() => copyToClipboard(password, 'Password', t('files.sftp.password'))}
- className="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-3 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  title={t('files.sftp.copyPassword')}
  >
  {copiedField === 'Password' ? (
@@ -364,12 +366,12 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
 
  {/* Quick connect URI */}
  {password && !isExpired && (
- <div className="rounded-md border border-border/50 bg-surface-2 px-3 py-2 dark:bg-surface-2/50">
- <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
+ <div className="deck-panel flex items-center gap-3 px-3 py-1.5">
+ <span className="type-overline w-24 shrink-0">
  {t('files.sftp.quickConnectUri')}
  </span>
- <div className="flex items-center gap-2">
- <code className="flex-1 truncate font-mono text-xs tabular-nums text-foreground">
+ <div className="flex min-w-0 flex-1 items-center gap-2">
+ <code className="min-w-0 flex-1 truncate font-mono text-data tabular-nums text-foreground">
  sftp://{serverId}@{sftpInfo.host}:{sftpInfo.port}
  </code>
  <button
@@ -381,7 +383,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  t('files.sftp.uri'),
  )
  }
- className="flex-shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-surface-3 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
+ className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  title={t('files.sftp.copyUri')}
  >
  {copiedField === 'URI' ? (
@@ -399,11 +401,10 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  <div className="space-y-3 pt-2">
  <div className="flex flex-wrap items-center justify-between gap-3">
  <div className="flex items-center gap-2">
- <Users className="h-4 w-4 text-muted-foreground" />
- <h3 className="text-sm font-semibold text-foreground dark:text-foreground">
+ <h3 className="font-display text-data font-semibold text-foreground">
  {t('files.sftp.activeSessions')}
  </h3>
- <span className="rounded-full border border-border/50 bg-surface-2 px-2.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground dark:bg-surface-2/50">
+ <span className="font-mono text-micro tabular-nums text-muted-foreground">
  {tokens.length}
  </span>
  </div>
@@ -412,7 +413,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  type="button"
  onClick={() => revokeAllMutation.mutate()}
  disabled={revokeAllMutation.isPending}
- className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/50/5 px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/50/10 disabled:opacity-50"
+ className="inline-flex h-7 items-center gap-1.5 rounded-sm border border-danger/30 px-2 text-mini font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
  >
  <Trash2 className={`h-3 w-3 ${revokeAllMutation.isPending ? 'animate-pulse' : ''}`} />
  {t('files.sftp.revokeAll')}
@@ -421,28 +422,28 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  </div>
 
  {tokensLoading ? (
- <div className="px-1 text-xs text-muted-foreground">{t('files.sftp.loadingSessions')}</div>
+ <div className="text-micro text-muted-foreground">{t('files.sftp.loadingSessions')}</div>
  ) : tokens.length === 0 ? (
- <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+ <div className="deck-panel px-3 py-6 text-center text-micro text-muted-foreground">
  {t('files.sftp.noSessions')}
  </div>
  ) : (
- <div className="divide-y divide-border overflow-hidden rounded-md border border-border/50">
- {/* Table header */}
- <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 bg-surface-2/80 px-3 py-2 type-overline text-muted-foreground dark:bg-surface-2/40">
+ <div className="deck-panel overflow-hidden">
+ {/* Table header — same fixed template as the rows */}
+ <div className={`${SESSION_GRID} items-center border-b border-border/50 bg-surface-1 px-3 py-1.5 type-overline text-muted-foreground/70`}>
  <span>{t('files.sftp.user')}</span>
- <span className="w-28 text-right">{t('files.sftp.expires')}</span>
- <span className="w-24 text-right">{t('files.sftp.created')}</span>
- <span className="w-16 text-right">{t('files.sftp.actions')}</span>
+ <span className="text-right">{t('files.sftp.expires')}</span>
+ <span className="text-right">{t('files.sftp.created')}</span>
+ <span className="text-right">{t('files.sftp.actions')}</span>
  </div>
- {tokens.map((token) => {
+ {tokens.map((token, index) => {
  const expired = token.expiresAt <= now;
  return (
  <div
  key={token.userId}
- className={`grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-surface-2/50 dark:hover:bg-surface-2/30 ${
- expired ? 'opacity-50' : ''
- }`}
+ className={`${SESSION_GRID} items-center px-3 py-1.5 transition-colors hover:bg-surface-1/40 ${
+ index > 0 ? 'border-t border-border/40' : ''
+ } ${expired ? 'opacity-50' : ''}`}
  >
  {/* User */}
  <div className="min-w-0">
@@ -451,31 +452,31 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  {token.username || token.email}
  </span>
  {token.isSelf && (
- <span className="rounded-full border border-border/50 bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+ <span className="rounded-sm bg-surface-2 px-1.5 py-0.5 text-micro font-medium text-muted-foreground">
  {t('files.sftp.you')}
  </span>
  )}
  </div>
- <span className="truncate text-xs text-muted-foreground">{token.email}</span>
+ <span className="truncate font-mono text-micro text-muted-foreground">{token.email}</span>
  </div>
 
  {/* Expires */}
- <span className={`w-28 text-right font-mono text-xs tabular-nums ${expired ? 'text-destructive' : 'text-muted-foreground'}`}>
+ <span className={`text-right font-mono text-micro tabular-nums ${expired ? 'text-danger' : 'text-muted-foreground'}`}>
  {expired ? t('files.sftp.expired') : formatExpiry(token.expiresAt)}
  </span>
 
  {/* Created */}
- <span className="w-24 text-right font-mono text-xs tabular-nums text-muted-foreground">
+ <span className="text-right font-mono text-micro tabular-nums text-muted-foreground">
  {formatTimeAgo(token.createdAt)}
  </span>
 
  {/* Actions */}
- <div className="flex w-16 justify-end gap-1">
+ <div className="flex justify-end gap-1">
  <button
  type="button"
  onClick={() => revokeMutation.mutate(token.userId)}
  disabled={revokeMutation.isPending}
- className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/50/10 hover:text-destructive disabled:opacity-50"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
  title={token.isSelf ? t('files.sftp.revokeOwn') : t('files.sftp.revokeFor', { email: token.email })}
  >
  <Trash2 className="h-3.5 w-3.5" />
@@ -487,7 +488,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  </div>
  )}
 
- <p className="text-[11px] text-muted-foreground">
+ <p className="text-micro text-muted-foreground">
  <Shield className="mr-1 inline h-3 w-3" />
  {t('files.sftp.footerNote')}
  </p>
@@ -495,7 +496,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  ) : tokens.length > 0 ? (
  /* Non-owner: show only their own session in a compact row */
  <div className="space-y-3 pt-2">
- <div className="flex items-center gap-2 text-xs text-muted-foreground">
+ <div className="flex items-center gap-2 text-mini text-muted-foreground">
  <Users className="h-3.5 w-3.5" />
  <span>
  {t('files.sftp.activeSessionCount', { count: tokens.length })}

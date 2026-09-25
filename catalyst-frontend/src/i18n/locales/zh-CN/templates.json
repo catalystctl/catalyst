@@ -203,7 +203,6 @@
     "deleted_other": "已删除 {{count}} 个模板",
     "deleteTitle": "删除模板",
     "deleteWarning": "正在被现有服务器使用的模板无法删除。此操作无法撤销。",
-    "description": "使用镜像和启动命令定义服务器模板。",
     "filters": "筛选",
     "memory": "内存",
     "nestLabel": "Nest",

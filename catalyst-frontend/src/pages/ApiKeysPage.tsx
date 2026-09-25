@@ -1,19 +1,17 @@
 import { useState, useMemo, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
- Key,
- Search,
- Plus,
- Trash2,
- Pencil,
- Copy,
- Server,
- Filter,
- Activity,
- Clock,
- Zap,
- Shield,
- ShieldCheck,
+  Search,
+  Plus,
+  Trash2,
+  Pencil,
+  Copy,
+  Server,
+  Activity,
+  Clock,
+  Zap,
+  Shield,
+  ShieldCheck,
 } from 'lucide-react';
 import { useApiKeys, useDeleteApiKey, usePermissionsCatalog } from '../hooks/useApiKeys';
 import { useNodes } from '../hooks/useNodes';
@@ -23,498 +21,529 @@ import i18n from '@/i18n';
 import { formatDateTime } from '@/i18n/format';
 import { CreateApiKeyDialog } from '../components/apikeys/CreateApiKeyDialog';
 import { EditApiKeyDialog } from '../components/apikeys/EditApiKeyDialog';
-import { Input } from '../components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
-import TabHeader from '../components/servers/tabs/TabHeader';
-import ServerTabCard from '../components/servers/tabs/ServerTabCard';
-import SectionHeader from '../components/servers/tabs/SectionHeader';
-import StatGrid from '../components/servers/tabs/StatGrid';
 import TabLoadingState from '../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../components/servers/tabs/TabEmptyState';
 import TabErrorState from '../components/servers/tabs/TabErrorState';
+import { BracketLabel, Segmented, StatusLed } from '../components/deck/primitives';
+import { cn } from '@/lib/utils';
 
 // ── Helpers ──
 const parseMetadata = (metadata: Record<string, any> | string | null): Record<string, any> | null => {
- if (!metadata) return null;
- if (typeof metadata === 'string') {
- try { return JSON.parse(metadata); } catch { return null; }
- }
- return metadata;
+  if (!metadata) return null;
+  if (typeof metadata === 'string') {
+    try { return JSON.parse(metadata); } catch { return null; }
+  }
+  return metadata;
 };
 
 const isAgentKey = (apiKey: ApiKey) => parseMetadata(apiKey.metadata)?.purpose === 'agent';
 const getNodeId = (apiKey: ApiKey): string | null => parseMetadata(apiKey.metadata)?.nodeId || null;
 const isExpired = (expiresAt: string | null) => expiresAt ? new Date(expiresAt) < new Date() : false;
 const formatDate = (dateString: string | null) => {
- if (!dateString) return i18n.t('never', { ns: 'profile' });
- return formatDateTime(dateString);
+  if (!dateString) return i18n.t('never', { ns: 'profile' });
+  return formatDateTime(dateString);
 };
+
+/**
+ * One grid template shared by the column header and every row.
+ *   base : identity · actions
+ *   md   : identity · usage · actions
+ */
+const APIKEY_GRID =
+  'grid grid-cols-1 items-start gap-x-3 gap-y-1 ' +
+  'md:grid-cols-[minmax(0,1fr)_11rem_5rem]';
 
 // ── Permissions Display ──
 function PermissionsDisplay({
- apiKey,
- catalog,
- collapsed,
- onToggle,
+  apiKey,
+  catalog,
+  collapsed,
+  onToggle,
 }: {
- apiKey: ApiKey;
- catalog: PermissionCategory[];
- collapsed: boolean;
- onToggle: () => void;
+  apiKey: ApiKey;
+  catalog: PermissionCategory[];
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
- const { t } = useTranslation('profile');
- if (apiKey.allPermissions) {
- return (
- <div className="flex items-center gap-1.5">
- <ShieldCheck className="h-3.5 w-3.5 text-success" />
- <span className="text-xs font-medium text-success">
- {t('apiKeys.permissions.allCreator')}
- </span>
- </div>
- );
- }
+  const { t } = useTranslation('profile');
+  if (apiKey.allPermissions) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <ShieldCheck className="h-3 w-3 shrink-0 text-success" />
+        <span className="text-mini font-medium text-success">
+          {t('apiKeys.permissions.allCreator')}
+        </span>
+      </div>
+    );
+  }
 
- const perms = apiKey.permissions || [];
- if (perms.length === 0) {
- return <span className="text-xs text-muted-foreground italic">{t('apiKeys.permissions.none')}</span>;
- }
+  const perms = apiKey.permissions || [];
+  if (perms.length === 0) {
+    return <span className="text-mini italic text-muted-foreground">{t('apiKeys.permissions.none')}</span>;
+  }
 
- const grouped = new Map<string, { cat: PermissionCategory; perms: string[] }>();
- for (const perm of perms) {
- const cat = catalog.find((c) => c.permissions.some((p) => p.value === perm));
- const catId = cat?.id || 'other';
- if (!grouped.has(catId)) grouped.set(catId, { cat: cat || { id: 'other', label: t('apiKeys.permissions.other'), description: '', permissions: [] }, perms: [] });
- grouped.get(catId)!.perms.push(perm);
- }
+  const grouped = new Map<string, { cat: PermissionCategory; perms: string[] }>();
+  for (const perm of perms) {
+    const cat = catalog.find((c) => c.permissions.some((p) => p.value === perm));
+    const catId = cat?.id || 'other';
+    if (!grouped.has(catId)) grouped.set(catId, { cat: cat || { id: 'other', label: t('apiKeys.permissions.other'), description: '', permissions: [] }, perms: [] });
+    grouped.get(catId)!.perms.push(perm);
+  }
 
- const maxShow = collapsed ? 3 : grouped.size;
- const entries = [...grouped.entries()].slice(0, maxShow);
+  const maxShow = collapsed ? 3 : grouped.size;
+  const entries = [...grouped.entries()].slice(0, maxShow);
 
- return (
- <div className="space-y-1">
- <div className="flex flex-wrap gap-1">
- {entries.map(([catId, { cat, perms: catPerms }]) => (
- <div key={catId} className="flex items-center gap-1">
- <Badge variant="outline" className="text-[10px] border-primary-300/40 text-primary-700">
- <Shield className="mr-1 h-2.5 w-2.5" />
- {cat.label}
- <span className="ml-1 text-[9px] opacity-60">{catPerms.length}</span>
- </Badge>
- </div>
- ))}
- {grouped.size > maxShow && (
- <button
- onClick={onToggle}
- className="text-[10px] text-primary hover:underline flex items-center gap-0.5"
- >
- {t('apiKeys.permissions.more', { count: grouped.size - maxShow })}
- </button>
- )}
- </div>
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {entries.map(([catId, { cat, perms: catPerms }]) => (
+          <span
+            key={catId}
+            className="flex items-center gap-1 rounded-sm border border-border/50 px-1.5 py-0.5 font-mono text-micro tabular-nums text-muted-foreground"
+          >
+            <Shield className="h-2.5 w-2.5 shrink-0" />
+            {cat.label}
+            <span className="opacity-60">{catPerms.length}</span>
+          </span>
+        ))}
+        {grouped.size > maxShow && (
+          <button
+            onClick={onToggle}
+            className="text-micro text-primary transition-colors hover:underline"
+          >
+            {t('apiKeys.permissions.more', { count: grouped.size - maxShow })}
+          </button>
+        )}
+      </div>
 
- {!collapsed && (
- <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 pl-1">
- {entries.map(([, { perms: catPerms }]) =>
- catPerms.map((perm) => (
- <div key={perm} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
- <span className="h-1 w-1 rounded-full bg-primary/40" />
- <span>{getPermissionLabel(perm, catalog)}</span>
- </div>
- ))
- )}
- </div>
- )}
- </div>
- );
+      {!collapsed && (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+          {entries.map(([, { perms: catPerms }]) =>
+            catPerms.map((perm) => (
+              <div key={perm} className="flex items-center gap-1.5 text-micro text-muted-foreground">
+                <span className="text-muted-foreground/50" aria-hidden>·</span>
+                <span className="truncate">{getPermissionLabel(perm, catalog)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── API Key Row ──
 function ApiKeyRow({
- apiKey,
- onDelete,
- onEdit,
- catalog,
- getNodeName,
- canManage,
+  apiKey,
+  onDelete,
+  onEdit,
+  catalog,
+  getNodeName,
+  canManage,
 }: {
- apiKey: ApiKey;
- onDelete: () => void;
- onEdit: () => void;
- catalog: PermissionCategory[];
- getNodeName: (nodeId: string) => string | undefined;
- canManage: boolean;
+  apiKey: ApiKey;
+  onDelete: () => void;
+  onEdit: () => void;
+  catalog: PermissionCategory[];
+  getNodeName: (nodeId: string) => string | undefined;
+  canManage: boolean;
 }) {
- const { t } = useTranslation('profile');
- const agent = isAgentKey(apiKey);
- const expired = isExpired(apiKey.expiresAt);
- const nodeId = getNodeId(apiKey);
- const [permsExpanded, setPermsExpanded] = useState(false);
+  const { t } = useTranslation('profile');
+  const agent = isAgentKey(apiKey);
+  const expired = isExpired(apiKey.expiresAt);
+  const nodeId = getNodeId(apiKey);
+  const [permsExpanded, setPermsExpanded] = useState(false);
+  const nodeName = nodeId ? getNodeName(nodeId) : undefined;
 
- return (
- <div
- className={`group relative overflow-hidden rounded-xl border p-5 transition-all duration-200 ${
- agent
- ? 'border-warning/20 bg-warning-muted'
- : expired
- ? 'border-danger/15 bg-danger-muted'
- : 'border-border/30 bg-card'
- }`}
- >
- <div className="flex items-start gap-4">
- <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2.5">
- {agent ? (
- <Server className="h-4 w-4 shrink-0 text-warning" />
- ) : expired ? (
- <Clock className="h-4 w-4 shrink-0 text-danger" />
- ) : (
- <Key className="h-4 w-4 shrink-0 text-primary" />
- )}
- <div className="min-w-0">
- <div className="flex items-center gap-2 flex-wrap">
- <span className="font-semibold text-foreground truncate">
- {apiKey.name || t('unnamedKey')}
- </span>
- {agent && (
- <Badge variant="outline" className="border-warning/30 text-warning text-[10px]">
- <Server className="mr-1 h-2.5 w-2.5" /> {t('apiKeys.row.agent')}
- </Badge>
- )}
- {apiKey.enabled && !expired ? (
- <Badge variant="outline" className="border-success/30 text-success text-[10px]">
- {t('apiKeys.active')}
- </Badge>
- ) : !apiKey.enabled ? (
- <Badge variant="secondary" className="text-[10px]">{t('common:actions.disabled')}</Badge>
- ) : null}
- {expired && (
- <Badge variant="destructive" className="text-[10px]">{t('apiKeys.expired')}</Badge>
- )}
- </div>
- {agent && nodeId && (() => {
- const nodeName = getNodeName(nodeId);
- return (
- <div className="mt-1 text-xs text-warning">
- {t('apiKeys.row.node')}{' '}
- {nodeName ? (
- <span className="font-medium">{nodeName}</span>
- ) : null}
- {' '}
- <code className="rounded bg-warning-muted px-1.5 py-0.5 font-mono text-[11px]">{nodeId.slice(0, 12)}{nodeId.length > 12 ? '...' : ''}</code>
- {!nodeName && (
- <span className="ml-1 text-[11px] opacity-60">{t('apiKeys.row.unknownNode')}</span>
- )}
- </div>
- );
- })()}
- </div>
- </div>
+  return (
+    <div
+      role="row"
+      className={cn(APIKEY_GRID, 'px-3 py-2 transition-colors hover:bg-surface-1/40')}
+    >
+      {/* identity */}
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+          <StatusLed
+            tone={agent ? 'hazard' : expired ? 'alarm' : apiKey.enabled ? 'go' : 'idle'}
+            pulse={apiKey.enabled && !expired && !agent}
+          />
+          <span className="truncate font-display text-data font-semibold tracking-tight text-foreground">
+            {apiKey.name || t('unnamedKey')}
+          </span>
+          {agent && (
+            <span className="type-overline shrink-0 text-warning">{t('apiKeys.row.agent')}</span>
+          )}
+          {apiKey.enabled && !expired ? (
+            <span className="type-overline shrink-0 text-success">{t('apiKeys.active')}</span>
+          ) : !apiKey.enabled ? (
+            <span className="type-overline shrink-0">{t('common:actions.disabled')}</span>
+          ) : null}
+          {expired && (
+            <span className="type-overline shrink-0 text-danger">{t('apiKeys.expired')}</span>
+          )}
+        </div>
 
- {apiKey.prefix && apiKey.start && (
- <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/30 bg-card px-3 py-2 font-mono text-sm">
- <code className="flex-1 truncate text-foreground">
- {apiKey.start}{'*'.repeat(40)}
- </code>
- <button
- onClick={() => navigator.clipboard.writeText(apiKey.start || '')}
- className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
- >
- <Copy className="h-3.5 w-3.5" />
- </button>
- </div>
- )}
+        {agent && nodeId && (
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-micro text-warning">
+            <Server className="h-3 w-3 shrink-0" />
+            <span>{t('apiKeys.row.node')}</span>
+            {nodeName ? <span className="truncate">{nodeName}</span> : null}
+            <code className="font-mono tabular-nums">
+              {nodeId.slice(0, 12)}{nodeId.length > 12 ? '...' : ''}
+            </code>
+            {!nodeName && (
+              <span className="opacity-60">{t('apiKeys.row.unknownNode')}</span>
+            )}
+          </div>
+        )}
 
- <div className="mt-3">
- <PermissionsDisplay
- apiKey={apiKey}
- catalog={catalog}
- collapsed={!permsExpanded}
- onToggle={() => setPermsExpanded(!permsExpanded)}
- />
- </div>
+        {apiKey.prefix && apiKey.start && (
+          <div className="mt-1 flex min-w-0 items-center gap-1.5">
+            <code className="min-w-0 truncate font-mono text-micro tabular-nums text-muted-foreground">
+              {apiKey.start}{'*'.repeat(16)}
+            </code>
+            <button
+              onClick={() => navigator.clipboard.writeText(apiKey.start || '')}
+              title={t('common:actions.copy')}
+              aria-label={t('common:actions.copy')}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          </div>
+        )}
 
- <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
- <div className="flex items-center gap-1.5 text-muted-foreground">
- <Activity className="h-3 w-3 shrink-0" />
- <span>{t('apiKeys.row.created')} <span className="font-medium text-foreground">{formatDate(apiKey.createdAt)}</span></span>
- </div>
- <div className="flex items-center gap-1.5 text-muted-foreground">
- <Clock className="h-3 w-3 shrink-0" />
- <span>{t('apiKeys.row.lastUsed')} <span className="font-medium text-foreground">{formatDate(apiKey.lastRequest)}</span></span>
- </div>
- <div className="flex items-center gap-1.5 text-muted-foreground">
- <Zap className="h-3 w-3 shrink-0" />
- <span>{t('apiKeys.row.requests')} <span className="font-medium text-foreground">{apiKey.requestCount || 0}</span></span>
- </div>
- <div className="flex items-center gap-1.5 text-muted-foreground">
- <Clock className="h-3 w-3 shrink-0" />
- <span>{t('apiKeys.row.expires')} <span className="font-medium text-foreground">{apiKey.expiresAt ? formatDate(apiKey.expiresAt) : t('never')}</span></span>
- </div>
- </div>
+        <div className="mt-1">
+          <PermissionsDisplay
+            apiKey={apiKey}
+            catalog={catalog}
+            collapsed={!permsExpanded}
+            onToggle={() => setPermsExpanded(!permsExpanded)}
+          />
+        </div>
+      </div>
 
- <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
- <span>{t('apiKeys.row.rateLimit', { max: apiKey.rateLimitMax, window: apiKey.rateLimitTimeWindow / 1000 })}</span>
- {apiKey.user && (
- <span>
- {t('apiKeys.row.by')} <span className="font-medium text-foreground">{apiKey.user.username || apiKey.user.email}</span>
- </span>
- )}
- </div>
- </div>
+      {/* usage meta */}
+      <div className="hidden flex-col gap-0.5 text-micro text-muted-foreground md:flex">
+        <span className="flex items-center gap-1.5">
+          <Activity className="h-3 w-3 shrink-0" />
+          {t('apiKeys.row.created')}{' '}
+          <span className="font-mono tabular-nums text-foreground">{formatDate(apiKey.createdAt)}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Clock className="h-3 w-3 shrink-0" />
+          {t('apiKeys.row.lastUsed')}{' '}
+          <span className="font-mono tabular-nums text-foreground">{formatDate(apiKey.lastRequest)}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Zap className="h-3 w-3 shrink-0" />
+          {t('apiKeys.row.requests')}{' '}
+          <span className="font-mono tabular-nums text-foreground">{apiKey.requestCount || 0}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Clock className="h-3 w-3 shrink-0" />
+          {t('apiKeys.row.expires')}{' '}
+          <span className="font-mono tabular-nums text-foreground">
+            {apiKey.expiresAt ? formatDate(apiKey.expiresAt) : t('never')}
+          </span>
+        </span>
+        <span className="truncate font-mono tabular-nums">
+          {t('apiKeys.row.rateLimit', { max: apiKey.rateLimitMax, window: apiKey.rateLimitTimeWindow / 1000 })}
+        </span>
+        {apiKey.user && (
+          <span className="truncate">
+            {t('apiKeys.row.by')}{' '}
+            <span className="text-foreground">{apiKey.user.username || apiKey.user.email}</span>
+          </span>
+        )}
+      </div>
 
- <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
- {canManage && (
- <>
- <button
- onClick={onEdit}
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
- title={t('apiKeys.row.edit')}
- >
- <Pencil className="h-3.5 w-3.5" />
- </button>
- <button
- onClick={onDelete}
- className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-danger-muted hover:text-danger"
- title={t('apiKeys.row.revoke')}
- >
- <Trash2 className="h-3.5 w-3.5" />
- </button>
- </>
- )}
- </div>
- </div>
- </div>
- );
+      {/* actions */}
+      <div className="flex shrink-0 items-center justify-end gap-1">
+        {canManage && (
+          <>
+            <button
+              onClick={onEdit}
+              title={t('apiKeys.row.edit')}
+              aria-label={t('apiKeys.row.edit')}
+              className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={onDelete}
+              title={t('apiKeys.row.revoke')}
+              aria-label={t('apiKeys.row.revoke')}
+              className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-danger/5 hover:text-danger"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LegendCount({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <Segmented muted className="text-micro">{value}</Segmented>
+      <span className="type-overline">{label}</span>
+    </span>
+  );
 }
 
 // ── Main Page ──
 export function ApiKeysPage() {
- const { t } = useTranslation('profile');
- const { data: apiKeys, isLoading, isError, refetch } = useApiKeys();
- const { data: catalog = [] } = usePermissionsCatalog();
- const { data: nodes = [] } = useNodes();
- // Mutating API keys requires apikey.manage; read-only admins (admin.read)
- // get a working list view with the mutation UI hidden.
- const userPerms = useAuthStore((s) => s.user?.permissions) ?? [];
- const canManage = userPerms.includes('*') || userPerms.includes('apikey.manage');
- const deleteApiKey = useDeleteApiKey();
- const [createDialogOpen, setCreateDialogOpen] = useState(false);
- const [editKey, setEditKey] = useState<ApiKey | null>(null);
- const [deleteKey, setDeleteKey] = useState<ApiKey | null>(null);
- const [confirmAgentDelete, setConfirmAgentDelete] = useState(false);
- const skipCancelRef = useRef(false);
- const [search, setSearch] = useState('');
- const [showAgentKeys, setShowAgentKeys] = useState(false);
- const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled' | 'expired'>('all');
+  const { t } = useTranslation('profile');
+  const { data: apiKeys, isLoading, isError, refetch } = useApiKeys();
+  const { data: catalog = [] } = usePermissionsCatalog();
+  const { data: nodes = [] } = useNodes();
+  // Mutating API keys requires apikey.manage; read-only admins (admin.read)
+  // get a working list view with the mutation UI hidden.
+  const userPerms = useAuthStore((s) => s.user?.permissions) ?? [];
+  const canManage = userPerms.includes('*') || userPerms.includes('apikey.manage');
+  const deleteApiKey = useDeleteApiKey();
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editKey, setEditKey] = useState<ApiKey | null>(null);
+  const [deleteKey, setDeleteKey] = useState<ApiKey | null>(null);
+  const [confirmAgentDelete, setConfirmAgentDelete] = useState(false);
+  const skipCancelRef = useRef(false);
+  const [search, setSearch] = useState('');
+  const [showAgentKeys, setShowAgentKeys] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled' | 'expired'>('all');
 
- const handleDelete = () => {
- if (deleteKey) {
- if (isAgentKey(deleteKey) && !confirmAgentDelete) {
- skipCancelRef.current = true;
- setConfirmAgentDelete(true);
- return;
- }
- deleteApiKey.mutate(deleteKey.id);
- setDeleteKey(null);
- setConfirmAgentDelete(false);
- }
- };
+  const handleDelete = () => {
+    if (deleteKey) {
+      if (isAgentKey(deleteKey) && !confirmAgentDelete) {
+        skipCancelRef.current = true;
+        setConfirmAgentDelete(true);
+        return;
+      }
+      deleteApiKey.mutate(deleteKey.id);
+      setDeleteKey(null);
+      setConfirmAgentDelete(false);
+    }
+  };
 
- const handleCancelDelete = () => {
- if (skipCancelRef.current) {
- skipCancelRef.current = false;
- return;
- }
- setDeleteKey(null);
- setConfirmAgentDelete(false);
- };
+  const handleCancelDelete = () => {
+    if (skipCancelRef.current) {
+      skipCancelRef.current = false;
+      return;
+    }
+    setDeleteKey(null);
+    setConfirmAgentDelete(false);
+  };
 
- const getNodeName = (nodeId: string): string | undefined => {
- const node = nodes.find((n) => n.id === nodeId);
- return node?.name;
- };
+  const getNodeName = (nodeId: string): string | undefined => {
+    const node = nodes.find((n) => n.id === nodeId);
+    return node?.name;
+  };
 
- const filteredApiKeys = useMemo(() => {
- if (!apiKeys) return [];
- return apiKeys.filter((apiKey) => {
- if (!showAgentKeys && isAgentKey(apiKey)) return false;
- if (search.trim()) {
- const s = search.toLowerCase();
- const name = (apiKey.name || '').toLowerCase();
- const nodeId = getNodeId(apiKey)?.toLowerCase() || '';
- const keyStart = (apiKey.start || '').toLowerCase();
- if (!name.includes(s) && !nodeId.includes(s) && !keyStart.includes(s)) return false;
- }
- if (statusFilter === 'active' && !apiKey.enabled) return false;
- if (statusFilter === 'disabled' && apiKey.enabled) return false;
- if (statusFilter === 'expired' && !isExpired(apiKey.expiresAt)) return false;
- return true;
- });
- }, [apiKeys, showAgentKeys, search, statusFilter]);
+  const filteredApiKeys = useMemo(() => {
+    if (!apiKeys) return [];
+    return apiKeys.filter((apiKey) => {
+      if (!showAgentKeys && isAgentKey(apiKey)) return false;
+      if (search.trim()) {
+        const s = search.toLowerCase();
+        const name = (apiKey.name || '').toLowerCase();
+        const nodeId = getNodeId(apiKey)?.toLowerCase() || '';
+        const keyStart = (apiKey.start || '').toLowerCase();
+        if (!name.includes(s) && !nodeId.includes(s) && !keyStart.includes(s)) return false;
+      }
+      if (statusFilter === 'active' && !apiKey.enabled) return false;
+      if (statusFilter === 'disabled' && apiKey.enabled) return false;
+      if (statusFilter === 'expired' && !isExpired(apiKey.expiresAt)) return false;
+      return true;
+    });
+  }, [apiKeys, showAgentKeys, search, statusFilter]);
 
- const stats = useMemo(() => {
- if (!apiKeys) return { total: 0, active: 0, agent: 0, expired: 0, totalRequests: 0 };
- return {
- total: apiKeys.length,
- active: apiKeys.filter((k) => k.enabled).length,
- agent: apiKeys.filter(isAgentKey).length,
- expired: apiKeys.filter((k) => isExpired(k.expiresAt)).length,
- totalRequests: apiKeys.reduce((sum, k) => sum + (k.requestCount || 0), 0),
- };
- }, [apiKeys]);
+  const stats = useMemo(() => {
+    if (!apiKeys) return { total: 0, active: 0, agent: 0, expired: 0, totalRequests: 0 };
+    return {
+      total: apiKeys.length,
+      active: apiKeys.filter((k) => k.enabled).length,
+      agent: apiKeys.filter(isAgentKey).length,
+      expired: apiKeys.filter((k) => isExpired(k.expiresAt)).length,
+      totalRequests: apiKeys.reduce((sum, k) => sum + (k.requestCount || 0), 0),
+    };
+  }, [apiKeys]);
 
- return (
- <div className="space-y-4">
- <TabHeader
- icon={Key}
- title={t('apiKeys.title')}
- description={t('apiKeys.description')}
- actions={
- canManage ? (
- <Button size="sm" onClick={() => setCreateDialogOpen(true)} className="gap-1.5">
- <Plus className="h-3.5 w-3.5" />
- {t('apiKeys.create')}
- </Button>
- ) : undefined
- }
- />
+  const hasActiveFilters = Boolean(search) || !showAgentKeys || statusFilter !== 'all';
 
- <ServerTabCard>
- <SectionHeader icon={Activity} title={t('apiKeys.overview')} />
- <StatGrid
- columns={4}
- items={[
- { label: t('apiKeys.total'), value: stats.total },
- { label: t('apiKeys.active'), value: stats.active },
- { label: t('apiKeys.agentKeys'), value: stats.agent },
- { label: t('apiKeys.totalRequests'), value: stats.totalRequests },
- ]}
- />
- {stats.expired > 0 && (
- <div className="mt-2">
- <StatGrid
- columns={4}
- items={[{ label: t('apiKeys.expired'), value: stats.expired }]}
- />
- </div>
- )}
- </ServerTabCard>
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* ── Deck header ── */}
+      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <BracketLabel>{t('apiKeys.overview')}</BracketLabel>
+          <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
+            {t('apiKeys.title')}
+          </h1>
+          <p className="type-meta">{t('apiKeys.description')}</p>
+        </div>
+        {canManage && (
+          <Button
+            size="sm"
+            onClick={() => setCreateDialogOpen(true)}
+            className="h-8 gap-1.5 px-3 text-mini"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t('apiKeys.create')}
+          </Button>
+        )}
+      </header>
 
- <ServerTabCard>
- <SectionHeader icon={Filter} title={t('apiKeys.filters.title')} />
- <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
- <div className="relative">
- <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
- <Input
- value={search}
- onChange={(e) => setSearch(e.target.value)}
- placeholder={t('apiKeys.filters.searchPlaceholder')}
- className="pl-9 border-border/40"
- />
- </div>
+      {/* ── The deck: controls, rows and legend in one frame ── */}
+      <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+        {/* Control strip */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+          <label className="relative flex min-w-[12rem] flex-1 items-center">
+            <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('apiKeys.filters.searchPlaceholder')}
+              className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+            />
+          </label>
 
- <div>
- <select
- value={statusFilter}
- onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled' | 'expired')}
- className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
- >
- <option value="all">{t('apiKeys.filters.allStatuses')}</option>
- <option value="active">{t('apiKeys.filters.active')}</option>
- <option value="disabled">{t('apiKeys.filters.disabled')}</option>
- <option value="expired">{t('apiKeys.filters.expired')}</option>
- </select>
- </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled' | 'expired')}
+            aria-label={t('apiKeys.filters.allStatuses')}
+            className="h-7 rounded-sm border border-border/60 bg-background/40 pl-2 pr-7 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
+          >
+            <option value="all">{t('apiKeys.filters.allStatuses')}</option>
+            <option value="active">{t('apiKeys.filters.active')}</option>
+            <option value="disabled">{t('apiKeys.filters.disabled')}</option>
+            <option value="expired">{t('apiKeys.filters.expired')}</option>
+          </select>
 
- <label className="flex items-center gap-2 rounded-lg border border-border/40 bg-card px-3 py-2 cursor-pointer transition-colors hover:border-primary/50">
- <input
- type="checkbox"
- checked={showAgentKeys}
- onChange={(e) => setShowAgentKeys(e.target.checked)}
- className="rounded border-border text-primary focus:ring-ring"
- />
- <span className="text-sm text-foreground">
- {t('apiKeys.filters.showAgentKeys', { count: stats.agent })}
- </span>
- </label>
- </div>
+          <label className="flex h-7 cursor-pointer select-none items-center gap-2 px-1 text-mini text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showAgentKeys}
+              onChange={(e) => setShowAgentKeys(e.target.checked)}
+              className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary focus:ring-primary"
+            />
+            <span>{t('apiKeys.filters.showAgentKeys', { count: stats.agent })}</span>
+          </label>
+        </div>
 
- {(search || !showAgentKeys || statusFilter !== 'all') && (
- <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/30 pt-3">
- <span className="text-[11px] text-muted-foreground">{t('apiKeys.filters.activeFilters')}</span>
- {!showAgentKeys && (
- <Badge variant="outline" className="border-warning/30 text-warning text-[10px]">
- {t('apiKeys.filters.hidingAgentKeys', { count: stats.agent })}
- </Badge>
- )}
- {statusFilter !== 'all' && (
- <Badge variant="outline" className="text-[10px]">
- {t('apiKeys.filters.status', { status: statusFilter })}
- </Badge>
- )}
- {search && (
- <Badge variant="outline" className="text-[10px]">
- {t('apiKeys.filters.search', { query: search })}
- </Badge>
- )}
- <button
- onClick={() => { setSearch(''); setStatusFilter('all'); }}
- className="ml-auto text-[11px] text-muted-foreground transition-colors hover:text-primary-600"
- >
- {t('apiKeys.filters.clear')}
- </button>
- </div>
- )}
- </ServerTabCard>
+        {/* Active filters strip */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-3 py-1.5">
+            <span className="type-overline">{t('apiKeys.filters.activeFilters')}</span>
+            {!showAgentKeys && (
+              <span className="type-overline text-warning">
+                {t('apiKeys.filters.hidingAgentKeys', { count: stats.agent })}
+              </span>
+            )}
+            {statusFilter !== 'all' && (
+              <span className="type-overline">
+                {t('apiKeys.filters.status', { status: statusFilter })}
+              </span>
+            )}
+            {search && (
+              <span className="type-overline">
+                {t('apiKeys.filters.search', { query: search })}
+              </span>
+            )}
+            <button
+              onClick={() => { setSearch(''); setStatusFilter('all'); }}
+              className="ml-auto text-micro text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {t('apiKeys.filters.clear')}
+            </button>
+          </div>
+        )}
 
- {isLoading ? (
- <TabLoadingState rows={4} />
- ) : isError ? (
- <TabErrorState message={t('apiKeys.loadFailed')} onRetry={() => refetch?.()} />
- ) : filteredApiKeys.length > 0 ? (
- <div className="space-y-2.5">
- {filteredApiKeys.map((apiKey) => (
- <ApiKeyRow
- key={apiKey.id}
- apiKey={apiKey}
- catalog={catalog}
- canManage={canManage}
- onDelete={() => { setDeleteKey(apiKey); setConfirmAgentDelete(false); }}
- onEdit={() => setEditKey(apiKey)}
- getNodeName={getNodeName}
- />
- ))}
- </div>
- ) : (
- <TabEmptyState
- title={search || statusFilter !== 'all' ? t('apiKeys.filteredEmptyTitle') : t('apiKeys.emptyTitle')}
- description={
- search || statusFilter !== 'all'
- ? t('apiKeys.filteredEmptyDescription')
- : t('apiKeys.emptyDescription')
- }
- action={
- !search && statusFilter === 'all' && canManage ? (
- <Button size="sm" onClick={() => setCreateDialogOpen(true)} className="gap-1.5">
- <Plus className="h-3.5 w-3.5" />
- {t('apiKeys.create')}
- </Button>
- ) : undefined
- }
- />
- )}
+        {/* Column header */}
+        <div
+          className={cn(
+            APIKEY_GRID,
+            'hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+          )}
+        >
+          <span className="type-overline">{t('apiKeys.form.name')}</span>
+          <span className="type-overline hidden md:inline-flex">{t('apiKeys.overview')}</span>
+          <span className="type-overline justify-self-end">{t('apiKeys.row.edit')}</span>
+        </div>
 
- <CreateApiKeyDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+        {/* Rows */}
+        <div className="bg-background/25">
+          {isLoading ? (
+            <div className="p-3">
+              <TabLoadingState rows={4} />
+            </div>
+          ) : isError ? (
+            <div className="p-3">
+              <TabErrorState message={t('apiKeys.loadFailed')} onRetry={() => refetch?.()} />
+            </div>
+          ) : filteredApiKeys.length > 0 ? (
+            <div className="divide-y divide-border/40">
+              {filteredApiKeys.map((apiKey) => (
+                <ApiKeyRow
+                  key={apiKey.id}
+                  apiKey={apiKey}
+                  catalog={catalog}
+                  canManage={canManage}
+                  onDelete={() => { setDeleteKey(apiKey); setConfirmAgentDelete(false); }}
+                  onEdit={() => setEditKey(apiKey)}
+                  getNodeName={getNodeName}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="py-2">
+              <TabEmptyState
+                title={search || statusFilter !== 'all' ? t('apiKeys.filteredEmptyTitle') : t('apiKeys.emptyTitle')}
+                description={
+                  search || statusFilter !== 'all'
+                    ? t('apiKeys.filteredEmptyDescription')
+                    : t('apiKeys.emptyDescription')
+                }
+                action={
+                  !search && statusFilter === 'all' && canManage ? (
+                    <Button size="sm" onClick={() => setCreateDialogOpen(true)} className="h-8 gap-1.5 px-3 text-mini">
+                      <Plus className="h-3.5 w-3.5" />
+                      {t('apiKeys.create')}
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          )}
+        </div>
 
- {editKey && (
- <EditApiKeyDialog
- apiKey={editKey}
- open={!!editKey}
- onClose={() => setEditKey(null)}
- />
- )}
+        {/* Footer strip — legend */}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <LegendCount label={t('apiKeys.total')} value={stats.total} />
+            <LegendCount label={t('apiKeys.active')} value={stats.active} />
+            <LegendCount label={t('apiKeys.agentKeys')} value={stats.agent} />
+            {stats.expired > 0 && <LegendCount label={t('apiKeys.expired')} value={stats.expired} />}
+          </div>
+          <span className="font-mono text-micro tabular-nums text-muted-foreground/60">
+            {t('apiKeys.totalRequests')}: {stats.totalRequests}
+          </span>
+        </div>
+      </div>
+
+      <CreateApiKeyDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+
+      {editKey && (
+        <EditApiKeyDialog
+          apiKey={editKey}
+          open={!!editKey}
+          onClose={() => setEditKey(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={!!deleteKey}
@@ -522,9 +551,9 @@ export function ApiKeysPage() {
         message={
           deleteKey && isAgentKey(deleteKey) && !confirmAgentDelete ? (
             <>
-              <div className="rounded-lg border border-danger/30 bg-danger-muted p-4">
-                <p className="text-sm font-semibold text-danger">{t('apiKeys.confirm.agentKeyHeading')}</p>
-                <p className="mt-1 text-sm text-danger/80">
+              <div className="rounded-sm border border-danger/30 px-3 py-2">
+                <p className="text-mini font-semibold text-danger">{t('apiKeys.confirm.agentKeyHeading')}</p>
+                <p className="mt-1 text-mini text-danger/80">
                   <Trans i18nKey="apiKeys.confirm.agentKeyWarning" ns="profile" components={{ strong: <strong /> }} />
                 </p>
               </div>
@@ -534,17 +563,17 @@ export function ApiKeysPage() {
             </>
           ) : deleteKey && confirmAgentDelete ? (
             <>
-              <div className="rounded-lg border border-danger/50 bg-danger-muted p-4">
-                <p className="text-sm font-bold text-danger">
+              <div className="rounded-sm border border-danger/50 px-3 py-2">
+                <p className="text-mini font-bold text-danger">
                   {t('apiKeys.confirm.uselessWarning')}
                 </p>
-                <p className="mt-1 text-sm text-danger/80">
+                <p className="mt-1 text-mini text-danger/80">
                   {t('apiKeys.confirm.reconfigureWarning')}
                 </p>
               </div>
               <p className="mt-3">
                 {t('apiKeys.confirm.typeNodeId')}{' '}
-                <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">
+                <code className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-micro tabular-nums">
                   {getNodeId(deleteKey)?.slice(0, 8)}…
                 </code>
               </p>
@@ -567,6 +596,6 @@ export function ApiKeysPage() {
         onConfirm={handleDelete}
         onCancel={handleCancelDelete}
       />
- </div>
- );
+    </div>
+  );
 }

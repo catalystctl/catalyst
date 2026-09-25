@@ -107,16 +107,16 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
  <DialogBody className="space-y-5">
  {isAgentKey && (
- <div className="flex items-center gap-1.5 rounded-md border border-warning/30 bg-warning/5 px-3 py-1.5 dark:border-warning/20 dark:bg-warning/15">
+ <div className="flex items-center gap-1.5 rounded-sm border border-warning/30 bg-warning/5 px-2.5 py-1.5 dark:border-warning/20 dark:bg-warning/15">
  <Server className="h-3.5 w-3.5 shrink-0 text-warning dark:text-warning" />
- <span className="text-xs text-warning dark:text-warning">
+ <span className="text-mini text-warning dark:text-warning">
  {t('apiKeys.editDialog.agentNotice')}
  </span>
  </div>
  )}
 
  {error && (
- <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive dark:border-destructive/20 dark:bg-destructive/15 dark:text-destructive">
+ <div className="rounded-sm border border-danger/40 bg-danger/5 px-2.5 py-2 text-mini text-danger dark:border-danger/20 dark:bg-danger/15 dark:text-danger">
  {error}
  </div>
  )}
@@ -125,6 +125,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <label className="type-overline">{t('apiKeys.form.name')}</label>
  <Input
  type="text"
+ className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
  placeholder={t('apiKeys.form.namePlaceholder')}
  value={name}
  onChange={(e) => setName(e.target.value)}
@@ -133,9 +134,9 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <p className="type-meta">{t('apiKeys.form.nameHint')}</p>
  </div>
 
- <div className="flex items-center justify-between rounded-md border border-border/50 bg-surface-2/50 px-4 py-3 dark:bg-surface-2/30">
+ <div className="flex items-center justify-between gap-3 rounded-sm border border-border/50 px-3 py-2">
  <div>
- <span className="text-sm font-medium text-foreground dark:text-foreground">{t('common:actions.enabled')}</span>
+ <span className="text-mini font-semibold text-foreground dark:text-foreground">{t('common:actions.enabled')}</span>
  <p className="type-meta">
  {t('apiKeys.editDialog.disabledHint')}
  </p>
@@ -155,36 +156,36 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  max={10000}
  value={rateLimitMax}
  onChange={(e) => setRateLimitMax(Number(e.target.value))}
- className="w-32"
+ className="h-8 w-32 rounded-sm border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums"
  />
- <span className="text-sm text-muted-foreground">{t('apiKeys.editDialog.requestsPer')}</span>
+ <span className="text-mini text-muted-foreground">{t('apiKeys.editDialog.requestsPer')}</span>
  <Input
  type="number"
  min={1}
  max={3600}
  value={rateLimitTimeWindow}
  onChange={(e) => setRateLimitTimeWindow(Number(e.target.value))}
- className="w-24"
+ className="h-8 w-24 rounded-sm border-border/60 bg-background/40 px-2.5 font-mono text-mini tabular-nums"
  />
- <span className="text-sm text-muted-foreground">{t('apiKeys.editDialog.seconds')}</span>
+ <span className="text-mini text-muted-foreground">{t('apiKeys.editDialog.seconds')}</span>
  </div>
  <p className="type-meta">{t('apiKeys.editDialog.rateLimitHint')}</p>
  </div>
 
- <div className="rounded-md border border-border/50 bg-surface-2/40 px-4 py-3 dark:bg-surface-2/20">
+ <div className="rounded-sm border border-border/50 px-3 py-2">
  <div className="flex items-center justify-between gap-2">
  <span className="type-overline">{t('apiKeys.form.permissions')}</span>
- <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('apiKeys.editDialog.readOnly')}</span>
+ <span className="type-overline">{t('apiKeys.editDialog.readOnly')}</span>
  </div>
  <p className="type-meta mt-1">
  {t('apiKeys.editDialog.permissionsFixed')}
  </p>
  <div className="mt-2 flex flex-wrap gap-1.5">
  {apiKey.allPermissions ? (
- <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{t('allPermissions')}</span>
+ <span className="rounded-sm border border-primary/40 bg-primary/10 px-1.5 py-0.5 font-mono text-micro tabular-nums text-foreground">{t('allPermissions')}</span>
  ) : apiKey.permissions?.length ? (
  apiKey.permissions.map((p) => (
- <span key={p} className="rounded-md border border-border/50 bg-card px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{p}</span>
+ <span key={p} className="rounded-sm border border-border/50 px-1.5 py-0.5 font-mono text-micro tabular-nums text-muted-foreground">{p}</span>
  ))
  ) : (
  <span className="type-meta">{t('apiKeys.editDialog.noPermissions')}</span>
@@ -196,8 +197,8 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  </div>
  </DialogBody>
  <DialogFooter>
- <Button variant="outline" size="sm" type="button" onClick={onClose}>{t('common:actions.cancel')}</Button>
- <Button size="sm" type="submit" disabled={updateApiKey.isPending}>
+ <Button variant="outline" size="sm" type="button" className="h-8 px-3 text-mini" onClick={onClose}>{t('common:actions.cancel')}</Button>
+ <Button size="sm" type="submit" className="h-8 px-3 text-mini" disabled={updateApiKey.isPending}>
  {updateApiKey.isPending ? (
  <>
  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

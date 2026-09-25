@@ -11,6 +11,7 @@ import { reportSystemError } from '../../services/api/systemErrors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -123,41 +124,38 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
         </DialogHeader>
         <DialogBody className="space-y-4">
           <div className="space-y-2">
-            <Label>{t('assign.target')}</Label>
-            <div className="flex gap-2">
-              <button
-                className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
-                  targetType === 'user'
-                    ? 'border-primary/50 bg-primary/10 text-primary'
-                    : 'border-border/40 text-muted-foreground hover:border-border/60'
-                }`}
-                onClick={() => {
-                  setTargetType('user');
-                  setTargetId('');
-                }}
-              >
-                {t('assign.user')}
-              </button>              <button
-                className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
-                  targetType === 'role'
-                    ? 'border-primary/50 bg-primary/10 text-primary'
-                    : 'border-border/40 text-muted-foreground hover:border-border/60'
-                }`}
-                onClick={() => {
-                  setTargetType('role');
-                  setTargetId('');
-                }}
-              >
-                {t('assign.role')}
-              </button>            </div>
+            <Label compact>{t('assign.target')}</Label>
+            <div className="flex items-center gap-0.5 border-b border-border/50">
+              {(['user', 'role'] as AssignmentTarget[]).map((type) => (
+                <button
+                  key={type}
+                  className={cn(
+                    'relative h-7 px-3 text-mini transition-colors',
+                    targetType === type
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  onClick={() => {
+                    setTargetType(type);
+                    setTargetId('');
+                  }}
+                >
+                  {type === 'user' ? t('assign.user') : t('assign.role')}
+                  {targetType === type && (
+                    <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="node-assign-search">
+            <Label compact htmlFor="node-assign-search">
               {targetType === 'user' ? t('assign.searchUsers') : t('assign.searchRoles')}
             </Label>
             <Input
               id="node-assign-search"
+              className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={targetType === 'user'
@@ -166,62 +164,56 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
             />
           </div>
 
-          <div className="max-h-48 overflow-y-auto rounded-md border border-border/50">
+          <div className="max-h-48 overflow-y-auto rounded-sm border border-border/50">
             {targetType === 'user' ? (
               usersLoading ? (
-                <div className="p-4 text-center text-muted-foreground">
+                <div className="type-meta p-4 text-center">
                   {t('assign.loadingUsers')}
                 </div>
               ) : filteredUsers.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">
+                <div className="type-meta p-4 text-center">
                   {t('assign.noUsers')}
                 </div>
               ) : (
-                <div className="divide-y divide-border/30">
+                <div className="divide-y divide-border/50">
                   {filteredUsers.map((user) => (
                     <button
                       key={user.id}
-                      className={`w-full px-4 py-2 text-left transition-all hover:bg-surface-2/50 ${
-                        targetId === user.id
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground'
-                      }`}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-mini transition-colors hover:bg-surface-1/40',
+                        targetId === user.id ? 'bg-primary/10 text-foreground' : 'text-muted-foreground',
+                      )}
                       onClick={() => setTargetId(user.id)}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{user.username}</span>
-                        <span className="text-xs text-muted-foreground">{user.email}</span>
-                      </div>
+                      <span className="truncate font-medium">{user.username}</span>
+                      <span className="truncate font-mono text-micro tabular-nums">{user.email}</span>
                     </button>
                   ))}
                 </div>
               )
             ) : rolesLoading ? (
-              <div className="p-4 text-center text-muted-foreground">
+              <div className="type-meta p-4 text-center">
                 {t('assign.loadingRoles')}
               </div>
             ) : filteredRoles.length === 0 ? (
-              <div className="p-4 text-center text-muted-foreground">
+              <div className="type-meta p-4 text-center">
                 {t('assign.noRoles')}
               </div>
             ) : (
-              <div className="divide-y divide-border/30">
+              <div className="divide-y divide-border/50">
                 {filteredRoles.map((role) => (
                   <button
                     key={role.id}
-                    className={`w-full px-4 py-2 text-left transition-all hover:bg-surface-2/50 ${
-                      targetId === role.id
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground'
-                    }`}
+                    className={cn(
+                      'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-mini transition-colors hover:bg-surface-1/40',
+                      targetId === role.id ? 'bg-primary/10 text-foreground' : 'text-muted-foreground',
+                    )}
                     onClick={() => setTargetId(role.id)}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{role.name}</span>
-                      {role.description && (
-                        <span className="text-xs text-muted-foreground">{role.description}</span>
-                      )}
-                    </div>
+                    <span className="truncate font-medium">{role.name}</span>
+                    {role.description && (
+                      <span className="truncate text-micro">{role.description}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -229,35 +221,40 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
           </div>
 
           {targetId && (
-            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2">
-              <span className="text-xs text-muted-foreground">
-                {t('assign.selected', {
-                  name: targetType === 'user'
-                    ? filteredUsers.find((u) => u.id === targetId)?.username || t('assign.unknownUser')
-                    : filteredRoles.find((r) => r.id === targetId)?.name || t('assign.unknownRole'),
-                })}
-              </span>
+            <div className="rounded-sm border border-border/50 px-3 py-2 text-mini text-muted-foreground">
+              {t('assign.selected', {
+                name: targetType === 'user'
+                  ? filteredUsers.find((u) => u.id === targetId)?.username || t('assign.unknownUser')
+                  : filteredRoles.find((r) => r.id === targetId)?.name || t('assign.unknownRole'),
+              })}
             </div>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="node-assign-expires">{t('assign.expiration')}</Label>
+            <Label compact htmlFor="node-assign-expires">{t('assign.expiration')}</Label>
             <Input
               id="node-assign-expires"
+              className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini"
               type="datetime-local"
               value={expiresAt}
               onChange={(e) => setExpiresAt(e.target.value)}
               min={new Date().toISOString().slice(0, 16)}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="type-overline">
               {t('assign.expirationHint')}
             </p>
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={handleClose}>
             {t('common:actions.cancel')}
-          </Button>          <Button onClick={handleSubmit} disabled={!targetId || assignMutation.isPending}>
+          </Button>
+          <Button
+            size="sm"
+            className="h-8 px-3 text-mini"
+            onClick={handleSubmit}
+            disabled={!targetId || assignMutation.isPending}
+          >
             {assignMutation.isPending ? t('assign.assigning') : t('assign.submit')}
           </Button>
         </DialogFooter>

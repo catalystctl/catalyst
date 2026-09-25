@@ -10,14 +10,11 @@ import {
  CheckCircle2,
  CheckCheck,
  Download,
- Radio,
  Copy,
  Check,
  Server,
  Loader2,
 } from 'lucide-react';
-import TabHeader from '../../components/servers/tabs/TabHeader';
-import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -45,8 +42,22 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { BracketLabel, Segmented, StatusLed } from '../../components/deck/primitives';
+import { cn } from '@/lib/utils';
 
 const pageSize = 50;
+
+/**
+ * One grid template shared by the column header and every row, so columns line
+ * up. Fixed / minmax(0,1fr) tracks only — never `auto`.
+ *   base : stacked (level · component · message · actions)
+ *   md   : level · component · message · actions
+ *   xl   : level · component · node · message · timestamp · actions
+ */
+const GRID =
+ 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+ 'md:grid-cols-[6.5rem_9rem_minmax(0,1fr)_10rem] ' +
+ 'xl:grid-cols-[6rem_10rem_5.5rem_minmax(0,1fr)_9rem_10.5rem]';
 
 const buildDefaultRange = () => {
  const now = new Date();
@@ -60,10 +71,16 @@ const buildDefaultRange = () => {
 
 // ── Level Color Helpers ──
 function levelColor(level: string) {
- if (level === 'critical') return 'border-destructive/40 text-destructive';
- if (level === 'error') return 'border-danger/40 text-danger';
- if (level === 'warn') return 'border-warning/40 text-warning';
- return 'border-border text-muted-foreground';
+ if (level === 'critical') return 'text-destructive';
+ if (level === 'error') return 'text-danger';
+ if (level === 'warn') return 'text-warning';
+ return 'text-muted-foreground';
+}
+
+function levelTone(level: string): 'alarm' | 'hazard' | 'idle' {
+ if (level === 'critical' || level === 'error') return 'alarm';
+ if (level === 'warn') return 'hazard';
+ return 'idle';
 }
 
 function levelBg(level: string) {
@@ -79,8 +96,8 @@ function levelLabel(level: string) {
  if (level === 'warn') return 'Warning';
  return level;
 }
-/** Localized level badge; the copyable diagnostics report keeps the raw level names. */
-function LevelBadge({ level, className }: { level: string; className: string }) {
+/** Localized level marker; the copyable diagnostics report keeps the raw level names. */
+function LevelBadge({ level, className }: { level: string; className?: string }) {
  const { t } = useTranslation('admin-system');
  const label =
  level === 'critical'
@@ -90,7 +107,12 @@ function LevelBadge({ level, className }: { level: string; className: string }) 
  : level === 'warn'
  ? t('systemErrors.levelWarning')
  : level;
- return <Badge variant="outline" className={className}>{label}</Badge>;
+ return (
+ <span className={cn('flex items-center gap-1.5 text-micro uppercase', className)}>
+ <StatusLed tone={levelTone(level)} />
+ <span className="truncate">{label}</span>
+ </span>
+ );
 }
 
 // ── Copy Helper ──
@@ -213,17 +235,17 @@ return (
  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.level')}</span>
- <LevelBadge level={error.level} className={`text-[11px] ${levelColor(error.level)}`} />
+ <LevelBadge level={error.level} className={`text-micro ${levelColor(error.level)}`} />
  </div>
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.status')}</span>
- <Badge variant={error.resolved ? 'outline' : 'secondary'} className={`text-[11px] ${error.resolved ? 'border-success/40 text-success' : ''}`}>
+ <Badge variant={error.resolved ? 'outline' : 'secondary'} className={`text-micro ${error.resolved ? 'border-success/40 text-success' : ''}`}>
  {error.resolved ? t('systemErrors.resolved') : t('systemErrors.unresolved')}
  </Badge>
  </div>
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.nodeId')}</span>
- <span className="block truncate font-mono text-[11px]" title={error.nodeId ?? t('systemErrors.notAvailable')}>
+ <span className="block truncate font-mono text-micro" title={error.nodeId ?? t('systemErrors.notAvailable')}>
  {error.nodeId ? (
  <span className="flex items-center gap-1 text-primary">
  <Server className="h-3 w-3" />
@@ -236,13 +258,13 @@ return (
  </div>
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.requestId')}</span>
- <span className="block truncate font-mono text-[11px] text-muted-foreground" title={error.requestId ?? 'n/a'}>
+ <span className="block truncate font-mono text-micro text-muted-foreground" title={error.requestId ?? 'n/a'}>
  {error.requestId ?? 'n/a'}
  </span>
  </div>
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.userId')}</span>
- <span className="block truncate font-mono text-[11px] text-muted-foreground" title={error.userId ?? 'n/a'}>
+ <span className="block truncate font-mono text-micro text-muted-foreground" title={error.userId ?? 'n/a'}>
  {error.userId ?? 'n/a'}
  </span>
  </div>
@@ -250,7 +272,7 @@ return (
 
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.timestamp')}</span>
- <div className="flex items-center gap-2 text-sm text-foreground">
+ <div className="flex items-center gap-2 text-mini text-foreground">
  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
  {formatDateTime(error.createdAt)}
  </div>
@@ -258,7 +280,7 @@ return (
 
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.tableMessage')}</span>
- <div className="rounded-lg border border-border/30 bg-surface-2/40 px-3 py-2 text-sm text-foreground">
+ <div className="rounded-sm border border-border/30 bg-surface-2/40 px-3 py-2 text-mini text-foreground">
  {systemErrorMessage(t, error.message)}
  </div>
  </div>
@@ -266,7 +288,7 @@ return (
  {error.stack && (
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.stackTrace')}</span>
- <pre className="max-h-64 overflow-auto rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground">
+ <pre className="max-h-64 overflow-auto rounded-sm border border-border/30 bg-surface-0 p-3 font-mono text-micro leading-relaxed text-foreground">
  {error.stack}
  </pre>
  </div>
@@ -277,8 +299,8 @@ return (
  <span className="type-overline">
  {t('systemErrors.metadataCount', { count: metadataEntries.length })}
  </span>
- <div className="overflow-hidden rounded-lg border border-border/30 bg-surface-2/40">
- <table className="w-full text-xs">
+ <div className="overflow-hidden rounded-sm border border-border/30 bg-surface-2/40">
+ <table className="w-full text-mini">
  <thead>
  <tr className="border-b border-border/30 text-left">
  <th className="px-3 py-2 font-semibold text-muted-foreground">{t('systemErrors.metadataKey')}</th>
@@ -301,7 +323,7 @@ return (
  )}
 
  {!hasMetadata && (
- <div className="rounded-lg border border-dashed border-border/30 bg-surface-2/20 px-4 py-3 text-center text-xs text-muted-foreground">
+ <div className="rounded-sm border border-dashed border-border/30 bg-surface-2/20 px-4 py-3 text-center text-mini text-muted-foreground">
  {t('systemErrors.noMetadata')}
  </div>
  )}
@@ -342,38 +364,41 @@ function ErrorRow({
  const { t } = useTranslation('admin-system');
  const { copiedId, copy } = useCopyToClipboard();
  const isCopied = copiedId === error.id;
+ const component = systemErrorComponentLabel(t, error.component);
+ const message = systemErrorMessage(t, error.message);
  return (
- <div className="group relative px-5 py-3.5 text-sm transition-colors hover:bg-surface-2/30">
- {/* Desktop: grid */}
- <div className="hidden grid-cols-12 items-center gap-3 md:grid">
- <div className="col-span-2 min-w-0">
- <LevelBadge level={error.level} className={`text-[11px] ${levelColor(error.level)}`} />
- </div>
- <div className="col-span-2 truncate font-medium text-foreground">
- {systemErrorComponentLabel(t, error.component)}
- </div>
- <div className="col-span-1 truncate font-mono text-[10px] text-muted-foreground">
+ <div className="group border-t border-border/40 transition-colors hover:bg-surface-1/40">
+ {/* Desktop — same grid as the column header */}
+ <div className={cn(GRID, 'hidden py-1.5 pl-3 pr-3 md:grid')}>
+ <LevelBadge level={error.level} className={levelColor(error.level)} />
+ <span className="truncate text-mini text-foreground" title={component}>
+ {component}
+ </span>
+ <span className="hidden min-w-0 xl:block">
  {error.nodeId ? (
- <span className="inline-flex items-center gap-1" title={t('systemErrors.nodeTitle', { nodeId: error.nodeId })}>
+ <span
+ className="flex min-w-0 items-center gap-1 font-mono text-micro text-muted-foreground"
+ title={t('systemErrors.nodeTitle', { nodeId: error.nodeId })}
+ >
  <Server className="h-3 w-3 shrink-0" />
  <span className="truncate">{error.nodeId}</span>
  </span>
  ) : (
- <span className="text-muted-foreground/40">—</span>
+ <span className="text-micro text-muted-foreground/40">—</span>
  )}
- </div>
- <div className="col-span-3 truncate text-muted-foreground">
- {systemErrorMessage(t, error.message)}
- </div>
- <div className="col-span-2 truncate font-mono text-xs text-muted-foreground">
+ </span>
+ <span className="truncate text-mini text-muted-foreground" title={message}>
+ {message}
+ </span>
+ <span className="hidden truncate font-mono text-micro tabular-nums text-muted-foreground xl:block">
  {formatDateTime(error.createdAt)}
- </div>
- <div className="col-span-2 flex items-center justify-end gap-2">
+ </span>
+ <span className="flex items-center justify-end gap-1">
  {!error.resolved && (
  <Button
  variant="ghost"
  size="sm"
- className="h-7 gap-1 text-[11px] text-success hover:text-success"
+ className="h-7 gap-1 rounded-sm px-2 text-micro text-success hover:text-success"
  onClick={(e) => {
  e.stopPropagation();
  onResolve();
@@ -385,7 +410,7 @@ function ErrorRow({
  </Button>
  )}
  <button
- className="rounded-md p-1 text-muted-foreground opacity-0 transition-colors hover:bg-primary/5 hover:text-primary sm:group-hover:opacity-100"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={(e) => {
  e.stopPropagation();
  copy(formatErrorForCopy(error), error.id);
@@ -395,35 +420,33 @@ function ErrorRow({
  {isCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
  </button>
  <button
- className="rounded-md p-1 text-muted-foreground opacity-0 transition-colors hover:bg-primary/5 hover:text-primary sm:group-hover:opacity-100"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={onView}
  title={t('systemErrors.viewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
- </div>
+ </span>
  </div>
 
- {/* Mobile: stacked */}
+ {/* Mobile — stacked */}
  <div className="md:hidden">
- <div className="flex items-center justify-between gap-2">
+ <div className="flex items-start justify-between gap-2">
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
- <LevelBadge level={error.level} className={`text-[10px] ${levelColor(error.level)}`} />
- <span className="truncate font-medium text-foreground">
- {systemErrorComponentLabel(t, error.component)}
- </span>
+ <LevelBadge level={error.level} className={levelColor(error.level)} />
+ <span className="truncate text-mini text-foreground">{component}</span>
  </div>
- <div className="mt-0.5 truncate text-xs text-muted-foreground">
- {systemErrorMessage(t, error.message)}
- </div>
- </div>
- <div className="flex items-center gap-2">
- <span className="text-[11px] text-muted-foreground">
+ <p className="mt-0.5 truncate text-micro text-muted-foreground" title={message}>
+ {message}
+ </p>
+ <p className="mt-0.5 font-mono text-micro tabular-nums text-muted-foreground">
  {formatDateTime(error.createdAt)}
- </span>
+ </p>
+ </div>
+ <div className="flex items-center gap-1">
  <button
- className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={(e) => {
  e.stopPropagation();
  copy(formatErrorForCopy(error), error.id);
@@ -433,7 +456,7 @@ function ErrorRow({
  {isCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
  </button>
  <button
- className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={onView}
  title={t('systemErrors.viewDetails')}
  >
@@ -442,11 +465,11 @@ function ErrorRow({
  </div>
  </div>
  {!error.resolved && (
- <div className="mt-2 flex">
+ <div className="mt-1 flex">
  <Button
  variant="ghost"
  size="sm"
- className="h-7 gap-1 text-[11px] text-success hover:text-success"
+ className="h-7 gap-1 rounded-sm px-2 text-micro text-success hover:text-success"
  onClick={(e) => {
  e.stopPropagation();
  onResolve();
@@ -589,18 +612,18 @@ function ExportErrorsModal({
      </div>
 
      {activeFilterChips.length > 0 ? (
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/30 bg-surface-2/40 px-3 py-2">
-       <span className="text-[11px] text-muted-foreground">{t('systemErrors.currentFilters')}</span>
+      <div className="flex flex-wrap items-center gap-2 rounded-sm border border-border/30 bg-surface-2/40 px-3 py-2">
+       <span className="text-micro text-muted-foreground">{t('systemErrors.currentFilters')}</span>
        {activeFilterChips.map((chip) => (
-        <Badge key={chip} variant="outline" className="text-[10px]">{chip}</Badge>
+        <Badge key={chip} variant="outline" className="text-micro">{chip}</Badge>
        ))}
       </div>
      ) : (
-      <p className="text-xs text-muted-foreground">{t('systemErrors.noFilters')}</p>
+      <p className="text-mini text-muted-foreground">{t('systemErrors.noFilters')}</p>
      )}
 
      {error && (
-      <p className="text-xs text-destructive">{error}</p>
+      <p className="text-mini text-destructive">{error}</p>
      )}
     </DialogBody>
 
@@ -652,16 +675,16 @@ function ResolveAllModal({
     <DialogBody className="space-y-3">
      {filtersSummary.length > 0 ? (
       <div className="flex flex-wrap items-center gap-2">
-       <span className="text-[11px] text-muted-foreground">{t('systemErrors.matchingFilters')}</span>
+       <span className="text-micro text-muted-foreground">{t('systemErrors.matchingFilters')}</span>
        {filtersSummary.map((chip) => (
-        <Badge key={chip} variant="outline" className="text-[10px]">{chip}</Badge>
+        <Badge key={chip} variant="outline" className="text-micro">{chip}</Badge>
        ))}
       </div>
      ) : (
-      <p className="text-xs text-muted-foreground">{t('systemErrors.noFiltersAll')}</p>
+      <p className="text-mini text-muted-foreground">{t('systemErrors.noFiltersAll')}</p>
      )}
-     <p className="text-xs text-muted-foreground">{t('systemErrors.cannotUndo')}</p>
-     {error && <p className="text-xs text-destructive">{error}</p>}
+     <p className="text-mini text-muted-foreground">{t('systemErrors.cannotUndo')}</p>
+     {error && <p className="text-mini text-destructive">{error}</p>}
     </DialogBody>
 
     <DialogFooter>
@@ -770,64 +793,69 @@ function SystemErrorsPage() {
  };
 
  return (
- <div className="space-y-5">
- <TabHeader
- icon={Bug}
- title={t('systemErrors.title')}
- description={t('systemErrors.description')}
- actions={
+ <div className="flex min-h-0 flex-1 flex-col gap-3">
+ {/* ── Deck header ── */}
+ <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+ <div className="flex min-w-0 flex-col gap-1">
+ <BracketLabel>{t('layout:sections.monitoring')}</BracketLabel>
+ <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
+ {t('systemErrors.title')}
+ </h1>
+ <p className="text-mini text-muted-foreground">{t('systemErrors.description')}</p>
+ </div>
  <div className="flex flex-wrap items-center gap-2">
- {isLive && (
- <Badge variant="outline" className="gap-1.5 border-success/40 text-success text-xs">
- <span className="relative flex h-2 w-2">
- <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
- <span className="relative inline-flex h-2 w-2 rounded-full bg-success/50" />
+ <span className="flex items-center gap-1.5 text-micro uppercase">
+ <StatusLed tone={isLive ? 'go' : 'idle'} pulse={isLive} />
+ <span className="text-muted-foreground">
+ {isLive ? t('systemErrors.live') : t('systemErrors.offline')}
  </span>
- {t('systemErrors.live')}
- </Badge>
- )}
- {!isLive && (
- <Badge variant="outline" className="gap-1.5 text-xs text-muted-foreground">
- <Radio className="h-3 w-3" />
- {t('systemErrors.offline')}
- </Badge>
- )}
- <Badge variant="outline" className="text-xs">
+ </span>
+ <Segmented muted className="text-micro">
  {t('systemErrors.errorCount', { count: data?.pagination?.total ?? errors.length })}
- </Badge>
- <Button variant="outline" size="sm" onClick={() => setShowExport(true)} className="gap-1.5">
+ </Segmented>
+ <Button
+ variant="outline"
+ size="sm"
+ className="h-8 gap-1.5 rounded-sm px-3 text-mini"
+ onClick={() => setShowExport(true)}
+ >
  <Download className="h-3.5 w-3.5" />
  {t('systemErrors.export')}
  </Button>
  <Button
-  variant="outline"
-  size="sm"
-  onClick={() => { setResolveAllError(null); setShowResolveAll(true); }}
-  disabled={isResolveAllDisabled}
-  className="gap-1.5"
-  title={isResolveAllDisabled ? t('systemErrors.resolveAllDisabledTitle') : t('systemErrors.resolveAllTooltip')}
+ variant="outline"
+ size="sm"
+ className="h-8 gap-1.5 rounded-sm px-3 text-mini"
+ onClick={() => { setResolveAllError(null); setShowResolveAll(true); }}
+ disabled={isResolveAllDisabled}
+ title={isResolveAllDisabled ? t('systemErrors.resolveAllDisabledTitle') : t('systemErrors.resolveAllTooltip')}
  >
  <CheckCheck className="h-3.5 w-3.5" />
  {t('systemErrors.resolveAll')}
  </Button>
- <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1.5">
+ <Button
+ variant="outline"
+ size="sm"
+ className="h-8 gap-1.5 rounded-sm px-3 text-mini"
+ onClick={clearFilters}
+ >
  <RotateCcw className="h-3.5 w-3.5" />
  {t('systemErrors.clear')}
  </Button>
  </div>
- }
- variant="danger"
- />
+ </header>
 
- {/* ── Filters ── */}
- <div className="overflow-hidden rounded-md border border-border/50 bg-card/60 p-4">
- <div className="mb-3 flex items-center gap-2 type-overline">
- <Search className="h-3.5 w-3.5" />
- {t('systemErrors.filters')}
+ {/* ── The deck: filters, columns, rows and paging in one frame ── */}
+ <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+ {/* Filter panel */}
+ <div className="border-b border-border/50 bg-surface-1/20 px-3 py-2">
+ <div className="mb-2 flex items-center gap-2">
+ <Search className="h-3 w-3 text-muted-foreground" />
+ <BracketLabel tone="muted">{t('systemErrors.filters')}</BracketLabel>
  </div>
- <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.level')}</span>
+ <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+ <label className="flex flex-col gap-1">
+ <span className="type-overline">{t('systemErrors.level')}</span>
  <Select
  value={level || 'all'}
  onValueChange={(next) => {
@@ -835,7 +863,7 @@ function SystemErrorsPage() {
  setPage(1);
  }}
  >
- <SelectTrigger className="w-full border-border/40">
+ <SelectTrigger className="h-7 w-full rounded-sm border-border/60 text-mini">
  <SelectValue placeholder={t('systemErrors.allLevels')} />
  </SelectTrigger>
  <SelectContent>
@@ -846,16 +874,26 @@ function SystemErrorsPage() {
  </SelectContent>
  </Select>
  </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.component')}</span>
- <Input value={component} onChange={(e) => { setComponent(e.target.value); setPage(1); }} placeholder={t('systemErrors.componentPlaceholder')} className="border-border/40" />
+ <label className="flex flex-col gap-1">
+ <span className="type-overline">{t('systemErrors.component')}</span>
+ <Input
+ value={component}
+ onChange={(e) => { setComponent(e.target.value); setPage(1); }}
+ placeholder={t('systemErrors.componentPlaceholder')}
+ className="h-7 rounded-sm border-border/60 text-mini"
+ />
  </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.node')}</span>
- <Input value={nodeId} onChange={(e) => { setNodeId(e.target.value); setPage(1); }} placeholder={t('systemErrors.nodePlaceholder')} className="border-border/40" />
+ <label className="flex flex-col gap-1">
+ <span className="type-overline">{t('systemErrors.node')}</span>
+ <Input
+ value={nodeId}
+ onChange={(e) => { setNodeId(e.target.value); setPage(1); }}
+ placeholder={t('systemErrors.nodePlaceholder')}
+ className="h-7 rounded-sm border-border/60 text-mini"
+ />
  </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.status')}</span>
+ <label className="flex flex-col gap-1">
+ <span className="type-overline">{t('systemErrors.status')}</span>
  <Select
  value={resolved === '' ? 'all' : resolved === 'true' ? 'resolved' : 'unresolved'}
  onValueChange={(next) => {
@@ -865,7 +903,7 @@ function SystemErrorsPage() {
  setPage(1);
  }}
  >
- <SelectTrigger className="w-full border-border/40">
+ <SelectTrigger className="h-7 w-full rounded-sm border-border/60 text-mini">
  <SelectValue placeholder={t('systemErrors.all')} />
  </SelectTrigger>
  <SelectContent>
@@ -875,26 +913,26 @@ function SystemErrorsPage() {
  </SelectContent>
  </Select>
  </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.from')}</span>
+ <label className="flex flex-col gap-1">
+ <span className="type-overline">{t('systemErrors.from')}</span>
  <Input
  type="datetime-local"
  value={from}
  onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }}
- className="border-border/40"
+ className="h-7 rounded-sm border-border/60 text-mini"
  />
  </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.to')}</span>
+ <label className="flex flex-col gap-1">
+ <span className="type-overline">{t('systemErrors.to')}</span>
  <Input
  type="datetime-local"
  value={to}
  onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }}
- className="border-border/40"
+ className="h-7 rounded-sm border-border/60 text-mini"
  />
  </label>
- <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('systemErrors.quickRange')}</span>
+ <label className="flex flex-col gap-1">
+ <span className="type-overline">{t('systemErrors.quickRange')}</span>
  <Select
  value={range || 'custom'}
  onValueChange={(next) => {
@@ -912,7 +950,7 @@ function SystemErrorsPage() {
  setPage(1);
  }}
  >
- <SelectTrigger className="w-full border-border/40">
+ <SelectTrigger className="h-7 w-full rounded-sm border-border/60 text-mini">
  <SelectValue placeholder={t('systemErrors.custom')} />
  </SelectTrigger>
  <SelectContent>
@@ -928,44 +966,44 @@ function SystemErrorsPage() {
 
  {/* Active filter chips */}
  {hasFilters && (
- <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/30 pt-3">
- <span className="text-[11px] text-muted-foreground">{t('activeLabel')}</span>
- {level && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipLevel', { value: level })}</Badge>}
- {component && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipComponent', { value: component })}</Badge>}
- {nodeId && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipNode', { value: nodeId })}</Badge>}
- {resolved && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipStatus', { value: resolved === 'true' ? t('systemErrors.statusResolvedLower') : t('systemErrors.statusUnresolvedLower') })}</Badge>}
- {range && <Badge variant="outline" className="text-[10px]">{t('systemErrors.chipRange', { value: range })}</Badge>}
+ <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/40 pt-2">
+ <span className="text-micro text-muted-foreground">{t('activeLabel')}</span>
+ {level && <Badge variant="outline" className="text-micro">{t('systemErrors.chipLevel', { value: level })}</Badge>}
+ {component && <Badge variant="outline" className="text-micro">{t('systemErrors.chipComponent', { value: component })}</Badge>}
+ {nodeId && <Badge variant="outline" className="text-micro">{t('systemErrors.chipNode', { value: nodeId })}</Badge>}
+ {resolved && <Badge variant="outline" className="text-micro">{t('systemErrors.chipStatus', { value: resolved === 'true' ? t('systemErrors.statusResolvedLower') : t('systemErrors.statusUnresolvedLower') })}</Badge>}
+ {range && <Badge variant="outline" className="text-micro">{t('systemErrors.chipRange', { value: range })}</Badge>}
  </div>
  )}
  </div>
 
- {/* ── Error Table ── */}
- {isLoading ? (
- <div className="overflow-hidden rounded-md border border-border/50 bg-card/80 p-4">
- {/* Desktop header */}
- <div className="hidden border-b border-border/30 px-5 py-3 type-overline md:grid md:grid-cols-12 md:gap-3">
- <div className="col-span-2">{t('systemErrors.tableLevel')}</div>
- <div className="col-span-2">{t('systemErrors.tableComponent')}</div>
- <div className="col-span-1">{t('systemErrors.tableNode')}</div>
- <div className="col-span-3">{t('systemErrors.tableMessage')}</div>
- <div className="col-span-2">{t('systemErrors.tableTimestamp')}</div>
- <div className="col-span-2 text-right">{t('systemErrors.tableActions')}</div>
+ {/* Column header — same grid as the rows, so columns always line up */}
+ <div
+ className={cn(
+ GRID,
+ 'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+ )}
+ >
+ <span className="type-overline">{t('systemErrors.tableLevel')}</span>
+ <span className="type-overline">{t('systemErrors.tableComponent')}</span>
+ <span className="type-overline hidden xl:inline-flex">{t('systemErrors.tableNode')}</span>
+ <span className="type-overline">{t('systemErrors.tableMessage')}</span>
+ <span className="type-overline hidden justify-self-end xl:inline-flex">{t('systemErrors.tableTimestamp')}</span>
+ <span className="type-overline justify-self-end">{t('systemErrors.tableActions')}</span>
  </div>
- <TabLoadingState rows={8} />
+
+ {/* Rows */}
+ <div className="max-h-[calc(100dvh-20rem)] min-w-0 overflow-y-auto bg-background/25">
+ {isLoading ? (
+ <div>
+ {Array.from({ length: 8 }).map((_, index) => (
+ <div key={index} className={cn(GRID, 'border-t border-border/40 py-2 pl-3 pr-3')}>
+ <div className="h-3.5 w-24 animate-pulse bg-surface-3" />
+ </div>
+ ))}
  </div>
  ) : errors.length > 0 ? (
- <div className="overflow-hidden rounded-md border border-border/50 bg-card/80">
- {/* Desktop header */}
- <div className="hidden border-b border-border/30 px-5 py-3 type-overline md:grid md:grid-cols-12 md:gap-3">
- <div className="col-span-2">{t('systemErrors.tableLevel')}</div>
- <div className="col-span-2">{t('systemErrors.tableComponent')}</div>
- <div className="col-span-1">{t('systemErrors.tableNode')}</div>
- <div className="col-span-3">{t('systemErrors.tableMessage')}</div>
- <div className="col-span-2">{t('systemErrors.tableTimestamp')}</div>
- <div className="col-span-2 text-right">{t('systemErrors.tableActions')}</div>
- </div>
- <div className="divide-y divide-border/30">
- {errors.map((error) => (
+ errors.map((error) => (
  <ErrorRow
  key={error.id}
  error={error}
@@ -973,10 +1011,20 @@ function SystemErrorsPage() {
  onResolve={() => handleResolve(error.id)}
  isResolving={resolveMutation.isPending && resolveMutation.variables === error.id}
  />
- ))}
+ ))
+ ) : (
+ <div className="p-3">
+ <TabEmptyState
+ title={t('systemErrors.emptyTitle')}
+ description={hasFilters ? t('systemErrors.emptyFilteredDescription') : t('systemErrors.emptyDescription')}
+ />
  </div>
+ )}
+ </div>
+
+ {/* Pagination */}
  {pagination && pagination.totalPages > 1 && (
- <div className="flex justify-center border-t border-border/30 pt-3">
+ <div className="flex justify-center border-t border-border/50 px-3 py-2">
  <Pagination
  page={pagination.page}
  totalPages={pagination.totalPages}
@@ -985,12 +1033,6 @@ function SystemErrorsPage() {
  </div>
  )}
  </div>
- ) : (
- <TabEmptyState
- title={t('systemErrors.emptyTitle')}
- description={hasFilters ? t('systemErrors.emptyFilteredDescription') : t('systemErrors.emptyDescription')}
- />
- )}
 
  {/* ── Error Detail Modal ── */}
  {selectedError && (
@@ -999,22 +1041,22 @@ function SystemErrorsPage() {
 
  {/* ── Export Modal ── */}
  {showExport && (
-  <ExportErrorsModal
-   filters={{ level, component, nodeId, resolved: resolvedBool }}
-   onClose={() => setShowExport(false)}
-  />
+ <ExportErrorsModal
+ filters={{ level, component, nodeId, resolved: resolvedBool }}
+ onClose={() => setShowExport(false)}
+ />
  )}
 
  {/* ── Resolve All Modal ── */}
  {showResolveAll && (
-  <ResolveAllModal
-   unresolvedCount={resolveAllUnresolvedCount}
-   filtersSummary={resolveAllFiltersSummary}
-   isPending={resolveAllMutation.isPending}
-   error={resolveAllError}
-   onConfirm={handleResolveAllConfirm}
-   onClose={() => { if (!resolveAllMutation.isPending) setShowResolveAll(false); }}
-  />
+ <ResolveAllModal
+ unresolvedCount={resolveAllUnresolvedCount}
+ filtersSummary={resolveAllFiltersSummary}
+ isPending={resolveAllMutation.isPending}
+ error={resolveAllError}
+ onConfirm={handleResolveAllConfirm}
+ onClose={() => { if (!resolveAllMutation.isPending) setShowResolveAll(false); }}
+ />
  )}
  </div>
  );
