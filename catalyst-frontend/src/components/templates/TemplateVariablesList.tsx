@@ -21,26 +21,26 @@ function TemplateVariablesList({ variables }: Props) {
  {variables.map((variable) => (
  <div
  key={variable.name}
- className="rounded-lg border border-border/30 bg-surface-2/50 px-3 py-2.5 transition-colors hover:bg-surface-2"
+ className="rounded-md border border-border/50 bg-surface-2/50 px-3 py-2.5 transition-colors hover:bg-surface-2"
  >
  <div className="flex items-center justify-between gap-2">
- <div className="text-sm font-medium text-foreground">
+ <div className="type-numeric text-sm text-foreground">
  {variable.name}
  {variable.required && <span className="ml-1 text-xs text-destructive">*</span>}
  </div>
- <Badge variant="outline" className="shrink-0 text-[11px]">
+ <Badge variant="outline" className="shrink-0 font-mono text-[11px] tabular-nums">
  {variable.input ?? 'text'}
  </Badge>
  </div>
  {variable.description && (
- <div className="mt-0.5 text-xs text-muted-foreground">{variable.description}</div>
+ <div className="type-meta mt-0.5">{variable.description}</div>
  )}
- <div className="mt-1.5 text-xs text-muted-foreground">
- {t('variables.default')} <span className="font-medium text-foreground">{variable.default || '—'}</span>
+ <div className="type-overline mt-1.5">
+ {t('variables.default')} <span className="type-numeric text-foreground">{variable.default || '—'}</span>
  </div>
  {variable.rules && variable.rules.length > 0 && (
- <div className="mt-0.5 text-xs text-muted-foreground">
- {t('variables.rules')} <span className="font-medium text-foreground">{variable.rules.join(', ')}</span>
+ <div className="type-overline mt-0.5">
+ {t('variables.rules')} <span className="font-mono font-semibold tabular-nums text-foreground">{variable.rules.join(', ')}</span>
  </div>
  )}
  </div>

@@ -281,9 +281,6 @@ function NodeCreateModal(_props: Props) {
  {/* ── Step 1: Location Selection ── */}
  {step === 1 && (
  <div className="flex flex-col items-center px-6 py-10 text-center">
- <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-success/10">
- <MapPin className="h-7 w-7 text-success" />
- </div>
  <h3 className="text-base font-semibold text-foreground">
  {t('create.assignTitle')}
  </h3>
@@ -294,7 +291,7 @@ function NodeCreateModal(_props: Props) {
  {locations.length > 0 ? (
  <label className="mt-6 block w-full max-w-xs space-y-1.5">
  <span className="text-xs font-medium text-muted-foreground">
- {t('create.selectLocationLabel')} <span className="text-red-500">*</span>
+ {t('create.selectLocationLabel')} <span className="text-destructive">*</span>
  </span>
  <Select
  value={locationId || '__none__'}
@@ -307,7 +304,7 @@ function NodeCreateModal(_props: Props) {
  {locations.map((location) => (
  <SelectItem key={location.id} value={location.id}>
  <span className="flex items-center gap-2">
- <MapPin className="h-3.5 w-3.5 text-success" />
+ <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
  {location.name}
  {location.description && (
  <span className="text-muted-foreground">
@@ -321,7 +318,7 @@ function NodeCreateModal(_props: Props) {
  </Select>
  </label>
  ) : (
- <div className="mt-6 rounded-xl border border-dashed border-border/40 bg-surface-2/50 px-5 py-4">
+ <div className="mt-6 rounded-md border border-dashed border-border/50 bg-surface-2/50 px-5 py-4">
  <p className="text-sm text-muted-foreground">
  {t('form.noLocations')}{' '}
  <button
@@ -346,9 +343,9 @@ function NodeCreateModal(_props: Props) {
  {step === 2 && (
  <div className="space-y-3 text-sm text-muted-foreground">
  {locationId && (
- <div className="flex items-center gap-2 rounded-lg bg-success/5 px-3 py-2">
- <MapPin className="h-4 w-4 text-success" />
- <span className="text-xs font-medium text-success">
+ <div className="flex items-center gap-2 rounded-md bg-surface-2/50 px-3 py-2">
+ <MapPin className="h-4 w-4 text-muted-foreground" />
+ <span className="text-xs font-medium text-muted-foreground">
  {t('create.location', { name: locations.find((l) => l.id === locationId)?.name || locationId })}
  </span>
  </div>
@@ -454,7 +451,7 @@ function NodeCreateModal(_props: Props) {
  </div>
 
  {/* SFTP Configuration */}
- <div className="rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
+ <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-3">
  <div className="flex items-center justify-between">
  <span className="text-sm font-medium text-foreground">{t('form.sftpAccess')}</span>
  <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -499,7 +496,7 @@ function NodeCreateModal(_props: Props) {
  {t('form.advancedPaths')}
  </button>
  {showAdvanced && (
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
+ <div className="space-y-3 rounded-md border border-border/50 bg-surface-2/30 px-3 py-3">
  <label className="block space-y-1">
  <span className="text-muted-foreground">{t('form.consoleLogDir')}</span>
  <input
@@ -610,9 +607,7 @@ function NodeCreateModal(_props: Props) {
  {/* ── Step 3: Deploy Script ── */}
  {step === 3 && (
  <div className="flex flex-col items-center py-4 text-center">
- <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-success/10">
- <CheckCircle className="h-7 w-7 text-success" />
- </div>
+ <CheckCircle className="mb-4 h-6 w-6 text-success" />
  <h3 className="text-base font-semibold text-foreground">
  {t('create.registered')}
  </h3>
@@ -627,13 +622,13 @@ function NodeCreateModal(_props: Props) {
  </div>
  ) : deployInfo ? (
  <div className="mt-6 w-full min-w-0 space-y-3 text-left">
- <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
+ <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border/50 bg-surface-2 px-4 py-3 font-mono text-xs tabular-nums text-foreground">
  <code className="block max-w-full break-all whitespace-pre-wrap">
 {buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey)}
  </code>
  </div>
  <div className="flex items-center justify-between text-xs text-muted-foreground">
- <span>{t('deploy.tokenExpires', { time: formatDateTime(deployInfo.expiresAt) })}</span>
+ <span className="font-mono tabular-nums">{t('deploy.tokenExpires', { time: formatDateTime(deployInfo.expiresAt) })}</span>
  <button
  className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80"
  onClick={() => {

@@ -127,7 +127,7 @@ function TemplateDetailsPage() {
  <Badge variant="secondary" className="text-xs">
  {template.author}
  </Badge>
- <Badge variant="outline" className="text-xs">
+ <Badge variant="outline" className="type-numeric text-xs">
  v{template.version}
  </Badge>
  </div>
@@ -170,16 +170,16 @@ function TemplateDetailsPage() {
  {/* Startup card */}
  <ServerTabCard>
  <SectionHeader icon={FileCode} title={t('details.startup')} />
- <p className="mb-2 text-xs text-muted-foreground">
+ <p className="type-meta mb-2">
  {t('details.variablesHint')}
  </p>
- <div className="rounded-lg border border-border/30 bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground">
+ <div className="rounded-md border border-border/50 bg-surface-2 px-3 py-2.5 font-mono text-xs tabular-nums text-foreground">
  {template.startup}
  </div>
  {template.installScript && (
  <>
  <SectionHeader icon={FileCode} title={t('details.installScript')} />
- <div className="max-h-40 overflow-y-auto rounded-lg border border-border/30 bg-surface-2 px-3 py-2.5 font-mono text-xs whitespace-pre-wrap text-foreground">
+ <div className="max-h-40 overflow-y-auto rounded-md border border-border/50 bg-surface-2 px-3 py-2.5 font-mono text-xs tabular-nums whitespace-pre-wrap text-foreground">
  {template.installScript}
  </div>
  </>
@@ -191,7 +191,7 @@ function TemplateDetailsPage() {
  <ServerTabCard>
  <div className="flex items-center gap-2">
  <SectionHeader icon={FileCode} title={t('details.variables')} />
- <Badge variant="outline" className="text-xs">
+ <Badge variant="outline" className="type-numeric text-xs">
  {template.variables?.length ?? 0}
  </Badge>
  </div>

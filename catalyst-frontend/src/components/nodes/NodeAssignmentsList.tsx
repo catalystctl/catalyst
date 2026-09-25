@@ -68,7 +68,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  {isLoading ? (
  <TabLoadingState rows={2} />
  ) : assignments.length === 0 ? (
- <div className="rounded-lg border border-dashed border-border/40 bg-surface-2/30 py-8 text-center">
+ <div className="rounded-md border border-dashed border-border/50 bg-surface-2/30 py-8 text-center">
  <Shield className="mx-auto mb-2 h-6 w-6 text-muted-foreground/50" />
  <p className="text-sm text-muted-foreground">
  {t('assignments.empty')}
@@ -79,7 +79,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  {assignments.map((assignment) => (
  <div
  key={assignment.id}
- className="group flex items-center justify-between rounded-lg border border-border/30 bg-surface-2/30 px-3 py-2.5 transition-colors hover:bg-surface-2/50"
+ className="group flex items-center justify-between rounded-md border border-border/50 bg-surface-2/30 px-3 py-2.5 transition-colors hover:bg-surface-2/50"
  >
  <div className="flex items-center gap-2.5 min-w-0">
  {assignment.source === 'user' ? (
@@ -88,7 +88,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  <User className="h-3 w-3" />
  {t('assign.user')}
  </Badge>
- <span className="truncate text-sm font-medium text-foreground">
+ <span className="truncate font-mono text-sm font-medium tabular-nums text-foreground">
  {assignment.userId}
  </span>
  </>
@@ -106,11 +106,11 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  </div>
 
  <div className="flex items-center gap-3">
- <div className="hidden text-xs text-muted-foreground sm:block">
- <span>{t('assignments.assigned', { date: formatDate(assignment.assignedAt) })}</span>
+ <div className="type-meta hidden sm:block">
+ <span className="font-mono tabular-nums">{t('assignments.assigned', { date: formatDate(assignment.assignedAt) })}</span>
  {assignment.expiresAt && (
  <span
- className={`ml-2 ${
+ className={`ml-2 font-mono tabular-nums ${
  new Date(assignment.expiresAt) < new Date()
  ? 'text-destructive'
  : ''

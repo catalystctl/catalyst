@@ -205,14 +205,14 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  <>
  <Dialog open={open} onOpenChange={onOpenChange}>
  <DialogContent size="xl">
- <DialogHeader icon={<MapPin className="h-4 w-4" />} iconClassName="border-success/20 bg-success/10 text-success">
+ <DialogHeader icon={<MapPin className="h-4 w-4" />} iconClassName="border-border/50 bg-surface-2 text-muted-foreground">
  <DialogTitle>{t('locations.title')}</DialogTitle>
  <DialogDescription>{t('locations.description')}</DialogDescription>
  </DialogHeader>
  <DialogBody>
  {/* Inline form */}
  {isFormActive && (
- <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+ <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 p-4">
  <div className="mb-3 flex items-center justify-between">
  <span className="text-sm font-semibold text-foreground">
  {editingLocation ? t('locations.edit') : t('locations.new')}
@@ -246,9 +246,8 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  {Array.from({ length: 3 }).map((_, i) => (
  <div
  key={i}
- className="flex items-center gap-3 rounded-lg border border-border/30 px-4 py-3"
+ className="flex items-center gap-3 rounded-md border border-border/50 px-4 py-3"
  >
- <div className="h-8 w-8 animate-pulse rounded-lg bg-surface-3" />
  <div className="flex-1 space-y-1.5">
  <div className="h-4 w-28 animate-pulse rounded bg-surface-3" />
  <div className="h-3 w-48 animate-pulse rounded bg-surface-2" />
@@ -269,24 +268,19 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  {locations.map((location) => (
  <div
  key={location.id}
- className="group flex items-center gap-3 rounded-xl border border-border/30 px-4 py-3 transition-colors hover:bg-surface-2/30"
+ className="group flex items-center gap-3 rounded-md border border-border/50 px-4 py-3 transition-colors hover:bg-surface-2/30"
  >
- {/* Icon */}
- <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10">
- <MapPin className="h-4 w-4 text-success" />
- </div>
-
  {/* Info */}
  <div className="min-w-0 flex-1">
  <span className="font-medium text-foreground">
  {location.name}
  </span>
  {location.description && (
- <p className="mt-0.5 truncate text-xs text-muted-foreground">
+ <p className="type-meta mt-0.5 truncate">
  {location.description}
  </p>
  )}
- <span className="text-[11px] text-muted-foreground/70">
+ <span className="type-meta font-mono tabular-nums">
  {t('locations.nodeCount', { count: location.nodeCount ?? 0 })}
  </span>
  </div>

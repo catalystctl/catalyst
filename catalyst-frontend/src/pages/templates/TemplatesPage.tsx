@@ -93,7 +93,7 @@ function TemplateRow({
  : [...prev, template.id],
  )
  }
- className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary-600"
+ className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary"
  />
  )}
 
@@ -120,13 +120,13 @@ function TemplateRow({
  <Badge variant="secondary" className="hidden shrink-0 text-[11px] sm:inline-flex">
  {template.author}
  </Badge>
- <Badge variant="outline" className="shrink-0 text-[11px]">
+ <Badge variant="outline" className="type-numeric shrink-0 text-[11px]">
  v{template.version}
  </Badge>
  </div>
  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
  <span className="line-clamp-1 max-w-md hidden sm:inline">{description}</span>
- <span className="font-mono text-[11px] opacity-60">
+ <span className="font-mono text-[11px] tabular-nums opacity-60">
  {template.defaultImage || template.image}
  </span>
   <span className="hidden md:inline">
@@ -138,20 +138,20 @@ function TemplateRow({
  {/* Resource stats — visible on larger screens */}
  <div className="hidden items-center gap-4 lg:flex">
  <div className="text-right">
- <div className="flex items-center gap-1 text-xs font-medium text-foreground">
+ <div className="type-numeric flex items-center gap-1 text-xs text-foreground">
  <Cpu className="h-3 w-3 text-muted-foreground" />
  {template.allocatedCpuCores}
  </div>
- <div className="text-[11px] text-muted-foreground">{t('page.cores')}</div>
+ <div className="type-overline">{t('page.cores')}</div>
  </div>
  <div className="text-right">
- <div className="flex items-center gap-1 text-xs font-medium text-foreground">
+ <div className="type-numeric flex items-center gap-1 text-xs text-foreground">
  <HardDrive className="h-3 w-3 text-muted-foreground" />
  {template.allocatedMemoryMb >= 1024
  ? `${(template.allocatedMemoryMb / 1024).toFixed(1)} GB`
  : `${template.allocatedMemoryMb} MB`}
  </div>
- <div className="text-[11px] text-muted-foreground">{t('page.memory')}</div>
+ <div className="type-overline">{t('page.memory')}</div>
  </div>
  </div>
 
@@ -214,12 +214,12 @@ function NestSectionHeader({ nest, count }: { nest: Nest | null; count: number }
  <div className="sticky top-0 z-10 border-b border-border/30 bg-card px-4 py-2">
  <div className="flex items-center gap-2">
  {nest.icon && <img src={nest.icon} className="h-4 w-4 rounded" alt="" />}
- <h3 className="text-sm font-semibold text-foreground">{nest.name}</h3>
- <Badge variant="secondary" className="text-[10px]">
+ <h3 className="type-overline">{nest.name}</h3>
+ <Badge variant="secondary" className="type-numeric text-[10px]">
  {t('page.templateCount', { count })}
  </Badge>
  {nest.description && (
- <span className="hidden text-xs text-muted-foreground sm:inline">
+ <span className="type-meta hidden sm:inline">
  {nest.description}
  </span>
  )}
@@ -232,8 +232,8 @@ function NestSectionHeader({ nest, count }: { nest: Nest | null; count: number }
  <div className="sticky top-0 z-10 border-b border-border/30 bg-card px-4 py-2">
  <div className="flex items-center gap-2">
  <FolderOpen className="h-4 w-4 text-muted-foreground" />
- <h3 className="text-sm font-semibold text-foreground">{t('page.ungrouped')}</h3>
- <Badge variant="secondary" className="text-[10px]">
+ <h3 className="type-overline">{t('page.ungrouped')}</h3>
+ <Badge variant="secondary" className="type-numeric text-[10px]">
  {t('page.templateCount', { count })}
  </Badge>
  </div>
@@ -436,7 +436,7 @@ function TemplatesPage({ hideHeader }: Props) {
  {canWrite ? (
  <TemplateCreateModal />
  ) : (
- <span className="text-xs text-muted-foreground">{t('page.adminRequired')}</span>
+ <span className="type-meta">{t('page.adminRequired')}</span>
  )}
  </div>
  }
@@ -475,7 +475,7 @@ function TemplatesPage({ hideHeader }: Props) {
  <Filter className="h-3.5 w-3.5" />
  {t('page.filters')}
  {hasActiveFilters && (
- <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+ <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground/20 text-[10px] font-bold">
  {[authorFilter, selectedNestId].filter(Boolean).length}
  </span>
  )}
@@ -496,7 +496,7 @@ function TemplatesPage({ hideHeader }: Props) {
  </SelectContent>
  </Select>
 
- <span className="text-xs text-muted-foreground">
+ <span className="type-meta">
  {t('page.count', { filtered: filteredTemplates.length, total: templates.length })}
  </span>
  </div>
@@ -514,7 +514,7 @@ function TemplatesPage({ hideHeader }: Props) {
  >
  {t('page.all')}
  <span
- className={`text-[10px] ${selectedNestId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+ className={`type-numeric text-[10px] ${selectedNestId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
  >
  {templates.length}
  </span>
@@ -535,7 +535,7 @@ function TemplatesPage({ hideHeader }: Props) {
  {nest.icon && <img src={nest.icon} className="h-3.5 w-3.5 rounded" alt="" />}
  {nest.name}
  <span
- className={`text-[10px] ${selectedNestId === nest.id ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+ className={`type-numeric text-[10px] ${selectedNestId === nest.id ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
  >
  {count}
  </span>
@@ -554,7 +554,7 @@ function TemplatesPage({ hideHeader }: Props) {
  <FolderOpen className="h-3.5 w-3.5" />
  {t('page.ungrouped')}
  <span
- className={`text-[10px] ${selectedNestId === '__ungrouped__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+ className={`type-numeric text-[10px] ${selectedNestId === '__ungrouped__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
  >
  {nestCounts.ungroupedCount}
  </span>
@@ -565,10 +565,10 @@ function TemplatesPage({ hideHeader }: Props) {
 
  {/* ── Expandable Filter Panel ── */}
  {showFilters && (
- <div className="rounded-xl border border-border/30 bg-card p-4">
+ <div className="rounded-md border border-border/50 bg-card p-4">
  <div className="flex flex-wrap items-end gap-4">
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">{t('page.authorLabel')}</span>
+ <span className="type-overline">{t('page.authorLabel')}</span>
  <Select
  value={authorFilter || 'all'}
  onValueChange={(value) => {
@@ -590,7 +590,7 @@ function TemplatesPage({ hideHeader }: Props) {
  </label>
  {nests.length > 0 && (
  <label className="space-y-1.5">
- <span className="text-xs font-medium text-muted-foreground">{t('page.nestLabel')}</span>
+ <span className="type-overline">{t('page.nestLabel')}</span>
  <Select
  value={selectedNestId || 'all'}
  onValueChange={(value) => {
@@ -644,7 +644,7 @@ function TemplatesPage({ hideHeader }: Props) {
 
  {/* ── Bulk Actions Bar ── */}
  {selectedIds.length > 0 && canWrite && (
- <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
+ <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 px-4 py-2.5">
  <div className="flex items-center gap-3">
  <span className="text-sm font-medium text-foreground">
  {t('page.selected', { total: selectedIds.length })}
@@ -679,7 +679,7 @@ function TemplatesPage({ hideHeader }: Props) {
  {showGroupedView ? (
  <div className="space-y-4">
  {isLoading ? (
- <div className="rounded-xl border border-border/30 bg-card p-4">
+ <div className="rounded-md border border-border/50 bg-card p-4">
  <TabLoadingState rows={6} />
  </div>
  ) : groupedByNest.length > 0 ? (
@@ -688,7 +688,7 @@ function TemplatesPage({ hideHeader }: Props) {
  return (
  <div
  key={nestId ?? '__ungrouped__'}
- className="rounded-xl border border-border/30 bg-card overflow-hidden"
+ className="rounded-md border border-border/50 bg-card overflow-hidden"
  >
  {canWrite && !hideHeader && (
  <div className="flex items-center gap-3 border-b border-border/30 px-4 py-2">
@@ -708,9 +708,9 @@ function TemplatesPage({ hideHeader }: Props) {
  return Array.from(new Set([...prev, ...groupIds]));
  })
  }
- className="h-4 w-4 rounded border-border bg-card text-primary-600"
+ className="h-4 w-4 rounded border-border bg-card text-primary"
  />
- <span className="text-xs font-medium text-muted-foreground">
+ <span className="type-overline">
  {t('page.selectAllInSection')}
  </span>
  </label>
@@ -736,7 +736,7 @@ function TemplatesPage({ hideHeader }: Props) {
  );
  })
  ) : (
- <div className="rounded-xl border border-border/30 bg-card p-6">
+ <div className="rounded-md border border-border/50 bg-card p-6">
  <TabEmptyState
  title={search.trim() || authorFilter ? t('page.noTemplatesFound') : t('list.emptyTitle')}
  description={
@@ -759,7 +759,7 @@ function TemplatesPage({ hideHeader }: Props) {
  )}
  </div>
  ) : (
- <div className="rounded-xl border border-border/30 bg-card overflow-hidden">
+ <div className="rounded-md border border-border/50 bg-card overflow-hidden">
  {isLoading ? (
  <div className="p-4">
  <TabLoadingState rows={6} />
@@ -780,9 +780,9 @@ function TemplatesPage({ hideHeader }: Props) {
  return Array.from(new Set([...prev, ...filteredIds]));
  })
  }
- className="h-4 w-4 rounded border-border bg-card text-primary-600"
+ className="h-4 w-4 rounded border-border bg-card text-primary"
  />
- <span className="text-xs font-medium text-muted-foreground">{t('page.selectAll')}</span>
+ <span className="type-overline">{t('page.selectAll')}</span>
  </label>
  </div>
  )}
@@ -854,7 +854,7 @@ function TemplatesPage({ hideHeader }: Props) {
  message={
  <div className="space-y-2">
  <p>{t('page.deleteConfirm', { label: deleteTargets?.label })}</p>
- <p className="text-xs text-muted-foreground">
+ <p className="type-meta">
    {t('page.deleteWarning')}
  </p>
  </div>

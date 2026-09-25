@@ -166,7 +166,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
             />
           </div>
 
-          <div className="max-h-48 overflow-y-auto rounded-lg border border-border/30">
+          <div className="max-h-48 overflow-y-auto rounded-md border border-border/50">
             {targetType === 'user' ? (
               usersLoading ? (
                 <div className="p-4 text-center text-muted-foreground">
@@ -229,7 +229,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
           </div>
 
           {targetId && (
-            <div className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
+            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2">
               <span className="text-xs text-muted-foreground">
                 {t('assign.selected', {
                   name: targetType === 'user'

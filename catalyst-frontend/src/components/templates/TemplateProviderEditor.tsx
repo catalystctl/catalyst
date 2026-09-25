@@ -57,13 +57,13 @@ function TemplateProviderEditor({
  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all duration-200 select-none';
 
  return (
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2 p-4 transition-colors">
- <div className="text-sm font-semibold text-foreground">
+ <div className="space-y-3 rounded-md border border-border/50 bg-surface-2 p-4 transition-colors">
+ <div className="type-overline">
  {t('provider.title')}
  </div>
 
  {/* ── Mod Manager ── */}
- <div className="space-y-2 rounded-lg border border-border/30 bg-card p-3 transition-colors">
+ <div className="space-y-2 rounded-md border border-border/50 bg-card p-3 transition-colors">
  <button
  type="button"
  onClick={() => onModManagerEnabledChange(!modManagerEnabled)}
@@ -90,9 +90,9 @@ function TemplateProviderEditor({
  key={id}
  type="button"
  onClick={() => toggleModProvider(id)}
- className={`${pillBase} ${
+ className={`${pillBase} font-mono tabular-nums ${
  active
- ? 'border-primary-400 bg-primary-50 text-primary'
+ ? 'border-primary bg-primary/10 text-primary'
  : 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground'
  }`}
  >
@@ -110,7 +110,7 @@ function TemplateProviderEditor({
  </div>
 
  {/* ── Plugin Manager ── */}
- <div className="space-y-2 rounded-lg border border-border/30 bg-card p-3 transition-colors">
+ <div className="space-y-2 rounded-md border border-border/50 bg-card p-3 transition-colors">
  <button
  type="button"
  onClick={() => onPluginManagerEnabledChange(!pluginManagerEnabled)}
@@ -137,9 +137,9 @@ function TemplateProviderEditor({
  key={id}
  type="button"
  onClick={() => togglePluginProvider(id)}
- className={`${pillBase} ${
+ className={`${pillBase} font-mono tabular-nums ${
  active
- ? 'border-primary-400 bg-primary-50 text-primary'
+ ? 'border-primary bg-primary/10 text-primary'
  : 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground'
  }`}
  >

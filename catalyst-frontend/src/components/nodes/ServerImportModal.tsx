@@ -201,13 +201,13 @@ export default function ServerImportModal({
  return (
  <div
  key={container.containerId}
- className="rounded-lg border border-border/30 bg-surface-2/30 p-4"
+ className="rounded-md border border-border/50 bg-surface-2/30 p-4"
  >
  <div className="flex items-center justify-between">
  <div className="flex min-w-0 flex-1 items-center gap-3">
  <Server className="h-4 w-4 shrink-0 text-muted-foreground" />
  <div className="min-w-0 overflow-hidden">
- <div className="text-sm font-mono font-medium text-foreground">
+ <div className="text-sm font-mono font-medium tabular-nums text-foreground">
  {container.containerId}
  </div>
  <div className="flex items-center gap-2 text-xs text-muted-foreground">

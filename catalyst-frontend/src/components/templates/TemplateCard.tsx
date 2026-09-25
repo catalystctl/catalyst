@@ -16,7 +16,7 @@ function TemplateCard({ template }: Props) {
  const description = template.description?.trim() || t('card.noDescription');
 
  return (
- <div className="group relative overflow-hidden rounded-xl border border-border/30 bg-card border-l-2 border-primary transition-colors hover:border-primary/60">
+ <div className="group relative overflow-hidden rounded-md border border-border/50 bg-card transition-colors hover:border-primary/60">
  <div className="p-5">
  {/* Header row */}
  <div className="flex items-start justify-between gap-3">
@@ -43,7 +43,7 @@ function TemplateCard({ template }: Props) {
  <Badge variant="secondary" className="text-[11px]">
  {template.author}
  </Badge>
- <Badge variant="outline" className="text-[11px]">
+ <Badge variant="outline" className="type-numeric text-[11px]">
  v{template.version}
  </Badge>
  </div>
@@ -67,25 +67,25 @@ function TemplateCard({ template }: Props) {
  </div>
 
  {/* Description */}
- <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">{description}</p>
+ <p className="type-meta mt-3 line-clamp-2">{description}</p>
 
  {/* Resource stats */}
  <div className="mt-4 grid grid-cols-2 gap-2.5">
- <div className="rounded-lg border border-border/30 bg-surface-2/50 p-2.5">
- <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+ <div className="rounded-md border border-border/50 bg-surface-2/50 p-2.5">
+ <div className="type-overline flex items-center gap-1.5">
  <HardDrive className="h-3 w-3" />
  <span>{t('image')}</span>
  </div>
- <div className="mt-1 truncate text-xs font-medium text-foreground">
+ <div className="type-numeric mt-1 truncate text-xs text-foreground">
  {template.defaultImage || template.image}
  </div>
  </div>
- <div className="rounded-lg border border-border/30 bg-surface-2/50 p-2.5">
- <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+ <div className="rounded-md border border-border/50 bg-surface-2/50 p-2.5">
+ <div className="type-overline flex items-center gap-1.5">
  <Cpu className="h-3 w-3" />
  <span>{t('resources')}</span>
  </div>
- <div className="mt-1 text-xs font-medium text-foreground">
+ <div className="type-numeric mt-1 text-xs text-foreground">
  {template.allocatedCpuCores} CPU · {template.allocatedMemoryMb} MB
  </div>
  </div>

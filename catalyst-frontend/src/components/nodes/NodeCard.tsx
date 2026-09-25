@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '@/i18n/format';
-import { Server, Cpu, HardDrive, ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import type { NodeInfo } from '../../types/node';
 
@@ -25,7 +25,7 @@ function NodeCard({ node, latestAgentVersion }: Props) {
 
  return (
  <div
- className={`group relative overflow-hidden rounded-xl border border-border/30 bg-card transition-all duration-200 hover:border-primary/15 hover:shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.06)] ${
+ className={`group relative overflow-hidden rounded-md border border-border/50 bg-card transition-colors hover:border-primary/20 ${
  node.isOnline
  ? 'hover:border-success/30'
  : ''
@@ -41,22 +41,6 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  <div className="p-5 pl-6">
  {/* Header row */}
  <div className="flex items-start justify-between gap-3">
- <div className="flex items-start gap-3 min-w-0">
- <div
- className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
- node.isOnline
- ? 'bg-success/10'
- : 'bg-surface-2'
- }`}
- >
- <Server
- className={`h-4.5 w-4.5 transition-colors ${
- node.isOnline
- ? 'text-success'
- : 'text-muted-foreground'
- }`}
- />
- </div>
  <div className="min-w-0">
  <div className="flex items-center gap-2.5">
  <Link
@@ -85,7 +69,7 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  {agentVersion && (
  <Badge
  variant={agentOutdated ? 'warning' : 'outline'}
- className="shrink-0 gap-1 font-mono text-[10px]"
+ className="shrink-0 gap-1 font-mono text-[10px] tabular-nums"
  >
  {agentOutdated ? (
  <AlertTriangle className="h-2.5 w-2.5" />
@@ -99,8 +83,8 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  </Badge>
  )}
  </div>
- <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
- <span className="font-mono text-[11px] opacity-70">{node.hostname ?? t('card.hostnameUnknown')}</span>
+ <div className="type-meta mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+ <span className="font-mono text-[11px] tabular-nums opacity-70">{node.hostname ?? t('card.hostnameUnknown')}</span>
  {node.location && (
  <>
  <span className="text-muted-foreground">·</span>
@@ -108,14 +92,13 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  </>
  )}
  <span className="text-muted-foreground">·</span>
- <span>{t('card.lastSeen', { time: lastSeen })}</span>
- </div>
+ <span className="font-mono tabular-nums">{t('card.lastSeen', { time: lastSeen })}</span>
  </div>
  </div>
 
  <Link
  to={`/admin/nodes/${node.id}`}
- className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border/30 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+ className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
  >
  {t('card.manage')}
  <ExternalLink className="h-3 w-3" />
@@ -124,26 +107,20 @@ function NodeCard({ node, latestAgentVersion }: Props) {
 
  {/* Resource stats */}
  <div className="mt-4 grid grid-cols-3 gap-2.5">
- <div className="rounded-lg border border-border/30 bg-surface-2/30 p-3">
- <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
- <Server className="h-3 w-3" />
- <span>{t('servers.title')}</span>
- </div>
- <div className="mt-1 text-lg font-semibold text-foreground">
+ <div className="rounded-md border border-border/50 bg-surface-2/30 p-3">
+ <div className="type-overline">{t('servers.title')}</div>
+ <div className="type-numeric mt-1 text-lg text-foreground">
  {serverCount}
  </div>
  </div>
- <div className="rounded-lg border border-border/30 bg-surface-2/30 p-3">
- <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
- <Cpu className="h-3 w-3" />
- <span>{t('card.cpu')}</span>
- </div>
- <div className="mt-1 text-lg font-semibold text-foreground">
+ <div className="rounded-md border border-border/50 bg-surface-2/30 p-3">
+ <div className="type-overline">{t('card.cpu')}</div>
+ <div className="type-numeric mt-1 text-lg text-foreground">
  {node.maxCpuCores ?? 0}
  <span className="ml-1 text-xs font-normal text-muted-foreground">{t('card.cores')}</span>
  </div>
  {node.cpuOverallocatePercent !== undefined && node.cpuOverallocatePercent !== 0 && (
- <div className="mt-0.5 text-[11px] text-muted-foreground">
+ <div className="type-meta mt-0.5 tabular-nums">
  {node.cpuOverallocatePercent === -1
  ? t('card.effectiveUnlimited')
  : t('card.effectiveCpu', {
@@ -153,17 +130,14 @@ function NodeCard({ node, latestAgentVersion }: Props) {
  </div>
  )}
  </div>
- <div className="rounded-lg border border-border/30 bg-surface-2/30 p-3">
- <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
- <HardDrive className="h-3 w-3" />
- <span>{t('card.memory')}</span>
- </div>
- <div className="mt-1 text-lg font-semibold text-foreground">
+ <div className="rounded-md border border-border/50 bg-surface-2/30 p-3">
+ <div className="type-overline">{t('card.memory')}</div>
+ <div className="type-numeric mt-1 text-lg text-foreground">
  {memoryGB}
  <span className="ml-1 text-xs font-normal text-muted-foreground">GB</span>
  </div>
  {node.memoryOverallocatePercent !== undefined && node.memoryOverallocatePercent !== 0 && (
- <div className="mt-0.5 text-[11px] text-muted-foreground">
+ <div className="type-meta mt-0.5 tabular-nums">
  {node.memoryOverallocatePercent === -1
  ? t('card.effectiveUnlimited')
  : t('card.effectiveMemory', {

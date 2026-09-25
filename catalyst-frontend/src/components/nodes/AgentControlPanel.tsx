@@ -184,9 +184,7 @@ function AgentOfflineState() {
   const { t } = useTranslation('nodes');
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-border/30 bg-surface-2">
-        <WifiOff className="h-6 w-6 text-muted-foreground/40" />
-      </div>
+      <WifiOff className="h-5 w-5 text-muted-foreground/40" />
       <p className="mt-3 text-sm font-medium text-muted-foreground">
         {t('agent.offlineTitle')}
       </p>
@@ -228,13 +226,11 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
       {/* Connection badge */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className={`flex h-7 w-7 items-center justify-center rounded-lg border ${
-            node.isOnline
-              ? 'border-success/30 bg-success/10 text-success'
-              : 'border-border/30 bg-surface-2 text-muted-foreground'
-          }`}>
-            {node.isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
-          </div>
+          {node.isOnline ? (
+            <Wifi className="h-3.5 w-3.5 text-success" />
+          ) : (
+            <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
           <div>
             <span className="text-xs font-semibold text-foreground">{t('agent.connection')}</span>
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
@@ -333,7 +329,7 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
           ].map((m) => (
             <div key={m.label} className="space-y-1">
               <div className="flex items-center justify-between text-[10px]">
-                <span className="font-semibold uppercase tracking-wider text-muted-foreground/50">{m.label}</span>
+                <span className="type-overline">{m.label}</span>
                 <span className="font-mono tabular-nums text-foreground">{m.pct.toFixed(1)}%</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
@@ -546,7 +542,7 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
       {/* Log viewer */}
       <div
         ref={logContainerRef}
-        className="max-h-[400px] overflow-y-auto rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground"
+        className="max-h-[400px] overflow-y-auto rounded-md border border-border/50 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground"
       >
         {isLoading && logs.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground/40">
@@ -635,9 +631,9 @@ function AgentUpdateTab({
     <div className="space-y-4">
       {/* Version comparison */}
       <div className="flex items-center gap-4">
-        <div className="flex-1 rounded-lg border border-border/30 bg-surface-2/30 px-4 py-3">
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40">{t('agent.current')}</div>
-          <div className="mt-1 font-mono text-lg font-bold text-foreground">
+        <div className="flex-1 rounded-md border border-border/50 bg-surface-2/30 px-4 py-3">
+          <div className="type-overline">{t('agent.current')}</div>
+          <div className="type-numeric mt-1 text-lg text-foreground">
             v{String(agentVersion ?? '?').replace(/^v/i, '')}
           </div>
         </div>
@@ -646,13 +642,13 @@ function AgentUpdateTab({
           <ChevronDown className="h-4 w-4 text-muted-foreground/30 -rotate-90" />
           <div className="h-px w-6 bg-border/30" />
         </div>
-        <div className={`flex-1 rounded-lg border px-4 py-3 ${
+        <div className={`flex-1 rounded-md border px-4 py-3 ${
           updateAvailable
             ? 'border-warning/30 bg-warning/5'
             : 'border-success/20 bg-success/5'
         }`}>
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40">{t('agent.latest')}</div>
-          <div className="mt-1 font-mono text-lg font-bold text-foreground">
+          <div className="type-overline">{t('agent.latest')}</div>
+          <div className="type-numeric mt-1 text-lg text-foreground">
             v{String(latestVersion ?? '?').replace(/^v/i, '')}
           </div>
         </div>
@@ -660,7 +656,7 @@ function AgentUpdateTab({
 
       {/* Update status */}
       {updateStatus && updateStatus.status !== 'idle' && (
-        <div className={`rounded-lg border px-4 py-3 ${
+        <div className={`rounded-md border px-4 py-3 ${
           updateStatus.status === 'failed'
             ? 'border-danger/30 bg-danger/5'
             : updateStatus.status === 'restarting'
@@ -688,7 +684,7 @@ function AgentUpdateTab({
       )}
 
       {/* Action */}
-      <div className="flex items-center justify-between rounded-lg border border-border/30 bg-surface-2/20 px-4 py-3">
+      <div className="flex items-center justify-between rounded-md border border-border/50 bg-surface-2/20 px-4 py-3">
         <div className="flex items-center gap-2">
           {updateAvailable ? (
             <>
@@ -766,10 +762,10 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
     <div className="space-y-3">
       {/* Config meta */}
       {config && (
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground/40">
-          <span className="font-mono">{config.path}</span>
+        <div className="type-meta flex items-center justify-between">
+          <span className="font-mono tabular-nums">{config.path}</span>
           {config.lastModified && (
-            <span>{t('agent.modified', { time: formatDateTime(config.lastModified) })}</span>
+            <span className="font-mono tabular-nums">{t('agent.modified', { time: formatDateTime(config.lastModified) })}</span>
           )}
         </div>
       )}
@@ -785,7 +781,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
           value={editContent ?? ''}
           onChange={(e) => setEditContent(e.target.value)}
           spellCheck={false}
-          className="w-full min-h-[320px] rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground focus:border-primary/30 focus:outline-none resize-y"
+          className="w-full min-h-[320px] rounded-md border border-border/50 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground focus:border-primary/30 focus:outline-none resize-y"
         />
       )}
 
@@ -952,19 +948,13 @@ function AgentActionsTab({ nodeId, isOnline, node }: { nodeId: string; isOnline:
         return (
           <div
             key={action.id}
-            className="group flex items-center justify-between rounded-lg border border-border/30 bg-surface-2/20 px-4 py-3 transition-all hover:border-border/50"
+            className="group flex items-center justify-between rounded-md border border-border/50 bg-surface-2/20 px-4 py-3 transition-colors hover:border-border/50"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
-                action.danger
-                  ? 'border-danger/20 bg-danger/5 text-danger'
-                  : 'border-border/30 bg-surface-2 text-muted-foreground'
-              }`}>
-                <Icon className="h-3.5 w-3.5" />
-              </div>
+              <Icon className={`h-3.5 w-3.5 shrink-0 ${action.danger ? 'text-danger' : 'text-muted-foreground'}`} />
               <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground">{action.label}</div>
-                <div className="text-[11px] text-muted-foreground/60 truncate">{action.description}</div>
+                <div className="type-meta truncate">{action.description}</div>
               </div>
             </div>
             <Button

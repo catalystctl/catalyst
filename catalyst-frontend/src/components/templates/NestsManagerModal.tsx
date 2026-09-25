@@ -51,7 +51,7 @@ function NestForm({
  <div className="space-y-3">
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">
+ <span className="type-overline">
    {t('form.name')} <span className="text-destructive">*</span>
  </span>
  <input
@@ -63,7 +63,7 @@ function NestForm({
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('nests.iconUrl')}</span>
+ <span className="type-overline">{t('nests.iconUrl')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={icon}
@@ -73,7 +73,7 @@ function NestForm({
  </label>
  </div>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('nests.authorOptional')}</span>
+ <span className="type-overline">{t('nests.authorOptional')}</span>
  <input
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  value={author}
@@ -82,7 +82,7 @@ function NestForm({
  />
  </label>
  <label className="block space-y-1">
- <span className="text-xs font-medium text-muted-foreground">{t('nests.descriptionOptional')}</span>
+ <span className="type-overline">{t('nests.descriptionOptional')}</span>
  <textarea
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
  rows={2}
@@ -227,9 +227,9 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  <DialogBody>
  {/* Inline form */}
  {isFormActive && (
- <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+ <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 p-4">
  <div className="mb-3 flex items-center justify-between">
- <span className="text-sm font-semibold text-foreground">
+ <span className="type-overline">
  {editingNest ? t('nests.edit') : t('nests.new')}
  </span>
  <button
@@ -261,7 +261,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  {Array.from({ length: 3 }).map((_, i) => (
  <div
  key={i}
- className="flex items-center gap-3 rounded-lg border border-border/40 px-4 py-3"
+ className="flex items-center gap-3 rounded-md border border-border/50 px-4 py-3"
  >
  <div className="h-8 w-8 animate-pulse rounded-lg bg-surface-3" />
  <div className="flex-1 space-y-1.5">
@@ -274,8 +274,8 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  ) : nests.length === 0 && !isCreating ? (
  <div className="flex flex-col items-center justify-center py-12 text-center">
  <FolderOpen className="mb-3 h-10 w-10 text-muted-foreground/40" />
- <p className="text-sm font-medium text-muted-foreground">{t('nests.empty')}</p>
- <p className="mt-1 text-xs text-muted-foreground/70">
+ <p className="type-meta">{t('nests.empty')}</p>
+ <p className="type-meta mt-1">
  {t('nests.emptyHint')}
  </p>
  </div>
@@ -284,7 +284,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  {nests.map((nest) => (
  <div
  key={nest.id}
- className="group flex items-center gap-3 rounded-xl border border-border/40 px-4 py-3 transition-colors hover:bg-surface-2/50"
+ className="group flex items-center gap-3 rounded-md border border-border/50 px-4 py-3 transition-colors hover:bg-surface-2/50"
  >
  {/* Icon */}
  <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-border/40 bg-surface-2">
@@ -304,15 +304,15 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  {nest.name}
  </span>
  {nest.author && (
- <span className="text-xs text-muted-foreground">{t('nests.byAuthor', { author: nest.author })}</span>
+ <span className="type-meta">{t('nests.byAuthor', { author: nest.author })}</span>
  )}
  </div>
  {nest.description && (
- <p className="mt-0.5 truncate text-xs text-muted-foreground">
+ <p className="type-meta mt-0.5 truncate">
  {nest.description}
  </p>
  )}
- <span className="text-[11px] text-muted-foreground/70">
+ <span className="type-numeric text-[11px] text-muted-foreground/70">
  {t('nests.templateCount', { count: (nest as any).templateCount ?? 0 })}
  </span>
  </div>
@@ -344,7 +344,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  </DialogBody>
  {!isFormActive && (
  <DialogFooter className="sm:justify-between">
- <span className="text-xs text-muted-foreground">
+ <span className="type-meta text-xs">
  {t('nests.count', { count: nests.length })}
  </span>
  <Button
@@ -369,7 +369,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  message={
  <div className="space-y-2">
  <p>{t('nests.deleteConfirm', { name: deleteTarget?.name })}</p>
- <p className="text-xs text-muted-foreground">
+ <p className="type-meta">
    {t('nests.deleteWarning')}
  </p>
  </div>

@@ -180,7 +180,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  {locations.map((location) => (
  <SelectItem key={location.id} value={location.id}>
  <span className="flex items-center gap-2">
- <MapPin className="h-3.5 w-3.5 text-success" />
+ <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
  {location.name}
  </span>
  </SelectItem>
@@ -188,7 +188,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </SelectContent>
  </Select>
  ) : (
- <div className="rounded-lg border border-dashed border-border/40 bg-surface-2/50 px-3 py-2">
+ <div className="rounded-md border border-dashed border-border/50 bg-surface-2/50 px-3 py-2">
  <p className="text-xs text-muted-foreground">
  {t('form.noLocations')}{' '}
  <button
@@ -299,7 +299,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  </div>
 
  {/* SFTP Configuration */}
- <div className="rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
+ <div className="rounded-md border border-border/50 bg-surface-2/30 px-3 py-3">
  <div className="flex items-center justify-between">
  <span className="text-sm font-medium text-foreground">{t('form.sftpAccess')}</span>
  <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -344,7 +344,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  {t('form.advancedPaths')}
  </button>
  {showAdvanced && (
- <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
+ <div className="space-y-3 rounded-md border border-border/50 bg-surface-2/30 px-3 py-3">
  <label className="block space-y-1">
  <span className="text-muted-foreground">{t('form.consoleLogDir')}</span>
  <input
