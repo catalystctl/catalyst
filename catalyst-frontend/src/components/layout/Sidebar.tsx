@@ -1,5 +1,5 @@
 import { NavLink, Link, useLocation } from 'react-router-dom';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -27,7 +27,7 @@ import { usePluginTabs } from '../../plugins/hooks';
 import { PANEL_VERSION } from '../../utils/version';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 import { cn } from '@/lib/utils';
-import { StatusLed } from '../deck/primitives';
+import { BracketLabel, StatusLed } from '../deck/primitives';
 import NavSectionsMenu from './NavSectionsMenu';
 import { buildGroups, buildMain, type NavLinkItem } from './navSections';
 
@@ -89,7 +89,7 @@ function NavRow({
   const className = cn(
     'relative flex items-center rounded-sm text-muted-foreground transition-colors',
     'hover:bg-surface-2 hover:text-foreground',
-    expanded ? 'h-8 w-full gap-2 px-2 text-mini' : 'h-9 w-9 justify-center',
+    expanded ? 'h-8 w-full gap-2 px-1.5 text-mini' : 'h-9 w-9 justify-center',
     active && 'bg-primary/10 text-foreground',
   );
 
@@ -97,21 +97,20 @@ function NavRow({
     <>
       {active && (
         <span
-          className={cn(
-            'absolute left-0 w-[2px] -translate-y-1/2 bg-primary',
-            expanded ? 'top-1/2 h-4' : 'top-1/2 h-4',
-          )}
+          className="absolute left-0.5 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-primary"
           aria-hidden
         />
       )}
-      <Icon className="h-4 w-4 shrink-0" />
+      <IconSlot>
+        <Icon className="h-4 w-4" />
+      </IconSlot>
       {expanded && <span className="truncate">{label}</span>}
     </>
   );
 
   if (expanded) {
     return (
-      <NavLink to={to} title={label} className={className}>
+      <NavLink to={to} title={label} aria-current={active ? 'page' : undefined} className={className}>
         {body}
       </NavLink>
     );
@@ -150,7 +149,7 @@ function RailButton({
       aria-label={label}
       className={cn(
         'flex items-center rounded-sm text-muted-foreground transition-colors',
-        expanded ? 'h-8 w-full gap-2 px-2 text-mini hover:bg-surface-2 hover:text-foreground' : 'h-9 w-9 justify-center',
+        expanded ? 'h-8 w-full gap-2 px-1.5 text-mini' : 'h-9 w-9 justify-center',
         danger ? 'hover:bg-danger/10 hover:text-danger' : 'hover:bg-surface-2 hover:text-foreground',
       )}
     >
@@ -175,7 +174,16 @@ function RailButton({
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div className="type-overline px-2 pb-0.5 pt-3">{children}</div>;
+  return (
+    <div className="px-2 pb-1 pt-3.5">
+      <BracketLabel tone="muted">{children}</BracketLabel>
+    </div>
+  );
+}
+
+/** Every row's icon occupies the same 24px slot, so all labels share one column. */
+function IconSlot({ children }: { children: React.ReactNode }) {
+  return <span className="flex w-6 shrink-0 items-center justify-center">{children}</span>;
 }
 
 /** Permission-filtered groups, shared by both densities. */
@@ -214,6 +222,24 @@ export default function Sidebar() {
   const adminLinks = ADMIN_PRIMARY.filter((link) => hasAnyPermission(permissions, [...link.perms]));
   const groups = visibleGroups(t, permissions);
   const activeTarget = useActiveTarget();
+  const navRef = useRef<HTMLElement>(null);
+  const [navScrolls, setNavScrolls] = useState(false);
+
+  // A half-scrolled row under the footer rule read as a rendering bug; measure
+  // the overflow so the cut edge can fade deliberately instead.
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el || !expanded) {
+      setNavScrolls(false);
+      return;
+    }
+    const measure = () => setNavScrolls(el.scrollHeight > el.clientHeight + 2);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [expanded, groups.length]);
+
   const pluginRows: NavLinkItem[] = pluginTabs.map((tab) => ({
     to: `/admin/plugin/${tab.id}`,
     label: tab.label,
@@ -267,12 +293,22 @@ export default function Sidebar() {
           )}
         </div>
 
-        {!expanded && <span className="deck-hatch mb-2 h-[2px] w-5" aria-hidden />}
+        {expanded ? (
+          <span className="deck-hatch mb-2 h-[2px] w-full" aria-hidden />
+        ) : (
+          <span className="deck-hatch mb-2 h-[2px] w-5" aria-hidden />
+        )}
 
         <nav
+          ref={navRef}
           className={cn(
             'flex min-h-0 flex-col',
-            expanded ? 'w-full flex-1 gap-0.5 overflow-y-auto' : 'items-center gap-1',
+            expanded
+              ? 'w-full flex-1 gap-0.5 overflow-y-auto pb-3 [scrollbar-width:thin]'
+              : 'items-center gap-1',
+            expanded &&
+              navScrolls &&
+              '[mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]',
           )}
         >
           {!expanded && (
@@ -348,7 +384,7 @@ export default function Sidebar() {
         {/* Footer: same controls, labelled when expanded */}
         <div className={cn('flex flex-col', expanded ? 'w-full gap-0.5 border-t border-border/50 pt-2' : 'items-center gap-1')}>
           <RailButton label={themeLabel} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} expanded={expanded}>
-            {themeIcon}
+            <IconSlot>{themeIcon}</IconSlot>
             {expanded && <span className="truncate">{themeLabel}</span>}
           </RailButton>
 
@@ -358,7 +394,7 @@ export default function Sidebar() {
               className="flex h-9 w-full items-center gap-2 rounded-sm px-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
               title={`${displayName} · ${user?.role ? user.role : t('sidebar.fallbackRole')}`}
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold ring-1 ring-border">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold ring-1 ring-border">
                 {user?.image ? (
                   <img src={user.image} alt="" className="h-full w-full rounded-sm object-cover" />
                 ) : (
@@ -392,7 +428,9 @@ export default function Sidebar() {
           )}
 
           <RailButton label={t('sidebar.logout')} onClick={logout} danger expanded={expanded}>
-            <LogOut className="h-4 w-4 shrink-0" />
+            <IconSlot>
+              <LogOut className="h-4 w-4" />
+            </IconSlot>
             {expanded && <span className="truncate">{t('sidebar.logout')}</span>}
           </RailButton>
 
@@ -415,7 +453,9 @@ export default function Sidebar() {
             >
               {/* Update state rides the LED tone; the rail keeps its h-9 hit box
                   instead of collapsing to the old 14×24 glyph. */}
-              <StatusLed tone={updateData?.updateAvailable ? 'hazard' : 'idle'} />
+              <IconSlot>
+                <StatusLed tone={updateData?.updateAvailable ? 'hazard' : 'idle'} />
+              </IconSlot>
               {expanded && <span className="truncate font-mono">v{PANEL_VERSION}</span>}
             </Link>
           )}
