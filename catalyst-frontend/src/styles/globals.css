@@ -513,6 +513,22 @@ select option {
   scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
 
+/*
+ * Touch scrolling. The viewport is xterm's scroller, but the canvas above it
+ * swallows vertical pans on touch devices, so a phone could not move the
+ * console at all. `pan-y` hands the gesture to the scroller and keeps the
+ * momentum scroll + overscroll contained inside the terminal.
+ */
+.xterm-console-host .xterm,
+.xterm-console-host .xterm-screen,
+.xterm-console-host .xterm-viewport {
+  touch-action: pan-y;
+}
+.xterm-console-host .xterm-viewport {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
 
 /* ── Utilities ── */
 

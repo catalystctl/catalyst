@@ -56,15 +56,18 @@
       "bufferSize": "Buffer size",
       "clearConsole": "Clear console",
       "closeFind": "Close find",
+      "collapse": "Collapse console",
       "commandInput": "Console command",
       "copyOutput": "Copy output",
       "downloadOutput": "Download output",
+      "expand": "Expand console",
       "findAriaLabel": "Find in console",
       "findPlaceholder": "Find…",
       "findTitle": "Find (Ctrl+F)",
       "follow": "Follow",
       "followOff": "Follow output off",
-      "followOn": "Follow output on"
+      "followOn": "Follow output on",
+      "streams": "Streams"
     },
     "xterm": {
       "ariaLabel": "Server console output",

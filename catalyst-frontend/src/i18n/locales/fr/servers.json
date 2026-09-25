@@ -57,15 +57,18 @@
       "bufferSize": "Taille du tampon",
       "clearConsole": "Effacer la console",
       "closeFind": "Fermer la recherche",
+      "collapse": "Réduire la console",
       "commandInput": "Commande de console",
       "copyOutput": "Copier la sortie",
       "downloadOutput": "Télécharger la sortie",
+      "expand": "Agrandir la console",
       "findAriaLabel": "Rechercher dans la console",
       "findPlaceholder": "Rechercher…",
       "findTitle": "Rechercher (Ctrl+F)",
       "follow": "Suivre",
       "followOff": "Suivi de la sortie désactivé",
-      "followOn": "Suivi de la sortie activé"
+      "followOn": "Suivi de la sortie activé",
+      "streams": "Flux"
     },
     "xterm": {
       "ariaLabel": "Sortie de la console du serveur",

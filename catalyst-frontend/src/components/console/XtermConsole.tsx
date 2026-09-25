@@ -18,6 +18,12 @@ import { useTranslation } from 'react-i18next';
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+
+/** Phones get a smaller terminal face — 13px wraps most log lines at 390px. */
+const MOBILE_MEDIA_QUERY: Pick<MediaQueryList, 'matches'> =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(max-width: 640px)')
+    : { matches: false };
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { ArrowDown } from 'lucide-react';
@@ -106,6 +112,10 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+
+  // Kept in sync with the terminal's initial fontSize; the resize observer
+  // re-applies it so rotating the phone re-fits instead of leaving 11px text
+  // on a wide viewport (or 13px text on a narrow one).
   const searchRef = useRef<SearchAddon | null>(null);
   useImperativeHandle(ref, () => ({
     findNext: (query: string) => {
@@ -162,7 +172,9 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
       disableStdin: true,
       convertEol: true,
       scrollback: Math.max(500, scrollback),
-      fontSize: 13,
+      // Narrow screens wrap long log lines constantly at 13px, so phones get a
+      // smaller face and the fit addon lands ~57 columns instead of ~48.
+      fontSize: MOBILE_MEDIA_QUERY.matches ? 11 : 13,
       fontFamily:
         '"JetBrains Mono Variable", "JetBrains Mono", "Fira Code", ui-monospace, monospace',
       lineHeight: 1.35,
@@ -227,6 +239,12 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
         /* host may be display:none */
       }
     };
+
+    // A breakpoint flip changes the font size, so re-fit after applying it.
+    const nextFontSize = MOBILE_MEDIA_QUERY.matches ? 11 : 13;
+    if (term.options.fontSize !== nextFontSize) {
+      term.options.fontSize = nextFontSize;
+    }
 
     // Debounce ResizeObserver fits — raw fires during layout and causes flicker.
     const scheduleFit = () => {

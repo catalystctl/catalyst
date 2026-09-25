@@ -1,11 +1,34 @@
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowDown, Check, Copy, Download, Search, Trash2, X } from 'lucide-react';
+import {
+  ArrowDown,
+  Check,
+  Copy,
+  Download,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 
 import XtermConsole, { type XtermConsoleHandle } from '../../components/console/XtermConsole';
 import { storage } from '../../services/storage/localStorage';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { StatusLed } from '../deck/primitives';
 import { cn } from '@/lib/utils';
 import { consoleStreamLabel } from '../../utils/constants';
@@ -75,6 +98,9 @@ export default function ServerConsoleTab({
 
   const [autoScroll, setAutoScroll] = useState(() => storage.get<boolean>('console.follow') ?? true);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Full-screen console: on a phone the chrome above the terminal ate half the
+  // viewport, so the console can take the whole screen instead.
+  const [focusMode, setFocusMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeStreams, setActiveStreams] = useState<Set<string>>(() => new Set(ALL_STREAMS));
   const [commandHistory, setCommandHistory] = useState<string[]>(() => storage.get<string[]>('console.history') ?? []);
@@ -192,43 +218,109 @@ export default function ServerConsoleTab({
       : t('console.placeholderConnectToSend')
     : t('console.placeholderTypeCommand');
 
+  const toggleStream = (stream: (typeof ALL_STREAMS)[number]) =>
+    setActiveStreams((prev) => {
+      const next = new Set(prev);
+      if (next.has(stream)) {
+        if (next.size > 1) next.delete(stream);
+      } else {
+        next.add(stream);
+      }
+      return next;
+    });
+
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setFocusMode(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [focusMode]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden deck-panel">
+      <div
+        className={cn(
+          'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
+          focusMode
+            ? 'fixed inset-0 z-50 h-[100dvh] w-full border-0 bg-background'
+            : 'deck-panel',
+        )}
+      >
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 bg-surface-1/40 px-2 py-1.5">
-
-
-
           <span className={cn('flex items-center gap-1.5 text-mini font-medium', connection.tone)}>
-            <StatusLed tone={connectionLed} pulse={streamStatus !== 'error' && streamStatus !== 'closed' && isConnected} />
+            <StatusLed
+              tone={connectionLed}
+              pulse={streamStatus !== 'error' && streamStatus !== 'closed' && isConnected}
+            />
             {connection.label}
           </span>
 
-          <div className="h-3.5 w-px bg-border" />
+          <div className="hidden h-3.5 w-px bg-border sm:block" />
 
-          {ALL_STREAMS.map((stream) => {
-            const isActive = activeStreams.has(stream);
-            return (
+          {/* Stream chips fit one row on desktop; on a phone four chips alone
+              wrapped the toolbar onto a second line, so they collapse into a
+              checkbox menu with the active count on the trigger. */}
+          <div className="hidden items-center gap-1 sm:flex">
+            {ALL_STREAMS.map((stream) => {
+              const isActive = activeStreams.has(stream);
+              return (
+                <button
+                  key={stream}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => toggleStream(stream)}
+                  className={cn(
+                    'flex h-7 items-center gap-1.5 rounded-sm border px-2 text-mini font-medium transition-colors',
+                    isActive
+                      ? 'border-border/70 bg-surface-2/60 text-foreground'
+                      : 'border-transparent text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full',
+                      isActive ? STREAM_COLORS[stream] : 'bg-muted-foreground',
+                    )}
+                  />
+                  {consoleStreamLabel(t, stream)}
+                </button>
+              );
+            })}
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
-                key={stream}
                 type="button"
-                aria-pressed={isActive}
-                onClick={() =>
-                  setActiveStreams((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(stream)) {
-                      if (next.size > 1) next.delete(stream);
-                    } else next.add(stream);
-                    return next;
-                  })
-                }
-                className={cn('flex h-7 items-center gap-1.5 rounded-sm border px-2 text-mini font-medium transition-colors', isActive ? 'border-border/70 bg-surface-2/60 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                aria-label={t('console.tab.streams')}
+                className="flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2 text-mini text-muted-foreground transition-colors hover:text-foreground sm:hidden"
               >
-                <span className={cn('h-1.5 w-1.5 rounded-full', isActive ? STREAM_COLORS[stream] : 'bg-muted-foreground')} />
-                {consoleStreamLabel(t, stream)}
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <span className="type-numeric">{activeStreams.size}</span>
               </button>
-            );
-          })}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-44">
+              <DropdownMenuLabel>{t('console.tab.streams')}</DropdownMenuLabel>
+              {ALL_STREAMS.map((stream) => (
+                <DropdownMenuCheckboxItem
+                  key={stream}
+                  checked={activeStreams.has(stream)}
+                  onCheckedChange={() => toggleStream(stream)}
+                  onSelect={(event) => event.preventDefault()}
+                >
+                  <span
+                    className={cn(
+                      'mr-2 h-1.5 w-1.5 rounded-full',
+                      activeStreams.has(stream) ? STREAM_COLORS[stream] : 'bg-muted-foreground',
+                    )}
+                  />
+                  {consoleStreamLabel(t, stream)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {searchOpen ? (
             <div className="flex h-7 items-center gap-1 rounded-sm border border-border/60 bg-surface-2 px-2">
@@ -283,7 +375,7 @@ export default function ServerConsoleTab({
           </label>
           <select
             id="console-scrollback"
-            className="h-7 rounded-sm border border-border/60 bg-transparent px-1.5 text-micro text-muted-foreground outline-none hover:border-border"
+            className="hidden h-7 rounded-sm border border-border/60 bg-transparent px-1.5 text-micro text-muted-foreground outline-none hover:border-border sm:block"
             value={scrollback}
             onChange={(event) => {
               const value = Number(event.target.value);
@@ -300,7 +392,9 @@ export default function ServerConsoleTab({
 
           <div className="flex-1" />
 
-          <span className="type-numeric text-micro text-muted-foreground">{t('console.lines', { count: visibleEntries.length })}</span>
+          <span className="type-numeric hidden text-micro text-muted-foreground sm:inline">
+            {t('console.lines', { count: visibleEntries.length })}
+          </span>
 
           <button
             type="button"
@@ -313,33 +407,125 @@ export default function ServerConsoleTab({
             }}
             className={cn(
               'flex h-7 items-center gap-1 rounded-sm px-2 text-mini font-medium transition-colors',
-              autoScroll ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+              autoScroll
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
             )}
           >
             <ArrowDown className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{t('console.tab.follow')}</span>
           </button>
 
-          <Button className="rounded-sm" type="button" variant="ghost" size="icon-sm" aria-label={copied ? t('common:actions.copied') : t('console.tab.copyOutput')} onClick={() => void handleCopy()}>
-            {copied ? <Check className="text-success" /> : <Copy />}
-          </Button>
-          <Button className="rounded-sm" type="button" variant="ghost" size="icon-sm" aria-label={t('console.tab.downloadOutput')} onClick={handleDownload}>
-            <Download />
-          </Button>
-          <Button
-            className="rounded-sm"
+          {/* One control on phones, three inline on larger screens. */}
+          <div className="flex items-center gap-0.5">
+            <Button
+              className="rounded-sm"
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={copied ? t('common:actions.copied') : t('console.tab.copyOutput')}
+              onClick={() => void handleCopy()}
+            >
+              {copied ? <Check className="text-success" /> : <Copy />}
+            </Button>
+            <Button
+              className="hidden rounded-sm sm:inline-flex"
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('console.tab.downloadOutput')}
+              onClick={handleDownload}
+            >
+              <Download />
+            </Button>
+            <Button
+              className="hidden rounded-sm sm:inline-flex"
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('console.tab.clearConsole')}
+              onClick={() => {
+                clearConsole();
+                setAutoScroll(true);
+                storage.set('console.follow', true);
+              }}
+            >
+              <Trash2 />
+            </Button>
+          </div>
+
+          <button
             type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t('console.tab.clearConsole')}
-            onClick={() => {
-              clearConsole();
-              setAutoScroll(true);
-              storage.set('console.follow', true);
-            }}
+            aria-label={focusMode ? t('console.tab.collapse') : t('console.tab.expand')}
+            title={focusMode ? t('console.tab.collapse') : t('console.tab.expand')}
+            aria-pressed={focusMode}
+            onClick={() => setFocusMode((prev) => !prev)}
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-sm transition-colors',
+              focusMode
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+            )}
           >
-            <Trash2 />
-          </Button>
+            {focusMode ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('common:actions.more')}
+                className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground sm:hidden"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-52">
+              <DropdownMenuLabel className="type-numeric text-micro text-muted-foreground">
+                {t('console.lines', { count: visibleEntries.length })}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>{t('console.tab.bufferSize')}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={String(scrollback)}
+                onValueChange={(value) => {
+                  const next = Number(value);
+                  setScrollback(next);
+                  storage.set('console.scrollback', next);
+                }}
+              >
+                {SCROLLBACK_OPTIONS.map((option) => (
+                  <DropdownMenuRadioItem
+                    key={option}
+                    value={String(option)}
+                    onSelect={(event) => event.preventDefault()}
+                    className="type-numeric"
+                  >
+                    {option === 1000 ? '1K' : option === 2000 ? '2K' : option}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => void handleCopy()}>
+                <Copy className="mr-2 h-3.5 w-3.5" />
+                {t('console.tab.copyOutput')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleDownload()}>
+                <Download className="mr-2 h-3.5 w-3.5" />
+                {t('console.tab.downloadOutput')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  clearConsole();
+                  setAutoScroll(true);
+                  storage.set('console.follow', true);
+                }}
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                {t('console.tab.clearConsole')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <XtermConsole
@@ -360,10 +546,27 @@ export default function ServerConsoleTab({
             setAutoScroll(true);
             storage.set('console.follow', true);
           }}
-          className="min-h-[280px] flex-1"
+          className="min-h-0 flex-1"
         />
 
-        <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-border/50 bg-surface-1/40 px-3 py-2">
+        {!autoScroll && (
+          <button
+            type="button"
+            onClick={() => {
+              setAutoScroll(true);
+              storage.set('console.follow', true);
+            }}
+            className="absolute bottom-20 right-3 z-10 flex h-8 items-center gap-1.5 rounded-sm border border-border/70 bg-card px-2.5 text-mini text-foreground shadow-elevated transition-colors hover:border-primary/50"
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+            {t('console.tab.follow')}
+          </button>
+        )}
+
+        <form
+          onSubmit={handleSend}
+          className="flex items-center gap-2 border-t border-border/50 bg-surface-1/40 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        >
           <span className="select-none font-mono text-sm font-semibold text-primary" aria-hidden>
             $
           </span>
@@ -371,7 +574,11 @@ export default function ServerConsoleTab({
             ref={inputRef}
             defaultValue=""
             aria-label={t('console.tab.commandInput')}
-            className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="send"
+            className="h-8 w-full bg-transparent font-mono text-mini text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
             onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
               if (event.key === 'Tab' && commandHistory.length > 0) {
                 const prefix = inputRef.current?.value ?? '';

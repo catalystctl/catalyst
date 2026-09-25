@@ -55,15 +55,18 @@
       "bufferSize": "缓冲区大小",
       "clearConsole": "清空控制台",
       "closeFind": "关闭查找",
+      "collapse": "收起控制台",
       "commandInput": "控制台命令",
       "copyOutput": "复制输出",
       "downloadOutput": "下载输出",
+      "expand": "展开控制台",
       "findAriaLabel": "在控制台中查找",
       "findPlaceholder": "查找…",
       "findTitle": "查找（Ctrl+F）",
       "follow": "跟随",
       "followOff": "输出跟随已关闭",
-      "followOn": "输出跟随已开启"
+      "followOn": "输出跟随已开启",
+      "streams": "输出流"
     },
     "xterm": {
       "ariaLabel": "服务器控制台输出",
