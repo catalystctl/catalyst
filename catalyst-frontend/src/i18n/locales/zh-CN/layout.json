@@ -305,6 +305,7 @@
   },
   "shell": {
     "closeMenu": "关闭菜单",
+    "fleetHeartbeat": "{{online}}/{{total}} 在线",
     "openMenu": "打开菜单",
     "openSearch": "打开搜索（{{shortcut}}）",
     "searchButton": "搜索…",

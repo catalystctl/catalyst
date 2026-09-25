@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Sidebar from './Sidebar';
 import Breadcrumbs from './Breadcrumbs';
+import FleetHeartbeat from './FleetHeartbeat';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
 import { useSseAdminEvents } from '../../hooks/useSseAdminEvents';
 import { useProfileSync } from '../../hooks/useProfileSync';
@@ -115,18 +116,21 @@ function AppLayout() {
         >
           <div className="flex items-center justify-between gap-3">
             <Breadcrumbs />
-            <button
-              type="button"
-              onClick={() => setIsSearchOpen(true)}
-              className="pressable hidden min-w-[200px] items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-panel hover:border-primary/25 hover:text-foreground lg:flex"
-              aria-label={t('shell.openSearch', { shortcut })}
-            >
-              <Search className="h-3.5 w-3.5" />
-              <span className="flex-1 text-left">{t('shell.searchButton')}</span>
-              <kbd className="hidden rounded-md border border-border bg-surface-2/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block">
-                {shortcut}
-              </kbd>
-            </button>
+            <div className="flex items-center gap-2">
+              <FleetHeartbeat />
+              <button
+                type="button"
+                onClick={() => setIsSearchOpen(true)}
+                className="pressable hidden min-w-[200px] items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-panel hover:border-primary/25 hover:text-foreground lg:flex"
+                aria-label={t('shell.openSearch', { shortcut })}
+              >
+                <Search className="h-3.5 w-3.5" />
+                <span className="flex-1 text-left">{t('shell.searchButton')}</span>
+                <kbd className="hidden rounded-md border border-border bg-surface-2/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block">
+                  {shortcut}
+                </kbd>
+              </button>
+            </div>
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <Outlet />

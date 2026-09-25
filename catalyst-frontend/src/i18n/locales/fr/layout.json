@@ -307,6 +307,7 @@
   },
   "shell": {
     "closeMenu": "Fermer le menu",
+    "fleetHeartbeat": "{{online}}/{{total}} en ligne",
     "openMenu": "Ouvrir le menu",
     "openSearch": "Ouvrir la recherche ({{shortcut}})",
     "searchButton": "Rechercher…",
