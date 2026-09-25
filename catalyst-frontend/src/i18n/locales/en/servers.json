@@ -23,6 +23,16 @@
     "warningCopyFiles": "Files will be copied from the source server. The new server will be unavailable until the copy completes.",
     "warningFreshInstall": "This will create a new server with the same configuration. A fresh install will run on the new server."
   },
+  "columns": {
+    "actions": "Actions",
+    "address": "Address",
+    "cpu": "CPU",
+    "disk": "Disk",
+    "game": "Game",
+    "ram": "RAM",
+    "server": "Server",
+    "state": "State"
+  },
   "console": {
     "connection": {
       "connecting": "Connecting",
@@ -209,6 +219,11 @@
     "clear": "Clear",
     "searchPlaceholder": "Search by name or node..."
   },
+  "hints": {
+    "actions": "actions",
+    "navigate": "navigate",
+    "open": "open"
+  },
   "hostNetwork": {
     "confirm": "Enable and start",
     "enabled": "Host networking enabled on the node.",
@@ -259,16 +274,13 @@
       "owned": "Owned"
     },
     "description": "Manage your game servers, monitor resources, and control power states.",
-    "overview": "Overview",
+    "empty": "No servers match these filters.",
+    "overline": "Fleet",
     "stats": {
       "issues": "Issues",
       "total": "Total"
     },
-    "title": "Servers",
-    "view": {
-      "cards": "Cards",
-      "list": "List"
-    }
+    "title": "Servers"
   },
   "tabBar": {
     "moreTabs": "More server pages"

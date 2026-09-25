@@ -23,6 +23,16 @@
     "warningCopyFiles": "Les fichiers seront copiés depuis le serveur source. Le nouveau serveur sera indisponible jusqu’à la fin de la copie.",
     "warningFreshInstall": "Un nouveau serveur avec la même configuration sera créé. Une nouvelle installation sera exécutée sur le nouveau serveur."
   },
+  "columns": {
+    "actions": "Actions",
+    "address": "Adresse",
+    "cpu": "CPU",
+    "disk": "Disque",
+    "game": "Jeu",
+    "ram": "RAM",
+    "server": "Serveur",
+    "state": "État"
+  },
   "console": {
     "connection": {
       "connecting": "Connexion…",
@@ -211,6 +221,11 @@
     "clear": "Effacer",
     "searchPlaceholder": "Rechercher par nom ou par nœud…"
   },
+  "hints": {
+    "actions": "actions",
+    "navigate": "naviguer",
+    "open": "ouvrir"
+  },
   "hostNetwork": {
     "confirm": "Activer et démarrer",
     "enabled": "Réseau hôte activé sur le nœud.",
@@ -261,16 +276,13 @@
       "owned": "Possédés"
     },
     "description": "Gérez vos serveurs de jeu, surveillez les ressources et contrôlez les états d’alimentation.",
-    "overview": "Vue d’ensemble",
+    "empty": "Aucun serveur ne correspond à ces filtres.",
+    "overline": "Parc",
     "stats": {
       "issues": "Problèmes",
       "total": "Total"
     },
-    "title": "Serveurs",
-    "view": {
-      "cards": "Cartes",
-      "list": "Liste"
-    }
+    "title": "Serveurs"
   },
   "tabBar": {
     "moreTabs": "Autres pages du serveur"

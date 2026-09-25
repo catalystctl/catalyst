@@ -317,6 +317,13 @@
       "reason": "Font preview glyph."
     },
     {
+      "file": "src/pages/servers/ServersPage.tsx",
+      "type": "hardcoded",
+      "text": "↑↓",
+      "count": 1,
+      "reason": "Keyboard shortcut hint (arrow keys); not translatable copy."
+    },
+    {
       "file": "src/pages/setup/SetupPage.tsx",
       "type": "hardcoded",
       "text": "%,",

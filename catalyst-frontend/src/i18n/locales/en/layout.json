@@ -310,20 +310,17 @@
     "openMenu": "Open menu",
     "openSearch": "Open search ({{shortcut}})",
     "searchButton": "Search…",
+    "sections": "All sections",
     "skipToContent": "Skip to content"
   },
   "sidebar": {
-    "collapse": "Collapse sidebar",
     "dark": "Dark",
     "darkMode": "Dark mode",
-    "expand": "Expand sidebar",
     "fallbackRole": "Member",
     "fallbackUser": "User",
     "light": "Light",
     "lightMode": "Light mode",
-    "logoAlt": "{{panelName}} logo",
     "logout": "Logout",
-    "outOfDate": "(out of date)",
     "updateTooltip": "v{{current}} - out of date (latest: v{{latest}})",
     "versionTooltip": "Catalyst Panel v{{version}}"
   }

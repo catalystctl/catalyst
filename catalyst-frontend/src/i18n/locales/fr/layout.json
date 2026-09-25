@@ -311,20 +311,17 @@
     "openMenu": "Ouvrir le menu",
     "openSearch": "Ouvrir la recherche ({{shortcut}})",
     "searchButton": "Rechercher…",
+    "sections": "Toutes les sections",
     "skipToContent": "Aller au contenu"
   },
   "sidebar": {
-    "collapse": "Réduire la barre latérale",
     "dark": "Sombre",
     "darkMode": "Mode sombre",
-    "expand": "Développer la barre latérale",
     "fallbackRole": "Membre",
     "fallbackUser": "Utilisateur",
     "light": "Clair",
     "lightMode": "Mode clair",
-    "logoAlt": "Logo {{panelName}}",
     "logout": "Se déconnecter",
-    "outOfDate": "(non à jour)",
     "updateTooltip": "v{{current}} - non à jour (dernière version : v{{latest}})",
     "versionTooltip": "Panneau Catalyst v{{version}}"
   }

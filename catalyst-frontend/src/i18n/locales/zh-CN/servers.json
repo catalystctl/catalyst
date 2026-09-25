@@ -23,6 +23,16 @@
     "warningCopyFiles": "将从源服务器复制文件。复制完成前，新服务器不可用。",
     "warningFreshInstall": "这将使用相同配置创建新服务器，并在新服务器上执行全新安装。"
   },
+  "columns": {
+    "actions": "操作",
+    "address": "地址",
+    "cpu": "CPU",
+    "disk": "磁盘",
+    "game": "游戏",
+    "ram": "内存",
+    "server": "服务器",
+    "state": "状态"
+  },
   "console": {
     "connection": {
       "connecting": "连接中",
@@ -207,6 +217,11 @@
     "clear": "清除",
     "searchPlaceholder": "按名称或节点搜索…"
   },
+  "hints": {
+    "actions": "操作",
+    "navigate": "导航",
+    "open": "打开"
+  },
   "hostNetwork": {
     "confirm": "启用并启动",
     "enabled": "已在节点上启用主机网络。",
@@ -257,16 +272,13 @@
       "owned": "我的"
     },
     "description": "管理您的游戏服务器、监控资源并控制电源状态。",
-    "overview": "概览",
+    "empty": "没有符合筛选条件的服务器。",
+    "overline": "集群",
     "stats": {
       "issues": "异常",
       "total": "总数"
     },
-    "title": "服务器",
-    "view": {
-      "cards": "卡片",
-      "list": "列表"
-    }
+    "title": "服务器"
   },
   "tabBar": {
     "moreTabs": "更多服务器页面"

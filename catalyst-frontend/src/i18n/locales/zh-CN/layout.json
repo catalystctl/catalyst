@@ -309,20 +309,17 @@
     "openMenu": "打开菜单",
     "openSearch": "打开搜索（{{shortcut}}）",
     "searchButton": "搜索…",
+    "sections": "全部板块",
     "skipToContent": "跳到主要内容"
   },
   "sidebar": {
-    "collapse": "收起侧边栏",
     "dark": "深色",
     "darkMode": "深色模式",
-    "expand": "展开侧边栏",
     "fallbackRole": "成员",
     "fallbackUser": "用户",
     "light": "浅色",
     "lightMode": "浅色模式",
-    "logoAlt": "{{panelName}} 徽标",
     "logout": "退出登录",
-    "outOfDate": "（有新版本）",
     "updateTooltip": "v{{current}} - 有新版本（最新：v{{latest}}）",
     "versionTooltip": "Catalyst 面板 v{{version}}"
   }
