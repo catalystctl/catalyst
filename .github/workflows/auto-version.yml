@@ -492,6 +492,10 @@ jobs:
           files: |
             /tmp/${{ matrix.artifact_name }}
             /tmp/${{ matrix.artifact_name }}.sha256
+          # Uploads update the existing release and softprops defaults `draft`
+          # to false, which would publish it here — before images exist. Only
+          # publish-release may publish.
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -529,6 +533,7 @@ jobs:
           files: |
             install.sh
             /tmp/install.sh.sha256
+          draft: true # see agent-release: uploads must not publish the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -586,6 +591,7 @@ jobs:
           files: |
             /tmp/catalyst-mcp.mjs
             /tmp/catalyst-mcp.mjs.sha256
+          draft: true # see agent-release: uploads must not publish the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
