@@ -387,7 +387,7 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  </div>
 
  {/* What gets imported */}
- <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">{t('migration.sections.allocations')}</div>
+ <div className="type-overline">{t('migration.sections.allocations')}</div>
  {server.allocations && server.allocations.length > 0 ? (
  <div className="flex flex-wrap gap-1.5">
  {server.allocations.map(allocation => (
@@ -409,7 +409,7 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
  </div>
  )}
 
- <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">{t('migration.sections.imports')}</div>
+ <div className="type-overline">{t('migration.sections.imports')}</div>
  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
  {/* Always imported */}
  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -553,7 +553,7 @@ function NodeMappingSection({
  <div className="border-t border-border/50 bg-surface-1/50">
  <div className="px-4 py-2 space-y-3">
  <div>
- <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
+ <div className="type-overline mb-2">
  {t('migration.nodeMapping.configuration')}
  </div>
  <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
@@ -569,7 +569,7 @@ function NodeMappingSection({
  </dl>
  {node.allocations && node.allocations.length > 0 && (
  <div className="mt-3">
- <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
+ <div className="type-overline mb-2">
  {t('migration.nodeConfig.allocations', { value: node.allocations.length })}
  </div>
  <div className="flex flex-wrap gap-1.5">
@@ -587,7 +587,7 @@ function NodeMappingSection({
  )}
  </div>
  <div>
- <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
+ <div className="type-overline mb-2">
  {t('migration.nodeMapping.serversOnNode', { value: nodeServers.length })}
  </div>
  {nodeServers.length > 0 ? (

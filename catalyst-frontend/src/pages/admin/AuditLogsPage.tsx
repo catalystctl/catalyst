@@ -254,11 +254,9 @@ return (
 
  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
  <div className="space-y-1.5">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('audit.detailActor')}</span>
+ <span className="type-overline">{t('audit.detailActor')}</span>
  <div className="flex items-center gap-2.5">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
- <User className="h-4 w-4 text-primary" />
- </div>
+ <User className="h-4 w-4 shrink-0 text-primary" />
  <div>
  <div className="text-sm font-medium text-foreground">{actorUsername ?? t('audit.detailSystem')}</div>
  <div className="text-[11px] text-muted-foreground">{actorEmail ?? log.userId ?? t('notAvailable')}</div>
@@ -266,11 +264,11 @@ return (
  </div>
  </div>
  <div className="space-y-1.5">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('audit.detailWhen')}</span>
+ <span className="type-overline">{t('audit.detailWhen')}</span>
  <div className="flex items-center gap-2">
  <Clock className="h-4 w-4 text-muted-foreground" />
  <div>
- <div className="text-sm font-medium text-foreground tabular-nums">
+ <div className="type-numeric text-sm text-foreground">
  {formatDateTime(log.timestamp)}
  </div>
  <div className="text-[11px] text-muted-foreground">
@@ -308,14 +306,14 @@ return (
 
  {hasDetails ? (
  <div className="space-y-2">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+ <span className="type-overline">
  {t('audit.detailDetailsCount', { count: publicEntries.length })}
  </span>
  <div className="space-y-2">
  {publicEntries.map(([key, value]) => (
- <div key={key} className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
+ <div key={key} className="rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
  <div className="flex items-start gap-3">
- <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground pt-0.5 min-w-[80px]">
+ <span className="shrink-0 type-overline pt-0.5 min-w-[80px]">
  {auditDetailLabel(t, key)}
  </span>
  <div className="flex-1 text-xs min-w-0">
@@ -472,7 +470,7 @@ function AuditLogsPage() {
 
  {/* ── Filters ── */}
  <ServerTabCard>
- <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+ <div className="flex items-center gap-2 type-overline mb-3">
  <Search className="h-3.5 w-3.5" />
  {t('filters')}
  </div>
@@ -567,7 +565,7 @@ function AuditLogsPage() {
  {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
  <div key={dateLabel}>
  <div className="mb-3 flex items-center gap-3">
- <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{dateLabel}</h3>
+ <h3 className="type-overline">{dateLabel}</h3>
  <div className="h-px flex-1 bg-border" />
  <Badge variant="outline" className="text-[10px]">{entries.length}</Badge>
  </div>
@@ -581,12 +579,10 @@ function AuditLogsPage() {
  return (
  <div
  key={log.id}
- className="group relative flex items-start gap-3 rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ className="group relative flex items-start gap-3 rounded-md border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
  >
  <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
- <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
- <ResourceIcon resource={log.resource} className="h-4 w-4" />
- </div>
+ <ResourceIcon resource={log.resource} className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">

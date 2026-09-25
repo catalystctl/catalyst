@@ -363,7 +363,7 @@ function AdminServersPage() {
  <Filter className="h-3.5 w-3.5" />
  {t('servers.filters')}
  {hasActiveFilters && (
- <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+ <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground/20 text-[10px] font-bold">
  {[status, nodeId, templateId, ownerSearch.trim()].filter(Boolean).length}
  </span>
  )}

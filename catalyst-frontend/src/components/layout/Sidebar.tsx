@@ -327,9 +327,9 @@ function Section({ id, title, links, expanded = false, onToggle, collapsed }: Se
         onClick={toggleExpanded}
         aria-expanded={shouldExpand}
         aria-controls={`section-${id}`}
-        className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80 transition-colors hover:text-foreground"
+        className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 transition-colors hover:text-foreground"
       >
-        <span>{title}</span>
+        <span className="type-overline">{title}</span>
         {shouldExpand ? (
           <ChevronDown className="h-3 w-3 opacity-70" />
         ) : (

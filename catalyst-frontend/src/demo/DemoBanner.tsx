@@ -11,9 +11,13 @@ export default function DemoBanner() {
     <div
       role="status"
       title={t('demo.banner')}
-      className="fixed inset-x-0 top-0 z-40 flex h-8 items-center justify-center gap-1.5 bg-primary px-3 text-[11px] font-medium text-primary-foreground"
+      className="fixed inset-x-0 top-0 z-40 flex h-8 items-center justify-center gap-2 border-b border-primary/30 bg-card px-3 font-mono text-[11px] text-foreground/80"
     >
-      <span aria-hidden="true" className="shrink-0">◆</span>
+      {/* Pulsing lab marker instead of a bright full-width accent bar */}
+      <span aria-hidden="true" className="relative flex h-1.5 w-1.5 shrink-0">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-50" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+      </span>
       <span className="truncate">{t('demo.banner')}</span>
     </div>
   );

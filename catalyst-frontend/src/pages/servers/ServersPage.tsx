@@ -213,7 +213,7 @@ function AccessTab({
  <span
  className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
  active
- ? 'bg-white/20 text-primary-foreground'
+ ? 'bg-primary-foreground/20 text-primary-foreground'
  : 'bg-surface-2 text-muted-foreground'
  }`}
  >

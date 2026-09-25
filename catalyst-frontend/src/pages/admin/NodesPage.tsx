@@ -15,14 +15,12 @@ import {
  X,
  MapPin,
  AlertTriangle,
- CheckCircle,
 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import NodeCreateModal from '../../components/nodes/NodeCreateModal';
 import LocationsManagerModal from '../../components/nodes/LocationsManagerModal';
 import { Input } from '../../components/ui/input';
-import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
  Select,
@@ -83,38 +81,24 @@ function TableSkeleton() {
 }
 
 // ── Location Section Header ──
+// Typographic overline + hairline rule, consistent with SectionHeader.
 function LocationSectionHeader({ location, count }: { location: Location | null; count: number }) {
  const { t } = useTranslation('admin-infra');
- if (location) {
+ const name = location ? location.name : t('nodes.unassigned');
  return (
- <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
- <div className="flex items-center gap-2">
- <MapPin className="h-4 w-4 text-success" />
- <h3 className="text-sm font-semibold text-foreground">
- {location.name}
+ <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2.5 backdrop-blur-sm">
+ <div className="flex items-center gap-3">
+ <h3 className="type-overline shrink-0">
+ {name}
  </h3>
- <Badge variant="secondary" className="text-[10px]">
+ <span className="h-px min-w-4 flex-1 bg-border/50" aria-hidden />
+ <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
  {t('nodes.locationNodeCount', { count })}
- </Badge>
- {location.description && (
- <span className="hidden text-xs text-muted-foreground sm:inline">
- {location.description}
  </span>
+ </div>
+ {location?.description && (
+ <p className="type-meta mt-0.5 hidden sm:block">{location.description}</p>
  )}
- </div>
- </div>
- );
- }
-
- return (
- <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
- <div className="flex items-center gap-2">
- <MapPin className="h-4 w-4 text-muted-foreground" />
- <h3 className="text-sm font-semibold text-foreground">{t('nodes.unassigned')}</h3>
- <Badge variant="secondary" className="text-[10px]">
- {t('nodes.locationNodeCount', { count })}
- </Badge>
- </div>
  </div>
  );
 }
@@ -163,24 +147,16 @@ function NodeRow({
  />
  )}
 
- {/* Online indicator dot + icon */}
- <div className="flex items-center gap-2">
- <div
- className={`h-2 w-2 rounded-full transition-colors ${
+ {/* Online indicator — pulsing dot, no icon tile */}
+ <div className="relative flex h-2 w-2 shrink-0 items-center">
+ {node.isOnline && (
+ <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-50" />
+ )}
+ <span
+ className={`relative inline-flex h-2 w-2 rounded-full ${
  node.isOnline ? 'bg-success' : 'bg-surface-3'
  }`}
  />
- <div
- className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
- node.isOnline ? 'bg-success/10' : 'bg-surface-2'
- }`}
- >
- <Server
- className={`h-4 w-4 transition-colors ${
- node.isOnline ? 'text-success' : 'text-muted-foreground'
- }`}
- />
- </div>
  </div>
 
  {/* Node info — primary column */}
@@ -188,43 +164,31 @@ function NodeRow({
  <div className="flex items-center gap-2.5 flex-wrap">
  <Link
  to={`/admin/nodes/${node.id}`}
- className="truncate font-semibold text-foreground transition-colors hover:text-primary"
+ className="truncate font-display text-sm font-semibold text-foreground transition-colors hover:text-primary"
  >
  {node.name}
  </Link>
- <Badge
- variant={node.isOnline ? 'success' : 'secondary'}
- className="shrink-0 gap-1 text-[11px]"
- >
- <span className="relative flex h-1.5 w-1.5">
- {node.isOnline && (
- <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
- )}
  <span
- className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
- node.isOnline ? 'bg-success' : 'bg-surface-3'
+ className={`shrink-0 font-mono text-[10px] ${
+ node.isOnline ? 'text-success' : 'text-muted-foreground'
  }`}
- />
- </span>
- {node.isOnline ? t('common:status.online') : t('common:status.offline')}
- </Badge>
- {/* Agent version badge */}
- {node.agentVersion && (
- <Badge
- variant={
- latestAgentVersion && compareVersions(node.agentVersion, latestAgentVersion)
- ? 'warning'
- : 'outline'
- }
- className="shrink-0 gap-1 font-mono text-[10px]"
  >
- {latestAgentVersion && compareVersions(node.agentVersion, latestAgentVersion) ? (
+ {node.isOnline ? t('common:status.online') : t('common:status.offline')}
+ </span>
+ {/* Agent version — warning only when outdated */}
+ {node.agentVersion && (
+ <span
+ className={`flex shrink-0 items-center gap-1 font-mono text-[10px] ${
+ latestAgentVersion && compareVersions(node.agentVersion, latestAgentVersion)
+ ? 'text-warning'
+ : 'text-muted-foreground/70'
+ }`}
+ >
+ {latestAgentVersion && compareVersions(node.agentVersion, latestAgentVersion) && (
  <AlertTriangle className="h-2.5 w-2.5" />
- ) : (
- <CheckCircle className="h-2.5 w-2.5" />
  )}
  {t('nodes.agentVersionShort', { version: node.agentVersion })}
- </Badge>
+ </span>
  )}
  </div>
  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -239,19 +203,19 @@ function NodeRow({
  {/* Resource stats — visible on larger screens */}
  <div className="hidden items-center gap-4 lg:flex">
  <div className="text-right">
- <div className="text-xs font-medium text-foreground">
+ <div className="type-numeric text-xs text-foreground">
  {serverCount}
  </div>
  <div className="text-[11px] text-muted-foreground">{t('nodes.stat.servers')}</div>
  </div>
  <div className="text-right">
- <div className="text-xs font-medium text-foreground">
+ <div className="type-numeric text-xs text-foreground">
  {node.maxCpuCores ?? 0}
  </div>
  <div className="text-[11px] text-muted-foreground">{t('nodes.stat.cores')}</div>
  </div>
  <div className="text-right">
- <div className="text-xs font-medium text-foreground">
+ <div className="type-numeric text-xs text-foreground">
  {memoryGB} GB
  </div>
  <div className="text-[11px] text-muted-foreground">{t('nodes.stat.memory')}</div>
@@ -575,7 +539,7 @@ function AdminNodesPage() {
  <Filter className="h-3.5 w-3.5" />
  {t('nodes.filters')}
  {hasActiveFilters && (
- <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+ <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground/20 text-[10px] font-bold">
  {[statusFilter, selectedLocationId].filter(Boolean).length}
  </span>
  )}
@@ -671,7 +635,7 @@ function AdminNodesPage() {
  <ServerTabCard>
  <div className="flex flex-wrap items-end gap-4">
  <label className="space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('nodes.filter.status')}</span>
+ <span className="type-overline">{t('nodes.filter.status')}</span>
  <Select
  value={statusFilter || 'all'}
  onValueChange={(value) => {
@@ -690,7 +654,7 @@ function AdminNodesPage() {
  </label>
  {locations.length > 0 && (
  <label className="space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('nodes.filter.location')}</span>
+ <span className="type-overline">{t('nodes.filter.location')}</span>
  <Select
  value={selectedLocationId || 'all'}
  onValueChange={(value) => {
@@ -739,7 +703,7 @@ function AdminNodesPage() {
 
  {/* ── Bulk Actions Bar ── */}
  {selectedIds.length > 0 && canDelete && (
- <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
+ <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 px-4 py-2.5">
  <div className="flex items-center gap-3">
  <span className="text-sm font-medium text-foreground">
  {t('nodes.selectedCount', { value: selectedIds.length })}
@@ -780,7 +744,7 @@ function AdminNodesPage() {
  return (
  <div
  key={locationId ?? '__unassigned__'}
- className="overflow-hidden rounded-xl border border-border bg-card "
+ className="overflow-hidden rounded-md border border-border bg-card "
  >
  <LocationSectionHeader location={location} count={groupNodes.length} />
  {renderNodeRows(groupNodes, true)}
@@ -812,7 +776,7 @@ function AdminNodesPage() {
  </div>
  ) : (
  /* ── Flat List View (single location selected or no locations exist) ── */
- <div className="overflow-hidden rounded-xl border border-border bg-card ">
+ <div className="overflow-hidden rounded-md border border-border bg-card ">
  {isLoading ? (
  <div className="p-4">
  <TableSkeleton />

@@ -136,7 +136,7 @@ function ColorPicker({
  <div className="flex items-center gap-2">
  <div className="relative flex-shrink-0">
  <div
- className="h-8 w-8 cursor-pointer rounded-md ring-1 ring-black/10"
+ className="h-8 w-8 cursor-pointer rounded-md ring-1 ring-border"
  style={{ backgroundColor: isValid ? value : 'hsl(var(--muted-foreground))' }}
  />
  <input
@@ -177,7 +177,7 @@ function ColorPicker({
  <div className="flex items-center gap-2">
  <div className="relative flex-shrink-0">
  <div
- className="h-10 w-10 cursor-pointer rounded-lg ring-1 ring-black/10 transition-transform hover:scale-105"
+ className="h-10 w-10 cursor-pointer rounded-lg ring-1 ring-border transition-transform hover:scale-105"
  style={{ backgroundColor: isValid ? value : 'hsl(var(--muted-foreground))' }}
  />
  <input
@@ -209,7 +209,7 @@ function Swatch({ color, label, mono }: { color: string; label?: string; mono?: 
  return (
  <div className="group/swatch flex flex-col items-center gap-1">
  <div
- className="h-10 w-full rounded-md ring-1 ring-black/5 transition-transform hover:scale-105"
+ className="h-10 w-full rounded-md ring-1 ring-border transition-transform hover:scale-105"
  style={{ backgroundColor: color }}
  />
  {label && (
@@ -454,7 +454,7 @@ function ElevationPreview({
  {levels.map(({ color, label }) => (
  <div key={label} className="flex-1 text-center">
  <div
- className="mx-auto h-12 rounded-lg ring-1 ring-black/5 transition-transform hover:scale-105"
+ className="mx-auto h-12 rounded-lg ring-1 ring-border transition-transform hover:scale-105"
  style={{ backgroundColor: color }}
  />
  <span className="mt-1 block text-[9px] font-medium text-muted-foreground">
@@ -1003,7 +1003,7 @@ function ThemeSettingsPage() {
  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
  <div className="group relative flex-shrink-0">
  <div
- className="h-24 w-24 cursor-pointer rounded-lg ring-1 ring-black/5 transition-all duration-300 group-hover:scale-105"
+ className="h-24 w-24 cursor-pointer rounded-lg ring-1 ring-border transition-all duration-300 group-hover:scale-105"
  style={{
  backgroundColor: isSeedValid ? seedColor : 'hsl(var(--muted-foreground))',
  boxShadow: isSeedValid
@@ -1236,12 +1236,12 @@ function ThemeSettingsPage() {
  <p className="mb-3 min-h-8 text-[11px] leading-relaxed text-muted-foreground">{presetDescription(t, preset.id)}</p>
  <div className="mb-3 flex gap-1.5">
  {[preset.primaryColor, preset.secondaryColor, preset.accentColor].map((c, i) => (
- <div key={i} className="h-8 flex-1 rounded-md ring-1 ring-black/10" style={{ backgroundColor: c }} />
+ <div key={i} className="h-8 flex-1 rounded-md ring-1 ring-border" style={{ backgroundColor: c }} />
  ))}
  </div>
  <div className="mb-4 flex gap-1">
  {[preset.themeColors.darkBackground, preset.themeColors.darkSurface2, preset.themeColors.lightBackground, preset.themeColors.lightSurface2].map((c, i) => (
- <div key={i} className="h-5 flex-1 rounded-sm ring-1 ring-black/10" style={{ backgroundColor: c }} />
+ <div key={i} className="h-5 flex-1 rounded-sm ring-1 ring-border" style={{ backgroundColor: c }} />
  ))}
  </div>
  <button
@@ -1383,7 +1383,7 @@ function ThemeSettingsPage() {
  {[primaryColor, secondaryColor, accentColor].map((color, i) => (
  <div
  key={i}
- className="h-10 flex-1 rounded-md ring-1 ring-black/5"
+ className="h-10 flex-1 rounded-md ring-1 ring-border"
  style={{ backgroundColor: color }}
  title={[t('theme.primaryTooltip'), t('theme.secondaryTooltip'), t('theme.accentTooltip')][i]}
  />
@@ -1703,7 +1703,7 @@ function ThemeSettingsPage() {
  ).map((c, i) => (
  <div
  key={i}
- className="h-5 flex-1 rounded-sm ring-1 ring-black/10"
+ className="h-5 flex-1 rounded-sm ring-1 ring-border"
  style={{ backgroundColor: c || 'hsl(var(--muted-foreground))' }}
  title={t('theme.elevationLevel', { level: i })}
  />
@@ -1805,7 +1805,7 @@ function ThemeSettingsPage() {
  onClick={() => setTheme(m as 'light' | 'dark')}
  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
  (currentTheme === m)
- ? 'bg-card text-foreground shadow-sm ring-1 ring-black/5'
+ ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
  : 'text-muted-foreground hover:text-foreground'
  }`}
  >
@@ -1839,7 +1839,7 @@ function ThemeSettingsPage() {
  onClick={() => setActiveTab(tab.id)}
  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
  isActive
- ? 'bg-card text-foreground shadow-sm ring-1 ring-black/5'
+ ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
  : 'text-muted-foreground hover:bg-surface-2/50 hover:text-foreground'
  }`}
  >

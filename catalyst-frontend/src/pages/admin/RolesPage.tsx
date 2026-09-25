@@ -367,9 +367,7 @@ function RoleCard({
   <div className="flex items-start justify-between gap-3">
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2.5">
- <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isWildcard ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}`}>
- {isWildcard ? <KeyRound className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
- </div>
+ {isWildcard ? <KeyRound className="h-4 w-4 shrink-0 text-warning" /> : <Shield className="h-4 w-4 shrink-0 text-primary" />}
  <div className="min-w-0">
  <div className="truncate font-semibold text-foreground">
  {roleLabel(t, role.name)}
@@ -765,7 +763,6 @@ function PermissionCategoryCard({
  searchQuery: string;
 }) {
  const { t } = useTranslation('admin-access');
- const Icon = category.icon;
  const allSelected = category.permissions.every((p) => selectedPermissions.has(p));
  const someSelected = category.permissions.some((p) => selectedPermissions.has(p));
  const selectedCount = category.permissions.filter((p) => selectedPermissions.has(p)).length;
@@ -787,9 +784,6 @@ function PermissionCategoryCard({
  onClick={() => onToggleCategory(category.permissions, !allSelected)}
  >
  <div className="flex items-center gap-2.5">
- <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${category.color}`}>
- <Icon className={`h-3.5 w-3.5 ${category.accent}`} />
- </div>
  <span className="text-sm font-semibold text-foreground">{permissionCategoryLabel(t, category.key)}</span>
  </div>
 
@@ -833,14 +827,10 @@ function PermissionCategoryReadCard({
   permissions: string[];
 }) {
  const { t } = useTranslation('admin-access');
- const Icon = category.icon;
  return (
  <div className={`rounded-xl border ${category.border}`}>
  <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
  <div className="flex items-center gap-2.5">
- <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${category.color}`}>
- <Icon className={`h-3.5 w-3.5 ${category.accent}`} />
- </div>
  <span className="text-sm font-semibold text-foreground">{category.category}</span>
  </div>
  <Badge variant="secondary" className="text-[10px] tabular-nums">{category.count}</Badge>
@@ -876,16 +866,14 @@ function PresetCard({
  <button
  type="button"
  onClick={onApply}
- className={`group flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition-all duration-200 ${
+ className={`group flex flex-col items-start gap-2 rounded-md border p-4 text-left transition-all duration-200 ${
  isActive
  ? 'border-primary/40 bg-primary/5 '
- : 'border-border bg-card hover:border-primary/20'
+ : 'border-border/50 bg-card hover:border-primary/20'
  }`}
  >
  <div className="flex items-center gap-2.5 w-full">
- <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${preset.color}`}>
- <Icon className="h-4 w-4 text-foreground/80" />
- </div>
+ <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
  <div className="min-w-0 flex-1">
  <div className="text-sm font-semibold text-foreground">{presetLabel(t, preset.key)}</div>
  <div className="text-[11px] text-muted-foreground">{presetDescription(t, preset.key)}</div>

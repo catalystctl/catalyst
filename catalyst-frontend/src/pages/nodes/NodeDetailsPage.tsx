@@ -321,11 +321,11 @@ function NodeDetailsPage() {
           SERVERS ON NODE
           Compact server list with count badge.
       ══════════════════════════════════════════════════════════════════ */}
-      <div className="overflow-hidden rounded-lg border border-border/70 bg-card px-3 py-2.5">
+      <div className="overflow-hidden rounded-md border border-border/50 bg-card px-3 py-2.5">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Server className="h-3.5 w-3.5 text-primary" />
-            <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
+            <h3 className="type-overline">
               {t('servers.title')}
             </h3>
           </div>
@@ -377,11 +377,11 @@ function NodeDetailsPage() {
           DISCOVERED SERVERS
       ══════════════════════════════════════════════════════════════════ */}
       {canWrite && unregisteredContainers.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-warning/30 bg-card px-3 py-2.5">
+        <div className="overflow-hidden rounded-md border border-warning/30 bg-card px-3 py-2.5">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Download className="h-3.5 w-3.5 text-warning" />
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
+              <h3 className="type-overline">
                 {t('discovered.title')}
               </h3>
             </div>
@@ -455,7 +455,7 @@ function NodeDetailsPage() {
         title={t('deploy.title')}
         description={t('deploy.description')}
       >
-        <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
+        <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
           <code className="block max-w-full break-all whitespace-pre-wrap">
             {deployInfo
               ? buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey)
@@ -492,17 +492,17 @@ function NodeDetailsPage() {
         description={t('apiKey.description')}
       >
         {apiKeyStatus?.exists && (
-          <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-xs text-warning">
+          <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/5 px-4 py-3 text-xs text-warning">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>{t('apiKey.revoked')}</span>
           </div>
         )}
-        <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
+        <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
           <code className="block max-w-full break-all whitespace-pre-wrap">
             api_key = &quot;{generatedApiKey}&quot;
           </code>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-xs text-warning">
+        <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/5 px-4 py-3 text-xs text-warning">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <strong>{t('apiKey.important')}</strong> {t('apiKey.saveNow')}
         </div>

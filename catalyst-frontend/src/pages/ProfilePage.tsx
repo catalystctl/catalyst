@@ -80,9 +80,7 @@ function DangerZone() {
  return (
  <ServerTabCard className="border-destructive/20 bg-destructive/5">
  <div className="mb-3 flex items-center gap-2.5">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
- <AlertTriangle className="h-4 w-4 text-destructive" />
- </div>
+ <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
  <div>
  <h3 className="text-sm font-semibold text-destructive">{t('dangerZone.title')}</h3>
  <p className="text-[11px] text-destructive/70">{t('dangerZone.description')}</p>
@@ -574,7 +572,7 @@ export default function ProfilePage() {
  {tfaSetup?.otpAuthUrl && <a href={tfaSetup.otpAuthUrl} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary"><ExternalLink className="h-3 w-3" /> {t('twoFactor.openInApp')}</a>}
  {tfaSetup?.secret && (
  <div className="mb-4 rounded-lg border border-border/50 bg-surface-2/50 p-3 text-center">
- <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{t('twoFactor.manualKey')}</div>
+ <div className="type-overline">{t('twoFactor.manualKey')}</div>
  <code className="mt-1 block text-sm font-mono font-semibold text-foreground select-all">{tfaSetup.secret}</code>
  <button onClick={() => { navigator.clipboard.writeText(tfaSetup?.secret ?? ''); notifySuccess(t('common:actions.copied')); }} className="mt-2 flex items-center gap-1 mx-auto text-[10px] text-muted-foreground hover:text-foreground"><Copy className="h-3 w-3" /> {t('common:actions.copy')}</button>
  </div>

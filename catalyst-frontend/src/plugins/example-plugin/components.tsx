@@ -25,7 +25,7 @@ export function AdminTab() {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
+      <div className="overflow-hidden rounded-md border border-border/70 bg-card">
         <div className="px-3 py-2.5">
           <h2 className="text-sm font-semibold tracking-tight text-foreground">Example Plugin Admin Tab</h2>
           <p className="type-meta mt-0.5">
@@ -35,45 +35,45 @@ export function AdminTab() {
       </div>
 
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
- <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+ <div className="bg-surface-1 rounded-md p-6 border border-border">
  <h3 className="text-lg font-semibold mb-4">Plugin Statistics</h3>
  {stats ? (
  <div className="space-y-2">
  <div className="flex justify-between">
- <span className="text-gray-400">Request Count:</span>
+ <span className="text-muted-foreground">Request Count:</span>
  <span className="font-mono">{stats.requestCount}</span>
  </div>
  <div className="flex justify-between">
- <span className="text-gray-400">Task Runs:</span>
+ <span className="text-muted-foreground">Task Runs:</span>
  <span className="font-mono">{stats.taskRunCount}</span>
  </div>
  <div className="flex justify-between">
- <span className="text-gray-400">Uptime:</span>
+ <span className="text-muted-foreground">Uptime:</span>
  <span className="font-mono">{Math.floor(stats.uptime)}s</span>
  </div>
  <div className="flex justify-between">
- <span className="text-gray-400">Installed:</span>
+ <span className="text-muted-foreground">Installed:</span>
  <span className="font-mono text-sm">
  {stats.installDate ? new Date(stats.installDate).toLocaleDateString() : 'N/A'}
  </span>
  </div>
  </div>
  ) : (
- <div className="text-gray-400">Loading...</div>
+ <div className="text-muted-foreground">Loading...</div>
  )}
  </div>
 
- <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+ <div className="bg-surface-1 rounded-md p-6 border border-border">
  <h3 className="text-lg font-semibold mb-4">Test Plugin API</h3>
  <div className="space-y-4">
  <button
  onClick={handleTestClick}
- className="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
+ className="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded-md transition-colors"
  >
  Test Hello Endpoint
  </button>
  {counter > 0 && (
- <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+ <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-md">
  <p className="text-green-400 text-sm">
  Response received! Request count: <strong>{counter}</strong>
  </p>
@@ -83,9 +83,9 @@ export function AdminTab() {
  </div>
  </div>
 
- <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+ <div className="bg-blue-500/10 border border-blue-500/20 rounded-md p-4">
  <h3 className="text-lg font-semibold mb-2 text-blue-400">💡 Developer Note</h3>
- <p className="text-sm text-gray-300">
+ <p className="text-sm text-foreground/80">
  This admin tab demonstrates how plugins can extend the admin interface with custom functionality.
  Plugins can add multiple tabs, each with their own components and logic.
  </p>
@@ -123,7 +123,7 @@ export function ServerTab({ serverId }: { serverId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
+      <div className="overflow-hidden rounded-md border border-border/70 bg-card">
         <div className="px-3 py-2.5">
           <h2 className="text-sm font-semibold tracking-tight text-foreground">Example Plugin Server Tab</h2>
           <p className="type-meta mt-0.5">
@@ -133,11 +133,11 @@ export function ServerTab({ serverId }: { serverId: string }) {
         </div>
       </div>
 
- <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+ <div className="bg-surface-1 rounded-md p-6 border border-border">
  <h3 className="text-lg font-semibold mb-4">Echo Test</h3>
  <div className="space-y-4">
  <div>
- <label className="block text-sm font-medium text-gray-300 mb-2">
+ <label className="block text-sm font-medium text-foreground/80 mb-2">
  Message to Echo
  </label>
  <div className="flex gap-2">
@@ -147,12 +147,12 @@ export function ServerTab({ serverId }: { serverId: string }) {
  onChange={(e) => setMessage(e.target.value)}
  onKeyPress={(e) => e.key === 'Enter' && handleEcho()}
  placeholder="Type a message..."
- className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+ className="flex-1 px-4 py-2 bg-surface-2 border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500"
  />
  <button
  onClick={handleEcho}
  disabled={!message}
- className="px-6 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+ className="px-6 py-2 bg-primary-600 hover:bg-primary-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
  >
  Send
  </button>
@@ -161,10 +161,10 @@ export function ServerTab({ serverId }: { serverId: string }) {
 
  {responses.length > 0 && (
  <div className="space-y-2">
- <h4 className="text-sm font-medium text-gray-400">Recent Responses:</h4>
+ <h4 className="text-sm font-medium text-muted-foreground">Recent Responses:</h4>
  {responses.map((resp, idx) => (
- <div key={idx} className="p-3 bg-gray-700/50 rounded border border-gray-600">
- <pre className="text-xs text-gray-300 overflow-x-auto">
+ <div key={idx} className="p-3 bg-surface-2/50 rounded border border-border">
+ <pre className="text-xs text-foreground/80 overflow-x-auto">
  {JSON.stringify(resp.echoed, null, 2)}
  </pre>
  <p className="text-xs text-gray-500 mt-1">
@@ -177,10 +177,10 @@ export function ServerTab({ serverId }: { serverId: string }) {
  </div>
  </div>
 
- <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4">
+ <div className="bg-purple-500/10 border border-purple-500/20 rounded-md p-4">
  <h3 className="text-lg font-semibold mb-2 text-purple-400">🚀 Plugin Context</h3>
- <p className="text-sm text-gray-300">
- Server-specific tabs receive the <code className="bg-gray-800 px-1 rounded">serverId</code> prop,
+ <p className="text-sm text-foreground/80">
+ Server-specific tabs receive the <code className="bg-surface-1 px-1 rounded">serverId</code> prop,
  allowing plugins to provide server-specific functionality and data.
  </p>
  </div>

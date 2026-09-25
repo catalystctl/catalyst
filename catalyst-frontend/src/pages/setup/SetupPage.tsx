@@ -441,8 +441,8 @@ function SetupPage() {
  {/* Preview card */}
  <div className="space-y-2">
  <label className={labelClass}>{t('welcome.preview')}</label>
- <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/50 p-4">
- <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+ <div className="flex items-center gap-3 rounded-md border border-border/50 bg-surface-2/50 p-4">
+ <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
  {logoDataUri ? (
  <img
  src={logoDataUri}
@@ -694,7 +694,7 @@ function SetupPage() {
  <div className="space-y-4 rounded-xl border border-border bg-surface-1/50 p-4">
  {/* Brand colors */}
  <div>
- <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+ <p className="type-overline mb-2">
  {t('palette.brand')}
  </p>
  <div className="grid grid-cols-3 gap-3">
@@ -718,7 +718,7 @@ function SetupPage() {
 
  {/* Semantic */}
  <div>
- <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+ <p className="type-overline mb-2">
  {t('palette.semantic')}
  </p>
  <div className="flex flex-wrap gap-2">
@@ -750,7 +750,7 @@ function SetupPage() {
 
  {/* Dark surfaces */}
  <div>
- <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+ <p className="type-overline mb-2">
  {t('appearance.darkSurfaces')}
  </p>
  <div className="rounded-lg bg-surface-0 p-3">
@@ -775,7 +775,7 @@ function SetupPage() {
 
  {/* Light surfaces */}
  <div>
- <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+ <p className="type-overline mb-2">
  {t('appearance.lightSurfaces')}
  </p>
  <div className="rounded-lg border border-border p-3">

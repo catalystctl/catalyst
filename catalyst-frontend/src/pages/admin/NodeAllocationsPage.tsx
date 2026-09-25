@@ -664,15 +664,15 @@ function NodeAllocationsPage() {
 
  <div className="mt-3 grid grid-cols-3 gap-2">
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.stats.available')}</div>
+ <div className="type-overline">{t('allocations.stats.available')}</div>
  <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.availableCount}</div>
  </div>
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.stats.used')}</div>
+ <div className="type-overline">{t('allocations.stats.used')}</div>
  <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.usedCount}</div>
  </div>
  <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.stats.reserved')}</div>
+ <div className="type-overline">{t('allocations.stats.reserved')}</div>
  <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.reservedCount}</div>
  </div>
  </div>
@@ -683,7 +683,7 @@ function NodeAllocationsPage() {
 
  {pool.allocations && pool.allocations.length > 0 && (
  <div className="mt-3 border-t border-border/30 pt-3">
- <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50 mb-2">
+ <div className="type-overline mb-2">
  {t('allocations.assignedIps', { value: pool.allocations.length })}
  </div>
  <div className="max-h-32 space-y-1 overflow-y-auto">
@@ -727,7 +727,7 @@ function NodeAllocationsPage() {
         </ServerTabCard>
 
         <label className="block space-y-1.5">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPort.ipLabel')}</span>
+          <span className="type-overline">{t('allocations.createPort.ipLabel')}</span>
           <Input
             type="text"
             value={ipInput}
@@ -737,7 +737,7 @@ function NodeAllocationsPage() {
         </label>
 
         <label className="block space-y-1.5">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPort.portsLabel')}</span>
+          <span className="type-overline">{t('allocations.createPort.portsLabel')}</span>
           <Input
             type="text"
             value={portsInput}
@@ -747,7 +747,7 @@ function NodeAllocationsPage() {
         </label>
 
         <label className="block space-y-1.5">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPort.aliasLabel')}</span>
+          <span className="type-overline">{t('allocations.createPort.aliasLabel')}</span>
           <Input
             type="text"
             value={aliasInput}
@@ -791,7 +791,7 @@ function NodeAllocationsPage() {
  </ServerTabCard>
 
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.networkName')}</span>
+ <span className="type-overline">{t('allocations.createPool.networkName')}</span>
  <Input
  type="text"
  value={networkName}
@@ -801,7 +801,7 @@ function NodeAllocationsPage() {
  </label>
 
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.cidr')}</span>
+ <span className="type-overline">{t('allocations.createPool.cidr')}</span>
  <Input
  type="text"
  value={cidr}
@@ -812,7 +812,7 @@ function NodeAllocationsPage() {
 
  <div className="grid grid-cols-2 gap-4">
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.gateway')}</span>
+ <span className="type-overline">{t('allocations.createPool.gateway')}</span>
  <Input
  type="text"
  value={gateway}
@@ -821,7 +821,7 @@ function NodeAllocationsPage() {
  />
  </label>
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.startIp')}</span>
+ <span className="type-overline">{t('allocations.createPool.startIp')}</span>
  <Input
  type="text"
  value={startIp}
@@ -830,7 +830,7 @@ function NodeAllocationsPage() {
  />
  </label>
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.endIp')}</span>
+ <span className="type-overline">{t('allocations.createPool.endIp')}</span>
  <Input
  type="text"
  value={endIp}
@@ -851,7 +851,7 @@ function NodeAllocationsPage() {
  </div>
 
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.quickSetupIp')}</span>
+ <span className="type-overline">{t('allocations.createPool.quickSetupIp')}</span>
  <Input
  type="text"
  value={autoFillIp}
@@ -861,7 +861,7 @@ function NodeAllocationsPage() {
  </label>
 
  <label className="block space-y-1.5">
- <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{t('allocations.createPool.reservedIps')}</span>
+ <span className="type-overline">{t('allocations.createPool.reservedIps')}</span>
  <Textarea
  value={reserved}
  onChange={(e) => setReserved(e.target.value)}
