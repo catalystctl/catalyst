@@ -24,6 +24,9 @@ colors:
   game-ark: "#3FA9A0"
   game-valheim: "#7C9CC4"
   game-generic: "#8A93A0"
+  # Brutalist theme preset only (documented exception: hard offset shadows)
+  brutalist-shadow: "rgb(0 0 0 / 0.9)"
+  brutalist-shadow-soft: "rgb(0 0 0 / 0.85)"
 typography:
   display:
     fontFamily: '"Oxanium Variable", system-ui, sans-serif'
@@ -68,11 +71,14 @@ typography:
     lineHeight: 1.4
     letterSpacing: "normal"
 rounded:
-  sm: "0px"
-  md: "2px"
-  lg: "4px"
+  sm: "4px"       # controls — pinned so a theme preset cannot reshape the deck
+  md: "6px"
+  lg: "4px"       # panels use --deck-radius (4px); lg stays theme-driven for floating surfaces
   xl: "8px"
   "2xl": "12px"
+  hairline: "2px" # text-highlight chips only
+  scroll: "3px"   # native scrollbar track/thumb chrome
+  pill: "999px"   # status LED + avatar circles only — never a surface
 spacing:
   xs: "4px"
   sm: "8px"
@@ -178,10 +184,12 @@ are off-ramp and flagged by tooling:
 
 ## 4. Shape, motion, structure
 
-- **Radius** derives from `--radius: 0.25rem`: panels use `--radius` (4px) via
-  `.deck-panel`; controls and rows use the crisp end of the scale
-  (`rounded-sm` = square, `rounded-md` = 2px). Oversized radii on data surfaces
-  are refused.
+- **Radius.** Panels and rows use a fixed `--deck-radius` (4px) via
+  `.deck-panel`/`.deck-rows`, and the control step (`rounded-sm` = 4px) is
+  pinned in the Tailwind scale rather than derived from `--radius`, so an admin
+  theme — including a gallery preset — cannot reshape the deck's controls.
+  `lg` and above stay theme-driven for floating surfaces. Oversized radii on
+  data surfaces are refused.
 - **Motion**: 120ms/200ms on `--ease-standard`. The status LED pulses opacity
   only (`.deck-led-pulse`, 2.4s) — never scale, never bounce.
 - **Structure**: a 56px cabinet rail, a marquee header, and one framed

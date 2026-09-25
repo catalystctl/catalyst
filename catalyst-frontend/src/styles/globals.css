@@ -72,6 +72,10 @@
 
   /* Shape — industrial, not SaaS-rounded */
   --radius: 0.25rem;
+  /* Deck frame — fixed 4px, deliberately NOT derived from `--radius`: the
+     re-hueable token is rewritten by theme presets, which used to stretch the
+     deck's frames to 8–10px. Deck structure must survive a preset click. */
+  --deck-radius: 4px;
 
   /* Documented type ramp — replaces ad-hoc text-[10px]/text-[11px] literals */
   --text-micro: 0.6875rem;
@@ -347,6 +351,8 @@ body {
   scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
 
+/* 6px track/thumb with a 3px rounding: scrollbar chrome, not a surface —
+   off the radius scale on purpose (the detector's 3px advisories). */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -589,14 +595,16 @@ select option {
 /* Browser rows: square corners, zebra striping, signal-tinted hover */
 .deck-rows {
   border: 1px solid hsl(var(--border) / 0.7);
-  border-radius: var(--radius);
+  border-radius: var(--deck-radius);
   overflow: hidden;
 }
 .deck-rows > * + * { border-top: 1px solid hsl(var(--border) / 0.4); }
 .deck-rows > *:nth-child(even) { background: hsl(var(--surface-1) / 0.5); }
 .deck-rows > *:hover { background: hsl(var(--signal) / 0.07); }
 
-/* Status LED — crisp ring, never a blur glow */
+/* Status LED — crisp ring, never a blur glow.
+   999px is intentional: the dot must stay a circle (the detector's 999px
+   advisory), so it is not on the radius scale. */
 .led {
   width: 0.5rem;
   height: 0.5rem;
@@ -617,7 +625,7 @@ select option {
 /* Square-cornered control surfaces inside the deck */
 .deck-panel {
   border: 1px solid hsl(var(--border) / 0.7);
-  border-radius: var(--radius);
+  border-radius: var(--deck-radius);
   background: hsl(var(--card));
 }
 

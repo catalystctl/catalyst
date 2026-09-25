@@ -11,7 +11,7 @@ const Command = forwardRef<
  className={cn(
  'flex h-full w-full flex-col overflow-hidden rounded-md bg-card text-foreground',
  '[&_[cmdk-group]]:px-1',
- '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[0.625rem] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-muted-foreground',
+ '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-muted-foreground',
  '[&_kbd]:ml-auto [&_kbd]:font-mono [&_kbd]:text-xs [&_kbd]:tracking-widest [&_kbd]:text-muted-foreground',
  className,
  )}
