@@ -9,7 +9,7 @@ function NotFoundPage() {
   const { t } = useTranslation('auth');
   return (
     <main className="app-shell flex min-h-screen items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-xl rounded-xl border-border/50 bg-card">
+      <Card className="w-full max-w-xl border-border/50 bg-card">
         <CardContent className="space-y-6 p-6 sm:p-8">
           <TabHeader
             icon={FileQuestion}

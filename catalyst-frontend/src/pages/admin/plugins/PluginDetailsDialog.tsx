@@ -61,7 +61,7 @@ function CapabilitySection({
   if (count === 0) return null;
   return (
     <div className="space-y-2">
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">
+      <p className="flex items-center gap-1.5 type-overline">
         <Icon className="h-3.5 w-3.5" />
         {title}
         <Badge variant="secondary" className="ml-0.5 text-[10px]">
@@ -257,7 +257,7 @@ export function PluginDetailsDialog({
                 </div>
                 {(details?.dependencies?.length ?? 0) > 0 && (
                   <div>
-                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">
+                    <p className="mb-1.5 type-overline">
                       {t('pluginsAdmin.dependsOn')}
                     </p>
                     <div className="flex flex-wrap gap-1.5">

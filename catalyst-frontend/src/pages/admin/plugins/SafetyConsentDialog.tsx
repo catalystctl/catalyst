@@ -89,7 +89,7 @@ export function SafetyConsentDialog({
             </p>
 
             <div className="rounded-lg border border-border/60 bg-surface-2/30 p-4">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">
+              <p className="mb-2 type-overline">
                 {t('pluginsAdmin.consentWillBeAbleTo')}
               </p>
               {requestedCapabilities && requestedCapabilities.length > 0 ? (
@@ -127,7 +127,7 @@ export function SafetyConsentDialog({
                 className="rounded-lg border border-border/60 bg-surface-2/30 p-4"
                 data-testid="plugin-consent-licensing"
               >
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">
+                <p className="mb-2 type-overline">
                   {t('pluginsAdmin.consentLicensingTitle')}
                 </p>
                 <ul className="space-y-2">

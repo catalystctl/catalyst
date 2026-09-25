@@ -1138,7 +1138,7 @@ function ServerDetailsPage() {
       <ErrorBoundary
         resetKey={tab ?? activeTab}
         fallback={
-          <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-xl border border-border/40 bg-card px-4 py-10 text-center">
+          <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-md border border-border/50 bg-card px-4 py-10 text-center">
             <p className="text-sm font-medium text-foreground">{t('details.tabErrorTitle')}</p>
             <p className="type-meta max-w-md">
               {t('details.tabErrorDescription')}

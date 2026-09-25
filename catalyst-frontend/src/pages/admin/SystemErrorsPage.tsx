@@ -212,17 +212,17 @@ return (
  <DialogBody className="space-y-5">
  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.level')}</span>
+ <span className="type-overline">{t('systemErrors.level')}</span>
  <LevelBadge level={error.level} className={`text-[11px] ${levelColor(error.level)}`} />
  </div>
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.status')}</span>
+ <span className="type-overline">{t('systemErrors.status')}</span>
  <Badge variant={error.resolved ? 'outline' : 'secondary'} className={`text-[11px] ${error.resolved ? 'border-success/40 text-success' : ''}`}>
  {error.resolved ? t('systemErrors.resolved') : t('systemErrors.unresolved')}
  </Badge>
  </div>
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.nodeId')}</span>
+ <span className="type-overline">{t('systemErrors.nodeId')}</span>
  <span className="block truncate font-mono text-[11px]" title={error.nodeId ?? t('systemErrors.notAvailable')}>
  {error.nodeId ? (
  <span className="flex items-center gap-1 text-primary">
@@ -235,13 +235,13 @@ return (
  </span>
  </div>
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.requestId')}</span>
+ <span className="type-overline">{t('systemErrors.requestId')}</span>
  <span className="block truncate font-mono text-[11px] text-muted-foreground" title={error.requestId ?? 'n/a'}>
  {error.requestId ?? 'n/a'}
  </span>
  </div>
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.userId')}</span>
+ <span className="type-overline">{t('systemErrors.userId')}</span>
  <span className="block truncate font-mono text-[11px] text-muted-foreground" title={error.userId ?? 'n/a'}>
  {error.userId ?? 'n/a'}
  </span>
@@ -249,7 +249,7 @@ return (
  </div>
 
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.timestamp')}</span>
+ <span className="type-overline">{t('systemErrors.timestamp')}</span>
  <div className="flex items-center gap-2 text-sm text-foreground">
  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
  {formatDateTime(error.createdAt)}
@@ -257,7 +257,7 @@ return (
  </div>
 
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.tableMessage')}</span>
+ <span className="type-overline">{t('systemErrors.tableMessage')}</span>
  <div className="rounded-lg border border-border/30 bg-surface-2/40 px-3 py-2 text-sm text-foreground">
  {systemErrorMessage(t, error.message)}
  </div>
@@ -265,7 +265,7 @@ return (
 
  {error.stack && (
  <div className="space-y-1">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.stackTrace')}</span>
+ <span className="type-overline">{t('systemErrors.stackTrace')}</span>
  <pre className="max-h-64 overflow-auto rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground">
  {error.stack}
  </pre>
@@ -274,7 +274,7 @@ return (
 
  {hasMetadata && (
  <div className="space-y-2">
- <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+ <span className="type-overline">
  {t('systemErrors.metadataCount', { count: metadataEntries.length })}
  </span>
  <div className="overflow-hidden rounded-lg border border-border/30 bg-surface-2/40">
@@ -560,7 +560,7 @@ function ExportErrorsModal({
 
     <DialogBody className="space-y-5">
      <div className="space-y-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.timeRange')}</span>
+      <span className="type-overline">{t('systemErrors.timeRange')}</span>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
        {EXPORT_RANGES.map((option) => (
         <Button
@@ -576,7 +576,7 @@ function ExportErrorsModal({
      </div>
 
      <div className="space-y-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('systemErrors.format')}</span>
+      <span className="type-overline">{t('systemErrors.format')}</span>
       <Select value={format} onValueChange={(next) => setFormat(next as 'markdown' | 'json')}>
        <SelectTrigger className="w-full border-border/40">
         <SelectValue />
@@ -820,8 +820,8 @@ function SystemErrorsPage() {
  />
 
  {/* ── Filters ── */}
- <div className="overflow-hidden rounded-xl border border-border/30 bg-card/60 p-4">
- <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+ <div className="overflow-hidden rounded-md border border-border/50 bg-card/60 p-4">
+ <div className="mb-3 flex items-center gap-2 type-overline">
  <Search className="h-3.5 w-3.5" />
  {t('systemErrors.filters')}
  </div>
@@ -941,9 +941,9 @@ function SystemErrorsPage() {
 
  {/* ── Error Table ── */}
  {isLoading ? (
- <div className="overflow-hidden rounded-xl border border-border/30 bg-card/80 p-4">
+ <div className="overflow-hidden rounded-md border border-border/50 bg-card/80 p-4">
  {/* Desktop header */}
- <div className="hidden border-b border-border/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
+ <div className="hidden border-b border-border/30 px-5 py-3 type-overline md:grid md:grid-cols-12 md:gap-3">
  <div className="col-span-2">{t('systemErrors.tableLevel')}</div>
  <div className="col-span-2">{t('systemErrors.tableComponent')}</div>
  <div className="col-span-1">{t('systemErrors.tableNode')}</div>
@@ -954,9 +954,9 @@ function SystemErrorsPage() {
  <TabLoadingState rows={8} />
  </div>
  ) : errors.length > 0 ? (
- <div className="overflow-hidden rounded-xl border border-border/30 bg-card/80">
+ <div className="overflow-hidden rounded-md border border-border/50 bg-card/80">
  {/* Desktop header */}
- <div className="hidden border-b border-border/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
+ <div className="hidden border-b border-border/30 px-5 py-3 type-overline md:grid md:grid-cols-12 md:gap-3">
  <div className="col-span-2">{t('systemErrors.tableLevel')}</div>
  <div className="col-span-2">{t('systemErrors.tableComponent')}</div>
  <div className="col-span-1">{t('systemErrors.tableNode')}</div>

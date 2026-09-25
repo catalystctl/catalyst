@@ -176,10 +176,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  <div className="flex flex-wrap items-center justify-between gap-3">
  <div className="space-y-1">
  <CardTitle className="flex items-center gap-2.5">
- <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30">
- <Waves className="h-5 w-5 text-primary-600 dark:text-primary-400" />
- <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-primary-200/50 dark:ring-primary-800/50" />
- </div>
+ <Waves className="h-5 w-5 shrink-0 text-muted-foreground" />
  <div>
  <span>{t('chart.title')}</span>
  <p className="text-sm font-normal text-muted-foreground">
@@ -300,7 +297,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  </CardHeader>
  <CardContent>
  {/* ── Chart area ── */}
- <div className="relative h-72 overflow-hidden rounded-xl border border-border bg-card dark:bg-surface-1/50">
+ <div className="relative h-72 overflow-hidden rounded-md border border-border/50 bg-card">
  <div className="absolute inset-0 bg-surface-2/20" />
  <div className="relative h-full">
  {showLoading ? (
