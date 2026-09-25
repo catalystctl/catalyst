@@ -1,7 +1,17 @@
-import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban, Copy, HardDriveDownload, Archive, OctagonX } from 'lucide-react';
+import { Square, Loader2, AlertTriangle, ArrowRightLeft, Ban, Copy, HardDriveDownload, Archive, OctagonX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ServerStatus } from '../../types/server';
 import { serverStatusLabel } from '../../utils/constants';
+
+// Live heartbeat for the running state — a pinging dot instead of a static
+// glyph, so an up server is visibly *alive* at a glance. Reduced-motion
+// users get the static dot (globals.css disables animations).
+const RunningPulse = () => (
+  <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
+    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-50" />
+    <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+  </span>
+);
 
 const colorMap: Record<ServerStatus, string> = {
   stopped: 'bg-surface-3 text-muted-foreground',
@@ -23,7 +33,7 @@ const iconMap: Record<ServerStatus, React.ReactNode> = {
   stopped: <Square className="h-3 w-3" />,
   installing: <Loader2 className="h-3 w-3 animate-spin" />,
   starting: <Loader2 className="h-3 w-3 animate-spin" />,
-  running: <Play className="h-3 w-3" />,
+  running: <RunningPulse />,
   stopping: <Loader2 className="h-3 w-3 animate-spin" />,
   crashed: <AlertTriangle className="h-3 w-3" />,
   transferring: <ArrowRightLeft className="h-3 w-3" />,

@@ -5,7 +5,6 @@ import type { Server } from '../../types/server';
 import ServerStatusBadge from './ServerStatusBadge';
 import ServerControls from './ServerControls';
 import { notifyError } from '../../utils/notify';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ServerIcon, Globe, Terminal, ChevronRight } from 'lucide-react';
 
@@ -74,11 +73,11 @@ function ServerCard({ server }: { server: Server }) {
 
 
  return (
- <div className="group relative overflow-hidden rounded-xl border border-border/50 bg-card transition-colors hover:border-primary/20">
+ <div className="group relative overflow-hidden rounded-md border border-border/50 bg-card transition-colors hover:border-primary/20">
 
- <div className="p-5 pl-6">
+ <div className="px-4 py-3.5">
  {/* Header */}
- <div className="mb-4 flex items-start justify-between gap-4">
+ <div className="mb-3 flex items-start justify-between gap-4">
  <div className="flex-1 space-y-2">
  <div className="flex items-center gap-2">
  <Link
@@ -89,15 +88,15 @@ function ServerCard({ server }: { server: Server }) {
  </Link>
  <ServerStatusBadge status={server.status} operationStage={server.operationStage} operationProgress={server.operationProgress} />
  </div>
- <div className="flex flex-wrap gap-2 text-xs">
- <Badge variant="secondary" className="gap-1.5">
- <ServerIcon className="h-3 w-3" />
- {server.nodeName ?? server.nodeId}
- </Badge>
- <Badge variant="secondary" className="gap-1.5">
- <Globe className="h-3 w-3" />
- {host}:{port}
- </Badge>
+ <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+ <span className="flex min-w-0 items-center gap-1">
+ <ServerIcon className="h-2.5 w-2.5 shrink-0" />
+ <span className="truncate font-mono text-[10px]">{server.nodeName ?? server.nodeId}</span>
+ </span>
+ <span className="flex min-w-0 items-center gap-1">
+ <Globe className="h-2.5 w-2.5 shrink-0" />
+ <span className="truncate font-mono text-[10px] tabular-nums">{host}:{port}</span>
+ </span>
  </div>
  </div>
  </div>

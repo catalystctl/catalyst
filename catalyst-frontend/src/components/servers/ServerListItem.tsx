@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import type { Server } from '../../types/server';
 import ServerStatusBadge from './ServerStatusBadge';
 import ServerControls from './ServerControls';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ServerIcon, Globe, Terminal, ChevronRight, HardDrive, Cpu, MemoryStick } from 'lucide-react';
 
@@ -80,14 +79,14 @@ function ServerListItem({ server }: { server: Server }) {
  {server.name}
  </Link>
  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
- <Badge variant="secondary" className="h-5 gap-1 px-1.5 py-0 text-[10px]">
- <ServerIcon className="h-2.5 w-2.5" />
- {server.nodeName ?? server.nodeId}
- </Badge>
- <Badge variant="secondary" className="h-5 gap-1 px-1.5 py-0 text-[10px]">
- <Globe className="h-2.5 w-2.5" />
- {host}:{port}
- </Badge>
+ <span className="flex min-w-0 items-center gap-1">
+ <ServerIcon className="h-2.5 w-2.5 shrink-0" />
+ <span className="truncate font-mono text-[10px]">{server.nodeName ?? server.nodeId}</span>
+ </span>
+ <span className="hidden items-center gap-1 sm:flex">
+ <Globe className="h-2.5 w-2.5 shrink-0" />
+ <span className="font-mono text-[10px] tabular-nums">{host}:{port}</span>
+ </span>
  </div>
  </div>
 
@@ -100,7 +99,7 @@ function ServerListItem({ server }: { server: Server }) {
  </div>
  <div className="flex items-center gap-2">
   <MemoryStick className="h-3 w-3 text-muted-foreground" />
-  <span className="min-w-16 text-right type-numeric text-[10px] text-foreground">
+  <span className="min-w-16 whitespace-nowrap text-right type-numeric text-[10px] text-foreground">
     {server.memoryUsageMb != null && server.allocatedMemoryMb
       ? `${formatMB(server.memoryUsageMb)}/${formatMB(server.allocatedMemoryMb)}`
       : formatPercent(memoryPercent)}
@@ -110,7 +109,7 @@ function ServerListItem({ server }: { server: Server }) {
 
  <div className="flex items-center gap-2">
  <HardDrive className="h-3 w-3 text-muted-foreground/50" />
- <span className="w-12 text-right font-mono text-[10px] tabular-nums text-foreground">
+ <span className="min-w-24 whitespace-nowrap text-right font-mono text-[10px] tabular-nums text-foreground">
  {server.diskUsageMb != null && diskTotalMb
  ? `${formatMB(server.diskUsageMb)}/${formatMB(diskTotalMb)}`
  : formatPercent(diskPercent)}

@@ -512,7 +512,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
 
 
       {isLoading && !hasContent && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-4 py-3 font-mono text-[11px] text-muted-foreground">
           <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary" />
           {t('console.xterm.loadingLogs')}
         </div>
@@ -532,8 +532,11 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
       )}
 
       {!isLoading && !hasContent && !isError && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
-          {t('console.xterm.empty')}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-1.5 px-4 py-3 font-mono text-[11px] text-muted-foreground">
+          <span className="text-primary">$</span>
+          <span>{t('console.xterm.empty')}</span>
+          {/* Blinking block cursor — pure CSS, keeps i18n catalogs free of glyphs */}
+          <span className="inline-block h-3 w-[7px] animate-pulse bg-primary/70" aria-hidden />
         </div>
       )}
 
