@@ -100,28 +100,35 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 export interface DialogHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * Deprecated no-op. Dialog headers no longer render an icon tile — the
+   * pattern is reserved for state only, and titles carry the identity. The
+   * prop is still accepted so existing call sites keep compiling.
+   */
   icon?: React.ReactNode;
+  /** Deprecated no-op, see `icon`. */
   iconClassName?: string;
 }
 
-const DialogHeader = ({ className, icon, iconClassName, children, ...props }: DialogHeaderProps) => (
-  <div
-    className={cn('flex shrink-0 items-start gap-3 px-5 pb-3 pt-4 pr-12', className)}
-    {...props}
-  >
-    {icon ? (
-      <div
-        className={cn(
-          'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/80 bg-surface-2 text-muted-foreground',
-          iconClassName,
-        )}
-      >
-        {icon}
-      </div>
-    ) : null}
-    <div className="min-w-0 flex-1 space-y-1">{children}</div>
-  </div>
-);
+const DialogHeader = ({
+  className,
+  icon,
+  iconClassName,
+  children,
+  ...props
+}: DialogHeaderProps) => {
+  // Deprecated props: consumed so they are not spread onto the DOM node.
+  void icon;
+  void iconClassName;
+  return (
+    <div
+      className={cn('flex shrink-0 items-start gap-3 px-5 pb-3 pt-4 pr-12', className)}
+      {...props}
+    >
+      <div className="min-w-0 flex-1 space-y-1">{children}</div>
+    </div>
+  );
+};
 DialogHeader.displayName = 'DialogHeader';
 
 const DialogToolbar = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -158,7 +165,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-base font-semibold leading-tight tracking-tight text-foreground', className)}
+    className={cn('font-display text-base font-semibold leading-tight tracking-tight text-foreground', className)}
     {...props}
   />
 ));
