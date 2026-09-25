@@ -30,7 +30,7 @@ export function StatsCard({ title, value, subtitle, icon, variant = 'default', o
   return (
     <div
       className={cn(
-        'rounded-xl border bg-card/80 px-3.5 py-3 shadow-panel transition-all duration-200 ease-standard',
+        'rounded-md border border-border/50 bg-card px-3.5 py-3 shadow-panel transition-all duration-200 ease-standard',
         variantStyles[variant],
         onClick && 'pressable cursor-pointer hover:border-primary/30 hover:bg-primary/[0.03]',
         className,
@@ -39,20 +39,16 @@ export function StatsCard({ title, value, subtitle, icon, variant = 'default', o
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-            {title}
-          </p>
+          <p className="type-overline">{title}</p>
           <p className="mt-1 font-mono text-base font-semibold tabular-nums tracking-tight text-foreground">
             {value}
           </p>
-          {subtitle && (
-            <p className="mt-0.5 text-[11px] text-muted-foreground/65">{subtitle}</p>
-          )}
+          {subtitle && <p className="type-meta mt-0.5">{subtitle}</p>}
         </div>
         {icon && (
           <div
             className={cn(
-              'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+              'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
               iconBgStyles[variant],
             )}
           >

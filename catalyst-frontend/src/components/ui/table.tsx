@@ -20,7 +20,11 @@ const TableHeader = React.forwardRef<
  HTMLTableSectionElement,
  React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
- <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
+ <thead
+ ref={ref}
+ className={cn("[&_tr]:border-b [&_tr]:border-border/50", className)}
+ {...props}
+ />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -43,7 +47,7 @@ const TableFooter = React.forwardRef<
  <tfoot
  ref={ref}
  className={cn(
- "border-t bg-surface-2/50 font-medium [&>tr]:last:border-b-0",
+ "border-t border-border/50 bg-surface-2/50 font-medium [&>tr]:last:border-b-0",
  className
  )}
  {...props}
@@ -58,7 +62,7 @@ const TableRow = React.forwardRef<
  <tr
  ref={ref}
  className={cn(
- "border-b border-border/70 transition-colors hover:bg-surface-2/45 data-[state=selected]:bg-primary/8",
+ "border-b border-border/50 transition-colors hover:bg-surface-2/45 data-[state=selected]:bg-primary/8",
  className
  )}
  {...props}
@@ -73,7 +77,7 @@ const TableHead = React.forwardRef<
  <th
  ref={ref}
  className={cn(
- "h-10 px-4 text-left align-middle text-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground/80 [&:has([role=checkbox])]:pr-0",
+ "type-overline h-9 px-4 text-left align-middle [&:has([role=checkbox])]:pr-0",
  className
  )}
  {...props}
@@ -87,7 +91,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
  <td
  ref={ref}
- className={cn("px-4 py-3 align-middle [&:has([role=checkbox])]:pr-0", className)}
+ className={cn("px-4 py-2.5 align-middle tabular-nums [&:has([role=checkbox])]:pr-0", className)}
  {...props}
  />
 ))

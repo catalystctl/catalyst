@@ -21,7 +21,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm dark:bg-black/60',
+      'fixed inset-0 z-50 bg-[hsl(var(--scrim))] backdrop-blur-sm',
       'data-[state=open]:animate-in data-[state=closed]:animate-out',
       'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       'duration-200',
@@ -36,7 +36,7 @@ const dialogContentVariants = cva(
   [
     'pointer-events-auto relative flex w-full flex-col overflow-hidden',
     'max-h-[92dvh] border border-border/80 bg-card text-card-foreground shadow-elevated outline-none',
-    'rounded-t-2xl sm:rounded-xl',
+    'rounded-t-md sm:rounded-md',
     'duration-200',
     'data-[state=open]:animate-in data-[state=closed]:animate-out',
     'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
