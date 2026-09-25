@@ -137,7 +137,7 @@ function BrowseSkeleton() {
  {Array.from({ length: 6 }).map((_, i) => (
  <div
  key={i}
- className="rounded-xl border border-border/50 bg-card/60 p-4"
+ className="rounded-md border border-border/50 bg-card p-4"
  >
  <div className="flex gap-3">
  <Skeleton className="h-11 w-11 rounded-lg" />
@@ -181,7 +181,7 @@ function VersionSelector({
  className="overflow-hidden"
  >
  <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
- <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+ <label className="type-overline">
  {t('tabs.mods.versionLabel')}
  </label>
  {isError ? (
@@ -190,7 +190,7 @@ function VersionSelector({
  <div className="flex items-end gap-2">
  <div className="relative flex-1">
  <select
- className="w-full appearance-none rounded-lg border border-border bg-surface-2 px-3 py-2 pr-8 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ className="w-full appearance-none rounded-md border border-border bg-surface-2 px-3 py-2 pr-8 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
  value={selectedVersion}
  onChange={(event) => onVersionChange(event.target.value)}
  disabled={isLoading}
@@ -694,12 +694,12 @@ export default function ServerModManagerTab({
  </motion.div>
 
  {/* ── Sub-tab toggle ── */}
- <motion.div variants={itemVariants} className="flex items-center gap-1 rounded-xl border border-border bg-card/80 p-1 backdrop-blur-sm">
+ <motion.div variants={itemVariants} className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
  {(['browse', 'installed'] as const).map((tab) => (
  <button
  key={tab}
  type="button"
- className={`relative flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all duration-200 ${
+ className={`relative flex items-center gap-2 rounded-md px-4 py-2 text-xs font-semibold transition-all duration-200 ${
  modSubTab === tab
  ? 'bg-primary text-primary-foreground shadow-sm'
  : 'text-muted-foreground hover:text-foreground'
@@ -749,7 +749,7 @@ export default function ServerModManagerTab({
 
  {/* Provider */}
  <select
- className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+ className="h-9 rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
  value={selectedModProvider?.key ?? ''}
  onChange={(e) => setModProviderKey(e.target.value)}
  >
@@ -763,7 +763,7 @@ export default function ServerModManagerTab({
  {/* Loader */}
  {supportsModLoaderFilter ? (
  <select
- className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+ className="h-9 rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
  value={modLoader}
  onChange={(e) => setModLoader(e.target.value)}
  >
@@ -776,7 +776,7 @@ export default function ServerModManagerTab({
 
  {/* Target */}
  <select
- className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+ className="h-9 rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
  value={modTarget}
  onChange={(e) =>
  setModTarget(e.target.value as ModManagerTarget)
@@ -841,7 +841,7 @@ export default function ServerModManagerTab({
  ) : modSearchError ? (
  <motion.div
  variants={itemVariants}
- className="rounded-xl border border-danger/30 bg-danger-muted p-4 text-sm text-danger"
+ className="rounded-md border border-danger/30 bg-danger-muted p-4 text-sm text-danger"
  >
  {(() => {
  const err: any = modSearchErrorDetail;
@@ -883,7 +883,7 @@ export default function ServerModManagerTab({
  variants={itemVariants}
  className="flex items-center justify-between"
  >
- <span className="text-xs text-muted-foreground">
+ <span className="type-meta">
  {t('tabs.mods.resultCount', { count: totalHits, formatted: formatNumber(totalHits) })}
  {totalHits > RESULTS_PER_PAGE && (
  <> · {t('tabs.mods.pageOf', { page: searchPage, total: totalPages })}</>
@@ -900,7 +900,7 @@ export default function ServerModManagerTab({
  >
  <ChevronLeft className="h-4 w-4" />
  </Button>
- <span className="min-w-[4rem] text-center text-xs text-muted-foreground">
+ <span className="min-w-[4rem] text-center type-numeric text-xs text-muted-foreground">
  {searchPage} / {totalPages}
  </span>
  <Button
@@ -978,10 +978,10 @@ export default function ServerModManagerTab({
  variants={cardVariants}
  layout
  layoutId={`mod-${String(id)}`}
- className={`group relative rounded-xl border p-4 transition-all duration-200 ${
+ className={`group relative rounded-md border p-4 transition-all duration-200 ${
  isActive
  ? 'border-primary/50 bg-primary-muted/50 ring-1 ring-primary/20'
- : 'border-border/50 bg-card/80 backdrop-blur-sm hover:border-primary/30'
+ : 'border-border/50 bg-card hover:border-primary/30'
  }`}
  onClick={() => {
  setSelectedProject(isActive ? null : String(id));
@@ -994,12 +994,10 @@ export default function ServerModManagerTab({
  src={imageUrl}
  alt=""
  loading="lazy"
- className="h-11 w-11 rounded-lg object-cover ring-1 ring-black/5"
+ className="h-11 w-11 rounded-lg object-cover ring-1 ring-border/50"
  />
  ) : (
- <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-surface-2">
  <Package className="h-5 w-5 text-muted-foreground" />
- </div>
  )}
  <div className="min-w-0 flex-1">
  <div className="flex items-start justify-between gap-2">
@@ -1020,12 +1018,12 @@ export default function ServerModManagerTab({
  )}
  </div>
  {summary && (
- <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+ <p className="mt-0.5 line-clamp-2 type-meta leading-relaxed">
  {summary}
  </p>
  )}
  {downloads > 0 && (
- <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+ <div className="mt-1.5 flex items-center gap-1 type-numeric text-[11px] text-muted-foreground">
  <Download className="h-3 w-3" />
  {formatDownloadCount(downloads)}
  </div>
@@ -1087,7 +1085,7 @@ export default function ServerModManagerTab({
  <button
  key={pageNum}
  type="button"
- className={`h-8 min-w-8 rounded-lg px-2 text-xs font-medium transition-colors ${
+ className={`h-8 min-w-8 rounded-md px-2 text-xs font-medium transition-colors ${
  searchPage === pageNum
  ? 'bg-primary text-primary-foreground shadow-sm'
  : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
@@ -1139,7 +1137,7 @@ export default function ServerModManagerTab({
  </div>
 
  <select
- className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+ className="h-9 rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
  value={modInstalledFilter}
  onChange={(e) =>
  setModInstalledFilter(
@@ -1154,7 +1152,7 @@ export default function ServerModManagerTab({
  </select>
 
  <select
- className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+ className="h-9 rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
  value={modInstalledSort}
  onChange={(e) =>
  setModInstalledSort(
@@ -1254,7 +1252,7 @@ export default function ServerModManagerTab({
  </option>
  ))}
  </select>
- <span className="text-xs text-muted-foreground">
+ <span className="type-meta">
  {filteredInstalledMods.length}
  {filteredInstalledMods.length !== installedMods.length
  ? t('tabs.mods.filteredOf', { total: installedMods.length })
@@ -1313,7 +1311,7 @@ export default function ServerModManagerTab({
  variants={containerVariants}
  initial="hidden"
  animate="visible"
- className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm"
+ className="overflow-hidden rounded-md border border-border/50 bg-card"
  >
  <AnimatePresence>
  {filteredInstalledMods.map((mod: any) => {
@@ -1366,13 +1364,6 @@ export default function ServerModManagerTab({
  </button>
 
  {/* Icon */}
- <div
- className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
- mod.hasUpdate
- ? 'bg-warning/10'
- : 'bg-surface-2'
- }`}
- >
  <Package
  className={`h-4 w-4 ${
  mod.hasUpdate
@@ -1380,7 +1371,6 @@ export default function ServerModManagerTab({
  : 'text-muted-foreground'
  }`}
  />
- </div>
 
  {/* Info */}
  <div className="min-w-0 flex-1">
@@ -1407,11 +1397,11 @@ export default function ServerModManagerTab({
  )}
  </div>
  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
- <span className="font-mono">
+ <span className="font-mono tabular-nums">
  {formatBytes(mod.size)}
  </span>
  {mod.modifiedAt && (
- <span>
+ <span className="type-numeric">
  {formatDate(mod.modifiedAt)}
  </span>
  )}
@@ -1426,13 +1416,13 @@ export default function ServerModManagerTab({
  {/* Update arrow */}
  {mod.hasUpdate && mod.latestVersionName && (
  <div className="hidden items-center gap-1.5 sm:flex">
- <span className="text-[11px] text-muted-foreground line-through">
+ <span className="font-mono tabular-nums text-[11px] text-muted-foreground line-through">
  {mod.versionId?.length > 12
  ? mod.versionId.slice(0, 8) + '…'
  : mod.versionId}
  </span>
  <ArrowLeftRight className="h-3 w-3 text-muted-foreground" />
- <span className="text-[11px] font-medium text-warning">
+ <span className="font-mono tabular-nums text-[11px] font-medium text-warning">
  {mod.latestVersionName}
  </span>
  </div>
@@ -1443,7 +1433,7 @@ export default function ServerModManagerTab({
  {mod.hasUpdate && (
  <button
  type="button"
- className="rounded-lg p-1.5 text-warning transition-colors hover:bg-warning/10"
+ className="rounded-md p-1.5 text-warning transition-colors hover:bg-warning/10"
  title={t('tabs.mods.updateToLatest')}
  disabled={isUpdatingMods}
  onClick={() =>
@@ -1464,7 +1454,7 @@ export default function ServerModManagerTab({
  )}
  <button
  type="button"
- className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+ className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
  title={t('common:actions.remove')}
  onClick={() => {
  setPendingRemoveMods([mod.name]);

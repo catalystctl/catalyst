@@ -91,12 +91,12 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
           </button>
         ))}
         <div className="border-t border-border pt-2">
-          <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="type-overline px-3 py-2">
             {t('timeRange.customRange')}
           </div>
           <div className="space-y-2 px-3 pb-2">
             <div>
-              <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('timeRange.hours')}</label>
+              <label className="type-overline">{t('timeRange.hours')}</label>
               <Input
                 type="number"
                 min="1"
@@ -108,7 +108,7 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('timeRange.dataPoints')}</label>
+              <label className="type-overline">{t('timeRange.dataPoints')}</label>
               <Input
                 type="number"
                 min="1"

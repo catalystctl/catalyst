@@ -19,11 +19,13 @@ function HeaderStat({
   label,
   value,
   percent,
+  barClass = 'bg-primary',
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   percent?: number;
+  barClass?: string;
 }) {
   const hot = percent != null && percent >= 90;
   return (
@@ -39,7 +41,7 @@ function HeaderStat({
       <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-surface-3">
         {percent != null ? (
           <div
-            className={cn('h-full rounded-full', hot ? 'bg-danger' : 'bg-primary')}
+            className={cn('h-full rounded-full', hot ? 'bg-danger' : barClass)}
             style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
           />
         ) : null}
@@ -113,7 +115,7 @@ export default function ServerHeaderStats({
   return (
     <div className="hidden items-end gap-4 lg:flex">
       <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
-      <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
+      <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} barClass="bg-success" />
       <HeaderStat icon={HardDrive} label={t('metrics.labels.disk')} value={diskValue} percent={diskPercent} />
       <HeaderStat
         icon={Activity}

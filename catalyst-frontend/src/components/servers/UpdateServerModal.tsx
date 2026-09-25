@@ -300,7 +300,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     <>
       {controlledOpen === undefined && (
         <button
-          className="rounded-md border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground disabled:opacity-60 dark:border-border dark:hover:border-primary/30"
+          className="rounded-md border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground disabled:opacity-60 dark:hover:border-primary/30"
           onClick={() => {
             if (!disabled) setOpen(true);
           }}
@@ -374,7 +374,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 min={0}
                 step={1}
               />
-              <span className="text-xs text-muted-foreground">
+              <span className="type-meta">
                 {t('updateServer.databaseAllocationHint')}
               </span>
             </div>
@@ -388,7 +388,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 min={0}
                 step={128}
               />
-              <span className="text-xs text-muted-foreground">
+              <span className="type-meta">
                 {t('updateServer.backupAllocationHint')}
               </span>
             </div>
@@ -403,19 +403,19 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 max={1000}
                 step={1}
               />
-              <span className="text-xs text-muted-foreground">
+              <span className="type-meta">
                 {t('updateServer.backupRetentionHint')}
               </span>
             </div>
             {isIpamNetwork ? (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
+                <p className="type-meta">
                   {t('updateServer.primaryIpHint')}
                 </p>
                 <Label htmlFor="update-server-ip">{t('updateServer.primaryIp')}</Label>
                 <select
                   id="update-server-ip"
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:text-foreground"
+                  className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
                   value={primaryIp}
                   onChange={(event) => setPrimaryIp(event.target.value)}
                   disabled={isRunning}
@@ -434,18 +434,18 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 </select>
                 {ipLoadError ? <p className="text-xs text-warning">{ipLoadError}</p> : null}
                 {!ipLoadError && availableIps.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">{t('fields.noIps')}</p>
+                  <p className="type-meta">{t('fields.noIps')}</p>
                 ) : null}
               </div>
             ) : isBridgeNetwork ? (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
+                <p className="type-meta">
                   {t('updateServer.primaryAllocationHint')}
                 </p>
                 <Label htmlFor="update-server-alloc">{t('updateServer.primaryAllocation')}</Label>
                 <select
                   id="update-server-alloc"
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:text-foreground"
+                  className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
                   value={allocationId}
                   onChange={(event) => setAllocationId(event.target.value)}
                   disabled={isRunning}
@@ -460,7 +460,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 </select>
                 {allocLoadError ? <p className="text-xs text-warning">{allocLoadError}</p> : null}
                 {!allocLoadError && availableAllocations.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">{t('updateServer.noAllocations')}</p>
+                  <p className="type-meta">{t('updateServer.noAllocations')}</p>
                 ) : null}
               </div>
             ) : null}

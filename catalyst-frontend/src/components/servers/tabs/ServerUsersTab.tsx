@@ -127,7 +127,7 @@ export default function ServerUsersTab({
  )
  }
  />
- <span className="font-mono text-[10px]">{perm}</span>
+ <span className="font-mono tabular-nums text-[10px]">{perm}</span>
  </label>
  ))}
  </div>
@@ -142,7 +142,7 @@ export default function ServerUsersTab({
  permissionsData.map((entry) => (
  <div
  key={entry.id}
- className="group relative rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ className="group relative rounded-md border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
  >
  <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
 
@@ -151,7 +151,7 @@ export default function ServerUsersTab({
  <div className="text-sm font-semibold text-foreground">
  {entry.user.username}
  </div>
- <div className="font-mono text-[10px] text-muted-foreground/50">
+ <div className="font-mono tabular-nums text-[10px] text-muted-foreground/50">
  {entry.user.email}
  </div>
  </div>
@@ -193,7 +193,7 @@ export default function ServerUsersTab({
                               <button
                                 key={`${entry.id}-${perm}`}
                                 type="button"
-                                className={`rounded-md border px-1.5 py-0.5 font-mono text-[10px] ${
+                                className={`rounded-md border px-1.5 py-0.5 font-mono tabular-nums text-[10px] ${
                                   on
                                     ? 'border-primary/30 bg-primary/10 text-foreground'
                                     : 'border-border text-muted-foreground'
@@ -250,7 +250,7 @@ export default function ServerUsersTab({
  invites.map((invite) => (
  <div
  key={invite.id}
- className="group relative flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/30 px-3 py-2 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ className="group relative flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/30 px-3 py-2 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
  >
  <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
  <div>

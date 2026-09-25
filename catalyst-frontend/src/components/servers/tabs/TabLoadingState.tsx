@@ -18,7 +18,7 @@ export default function TabLoadingState({
  {Array.from({ length: rows }).map((_, i) => (
  <div
  key={i}
- className={`${rowHeight} overflow-hidden rounded-lg bg-surface-2/60`}
+ className={`${rowHeight} overflow-hidden rounded-md bg-surface-2/60`}
  >
  {/* Shimmer overlay */}
  <div className="h-full w-full animate-pulse bg-gradient-to-r from-transparent via-surface-3/30 to-transparent bg-[length:200%_100%]" />

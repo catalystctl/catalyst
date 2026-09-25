@@ -55,11 +55,20 @@ function ServerMetricsTrends({
  });
  const lastThroughput = [...throughput].reverse().find((v) => v != null) ?? 0;
 
+ // Value color encodes STATE, not identity: neutral until a threshold is
+ // crossed. Chart strokes keep their series hues (data-viz identity).
+ const percentTone = (pct: number) =>
+ pct >= 90 ? 'text-danger' : pct >= 75 ? 'text-warning' : 'text-foreground';
+ const memoryPercent =
+ allocatedMemoryMb && allocatedMemoryMb > 0
+ ? ((latest?.memoryUsageMb ?? 0) / allocatedMemoryMb) * 100
+ : 0;
+
  const cards: TrendCard[] = [
  {
  label: t('metrics.labels.cpu'),
  value: `${(latest?.cpuPercent ?? 0).toFixed(1)}%`,
- color: 'text-primary',
+ color: percentTone(latest?.cpuPercent ?? 0),
  stroke: 'hsl(var(--primary))',
  data: toChartData(cpuHistory),
  },
@@ -68,7 +77,7 @@ function ServerMetricsTrends({
  value: allocatedMemoryMb
  ? `${(latest?.memoryUsageMb ?? 0).toFixed(0)} / ${allocatedMemoryMb} MB`
  : 'n/a',
- color: 'text-success',
+ color: percentTone(memoryPercent),
  stroke: 'hsl(var(--success))',
  data: toChartData(memoryHistory),
  formatTooltip: (value) => `${value.toFixed(0)} MB`,
@@ -76,7 +85,7 @@ function ServerMetricsTrends({
  {
  label: t('metrics.labels.diskUsage'),
  value: formatBytes((latest?.diskUsageMb ?? 0) * 1024 * 1024),
- color: 'text-warning',
+ color: 'text-foreground',
  stroke: 'hsl(var(--warning))',
  data: toChartData(diskHistory),
  formatTooltip: (value) => formatBytes(value * 1024 * 1024),
@@ -84,7 +93,7 @@ function ServerMetricsTrends({
  {
  label: t('metrics.labels.diskIo'),
  value: formatBytes((latest?.diskIoMb ?? 0) * 1024 * 1024),
- color: 'text-warning',
+ color: 'text-foreground',
  stroke: 'hsl(var(--warning))',
  data: toChartData(diskIoHistory),
  formatTooltip: (value) => formatBytes(value * 1024 * 1024),
@@ -92,7 +101,7 @@ function ServerMetricsTrends({
  {
  label: t('metrics.labels.network'),
  value: `${lastThroughput.toFixed(2)} MB/s`,
- color: 'text-info',
+ color: 'text-foreground',
  stroke: 'hsl(var(--info))',
  data: toChartData(throughput),
  formatTooltip: (value) => `${value.toFixed(2)} MB/s`,
@@ -104,17 +113,17 @@ function ServerMetricsTrends({
  {cards.map((card) => (
  <div
  key={card.label}
- className="rounded-xl border border-border bg-card transition-all duration-300 hover:border-primary/20"
+ className="rounded-md border border-border/50 bg-card transition-colors hover:border-primary/20"
  >
  <div className="p-4">
  <div className="flex items-center justify-between">
  <div>
- <div className="text-xs uppercase tracking-wide text-muted-foreground">
+ <div className="type-overline">
  {card.label}
  </div>
- <div className={`text-lg font-semibold ${card.color}`}>{card.value}</div>
+ <div className={`type-numeric text-lg ${card.color}`}>{card.value}</div>
  </div>
- <div className="text-[11px] text-muted-foreground">{resolvedTimeRangeLabel}</div>
+ <div className="type-meta">{resolvedTimeRangeLabel}</div>
  </div>
  <div className="mt-3">
  <div className="h-24 w-full">

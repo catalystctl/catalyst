@@ -147,10 +147,10 @@ export default function ServerDatabasesTab({
 
  <div className="flex flex-wrap items-center justify-between gap-3">
  <div>
- <div className="font-mono text-sm font-semibold text-foreground">
+ <div className="type-numeric text-sm text-foreground">
  {db.name}
  </div>
- <div className="mt-0.5 text-[10px] text-muted-foreground/50">
+ <div className="type-numeric mt-0.5 text-[10px] text-muted-foreground/50">
  {db.hostName} · {db.host}:{db.port}
  </div>
  </div>

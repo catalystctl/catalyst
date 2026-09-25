@@ -13,7 +13,7 @@ export default function TabErrorState({ message, title, description, onRetry }: 
   const heading = message ?? title ?? t('shared.somethingWentWrong');
 
   return (
-    <div className="rounded-lg border border-danger/25 bg-danger/5 px-4 py-3">
+    <div className="rounded-md border border-danger/25 bg-danger/5 px-4 py-3">
       <div className="flex items-start gap-2.5 text-xs text-danger">
         <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-danger/10">
           <AlertCircle className="h-3 w-3" />

@@ -450,7 +450,7 @@ function CreateServerModal() {
  >
  <div className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-all duration-300 ${
  isActive ? 'border-primary bg-primary text-primary-foreground' :
- isCompleted ? 'border-success bg-success text-white' :
+ isCompleted ? 'border-success bg-success text-success-foreground' :
  'border-border bg-card text-muted-foreground'
  }`}>
  {isCompleted ? (
@@ -483,27 +483,27 @@ function CreateServerModal() {
  {step === 'details' ? (
  <div className="space-y-5">
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.name')}</span>
- <input className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={name} onChange={(e) => setName(e.target.value)} placeholder="my-awesome-server"/>
+ <span className="type-overline">{t('createServer.fields.name')}</span>
+ <input className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={name} onChange={(e) => setName(e.target.value)} placeholder="my-awesome-server"/>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.description')} <span className="text-xs font-normal text-muted-foreground">{t('createServer.fields.optional')}</span></span>
- <textarea rows={3} className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('createServer.fields.descriptionPlaceholder')}/>
+ <span className="type-overline">{t('createServer.fields.description')} <span className="text-xs font-normal text-muted-foreground">{t('createServer.fields.optional')}</span></span>
+ <textarea rows={3} className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('createServer.fields.descriptionPlaceholder')}/>
  </label>
  <div className="grid gap-4 sm:grid-cols-2">
  <div className="space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.template')}</span>
+ <span className="type-overline">{t('createServer.fields.template')}</span>
  <Combobox value={templateId} onChange={(newTemplateId) => { setTemplateId(newTemplateId); setImageVariant(''); const template = templates.find((t) => t.id === newTemplateId); if (template?.variables) { const defaultEnv: Record<string, string> = {}; template.variables.filter((v) => v.name !== 'SERVER_DIR').forEach((v) => { defaultEnv[v.name] = v.default; }); setEnvironment(defaultEnv); } else { setEnvironment({}); } }} options={templates.map((t) => ({ value: t.id, label: t.name, keywords: [t.name, t.description || ''].filter(Boolean) }))} placeholder={t('createServer.fields.templatePlaceholder')} searchPlaceholder={t('createServer.fields.templateSearchPlaceholder')}/>
  </div>
  <div className="space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.node')}</span>
+ <span className="type-overline">{t('createServer.fields.node')}</span>
  <Combobox value={nodeId} onChange={(newNodeId) => setNodeId(newNodeId)} options={availableNodes.map((n) => ({ value: n.id, label: n.name, keywords: [n.name] }))} placeholder={t('createServer.fields.nodePlaceholder')} searchPlaceholder={t('createServer.fields.nodeSearchPlaceholder')}/>
  </div>
  </div>
  {selectedTemplate?.images?.length ? (
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.fields.imageVariant')}</span>
- <select className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={imageVariant} onChange={(e) => setImageVariant(e.target.value)}>
+ <span className="type-overline">{t('createServer.fields.imageVariant')}</span>
+ <select className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={imageVariant} onChange={(e) => setImageVariant(e.target.value)}>
  <option value="">{t('createServer.fields.useDefaultImage')}</option>
  {selectedTemplate.images.map((option) => (<option key={option.name} value={option.name}>{option.label ?? option.name}</option>))}
  </select>
@@ -515,35 +515,35 @@ function CreateServerModal() {
  {/* --- RESOURCES STEP --- */}
  {step === 'resources' ? (
  <div className="space-y-5">
- <div className="rounded-xl border border-border bg-card p-5 sm:p-6 dark:border-border dark:bg-card">
- <h3 className="mb-5 text-sm font-bold tracking-tight text-foreground dark:text-white">{t('createServer.resources.title')}</h3>
+ <div className="rounded-md border border-border/50 bg-card p-5 sm:p-6">
+ <h3 className="type-overline mb-5">{t('createServer.resources.title')}</h3>
  <div className="grid gap-4 sm:grid-cols-3">
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.memoryMb')}</span>
- <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={memory} onChange={(e) => setMemory(e.target.value)} type="number" min={256}/>
+ <span className="type-overline">{t('fields.memoryMb')}</span>
+ <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={memory} onChange={(e) => setMemory(e.target.value)} type="number" min={256}/>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.cpuCores')}</span>
- <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={cpu} onChange={(e) => setCpu(e.target.value)} type="number" min={1} step={1}/>
+ <span className="type-overline">{t('fields.cpuCores')}</span>
+ <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={cpu} onChange={(e) => setCpu(e.target.value)} type="number" min={1} step={1}/>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.diskMb')}</span>
- <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={disk} onChange={(e) => setDisk(e.target.value)} type="number" min={1024} step={1024}/>
+ <span className="type-overline">{t('fields.diskMb')}</span>
+ <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={disk} onChange={(e) => setDisk(e.target.value)} type="number" min={1024} step={1024}/>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.swapMb')}</span>
- <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={allocatedSwapMb} onChange={(e) => setAllocatedSwapMb(e.target.value)} type="number" min={0} step={128}/>
- <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{t('fields.leaveBlankDefaults')}</p>
+ <span className="type-overline">{t('fields.swapMb')}</span>
+ <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={allocatedSwapMb} onChange={(e) => setAllocatedSwapMb(e.target.value)} type="number" min={0} step={128}/>
+ <p className="type-meta">{t('fields.leaveBlankDefaults')}</p>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.backupMb')}</span>
- <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={backupAllocationMb} onChange={(e) => setBackupAllocationMb(e.target.value)} type="number" min={0} step={128}/>
- <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{t('fields.leaveBlankDefaults')}</p>
+ <span className="type-overline">{t('fields.backupMb')}</span>
+ <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={backupAllocationMb} onChange={(e) => setBackupAllocationMb(e.target.value)} type="number" min={0} step={128}/>
+ <p className="type-meta">{t('fields.leaveBlankDefaults')}</p>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('fields.databaseAllocation')}</span>
- <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={databaseAllocation} onChange={(e) => setDatabaseAllocation(e.target.value)} type="number" min={0} step={1}/>
- <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{t('fields.leaveBlankDefaults')}</p>
+ <span className="type-overline">{t('fields.databaseAllocation')}</span>
+ <input className="w-full rounded-md border border-border/40 bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={databaseAllocation} onChange={(e) => setDatabaseAllocation(e.target.value)} type="number" min={0} step={1}/>
+ <p className="type-meta">{t('fields.leaveBlankDefaults')}</p>
  </label>
  </div>
  </div>
@@ -554,38 +554,38 @@ function CreateServerModal() {
  {step === 'build' ? (
  <div className="space-y-5">
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('fields.networkMode')}</span>
- <select className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={networkMode} onChange={(e) => setNetworkMode(e.target.value)}>
+ <span className="type-overline">{t('fields.networkMode')}</span>
+ <select className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={networkMode} onChange={(e) => setNetworkMode(e.target.value)}>
  <option value="host">{t('networkModes.host')}</option>
  <option value="macvlan">{t('networkModes.macvlan')}</option>
  </select>
  </label>
  <label className="block space-y-1.5">
- <span className="text-sm font-semibold text-foreground dark:text-zinc-300">{t('createServer.network.primaryPort')}</span>
- <input className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400 disabled:opacity-50" value={port} onChange={(e) => setPort(e.target.value)} type="number" min={1024} max={65535} readOnly={networkMode === 'host'} disabled={networkMode === 'host'}/>
- <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{networkMode === 'host' ? t('createServer.network.primaryPortFromAllocation') : t('createServer.network.primaryPortHint')}</p>
+ <span className="type-overline">{t('createServer.network.primaryPort')}</span>
+ <input className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400 disabled:opacity-50" value={port} onChange={(e) => setPort(e.target.value)} type="number" min={1024} max={65535} readOnly={networkMode === 'host'} disabled={networkMode === 'host'}/>
+ <p className="type-meta">{networkMode === 'host' ? t('createServer.network.primaryPortFromAllocation') : t('createServer.network.primaryPortHint')}</p>
  </label>
 
  {networkMode === 'macvlan' ? (
- <div className="rounded-xl border border-border bg-card p-5 space-y-4 dark:border-border dark:bg-card">
- <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">{t('createServer.network.macvlanTitle')}</h4>
+ <div className="rounded-md border border-border/50 bg-card p-5 space-y-4">
+ <h4 className="type-overline">{t('createServer.network.macvlanTitle')}</h4>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('createServer.network.interface')}</span>
- <select className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={macvlanInterface} onChange={(e) => setMacvlanInterface(e.target.value)}>
+ <span className="type-overline">{t('createServer.network.interface')}</span>
+ <select className="w-full rounded-md border border-border/40 bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={macvlanInterface} onChange={(e) => setMacvlanInterface(e.target.value)}>
  <option value="">{t('createServer.network.selectInterface')}</option>
  {nodeIpPools.map((pool) => (<option key={pool.id} value={pool.networkName}>{t('createServer.network.interfaceOption', { network: pool.networkName, cidr: pool.cidr, count: pool.availableCount })}</option>))}
  </select>
  </label>
- {nodeIpPools.length === 0 && nodeId ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">{t('createServer.network.noInterfaces')}</p>) : null}
+ {nodeIpPools.length === 0 && nodeId ? (<p className="type-meta">{t('createServer.network.noInterfaces')}</p>) : null}
  {macvlanInterface ? (
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('createServer.network.ipAllocation')}</span>
- <select className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={primaryIp} onChange={(e) => setPrimaryIp(e.target.value)}>
+ <span className="type-overline">{t('createServer.network.ipAllocation')}</span>
+ <select className="w-full rounded-md border border-border/40 bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={primaryIp} onChange={(e) => setPrimaryIp(e.target.value)}>
  <option value="">{t('fields.autoAssign')}</option>
  {availableIps.map((ip) => (<option key={ip} value={ip}>{ip}</option>))}
  </select>
  {ipLoadError ? (<p className="text-xs text-warning">{ipLoadError}</p>) : null}
- {!ipLoadError && availableIps.length === 0 ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">{t('fields.noIps')}</p>) : null}
+ {!ipLoadError && availableIps.length === 0 ? (<p className="type-meta">{t('fields.noIps')}</p>) : null}
  </label>
  ) : null}
  </div>
@@ -593,48 +593,48 @@ function CreateServerModal() {
 
  {networkMode === 'host' ? (
  <div className="space-y-4">
- <div className="rounded-xl border border-border bg-card p-5 space-y-3 dark:border-border dark:bg-card">
+ <div className="rounded-md border border-border/50 bg-card p-5 space-y-3">
  <div>
- <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">{t('createServer.network.primaryAllocation')}</h4>
- <p className="mt-0.5 text-xs text-muted-foreground dark:text-muted-foreground">{t('createServer.network.primaryAllocationHint')}</p>
+ <h4 className="type-overline">{t('createServer.network.primaryAllocation')}</h4>
+ <p className="type-meta mt-0.5">{t('createServer.network.primaryAllocationHint')}</p>
  </div>
  <label className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{t('createServer.network.allocation')}</span>
+ <span className="type-overline">{t('createServer.network.allocation')}</span>
  <div className="flex flex-col sm:flex-row gap-2">
- <select className="flex-1 rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={allocationId} onChange={(event) => setAllocationId(event.target.value)}>
+ <select className="flex-1 rounded-md border border-border/40 bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={allocationId} onChange={(event) => setAllocationId(event.target.value)}>
  <option value="">{t('fields.selectAllocation')}</option>
  {availableAllocations.map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
  </select>
- <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 shrink-0 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary-500 hover:text-primary-600 dark:border-border dark:hover:border-primary/30 dark:hover:text-primary-400" title={t('createServer.network.createAllocationsHint')}>
+ <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 shrink-0 rounded-md border border-border/40 bg-card px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary-500 hover:text-primary-600 dark:hover:border-primary/30 dark:hover:text-primary-400" title={t('createServer.network.createAllocationsHint')}>
  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg> {t('createServer.network.newAllocation')}
  </a>
  </div>
  </label>
  {allocLoadError ? (<p className="text-xs text-warning">{allocLoadError}</p>) : null}
  {!allocLoadError && availableAllocations.length === 0 ? (
- <p className="text-xs text-muted-foreground dark:text-muted-foreground">{t('fields.noAllocations')}{' '}<a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">{t('fields.createOne')}</a></p>
+ <p className="type-meta">{t('fields.noAllocations')}{' '}<a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">{t('fields.createOne')}</a></p>
  ) : null}
  </div>
 
- <div className="rounded-xl border border-border bg-card p-5 space-y-3 dark:border-border dark:bg-card">
+ <div className="rounded-md border border-border/50 bg-card p-5 space-y-3">
  <div>
- <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">{t('createServer.network.additionalBindings')}</h4>
- <p className="mt-0.5 text-xs text-muted-foreground dark:text-muted-foreground">{t('createServer.network.additionalBindingsHint')}</p>
+ <h4 className="type-overline">{t('createServer.network.additionalBindings')}</h4>
+ <p className="type-meta mt-0.5">{t('createServer.network.additionalBindingsHint')}</p>
  </div>
  <div className="space-y-2.5">
  {additionalBindings.map((binding, index) => (
  <div key={`${binding.allocationId}-${index}`} className="flex flex-col sm:flex-row gap-2">
- <select className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={binding.allocationId} onChange={(event) => { const next = [...additionalBindings]; const allocation = availableAllocations.find((a) => a.id === event.target.value); next[index] = { allocationId: event.target.value, containerPort: allocation ? String(allocation.port) : binding.containerPort }; setAdditionalBindings(next); }}>
+ <select className="flex-1 rounded-md border border-border/40 bg-background px-3 py-2 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" value={binding.allocationId} onChange={(event) => { const next = [...additionalBindings]; const allocation = availableAllocations.find((a) => a.id === event.target.value); next[index] = { allocationId: event.target.value, containerPort: allocation ? String(allocation.port) : binding.containerPort }; setAdditionalBindings(next); }}>
  <option value="">{t('fields.selectAllocation')}</option>
  {availableAllocations.filter((a) => a.id !== allocationId && !additionalBindings.some((b, i) => i !== index && b.allocationId === a.id)).map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
  </select>
  <div className="flex gap-2">
- <input className="w-full sm:w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" type="number" min={1} max={65535} value={binding.containerPort} onChange={(event) => { const next = [...additionalBindings]; next[index] = { ...next[index], containerPort: event.target.value }; setAdditionalBindings(next); }} placeholder={t('createServer.network.portPlaceholder')}/>
- <button type="button" className="shrink-0 rounded-lg border border-danger/20 px-2.5 py-2 text-xs font-semibold text-danger transition-all duration-200 hover:border-danger/40 hover:bg-danger-muted" onClick={() => { setAdditionalBindings(additionalBindings.filter((_, i) => i !== index)); }}>{t('common:actions.remove')}</button>
+ <input className="w-full sm:w-24 rounded-md border border-border/40 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" type="number" min={1} max={65535} value={binding.containerPort} onChange={(event) => { const next = [...additionalBindings]; next[index] = { ...next[index], containerPort: event.target.value }; setAdditionalBindings(next); }} placeholder={t('createServer.network.portPlaceholder')}/>
+ <button type="button" className="shrink-0 rounded-md border border-danger/20 px-2.5 py-2 text-xs font-semibold text-danger transition-all duration-200 hover:border-danger/40 hover:bg-danger-muted" onClick={() => { setAdditionalBindings(additionalBindings.filter((_, i) => i !== index)); }}>{t('common:actions.remove')}</button>
  </div>
  </div>
  ))}
- <button type="button" className="rounded-lg border border-dashed border-border bg-transparent px-4 py-2 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary/40 hover:text-primary dark:hover:border-primary/30 dark:hover:text-primary-400" onClick={() => setAdditionalBindings([...additionalBindings, { allocationId: '', containerPort: '' }])}>
+ <button type="button" className="rounded-md border border-dashed border-border bg-transparent px-4 py-2 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary/40 hover:text-primary dark:hover:border-primary/30 dark:hover:text-primary-400" onClick={() => setAdditionalBindings([...additionalBindings, { allocationId: '', containerPort: '' }])}>
  {t('createServer.network.addBinding')}
  </button>
  </div>
@@ -649,21 +649,21 @@ function CreateServerModal() {
  <>
  {templateVariables.length > 0 ? (
  <div className="space-y-4">
- <h3 className="text-sm font-semibold text-foreground dark:text-zinc-200">{t('createServer.startup.environmentVariables')}</h3>
+ <h3 className="type-overline">{t('createServer.startup.environmentVariables')}</h3>
  {templateVariables.map((variable) => (
  <label key={variable.name} className="block space-y-1.5">
- <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{variable.name}{variable.required ? <span className="ml-1 text-danger">*</span> : null}</span>
- {variable.description ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">{variable.description}</p>) : null}
+ <span className="type-overline">{variable.name}{variable.required ? <span className="ml-1 text-danger">*</span> : null}</span>
+ {variable.description ? (<p className="type-meta">{variable.description}</p>) : null}
  {variable.input === 'checkbox' ? (
- <input type="checkbox" className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/30 focus:ring-offset-0 dark:border-border dark:bg-surface-1 dark:text-primary-400" checked={environment[variable.name] === 'true' || environment[variable.name] === '1'} onChange={(e) => { const useNumeric = variable.default === '1' || variable.default === '0'; setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.checked ? (useNumeric ? '1' : 'true') : (useNumeric ? '0' : 'false') })); }}/>
+ <input type="checkbox" className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/30 focus:ring-offset-0 dark:bg-surface-1 dark:text-primary-400" checked={environment[variable.name] === 'true' || environment[variable.name] === '1'} onChange={(e) => { const useNumeric = variable.default === '1' || variable.default === '0'; setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.checked ? (useNumeric ? '1' : 'true') : (useNumeric ? '0' : 'false') })); }}/>
  ) : (
- <input className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" type={variable.input === 'number' ? 'number' : 'text'} value={environment[variable.name] || ''} onChange={(e) => setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.value }))} placeholder={variable.default}/>
+ <input className="w-full rounded-md border border-border/40 bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:focus:border-primary-400" type={variable.input === 'number' ? 'number' : 'text'} value={environment[variable.name] || ''} onChange={(e) => setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.value }))} placeholder={variable.default}/>
  )}
  </label>
  ))}
  </div>
  ) : (
- <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground dark:border-border dark:bg-muted/20 dark:text-muted-foreground">{t('createServer.startup.noVariables')}</div>
+ <div className="rounded-md border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground dark:bg-muted/20">{t('createServer.startup.noVariables')}</div>
  )}
  </>
  ) : null}

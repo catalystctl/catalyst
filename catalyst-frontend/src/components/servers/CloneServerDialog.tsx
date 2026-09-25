@@ -72,7 +72,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
       <div className="flex items-center gap-2">
         <span className="font-medium">{u.username || u.email}</span>
         {u.username && <span className="text-muted-foreground">({u.email})</span>}
-        <span className="ml-auto text-[10px] text-muted-foreground">{u.id.slice(0, 8)}…</span>
+        <span className="ml-auto type-numeric text-[10px] text-muted-foreground">{u.id.slice(0, 8)}…</span>
       </div>
     ),
     keywords: [u.username || '', u.email || '', u.id],
@@ -223,7 +223,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
         </DialogHeader>
 
         <DialogBody className="space-y-4">
-        <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
+        <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <span className="text-muted-foreground">
             {copyFiles
@@ -235,12 +235,12 @@ function CloneServerDialog({ server, disabled = false }: Props) {
         <div className="grid gap-4">
           {/* Name */}
           <div className="grid gap-2">
-            <label htmlFor="clone-name" className="text-xs font-medium text-foreground">
+            <label htmlFor="clone-name" className="type-overline">
               {t('fields.name')}
             </label>
             <input
               id="clone-name"
-              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+              className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t('cloneServer.namePlaceholder')}
@@ -249,12 +249,12 @@ function CloneServerDialog({ server, disabled = false }: Props) {
 
           {/* Node */}
           <div className="grid gap-2">
-            <label htmlFor="clone-node" className="text-xs font-medium text-foreground">
+            <label htmlFor="clone-node" className="type-overline">
               {t('fields.node')}
             </label>
             <select
               id="clone-node"
-              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+              className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
               value={nodeId}
               onChange={(e) => setNodeId(e.target.value)}
             >
@@ -268,12 +268,12 @@ function CloneServerDialog({ server, disabled = false }: Props) {
 
           {/* Network Mode */}
           <div className="grid gap-2">
-            <label htmlFor="clone-network" className="text-xs font-medium text-foreground">
+            <label htmlFor="clone-network" className="type-overline">
               {t('fields.networkMode')}
             </label>
             <select
               id="clone-network"
-              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+              className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
               value={networkMode}
               onChange={(e) => setNetworkMode(e.target.value)}
             >
@@ -288,11 +288,11 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           {/* Allocation (host mode) */}
           {isHostNetwork && (
             <div className="grid gap-2">
-              <label className="text-xs font-medium text-foreground">
+              <label className="type-overline">
                 {t('cloneServer.networkAllocation')} <span className="text-danger">*</span>
               </label>
               <select
-                className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
                 value={allocationId}
                 onChange={(e) => setAllocationId(e.target.value)}
               >
@@ -308,7 +308,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 <p className="text-xs text-warning">{allocLoadError}</p>
               ) : null}
               {!allocLoadError && availableAllocations.length === 0 && nodeId ? (
-                <p className="text-xs text-muted-foreground">
+                <p className="type-meta">
                   {t('fields.noAllocations')}{' '}
                   <a
                     href={`/admin/nodes/${encodeURIComponent(nodeId)}/allocations`}
@@ -326,7 +326,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           {/* Server Owner (admin only) */}
           {isAdmin && (
             <div className="grid gap-2">
-              <label className="text-xs font-medium text-foreground">
+              <label className="type-overline">
                 {t('cloneServer.serverOwner')} <span className="text-danger">*</span>
               </label>
               <Combobox
@@ -336,7 +336,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 placeholder={t('cloneServer.ownerPlaceholder')}
                 searchPlaceholder={t('cloneServer.ownerSearchPlaceholder')}
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="type-meta">
                 {t('cloneServer.ownerHint')}
               </p>
             </div>
@@ -344,12 +344,12 @@ function CloneServerDialog({ server, disabled = false }: Props) {
 
           {/* Copy Files Toggle */}
           <div className="grid gap-2">
-            <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5">
+            <div className="flex items-center justify-between rounded-md border border-border/40 bg-card px-3 py-2.5">
               <div className="flex items-center gap-2.5">
                 <Copy className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="text-xs font-medium text-foreground">{t('cloneServer.copyFiles')}</p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="type-overline">{t('cloneServer.copyFiles')}</p>
+                  <p className="type-meta">
                     {t('cloneServer.copyFilesHint')}
                   </p>
                 </div>
@@ -364,7 +364,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-card shadow ring-0 transition duration-200 ease-in-out ${
                     copyFiles ? 'translate-x-4' : 'translate-x-0'
                   }`}
                 />
@@ -380,40 +380,40 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           {/* Resources */}
           <div className="grid grid-cols-3 gap-3">
             <div className="grid gap-2">
-              <label htmlFor="clone-memory" className="text-xs font-medium text-foreground">
+              <label htmlFor="clone-memory" className="type-overline">
                 {t('fields.memoryMb')}
               </label>
               <input
                 id="clone-memory"
                 type="number"
                 min={512}
-                className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
                 value={memoryMb}
                 onChange={(e) => setMemoryMb(Number(e.target.value))}
               />
             </div>
             <div className="grid gap-2">
-              <label htmlFor="clone-cpu" className="text-xs font-medium text-foreground">
+              <label htmlFor="clone-cpu" className="type-overline">
                 {t('fields.cpuCores')}
               </label>
               <input
                 id="clone-cpu"
                 type="number"
                 min={1}
-                className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
                 value={cpuCores}
                 onChange={(e) => setCpuCores(Number(e.target.value))}
               />
             </div>
             <div className="grid gap-2">
-              <label htmlFor="clone-disk" className="text-xs font-medium text-foreground">
+              <label htmlFor="clone-disk" className="type-overline">
                 {t('fields.diskMb')}
               </label>
               <input
                 id="clone-disk"
                 type="number"
                 min={1024}
-                className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
                 value={diskMb}
                 onChange={(e) => setDiskMb(Number(e.target.value))}
               />

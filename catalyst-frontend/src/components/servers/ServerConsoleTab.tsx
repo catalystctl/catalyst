@@ -203,7 +203,7 @@ export default function ServerConsoleTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/50 bg-card">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border/50 bg-card">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 bg-card px-2 py-1.5">
 
 

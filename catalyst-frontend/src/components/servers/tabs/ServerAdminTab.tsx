@@ -563,7 +563,7 @@ export default function ServerAdminTab({
  // ── Guard ──
  if (!canAdminWrite) {
  return (
- <div className="rounded-xl border border-danger/30 bg-danger-muted px-4 py-6 text-center text-sm text-danger">
+ <div className="rounded-md border border-danger/30 bg-danger-muted px-4 py-6 text-center text-sm text-danger">
  <Shield className="mx-auto mb-2 h-8 w-8 opacity-50" />
  {t('tabs.admin.accessRequired')}
  </div>
@@ -623,7 +623,7 @@ export default function ServerAdminTab({
                     />
                     <span className="text-[10px] text-muted-foreground">=</span>
                     <input
-                      className="min-w-0 flex-1 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono text-[11px] text-foreground focus:border-primary focus:outline-none"
+                      className="min-w-0 flex-1 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono tabular-nums text-[11px] text-foreground focus:border-primary focus:outline-none"
                       value={row.value}
                       onChange={(e) => {
                         const next = [...envVars];
@@ -726,7 +726,7 @@ export default function ServerAdminTab({
                   >
                     <div className="min-w-0">
                       <div className="text-xs font-medium text-foreground">{img.label ?? img.name}</div>
-                      <div className="truncate font-mono text-[10px] text-muted-foreground">{img.image}</div>
+                      <div className="truncate font-mono tabular-nums text-[10px] text-muted-foreground">{img.image}</div>
                     </div>
                     {isActive ? (
                       <span className="type-meta">{t('tabs.admin.active')}</span>
@@ -808,7 +808,7 @@ export default function ServerAdminTab({
         <ServerTabCard>
           <SectionHeader icon={Network} title={t('tabs.admin.ports')} />
           {allocationsError && (
-            <div className="mb-3 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
+            <div className="mb-3 rounded-md border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
               {allocationsError}
             </div>
           )}
@@ -818,7 +818,7 @@ export default function ServerAdminTab({
  <div className="space-y-2">
  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] text-xs">
  <select
- className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none disabled:opacity-50"
+ className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none disabled:opacity-50"
  value={selectedAllocationId}
  onChange={(e) => {
  const nextId = e.target.value;
@@ -841,7 +841,7 @@ export default function ServerAdminTab({
  ))}
  </select>
  <input
- className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none sm:w-28"
+ className="rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none sm:w-28"
  value={newContainerPort}
  onChange={(e) => onNewContainerPortChange(e.target.value)}
  placeholder={t('tabs.admin.containerPortPlaceholder')}
@@ -893,7 +893,7 @@ export default function ServerAdminTab({
  safeAllocations.map((alloc) => (
  <div
  key={`${alloc.containerPort}-${alloc.hostPort}-${alloc.allocationId ?? 'legacy'}`}
- className={`group relative flex items-center justify-between rounded-lg border px-3 py-2 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02] ${
+ className={`group relative flex items-center justify-between rounded-md border px-3 py-2 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02] ${
  alloc.isPrimary
  ? 'border-primary/30 bg-primary/5'
  : 'border-border/30 bg-surface-2/20'
@@ -906,12 +906,12 @@ export default function ServerAdminTab({
  ) : (
  <div className="h-3 w-3 shrink-0 rounded-full border border-muted-foreground/30" />
  )}
- <code className="text-xs font-mono text-foreground">
+ <code className="text-xs font-mono tabular-nums text-foreground">
  {alloc.ip ? `${alloc.ip}:` : ''}
  {alloc.hostPort}
  </code>
  <span className="text-muted-foreground">→</span>
- <code className="text-xs font-mono text-foreground">{alloc.containerPort}</code>
+ <code className="text-xs font-mono tabular-nums text-foreground">{alloc.containerPort}</code>
  {alloc.alias ? (
  <span className="truncate text-[10px] text-muted-foreground">({alloc.alias})</span>
  ) : null}
@@ -1012,7 +1012,7 @@ export default function ServerAdminTab({
 
  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
  <div className="min-w-0 flex-1">
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('tabs.admin.newOwner')}</label>
+ <label className="type-overline">{t('tabs.admin.newOwner')}</label>
  <div className="mt-1">
  <Combobox
  value={newOwnerId}
@@ -1061,8 +1061,8 @@ export default function ServerAdminTab({
  </div>
 
  {currentOwnerDisplay && (
- <div className="mt-3 rounded-lg border border-border/30 bg-surface-2/20 px-3 py-2">
- <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('tabs.admin.currentOwner')}</div>
+ <div className="mt-3 rounded-md border border-border/30 bg-surface-2/20 px-3 py-2">
+ <div className="type-overline">{t('tabs.admin.currentOwner')}</div>
  <div className="mt-0.5 text-xs font-medium text-foreground">{currentOwnerDisplay.primary}</div>
  {currentOwnerDisplay.secondary ? (
  <div className="mt-0.5 text-[10px] text-muted-foreground">{currentOwnerDisplay.secondary}</div>
@@ -1076,7 +1076,7 @@ export default function ServerAdminTab({
  <SectionHeader icon={AlertTriangle} title={t('tabs.admin.suspension')} accent="warning" description={t('tabs.admin.suspensionDescription')} />
 
  {server.status === 'suspended' ? (
- <div className="flex items-center justify-between rounded-lg border border-warning/20 bg-warning/5 p-3">
+ <div className="flex items-center justify-between rounded-md border border-warning/20 bg-warning/5 p-3">
  <div>
  <div className="text-xs font-medium text-foreground">{t('tabs.admin.suspended')}</div>
  {server.suspensionReason && (
@@ -1095,9 +1095,9 @@ export default function ServerAdminTab({
  ) : (
  <div className="flex flex-wrap items-end gap-3">
  <div className="flex-1 min-w-[200px]">
- <label className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('tabs.admin.suspensionReasonLabel')}</label>
+ <label className="type-overline">{t('tabs.admin.suspensionReasonLabel')}</label>
  <input
- className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+ className="mt-1 w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
  value={suspendReason}
  onChange={(e) => onSuspendReasonChange(e.target.value)}
  placeholder={t('tabs.admin.suspensionReasonPlaceholder')}
@@ -1117,7 +1117,7 @@ export default function ServerAdminTab({
  </div>
 
  {/* ── Danger Zone ── */}
- <div className="rounded-xl border border-danger/30 bg-danger/5 p-5">
+ <div className="rounded-md border border-danger/30 bg-danger/5 p-5">
  <SectionHeader icon={Skull} title={t('tabs.admin.dangerZone')} accent="danger" description={t('tabs.admin.dangerZoneDescription')} />
 
  <DeleteServerDialog

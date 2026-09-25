@@ -306,7 +306,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
           </div>
 
           {summary && (
-            <p className="break-words text-[11px] leading-snug text-muted-foreground">{summary}</p>
+            <p className="type-meta break-words">{summary}</p>
           )}
 
           {/* Compact chips for top fields when expanded is closed and we have a few keys */}
@@ -328,10 +328,10 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
             <dl className="mt-1.5 grid gap-1 rounded-md border border-border/40 bg-surface-1/50 p-2 sm:grid-cols-2">
               {publicEntries.map(([k, v]) => (
                 <div key={k} className="min-w-0 flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
-                  <dt className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                  <dt className="type-overline shrink-0">
                     {humanizeKey(k)}
                   </dt>
-                  <dd className="min-w-0 break-words font-mono text-[11px] text-foreground/90">
+                  <dd className="type-numeric min-w-0 break-words text-[11px] text-foreground/90">
                     {renderExpandedValue(v)}
                   </dd>
                 </div>
@@ -343,7 +343,7 @@ function ActivityRow({ entry }: { entry: ServerActivityLogEntry }) {
         {/* Timestamp + expand */}
         <div className="flex shrink-0 flex-col items-end gap-1">
           <time
-            className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground/70"
+            className="type-numeric whitespace-nowrap text-[10px] text-muted-foreground/70"
             dateTime={entry.timestamp}
             title={entry.timestamp}
           >
@@ -482,7 +482,7 @@ export default function ServerActivityLogTab({ serverId }: Props) {
 
         {pagination && pagination.totalPages > 1 && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[10px] tabular-nums text-muted-foreground/60">
+            <span className="type-numeric text-[10px] text-muted-foreground/60">
               {t('tabs.activity.pagination', {
                 page: pagination.page,
                 totalPages: pagination.totalPages,

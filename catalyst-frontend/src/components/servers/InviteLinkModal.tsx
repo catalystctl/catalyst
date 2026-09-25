@@ -64,7 +64,7 @@ export default function InviteLinkModal({
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
-          <div className="mb-3 text-xs text-muted-foreground">
+          <div className="type-meta mb-3">
             <Trans
               ns="servers"
               i18nKey="inviteLink.inviteFor"
@@ -96,7 +96,7 @@ export default function InviteLinkModal({
               )}
             </Button>
           </div>
-          <p className="mt-3 text-[11px] text-muted-foreground">
+          <p className="type-meta mt-3">
             {t('inviteLink.warning')}
           </p>
         </DialogBody>
