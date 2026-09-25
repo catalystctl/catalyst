@@ -62,7 +62,7 @@ function AppLayout() {
         >
           <Menu className="h-4 w-4" />
         </button>
-        <span className="text-sm font-semibold tracking-tight text-foreground">
+        <span className="font-display text-sm font-semibold tracking-tight text-foreground">
           {panelName}
         </span>
         <button
@@ -90,7 +90,7 @@ function AppLayout() {
         <button
           type="button"
           onClick={() => setIsMobileSidebarOpen(false)}
-          className="pressable absolute right-2 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground lg:hidden"
+          className="pressable absolute right-2 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground lg:hidden"
           aria-label={t('shell.closeMenu')}
         >
           <X className="h-4 w-4" />
@@ -126,7 +126,7 @@ function AppLayout() {
               >
                 <Search className="h-3.5 w-3.5" />
                 <span className="flex-1 text-left">{t('shell.searchButton')}</span>
-                <kbd className="hidden rounded-md border border-border bg-surface-2/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block">
+                <kbd className="hidden rounded-md border border-border bg-surface-2/80 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground sm:inline-block">
                   {shortcut}
                 </kbd>
               </button>

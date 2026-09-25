@@ -39,6 +39,7 @@ import { PluginSlot } from '../../plugins/PluginSlot';
 import { PANEL_VERSION } from '../../utils/version';
 import { roleLabel } from '../../utils/constants';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
+import { useDashboardStats } from '../../hooks/useDashboard';
 
 // Expanded admin sections persist across page refreshes.
 const SIDEBAR_EXPANDED_KEY = 'catalyst.sidebar.expandedSections';
@@ -235,12 +236,18 @@ interface MenuItemProps {
   collapsed?: boolean;
   /** Used for admin section filtering only; not rendered by MenuItem. */
   permissions?: string[];
+  /** Live status count; nothing renders while the stat is unavailable. */
+  count?: number;
+  /** `warning` tints the count only when it is above zero. */
+  countTone?: 'default' | 'warning';
 }
 
-function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
+function MenuItem({ to, label, icon: Icon, collapsed, count, countTone = 'default' }: MenuItemProps) {
   const location = useLocation();
   const isActive =
     location.pathname === to || (to !== '/admin' && location.pathname.startsWith(`${to}/`));
+  const showCount = typeof count === 'number';
+  const countIsWarning = countTone === 'warning' && (count ?? 0) > 0;
 
   if (collapsed) {
     return (
@@ -249,7 +256,7 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
       <NavLink
         to={to}
         className={cn(
-          'pressable relative flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200',
+          'pressable relative flex h-8 w-8 items-center justify-center rounded-md transition-colors duration-200',
           isActive
             ? 'bg-primary/10 text-foreground'
             : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
@@ -260,6 +267,9 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
           <span className="absolute -left-1.5 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
         )}
         <Icon className="h-4 w-4" />
+        {countIsWarning && (
+          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />
+        )}
       </NavLink>
         </TooltipTrigger>
         <TooltipContent side="right">{label}</TooltipContent>
@@ -271,17 +281,28 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
     <NavLink
       to={to}
       className={cn(
-        'pressable group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+        'pressable group relative flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors duration-200',
         isActive
           ? 'bg-primary/10 text-foreground'
           : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
       )}
     >
       {isActive && (
-        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
+        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
       )}
-      <Icon className="h-4 w-4 flex-shrink-0 opacity-90" />
+      <Icon className="h-4 w-4 shrink-0 opacity-90" />
       <span className="truncate">{label}</span>
+      {showCount && (
+        <span
+          className={cn(
+            'ml-auto shrink-0 font-mono text-[10px] tabular-nums',
+            countIsWarning ? 'text-warning' : 'text-muted-foreground/70',
+          )}
+          aria-hidden
+        >
+          {count}
+        </span>
+      )}
     </NavLink>
   );
 }
@@ -327,17 +348,18 @@ function Section({ id, title, links, expanded = false, onToggle, collapsed }: Se
         onClick={toggleExpanded}
         aria-expanded={shouldExpand}
         aria-controls={`section-${id}`}
-        className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 transition-colors hover:text-foreground"
+        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:text-foreground"
       >
-        <span className="type-overline">{title}</span>
+        <span className="type-overline shrink-0">{title}</span>
+        <span className="h-px min-w-4 flex-1 bg-border/50" aria-hidden />
         {shouldExpand ? (
-          <ChevronDown className="h-3 w-3 opacity-70" />
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
         ) : (
-          <ChevronRight className="h-3 w-3 opacity-70" />
+          <ChevronRight className="h-3 w-3 shrink-0 opacity-70" />
         )}
       </button>
       {shouldExpand && (
-        <div id={`section-${id}`} className="relative space-y-0.5 border-l border-border/70 ml-3 pl-2.5">
+        <div id={`section-${id}`} className="relative ml-3 space-y-0.5 border-l border-border/70 pl-2.5">
           {links.map((link) => (
             <MenuItem key={link.to} {...link} />
           ))}
@@ -349,6 +371,7 @@ function Section({ id, title, links, expanded = false, onToggle, collapsed }: Se
 
 function Sidebar() {
   const { data: updateData } = useUpdateCheck();
+  const { data: stats } = useDashboardStats();
   const { t } = useTranslation('layout');
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
@@ -449,7 +472,7 @@ function Sidebar() {
             }}
           />
           {!collapsed && (
-            <span className="text-sm font-semibold tracking-tight text-foreground">
+            <span className="font-display text-sm font-semibold tracking-tight text-foreground">
               {panelName}
             </span>
           )}
@@ -462,7 +485,12 @@ function Sidebar() {
           {buildMainLinks(t)
             .filter((link) => link.to !== '/tickets' || hasUserTicketPage)
             .map((link) => (
-              <MenuItem key={link.to} {...link} collapsed={collapsed} />
+              <MenuItem
+                key={link.to}
+                {...link}
+                collapsed={collapsed}
+                count={link.to === '/servers' ? stats?.servers : undefined}
+              />
             ))}
         </div>
 
@@ -474,7 +502,11 @@ function Sidebar() {
                   key={section.id}
                   id={section.id}
                   title={section.title}
-                  links={section.links}
+                  links={section.links.map((link) =>
+                    link.to === '/admin/alerts'
+                      ? { ...link, count: stats?.alertsUnacknowledged, countTone: 'warning' as const }
+                      : link,
+                  )}
                   expanded={expandedIds.includes(section.id)}
                   onToggle={toggleSection}
                   collapsed={collapsed}
@@ -490,11 +522,11 @@ function Sidebar() {
         <NavLink
           to="/profile"
           className={cn(
-            'pressable flex items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-surface-2',
+            'pressable flex items-center gap-2.5 rounded-md p-1.5 transition-colors hover:bg-surface-2',
             collapsed && 'justify-center',
           )}
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary text-xs font-semibold text-primary-foreground ring-1 ring-primary/30">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-primary text-xs font-semibold text-primary-foreground ring-1 ring-primary/30">
             {user?.image
               ? <img src={user.image} alt={displayName} className="h-full w-full object-cover" />
               : initials
@@ -503,7 +535,7 @@ function Sidebar() {
           {!collapsed && (
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-foreground">{displayName}</div>
-              <div className="truncate text-[11px] text-muted-foreground">{user?.role ? roleLabel(t, user.role) : t('sidebar.fallbackRole')}</div>
+              <div className="type-meta truncate">{user?.role ? roleLabel(t, user.role) : t('sidebar.fallbackRole')}</div>
             </div>
           )}
         </NavLink>
@@ -513,7 +545,7 @@ function Sidebar() {
             type="button"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className={cn(
-              'pressable flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground',
+              'pressable flex h-8 items-center justify-center gap-1.5 rounded-md border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground',
               collapsed ? 'w-8' : 'flex-1 px-2 text-[11px] font-medium',
             )}
             aria-label={theme === 'dark' ? t('sidebar.lightMode') : t('sidebar.darkMode')}
@@ -525,7 +557,7 @@ function Sidebar() {
           <button
             type="button"
             onClick={toggleSidebar}
-            className="pressable flex h-8 w-8 items-center justify-center rounded-lg border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            className="pressable flex h-8 w-8 items-center justify-center rounded-md border border-border/80 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
             title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
           >
@@ -534,10 +566,7 @@ function Sidebar() {
           <button
             type="button"
             onClick={logout}
-            className={cn(
-              'pressable flex h-8 items-center justify-center rounded-lg border border-border/80 text-danger transition-colors hover:bg-danger/10',
-              collapsed ? 'w-8' : 'w-8',
-            )}
+            className="pressable flex h-8 w-8 items-center justify-center rounded-md border border-border/80 text-danger transition-colors hover:bg-danger/10"
             aria-label={t('sidebar.logout')}
             title={t('sidebar.logout')}
           >
