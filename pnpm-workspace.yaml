@@ -16,6 +16,11 @@ allowBuilds:
 # Packages like vitest are frequently updated and the policy blocks
 # fresh releases, causing CI to fail on newly-generated lockfiles.
 minimumReleaseAge: 0
+peerDependencyRules:
+  # vitest 5 is current and this repo's suites pass on it (verified); better-auth
+  # and @testing-library/jest-dom still declare <5 peers and lag behind.
+  allowedVersions:
+    vitest: '>=5 <6'
 # pnpm 11+ only reads auth/registry from .npmrc. Linker/hoist settings must live here
 # (see https://pnpm.io/settings). Keep hoisted layout for local dev + Docker expectations.
 nodeLinker: hoisted
@@ -31,16 +36,19 @@ overrides:
   '@radix-ui/react-slot': 1.3.3
   '@simplewebauthn/server@<=13.3.1': '>=13.3.2 <14'
   '@vitest/mocker@>=2.1.0 <4.1.11': '>=4.1.11 <5'
-  'brace-expansion@5': 5.0.9
+  'brace-expansion@5': 5.0.12
   deepmerge-ts@<8.0.0: '>=8.0.0 <9'
-  dompurify: 3.4.13
+  dompurify: 3.4.16
   # fast-uri: URI-confusion advisories; patched in 3.1.6+ (v3) and 4.1.3+ (v4).
-  'fast-uri@3': 3.1.7
-  'fast-uri@4': 4.1.4
+  'fast-uri@3': 3.1.8
+  'fast-uri@4': 4.2.1
   fastify@<5.12.1: '>=5.12.1 <6'
   fastify@>=5.8.3 <5.12.1: '>=5.12.1 <6'
-  find-my-way: 9.7.0
-  'js-yaml@4': 4.3.1
+  find-my-way: 9.9.0
+  # lodash: Code Injection via _.template + prototype pollution via _.unset/_.omit;
+  # patched in 4.18.1 (transitive via prisma -> @prisma/studio-core -> @visx).
+  'lodash@4': 4.18.1
+  'js-yaml@4': 4.3.2
   js-yaml@>=4.0.0 <4.3.2: '>=4.3.2 <5'
   mysql2@<3.22.0: '>=3.22.0 <4'
   mysql2@<=3.23.0: '>=3.23.1 <4'

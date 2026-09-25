@@ -86,11 +86,16 @@ model account {
 }
 
 model jwks {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   publicKey  String
   privateKey String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  // better-auth 1.7 key rotation: optional per-key expiry and algorithm.
+  // Legacy rows keep alg: null and are read as the configured default alg.
+  expiresAt  DateTime?
+  alg        String?
+  crv        String?
 }
 
 model passkey {

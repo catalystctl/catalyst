@@ -386,15 +386,20 @@ export const authApi = {
     // OAuth has no backend in the demo.
     if (isDemoMode) throw new Error('Single sign-on is disabled in the demo.');
     const frontendOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-    const response = await authClient.signIn.oauth2({
-      providerId,
+    // better-auth 1.7 removed the genericOAuthClient plugin endpoints; generic
+    // OAuth/OIDC providers sign in through the core action → POST /sign-in/social.
+    // Provider ids stay untyped on the client proxy, hence the cast.
+    const response = await (authClient as any).signIn.social({
+      provider: providerId,
       callbackURL: `${frontendOrigin}/servers`,
     });
     const data = extractResponse(response);
     if (data.redirect && data.url) {
-      const trusted = new URL(data.url);
-      const allowed = [frontendOrigin, import.meta.env.VITE_BETTER_AUTH_URL].filter(Boolean);
-      if (!allowed.some(o => trusted.origin === new URL(o).origin)) {
+      // data.url is the identity provider's authorization endpoint on its own
+      // origin, so panel-origin allowlisting cannot apply to it — only enforce
+      // a safe redirect scheme.
+      const target = new URL(data.url);
+      if (target.protocol !== 'http:' && target.protocol !== 'https:') {
         throw new Error('Untrusted redirect URL');
       }
       window.location.href = data.url;

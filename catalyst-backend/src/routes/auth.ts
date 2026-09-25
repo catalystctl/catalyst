@@ -398,8 +398,11 @@ export async function authRoutes(app: FastifyInstance) {
       const { providerId, accountId } = request.body as {
         providerId: string; accountId?: string;
       };
-      if (!providerId) {
-        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing providerId");
+      // better-auth 1.7 unlinkAccount takes { accountId } only, where accountId
+      // is the better-auth account row id (not the provider subject);
+      // providerId is still needed for the only-sign-in-method guard below.
+      if (!providerId || !accountId) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing providerId or accountId");
       }
       const userRecord = await prisma.user.findUnique({
         where: { id: request.user.userId },
@@ -415,7 +418,7 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         const response = await getAuth().api.unlinkAccount({
           headers: getHeaders(request),
-          body: { providerId, accountId },
+          body: { accountId },
         });
         reply.send(serialize({ success: true, data: response }));
       } catch (err: any) {
