@@ -8,41 +8,39 @@
     "title": "Activité récente",
     "viewAll": "Voir tout"
   },
+  "attention": {
+    "alertsOpen_one": "{{count}} alerte ouverte",
+    "alertsOpen_many": "{{count}} alertes ouvertes",
+    "alertsOpen_other": "{{count}} alertes ouvertes",
+    "allClear": "Tous les systèmes sont nominaux",
+    "allClearDetail": "Aucun serveur hors service et aucune alerte non acquittée.",
+    "nodesOffline_one": "{{count}} nœud hors ligne",
+    "nodesOffline_many": "{{count}} nœuds hors ligne",
+    "nodesOffline_other": "{{count}} nœuds hors ligne",
+    "title": "À traiter"
+  },
   "description": "Vue d’ensemble de l’infrastructure pour {{name}}.",
   "overview": {
-    "account": "Compte",
-    "accountDescription": "Gérer votre profil",
     "alertsUnacknowledged": "{{alerts}} non acquittées",
     "allResolved": "Toutes résolues",
     "errorDescription": "Impossible de charger les statistiques du tableau de bord.",
     "errorTitle": "Impossible de charger la vue d’ensemble",
     "nodesConnected": "{{nodes}} connectés",
-    "serversRunning": "{{servers}} en cours d’exécution",
-    "title": "Vue d’ensemble"
+    "serversRunning": "{{servers}} en cours d’exécution"
   },
   "pendingAlerts_one": "{{count}} alerte non acquittée",
   "pendingAlerts_many": "{{count}} alertes non acquittées",
   "pendingAlerts_other": "{{count}} alertes non acquittées",
-  "quickActions": {
-    "createServer": "Créer un serveur",
-    "createServerDescription": "Déployer un nouveau serveur de jeu",
-    "profileSettings": "Paramètres du profil",
-    "profileSettingsDescription": "Gérer votre compte",
-    "registerNode": "Enregistrer un nœud",
-    "registerNodeDescription": "Ajouter une infrastructure",
-    "viewAlerts": "Consulter les alertes",
-    "viewAlertsAllClear": "Tout est normal",
-    "viewAlertsAttention": "{{alerts}} nécessitent votre attention",
-    "viewServers": "Consulter les serveurs",
-    "viewServersDescription": "Gérer vos serveurs"
-  },
   "resources": {
     "cpu": "CPU",
-    "description": "Dernières métriques de tous les nœuds",
-    "errorDescription": "L’utilisation des ressources est actuellement indisponible.",
-    "errorTitle": "Impossible de charger les ressources",
-    "memory": "Mémoire",
-    "title": "Utilisation des ressources"
+    "memory": "Mémoire"
   },
-  "title": "Tableau de bord"
+  "title": "Tableau de bord",
+  "vitals": {
+    "alerts": "Alertes",
+    "network": "Réseau",
+    "nodes": "Nœuds",
+    "servers": "Serveurs",
+    "title": "État du parc"
+  }
 }

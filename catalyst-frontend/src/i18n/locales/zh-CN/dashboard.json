@@ -8,39 +8,33 @@
     "title": "最近活动",
     "viewAll": "查看全部"
   },
+  "attention": {
+    "alertsOpen_other": "{{count}} 个未处理告警",
+    "allClear": "一切正常",
+    "allClearDetail": "没有停机的服务器，也没有未确认的告警。",
+    "nodesOffline_other": "{{count}} 个节点离线",
+    "title": "需要关注"
+  },
   "description": "{{name}} 的基础设施概览。",
   "overview": {
-    "account": "账号",
-    "accountDescription": "管理您的个人资料",
     "alertsUnacknowledged": "{{alerts}} 条未确认",
     "allResolved": "全部已解决",
     "errorDescription": "无法加载仪表盘统计信息。",
     "errorTitle": "无法加载概览",
     "nodesConnected": "已连接 {{nodes}} 个",
-    "serversRunning": "{{servers}} 台运行中",
-    "title": "概览"
+    "serversRunning": "{{servers}} 台运行中"
   },
   "pendingAlerts_other": "{{count}} 条未确认告警",
-  "quickActions": {
-    "createServer": "创建服务器",
-    "createServerDescription": "部署新的游戏服务器",
-    "profileSettings": "个人资料设置",
-    "profileSettingsDescription": "管理您的账号",
-    "registerNode": "注册节点",
-    "registerNodeDescription": "添加基础设施",
-    "viewAlerts": "查看告警",
-    "viewAlertsAllClear": "全部正常",
-    "viewAlertsAttention": "{{alerts}} 条需要处理",
-    "viewServers": "查看服务器",
-    "viewServersDescription": "管理您的服务器"
-  },
   "resources": {
     "cpu": "CPU",
-    "description": "所有节点的最新指标",
-    "errorDescription": "资源利用率当前不可用。",
-    "errorTitle": "无法加载资源",
-    "memory": "内存",
-    "title": "资源利用率"
+    "memory": "内存"
   },
-  "title": "仪表盘"
+  "title": "仪表盘",
+  "vitals": {
+    "alerts": "告警",
+    "network": "网络",
+    "nodes": "节点",
+    "servers": "服务器",
+    "title": "集群概览"
+  }
 }
