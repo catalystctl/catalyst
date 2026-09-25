@@ -9,7 +9,10 @@ const Command = forwardRef<
  <CommandPrimitive
  ref={ref}
  className={cn(
- 'flex h-full w-full flex-col overflow-hidden rounded-md bg-card text-foreground transition-all duration-300',
+ 'flex h-full w-full flex-col overflow-hidden rounded-md bg-card text-foreground',
+ '[&_[cmdk-group]]:px-1',
+ '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[0.625rem] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-muted-foreground',
+ '[&_kbd]:ml-auto [&_kbd]:font-mono [&_kbd]:text-xs [&_kbd]:tracking-widest [&_kbd]:text-muted-foreground',
  className,
  )}
  {...props}
@@ -24,7 +27,7 @@ const CommandInput = forwardRef<
  <CommandPrimitive.Input
  ref={ref}
  className={cn(
- 'flex h-10 w-full border-b border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground transition-all duration-300',
+ 'flex h-9 w-full border-b border-border/70 bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground transition-colors duration-normal',
  className,
  )}
  {...props}
@@ -51,7 +54,7 @@ const CommandItem = forwardRef<
  <CommandPrimitive.Item
  ref={ref}
  className={cn(
- 'relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-all duration-300 aria-selected:bg-primary/10 aria-selected:text-foreground dark:aria-selected:bg-primary/20 dark:aria-selected:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+ 'relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors duration-normal aria-selected:bg-primary/10 aria-selected:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
  className,
  )}
  {...props}
@@ -63,7 +66,7 @@ const CommandEmpty = forwardRef<
  React.ElementRef<typeof CommandPrimitive.Empty>,
  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
 >((props, ref) => (
- <CommandPrimitive.Empty ref={ref} className="py-4 text-center text-sm" {...props} />
+ <CommandPrimitive.Empty ref={ref} className="py-4 text-center type-meta" {...props} />
 ));
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
