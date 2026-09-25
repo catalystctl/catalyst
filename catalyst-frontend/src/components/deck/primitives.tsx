@@ -75,6 +75,34 @@ export function ActivityBars({
   );
 }
 
+/**
+ * Meter — a single track with a fill, so the proportion is readable against a
+ * reference (three loose mini-bars were not). Severity colour uses the same
+ * thresholds as the values.
+ */
+export function Meter({
+  value,
+  className,
+  width = 'w-8',
+}: {
+  value: number | null;
+  className?: string;
+  width?: string;
+}) {
+  const v = value == null ? 0 : Math.min(100, Math.max(0, value));
+  return (
+    <span
+      className={cn('inline-block h-1 shrink-0 overflow-hidden rounded-sm bg-surface-3', width, className)}
+      aria-hidden
+    >
+      <span
+        className={cn('block h-full rounded-sm transition-[width] duration-300', toneBar(v))}
+        style={{ width: `${v}%` }}
+      />
+    </span>
+  );
+}
+
 /** Segmented readout — mono, tabular, fixed width so columns line up. */
 export function Segmented({
   children,

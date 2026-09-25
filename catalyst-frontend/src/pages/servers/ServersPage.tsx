@@ -10,6 +10,7 @@ import {
   ActivityBars,
   BracketLabel,
   GameChip,
+  Meter,
   Segmented,
   StatusLed,
 } from '../../components/deck/primitives';
@@ -49,7 +50,7 @@ const toneForState = (status: string): Tone => STATE_TONE[status] ?? 'info';
 const GRID =
   'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
   'md:grid-cols-[minmax(0,1fr)_9rem_6rem_12rem] ' +
-  'xl:grid-cols-[minmax(0,1fr)_9rem_5.25rem_5.25rem_5.25rem_11rem_5.5rem_12rem]';
+  'xl:grid-cols-[minmax(0,1fr)_9rem_6.5rem_6.5rem_6.5rem_11rem_5.5rem_12rem]';
 
 function gameVersion(server: Server): string | undefined {
   const env = server.environment ?? {};
@@ -150,6 +151,7 @@ function ServerRow({
           <span className="flex min-w-0 items-baseline gap-2">
             <Link
               to={`/servers/${server.id}`}
+              title={server.name}
               className="truncate font-display text-data font-semibold tracking-tight text-foreground hover:text-primary"
             >
               {server.name}
@@ -165,10 +167,7 @@ function ServerRow({
               {host}:{port}
             </span>
             <span
-              className={cn(
-                'shrink-0 font-display uppercase tracking-[0.12em]',
-                stateTextClass(server.status),
-              )}
+              className={cn('shrink-0 text-micro uppercase', stateTextClass(server.status))}
             >
               {serverStatusLabel(t, server.status)}
             </span>
@@ -184,20 +183,20 @@ function ServerRow({
       {/* live activity cluster — labelled by the column header, so the row
           carries only the reading (bars + value) to stay dense and aligned */}
       <span className="hidden items-center justify-end gap-2 xl:flex">
-        <ActivityBars value={cpu} />
-        <Segmented muted={cpu == null} className={cn('min-w-[3.25rem] text-right', severityClass(cpu))}>
+        <Meter value={cpu} />
+        <Segmented muted={cpu == null} className={cn('min-w-[3rem] text-right', severityClass(cpu))}>
           {cpu == null ? '—' : `${Math.round(cpu)}%`}
         </Segmented>
       </span>
       <span className="hidden items-center justify-end gap-2 xl:flex">
-        <ActivityBars value={ramPct} />
-        <Segmented muted={ramPct == null} className={cn('min-w-[3.25rem] text-right', severityClass(ramPct))}>
+        <Meter value={ramPct} />
+        <Segmented muted={ramPct == null} className={cn('min-w-[3rem] text-right', severityClass(ramPct))}>
           {ramPct == null ? '—' : `${Math.round(ramPct)}%`}
         </Segmented>
       </span>
       <span className="hidden items-center justify-end gap-2 xl:flex">
-        <ActivityBars value={diskPct} />
-        <Segmented muted={diskPct == null} className={cn('min-w-[3.25rem] text-right', severityClass(diskPct))}>
+        <Meter value={diskPct} />
+        <Segmented muted={diskPct == null} className={cn('min-w-[3rem] text-right', severityClass(diskPct))}>
           {diskPct == null ? '—' : `${Math.round(diskPct)}%`}
         </Segmented>
       </span>
@@ -211,15 +210,15 @@ function ServerRow({
       </span>
 
       {/* state */}
-      <span className="hidden justify-end md:flex">
+      <span className="hidden min-w-0 justify-end overflow-hidden md:flex">
         <span
-          className={cn('text-micro uppercase', stateTextClass(server.status))}
+          className={cn('truncate text-micro uppercase', stateTextClass(server.status))}
         >
           {serverStatusLabel(t, server.status)}
         </span>
       </span>
 
-      <span className="flex shrink-0 items-center justify-end gap-1">
+      <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
         <ServerControls
           serverId={server.id}
           status={server.status}
@@ -451,11 +450,11 @@ function ServersPage() {
         </div>
 
         {/* Rows */}
-        <div ref={listRef} className="max-h-[calc(100dvh-22rem)] min-h-[6rem] min-w-0 overflow-y-auto bg-background/25">
+        <div ref={listRef} className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25">
           {isLoading ? (
             <div>
               {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className={cn(GRID, 'py-2 pl-3 pr-2')}>
+                <div key={index} className={cn(GRID, 'py-2 pl-3 pr-3')}>
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 animate-pulse rounded-full bg-surface-3" />
                     <div className="h-3.5 w-40 animate-pulse bg-surface-3" />
