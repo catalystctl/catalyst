@@ -117,7 +117,7 @@
     "fileWrite": "Modifier et téléverser des fichiers",
     "install": "Installer le serveur",
     "read": "Consulter les détails du serveur",
-    "rebuild": "Reconstruire le serveur et les variables",
+    "rebuild": "Relancer la commande d’installation",
     "reinstall": "Réinstaller le serveur",
     "schedule": "Gérer les planifications et les tâches",
     "start": "Démarrer le serveur",

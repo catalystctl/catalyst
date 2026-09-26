@@ -49,14 +49,13 @@ export default function ServerSettingsTab({
  const permSet = new Set(permissions ?? []);
  const canReinstall =
    permSet.has('*') ||
-   permSet.has('server.install') ||
    permSet.has('server.reinstall');
  const isInstalling = serverStatus === 'installing';
 
  const handleReinstall = async () => {
  setReinstallPending(true);
  try {
- await serversApi.install(serverId);
+ await serversApi.reinstall(serverId);
  notifySuccess(t('tabs.settings.reinstallStarted'));
  setShowReinstallConfirm(false);
  } catch (error: unknown) {

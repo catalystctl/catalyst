@@ -273,12 +273,12 @@ const serverTools: McpToolDef[] = [
   powerTool(
     "reinstall_server",
     "reinstall",
-    "Wipe disk and reinstall from scratch. Irreversible (POST /api/servers/:id/reinstall).",
+    "Delete all server files and reinstall from scratch. Irreversible (POST /api/servers/:id/reinstall).",
     {},
     true,
   ),
   powerTool("cancel_install", "cancel-install", "Cancel a stuck installer and reset to stopped (POST /api/servers/:id/cancel-install)."),
-  powerTool("rebuild_server", "rebuild", "Rebuild the container while preserving data (POST /api/servers/:id/rebuild)."),
+  powerTool("rebuild_server", "rebuild", "Re-run the template install command while preserving server files (POST /api/servers/:id/rebuild)."),
   powerTool(
     "suspend_server",
     "suspend",

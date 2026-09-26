@@ -614,7 +614,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Rebuild server (stops server, removes container, recreates from image, preserves data)
+  // Rebuild server (stops server, re-runs the template install script, preserves data)
   app.post(
     "/:serverId/rebuild",
     { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
@@ -741,15 +741,33 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");
       }
 
+      // Rebuild is agent-driven: the agent stops the server and re-runs the
+      // install script, then reports the terminal state itself. Do NOT pin the
+      // panel to `installing` here — an agent that still runs the older
+      // "remove container + start" rebuild reports starting/running, which the
+      // state machine rejects from `installing`, wedging the server.
       await prisma.serverLog.create({
         data: {
           serverId: serverId,
           stream: "system",
-          data: "Rebuild started (container recreation).",
+          data: "Rebuild started (install script re-run; user files preserved).",
         },
       });
 
-      reply.send({ success: true, message: "Rebuild command sent to agent" });
+      emitServerOperationProgress((app as any).wsGateway, {
+        serverId,
+        operation: "rebuild",
+        stage: "Rebuild started",
+        progress: 5,
+      });
+
+      // 202: accepted for async processing; completion via server_state_update
+      reply.status(202).send({
+        success: true,
+        accepted: true,
+        async: true,
+        message: "Rebuild command accepted; completion is asynchronous",
+      });
     }
   );
 

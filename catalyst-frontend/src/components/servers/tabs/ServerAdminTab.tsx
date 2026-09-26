@@ -497,7 +497,7 @@ export default function ServerAdminTab({
  const handleReinstall = useCallback(async () => {
  try {
  setReinstallPending(true);
- await serversApi.install(serverId);
+ await serversApi.reinstall(serverId);
  notifySuccess(t('tabs.admin.reinstallInitiated'));
  setReinstallConfirm(false);
  } catch (err: unknown) {

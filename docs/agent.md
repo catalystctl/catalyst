@@ -820,7 +820,7 @@ Server containers are created with these settings:
 | `kill_server` | Force kill with SIGKILL, exit code 137 |
 | `install_server` | Run template install script in temporary container, with SteamCMD retry support |
 | `reinstall_server` | Stop + wipe data directory + run install script |
-| `rebuild_server` | Stop + remove container only (data preserved) + start fresh |
+| `rebuild_server` | Stop + remove container only (data preserved) + re-run template install script |
 | `delete_server` | Stop + remove containers + cleanup firewall rules + remove data directory |
 
 ### Console I/O
@@ -1103,7 +1103,7 @@ The frontend must respond with `accept_eula` or `decline_eula` to resume.
 | `server_control` | Generic command with `action` field: `install`, `start`, `stop`, `kill`, `restart` |
 | `install_server` | Run template install script in temporary container (with SteamCMD retry) |
 | `reinstall_server` | Stop, wipe data, run install script |
-| `rebuild_server` | Remove container, keep data, start fresh |
+| `rebuild_server` | Remove container, keep data, re-run template install script |
 | `start_server` | Start server with full details (template, resources, environment) |
 | `stop_server` | Graceful stop with configurable stop command and signal |
 | `kill_server` | Force kill with SIGKILL |

@@ -117,7 +117,7 @@
     "fileWrite": "编辑并上传文件",
     "install": "安装服务器",
     "read": "查看服务器详情",
-    "rebuild": "重建服务器与变量",
+    "rebuild": "重新运行安装命令",
     "reinstall": "重新安装服务器",
     "schedule": "管理计划任务",
     "start": "启动服务器",

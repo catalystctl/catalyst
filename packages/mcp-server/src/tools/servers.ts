@@ -126,9 +126,9 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
   power("restart_server", "restart", "Restart a server (POST /api/servers/:id/restart).");
   power("kill_server", "kill", "Force-kill a server process (POST /api/servers/:id/kill).");
   power("install_server", "install", "Run the first-time installer (POST /api/servers/:id/install).");
-  power("reinstall_server", "reinstall", "Wipe disk and reinstall from scratch. Irreversible (POST /api/servers/:id/reinstall).");
+  power("reinstall_server", "reinstall", "Delete all server files and reinstall from scratch. Irreversible (POST /api/servers/:id/reinstall).");
   power("cancel_install", "cancel-install", "Cancel a stuck installer and reset to stopped (POST /api/servers/:id/cancel-install).");
-  power("rebuild_server", "rebuild", "Rebuild the container while preserving data (POST /api/servers/:id/rebuild).");
+  power("rebuild_server", "rebuild", "Re-run the template install command while preserving server files (POST /api/servers/:id/rebuild).");
   power(
     "suspend_server",
     "suspend",

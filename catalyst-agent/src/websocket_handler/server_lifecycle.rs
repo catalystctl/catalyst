@@ -763,7 +763,7 @@ impl WebSocketHandler {
         self.emit_console_output(
             server_id,
             "system",
-            "[Catalyst] Rebuilding server container...\n",
+            "[Catalyst] Rebuilding server: re-running install script (user data preserved)...\n",
         )
         .await?;
 
@@ -790,20 +790,14 @@ impl WebSocketHandler {
         self.emit_console_output(
             server_id,
             "system",
-            "[Catalyst] Container removed. Recreating from image...\n",
+            "[Catalyst] Container removed. Re-running installation script...\n",
         )
         .await?;
 
-        // Start the server (creates a fresh container, data on disk is preserved)
-        self.start_server_with_details(msg).await?;
-
-        self.emit_console_output(
-            server_id,
-            "system",
-            "[Catalyst] Server rebuilt successfully.\n",
-        )
-        .await?;
-        Ok(())
+        // Re-run the template install script over the existing data directory.
+        // Unlike reinstall, nothing is wiped first, so user files survive unless
+        // the template's own install script overwrites them.
+        self.install_server(msg).await
     }
 
     pub(crate) async fn start_server_with_details(&self, msg: &Value) -> AgentResult<()> {

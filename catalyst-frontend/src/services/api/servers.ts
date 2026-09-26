@@ -85,6 +85,10 @@ export const serversApi = {
     const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/install`);
     return data;
   },
+  reinstall: async (id: string) => {
+    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/reinstall`);
+    return data;
+  },
   cancelInstall: async (id: string) => {
     const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/cancel-install`);
     return data;

@@ -117,7 +117,7 @@
     "fileWrite": "Edit & upload files",
     "install": "Install server",
     "read": "View server details",
-    "rebuild": "Rebuild server & variables",
+    "rebuild": "Re-run install command",
     "reinstall": "Reinstall server",
     "schedule": "Manage schedules & tasks",
     "start": "Start server",
