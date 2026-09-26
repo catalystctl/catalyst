@@ -170,11 +170,13 @@ register_steps() {
     "test:Unit & Integration Tests"
   )
 
-  # push event adds build-verification, agent-release, and docker-publish steps
-  # Maps to: build:, agent-release:, and publish-*: jobs in ci.yml
-  if [[ "$EVENT" == "push" ]]; then
-    STEPS+=("build_verify:Build Verification")
+  # Build verification runs for pull requests and pushes alike — ci.yml's
+  # build: job carries no if: guard, only needs: [lint, test].
+  STEPS+=("build_verify:Build Verification")
 
+  # push event adds the release steps
+  # Maps to: agent-release: and publish-*: jobs in ci.yml
+  if [[ "$EVENT" == "push" ]]; then
     # Agent release only when on a v* tag
     # Maps to: if: startsWith(github.ref, 'refs/tags/v') in ci.yml
     local current_tag
@@ -215,8 +217,7 @@ should_run_step() {
       return 0
       ;;
     build_verify)
-      # Only on push event — registered conditionally above
-      # Maps to: if: github.event_name == 'push' in GHA
+      # Runs for both events — maps to: build: job (needs: [lint, test], no if:)
       return 0
       ;;
     agent_release)
@@ -671,16 +672,6 @@ step_build_verify() {
     return 0
   fi
 
-  # This step only runs on push events — maps to:
-  #   if: github.event_name == 'push' in ci.yml build: job
-  if [[ "$EVENT" != "push" ]]; then
-    echo -e "  ${C_YELLOW}Skipped (build verification only runs on push events)${C_RESET}"
-    STEP_STATUSES["$step_name"]="SKIP"
-    STEP_EXIT_CODES["$step_name"]=0
-    STEP_DURATIONS["$step_name"]="-"
-    return 0
-  fi
-
   STEP_STARTS["$step_name"]=$(now_ms)
   local overall_exit=0
 
@@ -689,6 +680,11 @@ step_build_verify() {
   if [[ "$HAS_PNPM" -eq 1 ]]; then
     echo -e "  ${C_BOLD}[pnpm] Building workspace...${C_RESET}"
     if ! run_step "${step_name}_pnpm" bash -c "pnpm run build:backend && pnpm run build:frontend"; then
+      overall_exit=1
+    fi
+
+    echo -e "  ${C_BOLD}[pnpm] Building plugin SDKs...${C_RESET}"
+    if ! run_step "${step_name}_sdk" bash -c "pnpm --filter @catalyst/plugin-sdk run build && pnpm --filter @catalyst/plugin-sdk-cli run build"; then
       overall_exit=1
     fi
   fi
