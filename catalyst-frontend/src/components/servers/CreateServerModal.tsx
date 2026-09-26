@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import {
@@ -16,7 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { serversApi } from '../../services/api/servers';
-import { useTemplates } from '../../hooks/useTemplates';
+import { useTemplate, useTemplates } from '../../hooks/useTemplates';
 import { useNodes, useAccessibleNodes } from '../../hooks/useNodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getLocalizedErrorMessage, getLocalizedFieldErrors } from '../../i18n/api-errors';
@@ -96,6 +96,9 @@ function CreateServerModal() {
  [templates, templateId],
  );
 
+ // …so the wizard reads them from the detail endpoint for the chosen template.
+ const { data: selectedTemplateDetail } = useTemplate(templateId || undefined);
+
  // Auto-populate primary port from selected allocation in host mode
  const [prevAllocationId, setPrevAllocationId] = useState(allocationId);
  if (allocationId !== prevAllocationId) {
@@ -136,9 +139,27 @@ function CreateServerModal() {
  }
 
  const templateVariables = useMemo(() => {
- if (!selectedTemplate?.variables) return [];
- return selectedTemplate.variables.filter((v) => v.name !== 'SERVER_DIR');
- }, [selectedTemplate]);
+ const variables = selectedTemplateDetail?.variables;
+ if (!variables) return [];
+ return variables.filter((v) => v.name !== 'SERVER_DIR');
+ }, [selectedTemplateDetail]);
+
+ // Prefill the environment once the chosen template's definitions arrive.
+ // Keyed by template id so a later refetch cannot overwrite what the user has
+ // typed, and so switching templates re-prefills.
+ const prefilledTemplateRef = useRef<string | null>(null);
+ useEffect(() => {
+ const detail = selectedTemplateDetail;
+ if (!detail || prefilledTemplateRef.current === detail.id) return;
+ prefilledTemplateRef.current = detail.id;
+ const defaultEnv: Record<string, string> = {};
+ (detail.variables ?? [])
+ .filter((v) => v.name !== 'SERVER_DIR')
+ .forEach((v) => {
+ defaultEnv[v.name] = v.default;
+ });
+ setEnvironment(defaultEnv);
+ }, [selectedTemplateDetail]);
 
  const selectedNode = useMemo(
  () => availableNodes.find((node) => node.id === nodeId),
@@ -518,7 +539,7 @@ function CreateServerModal() {
  <div className="grid gap-3 sm:grid-cols-2">
  <div className="space-y-1.5">
  <span className="type-overline">{t('createServer.fields.template')}</span>
- <Combobox value={templateId} onChange={(newTemplateId) => { setTemplateId(newTemplateId); setImageVariant(''); const template = templates.find((t) => t.id === newTemplateId); if (template?.variables) { const defaultEnv: Record<string, string> = {}; template.variables.filter((v) => v.name !== 'SERVER_DIR').forEach((v) => { defaultEnv[v.name] = v.default; }); setEnvironment(defaultEnv); } else { setEnvironment({}); } }} options={templates.map((t) => ({ value: t.id, label: t.name, keywords: [t.name, t.description || ''].filter(Boolean) }))} placeholder={t('createServer.fields.templatePlaceholder')} searchPlaceholder={t('createServer.fields.templateSearchPlaceholder')} className={fieldClass}/>
+ <Combobox value={templateId} onChange={(newTemplateId) => { setTemplateId(newTemplateId); setImageVariant(''); setEnvironment({}); }} options={templates.map((t) => ({ value: t.id, label: t.name, keywords: [t.name, t.description || ''].filter(Boolean) }))} placeholder={t('createServer.fields.templatePlaceholder')} searchPlaceholder={t('createServer.fields.templateSearchPlaceholder')} className={fieldClass}/>
  </div>
  <div className="space-y-1.5">
  <span className="type-overline">{t('createServer.fields.node')}</span>

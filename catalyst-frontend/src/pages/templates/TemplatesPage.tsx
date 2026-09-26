@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery } from '@/csync';
+import { useMutation, useQuery, useVirtualizer } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
@@ -17,7 +17,7 @@ import {
   X,
   FolderOpen,
 } from 'lucide-react';
-import { useTemplates } from '../../hooks/useTemplates';
+import { useTemplate, useTemplates } from '../../hooks/useTemplates';
 import TemplateCreateModal from '../../components/templates/TemplateCreateModal';
 import TemplateEditModal from '../../components/templates/TemplateEditModal';
 import NestsManagerModal from '../../components/templates/NestsManagerModal';
@@ -57,7 +57,7 @@ const TEMPLATE_GRID =
   'lg:grid-cols-[1.5rem_minmax(0,1fr)_5rem_5.5rem_5.5rem]';
 
 // ── Template Row ──
-function TemplateRow({
+const TemplateRow = memo(function TemplateRow({
   template,
   isSelected,
   canWrite,
@@ -65,7 +65,7 @@ function TemplateRow({
   setSelectedIds,
   setEditingTemplateId,
   handleBulkDelete,
-  deleteMutation,
+  deletePending,
 }: {
   template: Template;
   isSelected: boolean;
@@ -74,7 +74,7 @@ function TemplateRow({
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   setEditingTemplateId: (id: string) => void;
   handleBulkDelete: (ids: string[], label: string) => void;
-  deleteMutation: { isPending: boolean };
+  deletePending: boolean;
 }) {
   const { t } = useTranslation('templates');
   const iconUrl = template.features?.iconUrl;
@@ -145,7 +145,7 @@ function TemplateRow({
             </span>
             <span className="hidden truncate md:inline" title={description}>{description}</span>
             <span className="hidden shrink-0 lg:inline">
-              {t('page.variablesCount', { count: template.variables?.length ?? 0 })}
+              {t('page.variablesCount', { count: template.variablesCount ?? template.variables?.length ?? 0 })}
             </span>
           </span>
         </div>
@@ -207,7 +207,7 @@ function TemplateRow({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => handleBulkDelete([template.id], template.name)}
-                disabled={deleteMutation.isPending}
+                disabled={deletePending}
                 className="gap-2 text-mini text-danger"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -219,7 +219,105 @@ function TemplateRow({
       </span>
     </div>
   );
-}
+});
+
+/**
+ * A single virtualised row (or section header).
+ *
+ * The list re-renders on every scroll step, so the whole item tree — including
+ * each section's select-all control — lives here behind `memo`. Props are all
+ * primitives or identities that hold steady while scrolling, so React skips
+ * re-rendering the rows that did not change instead of rebuilding ~50 rows'
+ * worth of elements per frame (which profiling showed was the bulk of the jank).
+ */
+type ListItem =
+  | { kind: 'header'; key: string; nest: Nest | null; templates: Template[] }
+  | { kind: 'row'; key: string; template: Template };
+
+const VirtualItem = memo(function VirtualItem({
+  item,
+  index,
+  start,
+  selectedIds,
+  canWrite,
+  hideHeader,
+  setSelectedIds,
+  setEditingTemplateId,
+  handleBulkDelete,
+  deletePending,
+}: {
+  item: ListItem;
+  index: number;
+  start: number;
+  selectedIds: string[];
+  canWrite?: boolean;
+  hideHeader?: boolean;
+  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
+  setEditingTemplateId: (id: string | null) => void;
+  handleBulkDelete: (templateIds: string[], label: string) => void;
+  deletePending: boolean;
+}) {
+  const { t } = useTranslation('templates');
+
+  return (
+    <div
+      data-index={index}
+      className="border-b border-border/40"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        transform: `translateY(${start}px)`,
+        // Keep each row's layout/paint self-contained so mounting one cannot
+        // invalidate its neighbours.
+        contain: 'layout paint',
+      }}
+    >
+      {item.kind === 'header' ? (
+        <NestSectionHeader
+          nest={item.nest}
+          count={item.templates.length}
+          trailing={
+            canWrite && !hideHeader ? (
+              <label className="ml-auto -my-2 flex cursor-pointer items-center gap-2 py-2 text-micro text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={
+                    item.templates.length > 0 &&
+                    item.templates.every((tpl) => selectedIds.includes(tpl.id))
+                  }
+                  onChange={() =>
+                    setSelectedIds((prev) => {
+                      const groupIds = item.templates.map((tpl) => tpl.id);
+                      if (groupIds.every((id) => prev.includes(id))) {
+                        return prev.filter((id) => !groupIds.includes(id));
+                      }
+                      return Array.from(new Set([...prev, ...groupIds]));
+                    })
+                  }
+                  className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary"
+                />
+                <span className="type-overline">{t('page.selectAllInSection')}</span>
+              </label>
+            ) : undefined
+          }
+        />
+      ) : (
+        <TemplateRow
+          template={item.template}
+          isSelected={selectedIds.includes(item.template.id)}
+          canWrite={Boolean(canWrite)}
+          hideHeader={Boolean(hideHeader)}
+          setSelectedIds={setSelectedIds}
+          setEditingTemplateId={setEditingTemplateId}
+          handleBulkDelete={handleBulkDelete}
+          deletePending={deletePending}
+        />
+      )}
+    </div>
+  );
+});
 
 // ── Nest Section Header ──
 function NestSectionHeader({
@@ -313,6 +411,7 @@ function TemplatesPage({ hideHeader }: Props) {
     label: string;
   } | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const { data: editingTemplate } = useTemplate(editingTemplateId ?? undefined);
   const [nestsModalOpen, setNestsModalOpen] = useState(false);
 
   useEffect(() => {
@@ -454,12 +553,52 @@ function TemplatesPage({ hideHeader }: Props) {
     },
   });
 
-  const handleBulkDelete = (templateIds: string[], label: string) => {
+  const handleBulkDelete = useCallback((templateIds: string[], label: string) => {
     if (!templateIds.length) return;
     setDeleteTargets({ templateIds, label });
-  };
+  }, []);
 
   const showGroupedView = selectedNestId === null && nests.length > 0;
+
+  /**
+   * One flat model for both views so the list can be virtualised: 250
+   * Pterodactyl eggs rendered 15k DOM nodes (512 links, 429 buttons) and took
+   * ~9.5s to paint on a throttled CPU. Only the visible window renders now.
+   */
+  const listItems = useMemo<ListItem[]>(() => {
+    if (showGroupedView) {
+      const items: ListItem[] = [];
+      for (const [nestId, groupTemplates] of groupedByNest) {
+        items.push({
+          kind: 'header',
+          key: `nest:${nestId ?? '__ungrouped__'}`,
+          nest: nestId ? (nestMap.get(nestId) ?? null) : null,
+          templates: groupTemplates,
+        });
+        for (const template of groupTemplates) items.push({ kind: 'row', key: template.id, template });
+      }
+      return items;
+    }
+    return filteredTemplates.map((template) => ({ kind: 'row' as const, key: template.id, template }));
+  }, [showGroupedView, groupedByNest, nestMap, filteredTemplates]);
+
+  const rowsRef = useRef<HTMLDivElement | null>(null);
+  // Heights are the measured values (31px section header, 47px row) and are
+  // fixed rather than re-measured: a mismatch between estimate and reality made
+  // react-virtual reposition every item as it entered, which read as rows
+  // popping in and out while scrolling. Rows are one line by construction
+  // (name/author/image/description all truncate), so a fixed height is stable.
+  // Overscan keeps a screenful mounted ahead of the viewport either way.
+  const virtualizer = useVirtualizer({
+    count: listItems.length,
+    getScrollElement: () => rowsRef.current,
+    estimateSize: (index) => (listItems[index]?.kind === 'header' ? 31 : 47),
+    overscan: 12,
+    getItemKey: (index) => listItems[index]?.key ?? index,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+
 
   const emptyState = (
     <div className="py-2">
@@ -711,7 +850,10 @@ function TemplatesPage({ hideHeader }: Props) {
         )}
 
         {/* Rows */}
-        <div className="max-h-[calc(100dvh-24rem)] min-w-0 overflow-y-auto bg-background/25">
+        <div
+          ref={rowsRef}
+          className="max-h-[calc(100dvh-24rem)] min-w-0 overflow-y-auto bg-background/25"
+        >
           {/* One column header shared by the grouped and flat views */}
           {!isLoading && canWrite && !hideHeader && (
             <div
@@ -746,78 +888,29 @@ function TemplatesPage({ hideHeader }: Props) {
             <div className="p-3">
               <TabLoadingState rows={6} />
             </div>
-          ) : showGroupedView ? (
-            groupedByNest.length > 0 ? (
-              groupedByNest.map(([nestId, groupTemplates]) => {
-                const nest = nestId ? (nestMap.get(nestId) ?? null) : null;
-                const groupSelected =
-                  groupTemplates.length > 0 &&
-                  groupTemplates.every((t) => selectedIds.includes(t.id));
+          ) : listItems.length > 0 ? (
+            /* Virtualised window: the deck's rows are ~46px, so ~20 exist in
+               the DOM instead of all 250. */
+            <div style={{ position: 'relative', height: totalSize }}>
+              {virtualItems.map((virtualRow) => {
+                const item = listItems[virtualRow.index];
+                if (!item) return null;
                 return (
-                  <div key={nestId ?? '__ungrouped__'} className="border-b border-border/50 last:border-b-0">
-                    <NestSectionHeader
-                      nest={nest}
-                      count={groupTemplates.length}
-                      trailing={
-                        canWrite && !hideHeader ? (
-                          <label className="ml-auto -my-2 flex cursor-pointer items-center gap-2 py-2 text-micro text-muted-foreground">
-                            <input
-                              type="checkbox"
-                              checked={groupSelected}
-                              onChange={() =>
-                                setSelectedIds((prev) => {
-                                  const groupIds = groupTemplates.map((t) => t.id);
-                                  if (groupIds.every((id) => prev.includes(id))) {
-                                    return prev.filter((id) => !groupIds.includes(id));
-                                  }
-                                  return Array.from(new Set([...prev, ...groupIds]));
-                                })
-                              }
-                              className="h-3.5 w-3.5 rounded-sm border-border/60 bg-background/40 text-primary"
-                            />
-                            <span className="type-overline">
-                              {t('page.selectAllInSection')}
-                            </span>
-                          </label>
-                        ) : undefined
-                      }
-                    />
-                    <div className="divide-y divide-border/40">
-                      {groupTemplates.map((template) => (
-                        <TemplateRow
-                          key={template.id}
-                          template={template}
-                          isSelected={selectedIds.includes(template.id)}
-                          canWrite={canWrite}
-                          hideHeader={hideHeader}
-                          setSelectedIds={setSelectedIds}
-                          setEditingTemplateId={setEditingTemplateId}
-                          handleBulkDelete={handleBulkDelete}
-                          deleteMutation={deleteMutation}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                  <VirtualItem
+                    key={virtualRow.key}
+                    item={item}
+                    index={virtualRow.index}
+                    start={virtualRow.start}
+                    selectedIds={selectedIds}
+                    canWrite={canWrite}
+                    hideHeader={hideHeader}
+                    setSelectedIds={setSelectedIds}
+                    setEditingTemplateId={setEditingTemplateId}
+                    handleBulkDelete={handleBulkDelete}
+                    deletePending={deleteMutation.isPending}
+                  />
                 );
-              })
-            ) : (
-              emptyState
-            )
-          ) : filteredTemplates.length > 0 ? (
-            <div className="divide-y divide-border/40">
-              {filteredTemplates.map((template) => (
-                <TemplateRow
-                  key={template.id}
-                  template={template}
-                  isSelected={selectedIds.includes(template.id)}
-                  canWrite={canWrite}
-                  hideHeader={hideHeader}
-                  setSelectedIds={setSelectedIds}
-                  setEditingTemplateId={setEditingTemplateId}
-                  handleBulkDelete={handleBulkDelete}
-                  deleteMutation={deleteMutation}
-                />
-              ))}
+              })}
             </div>
           ) : (
             emptyState
@@ -845,7 +938,9 @@ function TemplatesPage({ hideHeader }: Props) {
       {/* ── Edit Template Modal ── */}
       {editingTemplateId &&
         (() => {
-          const template = templates.find((t) => t.id === editingTemplateId);
+          // The list payload carries only a variables count, so the modal
+          // needs the full record before it can build its variable drafts.
+          const template = editingTemplate;
           if (!template) return null;
           return (
             <TemplateEditModal

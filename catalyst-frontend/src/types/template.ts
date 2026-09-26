@@ -98,4 +98,6 @@ export interface Template {
   allocatedMemoryMb: number;
   allocatedCpuCores: number;
   features?: TemplateFeatures;
+  /** List payloads carry a count; only the detail endpoint carries `variables`. */
+  variablesCount?: number;
 }

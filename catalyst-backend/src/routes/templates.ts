@@ -23,9 +23,12 @@ let batchImportInFlight = false;
 
 registerCacheStats('templates.list', () => templateListCache.stats());
 
-// Lean select for list: exclude heavy installScript for throughput,
-// but keep all fields required by TemplatesPage list view.
-// Previously variables/allocated* were omitted, causing `Cannot read properties of undefined (reading 'length')`.
+// Lean select for the list. It carries exactly what a row renders, plus a
+// variables *count* rather than the definitions themselves: with 250 imported
+// Pterodactyl eggs the definitions alone were 532KB of the 940KB payload (and
+// `features` another 146KB), none of which the list displays. Anything that
+// needs the definitions (the create wizard, the edit modal) fetches
+// `GET /api/templates/:id`, which still returns the full record.
 const templateListSelect = {
   id: true,
   name: true,
@@ -33,20 +36,15 @@ const templateListSelect = {
   author: true,
   version: true,
   image: true,
-  images: true,
   defaultImage: true,
-  installImage: true,
-  startup: true,
-  stopCommand: true,
   nestId: true,
   createdAt: true,
   updatedAt: true,
   // Required by frontend list rendering:
-  variables: true,
   supportedPorts: true,
   allocatedMemoryMb: true,
   allocatedCpuCores: true,
-  features: true,
+  variables: true,
   nest: { select: { id: true, name: true, icon: true } },
 } as const;
 
@@ -202,7 +200,20 @@ export async function templateRoutes(app: FastifyInstance) {
 					select: wantFull ? undefined : (templateListSelect as any),
 					include: wantFull ? { nest: { select: { id: true, name: true, icon: true } } } : undefined,
 				} as any);
-				const payload = { success: true, data: templates };
+				// Shape the count like the field the row reads; the full variant
+				// keeps its definitions and omits the count.
+				const data = wantFull
+					? templates
+					: (templates as any[]).map((row) => {
+							// Reduce the JSON array to the count the list renders; the
+							// definitions never need to cross the wire here.
+							const { variables, ...rest } = row;
+							return {
+								...rest,
+								variablesCount: Array.isArray(variables) ? variables.length : 0,
+							};
+						});
+				const payload = { success: true, data };
 				// 10s TTL for lean list, 5s for full (heavier)
 				templateListCache.set(cacheKey, payload, wantFull ? 5000 : 10000);
 				return payload;
