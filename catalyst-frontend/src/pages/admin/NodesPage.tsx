@@ -19,7 +19,7 @@ import { BracketLabel, Segmented, StatusLed } from '../../components/deck/primit
 import { cn } from '@/lib/utils';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
-import NodeCreateModal from '../../components/nodes/NodeCreateModal';
+import NodeCreateModal, { NodeCreateButton } from '../../components/nodes/NodeCreateModal';
 import LocationsManagerModal from '../../components/nodes/LocationsManagerModal';
 import { Button } from '../../components/ui/button';
 import {
@@ -749,7 +749,7 @@ function AdminNodesPage() {
  {t('nodes.clearFilters')}
  </Button>
  ) : canWrite && !search.trim() ? (
- <NodeCreateModal />
+ <NodeCreateButton />
  ) : undefined
  }
  />
@@ -775,7 +775,7 @@ function AdminNodesPage() {
  {t('nodes.clearFilters')}
  </Button>
  ) : canWrite ? (
- <NodeCreateModal />
+ <NodeCreateButton />
  ) : undefined
  }
  />

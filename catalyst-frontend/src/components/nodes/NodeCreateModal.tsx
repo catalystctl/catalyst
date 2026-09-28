@@ -40,6 +40,30 @@ type Props = Record<string, never>;
  */
 const RETURN_EVENT = 'catalyst:return-to-node-create' as const;
 const OPEN_LOCATIONS_EVENT = 'catalyst:open-locations-modal' as const;
+const OPEN_CREATE_EVENT = 'catalyst:open-node-create' as const;
+
+/**
+ * Open the page-level NodeCreateModal (notably from the empty-state action).
+ * There must be exactly one mounted instance: a second one inside the empty
+ * state is unmounted by the node-list refetch that follows creation, so its
+ * step-3 deploy script would vanish.
+ */
+function openNodeCreateModal(): void {
+  window.dispatchEvent(new CustomEvent(OPEN_CREATE_EVENT));
+}
+
+/** Trigger button for the single page-level create modal. */
+export function NodeCreateButton(_props: Props) {
+  const { t } = useTranslation('nodes');
+  return (
+    <button
+      className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+      onClick={openNodeCreateModal}
+    >
+      {t('create.open')}
+    </button>
+  );
+}
 
 function NodeCreateModal(_props: Props) {
  const { t } = useTranslation('nodes');
@@ -92,6 +116,17 @@ function NodeCreateModal(_props: Props) {
  };
  window.addEventListener(RETURN_EVENT, handler);
  return () => window.removeEventListener(RETURN_EVENT, handler);
+ }, []);
+
+ // Open from the shared trigger (e.g. the empty-state action) so a single
+ // instance owns the whole create -> deploy flow.
+ useEffect(() => {
+ const handler = () => {
+ setStep(1);
+ setOpen(true);
+ };
+ window.addEventListener(OPEN_CREATE_EVENT, handler);
+ return () => window.removeEventListener(OPEN_CREATE_EVENT, handler);
  }, []);
 
  const { data: locations = [] } = useQuery({
