@@ -172,6 +172,9 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
       disableStdin: true,
       convertEol: true,
       scrollback: Math.max(500, scrollback),
+      // The search addon highlights every match with terminal decorations,
+      // which are part of the proposed API and throw unless this is enabled.
+      allowProposedApi: true,
       // Narrow screens wrap long log lines constantly at 13px, so phones get a
       // smaller face and the fit addon lands ~57 columns instead of ~48.
       fontSize: MOBILE_MEDIA_QUERY.matches ? 11 : 13,
