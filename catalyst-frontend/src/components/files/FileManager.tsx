@@ -782,7 +782,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 
  return (
  <motion.div
- className="flex flex-col lg:grid lg:grid-cols-[240px_1fr] gap-4"
+ className="flex flex-1 flex-col gap-4 lg:flex-row"
  variants={containerVariants}
  initial="hidden"
  animate="visible"
@@ -820,7 +820,8 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  variants={itemVariants}
  className={`
  fixed inset-y-0 left-0 z-50 w-64 transform rounded-none border-r border-border bg-card p-3 transition-transform duration-300 ease-out
- lg:static lg:z-auto lg:w-auto lg:transform-none lg:rounded-sm lg:border lg:transition-none
+ flex min-h-0 flex-col
+ lg:static lg:z-auto lg:w-60 lg:shrink-0 lg:transform-none lg:rounded-sm lg:border lg:transition-none
  ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
  `}
  >
@@ -838,7 +839,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <X className="h-4 w-4" />
  </button>
  </div>
- <div className="overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-thin">
+ <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
  <FileTree
  serverId={serverId}
  activePath={path}
@@ -851,7 +852,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </motion.div>
 
  {/* Main content */}
- <motion.div variants={itemVariants} className="space-y-3 min-w-0">
+ <motion.div variants={itemVariants} className="flex min-w-0 flex-1 flex-col gap-3">
  {/* Breadcrumb + toolbar */}
  <div className="deck-panel px-3 py-2">
  {/* Breadcrumbs */}
@@ -1063,7 +1064,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 
  {/* File list — drop target for explorer uploads (no Upload modal required) */}
  <div
- className={`deck-panel relative h-[calc(100vh-280px)] min-h-[200px] overflow-hidden transition-colors ${
+ className={`deck-panel relative min-h-[12rem] flex-1 overflow-hidden transition-colors ${
  isFileDropActive ? 'border-primary' : ''
  }`}
  onDragEnter={handleExplorerDragEnter}

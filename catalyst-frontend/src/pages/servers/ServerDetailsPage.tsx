@@ -1036,6 +1036,17 @@ function ServerDetailsPage() {
  const liveDiskTotalMb = displayMetrics?.diskTotalMb;
 
   const templateLabel = server?.template?.name;
+
+  // Console pins its own scroll region. Files fills the tab area as a column so
+  // only the inner list scrolls; the wrapper keeps overflow-y-auto as a
+  // fallback for viewports too short for the file list's minimum height.
+  const tabScrollClass =
+    !isPluginTab && activeTab === 'console'
+      ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
+      : !isPluginTab && activeTab === 'files'
+        ? 'flex min-h-0 flex-1 flex-col overflow-y-auto'
+        : 'min-h-0 flex-1 overflow-y-auto';
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
       <WorkspaceHeader
@@ -1142,13 +1153,7 @@ function ServerDetailsPage() {
           </div>
         }
       >
-        <div
-          className={
-            !isPluginTab && activeTab === 'console'
-              ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
-              : 'min-h-0 flex-1 overflow-y-auto'
-          }
-        >
+        <div className={tabScrollClass}>
 
 
           <Suspense fallback={<TabSkeleton />}>
@@ -1173,7 +1178,7 @@ function ServerDetailsPage() {
 
 
  {!isPluginTab && activeTab === 'files' && server && (
- <ServerTabCard>
+ <ServerTabCard className="flex min-h-fit shrink-0 grow flex-col">
  <FileManager
  serverId={server.id}
  isSuspended={isSuspended}
