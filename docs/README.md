@@ -28,6 +28,7 @@ These are contributor/engineering references, not published on the docs site:
 | [Redis](redis.md) | Redis setup and operations reference |
 | [Plugin System Guide](plugins.md) | Full plugin engineering reference (overview on the docs site) |
 | [Security Policy](SECURITY.md) | Vulnerability reporting and threat model |
+| [Design Notes](design/) | Feature design + implementation records (server cloning, deck identity) |
 | [Egg Migration Audit](egg-migration-audit.md) | Point-in-time Pterodactyl egg audit |
 | [Self-Hosted Runners](self-hosted-runners.md) | CI runner operations |
 | [Benchmarks](benchmarks.md) | Benchmark methodology and results |
