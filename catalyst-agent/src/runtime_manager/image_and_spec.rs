@@ -356,6 +356,17 @@ pub(crate) fn linux_memory_resources(
 }
 
 /// OCI `blockIO.weight` (cgroup v1 blkio, 10..=1000) for panel-driven
+/// True when this environment exposes the cgroup v2 `io` controller.
+/// Unprivileged LXC containers and similar sandboxes often delegate only
+/// `cpu memory pids`; runc then fails creating the container because it cannot
+/// write `io.weight`. Unreadable means "assume present" to keep the previous
+/// behaviour on normal nodes.
+fn io_controller_available() -> bool {
+    std::fs::read_to_string("/sys/fs/cgroup/cgroup.controllers")
+        .map(|list| list.split_whitespace().any(|controller| controller == "io"))
+        .unwrap_or(true)
+}
+
 /// ioWeight values. Out-of-range values degrade to the nearest bound
 /// instead of failing spec-parse in runc.
 pub fn clamp_io_weight(io_weight: u64) -> u64 {
@@ -853,17 +864,27 @@ impl ContainerdRuntime {
         // absurd value cannot fail spec-parse in runc.
         let io_weight = clamp_io_weight(config.io_weight);
 
+        let mut resources = serde_json::json!({
+            "memory": memory,
+            "cpu": cpu,
+            "pids": {"limit": 2048},
+            "devices": devices,
+            "unified": unified,
+        });
+        // runc fails hard when the cgroup v2 `io` controller is missing (common
+        // inside an unprivileged LXC or a similar sandbox), so only ask for a
+        // blockIO weight when the controller is actually present.
+        if io_controller_available() {
+            resources["blockIO"] = serde_json::json!({"weight": io_weight});
+        }
+
         Ok(serde_json::json!({
             "ociVersion":"1.1.0",
             "process":{"terminal":false,"user":{"uid":1000,"gid":1000},"args":args,"env":env_list,"cwd":"/data",
                 "capabilities":{"bounding":caps,"effective":caps,"permitted":caps,"ambient":caps},
                 "noNewPrivileges":true,"rlimits":[{"type":"RLIMIT_NOFILE","hard":65536u64,"soft":65536u64}]},
             "root":{"path":"rootfs","readonly":false},"hostname":config.container_id,"mounts":mounts,
-            "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":memory,
-                "cpu":cpu,
-                "blockIO":{"weight":io_weight},
-                "pids":{"limit":2048},
-                "devices":devices,"unified":unified},
+            "linux":{"cgroupsPath":cgroup_path,"resources":resources,
                 "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths(),
                 "seccomp": default_seccomp_profile(),
                 "sysctl": container_net_sysctls(use_host_network)}

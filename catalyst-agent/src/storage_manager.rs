@@ -152,8 +152,25 @@ impl StorageManager {
         }
 
         if self.dir_has_data(mount_dir).await? {
-            self.migrate_existing_data(server_uuid, mount_dir, &image_path)
-                .await?;
+            match self
+                .migrate_existing_data(server_uuid, mount_dir, &image_path)
+                .await
+            {
+                Ok(()) => {}
+                Err(e) if is_mount_permission_error(&format!("{}", e)) => {
+                    // Mount-restricted node (an unprivileged LXC, for example):
+                    // staging into the image is impossible, but the plain
+                    // directory already holds the data — keep using it.
+                    warn!(
+                        "Cannot migrate {} into its disk image ({}). Using the plain \
+                         data directory; disk quota will not be enforced.",
+                        server_uuid, e
+                    );
+                    let _ =
+                        fs::remove_dir_all(self.data_dir.join("migrate").join(server_uuid)).await;
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         match self.mount_image(&image_path, mount_dir).await {
@@ -179,7 +196,24 @@ impl StorageManager {
                 );
                 Ok(image_path)
             }
-            Err(e) => Err(e),
+            Err(e) => {
+                // Nested / virtualised nodes (an unprivileged LXC, for example)
+                // cannot loop-mount, and the namespace heuristic above misses
+                // them because the agent shares PID 1's mount namespace. Fall
+                // back to the plain data directory rather than refusing to start
+                // the server; disk quota is simply not enforced.
+                let message = format!("{}", e);
+                if is_mount_permission_error(&message) {
+                    error!(
+                        "Cannot mount disk image for {} ({}). Using the plain data \
+                         directory; disk quota will not be enforced.",
+                        server_uuid, e
+                    );
+                    Ok(image_path)
+                } else {
+                    Err(e)
+                }
+            }
         }
     }
 
@@ -1121,6 +1155,15 @@ fn validate_disk_mb(size_mb: u64) -> AgentResult<()> {
         )));
     }
     Ok(())
+}
+
+/// True when a mount failed because the node lacks mount privilege (an
+/// unprivileged LXC or a similarly sandboxed environment) rather than for a
+/// real filesystem reason. Such nodes fall back to plain data directories.
+fn is_mount_permission_error(message: &str) -> bool {
+    message.contains("not permitted")
+        || message.contains("Permission denied")
+        || message.contains("EPERM")
 }
 
 /// True when the live filesystem is still meaningfully smaller than the quota.
