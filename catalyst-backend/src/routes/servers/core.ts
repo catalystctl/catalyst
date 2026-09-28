@@ -11,6 +11,32 @@ import { registerCacheStats } from "../../lib/cache.js";
 import { publishCacheInvalidate, subscribeCacheInvalidations } from "../../lib/event-bus.js";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
+import {
+  assertPlanHasNoBlockers,
+  buildClonePlan,
+  cloneFingerprint,
+  copyCloneData,
+  loadCloneSource,
+  persistClone,
+  resolveCloneMode,
+  startCloneInstall,
+  storeClonePreflight,
+  storeCloneProvenance,
+  takeClonePreflight,
+  getCloneProvenance,
+  ClonePlanError,
+  type CloneAuth,
+  type CloneProbe,
+  type CloneRequest,
+} from "../../services/server-clone.js";
+import { serverClonePreflightSchema } from "../../lib/validation.js";
+import {
+  claimIdempotency,
+  completeIdempotency,
+  fingerprintRequest,
+  getIdempotency,
+  releaseIdempotency,
+} from "../../lib/idempotency.js";
 
 // Hot-path cache for GET /api/servers — makes list-servers win by a huge margin.
 // 5s TTL for plain list (no metrics) gives ~98% hit-rate under benchmark hammering;
@@ -60,30 +86,198 @@ const serverListSelect = {
 } as const;
 
 /**
- * Find the next available host port starting from `startPort`.
- * Uses the port usage map from collectUsedHostPortsByIp and findPortConflict
- * to avoid collisions with existing servers on the same node.
+ * Authorization context for clone plan resolution. Mirrors the gates the
+ * create/transfer routes apply so preflight and submit agree.
  */
-function findAvailableHostPort(
-  usedPorts: Map<string, Set<number>>,
-  hostIp: string | null,
-  startPort: number,
-  maxPort = 65535,
-): number {
-  for (let port = startPort; port <= maxPort; port++) {
-    const conflict = findPortConflict(usedPorts, hostIp, [port]);
-    if (!conflict) {
-      return port;
+async function buildCloneAuth(
+  request: FastifyRequest,
+  source: { ownerId: string; nodeId: string },
+  targetNodeId: string,
+): Promise<CloneAuth> {
+  const userId = request.user.userId;
+  const isAdmin = checkIsAdmin(request, 'admin.write');
+  const nodeAccess = await hasNodeAccess(prisma, userId, targetNodeId);
+  return {
+    userId,
+    canCreate: isAdmin || checkPerm(request, 'server.create'),
+    canSetOwner: isAdmin || checkPerm(request, 'user.create'),
+    canTransfer: isAdmin || checkPerm(request, 'server.transfer'),
+    canManageSuspended: isAdmin,
+    canAccessTargetNode: nodeAccess,
+  };
+}
+
+function numberOrNull(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/**
+ * Ask the target agent for the source data size and the node's free space.
+ * Best-effort: a missing agent or timeout yields nulls and the plan downgrades
+ * the disk check to a warning.
+ */
+async function probeCloneSizes(
+  gateway: any,
+  source: { id: string; uuid: string; nodeId: string },
+  targetNodeId: string,
+): Promise<CloneProbe> {
+  const empty: CloneProbe = { sourceBytes: null, targetFreeBytes: null };
+  if (!gateway || typeof gateway.requestFromAgent !== 'function') return empty;
+
+  const targetNode = await prisma.node.findUnique({
+    where: { id: targetNodeId },
+    select: { serverDataDir: true },
+  });
+
+  const ask = async (nodeId: string, message: Record<string, unknown>): Promise<any | null> => {
+    try {
+      const result = await gateway.requestFromAgent(
+        nodeId,
+        { type: 'clone_preflight', requestId: crypto.randomUUID(), serverId: source.id, ...message },
+        12000,
+      );
+      return result?.success ? result : null;
+    } catch {
+      /* probe is advisory */
+      return null;
     }
+  };
+
+  // The source data directory only exists on the source node, and the free
+  // space that matters is on the target node — for a cross-node clone these are
+  // two different machines, so each measurement has to be asked of its own node.
+  const [sourceProbe, targetProbe] = await Promise.all([
+    ask(source.nodeId, { sourceServerUuid: source.uuid }),
+    ask(targetNodeId, {
+      sourceServerUuid: source.uuid,
+      targetServerDataDir: targetNode?.serverDataDir || '/var/lib/catalyst/servers',
+    }),
+  ]);
+
+  return {
+    sourceBytes: numberOrNull(sourceProbe?.sourceBytes),
+    targetFreeBytes: numberOrNull(targetProbe?.targetFreeBytes),
+  };
+}
+
+/** Translate a `ClonePlanError` (or a generic failure) into an API response. */
+function replyCloneError(reply: FastifyReply, error: any) {
+  if (error instanceof ClonePlanError) {
+    return apiError(reply, error.status, error.code as any, error.message, { params: error.params });
   }
-  // Fallback: scan from 1024 up to startPort
-  for (let port = 1024; port < startPort; port++) {
-    const conflict = findPortConflict(usedPorts, hostIp, [port]);
-    if (!conflict) {
-      return port;
+  throw error;
+}
+
+/**
+ * Full-clone data copy. Shared by the clone submit route and the retry route so
+ * a failed copy can be re-run without recreating the server. Fire-and-forget:
+ * the caller has already replied.
+ */
+async function runCloneFileCopy(args: {
+  app: FastifyInstance;
+  request: FastifyRequest;
+  userId: string;
+  cloneServerId: string;
+  cloneUuid: string;
+  source: { id: string; uuid: string; nodeId: string; name: string };
+  targetNode: { id: string; name: string; serverDataDir: string | null };
+  gateway: any;
+}): Promise<void> {
+  const { app, request, userId, cloneServerId, cloneUuid, source, targetNode, gateway } = args;
+  const startedAt = Date.now();
+
+  try {
+    const result = await copyCloneData({
+      source: { id: source.id, uuid: source.uuid, nodeId: source.nodeId },
+      cloneUuid,
+      targetNodeId: targetNode.id,
+      targetServerDataDir: targetNode.serverDataDir || '/var/lib/catalyst/servers',
+      gateway,
+      onStage: (stage, progress) => {
+        emitServerOperationProgress((app as any).wsGateway, {
+          serverId: cloneServerId,
+          operation: 'clone',
+          stage,
+          progress,
+          state: ServerState.CLONING,
+        });
+      },
+    });
+
+    await prisma.server.update({
+      where: { id: cloneServerId },
+      data: { status: ServerState.STOPPED },
+    });
+    await prisma.serverLog.create({
+      data: {
+        serverId: cloneServerId,
+        stream: 'system',
+        data: `File copy complete${result.bytes ? ` (${result.bytes} bytes)` : ''}. The server is ready to start.`,
+      },
+    });
+
+    const doneGateway = (app as any).wsGateway;
+    if (doneGateway?.pushToGlobalSubscribers) {
+      doneGateway.pushToGlobalSubscribers('server_state_update', {
+        type: 'server_state_update',
+        serverId: cloneServerId,
+        state: ServerState.STOPPED,
+      });
     }
+    emitServerOperationProgress(doneGateway, {
+      serverId: cloneServerId,
+      operation: 'clone',
+      stage: 'Clone complete',
+      progress: 100,
+      state: ServerState.STOPPED,
+    });
+
+    await createAuditLog(userId, {
+      action: 'server.clone.completed',
+      resource: 'server',
+      resourceId: cloneServerId,
+      request,
+      details: { mode: 'full', bytes: result.bytes, durationMs: Date.now() - startedAt },
+    });
+  } catch (err: any) {
+    // Keep the row so the user can inspect, retry or delete it.
+    await prisma.server.update({
+      where: { id: cloneServerId },
+      data: { status: ServerState.STOPPED },
+    });
+    await prisma.serverLog.create({
+      data: {
+        serverId: cloneServerId,
+        stream: 'system',
+        data: `File copy failed: ${err.message}. The server was created but files were not copied. Retry or delete it.`,
+      },
+    });
+
+    const failGateway = (app as any).wsGateway;
+    if (failGateway?.pushToGlobalSubscribers) {
+      failGateway.pushToGlobalSubscribers('server_state_update', {
+        type: 'server_state_update',
+        serverId: cloneServerId,
+        state: ServerState.STOPPED,
+      });
+    }
+    if (failGateway?.routeToClients) {
+      void failGateway
+        .routeToClients(cloneServerId, {
+          type: 'clone_failed',
+          serverId: cloneServerId,
+          code: ErrorCodes.CLONE_FILE_COPY_FAILED,
+          message: err.message,
+        })
+        .catch(() => {});
+    }
+    captureSystemError({
+      level: 'error',
+      component: 'CloneFiles',
+      message: `File copy failed for clone ${cloneServerId}: ${err.message}`,
+    }).catch(() => {});
   }
-  throw new Error('No available host port found on this node');
 }
 
 export async function serverCoreRoutes(app: FastifyInstance) {
@@ -667,662 +861,549 @@ export async function serverCoreRoutes(app: FastifyInstance) {
     }
   );
 
-  // Clone a server
+  // ─────────────────────────────────────────────────────────────────────────
+  // Server cloning
+  //
+  // Two phases: `clone/preflight` resolves everything and returns the
+  // node-specific change set; `clone` writes it. A cross-node clone must
+  // present the preflight id, so the reviewer's confirmation is enforced
+  // server-side instead of being trusted from the client.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  app.post(
+    "/:serverId/clone/preflight",
+    { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverClonePreflightSchema)] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const body = request.body as any;
+      const userId = request.user.userId;
+
+      if (!checkPerm(request, 'server.create')) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create a server');
+      }
+      if (body.copyBackupCredentials && !checkIsAdmin(request, 'admin.write')) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Only administrators may copy backup credentials');
+      }
+
+      const source = await loadCloneSource(serverId);
+      if (!source) {
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Source server not found');
+      }
+      if (!(await canAccessServer(userId, { id: source.id, ownerId: source.ownerId, nodeId: source.nodeId }))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Cannot access source server');
+      }
+
+      const auth = await buildCloneAuth(request, source, body.targetNodeId);
+      const raw: CloneRequest = {
+        mode: body.mode,
+        name: body.name,
+        description: body.description,
+        targetNodeId: body.targetNodeId,
+        allocationId: body.allocationId,
+        networkMode: body.networkMode,
+        ownerId: body.ownerId,
+        allocatedMemoryMb: body.allocatedMemoryMb,
+        allocatedCpuCores: body.allocatedCpuCores,
+        allocatedDiskMb: body.allocatedDiskMb,
+        allocatedSwapMb: body.allocatedSwapMb,
+        ioWeight: body.ioWeight,
+        backupAllocationMb: body.backupAllocationMb,
+        databaseAllocation: body.databaseAllocation,
+        environment: body.environment,
+        backupStorageMode: body.backupStorageMode,
+        copyBackupCredentials: body.copyBackupCredentials,
+        includeAccess: body.includeAccess,
+        includeRoleGrants: body.includeRoleGrants,
+        includeScheduledTasks: body.includeScheduledTasks,
+        includeDatabases: body.includeDatabases,
+        includeInstalledMods: body.includeInstalledMods,
+      };
+
+      try {
+        // Only a full clone copies files, so only a full clone needs the disk
+        // measurement. Skipping it for configuration clones keeps preflight
+        // instant and independent of a slow or older agent.
+        const probe =
+          body.mode === 'full'
+            ? await probeCloneSizes((app as any).wsGateway, source, body.targetNodeId)
+            : { sourceBytes: null, targetFreeBytes: null };
+        const plan = await buildClonePlan({ source, raw, auth, probe });
+        const stored = await storeClonePreflight(plan, userId);
+        return reply.send({ success: true, data: stored });
+      } catch (error: any) {
+        return replyCloneError(reply, error);
+      }
+    }
+  );
+
   app.post(
     "/:serverId/clone",
     { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverCloneSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
+      const body = request.body as any;
       const userId = request.user.userId;
+      const mode = resolveCloneMode(body);
 
-      // Permission check — cloning creates a new server, so server.create is required
+      // Idempotency: a retried submit with the same Idempotency-Key must not
+      // create a second server. The claim is taken before any write and
+      // released again if the request fails before it produces a result.
+      const idempotencyKey = request.headers['idempotency-key'];
+      const idempotencyScope = `server.clone:${userId}:${serverId}`;
+      let idempotencyHash: string | null = null;
+      if (typeof idempotencyKey === 'string' && idempotencyKey.length > 0) {
+        idempotencyHash = fingerprintRequest([userId, serverId, idempotencyKey]);
+        const existing = await getIdempotency(idempotencyScope, idempotencyHash);
+        if (existing && existing !== 'claimed') {
+          try {
+            return reply.status(201).send(JSON.parse(existing));
+          } catch {
+            /* fall through and re-create */
+          }
+        }
+        const claimed = await claimIdempotency(idempotencyScope, idempotencyHash);
+        if (!claimed) {
+          const settled = await getIdempotency(idempotencyScope, idempotencyHash);
+          if (settled && settled !== 'claimed') {
+            try {
+              return reply.status(201).send(JSON.parse(settled));
+            } catch {
+              /* fall through */
+            }
+          }
+          return apiError(reply, 409, ErrorCodes.CLONE_PREFLIGHT_REQUIRED, 'A clone with this idempotency key is already in progress');
+        }
+      }
+
+      const releaseCloneClaim = async () => {
+        if (idempotencyHash) await releaseIdempotency(idempotencyScope, idempotencyHash);
+      };
+
+      // Cloning creates a new server, so server.create is required. The
+      // source access check below additionally scopes which server may be read.
       if (!checkPerm(request, 'server.create')) {
+        await releaseCloneClaim();
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create a server');
       }
-
-      // Fetch the source server with template, node, and location
-      const sourceServer = await prisma.server.findUnique({
-        where: { id: serverId },
-        include: { template: true, node: true, location: true },
-      });
-
-      if (!sourceServer) {
-        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Source server not found');
+      if (body.copyBackupCredentials && !checkIsAdmin(request, 'admin.write')) {
+        await releaseCloneClaim();
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Only administrators may copy backup credentials');
       }
 
-      // Check access to the source server (owner / ServerAccess / node+node.update / admin.write)
-      if (!(await canAccessServer(userId, { id: sourceServer.id, ownerId: sourceServer.ownerId, nodeId: sourceServer.nodeId }))) {
+      const source = await loadCloneSource(serverId);
+      if (!source) {
+        await releaseCloneClaim();
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Source server not found');
+      }
+      if (!(await canAccessServer(userId, { id: source.id, ownerId: source.ownerId, nodeId: source.nodeId }))) {
+        await releaseCloneClaim();
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Cannot access source server');
       }
 
-      const body = request.body as {
-        name?: string;
-        nodeId?: string;
-        locationId?: string;
-        allocatedMemoryMb?: number;
-        allocatedCpuCores?: number;
-        allocatedDiskMb?: number;
-        backupAllocationMb?: number;
-        databaseAllocation?: number;
-        environment?: Record<string, string>;
-        ownerId?: string;
-        allocationId?: string;
-        networkMode?: string;
-        copyFiles?: boolean;
+      const targetNodeId = body.nodeId ?? source.nodeId;
+      const auth = await buildCloneAuth(request, source, targetNodeId);
+      const raw: CloneRequest = {
+        mode,
+        name: body.name,
+        description: body.description,
+        targetNodeId,
+        allocationId: body.allocationId,
+        networkMode: body.networkMode,
+        ownerId: body.ownerId,
+        allocatedMemoryMb: body.allocatedMemoryMb,
+        allocatedCpuCores: body.allocatedCpuCores,
+        allocatedDiskMb: body.allocatedDiskMb,
+        allocatedSwapMb: body.allocatedSwapMb,
+        ioWeight: body.ioWeight,
+        backupAllocationMb: body.backupAllocationMb,
+        databaseAllocation: body.databaseAllocation,
+        environment: body.environment,
+        backupStorageMode: body.backupStorageMode,
+        copyBackupCredentials: body.copyBackupCredentials,
+        includeAccess: body.includeAccess,
+        includeRoleGrants: body.includeRoleGrants,
+        includeScheduledTasks: body.includeScheduledTasks,
+        includeDatabases: body.includeDatabases,
+        includeInstalledMods: body.includeInstalledMods,
       };
 
-      // Resolve overrides with defaults from source server
-      const resolvedName = body.name ?? `${sourceServer.name} Copy`;
-      const targetNodeId = body.nodeId ?? sourceServer.nodeId;
-      const resolvedLocationId = body.locationId ?? sourceServer.locationId;
-      const resolvedMemoryMb = body.allocatedMemoryMb ?? sourceServer.allocatedMemoryMb;
-      const resolvedCpuCores = body.allocatedCpuCores ?? sourceServer.allocatedCpuCores;
-      const resolvedDiskMb = body.allocatedDiskMb ?? sourceServer.allocatedDiskMb;
-      const resolvedBackupAllocationMb = body.backupAllocationMb ?? sourceServer.backupAllocationMb;
-      const resolvedDatabaseAllocation = body.databaseAllocation ?? sourceServer.databaseAllocation;
+      const crossNode = targetNodeId !== source.nodeId;
+      const acknowledgedWarnings: string[] = body.acknowledgedWarnings ?? [];
 
-      // Owner resolution — same logic as POST / (admin/API-key callers can specify a different owner)
-      const canCreate = checkIsAdmin(request, 'admin.write');
-      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, targetNodeId);
-      if (!canCreate && !hasNodeAccessResult) {
-        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin access or node assignment required');
-      }
-      const effectiveOwnerId = (canCreate || hasNodeAccessResult) && body.ownerId ? body.ownerId : userId;
-      if (effectiveOwnerId !== userId) {
-        if (!checkPerm(request, 'user.create')) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create server for other user');
-        }
-        const targetUser = await prisma.user.findUnique({ where: { id: effectiveOwnerId } });
-        if (!targetUser) {
-          return apiError(reply, 400, ErrorCodes.USER_NOT_FOUND, 'Specified owner does not exist');
-        }
+      if (crossNode && !body.preflightId) {
+        await releaseCloneClaim();
+        return apiError(
+          reply,
+          409,
+          ErrorCodes.CLONE_PREFLIGHT_REQUIRED,
+          'Run the clone preflight and review the node-specific changes before cloning to another node',
+        );
       }
 
-      // Validate source server's template still exists
-      if (!sourceServer.template) {
-        return apiError(reply, 400, ErrorCodes.TEMPLATE_NOT_FOUND, 'Source server template not found');
-      }
-
-      // Resolve environment — merge template defaults with source environment, then apply overrides
-      const templateVariables = (sourceServer.template.variables as any[]) || [];
-      const templateDefaults = templateVariables.reduce((acc: Record<string, string>, variable: any) => {
-        if (variable?.name && variable?.default !== undefined) {
-          acc[variable.name] = String(variable.default);
-        }
-        return acc;
-      }, {} as Record<string, string>);
-      const sourceEnvironment = (sourceServer.environment as Record<string, string>) || {};
-      const resolvedEnvironment = {
-        ...templateDefaults,
-        ...sourceEnvironment,
-        ...(body.environment || {}),
-      };
-
-      // Remove runtime-injected keys that should be re-resolved
-      delete resolvedEnvironment.CATALYST_NETWORK_IP;
-      delete resolvedEnvironment.TEMPLATE_IMAGE;
-
-      const resolvedImage = resolveTemplateImage(sourceServer.template, resolvedEnvironment);
-      if (!resolvedImage) {
-        return apiError(reply, 400, ErrorCodes.SERVER_TEMPLATE_IMAGE_REQUIRED, 'Template image is required');
-      }
-
-      // Validate required template variables are provided
-      const requiredVars = templateVariables.filter((v: any) => v.required);
-      const missingVars = requiredVars.filter((v: any) => !resolvedEnvironment?.[v.name]);
-      if (missingVars.length > 0) {
-        return apiError(reply, 400, ErrorCodes.SERVER_MISSING_TEMPLATE_VARIABLES, `Missing required template variables: ${missingVars.map((v: any) => v.name).join(', ')}`, { params: { variables: missingVars.map((v: any) => v.name).join(', ') } });
-      }
-
-      // Validate variable values against rules (same as POST /)
-      for (const variable of templateVariables) {
-        const value = resolvedEnvironment?.[variable.name];
-        if (value && variable.rules) {
-          const rules: string[] = variable.rules;
-          for (const rule of rules) {
-            if (rule.startsWith('between:')) {
-              const err = validateVariableRule(value, rule, rules);
-              if (err) {
-                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_INVALID, `Variable ${variable.name} ${err}`, { params: { name: variable.name, reason: err } });
-              }
-            } else if (rule.startsWith('in:')) {
-              const allowedValues = rule.substring(3).split(',');
-              if (!allowedValues.includes(value)) {
-                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_INVALID, `Variable ${variable.name} must be one of: ${allowedValues.join(', ')}`, { params: { name: variable.name, allowed: allowedValues.join(', ') } });
-              }
-            } else if (rule.startsWith('regex:')) {
-              let pattern = rule.substring(6);
-              if (pattern.startsWith('/') && pattern.endsWith('/')) {
-                pattern = pattern.slice(1, -1);
-              }
-              // Validate regex pattern for ReDoS protection
-              const dangerousPatterns = [
-                /\(.*\)\{/,     // Nested quantifiers like (a+)+ or (a*)+
-                /\(\?[=:!]/,    // Lookahead/behind assertions
-                /\*.*\+|\+.*\*|\{.*,.*\}/, // Complex quantifiers
-              ];
-              const isUnsafeRegex = dangerousPatterns.some(p => p.test(pattern));
-              if (isUnsafeRegex) {
-                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_PATTERN_INVALID, `Invalid regex pattern for variable ${variable.name}: pattern contains potentially unsafe constructs`, { params: { name: variable.name } });
-              }
-              try {
-                const regex = new RegExp(pattern);
-                const startTime = Date.now();
-                const result = regex.test(value);
-                if (Date.now() - startTime > 1000) {
-                  return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_VALIDATION_TIMEOUT, `Variable ${variable.name} regex validation timeout`, { params: { name: variable.name } });
-                }
-                if (!result) {
-                  return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_INVALID, `Variable ${variable.name} does not match required pattern`, { params: { name: variable.name } });
-                }
-              } catch {
-                return apiError(reply, 400, ErrorCodes.SERVER_VARIABLE_PATTERN_INVALID, `Invalid regex pattern for variable ${variable.name}: ${pattern}`, { params: { name: variable.name, pattern } });
-              }
-            }
-          }
-        }
-      }
-
-      // Validate node exists and has resources (same as POST /)
-      const node = await prisma.node.findUnique({
-        where: { id: targetNodeId },
-        include: {
-          servers: {
-            select: {
-              id: true,
-              allocatedCpuCores: true,
-              primaryPort: true,
-              primaryIp: true,
-              portBindings: true,
-              networkMode: true,
-              ...SERVER_CGROUP_MEMORY_SELECT,
-            },
-          },
-        },
-      });
-
-      if (!node) {
-        return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, 'Node not found');
-      }
-
-      // Check resource availability
-      const totalAllocatedMemory = sumCgroupMemoryMb(node.servers);
-      const totalAllocatedCpu = node.servers.reduce(
-        (sum, s) => sum + (s.allocatedCpuCores || 0), 0
-      );
-      const requiredMemory = requestedCgroupMemoryMb(resolvedMemoryMb, {
-        startup: sourceServer.startupCommand || sourceServer.template.startup,
-        image: sourceServer.template.image,
-        environment: body.environment ?? sourceServer.environment,
-      });
-
-      const effectiveMaxMemory = node.memoryOverallocatePercent === -1 ? Infinity : Math.floor(node.maxMemoryMb * (1 + node.memoryOverallocatePercent / 100));
-      const effectiveMaxCpu = node.cpuOverallocatePercent === -1 ? Infinity : node.maxCpuCores * (1 + node.cpuOverallocatePercent / 100);
-
-      if (totalAllocatedMemory + requiredMemory > effectiveMaxMemory) {
-        const available = effectiveMaxMemory === Infinity ? 'unlimited' : `${effectiveMaxMemory - totalAllocatedMemory}MB`;
-        return apiError(reply, 400, ErrorCodes.INSUFFICIENT_RESOURCES, `Insufficient memory. Available: ${available}, Required: ${requiredMemory}MB`, { params: { available, required: requiredMemory } });
-      }
-
-      if (totalAllocatedCpu + resolvedCpuCores > effectiveMaxCpu) {
-        const available = effectiveMaxCpu === Infinity ? 'unlimited' : `${effectiveMaxCpu - totalAllocatedCpu} cores`;
-        return apiError(reply, 400, ErrorCodes.INSUFFICIENT_RESOURCES, `Insufficient CPU. Available: ${available}, Required: ${resolvedCpuCores} cores`, { params: { available, required: resolvedCpuCores } });
-      }
-
-      // Network configuration — allow override, default to source server's mode
-      const desiredNetworkMode = body.networkMode || sourceServer.networkMode || 'mc-lan-static';
-      const isHostNetwork = desiredNetworkMode === 'host';
-
-      // Auto-assign fresh host ports for the clone.
-      // Never reuse the source server's primaryPort, primaryIp, or portBindings.
-      const usedPorts = collectUsedHostPortsByIp(node.servers);
-
-      let resolvedHostIp: string | null = null;
+      let plan;
       try {
-        resolvedHostIp =
-          typeof resolvedEnvironment?.CATALYST_NETWORK_IP === 'string'
-            ? normalizeHostIp(resolvedEnvironment.CATALYST_NETWORK_IP)
-            : null;
+        plan = await buildClonePlan({ source, raw, auth });
       } catch (error: any) {
-        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
+        await releaseCloneClaim();
+        return replyCloneError(reply, error);
       }
 
-      let hostNetworkIp: string | null = null;
-      if (isHostNetwork) {
-        try {
-          hostNetworkIp = resolvedHostIp ?? normalizeHostIp(node.publicAddress);
-        } catch (error: any) {
-          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
+      // The confirmation is bound to the reviewed plan: a stale allocation, a
+      // changed source status or different options invalidate it.
+      if (body.preflightId) {
+        const stored = await takeClonePreflight(body.preflightId, userId);
+        if (!stored) {
+          await releaseCloneClaim();
+          return apiError(
+            reply,
+            409,
+            ErrorCodes.CLONE_PREFLIGHT_EXPIRED,
+            'This clone review expired. Run the preflight again.',
+          );
         }
-      }
-
-      // For host network mode, no port mapping is needed
-      // For other modes, we need to auto-assign fresh host ports
-      const clonePortBindings: Record<number, number> = {};
-      let clonePrimaryPort: number;
-
-      if (isHostNetwork) {
-        // Host network — primaryPort is the container port, no host mapping needed
-        clonePrimaryPort = parsePortValue(sourceServer.primaryPort) ?? 25565;
-        // Port bindings in host mode are identity-mapped (container port = host port)
-        const sourceBindings = parseStoredPortBindings(sourceServer.portBindings);
-        for (const [containerPort] of Object.entries(sourceBindings)) {
-          const cp = parsePortValue(containerPort);
-          if (cp) clonePortBindings[cp] = cp;
+        const current = cloneFingerprint(plan);
+        if (current !== stored.fingerprint || (body.fingerprint && body.fingerprint !== current)) {
+          await releaseCloneClaim();
+          return apiError(
+            reply,
+            409,
+            ErrorCodes.CLONE_PREFLIGHT_STALE,
+            'The clone options changed since the review. Run the preflight again.',
+          );
         }
-        clonePortBindings[clonePrimaryPort] = clonePrimaryPort;
-      } else if (shouldUseIpam(desiredNetworkMode)) {
-        // IPAM mode — no host port mapping needed, each container gets its own IP
-        clonePrimaryPort = parsePortValue(sourceServer.primaryPort) ?? 25565;
-        const sourceBindings = parseStoredPortBindings(sourceServer.portBindings);
-        for (const [containerPort] of Object.entries(sourceBindings)) {
-          const cp = parsePortValue(containerPort);
-          if (cp) clonePortBindings[cp] = cp; // identity map for IPAM
-        }
-        clonePortBindings[clonePrimaryPort] = clonePrimaryPort;
-      } else {
-        // Non-IPAM, non-host (bridge/mc-lan-static/mc-lan-dynamic)
-        // Auto-assign fresh host ports for each container port from the source server
-        clonePrimaryPort = parsePortValue(sourceServer.primaryPort) ?? 25565;
-        const sourceBindings = parseStoredPortBindings(sourceServer.portBindings);
-
-        // Collect all container ports from source
-        const containerPorts = Object.keys(sourceBindings).map(k => parsePortValue(k)).filter((p): p is number => p !== null);
-        if (!containerPorts.includes(clonePrimaryPort)) {
-          containerPorts.push(clonePrimaryPort);
-        }
-
-        // For each container port, find a free host port and register it
-        // to prevent collisions between the clone's own ports
-        const ipKey = resolvedHostIp || WILDCARD_HOST;
-        for (const containerPort of containerPorts) {
-          const hostPort = findAvailableHostPort(usedPorts, resolvedHostIp, containerPort);
-          clonePortBindings[containerPort] = hostPort;
-          // Register the assigned port so subsequent bindings don't conflict
-          let portsForIp = usedPorts.get(ipKey);
-          if (!portsForIp) {
-            portsForIp = new Set();
-            usedPorts.set(ipKey, portsForIp);
-          }
-          portsForIp.add(hostPort);
+        const unacknowledged = stored.plan.warnings
+          .map((warning) => warning.code)
+          .filter((code) => !acknowledgedWarnings.includes(code));
+        if (unacknowledged.length > 0) {
+          await releaseCloneClaim();
+          return apiError(
+            reply,
+            400,
+            ErrorCodes.CLONE_WARNINGS_UNACKNOWLEDGED,
+            `Acknowledge these warnings before cloning: ${unacknowledged.join(', ')}`,
+            { params: { warnings: unacknowledged.join(', ') } },
+          );
         }
       }
 
-      const nextEnvironment = isHostNetwork && hostNetworkIp
-        ? { ...resolvedEnvironment, CATALYST_NETWORK_IP: hostNetworkIp }
-        : resolvedEnvironment;
-
-      // Validate allocationId if provided
-      const cloneAllocationId = body.allocationId;
-      let allocationIp: string | null = null;
-      let allocationPort: number | null = null;
-      if (cloneAllocationId) {
-        if (shouldUseIpam(desiredNetworkMode)) {
-          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_MODE_INVALID, 'Allocation IDs are only valid for bridge/host networking');
-        }
-        const allocation = await prisma.nodeAllocation.findUnique({
-          where: { id: cloneAllocationId },
-        });
-        if (!allocation || allocation.nodeId !== targetNodeId) {
-          return apiError(reply, 404, ErrorCodes.ALLOCATION_NOT_FOUND, 'Allocation not found');
-        }
-        if (allocation.serverId) {
-          return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, 'Allocation is already assigned to a server');
-        }
-        allocationIp = allocation.ip;
-        allocationPort = allocation.port;
-        // Override primary port and IP from the allocation
-        clonePrimaryPort = allocationPort;
-        hostNetworkIp = allocationIp;
-      }
-
-      const finalEnvironment = allocationIp
-        ? { ...nextEnvironment, CATALYST_NETWORK_IP: allocationIp }
-        : nextEnvironment;
-
-      // Create the cloned server in a transaction (same pattern as POST /)
-      let server;
       try {
-        server = await prisma.$transaction(async (tx) => {
-          const created = await tx.server.create({
-            data: {
-              uuid: uuidv4(),
-              name: resolvedName,
-              templateId: sourceServer.templateId,
-              nodeId: targetNodeId,
-              locationId: resolvedLocationId,
-              ownerId: effectiveOwnerId,
-              allocatedMemoryMb: resolvedMemoryMb,
-              allocatedCpuCores: resolvedCpuCores,
-              allocatedDiskMb: resolvedDiskMb,
-              backupAllocationMb: resolvedBackupAllocationMb ?? 0,
-              databaseAllocation: resolvedDatabaseAllocation ?? 0,
-              primaryPort: clonePrimaryPort,
-              portBindings: clonePortBindings,
-              networkMode: desiredNetworkMode,
-              environment: {
-                ...finalEnvironment,
-                TEMPLATE_IMAGE: resolvedImage,
-              },
-              // Status is always "stopped" for a clone — never copy runtime state
-            },
-          });
-
-          // Assign allocation to the server if provided
-          if (cloneAllocationId) {
-            const updated = await tx.server.update({
-              where: { id: created.id },
-              data: {
-                primaryIp: allocationIp,
-                primaryPort: allocationPort ?? clonePrimaryPort,
-                environment: {
-                  ...finalEnvironment,
-                  TEMPLATE_IMAGE: resolvedImage,
-                  CATALYST_NETWORK_IP: allocationIp,
-                },
-              },
-            });
-            // Conditional claim: fail if a concurrent request claimed the
-            // allocation between the outer check and this transaction.
-            const claim = await tx.nodeAllocation.updateMany({
-              where: { id: cloneAllocationId, nodeId: targetNodeId, serverId: null },
-              data: { serverId: created.id },
-            });
-            if (claim.count === 0) {
-              throw new Error("ALLOCATION_TAKEN");
-            }
-            return updated as typeof created;
-          }
-
-          // Allocate fresh IP via IPAM if needed (same as POST /)
-          if (shouldUseIpam(desiredNetworkMode)) {
-            const allocatedIp = await allocateIpForServer(tx, {
-              nodeId: targetNodeId,
-              networkName: desiredNetworkMode,
-              serverId: created.id,
-              requestedIp: null, // auto-assign
-            });
-
-            if (!allocatedIp) {
-              throw new Error('No IP pool configured for this network');
-            }
-
-            const ipamEnvironment = {
-              ...(nextEnvironment || {}),
-              TEMPLATE_IMAGE: resolvedImage,
-              CATALYST_NETWORK_IP: allocatedIp,
-            };
-
-            const updated = await tx.server.update({
-              where: { id: created.id },
-              data: {
-                primaryIp: allocatedIp,
-                environment: ipamEnvironment,
-              },
-            });
-
-            return { ...updated, environment: ipamEnvironment } as typeof updated;
-          }
-
-          return created;
-        });
+        assertPlanHasNoBlockers(plan);
       } catch (error: any) {
-        if (error?.message === "ALLOCATION_TAKEN") {
-          return apiError(reply, 409, ErrorCodes.ALLOCATION_ALREADY_ASSIGNED, "Allocation is no longer available");
-        }
-        return apiError(reply, 400, ErrorCodes.SERVER_CLONE_FAILED, error.message);
+        await releaseCloneClaim();
+        return replyCloneError(reply, error);
       }
 
-      // Grant owner full permissions (same as POST /)
-      await prisma.serverAccess.create({
-        data: {
-          userId: effectiveOwnerId,
-          serverId: server.id,
-          permissions: [...OWNER_SERVER_PERMISSIONS],
-        },
+      let persisted;
+      try {
+        persisted = await persistClone(plan, auth);
+      } catch (error: any) {
+        await releaseCloneClaim();
+        return replyCloneError(reply, error);
+      }
+
+      const { server, node } = persisted;
+      const cloneServerId = server.id;
+      const cloneServerUuid = (server as any).uuid;
+
+      // Remember where this clone came from so a failed full-clone file copy can
+      // be retried without recreating the server.
+      await storeCloneProvenance(cloneServerId, {
+        sourceId: source.id,
+        targetNodeId: node.id,
+        mode: plan.mode,
       });
 
-      // Audit log
       await createAuditLog(userId, {
         action: 'server.clone',
         resource: 'server',
-        resourceId: server.id,
+        resourceId: cloneServerId,
         request,
         details: {
-            sourceServerId: sourceServer.id,
-            sourceServerName: sourceServer.name,
-            clonedByName: resolvedName,
-          },
+          mode: plan.mode,
+          crossNode: plan.crossNode,
+          sourceServerId: source.id,
+          sourceServerName: source.name,
+          sourceNodeId: source.nodeId,
+          targetNodeId: node.id,
+          ownerId: plan.resolved.ownerId,
+          allocationId: plan.allocations.selected?.id ?? null,
+          networkMode: plan.resolved.networkMode,
+          includedSurfaces: plan.includeSurfaces,
+        },
       });
-
-      // If copyFiles is requested, set status to "cloning" and kick off async file copy
-      const shouldCopyFiles = body.copyFiles === true;
-      if (shouldCopyFiles) {
-        await prisma.server.update({
-          where: { id: server.id },
-          data: { status: ServerState.CLONING },
-        });
-
-        // Broadcast the cloning status update immediately
-        const wsGatewayCloning = (app as any).wsGateway;
-        if (wsGatewayCloning?.pushToGlobalSubscribers) {
-          wsGatewayCloning.pushToGlobalSubscribers('server_state_update', {
-            type: 'server_state_update',
-            serverId: server.id,
-            state: ServerState.CLONING,
-          });
-        }
-
-        emitServerOperationProgress(wsGatewayCloning, {
-          serverId: server.id,
-          operation: "clone",
-          stage: "Clone started — copying files",
-          progress: 10,
-          state: ServerState.CLONING,
-        });
-
-        reply.status(201).send({
-          success: true,
-          data: withConnectionInfo({ ...server, status: ServerState.CLONING }, node),
-        });
-      } else {
-        reply.status(201).send({
-          success: true,
-          data: withConnectionInfo(server, node),
-        });
-      }
 
       // A cloned server changes list results for everyone — evict everywhere.
       clearServerListCache();
 
-      // Async file copy (fire-and-forget from the request's perspective)
-      if (shouldCopyFiles) {
-        const cloneServerId = server.id;
-        const cloneServerUuid = (server as any).uuid;
-        const sourceUuid = sourceServer.uuid;
-        const sourceNodeId = sourceServer.nodeId;
-        const targetNodeIdFinal = targetNodeId;
-        const isSameNode = sourceNodeId === targetNodeIdFinal;
+      const gateway = (app as any).wsGateway;
 
-        // Log start of file copy
+      if (plan.mode === 'full') {
+        await prisma.server.update({
+          where: { id: cloneServerId },
+          data: { status: ServerState.CLONING },
+        });
+
+        if (gateway?.pushToGlobalSubscribers) {
+          gateway.pushToGlobalSubscribers('server_state_update', {
+            type: 'server_state_update',
+            serverId: cloneServerId,
+            state: ServerState.CLONING,
+          });
+        }
+        emitServerOperationProgress(gateway, {
+          serverId: cloneServerId,
+          operation: 'clone',
+          stage: 'Clone started — copying files',
+          progress: 10,
+          state: ServerState.CLONING,
+        });
+
         await prisma.serverLog.create({
           data: {
             serverId: cloneServerId,
             stream: 'system',
-            data: 'File copy from source server started...',
+            data: plan.crossNode
+              ? `File copy from "${source.name}" started (${source.node?.name ?? source.nodeId} → ${node.name})...`
+              : `File copy from "${source.name}" started...`,
           },
         });
 
-        const wsGatewayFileCopy = (app as any).wsGateway;
+        const fullResponseBody = {
+          success: true,
+          data: withConnectionInfo({ ...server, status: ServerState.CLONING }, node),
+        };
+        reply.status(201).send(fullResponseBody);
+        if (idempotencyHash) {
+          await completeIdempotency(idempotencyScope, idempotencyHash, JSON.stringify(fullResponseBody));
+        }
 
-        emitServerOperationProgress(wsGatewayFileCopy, {
+        void runCloneFileCopy({
+          app,
+          request,
+          userId,
+          cloneServerId,
+          cloneUuid: cloneServerUuid,
+          source: { id: source.id, uuid: source.uuid, nodeId: source.nodeId, name: source.name },
+          targetNode: { id: node.id, name: node.name, serverDataDir: node.serverDataDir ?? null },
+          gateway,
+        });
+      } else {
+        // Configuration clone: the panel config is written, now run the same
+        // template install a fresh server would get.
+        await prisma.server.update({
+          where: { id: cloneServerId },
+          data: { status: ServerState.INSTALLING },
+        });
+        await prisma.serverLog.create({
+          data: {
+            serverId: cloneServerId,
+            stream: 'system',
+            data: 'Configuration clone created. Starting template installation...',
+          },
+        });
+        emitServerOperationProgress(gateway, {
           serverId: cloneServerId,
-          operation: "clone",
-          stage: "Copying server files",
-          progress: 40,
-          state: ServerState.CLONING,
+          operation: 'install',
+          stage: 'Installation started',
+          progress: 5,
+          state: ServerState.INSTALLING,
         });
 
-        // Perform file copy in background
-        (async () => {
-          try {
-            if (!wsGatewayFileCopy) {
-              throw new Error('WebSocket gateway not available');
-            }
-
-            if (isSameNode) {
-              // Same-node: tell agent to cp -a the data directory
-              const result = await wsGatewayFileCopy.requestFromAgent(targetNodeIdFinal, {
-                type: 'clone_server_files',
-                serverId: cloneServerId,
-                sourceServerUuid: sourceUuid,
-                targetServerUuid: cloneServerUuid,
-              }, 300000); // 5 min timeout for large servers
-
-              if (!result?.success) {
-                throw new Error(result?.error || 'Agent file copy failed');
-              }
-            } else {
-              // Cross-node: use backup stream relay (same as transfer)
-              const requestId = crypto.randomUUID();
-
-              // Prepare restore on target agent
-              const targetNode = await prisma.node.findUnique({ where: { id: targetNodeIdFinal } });
-              if (!targetNode) {
-                throw new Error('Target node not found');
-              }
-              const targetServerDir = `${targetNode.serverDataDir || '/var/lib/catalyst/servers'}/${cloneServerUuid}`;
-
-              const prepareResult = await wsGatewayFileCopy.requestFromAgent(targetNodeIdFinal, {
-                type: 'prepare_restore_stream',
-                requestId,
-                serverId: cloneServerId,
-                serverUuid: cloneServerUuid,
-                serverDir: targetServerDir,
-              }, 15000);
-
-              if (!prepareResult?.success) {
-                throw new Error(prepareResult?.error || 'Target agent failed to prepare for file copy');
-              }
-
-              // Set up binary relay
-              const relayPromise = wsGatewayFileCopy.relayBackupStream(sourceNodeId, targetNodeIdFinal);
-
-              // Tell source agent to start streaming
-              wsGatewayFileCopy.sendToAgent(sourceNodeId, {
-                type: 'start_backup_stream',
-                requestId,
-                serverId: sourceServer.id,
-                serverUuid: sourceUuid,
-              });
-
-              // Wait for relay to complete
-              await relayPromise;
-
-              // Finish restore on target
-              const finishResult = await wsGatewayFileCopy.requestFromAgent(targetNodeIdFinal, {
-                type: 'finish_restore_stream',
-                requestId,
-                serverId: cloneServerId,
-                serverUuid: cloneServerUuid,
-              }, 30000);
-
-              if (!finishResult?.success) {
-                throw new Error(finishResult?.error || 'Target agent failed to finish file copy');
-              }
-            }
-
-            // Success — update status to stopped
-            await prisma.server.update({
-              where: { id: cloneServerId },
-              data: { status: 'stopped' },
-            });
-
-            await prisma.serverLog.create({
-              data: {
-                serverId: cloneServerId,
-                stream: 'system',
-                data: 'File copy complete. Server is ready to start.',
-              },
-            });
-
-            // Broadcast status update
-            const wsGatewayDone = (app as any).wsGateway;
-            if (wsGatewayDone?.pushToGlobalSubscribers) {
-              wsGatewayDone.pushToGlobalSubscribers('server_state_update', {
-                type: 'server_state_update',
-                serverId: cloneServerId,
-                state: 'stopped',
-              });
-            }
-            emitServerOperationProgress(wsGatewayDone, {
+        let installQueued = false;
+        try {
+          await startCloneInstall(cloneServerId, gateway);
+          installQueued = true;
+        } catch (err: any) {
+          await prisma.server.update({
+            where: { id: cloneServerId },
+            data: { status: ServerState.ERROR },
+          });
+          await prisma.serverLog.create({
+            data: {
               serverId: cloneServerId,
-              operation: "clone",
-              stage: "Clone complete",
-              progress: 100,
-              state: "stopped",
-            });
-          } catch (err: any) {
-            // Failure — still set to stopped but log the error
-            await prisma.server.update({
-              where: { id: cloneServerId },
-              data: { status: 'stopped' },
-            });
+              stream: 'system',
+              data: `Installation could not be started: ${err.message}. Press Install to retry.`,
+            },
+          });
+          captureSystemError({
+            level: 'error',
+            component: 'CloneInstall',
+            message: `Clone install failed for ${cloneServerId}: ${err.message}`,
+          }).catch(() => {});
+        }
 
-            await prisma.serverLog.create({
-              data: {
-                serverId: cloneServerId,
-                stream: 'system',
-                data: `File copy failed: ${err.message}. Server was created but files were not copied.`,
-              },
-            });
-
-            const wsGatewayFail = (app as any).wsGateway;
-            if (wsGatewayFail?.pushToGlobalSubscribers) {
-              wsGatewayFail.pushToGlobalSubscribers('server_state_update', {
-                type: 'server_state_update',
-                serverId: cloneServerId,
-                state: 'stopped',
-              });
-            }
-
-            captureSystemError({
-              level: 'error',
-              component: 'CloneFiles',
-              message: `File copy failed for clone ${cloneServerId}: ${err.message}`,
-            }).catch(() => {});
-          }
-        })();
+        const configResponseBody = {
+          success: true,
+          data: withConnectionInfo(
+            { ...server, status: installQueued ? ServerState.INSTALLING : ServerState.ERROR },
+            node,
+          ),
+        };
+        reply.status(201).send(configResponseBody);
+        if (idempotencyHash) {
+          await completeIdempotency(idempotencyScope, idempotencyHash, JSON.stringify(configResponseBody));
+        }
       }
 
-      // Fire webhook for server creation
+      // Fire webhooks for the new server (created fires for both modes so
+      // existing integrations keep working; cloned carries the clone context).
       const webhookService: any = (app as any).webhookService;
       if (webhookService) {
-        webhookService.serverCreated({ id: server.id, name: server.name, ownerId: effectiveOwnerId }, userId).catch(() => {});
+        webhookService
+          .serverCreated({ id: cloneServerId, name: server.name, ownerId: plan.resolved.ownerId }, userId)
+          .catch(() => {});
+        if (typeof webhookService.serverCloned === 'function') {
+          webhookService
+            .serverCloned(
+              { id: cloneServerId, name: server.name, ownerId: plan.resolved.ownerId },
+              { id: source.id, name: source.name, nodeId: source.nodeId },
+              node.id,
+              plan.mode,
+              userId,
+            )
+            .catch(() => {});
+        }
       }
 
-      // Broadcast server_created event (same as POST /)
-      const wsGatewayClone = (app as any).wsGateway;
-      if (wsGatewayClone?.pushToAdminSubscribers) {
-        wsGatewayClone.pushToAdminSubscribers('server_created', {
-          type: 'server_created',
-          serverId: server.id,
-          serverName: server.name,
-          ownerId: effectiveOwnerId,
-          createdBy: userId,
-          timestamp: new Date().toISOString(),
+      // Broadcast server_created (same as POST /).
+      const createdGateway = (app as any).wsGateway;
+      const createdEvent = {
+        type: 'server_created',
+        serverId: cloneServerId,
+        serverName: server.name,
+        ownerId: plan.resolved.ownerId,
+        createdBy: userId,
+        timestamp: new Date().toISOString(),
+      };
+      if (createdGateway?.pushToAdminSubscribers) {
+        createdGateway.pushToAdminSubscribers('server_created', createdEvent);
+      }
+      if (createdGateway?.pushToGlobalSubscribers) {
+        createdGateway.pushToGlobalSubscribers('server_created', createdEvent);
+      }
+    }
+  );
+
+  // Re-run the data copy for a full clone whose file copy failed. The clone
+  // server itself is the target; the source comes from recorded provenance.
+  app.post(
+    "/:serverId/clone/:cloneId/retry",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId, cloneId } = request.params as { serverId: string; cloneId: string };
+      const userId = request.user.userId;
+
+      if (!checkPerm(request, 'server.create')) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create a server');
+      }
+
+      const source = await loadCloneSource(serverId);
+      if (!source) {
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Source server not found');
+      }
+      if (!(await canAccessServer(userId, { id: source.id, ownerId: source.ownerId, nodeId: source.nodeId }))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Cannot access source server');
+      }
+
+      const provenance = await getCloneProvenance(cloneId);
+      if (!provenance || provenance.sourceId !== source.id) {
+        return apiError(
+          reply,
+          404,
+          ErrorCodes.SERVER_NOT_FOUND,
+          'No retryable clone of this server was found',
+        );
+      }
+
+      const clone = await prisma.server.findUnique({ where: { id: cloneId } });
+      if (!clone) {
+        return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Clone server not found');
+      }
+
+      if (String(source.status) !== 'stopped' && String(source.status) !== 'crashed') {
+        return apiError(
+          reply,
+          409,
+          ErrorCodes.CLONE_SOURCE_NOT_STOPPED,
+          'The source server must be stopped before its files can be copied.',
+        );
+      }
+      if (clone.status === ServerState.CLONING) {
+        return apiError(
+          reply,
+          409,
+          ErrorCodes.SERVER_STATE_TRANSITION_INVALID,
+          'This clone is already copying files.',
+          { params: { status: clone.status } },
+        );
+      }
+      if (clone.status !== ServerState.STOPPED) {
+        return apiError(
+          reply,
+          409,
+          ErrorCodes.SERVER_NOT_STOPPED,
+          'The clone must be stopped before the file copy can be retried.',
+          { params: { status: clone.status } },
+        );
+      }
+
+      const targetNode = await prisma.node.findUnique({ where: { id: clone.nodeId } });
+      if (!targetNode) {
+        return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, 'Target node not found');
+      }
+      if (!targetNode.isOnline) {
+        return apiError(reply, 503, ErrorCodes.CLONE_TARGET_NODE_OFFLINE, 'The target node is offline.');
+      }
+
+      const gateway = (app as any).wsGateway;
+      if (!gateway) {
+        return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, 'WebSocket gateway not available');
+      }
+
+      await prisma.server.update({
+        where: { id: cloneId },
+        data: { status: ServerState.CLONING },
+      });
+      await prisma.serverLog.create({
+        data: {
+          serverId: cloneId,
+          stream: 'system',
+          data: `Retrying the file copy from "${source.name}"...`,
+        },
+      });
+
+      if (gateway?.pushToGlobalSubscribers) {
+        gateway.pushToGlobalSubscribers('server_state_update', {
+          type: 'server_state_update',
+          serverId: cloneId,
+          state: ServerState.CLONING,
         });
       }
-      if (wsGatewayClone?.pushToGlobalSubscribers) {
-        wsGatewayClone.pushToGlobalSubscribers('server_created', {
-          type: 'server_created',
-          serverId: server.id,
-          serverName: server.name,
-          ownerId: effectiveOwnerId,
-          createdBy: userId,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      emitServerOperationProgress(gateway, {
+        serverId: cloneId,
+        operation: 'clone',
+        stage: 'Clone retry started — copying files',
+        progress: 10,
+        state: ServerState.CLONING,
+      });
+
+      reply.status(202).send({
+        success: true,
+        accepted: true,
+        async: true,
+        message: 'Clone file copy retry accepted; completion is asynchronous',
+      });
+
+      void runCloneFileCopy({
+        app,
+        request,
+        userId,
+        cloneServerId: cloneId,
+        cloneUuid: clone.uuid,
+        source: { id: source.id, uuid: source.uuid, nodeId: source.nodeId, name: source.name },
+        targetNode: { id: targetNode.id, name: targetNode.name, serverDataDir: targetNode.serverDataDir ?? null },
+        gateway,
+      });
     }
   );
 

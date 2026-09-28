@@ -110,6 +110,31 @@ export async function getIdempotency(
   return memoryGet(key);
 }
 
+/**
+ * Release a claim that never produced a result (validation failure, crash
+ * before persist) so the client can retry with the same key.
+ */
+export async function releaseIdempotency(
+  scope: string,
+  keyHash: string,
+  redis?: CatalystRedis | null,
+): Promise<void> {
+  const key = RedisKeys.idempotency(scope, keyHash);
+  const client: CatalystRedis | null = redis !== undefined ? redis : getRedis();
+  if (client) {
+    try {
+      // Only drop the sentinel; never clobber a stored result.
+      const current = await client.get(key);
+      if (current === 'claimed') await client.del(key);
+      return;
+    } catch {
+      /* fall through to memory */
+    }
+  }
+  const entry = memoryGet(key);
+  if (entry === 'claimed') memoryStore.delete(key);
+}
+
 /** Test helper. */
 export function clearIdempotencyMemory(): void {
   memoryStore.clear();

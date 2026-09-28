@@ -4,6 +4,7 @@ import { describeError } from "../../utils/describe-error.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, isHostNetworkDisabledAgentError, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
+import { buildInstallCommand, InstallPayloadError } from "../../services/server-install.js";
 import { emitServerStatusEvent } from "../../plugins/host-events.js";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
@@ -192,74 +193,21 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
-      // Automatically add SERVER_DIR to environment (uses node's configured server data directory)
-      const serverDir = server.node.serverDataDir || "/var/lib/catalyst/servers";
-      const fullServerDir = `${serverDir}/${server.uuid}`;
-      
-      const templateVariables = (server.template.variables as any[]) || [];
-      const templateDefaults = templateVariables.reduce((acc, variable) => {
-        if (variable?.name && variable?.default !== undefined) {
-          acc[variable.name] = String(variable.default);
-        }
-        return acc;
-      }, {} as Record<string, string>);
-
-      const environment = {
-        ...templateDefaults,
-        ...(server.environment as Record<string, string>),
-        SERVER_DIR: fullServerDir,
-      };
-      if (server.template?.image) {
-        const resolvedImage = resolveTemplateImage(server.template, environment);
-        environment.TEMPLATE_IMAGE = resolvedImage;
-      }
-      if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-        environment.CATALYST_NETWORK_IP = server.primaryIp;
-      }
-      if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
-        try {
-          environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
-        } catch (error: any) {
+      // Environment + command assembly lives in services/server-install so the
+      // install, reinstall and configuration-clone paths cannot drift.
+      let payload: ReturnType<typeof buildInstallCommand>;
+      try {
+        payload = buildInstallCommand(server, "install_server");
+      } catch (error: any) {
+        if (error instanceof InstallPayloadError) {
           return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
+        throw error;
       }
-      const runtimeTemplate = patchTemplateForRuntime(server.template);
-
-      // Sync port environment variables with primaryPort
-      const portBindings = parseStoredPortBindings(server.portBindings);
-      let syncedEnvironment = syncPortEnvironmentVariables(
-        environment,
-        server.primaryPort,
-        portBindings
-      );
-      syncedEnvironment = injectPterodactylCompatibilityVars(
-        syncedEnvironment,
-        {
-          uuid: server.uuid,
-          name: server.name,
-          primaryIp: server.primaryIp,
-          primaryPort: server.primaryPort,
-          allocatedMemoryMb: server.allocatedMemoryMb,
-          allocatedDiskMb: server.allocatedDiskMb,
-        },
-        portBindings,
-        { startupCommand: runtimeTemplate.startup },
-      );
 
       // Install is long-running — fire-and-forget with delivery check.
       // Final status arrives via server_state_update from the agent.
-      const success = await gateway.sendToAgent(server.nodeId, {
-        type: "install_server",
-        serverId: server.id,
-        serverUuid: server.uuid,
-        template: runtimeTemplate,
-        environment: syncedEnvironment,
-        allocatedMemoryMb: server.allocatedMemoryMb,
-        allocatedCpuCores: server.allocatedCpuCores,
-        allocatedDiskMb: server.allocatedDiskMb,
-        primaryPort: server.primaryPort,
-        portBindings: portBindings,
-      });
+      const success = await gateway.sendToAgent(server.nodeId, payload.command);
 
       if (!success) {
         return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");
@@ -343,73 +291,21 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
-      // Automatically add SERVER_DIR to environment
-      const serverDir = server.node.serverDataDir || "/var/lib/catalyst/servers";
-      const fullServerDir = `${serverDir}/${server.uuid}`;
-
-      const templateVariables = (server.template.variables as any[]) || [];
-      const templateDefaults = templateVariables.reduce((acc, variable) => {
-        if (variable?.name && variable?.default !== undefined) {
-          acc[variable.name] = String(variable.default);
-        }
-        return acc;
-      }, {} as Record<string, string>);
-
-      const environment = {
-        ...templateDefaults,
-        ...(server.environment as Record<string, string>),
-        SERVER_DIR: fullServerDir,
-      };
-      if (server.template?.image) {
-        const resolvedImage = resolveTemplateImage(server.template, environment);
-        environment.TEMPLATE_IMAGE = resolvedImage;
-      }
-      if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-        environment.CATALYST_NETWORK_IP = server.primaryIp;
-      }
-      if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
-        try {
-          environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
-        } catch (error: any) {
+      // Environment + command assembly lives in services/server-install so the
+      // install, reinstall and configuration-clone paths cannot drift.
+      let payload: ReturnType<typeof buildInstallCommand>;
+      try {
+        payload = buildInstallCommand(server, "reinstall_server");
+      } catch (error: any) {
+        if (error instanceof InstallPayloadError) {
           return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
+        throw error;
       }
-      const runtimeTemplate = patchTemplateForRuntime(server.template);
-
-      // Sync port environment variables with primaryPort
-      const portBindings = parseStoredPortBindings(server.portBindings);
-      let syncedEnvironment = syncPortEnvironmentVariables(
-        environment,
-        server.primaryPort,
-        portBindings
-      );
-      syncedEnvironment = injectPterodactylCompatibilityVars(
-        syncedEnvironment,
-        {
-          uuid: server.uuid,
-          name: server.name,
-          primaryIp: server.primaryIp,
-          primaryPort: server.primaryPort,
-          allocatedMemoryMb: server.allocatedMemoryMb,
-          allocatedDiskMb: server.allocatedDiskMb,
-        },
-        portBindings,
-        { startupCommand: runtimeTemplate.startup },
-      );
 
       // Reinstall is long-running — fire-and-forget with delivery check.
-      const success = await gateway.sendToAgent(server.nodeId, {
-        type: "reinstall_server",
-        serverId: server.id,
-        serverUuid: server.uuid,
-        template: runtimeTemplate,
-        environment: syncedEnvironment,
-        allocatedMemoryMb: server.allocatedMemoryMb,
-        allocatedCpuCores: server.allocatedCpuCores,
-        allocatedDiskMb: server.allocatedDiskMb,
-        primaryPort: server.primaryPort,
-        portBindings: portBindings,
-      });
+      // Final status arrives via server_state_update from the agent.
+      const success = await gateway.sendToAgent(server.nodeId, payload.command);
 
       if (!success) {
         return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");

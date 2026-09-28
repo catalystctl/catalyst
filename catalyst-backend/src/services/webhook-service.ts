@@ -227,6 +227,34 @@ export class WebhookService {
   }
 
   /**
+   * Helper: dispatch a server.cloned event (in addition to server.created).
+   */
+  async serverCloned(
+    clone: { id: string; name?: string; ownerId: string },
+    source: { id: string; name?: string; nodeId: string },
+    targetNodeId: string,
+    mode: 'full' | 'configuration',
+    userId: string,
+  ) {
+    return this.dispatch({
+      event: "server.cloned",
+      serverId: clone.id,
+      serverName: clone.name,
+      userId,
+      timestamp: new Date().toISOString(),
+      data: {
+        ownerId: clone.ownerId,
+        mode,
+        sourceServerId: source.id,
+        sourceServerName: source.name,
+        sourceNodeId: source.nodeId,
+        targetNodeId,
+        crossNode: source.nodeId !== targetNodeId,
+      },
+    });
+  }
+
+  /**
    * Helper: dispatch a server.deleted event.
    */
   async serverDeleted(serverId: string, serverName?: string, userId?: string) {

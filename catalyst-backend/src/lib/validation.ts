@@ -85,22 +85,76 @@ export const serverCreateSchema = z.object({
 });
 
 /**
- * Server clone validation
+ * Network modes a server may run under. Shared by create/clone/update so a new
+ * mode only has to be added here.
  */
-export const serverCloneSchema = z.object({
+export const CLONE_NETWORK_MODES = ['bridge', 'macvlan', 'host', 'mc-lan-static', 'mc-lan-dynamic'] as const;
+
+/**
+ * Clone modes:
+ * - `full`          configuration + the entire server data directory
+ * - `configuration` configuration only; a fresh template install runs
+ */
+export const cloneModeSchema = z.enum(['full', 'configuration']);
+
+/** Portable configuration surfaces a clone may include. */
+const cloneIncludeFields = {
+  includeAccess: z.boolean().default(true),
+  includeRoleGrants: z.boolean().default(true),
+  includeScheduledTasks: z.boolean().default(false),
+  includeDatabases: z.boolean().default(false),
+  /** Undefined → true for a full clone, false for a configuration clone. */
+  includeInstalledMods: z.boolean().optional(),
+};
+
+/** Resource/policy overrides shared by preflight and submit. */
+const cloneOverrideFields = {
   name: serverNameSchema.optional(),
-  nodeId: z.string().min(1, 'Node ID is required').optional(),
-  locationId: z.string().min(1, 'Location ID is required').optional(),
+  description: z.string().max(500).optional(),
   allocatedMemoryMb: z.number().int().min(512).max(131072).optional(),
   allocatedCpuCores: z.number().int().min(1).max(128).optional(),
   allocatedDiskMb: z.number().int().min(1024).max(1048576).optional(),
+  allocatedSwapMb: z.number().int().min(0).max(131072).optional(),
+  ioWeight: z.number().int().min(10).max(1000).optional(),
   backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
   databaseAllocation: z.number().int().min(0).max(1048576).optional(),
   environment: z.record(z.string(), z.string().min(1).max(4096)).optional(),
   ownerId: z.string().min(1).optional(),
   allocationId: z.string().min(1).optional(),
-  networkMode: z.enum(['bridge', 'macvlan', 'host', 'mc-lan-static', 'mc-lan-dynamic']).optional(),
-  copyFiles: z.boolean().default(false),
+  networkMode: z.enum(CLONE_NETWORK_MODES).optional(),
+  backupStorageMode: z.enum(['local', 's3', 'stream']).optional(),
+  /** Admin-only: carry S3/SFTP backup credentials to the clone. */
+  copyBackupCredentials: z.boolean().default(false),
+  ...cloneIncludeFields,
+};
+
+/**
+ * Preflight: resolve + validate a clone without writing anything. Returns the
+ * node-specific change set the user must review and confirm.
+ */
+export const serverClonePreflightSchema = z.object({
+  mode: cloneModeSchema,
+  targetNodeId: z.string().min(1, 'Target node ID is required'),
+  ...cloneOverrideFields,
+});
+
+/**
+ * Server clone submit validation.
+ *
+ * `mode` is optional for backwards compatibility: a request that only sends the
+ * legacy `copyFiles` boolean is mapped to `full`/`configuration`. Cross-node
+ * clones must present the `preflightId` (and echoed `fingerprint`) issued by
+ * `POST /:serverId/clone/preflight`.
+ */
+export const serverCloneSchema = z.object({
+  mode: cloneModeSchema.optional(),
+  nodeId: z.string().min(1, 'Node ID is required').optional(),
+  /** Deprecated alias for `mode: 'full' | 'configuration'`. */
+  copyFiles: z.boolean().optional(),
+  preflightId: z.string().min(1).optional(),
+  fingerprint: z.string().min(8).optional(),
+  acknowledgedWarnings: z.array(z.string().min(1)).default([]),
+  ...cloneOverrideFields,
 });
 
 /**

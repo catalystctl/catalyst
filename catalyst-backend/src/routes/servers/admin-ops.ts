@@ -3,6 +3,7 @@ import { prisma } from "../../db.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { allocateIpForServer, canAccessServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, OWNER_SERVER_PERMISSIONS, path, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
+import { streamServerData } from "../../services/server-file-stream.js";
 import { publishCacheInvalidate } from "../../lib/event-bus.js";
 import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../../utils/java-memory.js";
 import { apiError } from "../../lib/http-error";
@@ -561,7 +562,6 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         });
 
         const backupName = `transfer-${Date.now()}`;
-        const requestId = crypto.randomUUID();
 
         await prisma.backup.create({
           data: {
@@ -573,25 +573,8 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
           },
         });
 
-        // Step 2: Prepare restore on target agent (spawn tar -xf -)
-        const prepareResult = await wsGateway.requestFromAgent(
-          targetNodeId,
-          {
-            type: "prepare_restore_stream",
-            requestId,
-            serverId: id,
-            serverUuid: server.uuid,
-            serverDir: `${targetNode.serverDataDir || "/var/lib/catalyst/servers"}/${server.uuid}`,
-          },
-          15000,
-        );
-
-        if (!prepareResult?.success) {
-          throw new Error(
-            prepareResult?.error || "Target agent failed to prepare restore stream",
-          );
-        }
-
+        // Steps 2-4: stream the data directory to the target node through the
+        // shared service (identical path to a cross-node full clone).
         await prisma.serverLog.create({
           data: {
             serverId: id,
@@ -600,57 +583,24 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
           },
         });
 
-
-        emitServerOperationProgress((app as any).wsGateway, {
-          serverId: id,
-          operation: "transfer",
-          stage: `Streaming to ${targetNode.name}`,
-          progress: 55,
-          state: ServerState.TRANSFERRING,
-        });
-
-        // Step 3: Start backup stream on source agent and relay to target.
-        // Binary frames flow: Agent 1 → Backend → Agent 2 (zero-copy relay).
-        // Backend just forwards bytes — never touches the data.
-        const relayPromise = wsGateway.relayBackupStream(
-          server.nodeId,
+        await streamServerData({
+          gateway: wsGateway,
+          sourceNodeId: server.nodeId,
           targetNodeId,
-        );
-
-        // Tell source agent to start streaming tar output as binary frames.
-        // This is fire-and-forget — the relay promise resolves when
-        // the source sends backup_stream_complete.
-        wsGateway.sendToAgent(server.nodeId, {
-          type: "start_backup_stream",
-          requestId,
+          sourceUuid: server.uuid,
+          targetUuid: server.uuid,
           serverId: id,
-          serverUuid: server.uuid,
-        });
-
-        // Wait for the relay to complete (source finishes streaming)
-        try {
-          await relayPromise;
-        } catch (err: any) {
-          throw new Error(`Backup stream relay failed: ${err.message}`);
-        }
-
-        // Step 4: Tell target agent to close stdin and finish restore
-        const finishResult = await wsGateway.requestFromAgent(
-          targetNodeId,
-          {
-            type: "finish_restore_stream",
-            requestId,
-            serverId: id,
-            serverUuid: server.uuid,
+          targetServerDataDir: targetNode.serverDataDir || "/var/lib/catalyst/servers",
+          onStage: (stage, progress) => {
+            emitServerOperationProgress((app as any).wsGateway, {
+              serverId: id,
+              operation: "transfer",
+              stage,
+              progress,
+              state: ServerState.TRANSFERRING,
+            });
           },
-          30000,
-        );
-
-        if (!finishResult?.success) {
-          throw new Error(
-            finishResult?.error || "Target agent failed to finish restore stream",
-          );
-        }
+        });
 
         emitServerOperationProgress((app as any).wsGateway, {
           serverId: id,

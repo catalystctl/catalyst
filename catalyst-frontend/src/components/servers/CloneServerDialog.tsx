@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -12,8 +12,9 @@ import { adminApi } from '../../services/api/admin';
 import { useAccessibleNodes } from '../../hooks/useNodes';
 import { useAuthStore } from '../../stores/authStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { getLocalizedErrorMessage } from '../../i18n/api-errors';
+import { getApiErrorCode, getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import Combobox from '@/components/ui/combobox';
 import {
   Dialog,
@@ -25,8 +26,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import type { Server } from '../../types/server';
-import type { CloneServerPayload } from '../../types/server';
+import CloneReviewStep from './clone/CloneReviewStep';
+import type { CloneMode, ClonePlan, Server } from '../../types/server';
 
 /** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
 const fieldClass =
@@ -35,6 +36,9 @@ const fieldClass =
 const blockClass = 'rounded-sm border border-border/50 bg-surface-1/40 p-3';
 /** 1px separator for stacked fields inside a block. */
 const dividerClass = 'border-t border-border/50 pt-3';
+
+/** Network modes whose ports come from the panel's allocation pool. */
+const ALLOCATION_MODES = new Set(['host', 'bridge']);
 
 type Props = {
   server: Server;
@@ -46,6 +50,10 @@ function CloneServerDialog({ server, disabled = false }: Props) {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<'configure' | 'review'>('configure');
+  const [plan, setPlan] = useState<ClonePlan | null>(null);
+  const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<string[]>([]);
+  const [stopPending, setStopPending] = useState(false);
 
   const isAdmin =
     user?.permissions?.includes('*') ||
@@ -88,17 +96,22 @@ function CloneServerDialog({ server, disabled = false }: Props) {
   }));
 
   // Form state — pre-populated from source server
+  const [mode, setMode] = useState<CloneMode>('configuration');
   const [name, setName] = useState(`${server.name} Copy`);
   const [nodeId, setNodeId] = useState(server.nodeId);
   const [networkMode, setNetworkMode] = useState(server.networkMode || 'host');
   const [allocationId, setAllocationId] = useState('');
   const [ownerId, setOwnerId] = useState('');
-  const [copyFiles, setCopyFiles] = useState(false);
   const [memoryMb, setMemoryMb] = useState(server.allocatedMemoryMb ?? 1024);
   const [cpuCores, setCpuCores] = useState(server.allocatedCpuCores ?? 1);
   const [diskMb, setDiskMb] = useState(server.allocatedDiskMb ?? 1024);
+  const [includeAccess, setIncludeAccess] = useState(true);
+  const [includeRoleGrants, setIncludeRoleGrants] = useState(true);
+  const [includeScheduledTasks, setIncludeScheduledTasks] = useState(false);
+  const [includeDatabases, setIncludeDatabases] = useState(false);
+  const [includeInstalledMods, setIncludeInstalledMods] = useState(false);
 
-  // Load available allocations for the selected node in host mode
+  // Load available allocations for the selected node when the mode uses them.
   const [availableAllocations, setAvailableAllocations] = useState<
     Array<{ id: string; ip: string; port: number; alias?: string | null }>
   >([]);
@@ -112,7 +125,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
   ) {
     setPrevAllocDeps({ nodeId, networkMode, open });
     setAllocationId('');
-    if (!nodeId || networkMode !== 'host') {
+    if (!nodeId || !ALLOCATION_MODES.has(networkMode)) {
       setAvailableAllocations([]);
       setAllocLoadError(null);
     } else {
@@ -121,7 +134,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
   }
 
   useEffect(() => {
-    if (!nodeId || networkMode !== 'host') {
+    if (!nodeId || !ALLOCATION_MODES.has(networkMode)) {
       return;
     }
     let active = true;
@@ -154,15 +167,23 @@ function CloneServerDialog({ server, disabled = false }: Props) {
   const prevOpenRef = useRef(false);
   useEffect(() => {
     if (open && !prevOpenRef.current) {
+      setStep('configure');
+      setPlan(null);
+      setAcknowledgedWarnings([]);
+      setMode('configuration');
       setName(`${server.name} Copy`);
       setNodeId(server.nodeId);
       setNetworkMode(server.networkMode || 'host');
       setAllocationId('');
       setOwnerId('');
-      setCopyFiles(false);
       setMemoryMb(server.allocatedMemoryMb ?? 1024);
       setCpuCores(server.allocatedCpuCores ?? 1);
       setDiskMb(server.allocatedDiskMb ?? 1024);
+      setIncludeAccess(true);
+      setIncludeRoleGrants(true);
+      setIncludeScheduledTasks(false);
+      setIncludeDatabases(false);
+      setIncludeInstalledMods(false);
     }
     prevOpenRef.current = open;
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally only open; server read at transition time
@@ -172,28 +193,62 @@ function CloneServerDialog({ server, disabled = false }: Props) {
     user?.permissions?.includes('server.create') ||
     isAdmin;
 
-  const cloneMutation = useMutation({
-    mutationFn: () => {
-      const payload: CloneServerPayload = {
-        name: name.trim() || undefined,
-        nodeId: nodeId !== server.nodeId ? nodeId : undefined,
-        networkMode: networkMode !== server.networkMode ? networkMode : undefined,
-        allocationId: allocationId || undefined,
-        ownerId: ownerId || undefined,
-        copyFiles: copyFiles || undefined,
-        allocatedMemoryMb: memoryMb !== server.allocatedMemoryMb ? memoryMb : undefined,
-        allocatedCpuCores: cpuCores !== server.allocatedCpuCores ? cpuCores : undefined,
-        allocatedDiskMb: diskMb !== server.allocatedDiskMb ? diskMb : undefined,
-      };
-      return serversApi.clone(server.id, payload);
+  const buildPayload = () => ({
+    mode,
+    targetNodeId: nodeId,
+    name: name.trim() || undefined,
+    networkMode: networkMode !== server.networkMode ? networkMode : undefined,
+    allocationId: allocationId || undefined,
+    ownerId: ownerId || undefined,
+    allocatedMemoryMb: memoryMb !== server.allocatedMemoryMb ? memoryMb : undefined,
+    allocatedCpuCores: cpuCores !== server.allocatedCpuCores ? cpuCores : undefined,
+    allocatedDiskMb: diskMb !== server.allocatedDiskMb ? diskMb : undefined,
+    includeAccess,
+    includeRoleGrants,
+    includeScheduledTasks,
+    includeDatabases,
+    includeInstalledMods,
+  });
+
+  const preflightMutation = useMutation({
+    mutationFn: () => serversApi.clonePreflight(server.id, buildPayload()),
+    onSuccess: (result) => {
+      setPlan(result);
+      setAcknowledgedWarnings([]);
+      setStep('review');
     },
+    onError: (error: any) => {
+      notifyError(error);
+    },
+  });
+
+  const cloneMutation = useMutation({
+    mutationFn: () =>
+      serversApi.clone(server.id, {
+        ...buildPayload(),
+        preflightId: plan?.preflightId,
+        fingerprint: plan?.fingerprint,
+        acknowledgedWarnings,
+      }),
     onSuccess: (newServer) => {
-      notifySuccess(copyFiles ? t('cloneServer.startedCopyingFiles') : t('cloneServer.cloned'));
+      notifySuccess(
+        mode === 'full' ? t('cloneServer.startedCopyingFiles') : t('cloneServer.cloned'),
+      );
       setOpen(false);
-      // Navigate to the new server's page
       if (newServer?.id) {
         navigate(`/servers/${newServer.id}`);
       }
+    },
+    onError: (error: any) => {
+      const code = getApiErrorCode(error);
+      if (code === 'CLONE_PREFLIGHT_STALE' || code === 'CLONE_PREFLIGHT_EXPIRED') {
+        // The reviewed plan is no longer valid — re-run the preflight so the
+        // user sees the current blockers/warnings instead of a dead end.
+        notifyError(error);
+        preflightMutation.mutate();
+        return;
+      }
+      notifyError(error);
     },
     onSettled: (newServer) => {
       queryClient.invalidateQueries({ queryKey: qk.servers() });
@@ -202,14 +257,62 @@ function CloneServerDialog({ server, disabled = false }: Props) {
         queryClient.invalidateQueries({ queryKey: qk.server(newServer.id) });
       }
     },
-    onError: (error: any) => {
-      notifyError(error);
-    },
   });
 
-  const isHostNetwork = networkMode === 'host';
-  const needsAllocation = isHostNetwork;
-  const allocationValid = !needsAllocation || allocationId;
+  const stopSource = async () => {
+    setStopPending(true);
+    try {
+      await serversApi.stop(server.id);
+      preflightMutation.mutate();
+    } catch (error: any) {
+      notifyError(error);
+    } finally {
+      setStopPending(false);
+    }
+  };
+
+  const needsAllocation = ALLOCATION_MODES.has(networkMode);
+
+  const modeOption = (value: CloneMode, title: string, description: string) => (
+    <button
+      type="button"
+      onClick={() => {
+        setMode(value);
+        setIncludeInstalledMods(value === 'full');
+      }}
+      aria-pressed={mode === value}
+      className={cn(
+        'flex-1 rounded-sm border p-3 text-left transition-colors',
+        mode === value
+          ? 'border-primary bg-primary/10'
+          : 'border-border/50 bg-surface-1/40 hover:border-border',
+      )}
+    >
+      <span className="block text-mini font-medium text-foreground">{title}</span>
+      <span className="mt-1 block text-micro text-muted-foreground">{description}</span>
+    </button>
+  );
+
+  const includeToggle = (
+    id: string,
+    checked: boolean,
+    onChange: (value: boolean) => void,
+    label: string,
+    hint: string,
+  ) => (
+    <div className="flex items-start gap-2">
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={(value) => onChange(value === true)}
+        className="mt-0.5"
+      />
+      <label htmlFor={id} className="min-w-0 cursor-pointer">
+        <span className="block text-mini text-foreground">{label}</span>
+        <span className="block text-micro text-muted-foreground">{hint}</span>
+      </label>
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -224,227 +327,292 @@ function CloneServerDialog({ server, disabled = false }: Props) {
           {t('cloneServer.clone')}
         </Button>
       </DialogTrigger>
-      <DialogContent size="md">
+      <DialogContent size={step === 'review' ? 'lg' : 'md'}>
         <DialogHeader>
           <DialogTitle>{t('cloneServer.title')}</DialogTitle>
           <DialogDescription>
-            {t('cloneServer.description', { name: server.name })}
+            {step === 'configure'
+              ? t('cloneServer.description', { name: server.name })
+              : t('cloneServer.review.description')}
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-3">
-        <div className="flex items-start gap-2 rounded-sm border border-warning/40 bg-warning/10 p-3 text-mini text-muted-foreground">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-          <span>
-            {copyFiles
-              ? t('cloneServer.warningCopyFiles')
-              : t('cloneServer.warningFreshInstall')}
-          </span>
-        </div>
-
-        <div className={`${blockClass} space-y-3`}>
-          {/* Name */}
-          <div className="space-y-1.5">
-            <label htmlFor="clone-name" className="type-overline">
-              {t('fields.name')}
-            </label>
-            <input
-              id="clone-name"
-              className={fieldClass}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('cloneServer.namePlaceholder')}
+          {step === 'review' && plan ? (
+            <CloneReviewStep
+              plan={plan}
+              acknowledgedWarnings={acknowledgedWarnings}
+              onToggleWarning={(code) =>
+                setAcknowledgedWarnings((current) =>
+                  current.includes(code)
+                    ? current.filter((item) => item !== code)
+                    : [...current, code],
+                )
+              }
+              onBack={() => setStep('configure')}
+              onConfirm={() => cloneMutation.mutate()}
+              submitting={cloneMutation.isPending}
+              stopSourcePending={stopPending}
+              onStopSource={stopSource}
             />
-          </div>
+          ) : (
+            <>
+              <div className="flex items-start gap-2 rounded-sm border border-warning/40 bg-warning/10 p-3 text-mini text-muted-foreground">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+                <span>
+                  {mode === 'full'
+                    ? t('cloneServer.warningCopyFiles')
+                    : t('cloneServer.warningFreshInstall')}
+                </span>
+              </div>
 
-          {/* Node */}
-          <div className={cn('space-y-1.5', dividerClass)}>
-            <label htmlFor="clone-node" className="type-overline">
-              {t('fields.node')}
-            </label>
-            <select
-              id="clone-node"
-              className={fieldClass}
-              value={nodeId}
-              onChange={(e) => setNodeId(e.target.value)}
-            >
-              {availableNodes.map((node) => (
-                <option key={node.id} value={node.id}>
-                  {node.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              {preflightMutation.isPending && (
+                <div className="flex items-center gap-2 rounded-sm border border-info/30 bg-info/10 p-3 text-mini text-info">
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                  <span>{t('cloneServer.preflightPending')}</span>
+                </div>
+              )}
 
-          {/* Network Mode */}
-          <div className={cn('space-y-1.5', dividerClass)}>
-            <label htmlFor="clone-network" className="type-overline">
-              {t('fields.networkMode')}
-            </label>
-            <select
-              id="clone-network"
-              className={fieldClass}
-              value={networkMode}
-              onChange={(e) => setNetworkMode(e.target.value)}
-            >
-              <option value="host">{t('networkModes.host')}</option>
-              <option value="bridge">{t('networkModes.bridge')}</option>
-              <option value="macvlan">{t('networkModes.macvlan')}</option>
-              <option value="mc-lan-static">{t('networkModes.mcLanStatic')}</option>
-              <option value="mc-lan-dynamic">{t('networkModes.mcLanDynamic')}</option>
-            </select>
-          </div>
+              <div className={`${blockClass} space-y-3`}>
+                {/* Mode */}
+                <div className="space-y-1.5">
+                  <span className="type-overline">{t('cloneServer.modeLabel')}</span>
+                  <div className="flex gap-2">
+                    {modeOption(
+                      'full',
+                      t('cloneServer.mode.full.title'),
+                      t('cloneServer.mode.full.description'),
+                    )}
+                    {modeOption(
+                      'configuration',
+                      t('cloneServer.mode.configuration.title'),
+                      t('cloneServer.mode.configuration.description'),
+                    )}
+                  </div>
+                </div>
 
-          {/* Allocation (host mode) */}
-          {isHostNetwork && (
-            <div className={cn('space-y-1.5', dividerClass)}>
-              <label className="type-overline">
-                {t('cloneServer.networkAllocation')} <span className="text-danger">*</span>
-              </label>
-              <select
-                className={cn(fieldClass, 'font-mono tabular-nums')}
-                value={allocationId}
-                onChange={(e) => setAllocationId(e.target.value)}
-              >
-                <option value="">{t('fields.selectAllocation')}</option>
-                {availableAllocations.map((allocation) => (
-                  <option key={allocation.id} value={allocation.id}>
-                    {allocation.ip}:{allocation.port}
-                    {allocation.alias ? ` (${allocation.alias})` : ''}
-                  </option>
-                ))}
-              </select>
-              {allocLoadError ? (
-                <p className="text-micro text-warning">{allocLoadError}</p>
-              ) : null}
-              {!allocLoadError && availableAllocations.length === 0 && nodeId ? (
-                <p className="type-meta">
-                  {t('fields.noAllocations')}{' '}
-                  <a
-                    href={`/admin/nodes/${encodeURIComponent(nodeId)}/allocations`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-primary hover:underline"
+                {/* Name */}
+                <div className={cn('space-y-1.5', dividerClass)}>
+                  <label htmlFor="clone-name" className="type-overline">
+                    {t('fields.name')}
+                  </label>
+                  <input
+                    id="clone-name"
+                    className={fieldClass}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t('cloneServer.namePlaceholder')}
+                  />
+                </div>
+
+                {/* Node */}
+                <div className={cn('space-y-1.5', dividerClass)}>
+                  <label htmlFor="clone-node" className="type-overline">
+                    {t('fields.node')}
+                  </label>
+                  <select
+                    id="clone-node"
+                    className={fieldClass}
+                    value={nodeId}
+                    onChange={(e) => setNodeId(e.target.value)}
                   >
-                    {t('fields.createOne')}
-                  </a>
-                </p>
-              ) : null}
-            </div>
-          )}
+                    {availableNodes.map((node) => (
+                      <option key={node.id} value={node.id}>
+                        {node.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          {/* Server Owner (admin only) */}
-          {isAdmin && (
-            <div className={cn('space-y-1.5', dividerClass)}>
-              <label className="type-overline">
-                {t('cloneServer.serverOwner')} <span className="text-danger">*</span>
-              </label>
-              <Combobox
-                value={ownerId}
-                onChange={(val: string) => setOwnerId(val)}
-                options={userOptions}
-                placeholder={t('cloneServer.ownerPlaceholder')}
-                searchPlaceholder={t('cloneServer.ownerSearchPlaceholder')}
-                className={fieldClass}
-              />
-              <p className="type-meta">
-                {t('cloneServer.ownerHint')}
-              </p>
-            </div>
-          )}
+                {/* Network Mode */}
+                <div className={cn('space-y-1.5', dividerClass)}>
+                  <label htmlFor="clone-network" className="type-overline">
+                    {t('fields.networkMode')}
+                  </label>
+                  <select
+                    id="clone-network"
+                    className={fieldClass}
+                    value={networkMode}
+                    onChange={(e) => setNetworkMode(e.target.value)}
+                  >
+                    <option value="host">{t('networkModes.host')}</option>
+                    <option value="bridge">{t('networkModes.bridge')}</option>
+                    <option value="macvlan">{t('networkModes.macvlan')}</option>
+                    <option value="mc-lan-static">{t('networkModes.mcLanStatic')}</option>
+                    <option value="mc-lan-dynamic">{t('networkModes.mcLanDynamic')}</option>
+                  </select>
+                </div>
 
-          {/* Copy Files Toggle */}
-          <div className={cn('flex items-center justify-between gap-3', dividerClass)}>
-            <div className="min-w-0">
-              <p className="type-overline">{t('cloneServer.copyFiles')}</p>
-              <p className="type-meta">
-                {t('cloneServer.copyFilesHint')}
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={copyFiles}
-              onClick={() => setCopyFiles(!copyFiles)}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 ${
-                copyFiles ? 'bg-primary' : 'bg-surface-3'
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-card shadow ring-0 transition duration-200 ease-in-out ${
-                  copyFiles ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-          {copyFiles && (
-            <p className="text-micro text-warning">
-              {t('cloneServer.copyFilesStatusWarning')}
-            </p>
-          )}
+                {/* Allocation */}
+                {needsAllocation && (
+                  <div className={cn('space-y-1.5', dividerClass)}>
+                    <label className="type-overline">
+                      {t('cloneServer.networkAllocation')}{' '}
+                      <span className="text-muted-foreground">{t('cloneServer.allocationOptional')}</span>
+                    </label>
+                    <select
+                      className={cn(fieldClass, 'font-mono tabular-nums')}
+                      value={allocationId}
+                      onChange={(e) => setAllocationId(e.target.value)}
+                    >
+                      <option value="">{t('cloneServer.allocationAuto')}</option>
+                      {availableAllocations.map((allocation) => (
+                        <option key={allocation.id} value={allocation.id}>
+                          {allocation.ip}:{allocation.port}
+                          {allocation.alias ? ` (${allocation.alias})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {allocLoadError ? (
+                      <p className="text-micro text-warning">{allocLoadError}</p>
+                    ) : null}
+                    {!allocLoadError && availableAllocations.length === 0 && nodeId ? (
+                      <p className="type-meta">
+                        {t('fields.noAllocations')}{' '}
+                        <a
+                          href={`/admin/nodes/${encodeURIComponent(nodeId)}/allocations`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {t('fields.createOne')}
+                        </a>
+                      </p>
+                    ) : null}
+                  </div>
+                )}
 
-          {/* Resources */}
-          <div className={cn('grid grid-cols-3 gap-3', dividerClass)}>
-            <div className="space-y-1.5">
-              <label htmlFor="clone-memory" className="type-overline">
-                {t('fields.memoryMb')}
-              </label>
-              <input
-                id="clone-memory"
-                type="number"
-                min={512}
-                className={cn(fieldClass, 'font-mono tabular-nums')}
-                value={memoryMb}
-                onChange={(e) => setMemoryMb(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="clone-cpu" className="type-overline">
-                {t('fields.cpuCores')}
-              </label>
-              <input
-                id="clone-cpu"
-                type="number"
-                min={1}
-                className={cn(fieldClass, 'font-mono tabular-nums')}
-                value={cpuCores}
-                onChange={(e) => setCpuCores(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="clone-disk" className="type-overline">
-                {t('fields.diskMb')}
-              </label>
-              <input
-                id="clone-disk"
-                type="number"
-                min={1024}
-                className={cn(fieldClass, 'font-mono tabular-nums')}
-                value={diskMb}
-                onChange={(e) => setDiskMb(Number(e.target.value))}
-              />
-            </div>
-          </div>
-        </div>
+                {/* Server Owner (admin only) */}
+                {isAdmin && (
+                  <div className={cn('space-y-1.5', dividerClass)}>
+                    <label className="type-overline">
+                      {t('cloneServer.serverOwner')}{' '}
+                      <span className="text-muted-foreground">{t('cloneServer.ownerOptional')}</span>
+                    </label>
+                    <Combobox
+                      value={ownerId}
+                      onChange={(val: string) => setOwnerId(val)}
+                      options={userOptions}
+                      placeholder={t('cloneServer.ownerPlaceholder')}
+                      searchPlaceholder={t('cloneServer.ownerSearchPlaceholder')}
+                      className={fieldClass}
+                    />
+                    <p className="type-meta">{t('cloneServer.ownerHint')}</p>
+                  </div>
+                )}
+
+                {/* Resources */}
+                <div className={cn('grid grid-cols-3 gap-3', dividerClass)}>
+                  <div className="space-y-1.5">
+                    <label htmlFor="clone-memory" className="type-overline">
+                      {t('fields.memoryMb')}
+                    </label>
+                    <input
+                      id="clone-memory"
+                      type="number"
+                      min={512}
+                      className={cn(fieldClass, 'font-mono tabular-nums')}
+                      value={memoryMb}
+                      onChange={(e) => setMemoryMb(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="clone-cpu" className="type-overline">
+                      {t('fields.cpuCores')}
+                    </label>
+                    <input
+                      id="clone-cpu"
+                      type="number"
+                      min={1}
+                      className={cn(fieldClass, 'font-mono tabular-nums')}
+                      value={cpuCores}
+                      onChange={(e) => setCpuCores(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="clone-disk" className="type-overline">
+                      {t('fields.diskMb')}
+                    </label>
+                    <input
+                      id="clone-disk"
+                      type="number"
+                      min={1024}
+                      className={cn(fieldClass, 'font-mono tabular-nums')}
+                      value={diskMb}
+                      onChange={(e) => setDiskMb(Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+
+                {/* Portable configuration surfaces */}
+                <div className={cn('space-y-3', dividerClass)}>
+                  <span className="type-overline">{t('cloneServer.includeTitle')}</span>
+                  {includeToggle(
+                    'clone-include-access',
+                    includeAccess,
+                    setIncludeAccess,
+                    t('cloneServer.include.access'),
+                    t('cloneServer.include.accessHint'),
+                  )}
+                  {includeToggle(
+                    'clone-include-roles',
+                    includeRoleGrants,
+                    setIncludeRoleGrants,
+                    t('cloneServer.include.roleGrants'),
+                    t('cloneServer.include.roleGrantsHint'),
+                  )}
+                  {includeToggle(
+                    'clone-include-tasks',
+                    includeScheduledTasks,
+                    setIncludeScheduledTasks,
+                    t('cloneServer.include.scheduledTasks'),
+                    t('cloneServer.include.scheduledTasksHint'),
+                  )}
+                  {includeToggle(
+                    'clone-include-databases',
+                    includeDatabases,
+                    setIncludeDatabases,
+                    t('cloneServer.include.databases'),
+                    t('cloneServer.include.databasesHint'),
+                  )}
+                  {includeToggle(
+                    'clone-include-mods',
+                    includeInstalledMods,
+                    setIncludeInstalledMods,
+                    t('cloneServer.include.installedMods'),
+                    t('cloneServer.include.installedModsHint'),
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </DialogBody>
+
         <DialogFooter>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 px-3 text-mini"
-            onClick={() => setOpen(false)}
-            disabled={cloneMutation.isPending}
-          >
-            {t('common:actions.cancel')}
-          </Button>
-          <Button
-            size="sm"
-            className="h-8 px-3 text-mini"
-            onClick={() => cloneMutation.mutate()}
-            disabled={cloneMutation.isPending || !name.trim() || !allocationValid}
-          >
-            {cloneMutation.isPending ? t('cloneServer.cloning') : t('cloneServer.submit')}
-          </Button>
+          {step === 'configure' ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 text-mini"
+                onClick={() => setOpen(false)}
+                disabled={preflightMutation.isPending}
+              >
+                {t('common:actions.cancel')}
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 px-3 text-mini"
+                onClick={() => preflightMutation.mutate()}
+                disabled={preflightMutation.isPending || !name.trim()}
+              >
+                {preflightMutation.isPending && (
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                )}
+                {t('cloneServer.reviewChanges')}
+              </Button>
+            </>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

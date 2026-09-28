@@ -192,8 +192,16 @@ export const collectUsedHostPortsByIp = (
     portBindings?: unknown;
     networkMode?: string | null;
   }>,
-  excludeId?: string
+  excludeId?: string,
+  /**
+   * Host-network servers are normally skipped: server creation never checks
+   * host ports because the host network namespace is shared with the node, and
+   * the create route guards host mode separately. Callers that DO need to know
+   * which host ports are taken (clone port-block shifting) pass `includeHost`.
+   */
+  options?: { includeHost?: boolean },
 ) => {
+  const includeHost = options?.includeHost === true;
   const used = new Map<string, Set<number>>();
   // Track network modes that use shared IP pools so we can catch conflicts
   // even when primaryIp is null but servers share the same network.
@@ -205,7 +213,7 @@ export const collectUsedHostPortsByIp = (
     if (shouldUseIpam(server.networkMode ?? undefined)) {
       continue;
     }
-    if (server.networkMode === "host") {
+    if (server.networkMode === "host" && !includeHost) {
       continue;
     }
     const bindings = parseStoredPortBindings(server.portBindings);
@@ -268,6 +276,25 @@ export const findPortConflict = (
   return (
     ports.find((port) => hostBucket?.has(port) || wildcardBucket?.has(port)) ?? null
   );
+};
+
+/**
+ * Find the next free host port at or after `startPort`, scanning down from 1024
+ * as a fallback. Shared by create/clone/transfer port assignment.
+ */
+export const findAvailableHostPort = (
+  usedPorts: Map<string, Set<number>>,
+  hostIp: string | null,
+  startPort: number,
+  maxPort = 65535,
+): number => {
+  for (let port = startPort; port <= maxPort; port++) {
+    if (!findPortConflict(usedPorts, hostIp, [port])) return port;
+  }
+  for (let port = 1024; port < startPort; port++) {
+    if (!findPortConflict(usedPorts, hostIp, [port])) return port;
+  }
+  throw new Error('No available host port found on this node');
 };
 
 export const resolvePrimaryHostPort = (server: any) => {
@@ -1590,7 +1617,7 @@ export {
   shouldUseIpam,
 } from "../../utils/ipam.js";
 export { hasNodeAccess, getUserAccessibleNodes } from "../../lib/permissions.js";
-export { serverCloneSchema, serverCreateSchema, serverUpdateSchema, validateRequestBody } from "../../lib/validation.js";
+export { serverCloneSchema, serverClonePreflightSchema, cloneModeSchema, serverCreateSchema, serverUpdateSchema, validateRequestBody } from "../../lib/validation.js";
 export {
   DatabaseProvisioningError,
   dropDatabase,

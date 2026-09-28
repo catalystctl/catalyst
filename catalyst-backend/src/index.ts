@@ -2145,6 +2145,14 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				`Task scheduler started with ${taskScheduler.getScheduledTasksCount()} active tasks`,
 			);
 
+			// Recover servers whose clone/transfer was interrupted by a restart.
+			try {
+				const { reconcileStuckOperations } = await import("./lib/reconcile-operations");
+				await reconcileStuckOperations(prisma, logger);
+			} catch (error) {
+				logger.warn({ error }, "Stuck-operation reconciliation failed");
+			}
+
 			// Start alert service
 			await alertService.start();
 			logger.info("Alert monitoring service started");

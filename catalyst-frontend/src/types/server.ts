@@ -189,20 +189,146 @@ export interface UpdateServerPayload {
   databaseAllocation?: number;
 }
 
-export interface CloneServerPayload {
+export type CloneMode = 'full' | 'configuration';
+
+export interface CloneIncludeOptions {
+  includeAccess?: boolean;
+  includeRoleGrants?: boolean;
+  includeScheduledTasks?: boolean;
+  includeDatabases?: boolean;
+  includeInstalledMods?: boolean;
+}
+
+/** Shared options for the preflight and submit calls. */
+export interface CloneServerPayload extends CloneIncludeOptions {
+  mode?: CloneMode;
   name?: string;
+  description?: string;
   nodeId?: string;
-  locationId?: string;
   allocatedMemoryMb?: number;
   allocatedCpuCores?: number;
   allocatedDiskMb?: number;
+  allocatedSwapMb?: number;
+  ioWeight?: number;
   backupAllocationMb?: number;
   databaseAllocation?: number;
   environment?: Record<string, string>;
   ownerId?: string;
   allocationId?: string;
   networkMode?: string;
+  backupStorageMode?: string;
+  copyBackupCredentials?: boolean;
+  /** Deprecated alias for `mode`. */
   copyFiles?: boolean;
+  /** Submit-only: preflight confirmation binding. */
+  preflightId?: string;
+  fingerprint?: string;
+  acknowledgedWarnings?: string[];
+}
+
+export interface ClonePreflightPayload extends CloneServerPayload {
+  mode: CloneMode;
+  targetNodeId: string;
+}
+
+export interface CloneBlocker {
+  code: string;
+  message: string;
+  field?: string;
+}
+
+export interface CloneWarning {
+  code: string;
+  message: string;
+  field?: string;
+}
+
+export interface CloneChange {
+  field: string;
+  label: string;
+  from: string | number | null;
+  to: string | number | null;
+  nodeSpecific: boolean;
+}
+
+export interface ClonePlan {
+  preflightId: string;
+  fingerprint: string;
+  mode: CloneMode;
+  crossNode: boolean;
+  source: {
+    id: string;
+    uuid: string;
+    name: string;
+    status: string;
+    nodeId: string;
+    nodeName: string;
+    locationId: string;
+    locationName: string;
+    templateId: string;
+    templateName: string;
+    networkMode: string;
+    primaryIp: string | null;
+    primaryPort: number;
+    dataDir: string;
+    dataSizeBytes: number | null;
+    installedMods: number;
+    scheduledTasks: number;
+    subUsers: number;
+    databases: number;
+  };
+  target: {
+    nodeId: string;
+    nodeName: string;
+    locationId: string;
+    locationName: string;
+    isOnline: boolean;
+    agentVersion: string | null;
+    serverDataDir: string;
+    sftpPort: number;
+    publicAddress: string;
+    supportedNetworkModes: string[];
+    capacity: {
+      memoryFreeMb: number | 'unlimited';
+      cpuFreeCores: number | 'unlimited';
+      diskFreeBytes: number | null;
+    };
+  };
+  resolved: {
+    name: string;
+    ownerId: string;
+    nodeId: string;
+    locationId: string;
+    templateId: string;
+    networkMode: string;
+    primaryIp: string | null;
+    primaryPort: number;
+    portBindings: Record<number, number>;
+    allocatedMemoryMb: number;
+    allocatedCpuCores: number;
+    allocatedDiskMb: number;
+    backupStorageMode: string;
+  };
+  allocations: {
+    required: boolean;
+    mode: 'ipam' | 'allocation' | 'host-public' | 'none';
+    available: Array<{ id: string; ip: string; port: number; alias: string | null }>;
+    selected: { id: string; ip: string; port: number } | null;
+  };
+  includeSurfaces: {
+    access: boolean;
+    roleGrants: boolean;
+    scheduledTasks: boolean;
+    databases: boolean;
+  };
+  requirements: {
+    sourceStopped: boolean;
+    installWillRun: boolean;
+    estimatedDurationSec: number | null;
+  };
+  changes: CloneChange[];
+  blockers: CloneBlocker[];
+  warnings: CloneWarning[];
 }
 
 export interface TransferServerPayload {

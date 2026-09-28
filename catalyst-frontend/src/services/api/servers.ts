@@ -6,6 +6,8 @@ import type {
   TransferServerPayload,
   CreateServerPayload,
   CloneServerPayload,
+  ClonePreflightPayload,
+  ClonePlan,
   ServerLogs,
   RestartPolicy,
   BackupStorageMode,
@@ -41,6 +43,16 @@ export const serversApi = {
   },
   clone: async (id: string, payload: CloneServerPayload) => {
     const data = await apiClient.post<ApiResponse<Server>>(`/api/servers/${id}/clone`, payload);
+    return data.data;
+  },
+  clonePreflight: async (id: string, payload: ClonePreflightPayload) => {
+    const data = await apiClient.post<ApiResponse<ClonePlan>>(
+      `/api/servers/${id}/clone/preflight`,
+      payload,
+    );
+    if (!data.data) {
+      throw new Error(data.error || 'Clone preflight failed');
+    }
     return data.data;
   },
   update: async (id: string, payload: UpdateServerPayload) => {
