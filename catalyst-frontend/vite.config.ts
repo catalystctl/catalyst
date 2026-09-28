@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -10,6 +11,29 @@ export default defineConfig(async ({ mode }) => {
 
   const plugins: Plugin[] = [
     react(),
+    // decimal.js-light (recharts' tick engine) ships a UMD browser build with a
+    // runtime `typeof define === 'function' && define.amd` branch. Monaco's AMD
+    // loader defines a global `define`, so on any page that loaded the file
+    // editor first the branch wins: the module skips `module.exports`, recharts'
+    // default import becomes a plain object, and every chart crashes with
+    // "q.default is not a constructor". The package's `browser` field maps back
+    // to that UMD file even when aliased, so serve its ESM build through a
+    // virtual module instead — no runtime AMD detection survives.
+    {
+      name: 'decimal.js-light-esm',
+      enforce: 'pre',
+      resolveId(source) {
+        if (source === 'decimal.js-light') return '\0decimal.js-light-esm';
+        return null;
+      },
+      load(id) {
+        if (id !== '\0decimal.js-light-esm') return null;
+        return readFileSync(
+          require.resolve('decimal.js-light/decimal.mjs'),
+          'utf8',
+        );
+      },
+    } as Plugin,
     // Resolve npm packages imported by catalyst-plugins files using the
     // frontend's node_modules (where pnpm creates symlinks).
     {
