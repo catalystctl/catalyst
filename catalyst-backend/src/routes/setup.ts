@@ -102,6 +102,11 @@ export async function setupRoutes(app: FastifyInstance) {
 	app.get(
 		"/status",
 		async (_request: FastifyRequest, reply: FastifyReply) => {
+			// This answer flips from true to false exactly once (when setup
+			// completes). A browser or CDN replaying a cached "setupRequired:
+			// true" would strand an installed panel on the wizard until it
+			// expires — never let it be stored.
+			reply.header("Cache-Control", "no-store");
 			// SECURITY: once setup has completed (flag row exists), the wizard is
 			// closed permanently regardless of the live user/admin counts.
 			if (await isSetupCompleted()) {

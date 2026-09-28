@@ -35,6 +35,7 @@ describe('useSetupStatus', () => {
 
   beforeEach(() => {
     getMock.mockReset();
+    localStorage.clear();
     client = new QueryClient({
       // Hook supplies its own retry policy — keep client defaults out of the way.
       defaultOptions: { queries: { retry: false, staleTime: 0 } },
@@ -127,6 +128,43 @@ describe('useSetupStatus', () => {
       expect(result.current.error).toBeTruthy();
       // Initial attempt + retries (failureCount < 8 → up to 8 attempts)
       expect(getMock.mock.calls.length).toBeGreaterThan(1);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  it('does not re-open the wizard on error once this browser saw setup complete', async () => {
+    // A panel that was set up, then lost the backend for a moment (restart,
+    // upgrade) must not fall back to the OOBE wizard.
+    localStorage.setItem('catalyst.setup-complete', '1');
+    vi.useFakeTimers();
+    const onUnhandled = (reason: unknown) => {
+      const msg =
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === 'object' && reason && 'message' in reason
+            ? String((reason as { message?: unknown }).message)
+            : String(reason);
+      if (msg.includes('Bad Gateway')) return;
+      throw reason;
+    };
+    process.on('unhandledRejection', onUnhandled);
+
+    try {
+      getMock.mockRejectedValue({
+        response: { status: 502 },
+        message: 'Bad Gateway',
+      });
+      const { result } = renderHook(() => useSetupStatus(), {
+        wrapper: createWrapper(client),
+      });
+
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.setupRequired).toBe(false);
     } finally {
       process.off('unhandledRejection', onUnhandled);
     }

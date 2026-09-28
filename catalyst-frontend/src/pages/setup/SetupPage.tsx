@@ -104,7 +104,11 @@ function SetupPage() {
  useEffect(() => {
  const checkStatus = async () => {
  try {
- const data = await apiClient.get<{ setupRequired: boolean }>('/api/setup/status');
+ const data = await apiClient.get<{ setupRequired: boolean }>('/api/setup/status', {
+  // Never trust a cached wizard answer — an installed panel must redirect off
+  // /setup even if the browser stored an earlier response.
+  cache: 'no-store',
+ });
  // Dev preview: `?preview=1` renders the wizard on an already-set-up panel
  // so its states can be reviewed. Submitting is unchanged.
  const previewWizard =

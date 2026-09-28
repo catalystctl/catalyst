@@ -6,6 +6,29 @@ import { getLocalizedErrorMessage } from '../i18n/api-errors';
 
 const SETUP_STATUS_TIMEOUT_MS = 15000;
 
+// Per-browser memory that this panel has already been set up. Once a status
+// response (or a completed wizard) proves setup is done, a later transient
+// failure must not fall back to the wizard — that is what stranded installed
+// panels on `/setup` after a backend restart or upgrade. Clearing this only
+// re-arms the client-side gate, never the server-side setup guard.
+const SETUP_DONE_STORAGE_KEY = 'catalyst.setup-complete';
+
+function rememberSetupCompleted(): void {
+  try {
+    localStorage.setItem(SETUP_DONE_STORAGE_KEY, '1');
+  } catch {
+    /* private mode / storage disabled — best effort */
+  }
+}
+
+function hasRememberedSetupCompleted(): boolean {
+  try {
+    return localStorage.getItem(SETUP_DONE_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 interface SetupStatus {
   setupRequired: boolean;
   isLoading: boolean;
@@ -25,6 +48,10 @@ interface SetupStatus {
  * that as "setup done" permanently strands the operator on `/login` with no
  * accounts. Fail open toward setup, and keep the app in a loading state until
  * we have a definitive answer (or exhaust retries).
+ *
+ * The fail-open only applies to genuinely unknown panels: if this browser has
+ * ever seen setup completed, an error resolves to "not required" so an
+ * installed panel is never sent back to the wizard.
  */
 export function useSetupStatus(): SetupStatus {
   const queryClient = useQueryClient();
@@ -38,11 +65,19 @@ export function useSetupStatus(): SetupStatus {
     queryKey: ['setup', 'status'],
     queryFn: async () => {
       try {
-        const res = await apiClient.get<{ setupRequired: boolean }>('/api/setup/status');
-        return res.setupRequired ?? false;
+        const res = await apiClient.get<{ setupRequired: boolean }>('/api/setup/status', {
+          // The backend marks this no-store; force it client-side too so a
+          // response cached before that header existed can never replay
+          // "setupRequired: true" onto an already-installed panel.
+          cache: 'no-store',
+        });
+        const setupRequired = res.setupRequired ?? false;
+        if (!setupRequired) rememberSetupCompleted();
+        return setupRequired;
       } catch (err: any) {
         // Old backends without the OOBE endpoint — treat as already set up.
         if (err?.response?.status === 404) {
+          rememberSetupCompleted();
           return false;
         }
         throw err;
@@ -65,6 +100,7 @@ export function useSetupStatus(): SetupStatus {
 
   useEffect(() => {
     const handleSetupComplete = () => {
+      rememberSetupCompleted();
       queryClient.invalidateQueries({ queryKey: ['setup', 'status'] });
     };
     window.addEventListener('catalyst:setup-complete', handleSetupComplete);
@@ -88,8 +124,11 @@ export function useSetupStatus(): SetupStatus {
 
   // Definitive false only after a successful response (or 404 mapped to false).
   // On terminal error, fail open to setup so first-run Docker installs are not
-  // stranded on /login with zero users.
-  const setupRequired = typeof data === 'boolean' ? data : true;
+  // stranded on /login with zero users — unless this browser already knows the
+  // panel was set up, in which case an error must not re-open the wizard.
+  const setupRequired = typeof data === 'boolean'
+    ? data
+    : !hasRememberedSetupCompleted();
 
   const error = timedOut && !isFetched
     ? i18n.t('setupStatus.timedOut', { ns: 'common', ms: SETUP_STATUS_TIMEOUT_MS })

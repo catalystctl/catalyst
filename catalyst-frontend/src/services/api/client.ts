@@ -106,6 +106,7 @@ class ApiClient {
       signal?: AbortSignal;
       responseType?: 'json' | 'blob' | 'text';
       timeoutMs?: number;
+      cache?: RequestCache;
       onDownloadProgress?: (event: { loaded: number; total?: number }) => void;
     },
   ): Promise<T> {
@@ -117,6 +118,7 @@ class ApiClient {
       signal,
       responseType = 'json',
       timeoutMs,
+      cache,
     } = options ?? {};
     const effectiveTimeoutMs = timeoutMs ?? (responseType === 'blob' ? BLOB_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
 
@@ -217,6 +219,7 @@ class ApiClient {
         method,
         headers: finalHeaders,
         credentials,
+        cache,
         body: hasBody
           ? (body instanceof FormData ? body : typeof body === 'string' ? body : JSON.stringify(body))
           : undefined,
@@ -340,7 +343,7 @@ class ApiClient {
     }
   }
 
-  get<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; responseType?: 'json' | 'blob' | 'text'; timeoutMs?: number; onDownloadProgress?: (event: { loaded: number; total?: number }) => void }): Promise<T> {
+  get<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; responseType?: 'json' | 'blob' | 'text'; timeoutMs?: number; cache?: RequestCache; onDownloadProgress?: (event: { loaded: number; total?: number }) => void }): Promise<T> {
     return this.request<T>('GET', path, options);
   }
 

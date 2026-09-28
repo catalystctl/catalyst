@@ -79,6 +79,46 @@ describe("setup wizard completion flag", () => {
     expect((reply as any)._code).toBe(409);
     expect(createdUsers).toHaveLength(0);
   });
+
+  it("GET /status is uncacheable so a stored answer cannot re-open an installed panel", async () => {
+    vi.resetModules();
+    vi.doMock("../db.js", () => ({
+      prisma: {
+        systemSetting: {
+          findUnique: async ({ where }: any) => ({ id: where.id, createdAt: new Date() }),
+        },
+        user: { count: async () => 5 },
+      },
+    }));
+    vi.doMock("../auth.js", () => ({ auth: { api: {} } }));
+
+    const mod = await import("../routes/setup.js");
+    const handlers: Record<string, any> = {};
+    const app = {
+      get: (path: string, handler: any) => {
+        handlers[path] = handler;
+      },
+      post: () => {},
+      log: { warn: () => {}, error: () => {} },
+    } as any;
+    await mod.setupRoutes(app);
+
+    const headers: Record<string, string> = {};
+    const reply = {
+      header(name: string, value: string) {
+        headers[name] = value;
+        return reply;
+      },
+      send(body: any) {
+        (reply as any)._body = body;
+        return reply;
+      },
+    };
+    await handlers["/status"]({ log: { warn: () => {} } }, reply);
+
+    expect(headers["Cache-Control"]).toBe("no-store");
+    expect((reply as any)._body).toEqual({ setupRequired: false });
+  });
 });
 
 describe("placeholder secret boot guard", () => {
