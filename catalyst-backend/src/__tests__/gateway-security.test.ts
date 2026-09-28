@@ -128,9 +128,7 @@ describe("Gateway security & reliability regressions", () => {
     seedAgent(gw, "src-node", srcSocket);
     seedAgent(gw, "dst-node", dstSocket);
 
-    const relayPromise = gw.relayBackupStream("src-node", "dst-node", {
-      backupId: "b1",
-    });
+    const relayPromise = gw.relayBackupStream("src-node", "dst-node", "req-1");
 
     // An intruder (different node) sends binary frames.
     const intruder = makeFakeSocket();
@@ -158,9 +156,7 @@ describe("Gateway security & reliability regressions", () => {
     seedAgent(gw, "src-node", srcSocket);
     seedAgent(gw, "dst-node", dstSocket);
 
-    const relayPromise = gw.relayBackupStream("src-node", "dst-node", {
-      backupId: "b1",
-    });
+    const relayPromise = gw.relayBackupStream("src-node", "dst-node", "req-1");
 
     // Target node dies: onClose-equivalent rejects the relay.
     gw.rejectBackupRelay("dst-node", new Error("target disconnected"));

@@ -20,6 +20,12 @@ import { normalizeHostIp } from "../utils/ipam";
 import { captureSystemError } from "../services/error-logger";
 import { injectPterodactylCompatibilityVars } from "../utils/pterodactyl-env.js";
 import { getSecuritySettings, maxUploadBytesFromMb } from "../services/mailer";
+import {
+  DEFAULT_RELAY_FLOW_CONFIG,
+  evaluateRelayFlow,
+  initialRelayFlowState,
+  type RelayFlowState,
+} from "./relay-flow-control";
 import { acknowledgeAgentCommand, publishAgentCommand, publishFanout, subscribeAgentCommand, subscribeFanout, type AgentCommandRelayResult, type FanoutEvent } from "../lib/event-bus.js";
 
 /**
@@ -242,7 +248,17 @@ export class WebSocketGateway {
   // nodeId → timestamp of the last heartbeat whose lastSeenAt hit the database.
   // Entries older than ~10 minutes are swept; reset on agent reconnect.
   private readonly nodeLastPersistedSeen = new Map<string, number>();
-  private activeBackupRelay: { sourceNodeId: string; targetNodeId: string; resolve: () => void; reject: (err: Error) => void } | null = null;
+  private activeBackupRelay: {
+    sourceNodeId: string;
+    targetNodeId: string;
+    /** Stream id shared with both agents; used for flow-control commands. */
+    requestId?: string;
+    flow: RelayFlowState;
+    /** Drain watcher while the source is paused (no frames arrive then). */
+    flowTimer?: ReturnType<typeof setInterval>;
+    resolve: () => void;
+    reject: (err: Error) => void;
+  } | null = null;
   private consoleOutputCounters = new Map<string, { count: number; resetAt: number; warned: boolean }>();
   private clientCommandCounters = new Map<string, { count: number; resetAt: number }>();
   // Per-connection inbound client WS message limiter: every message costs DB
@@ -1450,20 +1466,11 @@ export class WebSocketGateway {
           reject(new Error("Relay target disconnected mid-stream"));
           return;
         }
-        // Backpressure guard: bulk binary relay must not buffer unboundedly
-        // behind a slow consumer. Aborting the stream surfaces the stall to
-        // both operators instead of growing panel memory silently.
-        if (
-          Number(targetAgent.socket.bufferedAmount ?? 0) >
-          WebSocketGateway.AGENT_BACKPRESSURE_BYTES
-        ) {
-          const { reject } = this.activeBackupRelay;
-          this.activeBackupRelay = null;
-          this.bumpCounter(this.reliabilityBackpressureDrops, nodeId);
-          reject(new Error("Relay target backpressure threshold exceeded"));
-          return;
-        }
+        // Flow control instead of a fixed watermark: a bulk copy legitimately
+        // outruns a slow target, so throttle the source rather than killing the
+        // transfer. Only a target that stops draining entirely aborts.
         targetAgent.socket.send(data);
+        this.applyRelayFlowControl(nodeId, targetAgent);
         return;
       }
 
@@ -4668,9 +4675,99 @@ export class WebSocketGateway {
    * Binary frames from sourceNodeId are forwarded directly to targetNodeId.
    * Returns a promise that resolves when the source sends backup_stream_complete.
    */
+  /**
+   * Adaptive backpressure for the active bulk relay (see relay-flow-control.ts).
+   *
+   * The source agent is asked to pause/resume around an adaptive watermark. An
+   * older agent that does not understand the command ignores it, and the stall
+   * detector remains the backstop so panel memory cannot grow unbounded.
+   */
+  private applyRelayFlowControl(sourceNodeId: string, targetAgent: any): void {
+    const relay = this.activeBackupRelay;
+    if (!relay) return;
+
+    const bufferedAmount = Number(targetAgent?.socket?.bufferedAmount ?? 0);
+    const decision = evaluateRelayFlow(
+      relay.flow,
+      bufferedAmount,
+      DEFAULT_RELAY_FLOW_CONFIG,
+      Date.now(),
+    );
+    relay.flow = decision.state;
+
+    if (decision.action === 'abort') {
+      this.clearRelayFlowTimer(relay);
+      this.activeBackupRelay = null;
+      this.bumpCounter(this.reliabilityBackpressureDrops, sourceNodeId);
+      relay.reject(new Error(`Relay target stalled: ${decision.reason ?? 'no progress'}`));
+      return;
+    }
+
+    if (decision.action === 'pause') {
+      this.sendRelayFlowCommand(sourceNodeId, relay, true, bufferedAmount, decision.reason);
+      // While paused no further binary frames arrive, so the drain has to be
+      // observed on a timer — otherwise the resume would never be evaluated and
+      // the transfer would sit paused until the relay timeout.
+      if (!relay.flowTimer) {
+        relay.flowTimer = setInterval(() => {
+          const current = this.activeBackupRelay;
+          if (!current || current !== relay) {
+            this.clearRelayFlowTimer(relay);
+            return;
+          }
+          this.applyRelayFlowControl(sourceNodeId, this.agents.get(relay.targetNodeId));
+        }, 250);
+        relay.flowTimer.unref?.();
+      }
+      return;
+    }
+
+    if (decision.action === 'resume') {
+      this.clearRelayFlowTimer(relay);
+      this.sendRelayFlowCommand(sourceNodeId, relay, false, bufferedAmount, decision.reason);
+    }
+  }
+
+  private clearRelayFlowTimer(relay: { flowTimer?: ReturnType<typeof setInterval> }): void {
+    if (relay.flowTimer) {
+      clearInterval(relay.flowTimer);
+      relay.flowTimer = undefined;
+    }
+  }
+
+  /**
+   * Tell the source agent to pause or resume the stream. Best effort: an agent
+   * that predates the command ignores it, and fire-and-forget keeps the binary
+   * path off the control plane.
+   */
+  private sendRelayFlowCommand(
+    sourceNodeId: string,
+    relay: { targetNodeId: string; requestId?: string },
+    paused: boolean,
+    bufferedAmount: number,
+    reason?: string,
+  ): void {
+    this.logger.debug(
+      {
+        sourceNodeId,
+        targetNodeId: relay.targetNodeId,
+        bufferedAmount,
+        action: paused ? 'pause' : 'resume',
+        reason,
+      },
+      'Relay flow control',
+    );
+    void this.sendToAgent(sourceNodeId, {
+      type: 'backup_stream_flow',
+      requestId: relay.requestId,
+      paused,
+    }).catch(() => {});
+  }
+
   async relayBackupStream(
     sourceNodeId: string,
     targetNodeId: string,
+    requestId?: string,
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const sourceAgent = this.agents.get(sourceNodeId);
@@ -4695,12 +4792,20 @@ export class WebSocketGateway {
       };
 
       const timeout = setTimeout(() => {
+        if (this.activeBackupRelay) this.clearRelayFlowTimer(this.activeBackupRelay);
         this.activeBackupRelay = null;
         cleanup();
         reject(new Error("Backup stream relay timed out (5 min)"));
       }, 5 * 60 * 1000);
 
-      this.activeBackupRelay = { sourceNodeId, targetNodeId, resolve, reject };
+      this.activeBackupRelay = {
+        sourceNodeId,
+        targetNodeId,
+        requestId,
+        flow: initialRelayFlowState(DEFAULT_RELAY_FLOW_CONFIG, Date.now()),
+        resolve,
+        reject,
+      };
 
       // Tag the socket allowed to inject binary frames for this relay. The
       // binary branch of handleAgentMessage drops frames from any other socket.
@@ -4745,6 +4850,7 @@ export class WebSocketGateway {
       const sourceAgent = this.agents.get(sourceNodeId);
       if (sourceAgent) delete sourceAgent.socket.__catalystRelaySocket;
       clearTimeout((this.activeBackupRelay as any)._timeout);
+      this.clearRelayFlowTimer(this.activeBackupRelay);
       const { resolve } = this.activeBackupRelay;
       this.activeBackupRelay = null;
       resolve();
@@ -4763,6 +4869,7 @@ export class WebSocketGateway {
       const sourceAgent = this.agents.get(this.activeBackupRelay.sourceNodeId);
       if (sourceAgent) delete sourceAgent.socket.__catalystRelaySocket;
       clearTimeout((this.activeBackupRelay as any)._timeout);
+      this.clearRelayFlowTimer(this.activeBackupRelay);
       const { reject } = this.activeBackupRelay;
       this.activeBackupRelay = null;
       reject(err);
