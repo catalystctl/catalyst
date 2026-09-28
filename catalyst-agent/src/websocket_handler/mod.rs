@@ -190,6 +190,25 @@ pub(crate) fn clamp_agent_log_lines(lines: u64) -> usize {
     (lines as usize).clamp(1, MAX_AGENT_LOG_LINES)
 }
 
+/// Parse and validate an optional RFC3339 time window from an agent_logs request.
+/// Returns canonical (since, until) strings; invalid or missing values become None.
+pub(crate) fn parse_log_time_window(msg: &Value) -> (Option<String>, Option<String>) {
+    fn parse(v: Option<&Value>) -> Option<(String, chrono::DateTime<chrono::FixedOffset>)> {
+        let dt = chrono::DateTime::parse_from_rfc3339(v?.as_str()?).ok()?;
+        Some((dt.to_rfc3339(), dt))
+    }
+
+    let since = parse(msg.get("since"));
+    let until = parse(msg.get("until"));
+    if let (Some((_, s)), Some((_, u))) = (&since, &until) {
+        // An inverted window is meaningless; drop both bounds.
+        if s >= u {
+            return (None, None);
+        }
+    }
+    (since.map(|(s, _)| s), until.map(|(u, _)| u))
+}
+
 /// SEC-H-04: deny-list for agent_config_update. These keys re-point the agent
 /// binary source, config persistence, network fabric, or file access and must
 /// never change via a panel message unless `allowUnsafe=true` (with backup +
@@ -2839,27 +2858,46 @@ impl WebSocketHandler {
             Some("agent_logs") => {
                 let lines =
                     clamp_agent_log_lines(msg.get("lines").and_then(|v| v.as_u64()).unwrap_or(200));
+                let (since, until) = parse_log_time_window(&msg);
                 let msg_clone = msg.clone();
                 let write = Arc::clone(write);
                 self.connection_tasks.lock().await.spawn(async move {
+                    // Re-parse the applied window for the fallback comparison.
+                    let since_dt = since
+                        .as_deref()
+                        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                        .map(|d| d.with_timezone(&chrono::Utc));
+                    let until_dt = until
+                        .as_deref()
+                        .and_then(|u| chrono::DateTime::parse_from_rfc3339(u).ok())
+                        .map(|d| d.with_timezone(&chrono::Utc));
+
                     // Try journalctl first (systemd-managed agents)
+                    let mut journal_args: Vec<String> = vec![
+                        "-u".to_string(),
+                        "catalyst-agent".to_string(),
+                        "-n".to_string(),
+                        lines.to_string(),
+                        "--no-pager".to_string(),
+                        "--output=json".to_string(),
+                    ];
+                    if let Some(s) = &since {
+                        journal_args.push("--since".to_string());
+                        journal_args.push(s.clone());
+                    }
+                    if let Some(u) = &until {
+                        journal_args.push("--until".to_string());
+                        journal_args.push(u.clone());
+                    }
                     let journal_output = tokio::process::Command::new("journalctl")
-                        .args([
-                            "-u",
-                            "catalyst-agent",
-                            "-n",
-                            &lines.to_string(),
-                            "--no-pager",
-                            "--output=json",
-                        ])
+                        .args(&journal_args)
                         .output()
                         .await;
 
-                    let logs: Vec<Value> =
-                        match &journal_output {
-                            Ok(out) if out.status.success() && !out.stdout.is_empty() => {
-                                // Parse journalctl JSON output
-                                String::from_utf8_lossy(&out.stdout)
+                    let logs: Vec<Value> = match &journal_output {
+                        Ok(out) if out.status.success() && !out.stdout.is_empty() => {
+                            // Parse journalctl JSON output
+                            String::from_utf8_lossy(&out.stdout)
                                 .lines()
                                 .filter_map(|line| serde_json::from_str::<Value>(line).ok())
                                 .map(|entry| {
@@ -2867,9 +2905,11 @@ impl WebSocketHandler {
                                     let ts_iso = entry["__REALTIME_TIMESTAMP"]
                                         .as_str()
                                         .and_then(|v| v.parse::<u64>().ok())
-                                        .map(|us| chrono::DateTime::from_timestamp_micros(us as i64)
-                                            .map(|dt| dt.to_rfc3339())
-                                            .unwrap_or_default())
+                                        .map(|us| {
+                                            chrono::DateTime::from_timestamp_micros(us as i64)
+                                                .map(|dt| dt.to_rfc3339())
+                                                .unwrap_or_default()
+                                        })
                                         .unwrap_or_default();
                                     json!({
                                         "timestamp": ts_iso,
@@ -2885,40 +2925,59 @@ impl WebSocketHandler {
                                     })
                                 })
                                 .collect()
-                            }
-                            _ => {
-                                // Fallback: try reading from /var/log/catalyst-agent/ or agent data dir
-                                // Use tail-style reading to avoid loading huge files into memory.
-                                let log_paths = vec![
-                                    "/var/log/catalyst-agent/agent.log",
-                                    "/opt/catalyst-agent/agent.log",
-                                ];
-                                let mut parsed = vec![];
-                                for path in &log_paths {
-                                    if let Ok(content) = read_tail(path, lines).await {
-                                        // Parse plain-text log lines
-                                        // Expected format: YYYY-MM-DDTHH:MM:SS [LEVEL] module::path: message
-                                        for line in content.lines() {
-                                            let (level, target, message) = parse_log_line(line);
-                                            let ts = extract_timestamp(line);
-                                            parsed.push(json!({
-                                                "timestamp": ts,
-                                                "level": level,
-                                                "target": target,
-                                                "message": message,
-                                            }));
+                        }
+                        _ => {
+                            // Fallback: try reading from /var/log/catalyst-agent/ or agent data dir
+                            // Use tail-style reading to avoid loading huge files into memory.
+                            let log_paths = vec![
+                                "/var/log/catalyst-agent/agent.log",
+                                "/opt/catalyst-agent/agent.log",
+                            ];
+                            let mut parsed = vec![];
+                            for path in &log_paths {
+                                if let Ok(content) = read_tail(path, lines).await {
+                                    // Parse plain-text log lines
+                                    // Expected format: YYYY-MM-DDTHH:MM:SS [LEVEL] module::path: message
+                                    for line in content.lines() {
+                                        if parsed.len() >= lines {
+                                            break;
                                         }
-                                        break;
+                                        let (level, target, message) = parse_log_line(line);
+                                        let ts = extract_timestamp(line);
+                                        let in_window =
+                                            match chrono::DateTime::parse_from_rfc3339(&ts)
+                                                .ok()
+                                                .map(|d| d.with_timezone(&chrono::Utc))
+                                            {
+                                                Some(t) => {
+                                                    since_dt.is_none_or(|s| t >= s)
+                                                        && until_dt.is_none_or(|u| t <= u)
+                                                }
+                                                // No usable timestamp: only keep when unfiltered.
+                                                None => since_dt.is_none() && until_dt.is_none(),
+                                            };
+                                        if !in_window {
+                                            continue;
+                                        }
+                                        parsed.push(json!({
+                                            "timestamp": ts,
+                                            "level": level,
+                                            "target": target,
+                                            "message": message,
+                                        }));
                                     }
+                                    break;
                                 }
-                                parsed
                             }
-                        };
+                            parsed
+                        }
+                    };
 
                     let response = json!({
                         "type": "agent_logs_response",
                         "requestId": msg_clone.get("requestId"),
                         "logs": logs,
+                        "window": { "since": since, "until": until },
                     });
                     let _ =
                         send_ws_with_timeout(&write, Message::Text(response.to_string().into()))
@@ -4818,6 +4877,43 @@ mod security_hardening_tests {
         assert_eq!(clamp_agent_log_lines(0), 1);
         assert_eq!(clamp_agent_log_lines(200), 200);
         assert_eq!(clamp_agent_log_lines(99999), MAX_AGENT_LOG_LINES);
+    }
+
+    #[test]
+    fn log_time_window_absent() {
+        let msg = json!({ "type": "agent_logs", "lines": 200 });
+        assert_eq!(parse_log_time_window(&msg), (None, None));
+    }
+
+    #[test]
+    fn log_time_window_valid() {
+        let msg = json!({
+            "since": "2026-01-01T00:00:00.000Z",
+            "until": "2026-01-02T00:00:00.000Z",
+        });
+        let (since, until) = parse_log_time_window(&msg);
+        assert_eq!(since.as_deref(), Some("2026-01-01T00:00:00+00:00"));
+        assert_eq!(until.as_deref(), Some("2026-01-02T00:00:00+00:00"));
+    }
+
+    #[test]
+    fn log_time_window_invalid_since() {
+        let msg = json!({
+            "since": "not-a-timestamp",
+            "until": "2026-01-02T00:00:00Z",
+        });
+        let (since, until) = parse_log_time_window(&msg);
+        assert_eq!(since, None);
+        assert_eq!(until.as_deref(), Some("2026-01-02T00:00:00+00:00"));
+    }
+
+    #[test]
+    fn log_time_window_inverted_is_dropped() {
+        let msg = json!({
+            "since": "2026-01-02T00:00:00Z",
+            "until": "2026-01-01T00:00:00Z",
+        });
+        assert_eq!(parse_log_time_window(&msg), (None, None));
     }
 
     #[test]

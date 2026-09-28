@@ -14,8 +14,10 @@ import {
  Check,
  Server,
  Loader2,
+ LifeBuoy,
 } from 'lucide-react';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import DiagnosticsExportModal from '../../components/admin/DiagnosticsExportModal';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -715,6 +717,7 @@ function SystemErrorsPage() {
  const [range, setRange] = useState('24h');
  const [selectedError, setSelectedError] = useState<SystemError | null>(null);
  const [showExport, setShowExport] = useState(false);
+ const [showDiagnostics, setShowDiagnostics] = useState(false);
  const [showResolveAll, setShowResolveAll] = useState(false);
  const [resolveAllError, setResolveAllError] = useState<string | null>(null);
 
@@ -821,6 +824,15 @@ function SystemErrorsPage() {
  >
  <Download className="h-3.5 w-3.5" />
  {t('systemErrors.export')}
+ </Button>
+ <Button
+ variant="outline"
+ size="sm"
+ className="h-8 gap-1.5 rounded-sm px-3 text-mini"
+ onClick={() => setShowDiagnostics(true)}
+ >
+ <LifeBuoy className="h-3.5 w-3.5" />
+ {t('diagnostics.button')}
  </Button>
  <Button
  variant="outline"
@@ -1045,6 +1057,11 @@ function SystemErrorsPage() {
  filters={{ level, component, nodeId, resolved: resolvedBool }}
  onClose={() => setShowExport(false)}
  />
+ )}
+
+ {/* ── Diagnostics Modal ── */}
+ {showDiagnostics && (
+ <DiagnosticsExportModal onClose={() => setShowDiagnostics(false)} />
  )}
 
  {/* ── Resolve All Modal ── */}

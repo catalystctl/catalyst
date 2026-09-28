@@ -396,6 +396,21 @@ export const adminApi = {
     });
     return data;
   },
+  exportDiagnostics: async (params?: {
+    hours?: number;
+    from?: string;
+    to?: string;
+    nodes?: string;
+    servers?: string;
+    redaction?: 'standard' | 'strict';
+    sections?: string;
+  }) => {
+    const data = await apiClient.get<Blob>('/api/admin/diagnostics/export', {
+      params,
+      responseType: 'blob',
+    });
+    return data;
+  },
   resolveAllSystemErrors: async (payload?: {
     level?: string;
     component?: string;

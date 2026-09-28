@@ -21,6 +21,14 @@ import { publishCacheInvalidate } from '../lib/event-bus.js';
 import { invalidateConfig } from '../lib/config-cache.js';
 import { invalidateAgentApiKeyCache } from '../lib/agent-auth.js';
 import { captureSystemError } from '../services/error-logger';
+import {
+  collectDiagnostics,
+  DIAGNOSTICS_SECTIONS,
+  type DiagnosticsNodeTarget,
+  type DiagnosticsSection,
+  type DiagnosticsServerTarget,
+} from '../services/diagnostics/collect';
+import { createDiagnosticsArchive } from '../services/diagnostics/archive';
 // Permission checks use request.user.permissions (populated by auth middleware)
 // No DB queries needed — works for both session and API key auth.
 import {
@@ -2439,6 +2447,168 @@ export async function adminRoutes(app: FastifyInstance) {
         lines.push(``);
       }
       reply.type('text/markdown').send(lines.join('\n'));
+    }
+  );
+
+  // Download a full troubleshooting bundle as a redacted ZIP (requires admin.read).
+  // Contains panel container logs, system errors, node agent logs and per-server
+  // console output for a time window. Admin-only: it crosses tenant boundaries by
+  // design. Every section is best-effort — an unreachable node or a missing
+  // container runtime becomes a manifest warning instead of failing the export.
+  app.get(
+    '/diagnostics/export',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(checkPerm(request, 'admin.read'))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
+      }
+
+      const query = request.query as Record<string, string | undefined>;
+
+      const now = new Date();
+      let from: Date;
+      let to: Date;
+      if (query.from) {
+        from = new Date(query.from);
+        if (Number.isNaN(from.getTime())) {
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid from timestamp');
+        }
+        to = query.to ? new Date(query.to) : now;
+        if (Number.isNaN(to.getTime())) {
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid to timestamp');
+        }
+      } else {
+        const parsedHours = Number.parseInt(query.hours ?? '', 10);
+        const hours = Number.isFinite(parsedHours) ? Math.min(Math.max(parsedHours, 1), 720) : 24;
+        to = now;
+        from = new Date(now.getTime() - hours * 3_600_000);
+      }
+      if (from.getTime() >= to.getTime()) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'from must be earlier than to');
+      }
+
+      if (query.redaction !== undefined && query.redaction !== 'standard' && query.redaction !== 'strict') {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid redaction mode');
+      }
+      const redaction = query.redaction === 'strict' ? 'strict' : 'standard';
+
+      let sections: Set<DiagnosticsSection>;
+      if (!query.sections || query.sections.trim() === '') {
+        sections = new Set(DIAGNOSTICS_SECTIONS);
+      } else {
+        const requested = query.sections.split(',').map((value) => value.trim()).filter(Boolean);
+        const invalid = requested.filter(
+          (value) => !(DIAGNOSTICS_SECTIONS as readonly string[]).includes(value),
+        );
+        if (invalid.length > 0) {
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `Invalid sections: ${invalid.join(', ')}`);
+        }
+        sections = new Set(requested as DiagnosticsSection[]);
+      }
+
+      // Selection helpers: `all` (default) or `none`, else an explicit id list.
+      const resolveSelection = <T extends { id: string }>(
+        all: T[],
+        param: string | undefined,
+      ): { items: T[] } | { invalid: string[] } => {
+        const value = param?.trim();
+        if (!value || value === 'all') return { items: all };
+        if (value === 'none') return { items: [] };
+        const ids = value.split(',').map((id) => id.trim()).filter(Boolean);
+        const invalid = ids.filter((id) => !all.some((item) => item.id === id));
+        if (invalid.length > 0) return { invalid };
+        return { items: all.filter((item) => ids.includes(item.id)) };
+      };
+
+      let nodeTargets: DiagnosticsNodeTarget[] = [];
+      if (sections.has('nodes')) {
+        const nodes = await prisma.node.findMany({
+          select: { id: true, name: true, isOnline: true },
+          orderBy: { name: 'asc' },
+        });
+        const selection = resolveSelection(nodes, query.nodes);
+        if ('invalid' in selection) {
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `Unknown node ids: ${selection.invalid.join(', ')}`);
+        }
+        nodeTargets = selection.items.map((node) => ({
+          id: node.id,
+          name: node.name,
+          online: node.isOnline,
+        }));
+      }
+
+      let serverTargets: DiagnosticsServerTarget[] = [];
+      if (sections.has('servers')) {
+        const servers = await prisma.server.findMany({
+          select: { id: true, name: true, uuid: true, nodeId: true },
+          orderBy: { name: 'asc' },
+        });
+        const selection = resolveSelection(servers, query.servers);
+        if ('invalid' in selection) {
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `Unknown server ids: ${selection.invalid.join(', ')}`);
+        }
+        // Reading `.env` goes through the node agent; knowing liveness up front
+        // avoids a 60s tunnel timeout per server on an offline node.
+        const onlineByNode = new Map<string, boolean>();
+        if (sections.has('env')) {
+          const nodes = await prisma.node.findMany({ select: { id: true, isOnline: true } });
+          for (const node of nodes) onlineByNode.set(node.id, node.isOnline);
+        }
+        serverTargets = selection.items.map((server) => ({
+          id: server.id,
+          name: server.name,
+          uuid: server.uuid,
+          nodeId: server.nodeId,
+          includeEnv: true,
+          nodeOnline: onlineByNode.get(server.nodeId),
+        }));
+      }
+
+      let entries;
+      try {
+        const result = await collectDiagnostics(
+          {
+            prisma,
+            wsGateway: (app as any).wsGateway,
+            fileTunnel: (app as any).fileTunnel,
+            logger: request.log,
+          },
+          {
+            from,
+            to,
+            redaction,
+            sections,
+            nodes: nodeTargets,
+            servers: serverTargets,
+            actor: { userId: request.user.userId, username: request.user.username },
+          },
+        );
+        entries = result.entries;
+        for (const warning of result.manifest.warnings) {
+          request.log.warn({ warning }, 'Diagnostics bundle warning');
+        }
+      } catch (error: any) {
+        captureSystemError({
+          level: 'error',
+          component: 'AdminRoutes',
+          message: `Failed to build diagnostics bundle: ${describeError(error)}`,
+          stack: error?.stack,
+          userId: request.user.userId,
+        }).catch(() => {});
+        request.log.error({ err: error }, 'Failed to build diagnostics bundle');
+        return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, 'Failed to build diagnostics bundle');
+      }
+
+      const archive = createDiagnosticsArchive(entries);
+      archive.on('error', (error: Error) => {
+        request.log.error({ err: error }, 'Diagnostics archive stream failed');
+        reply.raw.destroy(error);
+      });
+
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      reply.header('Content-Type', 'application/zip');
+      reply.header('Content-Disposition', `attachment; filename="catalyst-diagnostics-${stamp}.zip"`);
+      return reply.send(archive);
     }
   );
 
