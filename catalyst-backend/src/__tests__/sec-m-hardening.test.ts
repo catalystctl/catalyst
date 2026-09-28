@@ -177,7 +177,7 @@ describe("SEC-M contracts (static)", () => {
   }
 
   it("SEC-M-01 SFTP validate-token binds server.nodeId to the header node", async () => {
-    const src = await readSrc("index.ts");
+    const src = await readSrc("server.ts");
     expect(src).toContain("sftpvServer.nodeId !== headerNodeId");
     expect(src).toContain("SFTP validate-token node mismatch");
   });
@@ -192,7 +192,7 @@ describe("SEC-M contracts (static)", () => {
   });
 
   it("SEC-M-03 deploy takes the key from Authorization, refuses ?apiKey=", async () => {
-    const src = await readSrc("index.ts");
+    const src = await readSrc("server.ts");
     const deployIdx = src.indexOf("/api/deploy/:token");
     expect(deployIdx).toBeGreaterThan(-1);
     const block = src.slice(deployIdx, deployIdx + 4000);
@@ -211,12 +211,12 @@ describe("SEC-M contracts (static)", () => {
     expect(script).toContain("CATALYST_API_KEY_FILE");
     expect(script).toContain('NODE_API_KEY="$(cat "$CATALYST_API_KEY_FILE")"');
     expect(script).toContain("--preserve-env=CATALYST_API_KEY_FILE");
-    const bootstrap = await readSrc("index.ts");
+    const bootstrap = await readSrc("server.ts");
     expect(bootstrap).toContain('CATALYST_API_KEY_FILE="$KEY_FILE" "$TMP_SCRIPT"');
   });
 
   it("SEC-M-04 ws query ?token= deprecated, TRUST_PROXY defaults false, WS caps", async () => {
-    const indexSrc = await readSrc("index.ts");
+    const indexSrc = await readSrc("server.ts");
     expect(indexSrc).toContain("TRUST_PROXY");
     expect(indexSrc).toContain("defaults FALSE");
     expect(indexSrc).toContain("perMessageDeflate");

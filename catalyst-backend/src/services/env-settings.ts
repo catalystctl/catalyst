@@ -143,24 +143,36 @@ export async function initializeEnvOverrides(): Promise<void> {
 			process.env[spec.key] = override;
 		}
 		const effective = override ?? process.env[spec.key] ?? spec.default ?? null;
-		bootEffective.set(spec.key, effective === "" ? null : effective);
+		bootEffective.set(spec.key, normalizeEffective(effective));
 	}
 	initialized = true;
+}
+
+/**
+ * An empty environment assignment (`FOO=`) means "not set": `desiredValue`
+ * treats it that way, so the boot snapshot must too or every empty `.env`
+ * entry would look like a pending change.
+ */
+function normalizeEffective(value: string | null): string | null {
+	return value === "" ? null : value;
 }
 
 /** Test/CLI helper — treats the current environment as the boot snapshot. */
 export async function ensureInitialized(): Promise<void> {
 	if (initialized) return;
-	// Late initialization: this process did not boot through `src/start.ts`, so
-	// the database overrides were never applied. Do NOT apply them now — a value
-	// that requires a restart must not leak into a running process (rotating
-	// BETTER_AUTH_SECRET mid-flight would invalidate live sessions). Treat the
-	// current environment as the boot value instead, so every stored override
-	// correctly surfaces as "restart required".
+	// Late initialization: this process did not boot through the loader
+	// (`src/index.ts`), so the database overrides were never applied. Do NOT
+	// apply them now — a value that requires a restart must not leak into a
+	// running process (rotating BETTER_AUTH_SECRET mid-flight would invalidate
+	// live sessions). Treat the current environment as the boot value instead,
+	// so every stored override correctly surfaces as "restart required".
 	captureBaseEnvironment();
 	bootEffective = new Map();
 	for (const spec of PUBLIC_ENV_VAR_REGISTRY) {
-		bootEffective.set(spec.key, process.env[spec.key] ?? spec.default ?? null);
+		bootEffective.set(
+			spec.key,
+			normalizeEffective(process.env[spec.key] ?? spec.default ?? null),
+		);
 	}
 	initialized = true;
 }

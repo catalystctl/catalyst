@@ -33,6 +33,8 @@
     "button": "重启面板",
     "description": "部分更改需要重启后才会生效。请立即重启以应用更改。",
     "later": "稍后",
+    "pendingKeys": "等待应用：{{keys}}",
+    "pendingKeysTruncated": "等待应用：{{keys}}…",
     "restarting": "正在重启…",
     "restartingDescription": "面板正在重启。恢复后本页面会自动重新加载。",
     "standaloneHint": "未检测到重启监管程序。请手动重启面板进程以应用更改。",

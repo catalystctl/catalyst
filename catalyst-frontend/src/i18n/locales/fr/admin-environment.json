@@ -33,6 +33,8 @@
     "button": "Redémarrer le panneau",
     "description": "Certaines modifications ne prennent effet qu'après un redémarrage. Redémarrez maintenant pour les appliquer.",
     "later": "Plus tard",
+    "pendingKeys": "En attente : {{keys}}",
+    "pendingKeysTruncated": "En attente : {{keys}}…",
     "restarting": "Redémarrage…",
     "restartingDescription": "Le panneau redémarre. Cette page se rechargera automatiquement dès son retour.",
     "standaloneHint": "Aucun superviseur de redémarrage n'a été détecté. Appliquez les modifications en redémarrant manuellement le processus du panneau.",

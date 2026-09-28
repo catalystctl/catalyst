@@ -124,8 +124,11 @@ describe("validateEnvValue", () => {
 describe("env settings persistence", () => {
 	const LIVE_KEY = "DOCS_ENABLED";
 	const RESTART_KEY = "LOG_LEVEL";
+	// No registry default: an empty assignment must not read as a change.
+	const EMPTY_KEY = "BACKUP_S3_BUCKET";
 	const originalLive = process.env[LIVE_KEY];
 	const originalRestart = process.env[RESTART_KEY];
+	const originalEmpty = process.env[EMPTY_KEY];
 
 	beforeAll(async () => {
 		resetEnvSettingsState();
@@ -134,19 +137,21 @@ describe("env settings persistence", () => {
 
 	afterEach(async () => {
 		await prisma.envSetting.deleteMany({
-			where: { key: { in: [LIVE_KEY, RESTART_KEY] } },
+			where: { key: { in: [LIVE_KEY, RESTART_KEY, EMPTY_KEY] } },
 		});
 		if (originalLive === undefined) delete process.env[LIVE_KEY];
 		else process.env[LIVE_KEY] = originalLive;
 		if (originalRestart === undefined) delete process.env[RESTART_KEY];
 		else process.env[RESTART_KEY] = originalRestart;
+		if (originalEmpty === undefined) delete process.env[EMPTY_KEY];
+		else process.env[EMPTY_KEY] = originalEmpty;
 		resetEnvSettingsState();
 		await ensureInitialized();
 	});
 
 	afterAll(async () => {
 		await prisma.envSetting.deleteMany({
-			where: { key: { in: [LIVE_KEY, RESTART_KEY] } },
+			where: { key: { in: [LIVE_KEY, RESTART_KEY, EMPTY_KEY] } },
 		});
 	});
 
@@ -189,6 +194,20 @@ describe("env settings persistence", () => {
 		await expect(
 			updateEnvSettings({ CATALYST_BACKGROUND_JOB_OWNER: "1" }),
 		).rejects.toThrow(EnvValidationError);
+	});
+
+	it("does not flag an empty .env assignment as a pending change", async () => {
+		// `FOO=` in a .env file means "not set". Regression: the late-init path
+		// stored "" as the boot value while the desired value was null, so every
+		// empty assignment looked like a restart-required change and stranded the
+		// panel behind the restart prompt.
+		process.env[EMPTY_KEY] = "";
+		resetEnvSettingsState();
+		await ensureInitialized();
+		const overview = await getEnvOverview();
+		const entry = overview.entries.find((item) => item.key === EMPTY_KEY);
+		expect(entry?.changedSinceBoot).toBe(false);
+		expect(overview.changedKeys).not.toContain(EMPTY_KEY);
 	});
 
 	it("masks secret values in the overview", async () => {

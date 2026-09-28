@@ -33,6 +33,8 @@
     "button": "Restart panel",
     "description": "Some changes only take effect after a restart. Restart now to apply them.",
     "later": "Later",
+    "pendingKeys": "Waiting on: {{keys}}",
+    "pendingKeysTruncated": "Waiting on: {{keys}}…",
     "restarting": "Restarting…",
     "restartingDescription": "The panel is restarting. This page reloads automatically when it is back.",
     "standaloneHint": "No restart supervisor was detected. Apply the changes by restarting the panel process manually.",

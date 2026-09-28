@@ -16,6 +16,9 @@ import type { PanelRestartStrategy } from '../../types/admin';
 
 const HEALTH_POLL_INTERVAL_MS = 2_000;
 const HEALTH_POLL_TIMEOUT_MS = 120_000;
+/** Remembers "Later" across reloads, but only for the exact pending set. */
+const DISMISS_STORAGE_KEY = 'catalyst.env-restart-dismissed';
+const MAX_LISTED_KEYS = 5;
 
 /** API origin without the trailing `/api`, matching services/api/client.ts. */
 function apiOrigin(): string {
@@ -24,10 +27,21 @@ function apiOrigin(): string {
   return raw.replace(/\/api\/?$/, '');
 }
 
+function readDismissed(): string | null {
+  try {
+    return window.localStorage.getItem(DISMISS_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Panel-wide prompt shown to admins when an environment change is waiting for a
  * restart. Polls the cheap restart-status endpoint; once the admin confirms,
- * it polls `/health` and reloads the page when the panel is back.
+ * it polls `/api/health` and reloads the page when the panel is back.
+ *
+ * "Later" is remembered for the exact pending set, so a genuine pending change
+ * never blocks the panel — it reappears only when a different change is made.
  */
 export default function EnvRestartNotice() {
   const { t } = useTranslation('admin-environment');
@@ -40,15 +54,25 @@ export default function EnvRestartNotice() {
 
   const { data: status } = useEnvRestartStatus(isAdmin);
   const restartMutation = useRestartPanel();
-  const [dismissedFor, setDismissedFor] = useState<string | null>(null);
+  const [dismissedFor, setDismissedFor] = useState<string | null>(readDismissed);
   const [restarting, setRestarting] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const pollRef = useRef<number | null>(null);
 
-  const signature = useMemo(
-    () => (status?.changedKeys ?? []).slice().sort().join(','),
-    [status?.changedKeys],
-  );
+  const changedKeys = status?.changedKeys ?? [];
+  const signature = useMemo(() => changedKeys.slice().sort().join(','), [changedKeys]);
+
+  // Once nothing is pending, forget the dismissal so the same change shows
+  // again if it is ever made a second time.
+  useEffect(() => {
+    if (status && !status.restartRequired) {
+      try {
+        window.localStorage.removeItem(DISMISS_STORAGE_KEY);
+      } catch {
+        /* storage unavailable */
+      }
+    }
+  }, [status]);
 
   useEffect(() => {
     if (!restarting) return;
@@ -79,11 +103,25 @@ export default function EnvRestartNotice() {
     };
   }, [restarting]);
 
-  if (!isAdmin || !status?.restartRequired) return null;
+  if (!isAdmin || !status?.restartRequired || changedKeys.length === 0) return null;
   if (dismissedFor === signature) return null;
 
   const strategy: PanelRestartStrategy = status.strategy;
-  const open = true;
+
+  const dismiss = () => {
+    setDismissedFor(signature);
+    try {
+      window.localStorage.setItem(DISMISS_STORAGE_KEY, signature);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+
+  const listed = changedKeys.slice(0, MAX_LISTED_KEYS).join(', ');
+  const pendingLabel =
+    changedKeys.length > MAX_LISTED_KEYS
+      ? t('restart.pendingKeysTruncated', { keys: listed })
+      : t('restart.pendingKeys', { keys: listed });
 
   const confirm = () => {
     restartMutation.mutate(undefined, {
@@ -92,7 +130,7 @@ export default function EnvRestartNotice() {
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={(next) => !next && setDismissedFor(signature)}>
+    <AlertDialog open onOpenChange={(next) => !next && dismiss()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
           <AlertDialogTitle>{t('restart.title')}</AlertDialogTitle>
@@ -106,8 +144,11 @@ export default function EnvRestartNotice() {
                 : t('restart.description')}
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {!restarting && (
+          <p className="font-mono text-micro text-muted-foreground">{pendingLabel}</p>
+        )}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={restarting} onClick={() => setDismissedFor(signature)}>
+          <AlertDialogCancel disabled={restarting} onClick={dismiss}>
             {t('restart.later')}
           </AlertDialogCancel>
           <AlertDialogAction
