@@ -9,7 +9,8 @@
 ## Table of Contents
 
 1. [Quick Reference](#quick-reference)
-2. [Backend Environment Variables](#backend-environment-variables)
+2. [Managing variables from the panel](#managing-variables-from-the-panel)
+3. [Backend Environment Variables](#backend-environment-variables)
    - [General](#general)
    - [Public URL & Addresses](#public-url--addresses)
    - [Server & Networking](#server--networking)
@@ -27,17 +28,17 @@
    - [Performance & Scaling](#performance--scaling)
    - [Auto Updater](#auto-updater)
    - [Bootstrap / Seeding (Dev Only)](#bootstrap--seeding-dev-only)
-3. [Docker Compose Environment Variables](#docker-compose-environment-variables)
+4. [Docker Compose Environment Variables](#docker-compose-environment-variables)
    - [Ports](#ports)
    - [PostgreSQL](#postgresql)
    - [Redis](#redis)
    - [TLS/Reverse Proxy](#tlsreverse-proxy)
-4. [Frontend Build Variables](#frontend-build-variables)
-5. [Agent Environment Variables](#agent-environment-variables)
-6. [Agent TOML Configuration](#agent-toml-configuration)
-7. [Variables Not Configurable via Environment](#variables-not-configurable-via-environment)
-8. [Security Recommendations](#security-recommendations)
-9. [Troubleshooting Common Config Issues](#troubleshooting-common-config-issues)
+5. [Frontend Build Variables](#frontend-build-variables)
+6. [Agent Environment Variables](#agent-environment-variables)
+7. [Agent TOML Configuration](#agent-toml-configuration)
+8. [Variables Not Configurable via Environment](#variables-not-configurable-via-environment)
+9. [Security Recommendations](#security-recommendations)
+10. [Troubleshooting Common Config Issues](#troubleshooting-common-config-issues)
 
 ---
 
@@ -56,6 +57,39 @@
 
 ::: warning Critical
 `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `POSTGRES_PASSWORD` **must** be set before starting the backend. The application will refuse to start without them. The bundled compose file additionally requires a non-empty `REDIS_PASSWORD` (Redis runs with `--requirepass`); `install.sh`/`update.sh` fill it in when empty.
+:::
+
+---
+
+## Managing variables from the panel
+
+Most variables in this reference can now be edited at **Admin → Environment**
+instead of editing `.env` and recreating the container:
+
+- The panel lists every variable that does not already have its own settings
+  page, with its source (database, environment or default) and whether it is
+  secret.
+- A value saved in the panel is stored in the database and applied when the
+  panel restarts. When a change needs a restart, the panel prompts the signed-in
+  admin with a **Restart panel** button.
+- **Reset to .env** removes the override and falls back to the compose value.
+
+Settings with a dedicated editor are deliberately left out of **Admin →
+Environment** so each value has one place to change it: the panel name under
+**Theme**, rate limits and console output under **Security**, update automation
+under **System → Auto Updater**, OIDC providers under **Theme → SSO**, and
+marketplace sources in the plugin marketplace dialog.
+
+A handful of variables must stay in `.env` because the backend needs them
+before it can reach the database: `DATABASE_URL`, `POSTGRES_PASSWORD`,
+`NODE_ENV`, `PORT`, `TZ`, `WORKERS` and `REDIS_PASSWORD`. These appear in the
+panel as read-only, badged **.env only**.
+
+::: tip First-run setup
+The setup wizard asks for `PUBLIC_URL` (the exact URL users open the panel from)
+so links, CORS and auth callbacks are correct from the first sign-in. It is
+stored as an override and applied on the next restart; the panel prompts for
+that restart when setup completes.
 :::
 
 ---

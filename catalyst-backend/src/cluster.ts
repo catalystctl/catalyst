@@ -1,6 +1,7 @@
 import cluster from 'cluster';
 import os from 'os';
 import { initCacheBusPrimary } from './lib/cache-bus.js';
+import { RESTART_MESSAGE_TYPE } from './lib/panel-restart.js';
 
 /**
  * PID of the clustered worker that owns background jobs. Tracked by PID (not
@@ -102,6 +103,25 @@ export function bootstrapCluster(mainFn: () => Promise<void>) {
         `Worker ${worker.process.pid} (id=${worker.id}) died (code=${code}, signal=${signal}). Restarting...`,
       );
       forkWorker();
+    });
+
+    // A worker asked for a full panel restart (an environment change that needs
+    // a reboot): stop every worker and exit the primary, so the container /
+    // systemd unit restarts the whole panel with the new environment. Restarting
+    // only the requesting worker would leave the others on the old env.
+    cluster.on('message', (_worker, message: { type?: string } | undefined) => {
+      if (message?.type !== RESTART_MESSAGE_TYPE) return;
+      console.warn(
+        '[cluster] Panel restart requested — stopping workers and exiting for the supervisor to restart.',
+      );
+      for (const worker of Object.values(cluster.workers ?? {})) {
+        try {
+          worker?.process.kill('SIGTERM');
+        } catch {
+          /* already gone */
+        }
+      }
+      setTimeout(() => process.exit(0), 3_000).unref?.();
     });
   } else {
     mainFn().catch((err) => {

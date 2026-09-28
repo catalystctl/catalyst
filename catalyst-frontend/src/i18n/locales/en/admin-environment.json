@@ -1,0 +1,62 @@
+{
+  "actions": {
+    "refresh": "Refresh",
+    "reset": "Reset to .env",
+    "save": "Save"
+  },
+  "badge": {
+    "envOnly": ".env only",
+    "restartPending": "Restart pending"
+  },
+  "categories": {
+    "all": "All categories",
+    "auth": "Authentication",
+    "backups": "Backups",
+    "database": "Database",
+    "developer": "Developer",
+    "general": "General",
+    "limits": "Limits",
+    "oauth": "SSO / OAuth",
+    "performance": "Performance & agents",
+    "plugins": "Plugins",
+    "redis": "Redis",
+    "server": "Server",
+    "storage": "Storage",
+    "suspension": "Suspension",
+    "updates": "Updates",
+    "urls": "URLs & CORS"
+  },
+  "description": "Manage every environment variable the panel reads. {{overridden}} currently override the .env file.",
+  "empty": "No variables match your filters.",
+  "loadError": "Could not load the environment variables.",
+  "restart": {
+    "button": "Restart panel",
+    "description": "Some changes only take effect after a restart. Restart now to apply them.",
+    "later": "Later",
+    "restarting": "Restarting…",
+    "restartingDescription": "The panel is restarting. This page reloads automatically when it is back.",
+    "standaloneHint": "No restart supervisor was detected. Apply the changes by restarting the panel process manually.",
+    "started": "Restart requested.",
+    "timedOut": "The panel did not come back in time. Check the service and reload this page.",
+    "title": "Restart required"
+  },
+  "searchPlaceholder": "Search variables…",
+  "source": {
+    "database": "Database",
+    "default": "Default",
+    "environment": "Environment",
+    "unset": "Not set"
+  },
+  "title": "Environment",
+  "toast": {
+    "reset": "{{key}} reset to the environment or default value",
+    "saved": "{{key}} saved"
+  },
+  "value": {
+    "configured": "Configured",
+    "false": "false",
+    "secretUnchanged": "Unchanged — leave blank to keep",
+    "true": "true",
+    "unset": "Not set"
+  }
+}

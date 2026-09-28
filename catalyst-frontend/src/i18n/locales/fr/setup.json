@@ -77,6 +77,8 @@
     "panelPreview": "Panneau {{panelName}}",
     "preview": "Aperçu",
     "productTagline": "Gestion de serveurs de jeux",
+    "publicUrl": "URL publique du panneau",
+    "publicUrlHint": "L'URL exacte par laquelle les utilisateurs accèdent au panneau. Sert aux liens de connexion, au CORS et aux URL générées.",
     "title": "Bienvenue dans Catalyst"
   }
 }

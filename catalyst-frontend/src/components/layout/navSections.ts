@@ -17,6 +17,7 @@ import {
   Bug,
   Plug,
   Palette,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 /**
@@ -76,6 +77,7 @@ export function buildGroups(t: TFunction): NavGroup[] {
       links: [
         { to: '/admin/database', label: t('layout:nav.databases'), icon: Database, permissions: ['admin.read', 'admin.write'] },
         { to: '/admin/system', label: t('layout:nav.system'), icon: Settings, permissions: ['admin.write'] },
+        { to: '/admin/environment', label: t('layout:nav.environment'), icon: SlidersHorizontal, permissions: ['admin.read', 'admin.write'] },
         { to: '/admin/security', label: t('layout:nav.security'), icon: Lock, permissions: ['admin.read', 'admin.write'] },
         { to: '/admin/migration', label: t('layout:nav.migration'), icon: ArrowRightLeft, permissions: ['admin.read', 'admin.write'] },
       ],

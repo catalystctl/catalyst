@@ -1,0 +1,62 @@
+{
+  "actions": {
+    "refresh": "Actualiser",
+    "reset": "Rétablir la valeur .env",
+    "save": "Enregistrer"
+  },
+  "badge": {
+    "envOnly": ".env uniquement",
+    "restartPending": "Redémarrage requis"
+  },
+  "categories": {
+    "all": "Toutes les catégories",
+    "auth": "Authentification",
+    "backups": "Sauvegardes",
+    "database": "Base de données",
+    "developer": "Développement",
+    "general": "Général",
+    "limits": "Limites",
+    "oauth": "SSO / OAuth",
+    "performance": "Performance et agents",
+    "plugins": "Extensions",
+    "redis": "Redis",
+    "server": "Serveur",
+    "storage": "Stockage",
+    "suspension": "Suspension",
+    "updates": "Mises à jour",
+    "urls": "URL et CORS"
+  },
+  "description": "Gérez toutes les variables d'environnement lues par le panneau. {{overridden}} remplacent actuellement le fichier .env.",
+  "empty": "Aucune variable ne correspond à vos filtres.",
+  "loadError": "Impossible de charger les variables d'environnement.",
+  "restart": {
+    "button": "Redémarrer le panneau",
+    "description": "Certaines modifications ne prennent effet qu'après un redémarrage. Redémarrez maintenant pour les appliquer.",
+    "later": "Plus tard",
+    "restarting": "Redémarrage…",
+    "restartingDescription": "Le panneau redémarre. Cette page se rechargera automatiquement dès son retour.",
+    "standaloneHint": "Aucun superviseur de redémarrage n'a été détecté. Appliquez les modifications en redémarrant manuellement le processus du panneau.",
+    "started": "Redémarrage demandé.",
+    "timedOut": "Le panneau n'est pas revenu à temps. Vérifiez le service et rechargez cette page.",
+    "title": "Redémarrage requis"
+  },
+  "searchPlaceholder": "Rechercher des variables…",
+  "source": {
+    "database": "Base de données",
+    "default": "Par défaut",
+    "environment": "Environnement",
+    "unset": "Non définie"
+  },
+  "title": "Environnement",
+  "toast": {
+    "reset": "{{key}} rétablie à la valeur d'environnement ou par défaut",
+    "saved": "{{key}} enregistrée"
+  },
+  "value": {
+    "configured": "Configurée",
+    "false": "false",
+    "secretUnchanged": "Inchangée — laissez vide pour conserver",
+    "true": "true",
+    "unset": "Non définie"
+  }
+}

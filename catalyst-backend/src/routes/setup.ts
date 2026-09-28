@@ -9,6 +9,11 @@ import { invalidateConfig } from "../lib/config-cache.js";
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 import { formatZodIssues } from "../lib/validation";
+import {
+	applySetupEnvVars,
+	getEnvRestartStatus,
+	getSetupEnvVars,
+} from "../services/env-settings";
 
 const setupSchema = z.object({
 	email: z.string().email("Invalid email format"),
@@ -30,6 +35,10 @@ const setupSchema = z.object({
 	defaultTheme: z.enum(["light", "dark"]).default("dark"),
 	logoUrl: z.string().optional(),
 	metadata: z.record(z.string(), z.any()).default({}),
+	// Critical environment variables captured during first-run setup. Only
+	// keys flagged `setup` in the env registry are honored (see
+	// applySetupEnvVars) — this endpoint is unauthenticated.
+	environment: z.record(z.string(), z.string()).optional(),
 });
 
 // Helper to forward auth headers (set-cookie, set-auth-token) from better-auth
@@ -114,6 +123,17 @@ export async function setupRoutes(app: FastifyInstance) {
 			}
 			const userCount = await prisma.user.count();
 			return reply.send({ setupRequired: userCount === 0 });
+		},
+	);
+
+	// ── Environment variables captured during setup ────────────────────
+	// Unauthenticated (setup runs before any account exists), so this exposes
+	// only the registry entries explicitly flagged `setup` — never secrets.
+	app.get(
+		"/environment",
+		async (_request: FastifyRequest, reply: FastifyReply) => {
+			reply.header("Cache-Control", "no-store");
+			return reply.send({ success: true, data: getSetupEnvVars() });
 		},
 	);
 
@@ -251,6 +271,7 @@ export async function setupRoutes(app: FastifyInstance) {
 			return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to retrieve user record during setup recovery");
 		}
 
+		const envStatus = await getEnvRestartStatus();
 		return reply.send({
 			success: true,
 			data: {
@@ -265,6 +286,7 @@ export async function setupRoutes(app: FastifyInstance) {
 				permissions: fullUser.roles.flatMap((r) => r.permissions),
 				createdAt: fullUser.createdAt,
 				panelName,
+				environmentRestartRequired: envStatus.restartRequired,
 			},
 		});
 	}
@@ -309,6 +331,11 @@ export async function setupRoutes(app: FastifyInstance) {
 					details: formatZodIssues(parsed.error.issues),
 				});
 			}
+
+			// Persist the environment variables captured by the wizard. Restricted
+			// to the `setup` registry keys; they need a restart to take effect, so
+			// the response tells the client whether to show the reboot prompt.
+			await applySetupEnvVars(parsed.data.environment ?? {});
 
 			// 3. Partial setup recovery — an administrator-capable account may
 			// already exist (e.g. a previous attempt crashed after user creation
@@ -526,6 +553,7 @@ export async function setupRoutes(app: FastifyInstance) {
 					return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to retrieve user record after creation");
 				}
 
+				const envStatus = await getEnvRestartStatus();
 				return reply.send({
 					success: true,
 					data: {
@@ -540,6 +568,7 @@ export async function setupRoutes(app: FastifyInstance) {
 						permissions: fullUser.roles.flatMap((r) => r.permissions),
 						createdAt: fullUser.createdAt,
 						panelName,
+						environmentRestartRequired: envStatus.restartRequired,
 					},
 				});
 				} catch (error: any) {

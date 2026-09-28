@@ -367,6 +367,22 @@ model SystemSetting {
   updatedAt                   DateTime @updatedAt
 }
 
+// Runtime environment overrides managed from Admin > Environment.
+//
+// The .env file stays the bootstrap source for the handful of variables the
+// process needs before it can reach this table (DATABASE_URL and friends — see
+// `bootstrapOnly` in src/lib/env-registry.ts). For every other variable the
+// database wins: the boot loader in src/services/env-settings.ts applies rows
+// to process.env before the app modules are imported, so a value set here takes
+// effect on the next restart. Rows only exist for values an operator explicitly
+// set — deleting a row falls back to .env / the built-in default.
+model EnvSetting {
+  key       String   @id
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // Stable, opaque install identity handed to plugins as `ctx.installId`.
 // Generated once on first access and never rotates. Vendor license servers
 // use it for node-locking, so it must survive restarts and plugin reinstalls.

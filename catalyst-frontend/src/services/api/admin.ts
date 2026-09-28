@@ -26,6 +26,9 @@ import type {
   UpdateStateResponse,
   DatabaseHostPingResult,
   DbStatusResult,
+  EnvOverview,
+  EnvRestartStatus,
+  PanelRestartResult,
 } from '../../types/admin';
 
 type ApiResponse<T> = {
@@ -287,6 +290,33 @@ export const adminApi = {
   updateOidcConfig: async (payload: { whmcs?: { clientId?: string; clientSecret?: string; discoveryUrl?: string }; paymenter?: { clientId?: string; clientSecret?: string; discoveryUrl?: string } }) => {
     const data = await apiClient.patch<ApiResponse<{ message: string }>>('/api/admin/oidc-config', payload);
     return data;
+  },
+  // Environment variables
+  getEnvSettings: async () => {
+    const data = await apiClient.get<ApiResponse<EnvOverview>>('/api/admin/environment');
+    return data.data;
+  },
+  updateEnvSettings: async (values: Record<string, string | null>) => {
+    const data = await apiClient.put<ApiResponse<EnvOverview>>('/api/admin/environment', { values });
+    return data.data;
+  },
+  resetEnvSetting: async (key: string) => {
+    const data = await apiClient.delete<ApiResponse<EnvOverview>>(
+      `/api/admin/environment/${encodeURIComponent(key)}`,
+    );
+    return data.data;
+  },
+  getEnvRestartStatus: async () => {
+    const data = await apiClient.get<ApiResponse<EnvRestartStatus>>(
+      '/api/admin/environment/restart-status',
+    );
+    return data.data;
+  },
+  restartPanel: async () => {
+    const data = await apiClient.post<ApiResponse<PanelRestartResult>>(
+      '/api/admin/environment/restart',
+    );
+    return data.data;
   },
   // Ban a user
   banUser: async (userId: string, reason?: string, expiresInSeconds?: number) => {

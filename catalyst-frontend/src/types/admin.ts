@@ -434,3 +434,72 @@ export interface UpdateStateResponse {
   updatedAt: string | null;
   logs?: string[];
 }
+
+// ── Environment variables (Admin > Environment) ────────────────────────
+export type EnvValueSource = 'database' | 'environment' | 'default' | 'unset';
+export type EnvValueType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'enum'
+  | 'url'
+  | 'path'
+  | 'list'
+  | 'secret';
+export type EnvCategory =
+  | 'general'
+  | 'urls'
+  | 'server'
+  | 'database'
+  | 'auth'
+  | 'oauth'
+  | 'limits'
+  | 'suspension'
+  | 'storage'
+  | 'backups'
+  | 'plugins'
+  | 'redis'
+  | 'performance'
+  | 'updates'
+  | 'developer';
+
+export interface EnvEntry {
+  key: string;
+  title: string;
+  category: EnvCategory;
+  type: EnvValueType;
+  editable: boolean;
+  secret: boolean;
+  restartRequired: boolean;
+  changedSinceBoot: boolean;
+  source: EnvValueSource;
+  value: string | null;
+  isSet: boolean;
+  hasOverride: boolean;
+  default: string | null;
+  options?: readonly string[];
+  min?: number;
+  max?: number;
+  placeholder?: string;
+  description?: string;
+}
+
+export interface EnvOverview {
+  restartRequired: boolean;
+  changedKeys: string[];
+  entries: EnvEntry[];
+}
+
+export type PanelRestartStrategy = 'cluster' | 'supervised' | 'standalone';
+
+export interface EnvRestartStatus {
+  restartRequired: boolean;
+  changedKeys: string[];
+  strategy: PanelRestartStrategy;
+}
+
+export interface PanelRestartResult {
+  restarting: boolean;
+  strategy: PanelRestartStrategy;
+  message: string;
+}

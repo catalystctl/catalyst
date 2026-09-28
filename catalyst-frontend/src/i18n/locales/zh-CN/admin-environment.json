@@ -1,0 +1,62 @@
+{
+  "actions": {
+    "refresh": "刷新",
+    "reset": "恢复 .env 值",
+    "save": "保存"
+  },
+  "badge": {
+    "envOnly": "仅 .env",
+    "restartPending": "待重启生效"
+  },
+  "categories": {
+    "all": "所有类别",
+    "auth": "身份验证",
+    "backups": "备份",
+    "database": "数据库",
+    "developer": "开发者",
+    "general": "常规",
+    "limits": "限制",
+    "oauth": "单点登录 / OAuth",
+    "performance": "性能与代理",
+    "plugins": "插件",
+    "redis": "Redis",
+    "server": "服务器",
+    "storage": "存储",
+    "suspension": "暂停",
+    "updates": "更新",
+    "urls": "URL 与 CORS"
+  },
+  "description": "管理面板读取的所有环境变量。当前有 {{overridden}} 项覆盖了 .env 文件。",
+  "empty": "没有符合筛选条件的变量。",
+  "loadError": "无法加载环境变量。",
+  "restart": {
+    "button": "重启面板",
+    "description": "部分更改需要重启后才会生效。请立即重启以应用更改。",
+    "later": "稍后",
+    "restarting": "正在重启…",
+    "restartingDescription": "面板正在重启。恢复后本页面会自动重新加载。",
+    "standaloneHint": "未检测到重启监管程序。请手动重启面板进程以应用更改。",
+    "started": "已请求重启。",
+    "timedOut": "面板未及时恢复。请检查服务并重新加载此页面。",
+    "title": "需要重启"
+  },
+  "searchPlaceholder": "搜索变量…",
+  "source": {
+    "database": "数据库",
+    "default": "默认值",
+    "environment": "环境变量",
+    "unset": "未设置"
+  },
+  "title": "环境变量",
+  "toast": {
+    "reset": "{{key}} 已恢复为环境变量或默认值",
+    "saved": "{{key}} 已保存"
+  },
+  "value": {
+    "configured": "已配置",
+    "false": "false",
+    "secretUnchanged": "未更改 — 留空表示保留",
+    "true": "true",
+    "unset": "未设置"
+  }
+}

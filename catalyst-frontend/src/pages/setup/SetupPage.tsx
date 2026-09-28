@@ -75,6 +75,11 @@ function SetupPage() {
  // ── Step 1 state ──
  const [panelName, setPanelName] = useState('Catalyst');
  const [logoDataUri, setLogoDataUri] = useState<string | null>(null);
+ // Public URL drives CORS, auth callbacks and generated links. Best set before
+ // anyone signs in; stored as a DB override and applied on the next restart.
+ const [publicUrl, setPublicUrl] = useState(() =>
+ typeof window !== 'undefined' ? window.location.origin : ''
+ );
 
  // ── Step 2 state ──
  const [email, setEmail] = useState('');
@@ -254,6 +259,7 @@ function SetupPage() {
  accentColor,
  defaultTheme,
  metadata: { themeColors },
+ environment: publicUrl.trim() ? { PUBLIC_URL: publicUrl.trim() } : undefined,
  });
 
  // Cancel preview and re-apply theme with saved settings
@@ -385,6 +391,23 @@ function SetupPage() {
  onChange={(e) => setPanelName(e.target.value)}
  placeholder="Catalyst"
  />
+ </div>
+
+ {/* Public panel URL */}
+ <div className="space-y-2">
+ <label className={labelClass} htmlFor="publicUrl">
+ {t('welcome.publicUrl')}
+ </label>
+ <input
+ id="publicUrl"
+ type="url"
+ className={inputClass}
+ value={publicUrl}
+ onChange={(e) => setPublicUrl(e.target.value)}
+ placeholder="https://panel.example.com"
+ autoComplete="url"
+ />
+ <p className="text-micro text-muted-foreground">{t('welcome.publicUrlHint')}</p>
  </div>
 
  {/* Logo upload */}

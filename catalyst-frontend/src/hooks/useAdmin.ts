@@ -264,3 +264,61 @@ export function useResolveAllSystemErrors() {
     },
   });
 }
+
+// ── Environment variables ────────────────────────────────────────────────
+
+export function useEnvSettings() {
+  return useQuery({
+    queryKey: qk.adminEnv(),
+    queryFn: adminApi.getEnvSettings,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
+/**
+ * Polled by the global restart banner. Only runs for admins — the endpoint
+ * requires `admin.read`, so `enabled` gates it for everyone else.
+ */
+export function useEnvRestartStatus(enabled: boolean) {
+  return useQuery({
+    queryKey: qk.adminEnvRestartStatus(),
+    queryFn: adminApi.getEnvRestartStatus,
+    enabled,
+    staleTime: 15_000,
+    refetchInterval: enabled ? 30_000 : false,
+    refetchIntervalInBackground: false,
+  });
+}
+
+export function useUpdateEnvSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (values: Record<string, string | null>) => adminApi.updateEnvSettings(values),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.adminEnv() });
+      queryClient.invalidateQueries({ queryKey: qk.adminEnvRestartStatus() });
+    },
+  });
+}
+
+export function useResetEnvSetting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => adminApi.resetEnvSetting(key),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.adminEnv() });
+      queryClient.invalidateQueries({ queryKey: qk.adminEnvRestartStatus() });
+    },
+  });
+}
+
+export function useRestartPanel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => adminApi.restartPanel(),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.adminEnvRestartStatus() });
+    },
+  });
+}

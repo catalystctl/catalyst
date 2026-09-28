@@ -2,6 +2,7 @@
 import "dotenv/config";
 
 import Fastify from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import fastifyCompress from "@fastify/compress";
 import fs from "fs";
 import path from "path";
@@ -37,6 +38,7 @@ import { adminEventsRoutes } from "./routes/admin-events";
 import { metricsStreamRoutes } from "./routes/metrics-stream";
 import { backupRoutes } from "./routes/backups";
 import { adminRoutes } from "./routes/admin";
+import { envRoutes } from "./routes/env";
 import { roleRoutes } from "./routes/roles";
 import { taskRoutes } from "./routes/tasks";
 import { bulkServerRoutes } from "./routes/bulk-servers";
@@ -834,33 +836,34 @@ async function bootstrap() {
 
 		// Health check (liveness only; no version or diagnostic detail).
 		// Redis is OPTIONAL: degraded Redis never fails liveness, it is reported.
-		app.get(
-			"/health",
-			{
-				config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
-			},
-			async (request, reply) => {
-				try {
-					await prisma.$queryRaw`SELECT 1`;
-				} catch (dbError: any) {
-					captureSystemError({
-						level: 'error',
-						component: 'Index',
-						message: dbError?.message || 'Health check: database unreachable',
-						stack: dbError?.stack,
-						metadata: { context: 'health_check' },
-					}).catch(() => {});
-					return reply.status(503).send({
-						status: "unhealthy",
-					});
-				}
-				const redis = getRedisStats();
-				return {
-					status: "ok",
-					redis: redis.configured ? redis.status : "disabled",
-				};
-			},
-		);
+		// Served at both /health (direct) and /api/health (through the panel's
+		// nginx, which only proxies /api, /auth, /ws and /docs).
+		const healthHandler = async (_request: FastifyRequest, reply: FastifyReply) => {
+			try {
+				await prisma.$queryRaw`SELECT 1`;
+			} catch (dbError: any) {
+				captureSystemError({
+					level: 'error',
+					component: 'Index',
+					message: dbError?.message || 'Health check: database unreachable',
+					stack: dbError?.stack,
+					metadata: { context: 'health_check' },
+				}).catch(() => {});
+				return reply.status(503).send({
+					status: "unhealthy",
+				});
+			}
+			const redis = getRedisStats();
+			return {
+				status: "ok",
+				redis: redis.configured ? redis.status : "disabled",
+			};
+		};
+		const healthConfig = {
+			config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+		};
+		app.get("/health", healthConfig, healthHandler);
+		app.get("/api/health", healthConfig, healthHandler);
 
 		// WebSocket gateway - exempt from global rate limiting (authentication happens via handshake)
 		app.register(async (app) => {
@@ -1032,6 +1035,7 @@ await app.register(settingsRoutes, { prefix: "/api/settings" });
 		await app.register(metricsRoutes, { prefix: "/api" });
 		await app.register(backupRoutes, { prefix: "/api/servers" });
 		await app.register(adminRoutes, { prefix: "/api/admin" });
+		await app.register(envRoutes, { prefix: "/api/admin/environment" });
 		await app.register(updateRoutes, { prefix: "/api/admin/update" });
 		await app.register((app) => adminEventsRoutes(app, wsGateway), {
 			prefix: "/api/admin/events",

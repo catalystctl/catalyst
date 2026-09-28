@@ -100,6 +100,7 @@ RUN set -eu; \
       echo "ERROR: prisma CLI missing from production deploy tree"; \
       exit 1; \
     fi; \
+    test -f ./dist/start.js; \
     test -f ./dist/index.js; \
     test -f ./dist/db.js; \
     test -d ./prisma; \
@@ -161,4 +162,4 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/start.js"]

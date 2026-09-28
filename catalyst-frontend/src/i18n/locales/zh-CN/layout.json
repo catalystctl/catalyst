@@ -21,6 +21,7 @@
     "auditLogs": "审计日志",
     "dashboard": "仪表盘",
     "databases": "数据库",
+    "environment": "环境变量",
     "migration": "迁移",
     "nodes": "节点",
     "overview": "概览",
@@ -70,6 +71,9 @@
       "adminDatabases": {
         "description": "MySQL 和 PostgreSQL 主机管理",
         "label": "数据库主机"
+      },
+      "adminEnvironment": {
+        "description": "管理环境变量并重启面板"
       },
       "adminMigration": {
         "description": "从 Pterodactyl 导入服务器"

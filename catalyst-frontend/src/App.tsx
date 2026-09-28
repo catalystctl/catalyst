@@ -45,6 +45,7 @@ const AdminAlertsPage = lazy(() => import('./pages/admin/AlertsPage'));
 const UsersPage = lazy(() => import('./pages/admin/UsersPage'));
 const RolesPage = lazy(() => import('./pages/admin/RolesPage'));
 const SystemPage = lazy(() => import('./pages/admin/SystemPage'));
+const EnvironmentPage = lazy(() => import('./pages/admin/EnvironmentPage'));
 const AuditLogsPage = lazy(() => import('./pages/admin/AuditLogsPage'));
 const SystemErrorsPage = lazy(() => import('./pages/admin/SystemErrorsPage'));
 const SecurityPage = lazy(() => import('./pages/admin/SecurityPage'));
@@ -495,6 +496,18 @@ function App() {
  <Suspense fallback={<PageFallback />}>
  <PageTransition>
  <SecurityPage />
+ </PageTransition>
+ </Suspense>
+ </ProtectedRoute>
+ }
+ />
+ <Route
+ path="admin/environment"
+ element={
+ <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+ <Suspense fallback={<PageFallback />}>
+ <PageTransition>
+ <EnvironmentPage />
  </PageTransition>
  </Suspense>
  </ProtectedRoute>

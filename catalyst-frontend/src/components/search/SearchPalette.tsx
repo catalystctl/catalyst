@@ -47,6 +47,7 @@ import {
  MonitorDot,
  Package,
  AlertTriangle,
+ SlidersHorizontal,
  type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
@@ -270,6 +271,18 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  permissions: ['admin.write'],
  badge: t('layout:nav.admin'),
  path: '/admin/system',
+ },
+ {
+ id: 'admin-environment',
+ label: t('layout:nav.environment'),
+ description: t('layout:search.items.adminEnvironment.description'),
+ icon: SlidersHorizontal,
+ to: '/admin/environment',
+ category: 'Admin',
+ keywords: ['environment', 'env', 'variables', 'configuration', 'dotenv', 'restart'],
+ permissions: ['admin.read'],
+ badge: t('layout:nav.admin'),
+ path: '/admin/environment',
  },
  {
  id: 'admin-security',

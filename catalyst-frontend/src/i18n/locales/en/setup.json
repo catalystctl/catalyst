@@ -77,6 +77,8 @@
     "panelPreview": "{{panelName}} Panel",
     "preview": "Preview",
     "productTagline": "Game Server Management",
+    "publicUrl": "Public Panel URL",
+    "publicUrlHint": "The exact URL users open the panel from. Used for sign-in links, CORS and generated URLs.",
     "title": "Welcome to Catalyst"
   }
 }

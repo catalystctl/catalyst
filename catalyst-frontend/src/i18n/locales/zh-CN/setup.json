@@ -77,6 +77,8 @@
     "panelPreview": "{{panelName}} 面板",
     "preview": "预览",
     "productTagline": "游戏服务器管理",
+    "publicUrl": "面板公共 URL",
+    "publicUrlHint": "用户访问面板的完整 URL，用于登录链接、CORS 和生成的链接。",
     "title": "欢迎使用 Catalyst"
   }
 }

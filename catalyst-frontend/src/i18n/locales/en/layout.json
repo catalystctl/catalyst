@@ -21,6 +21,7 @@
     "auditLogs": "Audit Logs",
     "dashboard": "Dashboard",
     "databases": "Databases",
+    "environment": "Environment",
     "migration": "Migration",
     "nodes": "Nodes",
     "overview": "Overview",
@@ -70,6 +71,9 @@
       "adminDatabases": {
         "description": "MySQL and PostgreSQL host management",
         "label": "Database Hosts"
+      },
+      "adminEnvironment": {
+        "description": "Manage environment variables and restart the panel"
       },
       "adminMigration": {
         "description": "Import servers from Pterodactyl"

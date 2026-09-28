@@ -21,6 +21,7 @@
     "auditLogs": "Journaux d’audit",
     "dashboard": "Tableau de bord",
     "databases": "Bases de données",
+    "environment": "Environnement",
     "migration": "Migration",
     "nodes": "Nœuds",
     "overview": "Vue d’ensemble",
@@ -70,6 +71,9 @@
       "adminDatabases": {
         "description": "Gestion des hôtes MySQL et PostgreSQL",
         "label": "Hôtes de bases de données"
+      },
+      "adminEnvironment": {
+        "description": "Gérer les variables d'environnement et redémarrer le panneau"
       },
       "adminMigration": {
         "description": "Importer des serveurs depuis Pterodactyl"
