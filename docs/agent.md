@@ -54,6 +54,7 @@ Complete documentation for the Catalyst agent — the Rust-based component that 
   - [Backup Upload (Chunked)](#backup-upload-chunked)
   - [Backup Download (Streaming)](#backup-download-streaming)
   - [Restore (Pipe Relay)](#restore-pipe-relay)
+    - [Relay Flow Control](#relay-flow-control)
 - [WebSocket Communication Protocol](#websocket-communication-protocol)
   - [Connection](#connection)
   - [Handshake](#handshake)
@@ -80,6 +81,7 @@ Complete documentation for the Catalyst agent — the Rust-based component that 
   - [Air-Gapped / Offline Deployment](#air-gapped--offline-deployment)
   - [Headless / Containerized Deployment](#headless--containerized-deployment)
 - [Troubleshooting](#troubleshooting)
+  - [Servers Won't Start: Mount or Cgroup Restrictions](#servers-wont-start-mount-or-cgroup-restrictions)
 
 ---
 
@@ -232,7 +234,7 @@ The recommended method for production deployments:
    curl -fsSL -H 'Authorization: Bearer YOUR_API_KEY' https://your-panel.com/api/deploy/YOUR_TOKEN | sudo bash
    ```
 
-The script queries the panel for its version (`GET /api/agent/version`, authenticated with the node API key from the one-liner; the panel-provided `AGENT_VERSION` env skips the call), downloads the matching **static musl** binary from GitHub Releases (`catalyst-agent-{x86_64|aarch64}-linux-musl` at tag `v<panel>`), verifies the `.sha256` sidecar, writes `/opt/catalyst-agent/config.toml`, creates a systemd (or OpenRC) service, and starts the agent. It never builds from source on the node.
+The script installs the container runtime first (containerd, nerdctl and the pinned CNI plugins), then queries the panel for its version (`GET /api/agent/version`, authenticated with the node API key from the one-liner; the panel-provided `AGENT_VERSION` env skips the call), downloads the matching **static musl** binary from GitHub Releases (`catalyst-agent-{x86_64|aarch64}-linux-musl` at tag `v<panel>`), verifies the `.sha256` sidecar, writes `/opt/catalyst-agent/config.toml` (`0600`), creates a systemd (or OpenRC) service, and starts the agent. It never builds from source on the node, so a fresh machine needs nothing pre-installed beyond a supported distribution and root access.
 
 If GitHub is unreachable the script falls back to the panel proxy (`GET /api/agent/download?arch=...&version=<panel>`). Override the pin with `AGENT_VERSION=x.y.z` if needed.
 
@@ -395,6 +397,13 @@ format = "json"
 |---|---|---|---|
 | `socket_path` | path | `/run/containerd/containerd.sock` | Path to the containerd gRPC socket |
 | `namespace` | string | `catalyst` | containerd namespace for Catalyst containers |
+
+Servers request a per-server IO weight, which `runc` applies through the cgroup
+v2 `io` controller. If the controller is not exposed to the agent's cgroup — as
+inside an unprivileged LXC container — the agent omits the IO weight so
+containers still start, and logs nothing about it because IO weighting is
+advisory. Check `/sys/fs/cgroup/cgroup.controllers` contains `io` when a start
+fails with `io.weight: no such file or directory`.
 
 ### networking Section
 
@@ -643,7 +652,8 @@ When a server is created:
 4. If the host mount does not propagate into the agent's namespace, the agent bind-mounts `/proc/1/root/<data-dir>` over the local path so FileManager/SFTP see the same files.
 5. If a leftover private-NS-only mount is detected (host has no mount, agent does), the agent unmounts the private view and migrates any files that landed on the host directory into the image.
 6. If the host-namespace mount fails, the agent **does not** fall back to a private-NS mount (that recreates the split-brain). It uses the plain data directory and logs that disk quota is not enforced.
-7. If data already exists at the data directory, it uses `rsync` to migrate it to the image
+7. If mounting is **not permitted at all** — an unprivileged LXC container, or a similar sandbox — the same fallback applies even when the mount namespace matches, and the data-migration step below is skipped because the image cannot be mounted. The server runs from the plain data directory.
+8. If data already exists at the data directory, it uses `rsync` to migrate it to the image
 
 ### Resizing Storage
 
@@ -672,6 +682,11 @@ If data already exists at the server's data directory when a disk image is creat
 4. Clears the old directory and removes the migration directory
 
 This supports seamless upgrades from non-image-based deployments.
+
+On a node that cannot mount loop devices the migration is skipped (the image
+cannot be mounted), any stale `migrate/<server-uuid>` staging directory from an
+earlier failed attempt is removed, and the server keeps running from its plain
+data directory.
 
 ---
 
@@ -973,17 +988,47 @@ Backups are streamed to the panel in chunks:
 
 ### Restore (Pipe Relay)
 
-Restores use a pipe relay for efficient data transfer:
+Node-to-node transfers and cross-node full clones move a server's data directory
+as a tar stream that the panel relays straight through — the panel never writes
+the data to disk.
 
-1. `prepare_restore_stream` — Backend prepares restore request
-2. Agent opens the backup file and streams it as binary frames
-3. Backend pipes the tar stream directly into the container's data directory
-4. `finish_restore_stream` — Signals completion
+1. `prepare_restore_stream` — the target agent opens a tar extractor on its stdin,
+   staged in a temporary directory
+2. `start_backup_stream` — the source agent tars the data directory and sends it
+   as binary frames
+3. The panel forwards each frame to the target agent (see flow control below)
+4. `finish_restore_stream` — closes the extractor's stdin, waits for tar to exit,
+   then moves the staged directory into place
 
 **Constraints:**
 - Only one restore stream can be active at a time
 - Streams are killed on disconnect to prevent orphaned processes
-- Restore data is streamed directly without temporary files
+- Extraction is staged in a temporary directory and only swapped in once the
+  archive extracts cleanly, so a failed copy never replaces live data
+
+#### Relay Flow Control
+
+A target node that is slower than the source must not fail the transfer, so the
+panel throttles the source instead of buffering without limit:
+
+- The panel watches the target's socket buffer. At the **high watermark** it sends
+  `backup_stream_flow` with `paused: true`; the source agent stops reading tar
+  output, the pipe fills and tar blocks on write — the pressure stays on the
+  source node, not in panel memory.
+- When the buffer drains to the **low watermark** the panel sends `paused: false`
+  and the stream continues. A paused stream is re-checked on a timer, because no
+  frames arrive while it is paused.
+- Each pause doubles the high watermark (up to a ceiling), so a persistently
+  slow-but-healthy target is not put into a stop/start loop.
+- A target that makes **no progress at all** for the stall window is treated as
+  stuck: the relay is aborted and the failure is surfaced instead of buffering
+  forever.
+
+Watermarks and the stall window are set on the panel
+(`RELAY_BACKPRESSURE_LOW_BYTES`, `RELAY_BACKPRESSURE_HIGH_BYTES`,
+`RELAY_BACKPRESSURE_CEILING_BYTES`, `RELAY_STALL_MS`). An agent predating
+`backup_stream_flow` ignores the command; the adaptive ceiling and stall detector
+still let the copy finish.
 
 ---
 
@@ -1132,7 +1177,8 @@ The HTTP file tunnel supports 12 operations: `list`, `read`, `write`, `delete`, 
 | `delete_backup` | Delete a backup |
 | `download_backup_start` / `download_backup` | Stream backup download |
 | `upload_backup_start` / `upload_backup_chunk` / `upload_backup_complete` | Upload backup chunks |
-| `start_backup_stream` | Stream backup to remote storage (S3/SFTP) |
+| `start_backup_stream` | Stream a server's data directory (or a backup) as a tar stream — also the source side of a node-to-node relay |
+| `backup_stream_flow` | Pause or resume an in-flight stream (`paused: true\|false`); sent by the panel's relay flow control |
 | `prepare_restore_stream` / `finish_restore_stream` | Pipe relay restore |
 
 ### Configuration Commands (Panel → Agent)
@@ -1407,7 +1453,14 @@ The agent is designed to handle updates gracefully:
 - Agent runs inside a Docker container (see [Docker Installation](#docker-installation))
 - No systemd service needed
 - All configuration via environment variables
-- Requires `--privileged` mode for full functionality
+- Requires `--privileged` mode for full functionality. Two capabilities matter:
+  **loop mounts** for per-server disk quotas, and the cgroup v2 **`io`
+  controller** for per-server IO weight. Without mount privilege the agent falls
+  back to plain data directories and disk quota is not enforced; without the `io`
+  controller, an agent new enough to omit the IO weight still starts containers.
+- The same applies to a node running inside an LXC container — it works, but
+  expect no disk quota there, and check that `/sys/fs/cgroup/cgroup.controllers`
+  contains `io` before offering the node to users.
 
 ---
 
@@ -1580,6 +1633,24 @@ ls -la /var/lib/catalyst/{server-uuid}/Steam/
 # Should be owned by uid 1000:gid 1000
 ```
 
+### Servers Won't Start: Mount or Cgroup Restrictions
+
+**Symptoms:** every start on one node fails. The agent log names the cause.
+
+- `mount failed: Operation not permitted` — the node cannot create loop mounts,
+  so the per-server disk image step fails. The agent falls back to a plain data
+  directory (disk quota is **not** enforced). If the log also shows
+  `Migration directory already exists`, remove the stale
+  `<data_dir>/migrate/<server-uuid>` directory and start again.
+- `io.weight: no such file or directory` — the cgroup v2 `io` controller is not
+  delegated to the agent, so `runc` cannot apply the IO weight. Run the node
+  where the agent's cgroup exposes `io`, or use an agent new enough to omit the
+  IO weight automatically.
+
+Both are typical of running a node inside an unprivileged LXC container. Such a
+node works, but disk quota is unavailable there, so do not offer it to users as
+a quota-enforcing node.
+
 ### Enable Debug Logging
 
 For detailed troubleshooting, temporarily enable debug logging:
@@ -1610,4 +1681,4 @@ The agent automatically reconnects with exponential backoff. If the backend reje
 
 ---
 
-*Last updated: 2026-05-04*
+*Last updated: 2026-09-28*

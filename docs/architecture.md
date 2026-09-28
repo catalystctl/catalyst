@@ -21,6 +21,7 @@
   - [Server Lifecycle Flow](#server-lifecycle-flow)
   - [Plugin Runtime Flow](#plugin-runtime-flow)
   - [Backup Flow](#backup-flow)
+- [Node Transfer & Clone Flow](#node-transfer--clone-flow)
 - [Authentication & Authorization](#authentication--authorization)
   - [Authentication Flow](#authentication-flow)
   - [Authorization Model](#authorization-model)
@@ -454,6 +455,32 @@ Agent Node A          WebSocket Gateway          Backend Services
 │          │     └──────────────┘     │          │     │          │
 └──────────┘                          └──────────┘     └──────────┘
 ```
+
+### Node Transfer & Clone Flow
+
+Moving a server to another node and a **full clone onto another node** share one
+path: the panel relays a tar stream from the source agent to the target agent and
+never writes the data itself.
+
+1. The panel validates the move — source stopped, target capacity and network
+   mode, and for a clone the preflight confirmation plus `server.transfer`.
+2. **Source agent** — `start_backup_stream` tars the data directory into binary
+   frames.
+3. **Panel** — forwards each frame to the target agent. While the target's socket
+   buffer is above the high watermark the panel sends
+   `backup_stream_flow { paused: true }` and pauses the source; it resumes at the
+   low watermark, growing the watermark up to a ceiling so a slow-but-healthy
+   target is not throttled into a stop/start loop. A target that stops draining
+   altogether for the stall window aborts the relay.
+4. **Target agent** — `prepare_restore_stream` stages a tar extraction in a
+   temporary directory; `finish_restore_stream` swaps it into place only once the
+   archive extracts cleanly, so a failed copy never replaces live data.
+5. The panel records the outcome — SSE progress, audit, and for a clone the new
+   server row settles at `stopped`.
+
+See the [Agent Guide](agent.md) for watermark configuration and the
+[server cloning design](design/server-cloning.md) for the clone-specific layers
+(preflight, confirmation, modes).
 
 ---
 
