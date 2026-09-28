@@ -765,6 +765,11 @@ pub struct WebSocketHandler {
     pub(crate) active_restore_bytes_written: Arc<RwLock<HashMap<String, u64>>>,
     /// The requestId of the currently active restore stream (at most one at a time).
     pub(crate) active_restore_request_id: Arc<RwLock<Option<String>>>,
+    /// Flow-control gates for outbound backup streams, keyed by requestId.
+    /// The backend flips `true` when the target node is buffering and `false`
+    /// once it has drained, which pauses/resumes the tar producer without
+    /// dropping the transfer.
+    pub(crate) backup_flow_gates: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
     /// When set by the backend after an auth failure, the agent should wait this many
     /// seconds before reconnecting (progressive lockout).
     pub(crate) retry_after_seconds: Arc<RwLock<Option<u64>>>,
@@ -845,6 +850,7 @@ impl Clone for WebSocketHandler {
             active_restore_streams: self.active_restore_streams.clone(),
             active_restore_bytes_written: self.active_restore_bytes_written.clone(),
             active_restore_request_id: self.active_restore_request_id.clone(),
+            backup_flow_gates: self.backup_flow_gates.clone(),
             retry_after_seconds: self.retry_after_seconds.clone(),
             error_dedup: self.error_dedup.clone(),
             pending_startup_errors: self.pending_startup_errors.clone(),
@@ -911,6 +917,7 @@ impl WebSocketHandler {
             active_restore_streams: Arc::new(RwLock::new(HashMap::new())),
             active_restore_bytes_written: Arc::new(RwLock::new(HashMap::new())),
             active_restore_request_id: Arc::new(RwLock::new(None)),
+            backup_flow_gates: Arc::new(RwLock::new(HashMap::new())),
             retry_after_seconds: Arc::new(RwLock::new(None)),
             error_dedup: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
             pending_startup_errors: Arc::new(RwLock::new(Vec::new())),
@@ -1813,7 +1820,16 @@ impl WebSocketHandler {
                     }
                 }
                 let mut seen = self.seen_request_ids.lock().await;
-                if seen.insert_or_duplicate(rid) {
+                // Key on (requestId, type), not requestId alone: multi-step
+                // streaming flows (prepare_restore_stream → finish_restore_stream)
+                // deliberately reuse one requestId across different message
+                // types. Keying on the id alone treated the second step as a
+                // replay and dropped it, so a cross-node restore never finished.
+                let dedup_key = match msg.get("type").and_then(|v| v.as_str()) {
+                    Some(kind) if !kind.is_empty() => format!("{}:{}", rid, kind),
+                    _ => rid.to_string(),
+                };
+                if seen.insert_or_duplicate(&dedup_key) {
                     warn!("Dropping duplicate requestId {}", rid);
                     return Ok(());
                 }
@@ -2411,6 +2427,12 @@ impl WebSocketHandler {
                     }
                 });
             }
+            Some("backup_stream_flow") => {
+                // Fast, allocation-free: just flips the stream's flow gate.
+                if let Err(e) = self.handle_backup_stream_flow(&msg).await {
+                    warn!("backup_stream_flow handler failed: {}", e);
+                }
+            }
             Some("prepare_restore_stream") => {
                 self.handle_prepare_restore_stream(&msg, write).await?
             }
@@ -2459,6 +2481,16 @@ impl WebSocketHandler {
                                 None,
                             )
                             .await;
+                    }
+                });
+            }
+            Some("clone_preflight") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                self.connection_tasks.lock().await.spawn(async move {
+                    if let Err(e) = handler.handle_clone_preflight(&msg, &write).await {
+                        warn!("clone_preflight handler failed: {}", e);
                     }
                 });
             }
@@ -3466,6 +3498,59 @@ impl WebSocketHandler {
         Ok((buf, total))
     }
 
+    /// Advertise the source data size and the target filesystem's free space
+    /// so the panel can refuse a full clone that would not fit. Best-effort:
+    /// any field that cannot be measured is simply omitted.
+    async fn handle_clone_preflight(
+        &self,
+        msg: &Value,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let request_id = msg.get("requestId").cloned().unwrap_or(Value::Null);
+        let server_id = msg["serverId"].as_str().unwrap_or("").to_string();
+        let source_uuid = msg["sourceServerUuid"].as_str().unwrap_or("");
+        let target_data_dir = msg["targetServerDataDir"].as_str().unwrap_or("");
+
+        let mut response = json!({
+            "type": "clone_preflight_response",
+            "requestId": request_id,
+            "serverId": server_id,
+            "success": true,
+        });
+
+        if !source_uuid.is_empty()
+            && shell_utils::validate_safe_path_segment(source_uuid, "sourceServerUuid").is_ok()
+        {
+            let source_dir = self.config.server.data_dir.join(source_uuid);
+            if source_dir.exists() {
+                if let Ok(bytes) = directory_size_bytes(&source_dir).await {
+                    response["sourceBytes"] = json!(bytes);
+                }
+            }
+        }
+
+        if !target_data_dir.is_empty() {
+            let candidate = std::path::PathBuf::from(target_data_dir);
+            let probe = if candidate.exists() {
+                candidate
+            } else {
+                candidate
+                    .parent()
+                    .map(|parent| parent.to_path_buf())
+                    .unwrap_or(candidate)
+            };
+            if let Ok(vfs) = nix::sys::statvfs::statvfs(probe.as_path()) {
+                response["targetFreeBytes"] =
+                    json!(vfs.blocks_available().saturating_mul(vfs.fragment_size()));
+            }
+        }
+
+        send_ws_with_timeout(write, Message::Text(response.to_string().into()))
+            .await
+            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        Ok(())
+    }
+
     async fn handle_clone_server_files(
         &self,
         msg: &Value,
@@ -3500,12 +3585,39 @@ impl WebSocketHandler {
             return Ok(());
         }
 
-        // Create target directory if it doesn't exist
-        if !target_dir.exists() {
-            tokio::fs::create_dir_all(&target_dir).await.map_err(|e| {
-                AgentError::IoError(format!("Failed to create target directory: {}", e))
-            })?;
+        if source_dir == target_dir {
+            let event = json!({
+                "type": "clone_files_complete",
+                "requestId": request_id,
+                "serverId": server_id,
+                "success": false,
+                "error": "Source and target directories are identical",
+            });
+            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
+                .await
+                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            return Ok(());
         }
+
+        // A retry must not merge into a partial copy: start from a clean target.
+        if target_dir.exists() {
+            if let Err(e) = tokio::fs::remove_dir_all(&target_dir).await {
+                let event = json!({
+                    "type": "clone_files_complete",
+                    "requestId": request_id,
+                    "serverId": server_id,
+                    "success": false,
+                    "error": format!("Failed to clear target directory: {}", e),
+                });
+                send_ws_with_timeout(write, Message::Text(event.to_string().into()))
+                    .await
+                    .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+                return Ok(());
+            }
+        }
+        tokio::fs::create_dir_all(&target_dir).await.map_err(|e| {
+            AgentError::IoError(format!("Failed to create target directory: {}", e))
+        })?;
 
         info!(
             "Cloning files from {} to {}",
@@ -3579,11 +3691,13 @@ impl WebSocketHandler {
 
         info!("File clone complete for {} -> {}", source_uuid, target_uuid);
 
+        let copied_bytes = directory_size_bytes(&target_dir).await.unwrap_or(0);
         let event = json!({
             "type": "clone_files_complete",
             "requestId": request_id,
             "serverId": server_id,
             "success": true,
+            "bytes": copied_bytes,
         });
         send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
@@ -4408,6 +4522,32 @@ pub(crate) fn is_physical_interface(name: &str) -> bool {
         || n.starts_with("cni")
         || n.starts_with("podman")
         || n.starts_with("vet"))
+}
+
+/// Total apparent size of every regular file under `root`, in bytes.
+/// Iterative so a deep tree cannot blow the stack; unreadable entries are
+/// skipped rather than failing the whole probe.
+async fn directory_size_bytes(root: &std::path::Path) -> std::io::Result<u64> {
+    let mut total: u64 = 0;
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let mut entries = match tokio::fs::read_dir(&dir).await {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            match entry.file_type().await {
+                Ok(file_type) if file_type.is_dir() => stack.push(entry.path()),
+                Ok(file_type) if file_type.is_file() => {
+                    if let Ok(metadata) = entry.metadata().await {
+                        total = total.saturating_add(metadata.len());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok(total)
 }
 
 /// Disk usage of the filesystem containing `dir`, in (used, total) MiB.

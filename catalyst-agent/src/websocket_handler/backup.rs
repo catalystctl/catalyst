@@ -1544,6 +1544,15 @@ impl WebSocketHandler {
             buf
         });
 
+        // Flow-control gate: the panel pauses this stream while the target
+        // node's socket buffer is backed up, so a slow-but-healthy target
+        // throttles the copy instead of failing it.
+        let (flow_tx, mut flow_rx) = tokio::sync::watch::channel(false);
+        self.backup_flow_gates
+            .write()
+            .await
+            .insert(request_id.to_string(), flow_tx);
+
         let mut buf = vec![0u8; 64 * 1024]; // 64 KB read buffer
         let mut chunk_count: u64 = 0;
 
@@ -1552,6 +1561,16 @@ impl WebSocketHandler {
         // control-plane message (power commands, acks, heartbeats) behind an
         // entire multi-GB tar transfer.
         loop {
+            // While paused the tar pipe fills and tar blocks on write — that is
+            // the backpressure. Nothing is buffered inside the panel.
+            loop {
+                if !*flow_rx.borrow() {
+                    break;
+                }
+                if flow_rx.changed().await.is_err() {
+                    break;
+                }
+            }
             use tokio::io::AsyncReadExt;
             match stdout.read(&mut buf).await {
                 Ok(0) => break,
@@ -1567,6 +1586,7 @@ impl WebSocketHandler {
                     };
                     if !matches!(sent, Ok(Ok(()))) {
                         child.kill().await.ok();
+                        self.backup_flow_gates.write().await.remove(request_id);
                         return Err(AgentError::NetworkError(
                             "Failed to send backup chunk".to_string(),
                         ));
@@ -1579,6 +1599,7 @@ impl WebSocketHandler {
                 }
                 Err(e) => {
                     child.kill().await.ok();
+                    self.backup_flow_gates.write().await.remove(request_id);
                     return Err(AgentError::IoError(format!(
                         "Failed to read tar output: {}",
                         e
@@ -1586,6 +1607,8 @@ impl WebSocketHandler {
                 }
             }
         }
+
+        self.backup_flow_gates.write().await.remove(request_id);
 
         let status = child
             .wait()
@@ -1615,6 +1638,34 @@ impl WebSocketHandler {
         send_ws_with_timeout(write, Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Pause or resume an in-flight backup stream.
+    ///
+    /// Sent by the panel while the target node's socket buffer is backed up so
+    /// a bulk copy throttles instead of being aborted.
+    pub(crate) async fn handle_backup_stream_flow(&self, msg: &Value) -> AgentResult<()> {
+        let request_id = msg["requestId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
+        let paused = msg["paused"].as_bool().unwrap_or(false);
+
+        let gates = self.backup_flow_gates.read().await;
+        match gates.get(request_id) {
+            Some(sender) => {
+                // Fails only when the receiver is gone, i.e. the stream ended.
+                let _ = sender.send(paused);
+                info!(
+                    "Backup stream {} {} by panel flow control",
+                    request_id,
+                    if paused { "paused" } else { "resumed" }
+                );
+            }
+            None => {
+                debug!("Flow control for unknown backup stream {}", request_id);
+            }
+        }
         Ok(())
     }
 
