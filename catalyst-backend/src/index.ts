@@ -2157,15 +2157,15 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			await alertService.start();
 			logger.info("Alert monitoring service started");
 
-			// Start auto-updater — disabled in benchmark fair mode to eliminate
-			// external GitHub polling that steals network/CPU from throughput test
-			if (process.env.AUTO_UPDATE_ENABLED === "true" && !fairMode) {
-				const { scheduleUpdateCheck } = await import("./services/auto-updater");
-				scheduleUpdateCheck(
-					parseInt(process.env.AUTO_UPDATE_INTERVAL_MS || "3600000"),
-					logger,
-				);
-			} else if (fairMode) {
+			// Reconcile release polling with the stored update settings. Saved
+			// settings win; the AUTO_UPDATE_* env vars only seed the row on the
+			// first read so upgraded installs keep their previous behaviour.
+			// Skipped entirely in benchmark fair mode to eliminate external
+			// GitHub polling that steals network/CPU from throughput tests.
+			if (!fairMode) {
+				const { applyAutoUpdateScheme } = await import("./services/auto-updater");
+				await applyAutoUpdateScheme(logger);
+			} else {
 				logger.info("Benchmark fair mode: auto-update polling disabled");
 			}
 

@@ -18,6 +18,7 @@ import { sanitizeInput } from "../lib/validation";
 import { ServerStateMachine } from "../services/state-machine";
 import { normalizeHostIp } from "../utils/ipam";
 import { captureSystemError } from "../services/error-logger";
+import { isNodeAutoUpdateEnabled } from "../services/node-update-policy";
 import { injectPterodactylCompatibilityVars } from "../utils/pterodactyl-env.js";
 import { getSecuritySettings, maxUploadBytesFromMb } from "../services/mailer";
 import {
@@ -5254,9 +5255,15 @@ export class WebSocketGateway {
    * Check if an agent needs to be updated to match the panel version.
    * Sends update_agent command with targetVersion if the agent is behind.
    * Tracks the last-sent version per node to avoid spamming on every health_report.
+   *
+   * Automatic updates are opt-in per node: a node the admin has not approved is
+   * left alone and shows up as "update available" in the panel instead. A bad
+   * release therefore cannot roll out across every node unattended.
    */
   private async checkAgentUpdate(nodeId: string, agentVersion: unknown): Promise<void> {
     if (!agentVersion || typeof agentVersion !== 'string') return;
+
+    if (!(await isNodeAutoUpdateEnabled(nodeId))) return;
 
     const panelVersion = (await import('../services/auto-updater')).getCurrentVersion();
     if (!panelVersion || panelVersion === 'unknown') return;

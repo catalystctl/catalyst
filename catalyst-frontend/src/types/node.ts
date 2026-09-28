@@ -4,6 +4,8 @@ export interface NodeInfo {
   locationId: string;
   isOnline: boolean;
   agentVersion?: string | null;
+  /** Opt-in: whether this node receives automatic agent updates. */
+  autoUpdateEnabled?: boolean;
   lastSeenAt?: string | null;
   description?: string | null;
   hostname?: string;

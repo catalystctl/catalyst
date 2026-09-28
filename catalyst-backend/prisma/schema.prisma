@@ -355,6 +355,14 @@ model SystemSetting {
   // runtime via Admin > Security; NULL rate limit means the built-in default.
   mcpEnabled                   Boolean  @default(false)
   mcpToolRateLimitMax          Int?
+  // Update automation (row id "auto_update"). The DB is the source of truth:
+  // admins change these at runtime in Admin > System. AUTO_UPDATE_* env vars
+  // are read only to seed this row on first read, so upgraded installs keep
+  // their previous behaviour. The panel self-update and the per-node agent
+  // fan-out are separate concerns — the latter is Node.autoUpdateEnabled.
+  autoUpdateEnabled            Boolean?
+  autoUpdateAutoTrigger        Boolean?
+  autoUpdateIntervalMs         Int?
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }
@@ -426,6 +434,11 @@ model Node {
   memoryOverallocatePercent Int @default(0)
   cpuOverallocatePercent    Int @default(0)
   agentVersion  String?
+  // Opt-in: only nodes with this enabled receive automatic agent updates when
+  // the panel notices they are behind. Off by default so an update can never
+  // roll out to a node the admin did not explicitly approve; every other node
+  // is updated on demand from the panel.
+  autoUpdateEnabled Boolean @default(false)
   isOnline      Boolean   @default(false)
   lastSeenAt    DateTime?
   createdAt     DateTime  @default(now())

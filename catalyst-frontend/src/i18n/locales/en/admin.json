@@ -84,7 +84,46 @@
   },
   "update": {
     "actionRequired": "Action required",
+    "auto": {
+      "autoTrigger": "Install panel updates automatically",
+      "autoTriggerHint": "Off means a new release is only reported; you apply it with the button above.",
+      "description": "Poll GitHub for new Catalyst releases and keep the panel up to date.",
+      "intervalHint": "How often the panel looks for a new release.",
+      "intervalLabel": "Check for updates",
+      "intervalOptions": {
+        "daily": "Every 24 hours",
+        "hourly": "Every hour",
+        "sixHours": "Every 6 hours",
+        "twelveHours": "Every 12 hours"
+      },
+      "nodes": {
+        "automatic": "Automatic",
+        "description": "Choose which nodes may update their agent on their own. Everything else stays on its current version until you update it manually.",
+        "empty": "No nodes are registered yet.",
+        "enabledCount_one": "{{count}} node automatic",
+        "enabledCount_other": "{{count}} nodes automatic",
+        "manual": "Manual",
+        "offline": "Offline",
+        "save": "Apply",
+        "selectAll": "Select all",
+        "selectNone": "Clear selection",
+        "title": "Automatic node updates",
+        "toggleLabel": "Allow automatic updates for {{name}}",
+        "unsaved_one": "{{count}} unsaved change",
+        "unsaved_other": "{{count}} unsaved changes",
+        "updateAvailable": "Update available"
+      },
+      "title": "Panel update automation",
+      "toast": {
+        "disabled_one": "{{count}} node is now manual-only",
+        "disabled_other": "{{count}} nodes are now manual-only",
+        "enabled_one": "{{count}} node now updates automatically",
+        "enabled_other": "{{count}} nodes now update automatically",
+        "failed": "Could not change the node selection"
+      }
+    },
     "available": "Update available",
+    "checkNow": "Check now",
     "container": "Container",
     "currentVersion": "Current version",
     "environment": "Environment",
@@ -123,7 +162,9 @@
     "standalone": "Standalone",
     "standaloneNotice": "Auto-update is only available when running in Docker. Please update Catalyst manually.",
     "toast": {
-      "failed": "Update failed"
+      "checkFailed": "Could not check for updates",
+      "failed": "Update failed",
+      "saveFailed": "Could not save the update settings"
     },
     "trigger": "Trigger Update",
     "triggering": "Triggering…",

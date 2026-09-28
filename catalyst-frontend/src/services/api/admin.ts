@@ -22,6 +22,7 @@ import type {
   RolePreset,
   SystemErrorsResponse,
   UpdateStatusResponse,
+  UpdateSettingsResponse,
   UpdateStateResponse,
   DatabaseHostPingResult,
   DbStatusResult,
@@ -427,6 +428,36 @@ export const adminApi = {
   },
   updateStatus: async () => {
     const data = await apiClient.get<UpdateStatusResponse>('/api/admin/update/status');
+    return data;
+  },
+  updateSettings: async () => {
+    const data = await apiClient.get<UpdateSettingsResponse>('/api/admin/update/settings');
+    return data;
+  },
+  saveUpdateSettings: async (payload: {
+    enabled?: boolean;
+    autoTrigger?: boolean;
+    intervalMs?: number;
+  }) => {
+    const data = await apiClient.put<UpdateSettingsResponse>(
+      '/api/admin/update/settings',
+      payload,
+    );
+    return data;
+  },
+  checkForUpdate: async () => {
+    const data = await apiClient.post<UpdateStatusResponse>('/api/admin/update/check', {});
+    return data;
+  },
+  /**
+   * Approve or revoke automatic agent updates for a set of nodes.
+   * Nodes left out keep updating manually from the panel.
+   */
+  setNodeAutoUpdate: async (nodeIds: string[], enabled: boolean) => {
+    const data = await apiClient.patch<{
+      success: boolean;
+      data: { updated: number; enabled: boolean };
+    }>('/api/nodes/auto-update', { nodeIds, enabled });
     return data;
   },
   updateState: async () => {

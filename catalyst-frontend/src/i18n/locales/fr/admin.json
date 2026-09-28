@@ -84,7 +84,50 @@
   },
   "update": {
     "actionRequired": "Action requise",
+    "auto": {
+      "autoTrigger": "Installer les mises à jour du panneau automatiquement",
+      "autoTriggerHint": "Désactivé, une nouvelle version est seulement signalée ; vous l'appliquez avec le bouton ci-dessus.",
+      "description": "Interroge GitHub pour les nouvelles versions de Catalyst et maintient le panneau à jour.",
+      "intervalHint": "Fréquence à laquelle le panneau recherche une nouvelle version.",
+      "intervalLabel": "Rechercher les mises à jour",
+      "intervalOptions": {
+        "daily": "Toutes les 24 heures",
+        "hourly": "Toutes les heures",
+        "sixHours": "Toutes les 6 heures",
+        "twelveHours": "Toutes les 12 heures"
+      },
+      "nodes": {
+        "automatic": "Automatique",
+        "description": "Choisissez les nœuds autorisés à mettre à jour leur agent seuls. Les autres conservent leur version actuelle jusqu'à une mise à jour manuelle.",
+        "empty": "Aucun nœud n'est encore enregistré.",
+        "enabledCount_one": "{{count}} nœud automatique",
+        "enabledCount_many": "{{count}} nœud automatique",
+        "enabledCount_other": "{{count}} nœuds automatiques",
+        "manual": "Manuel",
+        "offline": "Hors ligne",
+        "save": "Appliquer",
+        "selectAll": "Tout sélectionner",
+        "selectNone": "Tout désélectionner",
+        "title": "Mises à jour automatiques des nœuds",
+        "toggleLabel": "Autoriser les mises à jour automatiques pour {{name}}",
+        "unsaved_one": "{{count}} modification non enregistrée",
+        "unsaved_many": "{{count}} modification non enregistrée",
+        "unsaved_other": "{{count}} modifications non enregistrées",
+        "updateAvailable": "Mise à jour disponible"
+      },
+      "title": "Mise à jour automatique du panneau",
+      "toast": {
+        "disabled_one": "{{count}} nœud est désormais en mode manuel",
+        "disabled_many": "{{count}} nœud est désormais en mode manuel",
+        "disabled_other": "{{count}} nœuds sont désormais en mode manuel",
+        "enabled_one": "{{count}} nœud se met désormais à jour automatiquement",
+        "enabled_many": "{{count}} nœud se met désormais à jour automatiquement",
+        "enabled_other": "{{count}} nœuds se mettent désormais à jour automatiquement",
+        "failed": "Impossible de modifier la sélection des nœuds"
+      }
+    },
     "available": "Mise à jour disponible",
+    "checkNow": "Vérifier maintenant",
     "container": "Conteneur",
     "currentVersion": "Version actuelle",
     "environment": "Environnement",
@@ -123,7 +166,9 @@
     "standalone": "Autonome",
     "standaloneNotice": "La mise à jour automatique n’est disponible que lorsque Catalyst tourne dans Docker. Veuillez mettre à jour Catalyst manuellement.",
     "toast": {
-      "failed": "Échec de la mise à jour"
+      "checkFailed": "Impossible de vérifier les mises à jour",
+      "failed": "Échec de la mise à jour",
+      "saveFailed": "Impossible d'enregistrer les paramètres de mise à jour"
     },
     "trigger": "Lancer la mise à jour",
     "triggering": "Lancement…",

@@ -409,6 +409,22 @@ export interface UpdateStatusResponse {
   releaseUrl: string | null;
   isDocker: boolean;
   autoUpdateEnabled: boolean;
+  autoUpdateAutoTrigger: boolean;
+  autoUpdateIntervalMs: number;
+  autoUpdatePolling: boolean;
+}
+
+export interface UpdateSettingsResponse {
+  enabled: boolean;
+  autoTrigger: boolean;
+  intervalMs: number;
+  /** False when the row has never been saved and env vars seeded the values. */
+  configured: boolean;
+  limits?: {
+    minIntervalMs: number;
+    maxIntervalMs: number;
+    defaultIntervalMs: number;
+  };
 }
 
 export interface UpdateStateResponse {

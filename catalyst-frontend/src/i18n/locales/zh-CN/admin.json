@@ -84,7 +84,42 @@
   },
   "update": {
     "actionRequired": "需要处理",
+    "auto": {
+      "autoTrigger": "自动安装面板更新",
+      "autoTriggerHint": "关闭后仅提示有新版本，需使用上方按钮手动应用。",
+      "description": "检查 GitHub 上的 Catalyst 新版本并保持面板为最新状态。",
+      "intervalHint": "面板检查新版本的间隔。",
+      "intervalLabel": "检查更新频率",
+      "intervalOptions": {
+        "daily": "每 24 小时",
+        "hourly": "每小时",
+        "sixHours": "每 6 小时",
+        "twelveHours": "每 12 小时"
+      },
+      "nodes": {
+        "automatic": "自动",
+        "description": "选择允许自行更新代理的节点。其他节点将保持当前版本，直到您手动更新。",
+        "empty": "尚未注册任何节点。",
+        "enabledCount_other": "{{count}} 个节点为自动",
+        "manual": "手动",
+        "offline": "离线",
+        "save": "应用",
+        "selectAll": "全选",
+        "selectNone": "清除选择",
+        "title": "节点自动更新",
+        "toggleLabel": "允许 {{name}} 自动更新",
+        "unsaved_other": "{{count}} 项未保存的更改",
+        "updateAvailable": "有可用更新"
+      },
+      "title": "面板自动更新",
+      "toast": {
+        "disabled_other": "{{count}} 个节点现在仅手动更新",
+        "enabled_other": "{{count}} 个节点现在会自动更新",
+        "failed": "无法更改节点选择"
+      }
+    },
     "available": "有可用更新",
+    "checkNow": "立即检查",
     "container": "容器",
     "currentVersion": "当前版本",
     "environment": "环境",
@@ -123,7 +158,9 @@
     "standalone": "独立运行",
     "standaloneNotice": "自动更新仅在 Docker 中运行时可用。请手动更新 Catalyst。",
     "toast": {
-      "failed": "更新失败"
+      "checkFailed": "无法检查更新",
+      "failed": "更新失败",
+      "saveFailed": "无法保存更新设置"
     },
     "trigger": "触发更新",
     "triggering": "正在触发…",

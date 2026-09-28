@@ -8,7 +8,7 @@
  * effect without waiting for TTL expiry.
  */
 
-import { RedisKeys, RedisTTL, ttlWithJitter } from './cache-keys';
+import { RedisKeys, RedisTTL, ttlWithJitter, type ConfigCacheKind } from './cache-keys';
 import { getRedis } from './redis';
 import { publishCacheInvalidate, subscribeCacheInvalidations } from './event-bus';
 import type { CacheInvalidateChannel } from './cache-bus';
@@ -58,7 +58,9 @@ async function ensureRemoteSubscription(): Promise<void> {
   }
 }
 
-export async function cachedConfig<T>(kind: 'security' | 'smtp' | 'mod_manager' | 'theme_default' | 'localization' | 'mcp', fetcher: () => Promise<T>): Promise<T> {
+export type { ConfigCacheKind } from './cache-keys';
+
+export async function cachedConfig<T>(kind: ConfigCacheKind, fetcher: () => Promise<T>): Promise<T> {
   void ensureRemoteSubscription();
   const localKey = `config:${kind}`;
   const hit = localGet<T>(localKey);
@@ -94,7 +96,7 @@ export async function cachedConfig<T>(kind: 'security' | 'smtp' | 'mod_manager' 
   return fresh;
 }
 
-export async function invalidateConfig(kind?: 'security' | 'smtp' | 'mod_manager' | 'theme_default' | 'localization' | 'mcp'): Promise<void> {
+export async function invalidateConfig(kind?: ConfigCacheKind): Promise<void> {
   if (kind) {
     localDelete(`config:${kind}`);
     const redis = getRedis();

@@ -4,6 +4,7 @@ import { spawn, spawnSync } from "child_process";
 import fetch from "node-fetch";
 import { captureSystemError } from "./error-logger";
 import { getCurrentVersion } from "../lib/panel-version";
+import { getAutoUpdateSettings, DEFAULT_AUTO_UPDATE_INTERVAL_MS } from "./auto-update-settings";
 
 export { getCurrentVersion };
 
@@ -16,6 +17,12 @@ export interface UpdateStatus {
 	lastCheckedAt: string | null;
 	isDocker: boolean;
 	autoUpdateEnabled: boolean;
+	/** Apply a new panel release without an admin confirming it. */
+	autoUpdateAutoTrigger: boolean;
+	/** Panel release-check cadence, in milliseconds. */
+	autoUpdateIntervalMs: number;
+	/** Whether update polling is currently scheduled in this process. */
+	autoUpdatePolling: boolean;
 }
 
 /**
@@ -102,6 +109,9 @@ let cachedStatus: UpdateStatus = {
 	lastCheckedAt: null,
 	isDocker: false,
 	autoUpdateEnabled: false,
+	autoUpdateAutoTrigger: false,
+	autoUpdateIntervalMs: DEFAULT_AUTO_UPDATE_INTERVAL_MS,
+	autoUpdatePolling: false,
 };
 
 let checkInterval: ReturnType<typeof setInterval> | null = null;
@@ -126,6 +136,7 @@ function compareVersions(current: string, latest: string): boolean {
 export async function checkForUpdate(logger?: any): Promise<UpdateStatus> {
 	const currentVersion = getCurrentVersion();
 	const isDockerEnv = isDocker();
+	const settings = await getAutoUpdateSettings();
 
 	try {
 		const response = await fetch(
@@ -154,7 +165,10 @@ export async function checkForUpdate(logger?: any): Promise<UpdateStatus> {
 			publishedAt,
 			lastCheckedAt: new Date().toISOString(),
 			isDocker: isDockerEnv,
-			autoUpdateEnabled: process.env.AUTO_UPDATE_ENABLED === "true",
+			autoUpdateEnabled: settings.enabled,
+			autoUpdateAutoTrigger: settings.autoTrigger,
+			autoUpdateIntervalMs: settings.intervalMs,
+			autoUpdatePolling: checkInterval !== null,
 		};
 
 		if (logger) {
@@ -185,7 +199,10 @@ export async function checkForUpdate(logger?: any): Promise<UpdateStatus> {
 			publishedAt: null,
 			lastCheckedAt: new Date().toISOString(),
 			isDocker: isDockerEnv,
-			autoUpdateEnabled: process.env.AUTO_UPDATE_ENABLED === "true",
+			autoUpdateEnabled: settings.enabled,
+			autoUpdateAutoTrigger: settings.autoTrigger,
+			autoUpdateIntervalMs: settings.intervalMs,
+			autoUpdatePolling: checkInterval !== null,
 		};
 
 		return cachedStatus;
@@ -502,73 +519,96 @@ export async function performUpdate(logger?: {
 	return { success: false, message };
 }
 
-export function scheduleUpdateCheck(intervalMs: number, logger?: any): void {
-	if (process.env.AUTO_UPDATE_ENABLED !== "true") {
-		if (logger) {
-			logger.info("Auto-update is disabled");
-		}
-		return;
+/**
+ * One polling tick: refresh the cached status, warn when a release is
+ * available and self-update when the admin opted into automatic triggers.
+ */
+async function runUpdateCheck(logger?: any): Promise<UpdateStatus> {
+	let status: UpdateStatus;
+	try {
+		status = await checkForUpdate(logger);
+	} catch (err) {
+		logger?.warn?.({ err }, "Update check failed");
+		return cachedStatus;
 	}
 
+	if (status.updateAvailable && logger) {
+		logger.warn(
+			{
+				currentVersion: status.currentVersion,
+				latestVersion: status.latestVersion,
+			},
+			"A new version of Catalyst is available",
+		);
+	}
+	if (status.updateAvailable && status.autoUpdateAutoTrigger) {
+		performUpdate(logger).then((result) => {
+			if (logger) {
+				logger.info({ result }, "Auto-update triggered");
+			}
+		}).catch((err) =>
+			logger?.warn?.({ err }, "Auto-update trigger failed"),
+		);
+	}
+	return status;
+}
+
+/**
+ * Start (or restart) release polling with the given cadence.
+ *
+ * Prefer `applyAutoUpdateScheme`, which reads the cadence from the database and
+ * also stops polling when the admin disabled it. This is kept exported for
+ * callers that already resolved the interval.
+ */
+export function scheduleUpdateCheck(intervalMs: number, logger?: any): void {
 	if (checkInterval) {
 		clearInterval(checkInterval);
 		checkInterval = null;
 	}
 
+	cachedStatus = { ...cachedStatus, autoUpdatePolling: true };
+
 	// Run initial check
-	checkForUpdate(logger).then((status) => {
-		if (status.updateAvailable && logger) {
-			logger.warn(
-				{
-					currentVersion: status.currentVersion,
-					latestVersion: status.latestVersion,
-				},
-				"A new version of Catalyst is available",
-			);
-		}
-		if (
-			status.updateAvailable &&
-			process.env.AUTO_UPDATE_AUTO_TRIGGER === "true"
-		) {
-			performUpdate(logger).then((result) => {
-				if (logger) {
-					logger.info({ result }, "Auto-update triggered");
-				}
-			}).catch((err) =>
-				logger?.warn?.({ err }, "Auto-update trigger failed"),
-			);
-		}
-	}).catch((err) => logger?.warn?.({ err }, "Update check failed"));
+	void runUpdateCheck(logger);
 
 	checkInterval = setInterval(() => {
-		checkForUpdate(logger).then((status) => {
-			if (status.updateAvailable && logger) {
-				logger.warn(
-					{
-						currentVersion: status.currentVersion,
-						latestVersion: status.latestVersion,
-					},
-					"A new version of Catalyst is available",
-				);
-			}
-			if (
-				status.updateAvailable &&
-				process.env.AUTO_UPDATE_AUTO_TRIGGER === "true"
-			) {
-				performUpdate(logger).then((result) => {
-					if (logger) {
-						logger.info({ result }, "Auto-update triggered");
-					}
-				}).catch((err) =>
-					logger?.warn?.({ err }, "Auto-update trigger failed"),
-				);
-			}
-		}).catch((err) => logger?.warn?.({ err }, "Update check failed"));
+		void runUpdateCheck(logger);
 	}, intervalMs);
 
 	if (logger) {
 		logger.info({ intervalMs }, "Auto-update check scheduled");
 	}
+}
+
+/**
+ * Reconcile release polling with the stored settings. Call on boot and after
+ * an admin changes update automation, so a toggle takes effect immediately
+ * instead of waiting for the next redeploy.
+ */
+export async function applyAutoUpdateScheme(logger?: any): Promise<UpdateStatus> {
+	let settings;
+	try {
+		settings = await getAutoUpdateSettings();
+	} catch (err) {
+		logger?.warn?.({ err }, "Could not read auto-update settings");
+		return cachedStatus;
+	}
+
+	if (!settings.enabled) {
+		stopUpdateCheck();
+		cachedStatus = {
+			...cachedStatus,
+			autoUpdateEnabled: false,
+			autoUpdateAutoTrigger: settings.autoTrigger,
+			autoUpdateIntervalMs: settings.intervalMs,
+			autoUpdatePolling: false,
+		};
+		logger?.info?.("Auto-update is disabled");
+		return cachedStatus;
+	}
+
+	scheduleUpdateCheck(settings.intervalMs, logger);
+	return cachedStatus;
 }
 
 export function getUpdateStatus(): UpdateStatus {
@@ -580,4 +620,5 @@ export function stopUpdateCheck(): void {
 		clearInterval(checkInterval);
 		checkInterval = null;
 	}
+	cachedStatus = { ...cachedStatus, autoUpdatePolling: false };
 }

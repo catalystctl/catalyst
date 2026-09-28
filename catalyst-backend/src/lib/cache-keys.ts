@@ -32,8 +32,18 @@ export function cacheKey(...parts: string[]): string {
   return [prefix(), ...parts.map(safeKeyPart)].join(':');
 }
 
+/** Configuration rows cached by lib/config-cache.ts and invalidated over the cache bus. */
+export type ConfigCacheKind =
+  | 'security'
+  | 'smtp'
+  | 'mod_manager'
+  | 'theme_default'
+  | 'localization'
+  | 'mcp'
+  | 'auto_update';
+
 export const RedisKeys = {
-  config: (kind: 'security' | 'smtp' | 'mod_manager' | 'theme_default' | 'localization' | 'mcp'): string =>
+  config: (kind: ConfigCacheKind): string =>
     cacheKey('config', kind),
   templateList: (hash: string): string => cacheKey('cache', 'templates', `list_${safeKeyPart(hash)}`),
   template: (id: string): string => cacheKey('cache', 'template', id),

@@ -203,6 +203,7 @@ export const demoNodes = [
     locationId: 'demo-loc-eu',
     isOnline: true,
     agentVersion: '1.58.1',
+    autoUpdateEnabled: true,
     lastSeenAt: now,
     description: 'Demo node ( fictional data )',
     hostname: 'demo-eu-1',

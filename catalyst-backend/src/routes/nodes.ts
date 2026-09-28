@@ -8,6 +8,7 @@ import { serialize } from "../utils/serialize";
 import { verifyAgentApiKey } from "../lib/agent-auth";
 import { createApiKey, deleteApiKey } from "../services/api-key-service";
 import { captureSystemError } from "../services/error-logger";
+import { invalidateNodeAutoUpdateCache } from "../services/node-update-policy";
 import { getUpdateStatus } from "../services/auto-updater";
 import { getCurrentVersion } from "../lib/panel-version";
 import { createAuditLog } from "../middleware/audit.js";
@@ -18,6 +19,9 @@ import { ErrorCodes } from "../shared-types";
 
 // ID format validation — accepts UUID, Cuid2, and other safe identifier formats.
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/** Ceiling for a single bulk auto-update selection change. */
+const MAX_AUTO_UPDATE_BATCH = 200;
 
 /**
  * Safely escape a nodeId for use in JSON string queries.
@@ -153,6 +157,92 @@ const parseAllocationIps = async (input: string): Promise<string[]> => {
 
 export async function nodeRoutes(app: FastifyInstance) {
 	// Using shared prisma instance from db.ts
+
+	// Update the automatic-agent-update opt-in for a set of nodes.
+	//
+	// Updating a node's agent can break a workload, so the panel no longer
+	// updates every outdated node on its own. Admins approve nodes here; the
+	// rest stay on "update available" until someone applies it manually via
+	// POST /:nodeId/agent/update.
+	app.patch(
+		"/auto-update",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.update")) return;
+
+			const { nodeIds, enabled } = (request.body ?? {}) as {
+				nodeIds?: unknown;
+				enabled?: unknown;
+			};
+
+			if (!Array.isArray(nodeIds)) {
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "nodeIds must be an array");
+			}
+			if (typeof enabled !== "boolean") {
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "enabled must be a boolean");
+			}
+
+			const ids = Array.from(
+				new Set(
+					nodeIds
+						.filter((id): id is string => typeof id === "string")
+						.map((id) => id.trim())
+						.filter((id) => ID_PATTERN.test(id)),
+				),
+			);
+			if (ids.length !== nodeIds.length || ids.length === 0) {
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "nodeIds must be a non-empty list of valid node ids");
+			}
+			if (ids.length > MAX_AUTO_UPDATE_BATCH) {
+				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, `At most ${MAX_AUTO_UPDATE_BATCH} nodes can be changed at once`);
+			}
+
+			const found = await prisma.node.findMany({
+				where: { id: { in: ids } },
+				select: { id: true, name: true },
+			});
+			if (found.length !== ids.length) {
+				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "One or more nodes were not found");
+			}
+
+			const result = await prisma.node.updateMany({
+				where: { id: { in: ids } },
+				data: { autoUpdateEnabled: enabled },
+			});
+
+			// The gateway caches this flag per node; drop it so the change bites
+			// on the next health report instead of after the TTL.
+			for (const id of ids) invalidateNodeAutoUpdateCache(id);
+
+			await createAuditLog(request.user.userId, {
+				action: "node.auto_update.update",
+				resource: "node",
+				resourceId: ids.length === 1 ? ids[0] : undefined,
+				request,
+				details: {
+					nodeIds: ids,
+					nodeNames: found.map((node) => node.name),
+					autoUpdateEnabled: enabled,
+					updated: result.count,
+				},
+			});
+
+			// Best-effort fan-out so open panels re-render the new selection.
+			const gateway = (app as any).wsGateway;
+			try {
+				gateway?.pushToAdminSubscribers?.("node_updated", {
+					type: "node_updated",
+					nodeIds: ids,
+					updatedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			} catch {
+				/* non-fatal */
+			}
+
+			reply.send({ success: true, data: { updated: result.count, enabled } });
+		},
+	);
 
 	// Create node
 	app.post(

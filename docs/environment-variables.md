@@ -300,14 +300,25 @@ Webhooks include an `X-Webhook-Signature` header with an HMAC-SHA256 hash of the
 
 ### Auto Updater
 
+Update automation is configured in the panel (Admin → System → Auto Updater) and
+stored in the database, so changes take effect without a redeploy. The variables
+below only **seed** that row the first time it is read; once an admin saves the
+settings the database wins and the variables are ignored. Delete the
+`auto_update` row in `SystemSetting` to fall back to them again.
+
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `AUTO_UPDATE_ENABLED` | `true` \| `false` | `false` | Enable automatic update checking. The backend checks for new releases at regular intervals. |
-| `AUTO_UPDATE_INTERVAL_MS` | Integer | `3600000` (1 hour) | Interval between update checks, in milliseconds. |
-| `AUTO_UPDATE_AUTO_TRIGGER` | `true` \| `false` | `false` | Auto-trigger the update when a new version is available. If `false`, only send a notification (admin must approve). |
+| `AUTO_UPDATE_ENABLED` | `true` \| `false` | `false` | Seed for automatic panel update checking. The backend checks for new releases at the configured interval. |
+| `AUTO_UPDATE_INTERVAL_MS` | Integer | `3600000` (1 hour) | Seed for the interval between panel update checks, in milliseconds (clamped to 1 minute – 7 days). |
+| `AUTO_UPDATE_AUTO_TRIGGER` | `true` \| `false` | `false` | Seed for applying a new panel release automatically. If `false`, the release is only reported and an admin applies it from the panel. |
 | `AUTO_UPDATE_DOCKER_COMPOSE_PATH` | Filesystem path | `${CATALYST_COMPOSE_DIR:-/opt/catalyst-docker}/docker-compose.yml` in Docker | Path to `docker-compose.yml` for Docker-based auto-update. Used to restart the stack after updating. |
 | `DOCKER_BIN` | Binary name/path | `docker` | Container runtime binary invoked by the auto-updater. |
 | `AUTO_UPDATE_FORCE_DOCKER` | `true` or unset | Unset | Force Docker-mode update flow even when Docker detection fails. |
+
+Node agent updates are opt-in per node (`Node.autoUpdateEnabled`) and are managed
+in the same admin card: only nodes the admin selected update their agent
+automatically, and every other node is updated on demand. There is no
+environment variable for this.
 
 ### Bootstrap / Seeding (Dev Only)
 
@@ -662,7 +673,7 @@ openssl rand -base64 32
 8. ✅ `WEBHOOK_SECRET` set explicitly (not auto-generated)
 9. ✅ `PASSKEY_RP_ID` matching your domain
 10. ✅ `SUSPENSION_ENFORCED=true`
-11. ✅ `AUTO_UPDATE_ENABLED=true` with `AUTO_UPDATE_AUTO_TRIGGER=false` (review before updating)
+11. ✅ `AUTO_UPDATE_ENABLED=true` with `AUTO_UPDATE_AUTO_TRIGGER=false` (seed values: review before updating)
 
 ---
 

@@ -278,7 +278,9 @@ export function handleDemoRequest(
   if (path === '/api/admin/auth-lockouts') return { handled: true, data: { lockouts: [], pagination: { page: 1, limit: 25, total: 0, totalPages: 1 } } };
   if (path === '/api/admin/theme-settings') return { handled: true, data: ok(demoPublicTheme) };
   if (path === '/api/admin/oidc-config') return { handled: true, data: ok({}) };
-  if (path === '/api/admin/update/status') return { handled: true, data: { currentVersion: '1.58.1', latestVersion: '1.58.1', updateAvailable: false, lastCheckedAt: now(), releaseUrl: null, isDocker: false, autoUpdateEnabled: false } };
+  if (path === '/api/admin/update/status') return { handled: true, data: { currentVersion: '1.58.1', latestVersion: '1.58.1', updateAvailable: false, lastCheckedAt: now(), releaseUrl: null, isDocker: false, autoUpdateEnabled: false, autoUpdateAutoTrigger: false, autoUpdateIntervalMs: 3600000, autoUpdatePolling: false } };
+  if (path === '/api/admin/update/settings') return { handled: true, data: { enabled: false, autoTrigger: false, intervalMs: 3600000, configured: true } };
+  if (path === '/api/admin/update/check') return { handled: true, data: { currentVersion: '1.58.1', latestVersion: '1.58.1', updateAvailable: false, lastCheckedAt: now(), releaseUrl: null, isDocker: false } };
   if (path === '/api/admin/update/state') return { handled: true, data: { state: 'idle', message: null, startedAt: null, updatedAt: null, logs: [] } };
   if (path === '/api/admin/api-keys') return { handled: true, data: ok([]) };
   if (path === '/api/roles/presets') return { handled: true, data: ok([]) };

@@ -1260,6 +1260,12 @@ ExecStartPost=-/bin/chmod 660 /run/containerd/containerd.sock
 
 The agent supports self-updates initiated by the panel via the `update_agent` WebSocket command.
 
+The panel sends that command in two cases: an admin clicks **Update Agent** for
+one node, or the node is opted into automatic updates (**Admin → System → Auto
+Updater → Automatic node updates**, `Node.autoUpdateEnabled`). Automatic updates
+are off by default, so an outdated node is only reported until an admin approves
+it or updates it manually.
+
 **Update flow:**
 1. Panel sends `update_agent` command
 2. Agent downloads the arch-matching **static musl** asset for the **panel version** from GitHub Releases (`.../releases/download/v{panel}/catalyst-agent-{x86_64|aarch64}-linux-musl`), falling back to `{backend_url}/api/agent/download?version={panel}`
