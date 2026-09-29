@@ -122,7 +122,29 @@ export async function setupRoutes(app: FastifyInstance) {
 				return reply.send({ setupRequired: false });
 			}
 			const userCount = await prisma.user.count();
-			return reply.send({ setupRequired: userCount === 0 });
+			if (userCount > 0) {
+				// Installs older than the flag row never had it written. Backfill
+				// now so a later account deletion cannot re-arm the wizard.
+				await markSetupCompleted().catch(() => {});
+				return reply.send({ setupRequired: false });
+			}
+			// The flag row is missing AND there are no users. If any other settings
+			// row exists, this panel has run before (first setup writes the
+			// "security" row) — its data is intact but the flag was lost, e.g. a
+			// restore or an interrupted upgrade. Never send an installed panel
+			// back to the wizard; close it and backfill instead.
+			const hasInstallEvidence =
+				(await prisma.systemSetting.count()) > 0 ||
+				(await prisma.role.count()) > 0 ||
+				(await prisma.server.count()) > 0;
+			if (hasInstallEvidence) {
+				_request.log.warn(
+					"Setup flag missing on an installed panel — backfilling setup:completed",
+				);
+				await markSetupCompleted().catch(() => {});
+				return reply.send({ setupRequired: false });
+			}
+			return reply.send({ setupRequired: true });
 		},
 	);
 
@@ -335,7 +357,16 @@ export async function setupRoutes(app: FastifyInstance) {
 			// Persist the environment variables captured by the wizard. Restricted
 			// to the `setup` registry keys; they need a restart to take effect, so
 			// the response tells the client whether to show the reboot prompt.
-			await applySetupEnvVars(parsed.data.environment ?? {});
+			// Best-effort: a missing EnvSetting table or a bad value must never
+			// block first-run setup from completing.
+			try {
+				await applySetupEnvVars(parsed.data.environment ?? {});
+			} catch (envError) {
+				request.log.warn(
+					{ error: envError },
+					"Setup environment capture failed — continuing setup",
+				);
+			}
 
 			// 3. Partial setup recovery — an administrator-capable account may
 			// already exist (e.g. a previous attempt crashed after user creation

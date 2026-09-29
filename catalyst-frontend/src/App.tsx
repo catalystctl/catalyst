@@ -96,7 +96,13 @@ function App() {
  const user = useAuthStore((s) => s.user);
  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
  const isReady = useAuthStore((s) => s.isReady);
- const { setupRequired, isLoading: isSetupLoading } = useSetupStatus();
+ const {
+ setupRequired,
+ isLoading: isSetupLoading,
+ unreachable: setupUnreachable,
+ error: setupStatusError,
+ recheck: recheckSetup,
+ } = useSetupStatus();
 
  // Backstop so a stalled backend can never leave the panel on Loading...
  // Auth and setup hooks have their own shorter timeouts; this covers any
@@ -203,6 +209,29 @@ function App() {
  <div className="flex flex-col items-center gap-3">
  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
  <p className="text-sm text-muted-foreground">{t('actions.loading')}</p>
+ </div>
+ </div>
+ );
+ }
+
+ // The setup answer is unknown because the backend could not be reached (an
+ // update or restart, typically). Never fall through to the wizard on an
+ // error — show a retry state and keep polling so an installed panel recovers
+ // instead of being sent back to /setup.
+ if (setupUnreachable) {
+ return (
+ <div className="flex h-screen items-center justify-center bg-background px-6">
+ <div className="max-w-md space-y-3 text-center">
+ <p className="text-sm text-muted-foreground">
+ {setupStatusError ?? t('actions.loading')}
+ </p>
+ <button
+ type="button"
+ onClick={recheckSetup}
+ className="mx-auto inline-flex h-8 items-center rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+ >
+ {t('actions.retry')}
+ </button>
  </div>
  </div>
  );

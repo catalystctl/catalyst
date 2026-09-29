@@ -6,52 +6,29 @@ import { getLocalizedErrorMessage } from '../i18n/api-errors';
 
 const SETUP_STATUS_TIMEOUT_MS = 15000;
 
-// Per-browser memory that this panel has already been set up. Once a status
-// response (or a completed wizard) proves setup is done, a later transient
-// failure must not fall back to the wizard — that is what stranded installed
-// panels on `/setup` after a backend restart or upgrade. Clearing this only
-// re-arms the client-side gate, never the server-side setup guard.
-const SETUP_DONE_STORAGE_KEY = 'catalyst.setup-complete';
-
-function rememberSetupCompleted(): void {
-  try {
-    localStorage.setItem(SETUP_DONE_STORAGE_KEY, '1');
-  } catch {
-    /* private mode / storage disabled — best effort */
-  }
-}
-
-function hasRememberedSetupCompleted(): boolean {
-  try {
-    return localStorage.getItem(SETUP_DONE_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 interface SetupStatus {
   setupRequired: boolean;
   isLoading: boolean;
   error: string | null;
+  /** The backend could not answer; routing must not assume a fresh install. */
+  unreachable: boolean;
   recheck: () => void;
 }
 
 /**
  * First-run / OOBE gate.
  *
- * IMPORTANT: never default "unknown" to setupRequired=false.
- * csync's `isLoading` is only true while `isPending && isFetching`. On the first
- * paint the fetch has not started yet (`isFetching` is still false), and a
- * default of `false` would briefly render the normal router — ProtectedRoute
- * then bounces unauthenticated users to `/login`. On a fresh Docker install the
- * backend is often still migrating, so the status call can also fail; treating
- * that as "setup done" permanently strands the operator on `/login` with no
- * accounts. Fail open toward setup, and keep the app in a loading state until
- * we have a definitive answer (or exhaust retries).
+ * IMPORTANT: only a *successful* `setupRequired: true` response opens the
+ * wizard. A network/5xx failure does NOT mean "fresh install" — treating it
+ * that way sent installed panels back to `/setup` whenever the backend was
+ * briefly unavailable (an image update or restart). On failure we report
+ * `unreachable` and keep polling, so an installed panel recovers on its own
+ * once the backend is back. A genuinely fresh install still gets a successful
+ * `true` and the wizard.
  *
- * The fail-open only applies to genuinely unknown panels: if this browser has
- * ever seen setup completed, an error resolves to "not required" so an
- * installed panel is never sent back to the wizard.
+ * The app must not fall through to the normal router while the answer is
+ * unknown either: ProtectedRoute would bounce unauthenticated users to
+ * `/login`. Unknown = loading, then the retry screen.
  */
 export function useSetupStatus(): SetupStatus {
   const queryClient = useQueryClient();
@@ -71,20 +48,16 @@ export function useSetupStatus(): SetupStatus {
           // "setupRequired: true" onto an already-installed panel.
           cache: 'no-store',
         });
-        const setupRequired = res.setupRequired ?? false;
-        if (!setupRequired) rememberSetupCompleted();
-        return setupRequired;
+        return res.setupRequired ?? false;
       } catch (err: any) {
         // Old backends without the OOBE endpoint — treat as already set up.
-        if (err?.response?.status === 404) {
-          rememberSetupCompleted();
-          return false;
-        }
+        if (err?.response?.status === 404) return false;
         throw err;
       }
     },
-    // Backend often needs a few seconds for migrate-on-boot on fresh Docker volumes.
-    // Keep retrying transient failures so we don't freeze on a wrong answer.
+    // Backend often needs a few seconds for migrate-on-boot on fresh Docker
+    // volumes. Keep retrying transient failures so we don't freeze on a wrong
+    // answer.
     retry: (failureCount, err: any) => {
       if (err?.response?.status === 404) return false;
       if (err?.response?.status === 401 || err?.response?.status === 403) return false;
@@ -100,7 +73,6 @@ export function useSetupStatus(): SetupStatus {
 
   useEffect(() => {
     const handleSetupComplete = () => {
-      rememberSetupCompleted();
       queryClient.invalidateQueries({ queryKey: ['setup', 'status'] });
     };
     window.addEventListener('catalyst:setup-complete', handleSetupComplete);
@@ -116,27 +88,28 @@ export function useSetupStatus(): SetupStatus {
     return () => clearTimeout(timer);
   }, [isFetched]);
 
+  const isDefinitive = typeof data === 'boolean';
+  const unreachable = !isDefinitive && (timedOut || (isFetched && !!queryError));
+
   // Block routing until the first attempt settles (success or terminal error).
   // Do NOT use csync's isLoading — it is false on the pre-fetch first paint.
-  // Never block longer than the timeout — fail open so a stalled backend
-  // cannot leave the panel on the loading screen.
+  // Never block longer than the timeout — the retry screen takes over.
   const isLoading = !isFetched && !timedOut;
 
-  // Definitive false only after a successful response (or 404 mapped to false).
-  // On terminal error, fail open to setup so first-run Docker installs are not
-  // stranded on /login with zero users — unless this browser already knows the
-  // panel was set up, in which case an error must not re-open the wizard.
-  const setupRequired = typeof data === 'boolean'
-    ? data
-    : !hasRememberedSetupCompleted();
+  // Definitive true only from a successful response. Unknown is NOT setup.
+  const setupRequired = data === true;
 
-  const error = timedOut && !isFetched
-    ? i18n.t('setupStatus.timedOut', { ns: 'common', ms: SETUP_STATUS_TIMEOUT_MS })
+  const error = unreachable
+    ? queryError
+      ? queryError instanceof Error
+        ? getLocalizedErrorMessage(queryError)
+        : i18n.t('setupStatus.checkFailed', { ns: 'common' })
+      : i18n.t('setupStatus.timedOut', { ns: 'common', ms: SETUP_STATUS_TIMEOUT_MS })
     : queryError
       ? queryError instanceof Error
         ? getLocalizedErrorMessage(queryError)
         : i18n.t('setupStatus.checkFailed', { ns: 'common' })
       : null;
 
-  return { setupRequired, isLoading, error, recheck };
+  return { setupRequired, isLoading, error, unreachable, recheck };
 }

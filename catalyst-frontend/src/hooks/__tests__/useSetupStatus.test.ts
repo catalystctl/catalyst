@@ -55,11 +55,10 @@ describe('useSetupStatus', () => {
       wrapper: createWrapper(client),
     });
 
-    // Critical: first paint must NOT claim setup is done.
+    // Critical: first paint must NOT claim setup is done, and must not claim a
+    // fresh install either — only a successful response decides.
     expect(result.current.isLoading).toBe(true);
-    // Fail-open toward setup while unknown — App.tsx only gates on isLoading,
-    // but the boolean must not be a false "done" signal if loading is skipped.
-    expect(result.current.setupRequired).toBe(true);
+    expect(result.current.setupRequired).toBe(false);
   });
 
   it('reports setupRequired=true when the backend says so', async () => {
@@ -93,7 +92,7 @@ describe('useSetupStatus', () => {
     expect(result.current.setupRequired).toBe(false);
   });
 
-  it('fails open to setupRequired=true on network / 5xx errors after retries', async () => {
+  it('reports unreachable (not a fresh install) on network / 5xx errors after retries', async () => {
     vi.useFakeTimers();
     // csync fires fetchQuery with `void` from useEffect, so terminal rejections
     // surface as unhandledRejection — swallow the expected 502 for this test.
@@ -124,7 +123,10 @@ describe('useSetupStatus', () => {
       });
 
       expect(result.current.isLoading).toBe(false);
-      expect(result.current.setupRequired).toBe(true);
+      // A backend that cannot answer is NOT a fresh install: never open the
+      // wizard, show the retry state instead.
+      expect(result.current.unreachable).toBe(true);
+      expect(result.current.setupRequired).toBe(false);
       expect(result.current.error).toBeTruthy();
       // Initial attempt + retries (failureCount < 8 → up to 8 attempts)
       expect(getMock.mock.calls.length).toBeGreaterThan(1);
@@ -133,10 +135,9 @@ describe('useSetupStatus', () => {
     }
   });
 
-  it('does not re-open the wizard on error once this browser saw setup complete', async () => {
-    // A panel that was set up, then lost the backend for a moment (restart,
-    // upgrade) must not fall back to the OOBE wizard.
-    localStorage.setItem('catalyst.setup-complete', '1');
+  it('never opens the wizard on an error, with or without prior setup memory', async () => {
+    // Even a browser that never saw "setup complete" must not be sent to the
+    // OOBE wizard just because the backend was briefly unavailable.
     vi.useFakeTimers();
     const onUnhandled = (reason: unknown) => {
       const msg =
@@ -165,6 +166,7 @@ describe('useSetupStatus', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.setupRequired).toBe(false);
+      expect(result.current.unreachable).toBe(true);
     } finally {
       process.off('unhandledRejection', onUnhandled);
     }
@@ -179,8 +181,8 @@ describe('useSetupStatus', () => {
       wrapper: createWrapper(client),
     });
 
-    // Wait for the first fetch to settle — setupRequired is true on first paint
-    // (fail-open) so we must not treat that as "fetched".
+    // Wait for the first fetch to settle — setupRequired becomes true only
+    // after the backend actually answers.
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
       expect(result.current.setupRequired).toBe(true);
