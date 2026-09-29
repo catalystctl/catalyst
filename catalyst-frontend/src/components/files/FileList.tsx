@@ -3,10 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFileListVirtualizer } from '../../hooks/useFileListVirtualizer';
 import { ArrowDown, ArrowUp, Folder, Check } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import type { FileEntry } from '../../types/file';
 import { formatBytes, formatFileMode } from '../../utils/formatters';
 import { formatDate, formatDateTime } from '@/i18n/format';
+import TabEmptyState from '../servers/tabs/TabEmptyState';
 import FileContextMenu from './FileContextMenu';
 import { FileTypeIcon } from './FileTypeIcon';
 import { getFileTypeInfo } from './fileTypes';
@@ -161,7 +161,7 @@ function FileList({
  }));
  }, [files, selectedPaths, renamingEntry]);
 
- const { virtualItems } = useFileListVirtualizer(files.length, parentRef);
+ const { virtualItems, totalSize: virtualTotalSize } = useFileListVirtualizer(files.length, parentRef);
 
  const closeContextMenu = useCallback(() => {
  setContextMenuPosition(null);
@@ -225,17 +225,15 @@ function FileList({
 
  if (!files.length) {
  return (
- <div className="flex h-full flex-col items-center justify-center gap-1 px-4 py-10 text-center">
- <p className="type-overline">{t('files.list.emptyTitle')}</p>
- <p className="type-meta max-w-md">{t('files.list.emptyDescription')}</p>
- </div>
+ <TabEmptyState
+ title={t('files.list.emptyTitle')}
+ description={t('files.list.emptyDescription')}
+ />
  );
  }
 
  const thBase =
- 'inline-flex h-7 cursor-pointer select-none items-center text-left type-overline transition-colors hover:text-foreground';
-
- const totalHeight = files.length * ROW_HEIGHT;
+ 'inline-flex h-8 min-h-8 cursor-pointer select-none items-center text-left type-overline transition-colors hover:text-foreground';
 
  const selectBox = (selected: boolean, extra = '') =>
  `flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${extra} ${
@@ -252,7 +250,7 @@ function FileList({
  <button
  type="button"
  onClick={onSelectAll}
- className="flex h-7 w-7 items-center justify-center"
+ className="flex h-8 min-h-8 w-7 items-center justify-center"
  >
  <span className={selectBox(allSelected, selectedPaths.size > 0 && !allSelected ? 'border-primary' : '')}>
  {allSelected && <Check className="h-3 w-3" />}
@@ -276,17 +274,13 @@ function FileList({
 
  {/* Virtual scroll container */}
  <div ref={parentRef} className="flex-1 overflow-auto" style={{ contain: 'strict' }}>
- <div style={{ height: totalHeight, position: 'relative' }}>
- <AnimatePresence initial={false}>
+ <div style={{ height: virtualTotalSize, position: 'relative' }}>
  {virtualItems.map((virtualRow) => {
  const { entry, selected, isRenaming, info } = rowData[virtualRow.index];
  return (
- <motion.div
+ <div
  key={entry.path}
  data-index={virtualRow.index}
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- transition={{ duration: 0.12 }}
  className={`${GRID} absolute left-0 right-0 group px-3 py-1.5 transition-colors ${
  virtualRow.index > 0 ? 'border-t border-border/40' : ''
  } ${
@@ -320,7 +314,7 @@ function FileList({
  }
  }}
  aria-label={entry.name}
- className="flex h-7 w-7 items-center justify-center"
+ className="flex h-9 min-h-9 w-7 items-center justify-center"
  >
  <span className={selectBox(selected, 'group-hover:border-primary/50')}>
  {selected && <Check className="h-3 w-3" />}
@@ -331,14 +325,14 @@ function FileList({
  {/* Name */}
  <button
  type="button"
- className="flex min-w-0 items-center gap-2 py-1.5 text-left min-h-7"
+ className="flex min-w-0 items-center gap-2 py-1.5 text-left min-h-9"
  onClick={(e) => {
  e.stopPropagation();
  onOpen(entry);
  }}
  >
  {entry.isDirectory ? (
- <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+ <Folder className="h-4 w-4 shrink-0 text-primary" />
  ) : (
  <FileTypeIcon name={entry.name} className="h-4 w-4" />
  )}
@@ -350,7 +344,7 @@ function FileList({
  />
  ) : (
  <span className="flex min-w-0 items-baseline gap-2">
- <span className="truncate text-data text-foreground">{entry.name}</span>
+ <span className="truncate text-data text-foreground" title={entry.name}>{entry.name}</span>
  {info && (
  <span className="hidden shrink-0 text-micro text-muted-foreground/70 xl:inline">
  {info.label}
@@ -388,7 +382,7 @@ function FileList({
  </span>
 
  {/* Actions */}
- <div className="flex justify-end opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:focus-within:opacity-100 has-[button[data-state=open]]:opacity-100">
+ <div className="flex h-8 min-h-8 items-center justify-end opacity-100 transition-opacity duration-150 [@media(hover:hover)]:sm:opacity-0 [@media(hover:hover)]:sm:group-hover:opacity-100 [@media(hover:hover)]:sm:group-focus-within:opacity-100 focus-within:opacity-100 has-[button[data-state=open]]:opacity-100 has-[button:focus-visible]:opacity-100">
  <FileContextMenu
  entry={entry}
  onOpen={() => onOpen(entry)}
@@ -405,10 +399,9 @@ function FileList({
  onDelete={() => onDelete(entry)}
  />
  </div>
- </motion.div>
+ </div>
  );
  })}
- </AnimatePresence>
  </div>
  </div>
 

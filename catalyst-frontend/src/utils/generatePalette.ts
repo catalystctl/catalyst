@@ -201,8 +201,9 @@ export function generatePalette(
   );
 
   // ── Semantic colors — standard hues, saturation influenced by seed ──
+  // Floor at 70%: washed-out seeds still ship vivid, legible status hues.
   const satFactor = clamp(s / 100, 0.3, 1);
-  const semanticSat = Math.round(55 + satFactor * 25);
+  const semanticSat = clamp(Math.round(55 + satFactor * 25), 70, 95);
 
   const successColor = hslToHex(152, semanticSat, 42);
   const warningColor = hslToHex(38, Math.min(semanticSat + 15, 95), 48);
@@ -279,8 +280,12 @@ export function generatePalette(
 
   const lightBackground = hslToHex(surfaceHue(0), lightBaseSat, lightBaseL);
   const lightForeground = hslToHex(surfaceHue(1), 12, 8);
-  const lightCard = hslToHex(surfaceHue(0), lightBaseSat + 1, lightBaseL + 2);
-  const lightSurface1 = hslToHex(surfaceHue(1), lightBaseSat + 1, lightBaseL + 3);
+  // Surface-1 sits ≥3L above card so elevated sheets read as a step, not
+  // noise — card yields when the +5 ceiling would collapse the step.
+  const lightSurface1L = Math.min(lightBaseL + 5, 100);
+  const lightCardL = Math.min(lightBaseL + 2, lightSurface1L - 3);
+  const lightCard = hslToHex(surfaceHue(0), lightBaseSat + 1, lightCardL);
+  const lightSurface1 = hslToHex(surfaceHue(1), lightBaseSat + 1, lightSurface1L);
   const lightSurface2 = hslToHex(surfaceHue(2), lightBaseSat - 2, lightBaseL - 3);
   const lightSurface3 = hslToHex(surfaceHue(3), lightBaseSat - 4, lightBaseL - 8);
   const lightBorder = hslToHex(surfaceHue(3), lightBaseSat - 4, lightBaseL - 8);
@@ -311,7 +316,7 @@ export function generatePalette(
       lightSurface3,
       lightBorder,
       lightMuted,
-      borderRadius: '0.5rem',
+      borderRadius: '0.25rem',
     },
   };
 }

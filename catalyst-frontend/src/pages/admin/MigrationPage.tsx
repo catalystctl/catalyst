@@ -41,7 +41,7 @@ import {
  SelectValue,
 } from '../../components/ui/select';
 import TabHeader from '../../components/servers/tabs/TabHeader';
-import { BracketLabel } from '../../components/deck/primitives';
+import { BracketLabel, Meter } from '../../components/deck/primitives';
 import StatGrid from '../../components/servers/tabs/StatGrid';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
@@ -242,9 +242,6 @@ function formatDuration(ms?: number | null) {
 function ProgressBar({ progress }: { progress: { total: number; completed: number; failed: number; skipped: number } }) {
  const { t } = useTranslation('admin-infra');
  const pct = progress.total > 0 ? Math.round(((progress.completed + progress.failed + progress.skipped) / progress.total) * 100) : 0;
- const completedPct = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
- const failedPct = progress.total > 0 ? (progress.failed / progress.total) * 100 : 0;
-
  return (
  <div className="space-y-1">
  <div className="flex justify-between text-mini text-muted-foreground">
@@ -252,18 +249,7 @@ function ProgressBar({ progress }: { progress: { total: number; completed: numbe
  <span>{t('migration.progress.failed', { value: progress.failed })}</span>
  <span>{pct}%</span>
  </div>
- <div className="h-1 w-full overflow-hidden rounded-sm bg-surface-3">
- <div className="flex h-full">
- <div
- className="h-full bg-success/50 transition-all duration-500"
- style={{ width: `${completedPct}%` }}
- />
- <div
- className="h-full bg-destructive/50 transition-all duration-500"
- style={{ width: `${failedPct}%` }}
- />
- </div>
- </div>
+ <Meter value={pct} width="w-full" />
  </div>
  );
 }
@@ -532,7 +518,7 @@ function NodeMappingSection({
  setNodeMappings(prev => ({ ...prev, [String(node.id)]: v }))
  }
  >
- <SelectTrigger className="h-7 w-48 rounded-sm border-border/40 bg-card text-mini">
+ <SelectTrigger className="h-7 w-48 rounded-sm border-border/40 bg-background/40 text-mini">
  <SelectValue placeholder={t('migration.selectTargetNode')} />
  </SelectTrigger>
  <SelectContent>
@@ -657,19 +643,19 @@ function ServerMappingList({
  {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
  {server.name}
  {server.backupSlots === 0 && (
- <span className="inline-flex items-center gap-1 text-micro text-warning bg-warning/50 border border-warning/30 rounded px-1.5 py-0">
+ <span className="inline-flex items-center gap-1 text-micro text-foreground bg-warning/50 border border-warning/30 rounded-sm px-1.5 py-0">
  <AlertTriangle className="h-2.5 w-2.5" />
  {t('migration.noBackups')}
  </span>
  )}
  {server.backupSlots > 0 && server.currentBackups >= server.backupSlots && (
- <span className="inline-flex items-center gap-1 text-micro text-warning/80 bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
+ <span className="inline-flex items-center gap-1 text-micro text-foreground bg-warning/30 border border-warning/20 rounded-sm px-1.5 py-0">
  <AlertTriangle className="h-2.5 w-2.5" />
  {t('migration.slotsFull')}
  </span>
  )}
  {server.suspended && (
- <span className="inline-flex items-center gap-1 text-micro text-warning bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
+ <span className="inline-flex items-center gap-1 text-micro text-foreground bg-warning/30 border border-warning/20 rounded-sm px-1.5 py-0">
  {t('common:status.suspended')}
  </span>
  )}
@@ -689,7 +675,7 @@ function ServerMappingList({
  setServerMappings(prev => ({ ...prev, [String(server.id)]: v }))
  }
  >
- <SelectTrigger className="h-7 w-48 rounded-sm border-border/40 bg-card text-mini">
+ <SelectTrigger className="h-7 w-48 rounded-sm border-border/40 bg-background/40 text-mini">
  <SelectValue placeholder={t('migration.selectTargetNode')} />
  </SelectTrigger>
  <SelectContent>

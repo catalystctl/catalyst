@@ -11,6 +11,7 @@ import {
 } from "react-hook-form"
 
 import { cn } from "@/lib/utils"
+import { AlertTriangle } from "lucide-react"
 import { reportSystemError } from "@/services/api/systemErrors"
 import { Label } from "@/components/ui/label"
 
@@ -158,10 +159,11 @@ const FormMessage = React.forwardRef<
  <p
  ref={ref}
  id={formMessageId}
- className={cn("text-sm font-medium text-destructive", className)}
+ className={cn("flex items-start gap-1.5 text-mini font-medium text-destructive", className)}
  {...props}
  >
- {body}
+ <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+{body}
  </p>
  )
 })

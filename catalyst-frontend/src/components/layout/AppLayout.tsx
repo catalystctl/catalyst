@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Sidebar from './Sidebar';
@@ -30,11 +30,36 @@ function AppLayout() {
   const shortcut = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘K' : 'Ctrl+K';
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerCloseRef = useRef<HTMLButtonElement>(null);
+  const wasDrawerOpen = useRef(false);
 
   useCmdK(() => setIsSearchOpen(true));
 
   useEffect(() => setIsMobileSidebarOpen(false), [pathname]);
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsMobileSidebarOpen(false); }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close); }, []);
+
+  // The sections dialog and the drawer share z-50: the sidebar closes the
+  // drawer before opening the dialog so the two never stack on mobile.
+  // (Only the drawer-close half lives here; the dialog overlay/content is
+  // owned by the dialog component.)
+  useEffect(() => {
+    const close = () => setIsMobileSidebarOpen(false);
+    window.addEventListener('catalyst:close-mobile-nav', close);
+    return () => window.removeEventListener('catalyst:close-mobile-nav', close);
+  }, []);
+
+  // Move focus into the drawer on open; return it to the menu button on
+  // close when focus was inside the drawer.
+  useEffect(() => {
+    if (isMobileSidebarOpen && !wasDrawerOpen.current) {
+      drawerCloseRef.current?.focus();
+    } else if (!isMobileSidebarOpen && wasDrawerOpen.current) {
+      const drawer = document.getElementById('mobile-sidebar');
+      if (drawer?.contains(document.activeElement)) menuButtonRef.current?.focus();
+    }
+    wasDrawerOpen.current = isMobileSidebarOpen;
+  }, [isMobileSidebarOpen]);
 
   // The cabinet rail's search button lives in a different subtree to the
   // palette, so it signals through a window event.
@@ -55,6 +80,7 @@ function AppLayout() {
           className="fixed inset-0 z-40 bg-surface-0/60 backdrop-blur-sm lg:hidden"
           onClick={() => setIsMobileSidebarOpen(false)}
           role="presentation"
+          aria-hidden="true"
         />
       )}
 
@@ -62,8 +88,9 @@ function AppLayout() {
       <div className={cn('fixed left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 lg:hidden', showsDemoChrome ? 'top-8' : 'top-0')}>
         <button
           type="button"
+          ref={menuButtonRef}
           onClick={() => setIsMobileSidebarOpen(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+          className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1.5 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           aria-label={t('shell.openMenu')}
           aria-expanded={isMobileSidebarOpen}
           aria-controls="mobile-sidebar"
@@ -79,7 +106,7 @@ function AppLayout() {
         <button
           type="button"
           onClick={() => setIsSearchOpen(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+          className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1.5 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           aria-label={t('common:actions.search')}
         >
           <Search className="h-4 w-4" />
@@ -89,27 +116,31 @@ function AppLayout() {
       {/* Cabinet rail (desktop) / drawer (mobile) */}
       <div
         id="mobile-sidebar"
+        role="dialog"
+        aria-modal="true"
+        aria-label={panelName}
         className={cn(
-          'fixed left-0 z-50 transform transition-transform duration-200 ease-standard lg:static lg:transform-none',
+          'fixed left-0 z-50 shrink-0 transform transition-transform duration-200 ease-standard lg:static lg:transform-none',
           showsDemoChrome ? 'top-8 bottom-0 z-[70]' : 'inset-y-0',
           isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
         <button
           type="button"
+          ref={drawerCloseRef}
           onClick={() => setIsMobileSidebarOpen(false)}
-          className="absolute right-2 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground lg:hidden"
+          className="absolute right-2 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1.5 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 lg:hidden"
           aria-label={t('shell.closeMenu')}
         >
           <X className="h-4 w-4" />
         </button>
-        <Sidebar />
+        <Sidebar hideCollapseOnMobile />
       </div>
 
       <main
         id="main-content"
         className={cn(
-          'relative flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-[4.5rem] lg:px-6',
+          'relative flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-[calc(3rem+env(safe-area-inset-top))] lg:px-6',
           isServerWorkspace ? 'pb-3 lg:pb-3 lg:pt-3' : 'lg:pb-6 lg:pt-4',
         )}
       >
@@ -120,17 +151,17 @@ function AppLayout() {
           )}
         >
           {/* Marquee — the cabinet gesture: wayfinding, fleet health, search */}
-          <header className="flex items-center justify-between gap-3 border-b border-border/60 pb-2">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="deck-hatch hidden h-4 w-1 lg:block" aria-hidden />
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 pb-2">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <span className="deck-hatch hidden h-4 w-1 shrink-0 lg:block" aria-hidden />
               <Breadcrumbs />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <FleetHeartbeat />
               <button
                 type="button"
                 onClick={() => setIsSearchOpen(true)}
-                className="hidden h-8 min-w-48 items-center gap-2 rounded-sm border border-border/70 bg-card px-3 text-mini text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground lg:flex"
+                className="hidden h-7 min-w-48 shrink-0 items-center gap-2 rounded-sm border border-border/70 bg-card px-3 text-mini text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 lg:flex"
                 aria-label={t('shell.openSearch', { shortcut })}
               >
                 <Search className="h-3.5 w-3.5" />

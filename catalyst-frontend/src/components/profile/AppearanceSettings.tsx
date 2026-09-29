@@ -86,15 +86,14 @@ export default function AppearanceSettings() {
                   type="button"
                   onClick={() => setThemePreference(id)}
                   title={hint}
-                  className={`flex flex-col items-center gap-1 rounded-sm border px-2 py-2 text-mini transition-colors ${
+                  className={`flex min-w-0 items-center justify-center gap-1.5 rounded-sm border px-2 py-2 text-mini leading-snug transition-colors ${
                     active
                       ? 'border-primary/60 bg-primary/5 text-foreground'
                       : 'border-border/60 text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  <span className="font-medium">{label}</span>
-                  <span className="text-micro opacity-70">{hint}</span>
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 truncate font-medium">{label}</span>
                 </button>
               );
             })}

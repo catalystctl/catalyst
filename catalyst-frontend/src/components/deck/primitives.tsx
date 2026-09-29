@@ -33,10 +33,10 @@ export function BracketLabel({
 // Only abnormal load earns colour; healthy values stay neutral so the eye is
 // not pulled by fifteen bars per screen.
 const toneBar = (value: number) =>
-  value >= 90 ? 'bg-danger' : value >= 75 ? 'bg-warning' : 'bg-muted-foreground/45';
+  value >= 90 ? 'bg-danger' : value >= 75 ? 'bg-warning' : 'bg-muted-foreground/70';
 
 /**
- * ActivityBars — the signature element: five discrete bars showing a live
+ * ActivityBars — the signature element: three discrete bars showing a live
  * 0-100 reading. Discrete bars (not a smooth meter) are the server-browser
  * gesture and stay legible at dense row heights.
  */
@@ -65,7 +65,7 @@ export function ActivityBars({
         <span
           key={i}
           className={cn(
-            'w-[2px] rounded-[1px]',
+            'w-[2px] rounded-[2px]',
             i === 0 ? 'h-[3px]' : i === 1 ? 'h-[5px]' : 'h-[7px]',
             i < filled ? fill : 'bg-surface-3',
           )}
@@ -92,11 +92,11 @@ export function Meter({
   const v = value == null ? 0 : Math.min(100, Math.max(0, value));
   return (
     <span
-      className={cn('inline-block h-1 shrink-0 overflow-hidden rounded-sm bg-surface-3', width, className)}
+      className={cn('inline-block h-1 shrink-0 overflow-hidden rounded-[2px] bg-surface-3', width, className)}
       aria-hidden
     >
       <span
-        className={cn('block h-full rounded-sm transition-[width] duration-300', toneBar(v))}
+        className={cn('block h-full rounded-[2px] transition-[width] duration-300', toneBar(v))}
         style={{ width: `${v}%` }}
       />
     </span>
@@ -145,7 +145,7 @@ export function StatusLed({
           ? 'bg-danger'
           : tone === 'info'
             ? 'bg-info'
-            : 'bg-surface-3';
+            : 'bg-muted-foreground/60';
   return (
     <span className={cn('relative flex h-2 w-2 shrink-0', className)} aria-hidden>
       {pulse && (
@@ -180,13 +180,15 @@ export function GameChip({ game, className }: { game?: string | null; className?
       title={title}
       className={cn(
         'inline-flex h-4 min-w-[1.35rem] items-center justify-center rounded-sm px-0.5',
-        'font-display text-micro font-semibold',
+        'font-display text-micro font-bold',
         className,
       )}
       style={{
-        color: `hsl(${hue})`,
-        backgroundColor: `hsl(${hue} / 0.10)`,
-        boxShadow: `inset 0 0 0 1px hsl(${hue} / 0.28)`,
+        // Light game hues wash out on tinted chips — darken the glyph 22%
+        // toward black so it stays legible in both themes.
+        color: `color-mix(in srgb, hsl(${hue}), black 22%)`,
+        backgroundColor: `hsl(${hue} / 0.14)`,
+        boxShadow: `inset 0 0 0 1px hsl(${hue} / 0.4)`,
       }}
     >
       {glyph}
@@ -208,8 +210,9 @@ export function MetricCluster({
 }) {
   return (
     <span className={cn('flex items-center gap-2', className)}>
-      <span className="shrink-0 type-overline w-8">
-        {label}
+      <span className="shrink-0 type-overline w-9 truncate" title={label}>
+        <span aria-hidden>{label}</span>
+        <span className="sr-only">{label}</span>
       </span>
       <ActivityBars value={value} />
       <Segmented muted={value == null} className="min-w-[3.25rem] text-right">

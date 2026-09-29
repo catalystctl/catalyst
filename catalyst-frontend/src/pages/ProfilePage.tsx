@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import {
  Shield, ShieldCheck, ShieldOff, Key, KeyRound, Fingerprint, Smartphone,
  Globe, Monitor, Trash2, AlertTriangle, Mail, Calendar,
- Copy, Loader2, ExternalLink, LogOut, QrCode, RefreshCw,
+ Copy, Loader2, ExternalLink, LogOut, LogIn, Play, Square, QrCode, RefreshCw,
  Eye, EyeOff, Plus, Camera, Pencil, X, Download,
  ChevronRight, History, Check, MailCheck,
 } from 'lucide-react';
@@ -31,7 +31,7 @@ import {
  DialogHeader,
  DialogTitle,
 } from '@/components/ui/dialog';
-import { BracketLabel } from '../components/deck/primitives';
+import { BracketLabel, StatusLed, Segmented } from '../components/deck/primitives';
 import ServerTabCard from '../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../components/servers/tabs/SectionHeader';
 import TabLoadingState from '../components/servers/tabs/TabLoadingState';
@@ -57,13 +57,13 @@ const parseUA = (ua: string | null | undefined) => {
  return { browser, os, mobile: ua.includes('Mobile') };
 };
 
-const actionIcons: Record<string, string> = {
- 'api_key.create': '🔑', 'api_key.delete': '🗑️', 'api_key.update': '✏️',
- 'user.login': '🔓', 'user.logout': '🔒',
- 'password.change': '🔑', 'password.reset': '🔄',
- '2fa.enable': '🛡️', '2fa.disable': '🔓', 'backup_codes.generate': '📋',
- 'server.create': '🖥️', 'server.delete': '🗑️', 'server.start': '▶️', 'server.stop': '⏹️',
- 'passkey.add': '👤', 'passkey.delete': '🗑️',
+const actionIcons: Record<string, typeof Shield> = {
+ 'api_key.create': Key, 'api_key.delete': Trash2, 'api_key.update': Pencil,
+ 'user.login': LogIn, 'user.logout': LogOut,
+ 'password.change': KeyRound, 'password.reset': RefreshCw,
+ '2fa.enable': ShieldCheck, '2fa.disable': ShieldOff, 'backup_codes.generate': Copy,
+ 'server.create': Plus, 'server.delete': Trash2, 'server.start': Play, 'server.stop': Square,
+ 'passkey.add': Fingerprint, 'passkey.delete': Trash2,
 };
 
 // ── Danger Zone ──
@@ -79,13 +79,7 @@ function DangerZone() {
 
  return (
  <ServerTabCard className="border-danger/30 bg-danger/5">
- <div className="mb-3 flex items-center gap-2.5">
- <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-danger" />
- <div>
- <h3 className="font-display text-data font-semibold tracking-tight text-danger">{t('dangerZone.title')}</h3>
- <p className="text-micro text-danger/70">{t('dangerZone.description')}</p>
- </div>
- </div>
+ <SectionHeader title={t('dangerZone.title')} description={t('dangerZone.description')} accent="danger" />
  <div className="flex flex-wrap items-center gap-2">
  <Button variant="outline" size="sm" onClick={() => { profileApi.exportData().then(() => notifySuccess(t('dangerZone.exported'))).catch(() => notifyError(t('dangerZone.exportFailed'))); }} className="h-8 gap-1.5 px-3 text-mini">
  <Download className="h-3.5 w-3.5" /> {t('dangerZone.export')}
@@ -253,7 +247,7 @@ export default function ProfilePage() {
  return (
  <div className="space-y-3">
  <header className="flex min-w-0 flex-col gap-1">
- <BracketLabel>{t('layout:nav.overview')}</BracketLabel>
+ <BracketLabel>{t('title')}</BracketLabel>
  <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">{t('title')}</h1>
  <p className="type-meta">{t('description')}</p>
  </header>
@@ -269,7 +263,7 @@ export default function ProfilePage() {
  return (
  <div className="space-y-3">
  <header className="flex min-w-0 flex-col gap-1">
- <BracketLabel>{t('layout:nav.overview')}</BracketLabel>
+ <BracketLabel>{t('title')}</BracketLabel>
  <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">{t('title')}</h1>
  <p className="type-meta">{t('description')}</p>
  </header>
@@ -279,11 +273,11 @@ export default function ProfilePage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative group">
             {profile?.image ? (
-              <img src={profile.image} alt="" className="h-8 w-8 rounded-sm border border-border/60 object-cover" />
+              <img src={profile.image} alt="" className="h-12 w-12 rounded-sm border border-border/60 object-cover sm:h-14 sm:w-14" />
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 bg-surface-2 text-micro font-semibold text-foreground">{initials}</div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-sm border border-border/60 bg-surface-2 text-micro font-semibold text-foreground sm:h-14 sm:w-14">{initials}</div>
             )}
-            <button onClick={() => fileRef.current?.click()} className="absolute inset-0 flex items-center justify-center rounded-sm bg-background/60 opacity-0 transition-opacity group-hover:opacity-100">
+            <button onClick={() => fileRef.current?.click()} aria-label={t('common:actions.edit')} className="absolute inset-0 flex items-center justify-center rounded-sm bg-background/60 opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 group-hover:opacity-100">
               <Camera className="h-3.5 w-3.5 text-foreground" />
             </button>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) avatarMutation.mutate(f); e.target.value = ''; }} />
@@ -292,22 +286,22 @@ export default function ProfilePage() {
           <div className="flex-1 min-w-0">
             {editingProfile ? (
               <div className="space-y-2">
-                <div className="flex gap-2">
-                  <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} placeholder={t('account.username')} className="h-8 w-36 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
-                  <Input value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} placeholder={t('account.firstName')} className="h-8 w-32 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
-                  <Input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} placeholder={t('account.lastName')} className="h-8 w-32 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
-                  <Button size="sm" onClick={() => updateProfileMutation.mutate()} disabled={updateProfileMutation.isPending} className="h-8 px-3 text-mini">
+                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+                  <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} placeholder={t('account.username')} className="h-8 w-36 min-w-0 flex-1 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
+                  <Input value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} placeholder={t('account.firstName')} className="h-8 w-32 min-w-0 flex-1 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
+                  <Input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} placeholder={t('account.lastName')} className="h-8 w-32 min-w-0 flex-1 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
+                  <Button size="sm" onClick={() => updateProfileMutation.mutate()} disabled={updateProfileMutation.isPending} aria-label={t('common:actions.save')} className="h-8 px-3 text-mini">
                     {updateProfileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditingProfile(false)} className="h-8 px-3 text-mini"><X className="h-3.5 w-3.5" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingProfile(false)} aria-label={t('common:actions.cancel')} className="h-8 px-3 text-mini"><X className="h-3.5 w-3.5" /></Button>
                 </div>
               </div>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="min-w-0 truncate font-display text-data font-semibold tracking-tight text-foreground">{profile?.username || t('account.fallbackName')}</span>
- {authUser?.permissions?.includes('*') && <Badge className="border-warning/40 bg-warning/5 text-warning text-micro">{t('account.superAdmin')}</Badge>}
- <button onClick={startEditProfile} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+ {authUser?.permissions?.includes('*') && <span className="inline-flex min-w-0 items-center gap-1.5"><StatusLed tone="hazard" /><Segmented className="truncate">{t('account.superAdmin')}</Segmented></span>}
+ <button onClick={startEditProfile} aria-label={t('common:actions.edit')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
  </div>
  <div className="mt-1 flex flex-wrap items-center gap-3 text-micro text-muted-foreground">
  <span className="flex min-w-0 items-center gap-1"><Mail className="h-3 w-3 shrink-0" /><span className="truncate">{profile?.email}</span></span>
@@ -317,7 +311,7 @@ export default function ProfilePage() {
  {t('account.verifyEmail')}
  </button>
  )}
- {profile?.emailVerified && <Badge variant="outline" className="border-success/40 text-success text-micro"><Check className="mr-0.5 h-2.5 w-2.5" />{t('account.verified')}</Badge>}
+ {profile?.emailVerified && <span className="inline-flex items-center gap-1.5"><StatusLed tone="go" /><Segmented className="truncate">{t('account.verified')}</Segmented></span>}
  <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{t('account.joined', { date: fmtDate(profile?.createdAt) })}</span>
  </div>
  </>
@@ -325,11 +319,9 @@ export default function ProfilePage() {
  </div>
 
  <div className="flex flex-col gap-2 sm:items-end">
- <div className="flex gap-2">
- <Badge variant={t2fa ? 'outline' : 'secondary'} className={`text-micro ${t2fa ? 'border-success/40 text-success' : ''}`}>
- {t2fa ? <ShieldCheck className="mr-1 h-3 w-3" /> : <ShieldOff className="mr-1 h-3 w-3" />}{t('account.twoFactorBadge')}
- </Badge>
- <Badge variant={hasPw ? 'outline' : 'secondary'} className="text-micro"><Key className="mr-1 h-3 w-3" />{hasPw ? t('account.passwordSet') : t('account.passwordUnset')}</Badge>
+ <div className="flex min-w-0 flex-wrap gap-2">
+ <span className="inline-flex min-w-0 items-center gap-1.5"><StatusLed tone={t2fa ? 'go' : 'idle'} /><Segmented className="truncate">{t('account.twoFactorBadge')}</Segmented></span>
+ <span className="inline-flex min-w-0 items-center gap-1.5"><StatusLed tone={hasPw ? 'go' : 'idle'} /><Segmented className="truncate">{hasPw ? t('account.passwordSet') : t('account.passwordUnset')}</Segmented></span>
  </div>
  {profile?.image && (
  <button onClick={() => removeAvatarMutation.mutate()} className="text-micro text-muted-foreground hover:text-danger">{t('account.removeAvatar')}</button>
@@ -350,11 +342,11 @@ export default function ProfilePage() {
  <div className="space-y-3">
  <div className="relative">
  <Input type={showCurPw ? 'text' : 'password'} autoComplete="current-password" value={curPw} onChange={(e) => setCurPw(e.target.value)} placeholder={t('password.currentPlaceholder')} className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 pr-10 text-mini" />
- <button onClick={() => setShowCurPw(!showCurPw)} className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">{showCurPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+ <button onClick={() => setShowCurPw(!showCurPw)} aria-label={showCurPw ? t('server-tabs:files.sftp.hidePassword') : t('server-tabs:files.sftp.showPassword')} className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">{showCurPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
  </div>
  <div className="relative">
  <Input type={showNewPw ? 'text' : 'password'} autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder={t('password.newPlaceholder')} className="h-8 rounded-sm border-border/60 bg-background/40 px-2.5 pr-10 text-mini" />
- <button onClick={() => setShowNewPw(!showNewPw)} className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">{showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+ <button onClick={() => setShowNewPw(!showNewPw)} aria-label={showNewPw ? t('server-tabs:files.sftp.hidePassword') : t('server-tabs:files.sftp.showPassword')} className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">{showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
  </div>
  <label className="flex min-h-7 cursor-pointer items-center gap-2 text-mini text-muted-foreground">
  <input type="checkbox" checked={revokeOthers} onChange={(e) => setRevokeOthers(e.target.checked)} className="h-4 w-4 shrink-0 rounded-sm border-border text-primary" />
@@ -378,7 +370,7 @@ export default function ProfilePage() {
  <ServerTabCard>
  <div className="mb-3 flex items-center justify-between">
  <SectionHeader icon={Shield} title={t('twoFactor.title')} description={t2fa ? t('twoFactor.enabledDescription') : t('twoFactor.disabledDescription')} />
- {t2fa && <Badge variant="outline" className="border-success/40 text-success text-micro">{t('common:actions.enabled')}</Badge>}
+ {t2fa && <Badge variant="outline" className="min-w-0 border-success/40 text-success text-micro">{t('common:actions.enabled')}</Badge>}
  </div>
  <div className="space-y-3">
  {/* autocomplete="current-password" so password managers offer the saved
@@ -425,7 +417,7 @@ export default function ProfilePage() {
  ) : (
  <button onClick={() => { setEditPkId(pk.id); setEditPkName(pk.name || ''); }} className="flex h-7 items-center rounded-sm px-2 text-mini text-muted-foreground hover:text-foreground">{t('passkeys.rename')}</button>
  )}
- <button onClick={() => delPkMutation.mutate(pk.id)} className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-danger/5 hover:text-danger"><Trash2 className="h-3 w-3" /></button>
+ <button onClick={() => delPkMutation.mutate(pk.id)} aria-label={t('common:actions.delete')} className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-danger/5 hover:text-danger"><Trash2 className="h-3 w-3" /></button>
  </div>
  </div>
  ))
@@ -465,7 +457,7 @@ export default function ProfilePage() {
  <ServerTabCard>
  <div className="mb-3 flex items-center justify-between">
  <SectionHeader icon={Monitor} title={t('sessions.title')} description={t('sessions.description')} />
- <Badge variant="outline" className="text-micro">{sessions?.length ?? 0}</Badge>
+ <Badge variant="outline" className="min-w-0 text-micro">{sessions?.length ?? 0}</Badge>
  </div>
  <div className="space-y-2 max-h-72 overflow-y-auto">
  {sessionsLoading ? (
@@ -480,11 +472,11 @@ export default function ProfilePage() {
  <div className="flex items-center gap-2.5 min-w-0">
  <Monitor className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
  <div className="min-w-0">
- <div className="flex items-center gap-1.5 text-mini font-medium text-foreground truncate">{t('sessions.device', { browser, os })}{mobile && <Badge variant="secondary" className="text-micro px-1 py-0">{t('sessions.mobile')}</Badge>}</div>
+ <div className="flex items-center gap-1.5 text-mini font-medium text-foreground truncate">{t('sessions.device', { browser, os })}{mobile && <Badge variant="secondary" className="min-w-0 shrink-0 px-1 py-0 text-micro">{t('sessions.mobile')}</Badge>}</div>
  <div className="text-micro text-muted-foreground">{s.ipAddress || t('sessions.unknownIp')} · {fmtRelative(s.updatedAt)}</div>
  </div>
  </div>
- <button onClick={() => revokeSessionMutation.mutate(s.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-danger/5 hover:text-danger" title={t('sessions.revoke')}><LogOut className="h-3.5 w-3.5" /></button>
+ <button onClick={() => revokeSessionMutation.mutate(s.id)} aria-label={t('sessions.revoke')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-danger/5 hover:text-danger" title={t('sessions.revoke')}><LogOut className="h-3.5 w-3.5" /></button>
  </div>
  );
  })
@@ -501,7 +493,7 @@ export default function ProfilePage() {
  <ServerTabCard>
  <div className="mb-3 flex items-center justify-between">
  <SectionHeader icon={KeyRound} title={t('apiKeysCard.title')} description={t('apiKeysCard.description')} />
- {apiKeys && apiKeys.length > 0 ? <Badge variant="outline" className="text-micro">{apiKeys.length}</Badge> : null}
+ {apiKeys && apiKeys.length > 0 ? <Badge variant="outline" className="min-w-0 text-micro">{apiKeys.length}</Badge> : null}
  </div>
  {apiKeys && apiKeys.length > 0 ? (
  <div className="space-y-2">
@@ -509,7 +501,7 @@ export default function ProfilePage() {
  <Link to="/admin/api-keys" key={k.id} className="flex items-center justify-between border-b border-border/50 py-2 last:border-b-0 hover:bg-surface-1/40">
  <div className="min-w-0">
  <div className="flex items-center gap-2 text-mini font-medium text-foreground">
- {k.name || t('unnamed')}{!k.enabled && <Badge variant="secondary" className="text-micro px-1 py-0">{t('common:actions.disabled')}</Badge>}
+ {k.name || t('unnamed')}{!k.enabled && <Badge variant="secondary" className="min-w-0 shrink-0 px-1 py-0 text-micro">{t('common:actions.disabled')}</Badge>}
  </div>
  <div className="text-micro text-muted-foreground">
  {k.allPermissions ? t('allPermissions') : t('apiKeysCard.permissionCount', { count: k.permissions.length })} · {t('apiKeysCard.requests', { count: k.requestCount })}
@@ -535,18 +527,21 @@ export default function ProfilePage() {
  {(!auditData?.logs || auditData.logs.length === 0) ? (
  <TabEmptyState title={t('activity.emptyTitle')} description={t('activity.emptyDescription')} />
  ) : (
- auditData.logs.map((entry) => (
+ auditData.logs.map((entry) => {
+ const ActionIcon = actionIcons[entry.action] || History;
+ return (
  <div key={entry.id} className="flex items-start gap-2.5 border-b border-border/50 px-2 py-2 last:border-b-0 hover:bg-surface-1/40">
- <span className="mt-0.5 text-mini shrink-0">{actionIcons[entry.action] || '📝'}</span>
+ <ActionIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
  <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2">
- <span className="text-mini font-medium text-foreground">{entry.action}</span>
+ <div className="flex min-w-0 items-center gap-2">
+ <span className="min-w-0 truncate text-mini font-medium text-foreground">{entry.action}</span>
  {entry.resourceId && <code className="truncate max-w-[100px] font-mono text-micro tabular-nums text-muted-foreground">{entry.resourceId}</code>}
  </div>
  <div className="text-micro text-muted-foreground">{fmtRelative(entry.timestamp)}</div>
  </div>
  </div>
- ))
+ );
+ })
  )}
  </div>
  </ServerTabCard>
@@ -588,7 +583,7 @@ export default function ProfilePage() {
  </div>
  )}
  </DialogBody>
- <DialogFooter>
+ <DialogFooter className="min-w-0 flex-wrap">
  <Button size="sm" className="h-8 px-3 text-mini" onClick={() => { setTfaModalOpen(false); setTfaSetup(null); }}>{t('done')}</Button>
  </DialogFooter>
  </DialogContent>

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Button } from '../ui/button';
 
 type Props = {
   page: number;
@@ -16,22 +17,22 @@ function Pagination({ page, totalPages, onPageChange, className }: Props) {
         {t('pagination.pageOf', { page, totalPages })}
       </span>
       <div className="flex items-center gap-1.5">
-        <button
+        <Button
           type="button"
-          className="h-7 rounded-sm border border-border/60 px-2.5 text-mini text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
+          variant="outline" size="sm"
           onClick={() => onPageChange(Math.max(1, page - 1))}
           disabled={page <= 1}
         >
           {t('actions.previous')}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="h-7 rounded-sm border border-border/60 px-2.5 text-mini text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
+          variant="outline" size="sm"
           onClick={() => onPageChange(Math.min(totalPages, page + 1))}
           disabled={page >= totalPages}
         >
           {t('actions.next')}
-        </button>
+        </Button>
       </div>
     </div>
   );

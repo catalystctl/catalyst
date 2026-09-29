@@ -300,6 +300,12 @@ function luminance(hsl: string): number {
   return parseInt(hsl.split(' ')[2]) / 100;
 }
 
+/** Near-black foreground for light danger surfaces (dark theme ships light danger). */
+function dangerForeground(dangerHSL: string, isDark: boolean): string {
+  if (isDark) return '217 2% 7%';
+  return luminance(dangerHSL) > 0.55 ? '0 0% 9%' : '0 0% 100%';
+}
+
 // ─── Pure DOM application (no store dependency) ───
 // Build the variable map first so startup can cache + replay it pre-paint.
 
@@ -335,6 +341,8 @@ function buildThemeCssVars(
 
   const accentHSL = hexToHSL(accentColor);
   set('--accent', accentHSL);
+  const isLightAccent = luminance(accentHSL) > 0.55;
+  set('--accent-foreground', isLightAccent ? '0 0% 9%' : '0 0% 100%');
   set('--ring', colors.ringColor ? hexToHSL(colors.ringColor) : primaryHSL);
 
   const semanticKeys: (keyof ThemeColors)[] = ['successColor', 'warningColor', 'dangerColor', 'infoColor'];
@@ -344,6 +352,7 @@ function buildThemeCssVars(
     dangerColor: 'danger',
     infoColor: 'info',
   };
+  let dangerHSL: string | null = null;
   for (const key of semanticKeys) {
     const hex = colors[key];
     if (!hex) continue;
@@ -353,10 +362,13 @@ function buildThemeCssVars(
     set(`--${varName}-muted`, mutedVariant(hsl));
     if (key === 'dangerColor') {
       set('--destructive', hsl);
+      dangerHSL = hsl;
     }
   }
-
+  // Solid warning surfaces (confirm dialogs) need an ink/dark-brown label;
+  // dark themes use ink, light themes a dark amber for contrast on bright yellow.
   const isDark = theme === 'dark';
+  set('--warning-foreground', isDark ? '217 2% 7%' : '32 90% 22%');
   const bgKey = isDark ? 'darkBackground' : 'lightBackground';
   const fgKey = isDark ? 'darkForeground' : 'lightForeground';
   const cardKey = isDark ? 'darkCard' : 'lightCard';
@@ -405,13 +417,18 @@ function buildThemeCssVars(
   const fallbackFg = isDark ? '#fafafa' : '#09090b';
   set('--popover', hexToHSL(colors[popoverKey] || colors[cardKey] || colors[bgKey] || fallbackBg));
   set('--popover-foreground', hexToHSL(colors[fgKey] || fallbackFg));
-  set('--accent-foreground', hexToHSL(colors[bgKey] || fallbackBg));
-  set('--destructive-foreground', '0 0% 100%');
+  const dangerFg = dangerHSL ? dangerForeground(dangerHSL, isDark) : isDark ? '217 2% 7%' : '0 0% 100%';
+  set('--destructive-foreground', dangerFg);
+  set('--danger-foreground', dangerFg);
 
   if (colors.borderRadius) {
     set('--radius', colors.borderRadius);
   }
 
+  set('--signal-bright', accentHSL);
+  set('--signal-muted', mutedVariant(primaryHSL));
+  // Back-compat aliases (deprecated): nothing in the panel reads these anymore,
+  // but custom CSS / plugins may. Remove in v2.
   set('--accent-teal', primaryHSL);
   set('--accent-teal-light', accentHSL);
   set('--accent-teal-muted', mutedVariant(primaryHSL));

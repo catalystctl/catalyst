@@ -175,7 +175,7 @@ const TemplateRow = memo(function TemplateRow({
           to={`/admin/templates/${template.id}`}
           title={t('actions.view')}
           aria-label={t('actions.view')}
-          className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </Link>
@@ -184,7 +184,7 @@ const TemplateRow = memo(function TemplateRow({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
                 title={t('common:actions.more')}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />

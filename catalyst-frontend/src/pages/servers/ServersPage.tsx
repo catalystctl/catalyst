@@ -22,8 +22,16 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select';
 import { cn } from '@/lib/utils';
 import { serverStatusLabel } from '../../utils/constants';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
 type AccessFilter = 'all' | 'owned' | 'other';
 type Tone = 'go' | 'hazard' | 'alarm' | 'idle' | 'info';
@@ -42,12 +50,12 @@ const toneForState = (status: string): Tone => STATE_TONE[status] ?? 'info';
  * One grid template shared by the column header and every row, so columns line
  * up exactly at each breakpoint. Hidden cells drop out of grid placement, which
  * is why the visible order matches each template.
- *   base : identity · actions
+ *   base : identity · actions (one row)
  *   md   : identity · address · state · actions
  *   xl   : identity · game · cpu · ram · disk · address · state · actions
  */
 const GRID =
-  'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 ' +
   'md:grid-cols-[minmax(0,1fr)_9rem_6rem_12rem] ' +
   'xl:grid-cols-[minmax(0,1fr)_9rem_6.5rem_6.5rem_6.5rem_11rem_5.5rem_12rem]';
 
@@ -125,6 +133,7 @@ function ServerRow({
     <div
       role="row"
       tabIndex={0}
+      aria-selected={false}
       onKeyDown={(event) => {
         if (event.key === 'ArrowDown') {
           event.preventDefault();
@@ -138,8 +147,8 @@ function ServerRow({
       }}
       className={cn(
         GRID,
-        'group relative py-1.5 pl-3 pr-3 outline-none transition-colors',
-        'hover:bg-surface-1/40 focus-visible:bg-primary/10',
+        'group relative rounded-sm py-1.5 pl-3 pr-3 outline-none transition-colors',
+        'hover:bg-surface-1/40 focus-visible:bg-primary/10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
       )}
     >
       {/* identity — on small screens this cell also carries address + state */}
@@ -217,7 +226,7 @@ function ServerRow({
         </span>
       </span>
 
-      <span className="col-span-full flex shrink-0 items-center justify-end gap-1 md:col-auto md:justify-end">
+      <span className="flex shrink-0 items-center justify-end gap-1 md:justify-end">
         <ServerControls
           serverId={server.id}
           status={server.status}
@@ -228,7 +237,7 @@ function ServerRow({
           to={`/servers/${server.id}/console`}
           title={t('tabs.console')}
           aria-label={t('tabs.console')}
-          className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus-visible:border-primary focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-7 sm:min-w-7 sm:h-7 sm:w-7"
         >
           <Terminal className="h-3.5 w-3.5" />
         </Link>
@@ -236,7 +245,7 @@ function ServerRow({
           to={`/servers/${server.id}`}
           title={t('card.manage')}
           aria-label={t('card.manage')}
-          className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus-visible:border-primary focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-7 sm:min-w-7 sm:h-7 sm:w-7"
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </Link>
@@ -347,7 +356,7 @@ function ServersPage() {
       <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
         {/* Control strip */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
-          <div className="flex items-center gap-0.5 border-b border-border/50">
+          <div className="flex items-center gap-0.5">
             <RailTab
               active={accessFilter === 'all'}
               onClick={() => setAccessFilter('all')}
@@ -382,27 +391,33 @@ function ServersPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t('filters.searchPlaceholder')}
-              className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+              className="h-8 min-h-8 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
             />
           </label>
 
-          <select
+          <Select
             value={status ?? '__all__'}
-            onChange={(event) =>
-              setStatus(event.target.value === '__all__' ? undefined : (event.target.value as ServerStatus))
+            onValueChange={(value) =>
+              setStatus(value === '__all__' ? undefined : (value as ServerStatus))
             }
-            className="h-7 rounded-sm border border-border/60 bg-background/40 pl-2 pr-7 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
-            aria-label={t('filters.allStatuses')}
           >
-            <option value="__all__">{t('filters.allStatuses')}</option>
-            {(['running', 'stopped', 'installing', 'starting', 'stopping', 'crashed', 'transferring', 'cloning', 'suspended'] as ServerStatus[]).map(
-              (value) => (
-                <option key={value} value={value}>
-                  {serverStatusLabel(t, value)}
-                </option>
-              ),
-            )}
-          </select>
+            <SelectTrigger
+              className="h-8 min-h-8 rounded-sm border-border/60 bg-background/40 px-2 text-mini"
+              aria-label={t('filters.allStatuses')}
+            >
+              <SelectValue placeholder={t('filters.allStatuses')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">{t('filters.allStatuses')}</SelectItem>
+              {(['running', 'stopped', 'installing', 'starting', 'stopping', 'crashed', 'transferring', 'cloning', 'suspended'] as ServerStatus[]).map(
+                (value) => (
+                  <SelectItem key={value} value={value}>
+                    {serverStatusLabel(t, value)}
+                  </SelectItem>
+                ),
+              )}
+            </SelectContent>
+          </Select>
 
           {hasFilters && (
             <button
@@ -411,7 +426,7 @@ function ServersPage() {
                 setSearch('');
                 setStatus(undefined);
               }}
-              className="flex h-7 items-center gap-1 rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="flex h-8 min-h-8 items-center gap-1 rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               <X className="h-3 w-3" />
               {t('filters.clear')}
@@ -438,23 +453,62 @@ function ServersPage() {
         </div>
 
         {/* Rows */}
-        <div ref={listRef} className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25">
+        <div ref={listRef} className="min-h-[12rem] min-w-0 flex-1 overflow-y-auto bg-background/25">
           {isLoading ? (
-            <div>
+            <div role="status" aria-label={t('page.title')}>
               {Array.from({ length: 6 }).map((_, index) => (
                 <div key={index} className={cn(GRID, 'py-2 pl-3 pr-3')}>
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 animate-pulse rounded-full bg-surface-3" />
-                    <div className="h-3.5 w-40 animate-pulse bg-surface-3" />
+                    <div className="h-3.5 w-40 animate-pulse rounded-sm bg-surface-3" />
+                  </div>
+                  <div className="hidden min-w-0 xl:block">
+                    <div className="h-3 w-20 animate-pulse rounded-sm bg-surface-3" />
+                  </div>
+                  <div className="hidden items-center justify-end gap-2 xl:flex">
+                    <div className="h-2 w-16 animate-pulse rounded-sm bg-surface-3" />
+                    <div className="h-3 w-10 animate-pulse rounded-sm bg-surface-3" />
+                  </div>
+                  <div className="hidden items-center justify-end gap-2 xl:flex">
+                    <div className="h-2 w-16 animate-pulse rounded-sm bg-surface-3" />
+                    <div className="h-3 w-10 animate-pulse rounded-sm bg-surface-3" />
+                  </div>
+                  <div className="hidden items-center justify-end gap-2 xl:flex">
+                    <div className="h-2 w-16 animate-pulse rounded-sm bg-surface-3" />
+                    <div className="h-3 w-10 animate-pulse rounded-sm bg-surface-3" />
+                  </div>
+                  <div className="hidden min-w-0 md:block">
+                    <div className="h-3 w-24 animate-pulse rounded-sm bg-surface-3" />
+                  </div>
+                  <div className="hidden min-w-0 md:block">
+                    <div className="h-3 w-12 animate-pulse rounded-sm bg-surface-3" />
+                  </div>
+                  <div className="flex justify-end gap-1">
+                    <div className="h-7 w-16 animate-pulse rounded-sm bg-surface-3" />
                   </div>
                 </div>
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <p className="type-meta">{t('page.empty')}</p>
-            </div>
+            <TabEmptyState
+              title={hasFilters ? t('page.empty') : t('list.emptyTitle')}
+              description={hasFilters ? undefined : t('list.emptyDescription')}
+              action={
+                hasFilters ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch('');
+                      setStatus(undefined);
+                    }}
+                    className="flex h-8 min-h-8 items-center gap-1 rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                    {t('filters.clear')}
+                  </button>
+                ) : undefined
+              }
+            />
           ) : (
             filtered.map((server, index) => (
               <div
@@ -529,17 +583,17 @@ function RailTab({
       type="button"
       onClick={onClick}
       className={cn(
-        'relative flex h-7 items-center gap-1.5 px-2.5 transition-colors',
-        'text-mini',
+        'relative flex h-8 min-h-8 min-w-0 max-w-full items-center gap-1.5 px-2.5 transition-colors',
+        'text-mini [@media(pointer:fine)]:h-7 [@media(pointer:fine)]:min-h-7',
         active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
       )}
     >
       {active && (
         <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
       )}
-      {icon}
-      <span>{label}</span>
-      <span className="font-mono text-micro tabular-nums text-muted-foreground/80">{count}</span>
+      <span className="shrink-0">{icon}</span>
+      <span className="min-w-0 truncate">{label}</span>
+      <span className="shrink-0 font-mono text-micro tabular-nums text-muted-foreground/80">{count}</span>
     </button>
   );
 }

@@ -321,7 +321,7 @@ function NodeDetailsPage() {
           SERVERS ON NODE
           Compact server list with count badge.
       ══════════════════════════════════════════════════════════════════ */}
-      <div className="overflow-hidden rounded-md border border-border/50 bg-card px-3 py-2.5">
+      <div className="deck-panel overflow-hidden px-3 py-2.5">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Server className="h-3.5 w-3.5 text-primary" />
@@ -360,7 +360,7 @@ function NodeDetailsPage() {
                 </div>
                 <Link
                   to={`/servers/${server.id}`}
-                  className="ml-3 flex shrink-0 items-center gap-1 h-6 rounded-sm border border-border/40 px-2 text-micro text-muted-foreground opacity-0 transition-colors hover:border-primary/50 hover:text-primary group-hover:opacity-100"
+                  className="ml-3 flex shrink-0 items-center gap-1 h-6 rounded-sm border border-border/40 px-2 text-micro text-muted-foreground opacity-100 transition-colors hover:border-primary/50 hover:text-primary focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                 >
                   {t('servers.open')}
                   <ExternalLink className="h-2.5 w-2.5" />
@@ -377,7 +377,7 @@ function NodeDetailsPage() {
           DISCOVERED SERVERS
       ══════════════════════════════════════════════════════════════════ */}
       {canWrite && unregisteredContainers.length > 0 && (
-        <div className="overflow-hidden rounded-md border border-warning/30 bg-card px-3 py-2.5">
+        <div className="deck-panel overflow-hidden border-warning/30 px-3 py-2.5">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Download className="h-3.5 w-3.5 text-warning" />
@@ -455,7 +455,7 @@ function NodeDetailsPage() {
         title={t('deploy.title')}
         description={t('deploy.description')}
       >
-        <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
+        <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border/40 bg-surface-2 px-3 py-2 font-mono text-xs text-foreground">
           <code className="block max-w-full break-all whitespace-pre-wrap">
             {deployInfo
               ? buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey)
@@ -497,7 +497,7 @@ function NodeDetailsPage() {
             <span>{t('apiKey.revoked')}</span>
           </div>
         )}
-        <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
+        <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border/40 bg-surface-2 px-3 py-2 font-mono text-xs text-foreground">
           <code className="block max-w-full break-all whitespace-pre-wrap">
             api_key = &quot;{generatedApiKey}&quot;
           </code>

@@ -100,7 +100,7 @@ export default function ServerTasksTab({
  />
 
  {task.lastError && (
- <div className="mt-2 rounded-sm border border-danger/20 bg-danger/5 px-3 py-1.5 font-mono text-micro text-danger">
+ <div className="mt-2 max-h-24 overflow-auto break-all rounded-sm border border-danger/20 bg-danger/5 px-3 py-1.5 font-mono text-micro text-danger">
  {task.lastError}
  </div>
  )}
@@ -113,7 +113,7 @@ export default function ServerTasksTab({
  />
  <button
  type="button"
- className={`rounded-sm border h-7 px-3 text-mini font-semibold transition-colors duration-200 ${
+ className={`rounded-sm border h-8 min-h-8 px-3 text-mini font-semibold transition-colors duration-200 ${
  task.enabled === false
  ? 'border-success/25 text-success hover:border-success/40 hover:bg-success/5'
  : 'border-warning/25 text-warning hover:border-warning/40 hover:bg-warning/5'
@@ -127,7 +127,7 @@ export default function ServerTasksTab({
  </button>
  <button
  type="button"
- className="rounded-sm border border-danger/20 h-7 px-3 text-mini font-semibold text-danger transition-colors duration-200 hover:border-danger/40 hover:bg-danger/5"
+ className="rounded-sm border border-danger/20 h-8 min-h-8 px-3 text-mini font-semibold text-danger transition-colors duration-200 hover:border-danger/40 hover:bg-danger/5"
  onClick={() => setPendingDeleteId(task.id)}
  disabled={deletePending || isSuspended}
  >

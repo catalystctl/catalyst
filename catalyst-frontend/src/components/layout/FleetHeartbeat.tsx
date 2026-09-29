@@ -28,7 +28,7 @@ export default function FleetHeartbeat() {
   return (
     <Link
       to={canSeeNodes ? '/admin/nodes' : '/servers'}
-      className="pressable hidden h-7 items-center gap-2 rounded-sm border border-border/70 bg-card px-2.5 font-mono text-micro tabular-nums text-muted-foreground shadow-panel transition-colors hover:border-primary/25 hover:text-foreground sm:flex"
+      className="pressable hidden h-7 items-center gap-2 rounded-sm border border-border/70 bg-card px-2.5 font-mono text-micro tabular-nums text-muted-foreground shadow-panel transition-colors hover:border-primary/25 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:flex"
       aria-label={label}
       title={label}
     >

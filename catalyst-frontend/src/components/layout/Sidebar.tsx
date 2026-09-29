@@ -90,8 +90,10 @@ function NavRow({
   badge?: { value: number; tone?: 'hazard' | 'alarm' };
 }) {
 
+  // Density is intentional: 30px labelled rows when expanded, 36px targets
+  // on the collapsed rail (same split as RailButton below). Keep in sync.
   const className = cn(
-    'group/row relative flex items-center rounded-sm text-muted-foreground/90 transition-colors',
+    'group/row relative flex items-center rounded-sm text-muted-foreground/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
     expanded
       ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data hover:bg-surface-2/70 hover:text-foreground'
       : 'h-9 w-9 justify-center hover:bg-surface-2 hover:text-foreground',
@@ -113,11 +115,11 @@ function NavRow({
           className={cn('h-4 w-4', active && 'text-primary', !active && expanded && 'group-hover/row:text-foreground')}
         />
       </IconSlot>
-      {expanded && <span className={cn('truncate', active && 'font-medium')}>{label}</span>}
+      {expanded && <span className="truncate font-medium">{label}</span>}
       {expanded && badge && (
         <span
           className={cn(
-            'ml-auto shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums',
+            'ml-auto min-w-7 shrink-0 rounded-sm border px-1.5 py-0.5 text-center font-mono text-micro leading-none tabular-nums',
             badge.tone === 'alarm'
               ? 'border-danger/40 bg-danger/10 text-danger'
               : badge.tone === 'hazard'
@@ -129,16 +131,26 @@ function NavRow({
         </span>
       )}
       {/* Collapsed, the same signal rides the icon so an administrator still
-          sees unacknowledged alerts without expanding the rail. */}
-      {!expanded && badge?.tone === 'alarm' && (
-        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-danger" aria-hidden />
+          sees the count without expanding the rail. */}
+      {!expanded && badge && (
+        <span
+          className={cn(
+            'absolute right-1 top-1 h-1.5 w-1.5 rounded-full',
+            badge.tone === 'alarm'
+              ? 'bg-danger'
+              : badge.tone === 'hazard'
+                ? 'bg-warning'
+                : 'bg-muted-foreground/60',
+          )}
+          aria-hidden
+        />
       )}
     </>
   );
 
   if (expanded) {
     return (
-      <NavLink to={to} title={label} aria-current={active ? 'page' : undefined} className={className}>
+      <NavLink to={to} aria-current={active ? 'page' : undefined} className={className}>
         {body}
       </NavLink>
     );
@@ -147,11 +159,11 @@ function NavRow({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <NavLink to={to} aria-label={label} className={className}>
+        <NavLink to={to} aria-label={badge ? `${label} · ${badge.value}` : label} className={className}>
           {body}
         </NavLink>
       </TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
+      <TooltipContent side="right">{badge ? `${label} · ${badge.value}` : label}</TooltipContent>
     </Tooltip>
   );
 }
@@ -163,12 +175,14 @@ function RailButton({
   children,
   danger,
   expanded,
+  className,
 }: {
   label: string;
   onClick?: () => void;
   children: React.ReactNode;
   danger?: boolean;
   expanded: boolean;
+  className?: string;
 }) {
   const button = (
     <button
@@ -176,9 +190,11 @@ function RailButton({
       onClick={onClick}
       aria-label={label}
       className={cn(
-        'flex items-center rounded-sm text-muted-foreground transition-colors',
-        expanded ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data' : 'h-9 w-9 justify-center',
+        'flex items-center rounded-sm text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
+        // Same 30px/36px density split as NavRow above. Keep in sync.
+        expanded ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data' : "relative h-9 w-9 justify-center after:absolute after:-inset-1 after:content-['']",
         danger ? 'hover:bg-danger/10 hover:text-danger' : 'hover:bg-surface-2 hover:text-foreground',
+        className,
       )}
     >
       {children}
@@ -186,11 +202,7 @@ function RailButton({
   );
 
   if (expanded) {
-    return (
-      <div className="flex w-full items-center" title={label}>
-        {button}
-      </div>
-    );
+    return <div className="flex w-full items-center">{button}</div>;
   }
 
   return (
@@ -205,7 +217,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   // Aligned with the row labels (icon column + gap), so the nav keeps two
   // clean columns instead of a ragged set of headings.
   return (
-    <div className="px-2 pb-1 pt-4 text-micro font-semibold uppercase leading-none tracking-[0.14em] text-muted-foreground/55">
+    <div className="pb-1 pl-[calc(0.5rem+1rem+0.625rem)] pr-2 pt-4 text-micro font-semibold uppercase leading-none tracking-[0.14em] text-muted-foreground/55">
       {children}
     </div>
   );
@@ -226,7 +238,7 @@ function visibleGroups(t: TFunction, permissions: string[]) {
     .filter((group) => group.links.length > 0);
 }
 
-export default function Sidebar() {
+export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapseOnMobile?: boolean }) {
   const { t } = useTranslation('layout');
   const { data: updateData } = useUpdateCheck();
   const theme = useUIStore((s) => s.theme);
@@ -290,6 +302,13 @@ export default function Sidebar() {
     icon: tab.id.includes('ticket') ? Ticket : Plug,
   }));
 
+  // The drawer sits at z-50 under the sections dialog; close it first so the
+  // dialog never stacks beneath it on mobile. AppLayout listens for this.
+  const openSections = () => {
+    window.dispatchEvent(new CustomEvent('catalyst:close-mobile-nav'));
+    setSectionsOpen(true);
+  };
+
   const mainLinks = buildMain(t);
   const allTargets = [
     ...mainLinks.map((l) => l.to),
@@ -305,7 +324,7 @@ export default function Sidebar() {
     <TooltipProvider>
       <aside
         className={cn(
-          'flex h-full flex-col border-r border-border/70 bg-surface-1/40 transition-[width] duration-200 ease-standard',
+          'flex h-full flex-col border-r border-border/70 bg-surface-1/40 transition-[width,padding] duration-200 ease-standard',
           expanded ? 'w-60 px-2 pb-2' : 'w-14 items-center py-2',
         )}
       >
@@ -320,7 +339,7 @@ export default function Sidebar() {
         >
           <Link
             to="/dashboard"
-            className={cn('flex h-9 items-center gap-2 rounded-sm px-1.5', expanded && 'min-w-0 flex-1')}
+            className={cn('flex h-9 items-center gap-2 rounded-sm px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40', expanded && 'min-w-0 flex-1')}
             aria-label={panelName}
           >
             <img
@@ -337,10 +356,20 @@ export default function Sidebar() {
               </span>
             )}
           </Link>
-          {expanded && (
-            <RailButton label={t('shell.collapseNav')} onClick={toggleNav} expanded={false}>
+          {/* Brand row: wordmark when expanded, nav toggle beside it. Both
+              densities keep the toggle here so it never jumps between the
+              brand row and the nav. Hidden below lg inside the drawer, where
+              the drawer's own close button already sits. */}
+          {expanded ? (
+            <RailButton label={t('shell.collapseNav')} onClick={toggleNav} expanded={false} className={cn('h-8 w-8', hideCollapseOnMobile && 'max-lg:hidden')}>
               <PanelLeftClose className="h-4 w-4" />
             </RailButton>
+          ) : (
+            <span className={cn(hideCollapseOnMobile && 'max-lg:hidden')}>
+              <RailButton label={t('shell.expandNav')} onClick={toggleNav} expanded={false}>
+                <PanelLeftOpen className="h-4 w-4" />
+              </RailButton>
+            </span>
           )}
         </div>
 
@@ -351,19 +380,13 @@ export default function Sidebar() {
           className={cn(
             'flex min-h-0 flex-col',
             expanded
-              ? 'w-full flex-1 gap-px overflow-y-auto pb-6 pr-2 [scrollbar-width:thin]'
+              ? 'w-full flex-1 gap-px overflow-y-auto pb-10 pr-2 [scrollbar-width:thin]'
               : 'items-center gap-1',
             expanded &&
               navScrolls &&
-              '[mask-image:linear-gradient(to_bottom,black_calc(100%-1.75rem),transparent_calc(100%-0.25rem))]',
+              '[mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent_calc(100%-1rem))]',
           )}
         >
-          {!expanded && (
-            <RailButton label={t('shell.expandNav')} onClick={toggleNav} expanded={false}>
-              <PanelLeftOpen className="h-4 w-4" />
-            </RailButton>
-          )}
-
           {expanded ? (
             <>
               {mainLinks.map((link) => (
@@ -400,8 +423,8 @@ export default function Sidebar() {
                     type="button"
                     aria-label={t('shell.sections')}
                     aria-expanded={sectionsOpen}
-                    onClick={() => setSectionsOpen(true)}
-                    className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                    onClick={openSections}
+                    className="relative flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
@@ -415,7 +438,7 @@ export default function Sidebar() {
                     type="button"
                     aria-label={t('shell.openSearch', { shortcut: 'Ctrl+K' })}
                     onClick={() => window.dispatchEvent(new CustomEvent('catalyst:open-search'))}
-                    className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                    className="relative flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     <Search className="h-4 w-4" />
                   </button>
@@ -443,7 +466,7 @@ export default function Sidebar() {
           {expanded ? (
             <NavLink
               to="/profile"
-              className="group/me mt-1 flex w-full items-center gap-2.5 rounded-sm border border-border/60 bg-surface-1/60 px-2 py-2 text-muted-foreground transition-colors hover:border-border hover:bg-surface-2/70 hover:text-foreground"
+              className="group/me mt-1 flex w-full items-center gap-2.5 rounded-sm border border-border/60 bg-surface-1/60 px-2 py-2 text-muted-foreground transition-colors hover:border-border hover:bg-surface-2/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               title={`${displayName} · ${user?.role ? user.role : t('sidebar.fallbackRole')}`}
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-foreground ring-1 ring-border">
@@ -459,7 +482,7 @@ export default function Sidebar() {
                   {user?.role ? user.role : t('sidebar.fallbackRole')}
                 </span>
               </span>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover/me:opacity-70" />
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover/me:opacity-70 group-focus-visible/me:opacity-70 group-focus-within/me:opacity-70" />
             </NavLink>
           ) : (
             <Tooltip>
@@ -467,7 +490,7 @@ export default function Sidebar() {
                 <NavLink
                   to="/profile"
                   aria-label={displayName}
-                  className="flex h-9 w-9 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-muted-foreground ring-1 ring-border"
+                  className="flex h-9 w-9 items-center justify-center rounded-sm font-display text-micro font-semibold text-muted-foreground ring-1 ring-border transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
                   {user?.image ? (
                     <img src={user.image} alt="" className="h-full w-full rounded-sm object-cover" />
@@ -502,14 +525,17 @@ export default function Sidebar() {
                   : t('sidebar.versionTooltip', { version: PANEL_VERSION })
               }
               className={cn(
-                'flex items-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground',
+                'flex items-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
                 expanded ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data' : 'h-9 w-9 justify-center',
               )}
             >
               {/* Update state rides the LED tone; the rail keeps its h-9 hit box
                   instead of collapsing to the old 14×24 glyph. */}
               <IconSlot>
-                <StatusLed tone={updateData?.updateAvailable ? 'hazard' : 'idle'} />
+                <StatusLed
+                  tone={updateData?.updateAvailable ? 'hazard' : 'idle'}
+                  className={cn(!updateData?.updateAvailable && 'opacity-80')}
+                />
               </IconSlot>
               {expanded && <span className="truncate font-mono">v{PANEL_VERSION}</span>}
             </Link>

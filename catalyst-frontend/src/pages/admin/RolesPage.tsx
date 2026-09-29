@@ -414,7 +414,7 @@ function RoleRow({
  <div className="hidden min-w-0 items-center gap-1 md:flex">
  <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
  {isWildcard ? (
- <Badge className="shrink-0 gap-1 whitespace-nowrap border-warning/30 bg-warning/10 text-warning text-micro">
+ <Badge className="min-w-0 max-w-44 shrink gap-1 truncate border-warning/30 bg-warning/10 text-warning text-micro">
  <Zap className="h-3 w-3" /> {t('roles.cardFullAdmin')}
  </Badge>
  ) : (
@@ -422,13 +422,13 @@ function RoleRow({
  {permCats.slice(0, 4).map((cat) => {
  const Icon = cat.icon;
  return (
- <Badge key={cat.category} variant="outline" className="shrink-0 gap-1 whitespace-nowrap text-micro">
+ <Badge key={cat.category} variant="outline" className="min-w-0 max-w-44 shrink gap-1 truncate text-micro">
  <Icon className="h-2.5 w-2.5" /> {cat.category} ({cat.count})
  </Badge>
  );
  })}
  {permCats.length > 4 && (
- <Badge variant="secondary" className="shrink-0 whitespace-nowrap text-micro">{t('roles.cardMore', { count: permCats.length - 4 })}</Badge>
+ <Badge variant="secondary" className="min-w-0 max-w-32 shrink truncate text-micro">{t('roles.cardMore', { count: permCats.length - 4 })}</Badge>
  )}
  </>
  )}
@@ -556,7 +556,7 @@ function ScopedAccessStep({
  const hasAllNodes = selectedNodeIds.includes('*');
 
  return (
- <div className="space-y-4">
+ <div className="space-y-3">
  {/* Mode selection */}
  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
  {modeCards.map(({ mode, title, description }) => (
@@ -564,7 +564,7 @@ function ScopedAccessStep({
  key={mode}
  type="button"
  onClick={() => onScopeModeChange(mode)}
- className={`rounded-sm border p-4 text-left transition-all duration-200 ${
+ className={`rounded-sm border p-3 text-left transition-colors ${
  scopeMode === mode
  ? 'border-primary/40 bg-primary/5'
  : 'border-border bg-card hover:border-primary/20'
@@ -779,7 +779,7 @@ function PermissionChip({
  <button
  type="button"
  onClick={onToggle}
- className={`inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-micro font-medium transition-all duration-150 ${
+ className={`inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-micro font-medium transition-colors duration-150 ${
  compact ? 'px-1.5 py-0.5 text-micro' : ''
  } ${
  selected
@@ -822,7 +822,7 @@ function PermissionCategoryCard({
  if (filteredPerms.length === 0) return null;
 
  return (
- <div className={`rounded-sm border transition-all duration-200 ${someSelected ? category.border : 'border-border'}`}>
+ <div className={`rounded-sm border transition-colors duration-200 ${someSelected ? category.border : 'border-border'}`}>
  {/* Category header */}
  <div
  className="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none md:px-4 md:py-3"
@@ -836,10 +836,10 @@ function PermissionCategoryCard({
  <span className={`text-micro tabular-nums ${someSelected ? category.accent : 'text-muted-foreground'}`}>
  {selectedCount}/{category.permissions.length}
  </span>
- <div className={`flex h-5 w-9 items-center rounded-full transition-all duration-200 ${
+ <div className={`flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
  allSelected ? 'bg-primary' : someSelected ? 'bg-primary/40' : 'bg-surface-3'
  }`}>
- <div className={`h-3.5 w-3.5 rounded-full bg-card  transition-all duration-200 ${
+ <div className={`h-3.5 w-3.5 rounded-full bg-card transition-transform duration-200 ${
  allSelected ? 'translate-x-[18px]' : someSelected ? 'translate-x-[10px]' : 'translate-x-[2px]'
  }`} />
  </div>
@@ -911,7 +911,7 @@ function PresetCard({
  <button
  type="button"
  onClick={onApply}
- className={`group flex flex-col items-start gap-2 rounded-sm border p-4 text-left transition-all duration-200 ${
+ className={`group flex flex-col items-start gap-2 rounded-sm border p-3 text-left transition-colors ${
  isActive
  ? 'border-primary/40 bg-primary/5 '
  : 'border-border/50 bg-card hover:border-primary/20'
@@ -1357,7 +1357,7 @@ function RolesPage() {
 
  {/* Step 1: Permissions */}
  {wizardStep === 1 && (
- <div className="space-y-4">
+ <div className="space-y-3">
  <div className="flex items-center justify-between gap-3">
  <div className="flex items-center gap-2">
  <span className="text-sm font-semibold text-foreground">{t('roles.permissionsHeading')}</span>
@@ -1380,7 +1380,7 @@ function RolesPage() {
  <button
  type="button"
  onClick={() => togglePermission('*')}
- className={`flex items-center gap-3 rounded-sm border p-4 w-full transition-all duration-200 ${
+ className={`flex items-center gap-3 rounded-sm border p-3 w-full transition-colors ${
  selectedPermissions.has('*')
  ? 'border-warning/30 bg-warning/5'
  : 'border-border bg-card hover:border-warning/20'
@@ -1393,10 +1393,10 @@ function RolesPage() {
  <div className="text-sm font-semibold text-warning">{t('roles.wildcard')}</div>
  <div className="text-micro text-muted-foreground">{t('roles.wildcardDescription')}</div>
  </div>
- <div className={`flex h-6 w-11 items-center rounded-full transition-all duration-200 ${
+ <div className={`flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
  selectedPermissions.has('*') ? 'bg-warning' : 'bg-surface-3'
  }`}>
- <div className={`h-4 w-4 rounded-full bg-card  transition-all duration-200 ${
+ <div className={`h-4 w-4 rounded-full bg-card transition-transform duration-200 ${
  selectedPermissions.has('*') ? 'translate-x-6' : 'translate-x-1'
  }`} />
  </div>
@@ -1535,7 +1535,7 @@ function RolesPage() {
  </DialogDescription>
  </DialogHeader>
 
- <DialogBody className="space-y-4">
+ <DialogBody className="space-y-3">
  {viewingRole && (
  <>
  <div className="flex flex-wrap gap-2 md:gap-3">

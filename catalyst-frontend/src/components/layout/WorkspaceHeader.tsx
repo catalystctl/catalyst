@@ -20,6 +20,13 @@ const ledTone: Record<WorkspaceHeaderVariant, 'idle' | 'go' | 'hazard' | 'alarm'
   danger: 'alarm',
 };
 
+const ledBg: Record<'idle' | 'go' | 'hazard' | 'alarm', string> = {
+  idle: 'bg-surface-3',
+  go: 'bg-success',
+  hazard: 'bg-warning',
+  alarm: 'bg-danger',
+};
+
 export interface WorkspaceHeaderProps {
   /**
    * Deprecated no-op. The old icon-chip header pattern is gone; the prop is
@@ -38,8 +45,6 @@ export interface WorkspaceHeaderProps {
   headingLevel?: 'h1' | 'h2';
   className?: string;
 }
-
-void ledTone;
 
 export function WorkspaceHeader({
   title,
@@ -67,25 +72,13 @@ export function WorkspaceHeader({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-2.5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                'led',
-                variant === 'success'
-                  ? 'bg-success'
-                  : variant === 'warning'
-                    ? 'bg-warning'
-                    : variant === 'danger'
-                      ? 'bg-danger'
-                      : 'bg-surface-3',
-              )}
-              aria-hidden
-            />
+            <span className={cn('led', ledBg[ledTone[variant]])} aria-hidden />
             {typeof title === 'string' ? (
               <Heading className="truncate font-display text-lg font-semibold tracking-tight text-foreground">
                 {title}
               </Heading>
             ) : (
-              title
+              <span className="min-w-0 flex-1 truncate">{title}</span>
             )}
             {titleAddon}
           </div>
@@ -98,8 +91,8 @@ export function WorkspaceHeader({
           ) : null}
           {extra}
         </div>
-        {stats}
-        {actions ? <div className="ml-auto min-w-0 max-w-full">{actions}</div> : null}
+        {stats ? <div className="min-w-0 w-full sm:w-auto">{stats}</div> : null}
+        {actions ? <div className="min-w-0 w-full max-w-full sm:ml-auto sm:w-auto">{actions}</div> : null}
       </div>
       {banners}
       {toolbar}

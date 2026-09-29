@@ -2,7 +2,10 @@ import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  FileCode,
+  Cpu,
+  Terminal,
+  ScrollText,
+  List,
   ArrowLeft,
   Settings,
   Trash2,
@@ -152,7 +155,7 @@ function TemplateDetailsPage() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {/* Runtime */}
         <ServerTabCard>
-          <SectionHeader icon={FileCode} title={t('details.runtime')} />
+          <SectionHeader icon={Cpu} title={t('details.runtime')} />
           <div className="space-y-0">
             <DataField label={t('image')} value={template.defaultImage || template.image} />
             {imageVariants.length > 0 && (
@@ -185,7 +188,7 @@ function TemplateDetailsPage() {
 
         {/* Startup */}
         <ServerTabCard>
-          <SectionHeader icon={FileCode} title={t('details.startup')} />
+          <SectionHeader icon={Terminal} title={t('details.startup')} />
           <p className="type-meta mb-2">
             {t('details.variablesHint')}
           </p>
@@ -195,7 +198,7 @@ function TemplateDetailsPage() {
           {template.installScript && (
             <>
               <div className="mt-3">
-                <SectionHeader icon={FileCode} title={t('details.installScript')} />
+                <SectionHeader icon={ScrollText} title={t('details.installScript')} />
               </div>
               <div className="max-h-40 overflow-y-auto rounded-sm border border-border/50 bg-surface-0 px-3 py-2 font-mono text-micro tabular-nums whitespace-pre-wrap text-foreground">
                 {template.installScript}
@@ -208,7 +211,7 @@ function TemplateDetailsPage() {
       {/* ── Variables ── */}
       <ServerTabCard>
         <div className="flex items-center gap-2">
-          <SectionHeader icon={FileCode} title={t('details.variables')} />
+          <SectionHeader icon={List} title={t('details.variables')} />
           <Segmented muted>{template.variables?.length ?? 0}</Segmented>
         </div>
         <TemplateVariablesList variables={template.variables ?? []} />

@@ -12,6 +12,10 @@ import { describeError } from '../../utils/errors';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { BracketLabel } from '../../components/deck/primitives';
+import FieldError from '../../components/auth/FieldError';
+import { showsDemoChrome } from '../../demo/isDemo';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generatePalette';
 import { cn } from '../../lib/utils';
 import type { ThemeColors } from '../../services/api/theme';
@@ -88,6 +92,8 @@ function SetupPage() {
  const [confirmPassword, setConfirmPassword] = useState('');
  const [showPassword, setShowPassword] = useState(false);
  const [showConfirm, setShowConfirm] = useState(false);
+ // Inline per-field hints for step 2 (same copy as the top banner).
+ const [step2Errors, setStep2Errors] = useState<{ email?: string; username?: string; password?: string; confirmPassword?: string }>({});
 
  // ── Step 3 state ──
  const [seedColor, setSeedColor] = useState('#c48d5a');
@@ -150,32 +156,29 @@ function SetupPage() {
  // ── Validation ──
 
  const validateStep2 = useCallback((): boolean => {
+ const fieldErrors: { email?: string; username?: string; password?: string; confirmPassword?: string } = {};
  if (!email.trim()) {
- setError(t('errors.emailRequired'));
- return false;
- }
- if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
- setError(t('errors.emailInvalid'));
- return false;
+ fieldErrors.email = t('errors.emailRequired');
+ } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+ fieldErrors.email = t('errors.emailInvalid');
  }
  if (!username.trim()) {
- setError(t('errors.usernameRequired'));
- return false;
- }
- if (username.trim().length < 3) {
- setError(t('errors.usernameTooShort', { min: 3 }));
- return false;
+ fieldErrors.username = t('errors.usernameRequired');
+ } else if (username.trim().length < 3) {
+ fieldErrors.username = t('errors.usernameTooShort', { min: 3 });
  }
  if (!password) {
- setError(t('errors.passwordRequired'));
- return false;
+ fieldErrors.password = t('errors.passwordRequired');
+ } else if (password.length < 8) {
+ fieldErrors.password = t('errors.passwordTooShort', { min: 8 });
  }
- if (password.length < 8) {
- setError(t('errors.passwordTooShort', { min: 8 }));
- return false;
+ if (password && password !== confirmPassword) {
+ fieldErrors.confirmPassword = t('admin.passwordMismatch');
  }
- if (password !== confirmPassword) {
- setError(t('admin.passwordMismatch'));
+ setStep2Errors(fieldErrors);
+ const first = fieldErrors.email ?? fieldErrors.username ?? fieldErrors.password ?? fieldErrors.confirmPassword;
+ if (first) {
+ setError(first);
  return false;
  }
  setError(null);
@@ -188,12 +191,14 @@ function SetupPage() {
  if (currentStep === 1 && !validateStep2()) return;
  setDirection(1);
  setError(null);
+ setStep2Errors({});
  setCurrentStep((s) => Math.min(s + 1, 2));
  };
 
  const goBack = () => {
  setDirection(-1);
  setError(null);
+ setStep2Errors({});
  setCurrentStep((s) => Math.max(s - 1, 0));
  };
 
@@ -312,30 +317,25 @@ function SetupPage() {
  // ── Don't render if redirecting ──
  if (alreadySetup) return null;
 
- // ── Input class ──
- const inputClass =
- 'h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40';
-
- const labelClass = 'block text-mini text-muted-foreground';
-
  return (
  <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
- <div className="absolute right-4 top-4 z-20">
+ <div className={`absolute right-4 z-20 ${showsDemoChrome ? 'top-[calc(2rem+1rem)]' : 'top-4'}`}>
  <LanguageSwitcher variant="compact" />
  </div>
  <div className="relative z-10 w-full max-w-lg space-y-4">
  <div className="deck-panel px-3 py-3 sm:px-4 sm:py-4">
  {/* ── Step indicator ── */}
- <div className="mb-6 flex items-center gap-2 overflow-x-auto">
+ <ol className="mb-6 flex min-w-0 items-center gap-2">
  {stepLabels.map((label, i) => {
  const Icon = stepIcons[i];
  const isActive = i === currentStep;
  const isComplete = i < currentStep;
  return (
- <div key={label} className="flex flex-1 items-center gap-2">
+ <li key={label} aria-current={isActive ? 'step' : undefined} className="flex min-w-0 flex-1 items-center gap-2">
  <div
+ title={label}
  className={cn(
- 'flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 font-display text-micro font-semibold transition-colors sm:px-2.5',
+ 'flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-sm border px-2 font-display text-micro font-semibold transition-colors sm:px-2.5',
  isActive
  ? 'border-primary/50 bg-primary/10 text-primary'
  : isComplete
@@ -343,25 +343,27 @@ function SetupPage() {
  : 'border-border/60 text-muted-foreground',
  )}
  >
- {isComplete ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
- <span>{label}</span>
+ {isComplete ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Icon className="h-3.5 w-3.5 shrink-0" />}
+ <span className="min-w-0 flex-1 truncate">{label}</span>
+ <span className="sr-only">{t('steps.progress', { current: i + 1, total: 3 })}</span>
  </div>
  {i < 2 && (
  <span
+ aria-hidden="true"
  className={cn(
- 'hidden h-px flex-1 transition-colors sm:block',
- i < currentStep ? 'bg-primary/60' : 'bg-border/50',
+ 'h-px w-4 shrink-0 transition-colors sm:w-auto sm:flex-1',
+ i < currentStep ? 'bg-success/50' : 'bg-border/50',
  )}
  />
  )}
- </div>
+ </li>
  );
  })}
- </div>
+ </ol>
 
  {/* ── Error display ── */}
  {error && (
- <div className="mb-4 rounded-sm border border-danger/25 bg-danger/5 px-3 py-2.5 text-mini text-danger">
+ <div role="alert" className="mb-4 rounded-sm border border-danger/25 bg-danger/5 px-3 py-2.5 text-mini text-danger">
  {error}
  </div>
  )}
@@ -380,13 +382,13 @@ function SetupPage() {
  <div className="mt-6 space-y-5">
  {/* Panel name */}
  <div className="space-y-2">
- <label className={labelClass} htmlFor="panelName">
+ <Label htmlFor="panelName" className="text-mini text-muted-foreground">
  {t('welcome.panelName')}
- </label>
- <input
+ </Label>
+ <Input
  id="panelName"
  type="text"
- className={inputClass}
+ className="h-8 bg-background/40 text-mini"
  value={panelName}
  onChange={(e) => setPanelName(e.target.value)}
  placeholder="Catalyst"
@@ -395,13 +397,13 @@ function SetupPage() {
 
  {/* Public panel URL */}
  <div className="space-y-2">
- <label className={labelClass} htmlFor="publicUrl">
+ <Label htmlFor="publicUrl" className="text-mini text-muted-foreground">
  {t('welcome.publicUrl')}
- </label>
- <input
+ </Label>
+ <Input
  id="publicUrl"
  type="url"
- className={inputClass}
+ className="h-8 bg-background/40 text-mini"
  value={publicUrl}
  onChange={(e) => setPublicUrl(e.target.value)}
  placeholder="https://panel.example.com"
@@ -412,7 +414,7 @@ function SetupPage() {
 
  {/* Logo upload */}
  <div className="space-y-2">
- <label className={labelClass}>{t('welcome.panelLogo')}</label>
+ <Label className="text-mini text-muted-foreground">{t('welcome.panelLogo')}</Label>
  <div className="flex items-start gap-3">
  {logoDataUri ? (
  <div className="relative">
@@ -462,7 +464,7 @@ function SetupPage() {
 
  {/* Preview card */}
  <div className="space-y-2">
- <label className={labelClass}>{t('welcome.preview')}</label>
+ <Label className="text-mini text-muted-foreground">{t('welcome.preview')}</Label>
  <div className="flex items-center gap-3 rounded-sm border border-border/60 bg-surface-1/40 p-3">
  <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10">
  {logoDataUri ? (
@@ -498,59 +500,70 @@ function SetupPage() {
  <div className="mt-6 space-y-4">
  {/* Email */}
  <div className="space-y-2">
- <label className={labelClass} htmlFor="adminEmail">
+ <Label htmlFor="adminEmail" className="text-mini text-muted-foreground">
  {t('admin.email')}
- </label>
- <input
+ </Label>
+ <Input
  id="adminEmail"
  type="email"
- className={inputClass}
+ className={`h-8 bg-background/40 text-mini${step2Errors.email ? ' border-danger/50' : ''}`}
  value={email}
  onChange={(e) => {
  setEmail(e.target.value);
  setError(null);
+ setStep2Errors((prev) => ({ ...prev, email: undefined }));
  }}
  placeholder={t('admin.emailPlaceholder')}
  autoComplete="email"
+ aria-invalid={step2Errors.email ? true : undefined}
+ aria-describedby={step2Errors.email ? 'adminEmail-error' : undefined}
  />
+ <FieldError id="adminEmail-error" message={step2Errors.email} />
  </div>
 
  {/* Username */}
  <div className="space-y-2">
- <label className={labelClass} htmlFor="adminUsername">
+ <Label htmlFor="adminUsername" className="text-mini text-muted-foreground">
  {t('admin.username')}
- </label>
- <input
+ </Label>
+ <Input
  id="adminUsername"
  type="text"
- className={inputClass}
+ className={`h-8 bg-background/40 text-mini${step2Errors.username ? ' border-danger/50' : ''}`}
  value={username}
  onChange={(e) => {
  setUsername(e.target.value);
  setError(null);
+ setStep2Errors((prev) => ({ ...prev, username: undefined }));
  }}
  placeholder={t('admin.usernamePlaceholder')}
  autoComplete="username"
+ aria-invalid={step2Errors.username ? true : undefined}
+ aria-describedby={step2Errors.username ? 'adminUsername-error' : undefined}
  />
+ <FieldError id="adminUsername-error" message={step2Errors.username} />
  </div>
 
  {/* Password */}
  <div className="space-y-2">
- <label className={labelClass} htmlFor="adminPassword">
+ <Label htmlFor="adminPassword" className="text-mini text-muted-foreground">
  {t('admin.password')}
- </label>
+ </Label>
  <div className="relative">
- <input
+ <Input
  id="adminPassword"
  type={showPassword ? 'text' : 'password'}
- className={cn(inputClass, 'pr-10')}
+ className={cn('h-8 bg-background/40 pr-10 text-mini', step2Errors.password && 'border-danger/50')}
  value={password}
  onChange={(e) => {
  setPassword(e.target.value);
  setError(null);
+ setStep2Errors((prev) => ({ ...prev, password: undefined }));
  }}
  placeholder="••••••••"
  autoComplete="new-password"
+ aria-invalid={step2Errors.password ? true : undefined}
+ aria-describedby={step2Errors.password ? 'adminPassword-error' : undefined}
  />
  <button
  type="button"
@@ -566,25 +579,29 @@ function SetupPage() {
  </button>
  </div>
  <PasswordStrengthMeter password={password} />
+ <FieldError id="adminPassword-error" message={step2Errors.password} />
  </div>
 
  {/* Confirm password */}
  <div className="space-y-2">
- <label className={labelClass} htmlFor="adminConfirmPassword">
+ <Label htmlFor="adminConfirmPassword" className="text-mini text-muted-foreground">
  {t('admin.confirmPassword')}
- </label>
+ </Label>
  <div className="relative">
- <input
+ <Input
  id="adminConfirmPassword"
  type={showConfirm ? 'text' : 'password'}
- className={cn(inputClass, 'pr-10')}
+ className={cn('h-8 bg-background/40 pr-10 text-mini', step2Errors.confirmPassword && 'border-danger/50')}
  value={confirmPassword}
  onChange={(e) => {
  setConfirmPassword(e.target.value);
  setError(null);
+ setStep2Errors((prev) => ({ ...prev, confirmPassword: undefined }));
  }}
  placeholder="••••••••"
  autoComplete="new-password"
+ aria-invalid={step2Errors.confirmPassword ? true : undefined}
+ aria-describedby={step2Errors.confirmPassword ? 'adminConfirmPassword-error' : undefined}
  />
  <button
  type="button"
@@ -595,9 +612,7 @@ function SetupPage() {
  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
  </button>
  </div>
- {confirmPassword && password !== confirmPassword && (
- <p className="text-mini text-danger">{t('admin.passwordMismatch')}</p>
- )}
+ <FieldError id="adminConfirmPassword-error" message={step2Errors.confirmPassword ?? ((confirmPassword && password !== confirmPassword) ? t('admin.passwordMismatch') : null)} />
  </div>
  </div>
  </div>
@@ -628,18 +643,19 @@ function SetupPage() {
  </div>
  <div className="flex-1 space-y-3">
  <div>
- <label className="mb-1 block text-mini font-medium text-foreground">{t('appearance.seedColor')}</label>
+ <Label className="mb-1 block text-mini font-medium text-foreground">{t('appearance.seedColor')}</Label>
  <div className="flex items-center gap-2">
- <input
+ <Input
  type="text"
  value={seedColor}
  onChange={(e) => setSeedColor(e.target.value)}
  placeholder="#c48d5a"
- className={`h-8 w-36 rounded-sm border bg-background/40 px-2.5 font-mono text-mini outline-none transition-colors focus:ring-1 ${
+ className={`h-8 w-36 bg-background/40 font-mono text-mini ${
  isSeedValid
- ? 'border-border/60 text-foreground focus:border-primary focus:ring-primary/40'
- : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/40'
+ ? ''
+ : 'border-danger/40 text-danger'
  }`}
+ aria-invalid={isSeedValid ? undefined : true}
  />
  <button
  type="button"
@@ -669,9 +685,9 @@ function SetupPage() {
 
  {/* Harmony modes */}
  <div>
- <label className="mb-1.5 block text-mini font-medium text-foreground">
+ <Label className="mb-1.5 block text-mini font-medium text-foreground">
  {t('appearance.colorHarmony')}
- </label>
+ </Label>
  <div className="flex flex-wrap gap-1">
  {(
  [
@@ -817,7 +833,7 @@ function SetupPage() {
 
  {/* Theme toggle */}
  <div className="space-y-2.5">
- <label className={labelClass}>{t('appearance.defaultTheme')}</label>
+ <Label className="text-mini text-muted-foreground">{t('appearance.defaultTheme')}</Label>
  <div className="flex gap-3">
  <button
  type="button"
@@ -856,7 +872,7 @@ function SetupPage() {
 
  {/* Live preview */}
  <div className="space-y-2">
- <label className={labelClass}>{t('appearance.livePreview')}</label>
+ <Label className="text-mini text-muted-foreground">{t('appearance.livePreview')}</Label>
  <div className="overflow-hidden rounded-sm border border-border/60">
  {/* Mock header */}
  <div

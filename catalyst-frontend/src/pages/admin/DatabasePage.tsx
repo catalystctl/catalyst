@@ -362,7 +362,7 @@ function DatabasePage() {
  value={dbName}
  onChange={(e) => setDbName(e.target.value)}
  placeholder="primary-mysql"
- className="h-8 rounded-sm border-border/40 bg-card text-mini"
+ className="h-8 rounded-sm border-border/40 bg-background/40 text-mini"
  />
  </label>
  <label className="block space-y-1">
@@ -373,7 +373,7 @@ function DatabasePage() {
  value={dbHost}
  onChange={(e) => setDbHost(e.target.value)}
  placeholder="mysql.internal"
- className="h-8 rounded-sm border-border/40 bg-card text-mini"
+ className="h-8 rounded-sm border-border/40 bg-background/40 text-mini"
  />
  </label>
  <label className="block space-y-1">
@@ -384,7 +384,7 @@ function DatabasePage() {
  value={dbPort}
  onChange={(e) => setDbPort(e.target.value)}
  placeholder={dbEngine === 'postgresql' ? '5432' : '3306'}
- className="h-8 rounded-sm border-border/40 bg-card text-mini"
+ className="h-8 rounded-sm border-border/40 bg-background/40 text-mini"
  />
  </label>
  <label className="block space-y-1">
@@ -395,7 +395,7 @@ function DatabasePage() {
  value={dbUsername}
  onChange={(e) => setDbUsername(e.target.value)}
  placeholder="catalyst_admin"
- className="h-8 rounded-sm border-border/40 bg-card text-mini"
+ className="h-8 rounded-sm border-border/40 bg-background/40 text-mini"
  />
  </label>
  <label className="block space-y-1">
@@ -436,7 +436,7 @@ function DatabasePage() {
  value={dbDatabase}
  onChange={(e) => setDbDatabase(e.target.value)}
  placeholder="postgres"
- className="h-8 rounded-sm border-border/40 bg-card text-mini"
+ className="h-8 rounded-sm border-border/40 bg-background/40 text-mini"
  />
  <span className="text-micro text-muted-foreground">{t('database.form.databaseHint')}</span>
  </label>
@@ -451,7 +451,7 @@ function DatabasePage() {
  value={dbPassword}
  onChange={(e) => setDbPassword(e.target.value)}
  placeholder="••••••••"
- className="h-8 rounded-sm border-border/40 bg-card text-mini"
+ className="h-8 rounded-sm border-border/40 bg-background/40 text-mini"
  />
  </label>
  </div>

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { buildGroups, buildMain } from './navSections';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +27,8 @@ export default function NavSectionsMenu({
   const { t } = useTranslation('layout');
   const user = useAuthStore((s) => s.user);
   const pluginTabs = usePluginTabs('admin');
+  const { pathname } = useLocation();
+  const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
 
   const groups = useMemo(() => {
     const permissions = user?.permissions ?? [];
@@ -62,17 +64,21 @@ export default function NavSectionsMenu({
         </DialogHeader>
         <div className="space-y-4 px-5 pb-5">
           <div className="flex flex-wrap gap-1.5">
-            {main.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                onClick={() => onOpenChange(false)}
-                className="flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 type-overline text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-              >
-                <link.icon className="h-3.5 w-3.5" />
-                {link.label}
-              </Link>
-            ))}
+            {main.map((link) => {
+              const active = isActive(link.to);
+              return (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  onClick={() => onOpenChange(false)}
+                  aria-current={active ? 'page' : undefined}
+                  className={`flex h-7 items-center gap-1.5 rounded-sm border px-2.5 type-overline transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${active ? 'border-primary/40 bg-surface-2 text-foreground' : 'border-border/60 text-muted-foreground'}`}
+                >
+                  <link.icon className="h-3.5 w-3.5" />
+                  {link.label}
+                </Link>
+              );
+            })}
           </div>
 
           <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -80,17 +86,21 @@ export default function NavSectionsMenu({
               <div key={group.id}>
                 <span className="deck-label mb-1.5">{group.title}</span>
                 <div className="flex flex-col">
-                  {group.links.map((link) => (
-                    <Link
-                      key={link.to}
-                      to={link.to}
-                      onClick={() => onOpenChange(false)}
-                      className="flex items-center gap-2 rounded-sm px-1.5 py-1 text-data text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground"
-                    >
-                      <link.icon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-                      <span className="truncate">{link.label}</span>
-                    </Link>
-                  ))}
+                  {group.links.map((link) => {
+                    const active = isActive(link.to);
+                    return (
+                      <Link
+                        key={link.to}
+                        to={link.to}
+                        onClick={() => onOpenChange(false)}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex min-h-7 items-center gap-2 rounded-sm px-1.5 py-1.5 text-data transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${active ? 'bg-surface-2 text-foreground' : 'text-muted-foreground'}`}
+                      >
+                        <link.icon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                        <span className="truncate">{link.label}</span>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             ))}

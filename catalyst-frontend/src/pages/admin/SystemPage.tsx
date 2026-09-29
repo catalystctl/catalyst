@@ -329,7 +329,7 @@ function SystemPage() {
  <Languages className="h-3 w-3" /> {t('system.defaultLanguage')}
  </span>
  <Select value={defaultLocale} onValueChange={(next) => setDefaultLocale(next as SupportedLocale)}>
- <SelectTrigger className="h-8 rounded-sm border-border/40 text-mini">
+ <SelectTrigger className="h-8 rounded-sm border-border/40 bg-background/40 text-mini">
  <SelectValue />
  </SelectTrigger>
  <SelectContent>

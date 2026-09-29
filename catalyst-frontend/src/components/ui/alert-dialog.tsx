@@ -20,7 +20,7 @@ const AlertDialogOverlay = React.forwardRef<
       'fixed inset-0 z-50 bg-[hsl(var(--scrim))] backdrop-blur-sm',
       'data-[state=open]:animate-in data-[state=closed]:animate-out',
       'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-      'duration-200',
+      'duration-normal',
       className,
     )}
     {...props}
@@ -34,7 +34,7 @@ const alertDialogContentVariants = cva(
     'pointer-events-auto relative flex w-full flex-col overflow-hidden',
     'max-h-[92dvh] border border-border/80 bg-card text-card-foreground shadow-elevated outline-none',
     'rounded-t-md sm:rounded-md',
-    'duration-200',
+    'duration-normal',
     'data-[state=open]:animate-in data-[state=closed]:animate-out',
     'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
     'data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98]',
@@ -43,8 +43,8 @@ const alertDialogContentVariants = cva(
     variants: {
       size: {
         sm: 'sm:max-w-sm',
-        md: 'sm:max-w-md',
-        lg: 'sm:max-w-lg',
+        md: 'sm:max-w-lg',
+        lg: 'sm:max-w-xl',
       },
     },
     defaultVariants: {
@@ -57,6 +57,9 @@ export interface AlertDialogContentProps
   extends React.ComponentPropsWithoutRef<typeof AlertPrimitive.Content>,
     VariantProps<typeof alertDialogContentVariants> {}
 
+// NOTE: AlertDialog intentionally renders no close (X) affordance — unlike
+// Dialog, it requires an explicit Action/Cancel choice. Keep it that way;
+// do not add DialogContent-style showClose here.
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertPrimitive.Content>,
   AlertDialogContentProps
@@ -101,7 +104,7 @@ const AlertDialogHeader = ({
   void icon;
   void iconClassName;
   return (
-    <div className={cn('flex items-start gap-3 px-5 pt-4 pb-1', className)} {...props}>
+    <div className={cn('flex items-start gap-3 px-5 pt-4 pb-4', className)} {...props}>
       <div className="min-w-0 flex-1 space-y-1.5">{children}</div>
     </div>
   );

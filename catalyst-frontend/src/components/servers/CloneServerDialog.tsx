@@ -282,7 +282,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
       }}
       aria-pressed={mode === value}
       className={cn(
-        'flex-1 rounded-sm border p-3 text-left transition-colors',
+        'flex-1 rounded-sm border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
         mode === value
           ? 'border-primary bg-primary/10'
           : 'border-border/50 bg-surface-1/40 hover:border-border',
@@ -502,7 +502,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                 )}
 
                 {/* Resources */}
-                <div className={cn('grid grid-cols-3 gap-3', dividerClass)}>
+                <div className={cn('grid grid-cols-1 gap-3 sm:grid-cols-3', dividerClass)}>
                   <div className="space-y-1.5">
                     <label htmlFor="clone-memory" className="type-overline">
                       {t('fields.memoryMb')}

@@ -67,11 +67,15 @@ function TableSkeleton() {
  return (
  <div>
  {Array.from({ length: 6 }).map((_, i) => (
- <div key={i} className={cn(GRID, 'border-t border-border/40 py-2 pl-3 pr-3')}>
+ <div key={i} className={cn(GRID, 'border-t border-border/40 py-2 pl-3 pr-3')} aria-hidden>
  <div className="flex items-center gap-2">
  <div className="h-2 w-2 animate-pulse rounded-full bg-surface-3" />
  <div className="h-3.5 w-40 animate-pulse bg-surface-3" />
  </div>
+ <div className="hidden h-3.5 w-12 animate-pulse justify-self-end bg-surface-3 md:block" />
+ <div className="hidden h-3.5 w-12 animate-pulse justify-self-end bg-surface-3 md:block" />
+ <div className="hidden h-3.5 w-16 animate-pulse justify-self-end bg-surface-3 md:block" />
+ <div className="h-8 w-16 animate-pulse justify-self-end bg-surface-3" />
  </div>
  ))}
  </div>
@@ -211,7 +215,7 @@ function NodeRow({
  <span className="flex shrink-0 items-center justify-end gap-1">
  <Link
  to={`/admin/nodes/${node.id}`}
- className="flex h-7 items-center gap-1 rounded-sm border border-border/60 px-2 text-micro text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+ className="flex h-8 items-center gap-1 rounded-sm border border-border/60 px-2 text-micro text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
  >
  <ExternalLink className="h-3 w-3" />
  <span className="hidden sm:inline">{t('nodes.manage')}</span>
@@ -221,7 +225,7 @@ function NodeRow({
  <DropdownMenu>
  <DropdownMenuTrigger asChild>
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
  title={t('common:actions.more')}
  >
  <MoreHorizontal className="h-3.5 w-3.5" />
@@ -574,7 +578,7 @@ function AdminNodesPage() {
 
  {/* Expandable filter panel */}
  {showFilters && (
- <div className="flex flex-wrap items-end gap-4 border-b border-border/50 bg-surface-1/20 px-3 py-2">
+ <div className="flex flex-wrap items-end gap-4 border-b border-border/50 bg-surface-1/40 px-3 py-2">
  <label className="flex flex-col gap-1">
  <span className="type-overline">{t('nodes.filter.status')}</span>
  <Select

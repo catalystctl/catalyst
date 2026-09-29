@@ -11,7 +11,7 @@
 
 import type { ITheme } from '@xterm/xterm';
 
-const CHANNELS = /^(-?[\d.]+)\s+([\d.]+)%\s+([\d.]+)%(?:\s*\/\s*[\d.%]+)?$/;
+const CHANNELS = /^(-?[\d.]+)\s+([\d.]+)%\s+([\d.]+)%(?:\s*\/\s*([\d.]+%?))?$/;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -36,6 +36,8 @@ export function hslChannelsToHex(h: number, s: number, l: number): string {
 /**
  * Turn a raw CSS custom-property value into a concrete color.
  * Accepts channel tokens, already-wrapped hsl()/rgb()/#hex, or empty.
+ * Translucent channel tokens (`H S% L% / alpha`) are rejected — xterm needs
+ * opaque colors, and silently dropping the alpha would paint a wrong solid.
  */
 export function tokenValueToColor(raw: string, fallback: string): string {
   const value = raw.trim();
@@ -47,6 +49,11 @@ export function tokenValueToColor(raw: string, fallback: string): string {
 
   const match = value.match(CHANNELS);
   if (match) {
+    const alphaRaw = match[4];
+    if (alphaRaw !== undefined) {
+      const alpha = alphaRaw.endsWith('%') ? Number(alphaRaw.slice(0, -1)) / 100 : Number(alphaRaw);
+      if (!Number.isFinite(alpha) || alpha < 1) return fallback;
+    }
     return hslChannelsToHex(Number(match[1]), Number(match[2]), Number(match[3]));
   }
 
@@ -60,10 +67,18 @@ export function readCssVar(token: string): string {
   try {
     const styles = getComputedStyle(document.documentElement);
     let value = styles.getPropertyValue(token).trim();
-    // Follow one var() hop (`--primary: var(--accent-teal)`).
-    const ref = value.match(VAR_REF);
-    if (ref) {
-      value = styles.getPropertyValue(ref[1]).trim() || (ref[2] ?? '').trim();
+    // Follow var() hops (`--primary: var(--signal)`) up to 3 deep, then stop
+    // so a cyclic alias cannot hang the theme read.
+    for (let depth = 0; depth < 3; depth++) {
+      const ref = value.match(VAR_REF);
+      if (!ref) break;
+      const next = styles.getPropertyValue(ref[1]).trim();
+      if (next) {
+        value = next;
+      } else {
+        value = (ref[2] ?? '').trim();
+        break;
+      }
     }
     return value;
   } catch {
@@ -86,12 +101,20 @@ function parseRgb(color: string): [number, number, number] | null {
   return null;
 }
 
+function isDarkTheme(): boolean {
+  if (typeof document === 'undefined') return true;
+  try {
+    return document.documentElement.classList.contains('dark');
+  } catch {
+    return true;
+  }
+}
+
 /** Mix `amount` of `fg` over `bg` into `#rrggbb` (xterm cannot parse color-mix()). */
-function resolveSelection(primary: string, bg: string): string {
-  const fgRgb = parseRgb(primary);
+function mixHex(fg: string, bg: string, amount: number): string {
+  const fgRgb = parseRgb(fg);
   const bgRgb = parseRgb(bg);
-  if (!fgRgb || !bgRgb) return primary;
-  const amount = 0.35;
+  if (!fgRgb || !bgRgb) return fg;
   const mix = (a: number, b: number) =>
     Math.round(a * amount + b * (1 - amount))
       .toString(16)
@@ -99,16 +122,21 @@ function resolveSelection(primary: string, bg: string): string {
   return `#${mix(fgRgb[0], bgRgb[0])}${mix(fgRgb[1], bgRgb[1])}${mix(fgRgb[2], bgRgb[2])}`;
 }
 
+/** Selection wash: primary mixed over the terminal bg (0.28 dark / 0.22 light). */
+function resolveSelection(primary: string, bg: string): string {
+  return mixHex(primary, bg, isDarkTheme() ? 0.28 : 0.22);
+}
+
 export function readXtermTheme(): ITheme {
-  const bg = resolveThemeColor('--card', '#0b0f14');
+  const bg = resolveThemeColor('--card', '#161a21');
   const fg = resolveThemeColor('--foreground', '#e6edf3');
-  const primary = resolveThemeColor('--primary', '#14b8a6');
+  const primary = resolveThemeColor('--primary', '#ff3d7f');
   const danger = resolveThemeColor('--danger', '#f87171');
   const success = resolveThemeColor('--success', '#4ade80');
   const warning = resolveThemeColor('--warning', '#fbbf24');
   const info = resolveThemeColor('--info', '#60a5fa');
-  const muted = resolveThemeColor('--muted-foreground', '#6b7280');
-  const surface = resolveThemeColor('--surface-2', '#1f2937');
+  const muted = resolveThemeColor('--muted-foreground', '#939dac');
+  const surface = resolveThemeColor('--surface-2', '#232a35');
 
   return {
     background: bg,
@@ -116,7 +144,9 @@ export function readXtermTheme(): ITheme {
     cursor: primary,
     cursorAccent: bg,
     selectionBackground: resolveSelection(primary, bg),
-    selectionInactiveBackground: surface,
+    // Blurred-window selection: surface at 25% over the terminal bg,
+    // pre-blended because xterm cannot parse color-mix().
+    selectionInactiveBackground: mixHex(surface, bg, 0.25),
     selectionForeground: fg,
     black: resolveThemeColor('--background', '#09090b'),
     red: danger,

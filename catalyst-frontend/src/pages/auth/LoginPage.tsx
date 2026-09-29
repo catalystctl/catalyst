@@ -31,7 +31,8 @@ import {
  DialogTitle,
  DialogDescription,
 } from '@/components/ui/dialog';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import FieldError from '../../components/auth/FieldError';
+import { showsDemoChrome } from '../../demo/isDemo';
 
 /** One banner recipe shared by every auth card. */
 const AUTH_BANNER_CLASS = 'rounded-sm border px-3 py-2.5 text-mini';
@@ -282,7 +283,7 @@ function LoginPage() {
 
  return (
  <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
- <div className="absolute right-4 top-4 z-20">
+ <div className={`absolute right-4 z-20 ${showsDemoChrome ? 'top-[calc(2rem+1rem)]' : 'top-4'}`}>
  <LanguageSwitcher variant="compact" />
  </div>
  <div className="deck-panel w-full max-w-md">
@@ -335,10 +336,12 @@ function LoginPage() {
  type="email"
  autoComplete="username webauthn"
  placeholder={t('fields.emailPlaceholder')}
- className="h-8 rounded-sm text-mini"
+ className={`h-8 rounded-sm text-mini${errors.email ? ' border-danger/50' : ''}`}
+ aria-invalid={errors.email ? true : undefined}
+ aria-describedby={errors.email ? 'email-error' : undefined}
  {...register('email')}
  />
- {errors.email && <p className="text-mini text-danger">{errors.email.message}</p>}
+ <FieldError id="email-error" message={errors.email?.message} />
  </div>
 
  <div className="space-y-2">
@@ -356,10 +359,12 @@ function LoginPage() {
  type="password"
  autoComplete="current-password webauthn"
  placeholder="••••••••"
- className="h-8 rounded-sm text-mini"
+ className={`h-8 rounded-sm text-mini${errors.password ? ' border-danger/50' : ''}`}
+ aria-invalid={errors.password ? true : undefined}
+ aria-describedby={errors.password ? 'password-error' : undefined}
  {...register('password')}
  />
- {errors.password && <p className="text-mini text-danger">{errors.password.message}</p>}
+ <FieldError id="password-error" message={errors.password?.message} />
  </div>
 
  <Button
@@ -383,7 +388,7 @@ function LoginPage() {
  />
  )}
  />
- <Label htmlFor="rememberMe" className="text-sm font-normal">
+ <Label htmlFor="rememberMe" className="text-mini font-normal">
  {t('login.rememberMe')}
  </Label>
  </div>
@@ -477,9 +482,9 @@ function LoginPage() {
  </DialogHeader>
  <DialogBody className="space-y-3">
  {totpError && (
- <Alert variant="destructive" className="rounded-sm">
- <AlertDescription>{totpError}</AlertDescription>
- </Alert>
+ <div role="alert" className={`${AUTH_BANNER_CLASS} border-danger/25 bg-danger/5 text-danger`}>
+ {totpError}
+ </div>
  )}
  <Input
  type="text"
@@ -496,7 +501,7 @@ function LoginPage() {
  checked={totpTrustDevice}
  onCheckedChange={(checked) => setTotpTrustDevice(checked as boolean)}
  />
- <Label htmlFor="trustDevice" className="text-sm font-normal">
+ <Label htmlFor="trustDevice" className="text-mini font-normal">
  {t('twoFactor.trustDevice')}
  </Label>
  </div>

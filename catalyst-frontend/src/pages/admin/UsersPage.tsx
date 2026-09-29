@@ -130,7 +130,7 @@ function RoleChip({ role, selected, onToggle }: { role: { id: string; name: stri
  <button
  type="button"
  onClick={onToggle}
- className={`inline-flex items-center gap-1.5 rounded-sm border px-3 py-1.5 text-mini font-medium transition-all duration-150 ${
+ className={`inline-flex h-7 items-center gap-1.5 rounded-sm border px-2.5 text-mini font-medium transition-colors ${
  selected
  ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
  : 'border-border/30 bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground'
@@ -149,7 +149,7 @@ function ServerChip({ server, selected, onToggle }: { server: { id: string; name
  <button
  type="button"
  onClick={onToggle}
- className={`inline-flex items-center gap-1.5 rounded-sm border px-3 py-1.5 text-mini font-medium transition-all duration-150 ${
+ className={`inline-flex h-7 items-center gap-1.5 rounded-sm border px-2.5 text-mini font-medium transition-colors ${
  selected
  ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
  : 'border-border/30 bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground'
@@ -201,7 +201,7 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  )}
 
  {/* 2FA status */}
- <div className="rounded-sm border border-border/30 bg-card p-4">
+ <div className="rounded-sm border border-border/30 bg-surface-1/40 p-3">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-3">
  <ShieldCheck className={`h-4 w-4 shrink-0 ${twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
@@ -233,7 +233,7 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  </div>
 
  {/* Passkeys */}
- <div className="rounded-sm border border-border/30 bg-card p-4">
+ <div className="rounded-sm border border-border/30 bg-surface-1/40 p-3">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-3">
  <Fingerprint className={`h-4 w-4 shrink-0 ${passkeys.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
@@ -263,7 +263,7 @@ function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnli
  </div>
 
  {/* Linked SSO accounts */}
- <div className="rounded-sm border border-border/30 bg-card p-4">
+ <div className="rounded-sm border border-border/30 bg-surface-1/40 p-3">
  <div className="flex items-center gap-2 mb-3">
  <Link2 className="h-4 w-4 text-muted-foreground" />
  <span className="text-sm font-medium text-foreground">{t('users.linkedAccounts')}</span>
@@ -962,7 +962,7 @@ function UsersPage() {
 
  {/* Expandable filter panel */}
  {showFilters && (
- <div className="flex flex-wrap items-end gap-4 border-b border-border/50 bg-surface-1/20 px-3 py-2">
+ <div className="flex flex-wrap items-end gap-4 border-b border-border/50 bg-surface-1/40 px-3 py-2">
  <label className="flex flex-col gap-1">
  <span className="type-overline">{t('users.roleLabel')}</span>
  <Select
@@ -1204,7 +1204,7 @@ function UsersPage() {
  <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
  {user.banned ? (
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
  onClick={(e) => { e.stopPropagation(); handleBulkUnban([user.id], user.username); }}
  disabled={banMutation.isPending || unbanMutation.isPending}
  title={t('users.unban')}
@@ -1213,7 +1213,7 @@ function UsersPage() {
  </button>
  ) : (
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
  onClick={(e) => { e.stopPropagation(); handleBulkBan([user.id], user.username); }}
  disabled={banMutation.isPending || unbanMutation.isPending}
  title={t('users.ban')}
@@ -1223,7 +1223,7 @@ function UsersPage() {
  )}
  {!user.emailVerified && (
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
  onClick={(e) => { e.stopPropagation(); verifyEmailMutation.mutate(user.id); }}
  disabled={verifyEmailMutation.isPending}
  title={t('users.verifyEmailAction')}
@@ -1233,7 +1233,7 @@ function UsersPage() {
  )}
 
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={(e) => { e.stopPropagation(); startView(user); }}
  title={t('users.viewDetails')}
  >
@@ -1242,7 +1242,7 @@ function UsersPage() {
  <DropdownMenu>
  <DropdownMenuTrigger asChild>
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
  title={t('users.more')}
  onClick={(e) => e.stopPropagation()}
  >
@@ -1658,7 +1658,7 @@ function UsersPage() {
  <DialogDescription>{viewingUser?.email ?? t('users.viewDescription')}</DialogDescription>
  </DialogHeader>
 
- <DialogBody className="space-y-4">
+ <DialogBody className="space-y-3">
  {viewingUser && (
  <>
  <div className="flex flex-wrap items-center gap-2">
@@ -1715,7 +1715,7 @@ function UsersPage() {
  </div>
 
  {viewingUser.roles.length > 0 && (
- <div className="rounded-sm border border-border/30 p-4">
+ <div className="rounded-sm border border-border/30 p-3">
  <div className="flex items-center gap-2 mb-3">
  <Shield className="h-4 w-4 text-primary" />
  <span className="text-sm font-semibold text-foreground">{t('users.rolesHeading')}</span>
@@ -1738,7 +1738,7 @@ function UsersPage() {
  const hasContent = accounts.length > 0 || passkeys.length > 0 || has2fa;
  if (!hasContent) return null;
  return (
- <div className="rounded-sm border border-border/30 p-4 space-y-3">
+ <div className="rounded-sm border border-border/30 p-3 space-y-3">
  <div className="flex items-center gap-2 mb-1">
  <Lock className="h-4 w-4 text-muted-foreground" />
  <span className="text-sm font-semibold text-foreground">{t('users.authentication')}</span>
@@ -1858,7 +1858,7 @@ function UsersPage() {
  {t('users.dialogs.reasonLabel')}
  </span>
  <input
- className="w-full rounded-sm border border-border/30 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+ className="w-full rounded-sm border border-border/30 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
  value={banReason}
  onChange={(event) => setBanReason(event.target.value)}
  placeholder={t('users.dialogs.reasonPlaceholder')}

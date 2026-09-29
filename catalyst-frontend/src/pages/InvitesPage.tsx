@@ -11,11 +11,11 @@ import { getLocalizedErrorMessage } from '../i18n/api-errors';
 import type { ServerInvitePreview } from '../types/server';
 import ServerTabCard from '../components/servers/tabs/ServerTabCard';
 import TabEmptyState from '../components/servers/tabs/TabEmptyState';
-import LoadingSpinner from '../components/shared/LoadingSpinner';
+import TabLoadingState from '../components/servers/tabs/TabLoadingState';
 import { BracketLabel } from '../components/deck/primitives';
-
-const INPUT_CLASS =
-  'mt-1 h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 function InvitesPage() {
   const { t } = useTranslation('auth');
@@ -127,12 +127,9 @@ function InvitesPage() {
             <TabEmptyState
               title={getLocalizedErrorMessage(previewError, 'INVITE_NOT_FOUND')}
               action={
-                <Link
-                  to="/login"
-                  className="inline-flex h-8 items-center rounded-sm border border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
-                >
-                  {t('invite.signInInstead')}
-                </Link>
+                <Button asChild variant="outline" size="sm" className="h-8 text-mini">
+                  <Link to="/login">{t('invite.signInInstead')}</Link>
+                </Button>
               }
             />
           </ServerTabCard>
@@ -145,7 +142,7 @@ function InvitesPage() {
         <div className="mx-auto w-full max-w-lg space-y-3">
           {header(t('invite.registerDescription'))}
           <ServerTabCard>
-            <LoadingSpinner />
+            <TabLoadingState rows={3} />
           </ServerTabCard>
         </div>
       );
@@ -168,35 +165,38 @@ function InvitesPage() {
             </div>
           ) : null}
           <div className="mt-3 space-y-3">
-            <label className="block type-overline">
-              {t('fields.email')}
-              <input
-                className={INPUT_CLASS}
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">{t('fields.email')}</Label>
+              <Input
+                id="invite-email"
+                className="h-8 bg-background/40 text-mini"
                 value={invitePreview?.email ?? ''}
                 placeholder={t('invite.emailPlaceholder')}
                 disabled
               />
-            </label>
-            <label className="block type-overline">
-              {t('fields.username')}
-              <input
-                className={INPUT_CLASS}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-username">{t('fields.username')}</Label>
+              <Input
+                id="invite-username"
+                className="h-8 bg-background/40 text-mini"
                 value={registerUsername}
                 onChange={(event) => setRegisterUsername(event.target.value)}
                 placeholder={t('fields.usernamePlaceholder')}
               />
-            </label>
-            <label className="block type-overline">
-              {t('fields.password')}
-              <input
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-password">{t('fields.password')}</Label>
+              <Input
+                id="invite-password"
                 type="password"
                 autoComplete="new-password"
-                className={INPUT_CLASS}
+                className="h-8 bg-background/40 text-mini"
                 value={registerPassword}
                 onChange={(event) => setRegisterPassword(event.target.value)}
                 placeholder="••••••••"
               />
-            </label>
+            </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -224,14 +224,30 @@ function InvitesPage() {
       <ServerTabCard>
         {!token || isPreviewError ? (
           <TabEmptyState title={getLocalizedErrorMessage(previewError, 'INVITE_NOT_FOUND')} />
+        ) : isPreviewLoading ? (
+          <TabLoadingState rows={3} />
         ) : (
-          <button
-            className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
-            onClick={() => acceptMutation.mutate()}
-            disabled={!token || acceptMutation.isPending || accepted}
-          >
-            {t('invite.accept')}
-          </button>
+          <div className="space-y-3">
+            {invitePreview ? (
+              <div className="rounded-sm border border-border/50 px-3 py-2">
+                <div className="type-overline">{t('invite.serverLabel')}</div>
+                <div className="font-display text-data font-semibold tracking-tight text-foreground">
+                  {invitePreview.serverName}
+                </div>
+                <div className="type-overline mt-2">{t('invite.permissions')}</div>
+                <div className="font-mono text-micro tabular-nums text-muted-foreground">
+                  {invitePreview.permissions.join(', ')}
+                </div>
+              </div>
+            ) : null}
+            <button
+              className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+              onClick={() => acceptMutation.mutate()}
+              disabled={!token || acceptMutation.isPending || accepted}
+            >
+              {t('invite.accept')}
+            </button>
+          </div>
         )}
       </ServerTabCard>
     </div>

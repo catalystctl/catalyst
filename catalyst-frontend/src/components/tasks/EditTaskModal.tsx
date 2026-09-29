@@ -70,7 +70,7 @@ function EditTaskModal({
   return (
     <div>
       <button
-        className="inline-flex h-7 items-center rounded-sm border border-border/60 px-2 text-mini font-semibold text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-60"
+        className="inline-flex h-8 min-h-8 items-center rounded-sm border border-border/60 px-2 text-mini font-semibold text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-60"
         onClick={() => {
           if (!disabled) setOpen(true);
         }}
@@ -105,7 +105,7 @@ function EditTaskModal({
               <Label htmlFor="edit-task-action">{t('tasks.action')}</Label>
               <select
                 id="edit-task-action"
-                className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary"
+                className="h-8 min-h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors [color-scheme:dark] focus:border-primary"
                 value={action}
                 onChange={(event) => setAction(event.target.value as Task['action'])}
               >

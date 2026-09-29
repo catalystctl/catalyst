@@ -111,6 +111,11 @@ export default function ServerHeaderStats({
     diskUsed != null && diskTotal && diskTotal > 0 ? Math.min(100, (diskUsed / diskTotal) * 100) : 0;
 
   return (
+    <>
+    <div className="hidden items-end gap-5 md:flex lg:hidden">
+      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
+      <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
+    </div>
     <div className="hidden items-end gap-5 lg:flex">
       <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
       <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
@@ -121,5 +126,6 @@ export default function ServerHeaderStats({
         value={isRunning ? `↓ ${formatBytes(netRate.rx)}/s  ↑ ${formatBytes(netRate.tx)}/s` : '↓ 0 B/s  ↑ 0 B/s'}
       />
     </div>
+    </>
   );
 }

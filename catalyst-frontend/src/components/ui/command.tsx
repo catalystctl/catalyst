@@ -11,7 +11,7 @@ const Command = forwardRef<
  className={cn(
  'flex h-full w-full flex-col overflow-hidden rounded-md bg-card text-foreground',
  '[&_[cmdk-group]]:px-1',
- '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-muted-foreground',
+ '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[var(--text-micro)] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-muted-foreground',
  '[&_kbd]:ml-auto [&_kbd]:font-mono [&_kbd]:text-xs [&_kbd]:tracking-widest [&_kbd]:text-muted-foreground',
  className,
  )}
@@ -27,7 +27,7 @@ const CommandInput = forwardRef<
  <CommandPrimitive.Input
  ref={ref}
  className={cn(
- 'flex h-9 w-full border-b border-border/70 bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground transition-colors duration-normal',
+ 'flex h-9 w-full border-b border-border/50 bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/80 transition-colors duration-normal',
  className,
  )}
  {...props}
@@ -66,7 +66,7 @@ const CommandEmpty = forwardRef<
  React.ElementRef<typeof CommandPrimitive.Empty>,
  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
 >((props, ref) => (
- <CommandPrimitive.Empty ref={ref} className="py-4 text-center type-meta" {...props} />
+ <CommandPrimitive.Empty ref={ref} className="py-6 text-center type-meta" {...props} />
 ));
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 

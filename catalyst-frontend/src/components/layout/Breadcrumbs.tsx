@@ -93,9 +93,9 @@ function Breadcrumbs() {
     .map((segment, index) => {
       const href = `/${segments.slice(0, index + 1).join('/')}`;
       const label = formatSegment(t, segment);
-      return label ? { href, label, isLast: index === segments.length - 1 } : null;
+      return label ? { href, label, raw: segment, isLast: index === segments.length - 1 } : null;
     })
-    .filter((crumb): crumb is { href: string; label: string; isLast: boolean } => crumb !== null);
+    .filter((crumb): crumb is { href: string; label: string; raw: string; isLast: boolean } => crumb !== null);
 
   if (crumbs.length === 0) {
     return null;
@@ -105,12 +105,12 @@ function Breadcrumbs() {
 
   return (
     <nav
-      className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm text-muted-foreground scrollbar-hide"
+      className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm text-muted-foreground scrollbar-hide [mask-image:linear-gradient(to_right,black_calc(100%-1.25rem),transparent_100%)]"
       aria-label={t('breadcrumbs.nav')}
     >
       {!skipDashboardHome && (
         <Link
-          className="inline-flex min-h-7 shrink-0 items-center rounded-md px-1.5 font-medium transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="inline-flex h-7 shrink-0 items-center rounded-sm px-1.5 font-medium transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           to="/dashboard"
         >
           {t('nav.dashboard')}
@@ -123,15 +123,15 @@ function Breadcrumbs() {
           )}
           {crumb.isLast ? (
             <span
-              className={`inline-flex min-h-7 min-w-0 items-center px-1.5 font-medium text-foreground ${crumb.label.endsWith('…') ? 'font-mono text-mini tabular-nums' : ''}`}
+              className={`inline-flex h-7 min-w-0 items-center px-1.5 font-medium text-foreground ${crumb.label.endsWith('…') ? 'font-mono text-mini tabular-nums' : ''}`}
               aria-current="page"
-              title={crumb.label}
+              title={crumb.raw}
             >
               <span className="truncate">{crumb.label}</span>
             </span>
           ) : (
             <Link
-              className="inline-flex min-h-7 shrink-0 items-center rounded-md px-1.5 font-medium transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="inline-flex h-7 shrink-0 items-center rounded-sm px-1.5 font-medium transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               to={crumb.href}
             >
               {crumb.label}

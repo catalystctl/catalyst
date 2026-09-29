@@ -21,7 +21,7 @@ function TemplateVariablesList({ variables }: Props) {
       {variables.map((variable) => (
         <div
           key={variable.name}
-          className="py-2 transition-colors hover:bg-surface-1/40"
+          className="-mx-3 px-3 py-2 transition-colors hover:bg-surface-1/40"
         >
           <div className="flex items-center justify-between gap-2">
             <div className="font-mono text-data tabular-nums text-foreground">

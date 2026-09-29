@@ -157,7 +157,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
               <Label htmlFor="create-task-action">{t('tasks.action')}</Label>
               <select
                 id="create-task-action"
-                className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary"
+                className="h-8 min-h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors [color-scheme:dark] focus:border-primary"
                 value={action}
                 onChange={(event) => setAction(event.target.value as Task['action'])}
               >
@@ -184,6 +184,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
               <Input
                 id="create-task-start"
                 type="datetime-local"
+                className="[color-scheme:dark]"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
               />
@@ -197,7 +198,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
               <Label htmlFor="create-task-repeat">{t('tasks.repeat')}</Label>
               <select
                 id="create-task-repeat"
-                className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary"
+                className="h-8 min-h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors [color-scheme:dark] focus:border-primary"
                 value={repeat}
                 onChange={(event) => setRepeat(event.target.value as typeof repeat)}
               >
@@ -213,7 +214,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
                 <Label htmlFor="create-task-weekday">{t('tasks.dayOfWeek')}</Label>
                 <select
                   id="create-task-weekday"
-                  className="h-7 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary"
+                  className="h-8 min-h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors [color-scheme:dark] focus:border-primary"
                   value={weekday}
                   onChange={(event) => setWeekday(event.target.value)}
                 >

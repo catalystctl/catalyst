@@ -9,7 +9,6 @@ import type {
   AgentLogEntry,
 } from '../../types/agent';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import ServerTabCard from '../servers/tabs/ServerTabCard';
 import SectionHeader from '../servers/tabs/SectionHeader';
 import StatGrid from '../servers/tabs/StatGrid';
 import { Button } from '../ui/button';
@@ -32,7 +31,7 @@ import {
   Upload,
   WifiOff,
   Zap,
-  ChevronDown,
+  ChevronRight,
   Copy,
   Pause,
   Play,
@@ -107,9 +106,9 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
   const latestVersion = stats?.latestAgentVersion ?? null;
 
   return (
-    <ServerTabCard className="overflow-hidden">
+    <div className="deck-panel overflow-hidden">
       {/* ── Tab Strip ── */}
-      <div className="-mx-3 -mt-2.5 mb-0 border-b border-border/50 bg-surface-1/40">
+      <div className="border-b border-border/50 bg-surface-1/40">
         <div className="flex items-center gap-0.5 overflow-x-auto px-1">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -131,7 +130,7 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
                 <Icon className="h-3 w-3" />
                 {tabLabels[tab.id]}
                 {showDot && (
-                  <StatusLed tone="hazard" className="absolute right-0.5 top-1 h-1.5 w-1.5" />
+                  <StatusLed tone="hazard" className="-mr-1 h-1.5 w-1.5 shrink-0" />
                 )}
                 {isActive && (
                   <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
@@ -143,7 +142,7 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
       </div>
 
       {/* ── Tab Content ── */}
-      <div className="pt-3">
+      <div className="px-3 py-2.5">
         {!isOnline && activeTab !== 'actions' ? (
           <AgentOfflineState />
         ) : (
@@ -171,7 +170,7 @@ export default function AgentControlPanel({ node, stats }: AgentControlPanelProp
           </>
         )}
       </div>
-    </ServerTabCard>
+    </div>
   );
 }
 
@@ -621,7 +620,7 @@ function AgentUpdateTab({
           </div>
         </div>
         <div className="flex w-8 shrink-0 items-center justify-center border-x border-border/50 bg-surface-1/40">
-          <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/60" />
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
         </div>
         <div className="min-w-0 flex-1 px-3 py-2">
           <div className="flex items-center gap-1.5">

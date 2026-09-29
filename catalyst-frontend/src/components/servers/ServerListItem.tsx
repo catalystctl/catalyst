@@ -26,8 +26,8 @@ function ServerListItem({ server }: { server: Server }) {
     server.primaryIp ??
     server.node?.publicAddress ??
     server.node?.hostname ??
-    'n/a';
-  const port = server.connection?.port ?? server.primaryPort ?? 'n/a';
+    '—';
+  const port = server.connection?.port ?? server.primaryPort ?? '—';
 
   const cpuPercent =
     server.status === 'running' && server.cpuPercent != null
@@ -50,7 +50,7 @@ function ServerListItem({ server }: { server: Server }) {
   const isSuspended = server.status === 'suspended';
 
   return (
-    <div className="group flex items-center gap-4 px-3 py-2">
+    <div className="group flex items-center gap-4 rounded-sm px-3 py-2 transition-colors hover:bg-surface-1/40 focus-within:bg-primary/10">
       {/* Status */}
       <div className="shrink-0">
         <ServerStatusBadge status={server.status} operationStage={server.operationStage} operationProgress={server.operationProgress} />

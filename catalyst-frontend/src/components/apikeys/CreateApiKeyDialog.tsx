@@ -288,8 +288,9 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  )}
 
  {!formData.allPermissions && selectedCount === 0 && (
- <p className="text-mini text-warning dark:text-warning">
- ⚠ {t('apiKeys.form.selectAtLeastOne')}
+ <p className="flex items-center gap-1.5 text-mini text-warning dark:text-warning">
+ <AlertTriangle className="h-3 w-3 shrink-0" />
+ {t('apiKeys.form.selectAtLeastOne')}
  </p>
  )}
  </div>

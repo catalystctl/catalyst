@@ -233,8 +233,8 @@ return (
  <DialogDescription>{error.id}</DialogDescription>
  </DialogHeader>
 
- <DialogBody className="space-y-5">
- <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+ <DialogBody className="space-y-3">
+ <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
  <div className="space-y-1">
  <span className="type-overline">{t('systemErrors.level')}</span>
  <LevelBadge level={error.level} className={`text-micro ${levelColor(error.level)}`} />
@@ -301,7 +301,7 @@ return (
  <span className="type-overline">
  {t('systemErrors.metadataCount', { count: metadataEntries.length })}
  </span>
- <div className="overflow-hidden rounded-sm border border-border/30 bg-surface-2/40">
+ <div className="overflow-x-auto rounded-sm border border-border/30 bg-surface-2/40">
  <table className="w-full text-mini">
  <thead>
  <tr className="border-b border-border/30 text-left">
@@ -583,7 +583,7 @@ function ExportErrorsModal({
      </DialogDescription>
     </DialogHeader>
 
-    <DialogBody className="space-y-5">
+    <DialogBody className="space-y-3">
      <div className="space-y-2">
       <span className="type-overline">{t('systemErrors.timeRange')}</span>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -860,7 +860,7 @@ function SystemErrorsPage() {
  {/* ── The deck: filters, columns, rows and paging in one frame ── */}
  <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
  {/* Filter panel */}
- <div className="border-b border-border/50 bg-surface-1/20 px-3 py-2">
+ <div className="border-b border-border/50 bg-surface-1/40 px-3 py-2">
  <div className="mb-2 flex items-center gap-2">
  <Search className="h-3 w-3 text-muted-foreground" />
  <BracketLabel tone="muted">{t('systemErrors.filters')}</BracketLabel>

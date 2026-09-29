@@ -1081,7 +1081,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  >
  {/* Backdrop */}
  <div
- className="fixed inset-0 bg-background/60"
+ className="fixed inset-0 bg-[hsl(var(--scrim))] backdrop-blur-sm"
  onClick={onClose}
  aria-hidden="true"
  />
@@ -1114,7 +1114,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  type="button"
  onClick={onClose}
  aria-label={t('search.close')}
- className="ml-2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="ml-2 rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
  <X className="h-4 w-4" />
  </button>
@@ -1169,7 +1169,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  </p>
  </div>
  ) : (
- <div className="space-y-1">
+ <div className="space-y-1 px-2">
  {groupedItems.map(({ category, items }) => {
  const meta = categoryMeta[category];
  const CatIcon = meta.icon;
@@ -1177,7 +1177,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  return (
  <div key={category}>
  {/* Group header */}
- <div className="sticky top-0 z-10 flex items-center gap-2 bg-card px-4 py-1.5">
+ <div className="sticky top-0 z-10 flex items-center gap-2 bg-card px-2 py-1.5">
  <CatIcon className={cn('h-3 w-3', meta.color)} />
  <span className="type-overline">
  {meta.label}
@@ -1200,10 +1200,10 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  data-index={globalIndex}
  onClick={() => handleItemClick(item)}
  className={cn(
- 'flex w-full items-center gap-3 px-4 py-2.5 text-left transition-all duration-100',
+ 'flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left transition-colors duration-fast',
  isSelected
- ? 'bg-primary/10 text-primary'
- : 'text-foreground hover:bg-surface-2',
+ ? 'bg-primary/10 text-foreground'
+ : 'text-foreground hover:bg-primary/10',
  )}
  >
  <Icon

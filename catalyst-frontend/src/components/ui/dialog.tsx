@@ -24,7 +24,7 @@ const DialogOverlay = React.forwardRef<
       'fixed inset-0 z-50 bg-[hsl(var(--scrim))] backdrop-blur-sm',
       'data-[state=open]:animate-in data-[state=closed]:animate-out',
       'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-      'duration-200',
+      'duration-normal',
       className,
     )}
     {...props}
@@ -37,7 +37,7 @@ const dialogContentVariants = cva(
     'pointer-events-auto relative flex w-full flex-col overflow-hidden',
     'max-h-[92dvh] border border-border/80 bg-card text-card-foreground shadow-elevated outline-none',
     'rounded-t-md sm:rounded-md',
-    'duration-200',
+    'duration-normal',
     'data-[state=open]:animate-in data-[state=closed]:animate-out',
     'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
     'data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98]',
@@ -87,7 +87,7 @@ const DialogContent = React.forwardRef<
           </div>
           {children}
           {showClose ? (
-            <DialogPrimitive.Close className="pressable absolute right-3.5 top-3.5 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none">
+            <DialogPrimitive.Close className="pressable absolute right-3.5 top-3.5 rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none">
               <X className="h-4 w-4" />
               <span className="sr-only">{t('actions.close')}</span>
             </DialogPrimitive.Close>
@@ -122,7 +122,7 @@ const DialogHeader = ({
   void iconClassName;
   return (
     <div
-      className={cn('flex shrink-0 items-start gap-3 px-5 pb-3 pt-4 pr-12', className)}
+      className={cn('flex shrink-0 items-start gap-3 px-5 pb-4 pt-4 pr-12', className)}
       {...props}
     >
       <div className="min-w-0 flex-1 space-y-1">{children}</div>
@@ -150,7 +150,7 @@ DialogBody.displayName = 'DialogBody';
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      'flex shrink-0 flex-col gap-2 border-t border-border/70 bg-surface-1/80 px-5 py-3.5',
+      'flex shrink-0 flex-col gap-2 border-t border-border/70 bg-surface-1/80 px-5 py-4',
       'sm:flex-row sm:items-center sm:justify-end',
       className,
     )}

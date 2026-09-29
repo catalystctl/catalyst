@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hslChannelsToHex, paintXtermBackground, tokenValueToColor } from './xtermTheme';
+import { hslChannelsToHex, paintXtermBackground, readCssVar, tokenValueToColor } from './xtermTheme';
 
 describe('hslChannelsToHex', () => {
   it('converts dark card channels to a dark hex (not canvastext white)', () => {
@@ -29,26 +29,68 @@ describe('tokenValueToColor', () => {
   });
 
   it('passes through already-complete colors', () => {
-    expect(tokenValueToColor('#0b0f14', '#fff')).toBe('#0b0f14');
+    expect(tokenValueToColor('#161a21', '#fff')).toBe('#161a21');
     expect(tokenValueToColor('rgb(12, 12, 20)', '#fff')).toBe('rgb(12, 12, 20)');
     expect(tokenValueToColor('hsl(240 12% 9%)', '#fff')).toBe('hsl(240 12% 9%)');
   });
 
   it('falls back when the var is empty or unusable', () => {
-    expect(tokenValueToColor('', '#0b0f14')).toBe('#0b0f14');
-    expect(tokenValueToColor('   ', '#0b0f14')).toBe('#0b0f14');
-    expect(tokenValueToColor('var(--something)', '#0b0f14')).toBe('#0b0f14');
+    expect(tokenValueToColor('', '#161a21')).toBe('#161a21');
+    expect(tokenValueToColor('   ', '#161a21')).toBe('#161a21');
+    expect(tokenValueToColor('var(--something)', '#161a21')).toBe('#161a21');
   });
 
   it('does not treat a failed resolve as inherited canvastext white', () => {
     // The bug: probe inherited color-scheme:dark canvastext ≈ rgb(243,243,246)
-    const bg = tokenValueToColor('', '#0b0f14');
-    expect(bg).toBe('#0b0f14');
+    const bg = tokenValueToColor('', '#161a21');
+    expect(bg).toBe('#161a21');
     expect(bg).not.toMatch(/243/);
   });
 
   it('does not treat a var() wrapper as a color', () => {
-    expect(tokenValueToColor('var(--accent-teal)', '#14b8a6')).toBe('#14b8a6');
+    expect(tokenValueToColor('var(--signal-bright)', '#ff3d7f')).toBe('#ff3d7f');
+  });
+
+  it('rejects translucent channel tokens (xterm needs opaque colors)', () => {
+    expect(tokenValueToColor('340 100% 62% / 0.16', '#ff3d7f')).toBe('#ff3d7f');
+    expect(tokenValueToColor('340 100% 62% / 16%', '#ff3d7f')).toBe('#ff3d7f');
+    // Fully opaque alpha still resolves.
+    expect(tokenValueToColor('340 100% 62% / 1', '#ff3d7f')).toBe(hslChannelsToHex(340, 100, 62));
+  });
+});
+
+describe('readCssVar', () => {
+  it('follows chained var() hops', () => {
+    const root = document.documentElement;
+    root.style.setProperty('--xterm-hop-c', '10 20% 30%');
+    root.style.setProperty('--xterm-hop-b', 'var(--xterm-hop-c)');
+    root.style.setProperty('--xterm-hop-a', 'var(--xterm-hop-b)');
+    try {
+      expect(readCssVar('--xterm-hop-a')).toBe('10 20% 30%');
+    } finally {
+      root.style.removeProperty('--xterm-hop-a');
+      root.style.removeProperty('--xterm-hop-b');
+      root.style.removeProperty('--xterm-hop-c');
+    }
+  });
+
+  it('stops after three hops so a long chain cannot hang the theme read', () => {
+    const root = document.documentElement;
+    root.style.setProperty('--xterm-cap-e', '10 20% 30%');
+    root.style.setProperty('--xterm-cap-d', 'var(--xterm-cap-e)');
+    root.style.setProperty('--xterm-cap-c', 'var(--xterm-cap-d)');
+    root.style.setProperty('--xterm-cap-b', 'var(--xterm-cap-c)');
+    root.style.setProperty('--xterm-cap-a', 'var(--xterm-cap-b)');
+    try {
+      // a→b→c→d resolves; the fourth hop to --xterm-cap-e is not followed.
+      expect(readCssVar('--xterm-cap-a')).toBe('var(--xterm-cap-e)');
+    } finally {
+      root.style.removeProperty('--xterm-cap-a');
+      root.style.removeProperty('--xterm-cap-b');
+      root.style.removeProperty('--xterm-cap-c');
+      root.style.removeProperty('--xterm-cap-d');
+      root.style.removeProperty('--xterm-cap-e');
+    }
   });
 });
 

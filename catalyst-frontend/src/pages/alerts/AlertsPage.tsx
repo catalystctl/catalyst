@@ -43,7 +43,7 @@ type LedTone = 'go' | 'hazard' | 'alarm' | 'idle' | 'info';
 function severityTone(severity: string): LedTone {
  if (severity === 'critical') return 'alarm';
  if (severity === 'warning') return 'hazard';
- return 'go';
+ return 'info';
 }
 
 // ── Alert Rule Row ──
@@ -81,7 +81,7 @@ function RuleRow({
  {rule.description || rule.type.replace('_', ' ')}
  </div>
  </div>
- <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+ <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
  {isOwner && (
  <>
  <button
@@ -152,7 +152,7 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  <Button
  variant="outline"
  size="sm"
- className="h-7 shrink-0 rounded-sm px-2.5 text-mini opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+ className="h-7 shrink-0 rounded-sm px-2.5 text-mini opacity-100 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
  onClick={onResolve}
  disabled={isPending}
  >
@@ -425,6 +425,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {/* ── Deck header ── */}
  <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
  <div className="flex min-w-0 flex-col gap-1">
+ <BracketLabel>{t('layout:sections.monitoring')}</BracketLabel>
  <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
  {showAdminTargets ? t('page.titleAll') : t('page.titleMine')}
  </h1>
@@ -448,7 +449,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {[
  { label: t('page.activeAlerts'), value: alertStats?.unresolved ?? unresolvedCount },
  { label: t('page.totalAlerts'), value: alertStats?.total ?? alerts.length },
- { label: t('page.critical'), value: alertStats?.bySeverity?.critical ?? 0 },
+ { label: t('page.critical'), value: alertStats?.bySeverity?.critical ?? 0, critical: true },
  ].map((item, i) => (
  <div
  key={item.label}
@@ -458,7 +459,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  )}
  >
  <span className="type-overline w-24 shrink-0">{item.label}</span>
- <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-foreground">{item.value}</span>
+ <span className={cn('shrink-0 font-mono text-sm font-semibold tabular-nums', 'critical' in item && item.critical && Number(item.value) > 0 ? 'text-danger' : 'text-foreground')}>{item.value}</span>
  </div>
  ))}
  </div>
@@ -542,7 +543,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  ))}
  </div>
  ) : hasAlerts ? (
- <div>
+ <div className="max-h-[28rem] overflow-y-auto">
  {alerts.map((alert, index) => (
  <div key={alert.id} className={cn(index > 0 && 'border-t border-border/40')}>
  <AlertRow
@@ -588,7 +589,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </DialogHeader>
 
  <DialogToolbar>
- <div className="flex gap-1 rounded-sm border border-border/50 bg-surface-1/40 p-0.5">
+ <div className="flex gap-4">
  {ruleStepOrder.map((key, index) => {
  const isActive = ruleStep === key;
  const canNav = canNavigateRuleStep(index);
@@ -603,9 +604,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  type="button"
  disabled={!canNav}
  onClick={() => canNav && setRuleStep(key)}
- className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-mini font-medium transition-colors ${
+ className={`relative flex items-center gap-1.5 px-1 py-2 text-mini font-medium transition-colors ${
  isActive
- ? 'bg-primary text-primary-foreground '
+ ? 'text-foreground'
  : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
  }`}
  >
@@ -613,6 +614,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {index < ruleStepOrder.length - 1 && (
  <ChevronRight className="h-3 w-3 opacity-40" />
  )}
+ {isActive && <span className="absolute inset-x-0 -bottom-px h-[2px] bg-primary" aria-hidden />}
  </button>
  );
  })}

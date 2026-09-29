@@ -39,7 +39,10 @@
  * cluster, so it survives an admin re-hue.
  */
 :root {
-  /* Chassis — cool graphite, tinted, never pure black or white */
+  /* Chassis — cool graphite, tinted, never pure black or white.
+     Deprecated: nothing in the panel reads --ink/--panel/--panel-2/--edge/
+     --chalk/--dust anymore (surfaces now use the --surface-N and --card
+     tokens). Kept so custom CSS and plugins referencing them do not break. */
   --ink: 217 2% 7%;
   --panel: 218 2% 11%;
   --panel-2: 219 3% 14%;
@@ -51,6 +54,9 @@
   --signal: 340 82% 47%;
   --signal-deep: 340 85% 38%;
 
+  /* Signal companions. --accent-teal* are deprecated aliases of these. */
+  --signal-bright: 340 90% 58%;
+  --signal-muted: 340 82% 47% / 0.15;
   --accent-teal: 340 82% 47%;
   --accent-teal-light: 340 90% 58%;
   --accent-teal-muted: 340 82% 47% / 0.15;
@@ -92,9 +98,11 @@
   --destructive: var(--danger);
   --destructive-foreground: 0 0% 100%;
   --ring: var(--signal);
-  --primary-muted: var(--accent-teal-muted);
+  /* Derived from --primary so a re-hued admin theme never flashes magenta. */
+  --primary-muted: color-mix(in srgb, hsl(var(--primary)) 15%, transparent);
   --success-foreground: 0 0% 100%;
   --danger-foreground: 0 0% 100%;
+  --warning-foreground: 32 90% 22%;
   --info-foreground: 0 0% 100%;
 
   /* Shape — industrial, not SaaS-rounded */
@@ -109,6 +117,9 @@
   --text-mini: 0.75rem;
   --text-data: 0.8125rem;
 
+  /* Deprecated scales: only --primary-500 (Sparkline/mod-manager tint) and
+     --zinc-500 (legacy plugin shim) are still referenced. The rest are kept
+     so custom CSS referencing them does not break — prefer the live tokens. */
   --primary-50: 340 100% 97%;
   --primary-100: 340 100% 94%;
   --primary-200: 340 95% 87%;
@@ -175,6 +186,9 @@
 
   --signal: 340 100% 62%;
   --signal-deep: 340 90% 52%;
+  --signal-bright: 340 95% 70%;
+  --signal-muted: 340 100% 62% / 0.16;
+  /* Deprecated aliases of --signal-bright/--signal-muted (see :root). */
   --accent-teal: 340 100% 62%;
   --accent-teal-light: 340 95% 70%;
   --accent-teal-muted: 340 100% 62% / 0.16;
@@ -215,9 +229,12 @@
   --destructive-foreground: 0 0% 100%;
   --ring: var(--signal);
 
-  --primary-muted: 340 100% 62% / 0.16;
+  /* Derived from --primary so a re-hued admin theme never flashes magenta. */
+  --primary-muted: color-mix(in srgb, hsl(var(--primary)) 15%, transparent);
   --success-foreground: 217 2% 7%;
-  --danger-foreground: 0 0% 100%;
+  /* Dark danger is a light red — label it with ink, not white. */
+  --danger-foreground: 217 2% 7%;
+  --warning-foreground: 217 2% 7%;
   --info-foreground: 217 2% 7%;
 
   --surface-0: 217 2% 7%;
@@ -231,9 +248,11 @@
 
   --shadow-surface: 0 1px 2px 0 rgb(0 0 0 / 0.4);
   --shadow-elevated: 0 14px 34px -14px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.45);
-  --shadow-panel: 0 0 0 1px rgb(255 255 255 / 0.045);
+  /* Border-colored ring: deck surfaces already draw a border, so a second
+     white ring read as a double edge. */
+  --shadow-panel: 0 0 0 1px hsl(var(--border) / 0.8);
 
-  --sonner-background: hsl(var(--surface-1));
+  --sonner-background: hsl(var(--card));
   --sonner-border: hsl(var(--border));
   --sonner-text: hsl(var(--foreground));
   --sonner-success: hsl(var(--success));
@@ -310,10 +329,11 @@ body {
 }
 
 
-/* Content frame used by main workspace */
+/* Content frame used by main workspace — pinned to the deck radius so theme
+   presets (which rewrite --radius) can never stretch it to 8px. */
 .panel-frame {
   border: 1px solid hsl(var(--border) / 0.75);
-  border-radius: calc(var(--radius) + 4px);
+  border-radius: var(--deck-radius);
   background: hsl(var(--card));
   box-shadow: var(--shadow-panel);
 }
@@ -403,16 +423,13 @@ body {
 
 select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%235f6a78' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
   background-position: right 0.5rem center;
   background-repeat: no-repeat;
   background-size: 1.5em 1.5em;
   padding-right: 2rem;
   cursor: pointer;
-}
-
-.dark select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%23939dac' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  /* The chevron above uses currentColor so it tracks the theme automatically. */
 }
 
 select option {
@@ -445,30 +462,27 @@ select option {
 
 .console-output {
   background: hsl(var(--surface-1));
-  scrollbar-color: hsl(var(--surface-3)) hsl(var(--surface-1));
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
 
 .console-output::-webkit-scrollbar-track {
-  background: hsl(var(--surface-1));
+  background: hsl(var(--scrollbar-track));
 }
 
 .console-output::-webkit-scrollbar-thumb {
-  background: hsl(var(--surface-3));
-  border-color: hsl(var(--surface-1));
+  background: hsl(var(--scrollbar-thumb));
+}
+
+.console-output::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--scrollbar-thumb-hover));
+}
+
+.console-output:focus-visible::-webkit-scrollbar-thumb {
+  background: hsl(var(--scrollbar-thumb-hover));
 }
 
 .dark .console-output {
   background: hsl(var(--surface-0));
-  scrollbar-color: hsl(var(--surface-2)) hsl(var(--surface-0));
-}
-
-.dark .console-output::-webkit-scrollbar-track {
-  background: hsl(var(--surface-0));
-}
-
-.dark .console-output::-webkit-scrollbar-thumb {
-  background: hsl(var(--surface-2));
-  border-color: hsl(var(--surface-0));
 }
 
 /*
@@ -592,8 +606,17 @@ select option {
     transition-duration: 0.01ms !important;
   }
 
+  html {
+    scroll-behavior: auto;
+  }
+
   .app-shell::before {
     display: none;
+  }
+
+  .deck-led-pulse {
+    animation: none;
+    opacity: 1;
   }
 
   .pressable:active:not(:disabled) {
@@ -644,6 +667,9 @@ select option {
 .deck-rows > * + * { border-top: 1px solid hsl(var(--border) / 0.4); }
 .deck-rows > *:nth-child(even) { background: hsl(var(--surface-1) / 0.5); }
 .deck-rows > *:hover { background: hsl(var(--signal) / 0.07); }
+/* Dark zebra/hover washed out against the near-black chassis — step up. */
+.dark .deck-rows > *:nth-child(even) { background: hsl(var(--surface-2) / 0.55); }
+.dark .deck-rows > *:hover { background: hsl(var(--signal) / 0.10); }
 
 /* Status LED — crisp ring, never a blur glow.
    999px is intentional: the dot must stay a circle (the detector's 999px
@@ -678,4 +704,9 @@ select option {
   0%, 100% { opacity: 0.85; }
   50% { opacity: 0.25; }
 }
-.deck-led-pulse { animation: deck-led 2.4s var(--ease-standard) infinite; }
+/* Same crisp inset ring as .led so the pulse never reads as a soft glow. */
+.deck-led-pulse {
+  animation: deck-led 2.4s var(--ease-standard) infinite;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px hsl(var(--background) / 0.55);
+}

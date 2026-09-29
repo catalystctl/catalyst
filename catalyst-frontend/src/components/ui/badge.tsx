@@ -3,8 +3,11 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Deck rule: on deck surfaces use the neutral secondary/outline variants
+// (bg-surface-3/outline); tinted default/success/warning/destructive variants
+// are for non-deck surfaces only.
 const badgeVariants = cva(
-  "inline-flex items-center rounded-sm border px-2 py-0.5 text-[11px] font-semibold tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-primary/35 focus:ring-offset-2",
+  "inline-flex items-center rounded-sm border px-2 py-0.5 text-micro font-semibold tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-primary/35 focus:ring-offset-2",
   {
     variants: {
       variant: {

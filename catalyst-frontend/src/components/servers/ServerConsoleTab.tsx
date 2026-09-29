@@ -248,7 +248,7 @@ export default function ServerConsoleTab({
             : 'deck-panel',
         )}
       >
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 bg-surface-1/40 px-2 py-1.5">
+        <div className="relative flex flex-wrap items-center gap-1.5 border-b border-border/50 bg-surface-1/40 px-2 py-1.5">
           <span className={cn('flex items-center gap-1.5 text-mini font-medium', connection.tone)}>
             <StatusLed
               tone={connectionLed}
@@ -299,6 +299,9 @@ export default function ServerConsoleTab({
               >
                 <SlidersHorizontal className="h-3.5 w-3.5" />
                 <span className="type-numeric">{activeStreams.size}</span>
+                <span className="type-numeric text-micro text-muted-foreground/70" aria-hidden>
+                  ·{visibleEntries.length}
+                </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-44">
@@ -323,7 +326,8 @@ export default function ServerConsoleTab({
           </DropdownMenu>
 
           {searchOpen ? (
-            <div className="flex h-7 items-center gap-1 rounded-sm border border-border/60 bg-surface-2 px-2">
+            // Absolute overlay so toggling find never reflows the toolbar.
+            <div className="absolute right-2 top-1/2 z-20 flex h-7 -translate-y-1/2 items-center gap-1 rounded-sm border border-border/60 bg-surface-2 px-2 shadow-elevated">
               <Search className="h-3 w-3 text-muted-foreground" />
               <input
                 ref={searchRef}
@@ -549,19 +553,7 @@ export default function ServerConsoleTab({
           className="min-h-0 flex-1"
         />
 
-        {!autoScroll && (
-          <button
-            type="button"
-            onClick={() => {
-              setAutoScroll(true);
-              storage.set('console.follow', true);
-            }}
-            className="absolute bottom-20 right-3 z-10 flex h-8 items-center gap-1.5 rounded-sm border border-border/70 bg-card px-2.5 text-mini text-foreground shadow-elevated transition-colors hover:border-primary/50"
-          >
-            <ArrowDown className="h-3.5 w-3.5" />
-            {t('console.tab.follow')}
-          </button>
-        )}
+        {/* Follow pill lives in XtermConsole (centered); no second pill here. */}
 
         <form
           onSubmit={handleSend}
@@ -578,7 +570,7 @@ export default function ServerConsoleTab({
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="send"
-            className="h-8 w-full bg-transparent font-mono text-mini text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+            className="h-8 w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
             onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
               if (event.key === 'Tab' && commandHistory.length > 0) {
                 const prefix = inputRef.current?.value ?? '';

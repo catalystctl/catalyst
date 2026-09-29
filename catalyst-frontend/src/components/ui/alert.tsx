@@ -3,14 +3,19 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// NOTE: rounded-md is intentional here — Alert is a floating callout, not a
+// deck surface. Deck rule for badges/alerts: neutral secondary/outline on
+// deck, tinted success/warning/danger variants elsewhere.
 const alertVariants = cva(
-  "relative w-full rounded-md border p-4 shadow-panel [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground",
+  "relative w-full rounded-md border p-4 shadow-panel flex items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0 [&>svg]:text-foreground",
   {
     variants: {
       variant: {
         default: "border-border/50 bg-card text-foreground",
         destructive:
-          "border-destructive/40 bg-danger/5 text-destructive [&>svg]:text-destructive",
+          "border-destructive/40 bg-danger/10 text-destructive [&>svg]:text-destructive",
+        warning:
+          "border-warning/40 bg-warning/10 text-warning [&>svg]:text-warning",
       },
     },
     defaultVariants: {

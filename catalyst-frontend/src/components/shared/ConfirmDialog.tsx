@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { AlertTriangle, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { buttonVariants } from '@/components/ui/button';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -27,17 +28,17 @@ const variantConfig = {
   default: {
     icon: <Info className="h-4 w-4" />,
     iconClassName: 'border-primary/20 bg-primary/10 text-primary',
-    buttonClass: 'bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 text-mini',
+    buttonClass: buttonVariants({ size: 'sm' }),
   },
   danger: {
     icon: <AlertTriangle className="h-4 w-4" />,
     iconClassName: 'border-danger/20 bg-danger/10 text-danger',
-    buttonClass: 'bg-destructive text-destructive-foreground hover:bg-destructive/90 h-8 px-3 text-mini',
+    buttonClass: buttonVariants({ variant: 'destructive', size: 'sm' }),
   },
   warning: {
     icon: <AlertTriangle className="h-4 w-4" />,
     iconClassName: 'border-warning/20 bg-warning/10 text-warning',
-    buttonClass: 'bg-warning text-foreground hover:bg-warning/90 h-8 px-3 text-mini',
+    buttonClass: buttonVariants({ size: 'sm', className: 'bg-warning text-foreground hover:bg-warning/90' }),
   },
 };
 
@@ -70,7 +71,7 @@ export function ConfirmDialog({
           )}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading} className="h-8 px-3 text-mini">{cancelText ?? t('actions.cancel')}</AlertDialogCancel>
+          <AlertDialogCancel disabled={loading} className={buttonVariants({ variant: 'outline', size: 'sm' })}>{cancelText ?? t('actions.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             disabled={loading}

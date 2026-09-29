@@ -15,6 +15,8 @@ import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import FieldError from '../../components/auth/FieldError';
+import { showsDemoChrome } from '../../demo/isDemo';
 
 /** One banner recipe shared by every auth card. */
 const AUTH_BANNER_CLASS = 'rounded-sm border px-3 py-2.5 text-mini';
@@ -57,7 +59,7 @@ function RegisterPage() {
 
  return (
  <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
- <div className="absolute right-4 top-4 z-20">
+ <div className={`absolute right-4 z-20 ${showsDemoChrome ? 'top-[calc(2rem+1rem)]' : 'top-4'}`}>
  <LanguageSwitcher variant="compact" />
  </div>
  <div className="deck-panel w-full max-w-md">
@@ -86,12 +88,12 @@ function RegisterPage() {
  type="text"
  autoComplete="username"
  placeholder={t('fields.usernamePlaceholder')}
- className="h-8 rounded-sm text-mini"
+ className={`h-8 rounded-sm text-mini${errors.username ? ' border-danger/50' : ''}`}
+ aria-invalid={errors.username ? true : undefined}
+ aria-describedby={errors.username ? 'username-error' : undefined}
  {...register('username')}
  />
- {errors.username ? (
- <p className="text-mini text-danger">{errors.username.message}</p>
- ) : null}
+ <FieldError id="username-error" message={errors.username?.message} />
  </div>
 
  <div className="space-y-2">
@@ -101,10 +103,12 @@ function RegisterPage() {
  type="email"
  autoComplete="email"
  placeholder={t('fields.emailPlaceholder')}
- className="h-8 rounded-sm text-mini"
+ className={`h-8 rounded-sm text-mini${errors.email ? ' border-danger/50' : ''}`}
+ aria-invalid={errors.email ? true : undefined}
+ aria-describedby={errors.email ? 'email-error' : undefined}
  {...register('email')}
  />
- {errors.email ? <p className="text-mini text-danger">{errors.email.message}</p> : null}
+ <FieldError id="email-error" message={errors.email?.message} />
  </div>
 
  <div className="space-y-2">
@@ -114,13 +118,13 @@ function RegisterPage() {
  type="password"
  autoComplete="new-password"
  placeholder="••••••••"
- className="h-8 rounded-sm text-mini"
+ className={`h-8 rounded-sm text-mini${errors.password ? ' border-danger/50' : ''}`}
+ aria-invalid={errors.password ? true : undefined}
+ aria-describedby={errors.password ? 'password-error' : undefined}
  {...register('password')}
  />
  <PasswordStrengthMeter password={passwordValue} />
- {errors.password ? (
- <p className="text-mini text-danger">{errors.password.message}</p>
- ) : null}
+ <FieldError id="password-error" message={errors.password?.message} />
  </div>
 
  <Button type="submit" size="sm" className="h-8 w-full text-mini" disabled={isLoading}>
@@ -128,7 +132,7 @@ function RegisterPage() {
  </Button>
  </form>
 
- <p className="mt-4 text-center text-sm text-muted-foreground">
+ <p className="mt-4 text-center text-mini text-muted-foreground">
  {t('register.haveAccount')}{' '}
  <Link
  to="/login"

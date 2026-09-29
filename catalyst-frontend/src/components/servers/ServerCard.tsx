@@ -12,7 +12,7 @@ import { ServerIcon, Globe, Terminal, ChevronRight } from 'lucide-react';
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
 const formatPercent = (value?: number | null) =>
-  value != null && typeof value === 'number' ? `${Math.round(value)}%` : 'n/a';
+  value != null && typeof value === 'number' ? `${Math.round(value)}%` : '—';
 const formatMB = (mb: number) => {
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
   return `${mb.toFixed(0)} MB`;
@@ -29,8 +29,8 @@ function ServerCard({ server }: { server: Server }) {
     server.primaryIp ??
     server.node?.publicAddress ??
     server.node?.hostname ??
-    'n/a';
-  const port = server.connection?.port ?? server.primaryPort ?? 'n/a';
+    '—';
+  const port = server.connection?.port ?? server.primaryPort ?? '—';
 
   const cpuPercent =
     server.status === 'running' && server.cpuPercent != null && typeof server.cpuPercent === 'number'

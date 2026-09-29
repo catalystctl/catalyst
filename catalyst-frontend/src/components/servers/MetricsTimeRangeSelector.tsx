@@ -17,6 +17,22 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
  const [customHours, setCustomHours] = useState('');
  const [customLimit, setCustomLimit] = useState('');
 
+ const hours = Number(customHours);
+ const limit = Number(customLimit);
+ const hoursError =
+ customHours !== '' && (!Number.isFinite(hours) || hours <= 0 || hours > 8760)
+ ? t('timeRange.hoursRangeError')
+ : null;
+ const limitError =
+ customLimit !== '' && (!Number.isFinite(limit) || limit <= 0 || limit > 1000)
+ ? t('timeRange.limitRangeError')
+ : null;
+ const customValid =
+ customHours !== '' &&
+ customLimit !== '' &&
+ hoursError == null &&
+ limitError == null;
+
  // Preset captions are literal keys — never assembled dynamically.
  const presets = useMemo<MetricsTimeRange[]>(
  () => [
@@ -37,18 +53,7 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
  };
 
  const handleCustomSubmit = () => {
- const hours = Number(customHours);
- const limit = Number(customLimit);
-
- if (!Number.isFinite(hours) || hours <= 0 || hours > 8760) {
- alert(t('timeRange.hoursRangeError'));
- return;
- }
-
- if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
- alert(t('timeRange.limitRangeError'));
- return;
- }
+ if (!customValid) return;
 
  onRangeChange({
  hours,
@@ -67,7 +72,7 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
       <Button
         variant="outline"
         size="sm"
-        className="h-7 gap-2 rounded-sm px-3 text-mini"
+        className="h-8 min-h-8 gap-2 rounded-sm px-3 text-mini"
       >
         <span>{selectedRange.label}</span>
         <ChevronDown className={`h-3.5 w-3.5 transition ${isOpen ? 'rotate-180' : ''}`} />
@@ -104,8 +109,14 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
                 value={customHours}
                 onChange={(e) => setCustomHours(e.target.value)}
                 placeholder="24"
-                className="mt-1 h-7 rounded-sm text-mini"
+                aria-invalid={hoursError != null}
+                className="mt-1 h-8 min-h-8 rounded-sm text-mini"
               />
+              {hoursError && (
+              <p role="alert" className="mt-1 text-micro text-danger">
+              {hoursError}
+              </p>
+              )}
             </div>
             <div>
               <label className="type-overline">{t('timeRange.dataPoints')}</label>
@@ -116,14 +127,20 @@ function MetricsTimeRangeSelector({ selectedRange, onRangeChange }: MetricsTimeR
                 value={customLimit}
                 onChange={(e) => setCustomLimit(e.target.value)}
                 placeholder="144"
-                className="mt-1 h-7 rounded-sm text-mini"
+                aria-invalid={limitError != null}
+                className="mt-1 h-8 min-h-8 rounded-sm text-mini"
               />
+              {limitError && (
+              <p role="alert" className="mt-1 text-micro text-danger">
+              {limitError}
+              </p>
+              )}
             </div>
             <Button
               size="sm"
               onClick={handleCustomSubmit}
-              disabled={!customHours || !customLimit}
-              className="h-7 w-full rounded-sm px-3 text-mini"
+              disabled={!customValid}
+              className="h-8 min-h-8 w-full rounded-sm px-3 text-mini"
             >
               {t('common:actions.apply')}
             </Button>

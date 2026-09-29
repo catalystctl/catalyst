@@ -108,7 +108,31 @@ const EXT_MAP: Record<string, { icon: React.ElementType; color: string; label: s
   lock: { icon: Hash, color: 'text-muted-foreground', label: 'Lockfile' },
 };
 
+const BASENAME_MAP: Record<string, { icon: React.ElementType; color: string; label: string }> = {
+  'dockerfile': { icon: FileCode, color: 'text-info', label: 'Dockerfile' },
+  'makefile': { icon: Terminal, color: 'text-success', label: 'Makefile' },
+  'docker-compose.yml': { icon: Braces, color: 'text-success', label: 'Compose' },
+  'docker-compose.yaml': { icon: Braces, color: 'text-success', label: 'Compose' },
+  'compose.yml': { icon: Braces, color: 'text-success', label: 'Compose' },
+  'compose.yaml': { icon: Braces, color: 'text-success', label: 'Compose' },
+};
+
 export function getFileTypeInfo(name: string) {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  const lower = name.toLowerCase();
+  if (lower === 'dockerfile' || lower.startsWith('dockerfile.')) {
+    return BASENAME_MAP['dockerfile'];
+  }
+  if (lower === 'makefile' || lower.startsWith('makefile.')) {
+    return BASENAME_MAP['makefile'];
+  }
+  const base = lower.split('/').pop() ?? lower;
+  if (BASENAME_MAP[base]) return BASENAME_MAP[base];
+  if (lower.endsWith('.tar.gz')) {
+    return { icon: FileArchive, color: 'text-warning', label: 'Tarball' };
+  }
+  if (lower.endsWith('.tgz')) {
+    return { icon: FileArchive, color: 'text-warning', label: 'TGZ' };
+  }
+  const ext = lower.split('.').pop() ?? '';
   return EXT_MAP[ext] ?? { icon: File, color: 'text-muted-foreground', label: 'File' };
 }

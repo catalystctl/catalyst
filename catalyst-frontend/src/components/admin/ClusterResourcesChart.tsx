@@ -214,6 +214,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  >
  <ToggleGroupItem
  value="live"
+ aria-label={t('chart.mode.live')}
  className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
  <Radio className="h-3.5 w-3.5" />
@@ -221,6 +222,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  </ToggleGroupItem>
  <ToggleGroupItem
  value="historical"
+ aria-label={t('chart.mode.historical')}
  className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
  <History className="h-3.5 w-3.5" />
@@ -257,6 +259,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  >
  <ToggleGroupItem
  value="cpu"
+ aria-label={t('chart.metric.cpu')}
  className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
  <Cpu className="h-3.5 w-3.5" />
@@ -264,6 +267,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  </ToggleGroupItem>
  <ToggleGroupItem
  value="memory"
+ aria-label={t('chart.metric.memory')}
  className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
  <MemoryStick className="h-3.5 w-3.5" />
@@ -271,6 +275,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  </ToggleGroupItem>
  <ToggleGroupItem
  value="network"
+ aria-label={t('chart.metric.network')}
  className="h-7 gap-1.5 px-2.5 text-mini data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
  >
  <Network className="h-3.5 w-3.5" />
@@ -282,7 +287,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
 
  <div className="p-3">
  {/* ── Chart area ── */}
- <div className="relative h-72 overflow-hidden rounded-sm border border-border/50 bg-card">
+ <div className="relative h-56 overflow-hidden rounded-sm border border-border/50 bg-card sm:h-72">
  <div className="relative h-full">
  {showLoading ? (
  <Skeleton className="h-full w-full" />

@@ -18,7 +18,7 @@ export type ServerNavTab = {
 };
 
 const TAB_CLASS =
-  'relative flex h-7 shrink-0 items-center gap-1.5 rounded-sm px-2.5 text-mini font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40';
+  'relative flex h-7 min-h-7 shrink-0 items-center gap-1.5 rounded-sm px-2.5 text-mini font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 [@media(pointer:coarse)]:h-8 [@media(pointer:coarse)]:min-h-8';
 
 function TabButton({ tab, hidden }: { tab: ServerNavTab; hidden?: boolean }) {
   const Icon = tab.icon;

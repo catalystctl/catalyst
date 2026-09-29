@@ -55,7 +55,7 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
         </DialogHeader>
         <DialogBody>
           <div
-            className="max-h-72 overflow-y-auto rounded-lg border border-border bg-surface-2 p-4 text-sm leading-relaxed text-muted-foreground"
+            className="max-h-72 overflow-y-auto rounded-sm border border-border bg-surface-2 p-4 text-sm leading-relaxed text-muted-foreground"
             onScroll={handleScroll}
             ref={handleContentRef}
           >

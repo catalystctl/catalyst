@@ -113,7 +113,11 @@ function ProtectedRoute({ children, requireAdmin, requireAdminWrite, requirePerm
  : hasAdminAccess;
 
  if (!isReady) {
- return <LoadingSpinner />;
+ return (
+ <div className="grid min-h-[50dvh] place-items-center">
+ <LoadingSpinner />
+ </div>
+ );
  }
 
  if (!isAuthenticated) {

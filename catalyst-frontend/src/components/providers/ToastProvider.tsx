@@ -5,12 +5,12 @@ import { useUIStore } from '../../stores/uiStore';
 /**
  * Sonner's stylesheet is unlayered, so Tailwind utility classes cannot win the
  * cascade. Drive its neutral surface through the custom properties it already
- * reads: `--border-radius` matches `rounded-md` (calc(var(--radius) - 2px)) and
- * the normal background/border/text come from the panel tokens. Rich colors
+ * reads: `--border-radius` matches `rounded-sm` (var(--deck-radius), pinned
+ * 4px) and the normal background/border/text come from the panel tokens. Rich colors
  * are left alone so success/error/warning toasts keep their semantic tone.
  */
 const TOASTER_STYLE = {
-  '--border-radius': 'calc(var(--radius) - 2px)',
+  '--border-radius': 'var(--deck-radius)',
   '--normal-bg': 'var(--sonner-background)',
   '--normal-border': 'var(--sonner-border)',
   '--normal-text': 'var(--sonner-text)',

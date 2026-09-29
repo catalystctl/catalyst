@@ -21,7 +21,7 @@ export function TableSkeleton({ rows = 5, columns = 4 }: TableSkeletonProps) {
       {Array.from({ length: rows }).map((_, rowIndex) => (
         <div
           key={rowIndex}
-          className="grid gap-3 border-t border-border/40 px-3 py-2 first:border-t-0"
+          className="grid gap-3 border-b border-border/40 px-3 py-2 last:border-b-0"
           style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
         >
           {Array.from({ length: columns }).map((_, colIndex) => (

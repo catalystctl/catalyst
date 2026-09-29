@@ -66,6 +66,7 @@ export default {
         warning: {
           DEFAULT: 'hsl(var(--warning))',
           muted: 'hsl(var(--warning-muted))',
+          foreground: 'hsl(var(--warning-foreground))',
         },
         danger: {
           DEFAULT: 'hsl(var(--danger))',
@@ -86,22 +87,8 @@ export default {
           3: 'hsl(var(--surface-3))',
         },
         zinc: {
-          50: 'hsl(var(--zinc-50))',
-          100: 'hsl(var(--zinc-100))',
-          200: 'hsl(var(--zinc-200))',
-          300: 'hsl(var(--zinc-300))',
-          400: 'hsl(var(--zinc-400))',
+          // Deprecated alias — retained for legacy plugin UIs; use surface/muted tokens instead.
           500: 'hsl(var(--zinc-500))',
-          600: 'hsl(var(--zinc-600))',
-          700: 'hsl(var(--zinc-700))',
-          800: 'hsl(var(--zinc-800))',
-          900: 'hsl(var(--zinc-900))',
-          950: 'hsl(var(--zinc-950))',
-        },
-        gray: {
-          750: 'hsl(var(--surface-3))',
-          850: 'hsl(var(--surface-1))',
-          950: 'hsl(var(--surface-0))',
         },
 
       },

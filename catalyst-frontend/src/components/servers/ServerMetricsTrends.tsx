@@ -77,7 +77,7 @@ function ServerMetricsTrends({
  label: t('metrics.labels.memory'),
  value: allocatedMemoryMb
  ? `${(latest?.memoryUsageMb ?? 0).toFixed(0)} / ${allocatedMemoryMb} MB`
- : 'n/a',
+ : '—',
  color: percentTone(memoryPercent),
  stroke: 'hsl(var(--success))',
  data: toChartData(memoryHistory),
@@ -95,7 +95,7 @@ function ServerMetricsTrends({
  label: t('metrics.labels.diskIo'),
  value: formatBytes((latest?.diskIoMb ?? 0) * 1024 * 1024),
  color: 'text-foreground',
- stroke: 'hsl(var(--warning))',
+ stroke: 'hsl(var(--info))',
  data: toChartData(diskIoHistory),
  formatTooltip: (value) => formatBytes(value * 1024 * 1024),
  },

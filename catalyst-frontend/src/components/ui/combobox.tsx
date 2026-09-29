@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode, KeyboardEvent } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +46,8 @@ function Combobox({
  if (searchValue === undefined) setInternalSearch(next);
  };
 
- const selected = useMemo(() => options.find((o) => o.value === value), [options, value]);
+ const listId = useId();
+const selected = useMemo(() => options.find((o) => o.value === value), [options, value]);
 
  const filtered = useMemo(() => {
  // When search is controlled externally, the parent is expected to already
@@ -109,8 +110,11 @@ function Combobox({
  type="button"
  role="combobox"
  aria-expanded={open}
+aria-haspopup="listbox"
+aria-controls={listId}
+aria-activedescendant={open && filtered.length > 0 ? `${listId}-option-${focusIdx}` : undefined}
  className={cn(
- 'flex h-9 w-full items-center justify-between rounded-md border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors duration-200 ease-standard hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2 focus:ring-offset-background focus:border-primary',
+ 'flex h-9 w-full items-center justify-between rounded-sm border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors duration-normal ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
  className,
  )}
  >
@@ -130,7 +134,11 @@ function Combobox({
  <Search className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  <input
  autoFocus
- className="flex h-9 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+aria-label={searchPlaceholder}
+aria-controls={listId}
+aria-activedescendant={filtered.length > 0 ? `${listId}-option-${focusIdx}` : undefined}
+role="searchbox"
+ className="flex h-9 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/80"
  placeholder={searchPlaceholder}
  value={search}
  onChange={(e) => {
@@ -140,7 +148,7 @@ function Combobox({
  />
  </div>
  ) : null}
- <div ref={listRef} className="max-h-56 overflow-y-auto py-1">
+ <div ref={listRef} role="listbox" id={listId} aria-label={searchPlaceholder} className="max-h-56 overflow-y-auto py-1">
  {filtered.length === 0 ? (
  <div className="type-meta py-6 text-center">
  {emptyMessage ?? t('combobox.noMatches')}
@@ -149,12 +157,15 @@ function Combobox({
  filtered.map((option, idx) => (
  <button
  key={option.value}
+role="option"
+id={`${listId}-option-${idx}`}
+aria-selected={idx === focusIdx}
  type="button"
  className={cn(
- 'relative flex w-full cursor-pointer items-center rounded-sm px-3 py-1.5 text-left text-sm outline-none',
+ 'relative mx-1 flex w-[calc(100%-0.5rem)] cursor-pointer items-center rounded-sm px-3 py-1.5 text-left text-sm outline-none',
  idx === focusIdx
  ? 'bg-primary/10 text-foreground'
- : 'text-foreground hover:bg-surface-2',
+ : 'text-foreground hover:bg-primary/10',
  )}
  onClick={() => select(option.value)}
  onMouseEnter={() => setFocusIdx(idx)}

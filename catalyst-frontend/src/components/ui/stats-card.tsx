@@ -30,7 +30,7 @@ export function StatsCard({ title, value, subtitle, icon, variant = 'default', o
   return (
     <div
       className={cn(
-        'rounded-md border border-border/50 bg-card px-3.5 py-3 shadow-panel transition-all duration-200 ease-standard',
+        'rounded-md border border-border/50 bg-card px-4 py-3 shadow-panel transition-colors duration-normal ease-standard',
         variantStyles[variant],
         onClick && 'pressable cursor-pointer hover:border-primary/30 hover:bg-primary/[0.03]',
         className,
@@ -48,7 +48,7 @@ export function StatsCard({ title, value, subtitle, icon, variant = 'default', o
         {icon && (
           <div
             className={cn(
-              'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+              'flex h-8 w-8 shrink-0 items-center justify-center rounded-sm',
               iconBgStyles[variant],
             )}
           >

@@ -211,7 +211,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
     window.addEventListener('keydown', copySelectionIfNeeded, true);
     host.addEventListener('keydown', copySelectionIfNeeded, true);
 
-    const initialBg = readXtermTheme().background || resolveThemeColor('--card', '#0b0f14');
+    const initialBg = readXtermTheme().background || resolveThemeColor('--card', '#161a21');
     paintXtermBackground(host, initialBg);
 
     term.write('\x1b[?25l');
@@ -360,7 +360,7 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
         // xterm 6 paints theme.background onto `.xterm-scrollable-element` as an
         // inline style. Keep host + viewport + scrollable in lockstep so a
         // mis-resolved color cannot cover the log (white-on-white).
-        const bg = theme.background || resolveThemeColor('--card', '#0b0f14');
+        const bg = theme.background || resolveThemeColor('--card', '#161a21');
         paintXtermBackground(host, bg);
       });
     };
@@ -523,6 +523,19 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
 
   return (
     <div className={`relative flex min-h-0 flex-1 flex-col ${className}`}>
+      {isError && !hasContent && (
+        <div className="flex items-center justify-between gap-2 border-b border-danger/30 bg-danger/10 px-3 py-1.5 text-mini text-danger">
+          <span>{t('console.xterm.loadError')}</span>
+          <button
+            type="button"
+            className="h-7 shrink-0 rounded-sm border border-danger/30 px-2 text-mini transition-colors hover:bg-danger/10"
+            onClick={() => onRetry?.()}
+          >
+            {t('common:actions.retry')}
+          </button>
+        </div>
+      )}
+
       <div
         ref={hostRef}
         role="log"
@@ -533,22 +546,9 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
 
 
       {isLoading && !hasContent && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-4 py-3 font-mono text-micro text-muted-foreground">
+        <div className="pointer-events-none absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-sm border border-border/60 bg-card/80 px-2.5 py-1 font-mono text-micro text-muted-foreground backdrop-blur-sm">
           <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary" />
           {t('console.xterm.loadingLogs')}
-        </div>
-      )}
-
-      {isError && !hasContent && (
-        <div className="absolute inset-x-4 top-3 z-10 flex items-center justify-between rounded-sm border border-danger/30 bg-danger/10 px-3 py-1.5 text-mini text-danger">
-          <span>{t('console.xterm.loadError')}</span>
-          <button
-            type="button"
-            className="pointer-events-auto h-7 rounded-sm border border-danger/30 px-2 text-mini transition-colors hover:bg-danger/10"
-            onClick={() => onRetry?.()}
-          >
-            {t('common:actions.retry')}
-          </button>
         </div>
       )}
 
@@ -556,8 +556,6 @@ const XtermConsole = forwardRef<XtermConsoleHandle, XtermConsoleProps>(function 
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-1.5 px-4 py-3 font-mono text-micro text-muted-foreground">
           <span className="text-primary">$</span>
           <span>{t('console.xterm.empty')}</span>
-          {/* Blinking block cursor — pure CSS, keeps i18n catalogs free of glyphs */}
-          <span className="inline-block h-3 w-[7px] animate-pulse bg-primary/70" aria-hidden />
         </div>
       )}
 

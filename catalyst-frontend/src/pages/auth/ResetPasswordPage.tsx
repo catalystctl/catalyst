@@ -13,6 +13,9 @@ import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { BracketLabel, StatusLed } from '../../components/deck/primitives';
+import FieldError from '../../components/auth/FieldError';
+import { showsDemoChrome } from '../../demo/isDemo';
 
 /** One banner recipe shared by every auth card. */
 const AUTH_BANNER_CLASS = 'rounded-sm border px-3 py-2.5 text-mini';
@@ -109,7 +112,7 @@ function ResetPasswordPage() {
  if (!token || !isValid) {
  return (
  <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
- <div className="absolute right-4 top-4 z-20">
+ <div className={`absolute right-4 z-20 ${showsDemoChrome ? 'top-[calc(2rem+1rem)]' : 'top-4'}`}>
  <LanguageSwitcher variant="compact" />
  </div>
  <div className="deck-panel w-full max-w-md">
@@ -117,7 +120,11 @@ function ResetPasswordPage() {
  <div className="flex items-start gap-2.5">
  <img src={logoUrl} alt={t('logoAlt', { panelName })} className="h-8 w-8 rounded-sm border border-border/70" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
  <div className="min-w-0">
- <h1 className="font-display text-lg font-semibold tracking-tight text-danger">{t('resetPassword.invalidTitle')}</h1>
+ <div className="flex items-center gap-1.5">
+ <StatusLed tone="alarm" />
+ <BracketLabel tone="alarm">{t('status.error', { ns: 'common' })}</BracketLabel>
+ </div>
+ <h1 className="mt-1 font-display text-lg font-semibold tracking-tight text-foreground">{t('resetPassword.invalidTitle')}</h1>
  <p className="type-meta mt-1">
  {t('resetPassword.invalidDescription')}
  </p>
@@ -137,7 +144,7 @@ function ResetPasswordPage() {
 
  return (
  <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
- <div className="absolute right-4 top-4 z-20">
+ <div className={`absolute right-4 z-20 ${showsDemoChrome ? 'top-[calc(2rem+1rem)]' : 'top-4'}`}>
  <LanguageSwitcher variant="compact" />
  </div>
  <div className="deck-panel w-full max-w-md">
@@ -186,11 +193,11 @@ function ResetPasswordPage() {
  placeholder="••••••••"
  value={confirmPassword}
  onChange={(e) => setConfirmPassword(e.target.value)}
- className="h-8 rounded-sm text-mini"
+ className={`h-8 rounded-sm text-mini${confirmPassword && password !== confirmPassword ? ' border-danger/50' : ''}`}
+ aria-invalid={confirmPassword && password !== confirmPassword ? true : undefined}
+ aria-describedby={confirmPassword && password !== confirmPassword ? 'confirmPassword-error' : undefined}
  />
- {confirmPassword && password !== confirmPassword && (
- <p className="text-mini text-danger">{t('resetPassword.passwordMismatch')}</p>
- )}
+ <FieldError id="confirmPassword-error" message={confirmPassword && password !== confirmPassword ? t('resetPassword.passwordMismatch') : null} />
  </div>
 
  <Button

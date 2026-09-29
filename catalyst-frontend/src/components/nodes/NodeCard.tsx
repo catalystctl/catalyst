@@ -14,15 +14,13 @@ type Props = {
 
 /**
  * One grid template shared by NodeList's column header and every row, so the
- * columns line up at each breakpoint. Hidden cells drop out of grid placement.
+ * columns line up at each breakpoint. Mirrors the admin NodesPage grid:
  *   base : identity · actions
- *   md   : identity · cpu · memory · actions
- *   xl   : identity · servers · cpu · memory · actions
+ *   md   : identity · servers · cpu · memory · actions
  */
 export const NODE_GRID =
-  'grid grid-cols-1 items-center gap-x-3 gap-y-1 ' +
-  'md:grid-cols-[minmax(0,1fr)_7rem_7rem_5.5rem] ' +
-  'xl:grid-cols-[minmax(0,1fr)_4.5rem_7rem_7rem_5.5rem]';
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 ' +
+  'md:grid-cols-[minmax(0,1fr)_5rem_5rem_6.5rem_8.5rem]';
 
 /** Dense browser row — no card shell, no per-item stat tiles. */
 function NodeCard({ node, latestAgentVersion }: Props) {
@@ -89,7 +87,7 @@ function NodeCard({ node, latestAgentVersion }: Props) {
       </div>
 
       {/* servers */}
-      <span className="hidden justify-end xl:flex">
+      <span className="hidden justify-self-end md:flex">
         <Segmented muted={serverCount === 0}>{serverCount}</Segmented>
       </span>
 
@@ -124,12 +122,12 @@ function NodeCard({ node, latestAgentVersion }: Props) {
       </span>
 
       {/* actions */}
-      <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
+      <span className="flex shrink-0 items-center justify-end gap-1">
         <Link
           to={`/admin/nodes/${node.id}`}
           title={t('card.manage')}
           aria-label={t('card.manage')}
-          className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </Link>

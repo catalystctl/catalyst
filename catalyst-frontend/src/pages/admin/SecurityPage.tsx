@@ -262,7 +262,7 @@ function McpSettingsCard() {
           checked={enabled}
           onCheckedChange={handleToggle}
           aria-label={t('security.mcpEnableAria')}
-          className="h-7 sm:h-5"
+          className="h-5"
         />
       </div>
       <ConfirmDialog
@@ -347,7 +347,7 @@ function LockoutRow({
  </span>
  )}
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground opacity-100 transition-colors hover:bg-surface-2 hover:text-primary sm:opacity-0 sm:group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-30"
+ className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground opacity-100 transition-colors hover:bg-surface-2 hover:text-primary focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 disabled:pointer-events-none disabled:opacity-30"
  onClick={onClear}
  disabled={isClearing}
  title={t('security.clearLockout')}
@@ -635,7 +635,7 @@ function SecurityPage() {
           checked={requireEmailVerification}
           onCheckedChange={setRequireEmailVerification}
           aria-label={t('security.requireEmailVerificationAria')}
-          className="h-7 sm:h-5"
+          className="h-5"
         />
       </div>
 

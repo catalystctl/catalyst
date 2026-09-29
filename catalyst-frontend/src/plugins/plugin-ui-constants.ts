@@ -3,6 +3,9 @@
 // Maps semantic names to the Tailwind classes used throughout Catalyst.
 // Use these in plugin code for consistent styling that follows the design system.
 
+// Deck rule: control surfaces inside the deck use rounded-sm (pinned 4px).
+// rounded-md and up are for floating surfaces only (popover, dialog, tooltip,
+// toast). Prefer the shared ui components over these raw constants.
 export const SURFACE_0 = 'bg-background';
 export const SURFACE_1 = 'bg-card';
 export const SURFACE_2 = 'bg-surface-2';

@@ -130,6 +130,9 @@ export default function EnvRestartNotice() {
   };
 
   return (
+    // TODO: convert this blocking AlertDialog into a non-modal banner so it
+    // never traps focus. Kept as a modal for now; at minimum the key list
+    // below must not overflow narrow viewports.
     <AlertDialog open onOpenChange={(next) => !next && dismiss()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
@@ -145,7 +148,7 @@ export default function EnvRestartNotice() {
           </AlertDialogDescription>
         </AlertDialogHeader>
         {!restarting && (
-          <p className="font-mono text-micro text-muted-foreground">{pendingLabel}</p>
+          <p className="line-clamp-3 break-all font-mono text-micro text-muted-foreground">{pendingLabel}</p>
         )}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={restarting} onClick={dismiss}>

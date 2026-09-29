@@ -59,7 +59,7 @@ function TemplateProviderEditor({
     'inline-flex h-7 items-center gap-1.5 rounded-sm border px-2.5 text-mini font-medium transition-colors select-none';
 
   return (
-    <div className="space-y-3 rounded-sm border border-border/50 p-3">
+    <div className="space-y-3">
       <div className="type-overline">
         {t('provider.title')}
       </div>

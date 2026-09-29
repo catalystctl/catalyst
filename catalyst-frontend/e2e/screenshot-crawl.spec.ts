@@ -18,7 +18,18 @@ import { createTestUser, deleteTestUser, loginUser, type TestUser } from './test
  */
 
 const BASE_DIR = path.resolve(process.cwd(), '../docs/screenshots');
-const RESOLUTION = { width: 1920, height: 1080 };
+const VIEWPORTS = [
+  { width: 1920, height: 1080 },
+  { width: 768, height: 1024 },
+  { width: 390, height: 844 },
+];
+
+/** Suffix appended to screenshot names so viewport runs don't overwrite each other. */
+let viewportSuffix = '';
+
+function viewportTag() {
+  return viewportSuffix;
+}
 
 // ─── Shared test user ────────────────────────────────────────────────────────
 
@@ -75,7 +86,7 @@ function isAuthed(page: Page) {
 }
 
 async function screenshotPage(page: Page, folder: string, name: string) {
-  const file = `${slugify(name)}.png`;
+  const file = `${slugify(name)}${viewportTag()}.png`;
   const dir = path.join(BASE_DIR, folder);
   ensureDir(dir);
   await page.screenshot({ path: path.join(dir, file), fullPage: true });
@@ -83,7 +94,7 @@ async function screenshotPage(page: Page, folder: string, name: string) {
 }
 
 async function screenshotModal(page: Page, folder: string, name: string) {
-  const file = `${slugify(name)}.png`;
+  const file = `${slugify(name)}${viewportTag()}.png`;
   const dir = path.join(BASE_DIR, folder);
   ensureDir(dir);
   await page.screenshot({ path: path.join(dir, file), fullPage: false });
@@ -545,15 +556,18 @@ test.describe('📸 Auth Pages', () => {
   });
 
   test('crawl auth routes', async ({ page }) => {
-    await page.setViewportSize(RESOLUTION);
-    for (const route of AUTH_ROUTES) {
-      const ok = await navAndWait(page, route.path);
-      if (!ok) {
-        console.log(`  ⚠ ${route.path} — skipped`);
-        continue;
+    for (const vp of VIEWPORTS) {
+      await page.setViewportSize(vp);
+      viewportSuffix = `@${vp.width}x${vp.height}`;
+      for (const route of AUTH_ROUTES) {
+        const ok = await navAndWait(page, route.path);
+        if (!ok) {
+          console.log(`  ⚠ ${route.path} — skipped`);
+          continue;
+        }
+        await hideDevtoolsAndSettle(page);
+        await screenshotPage(page, route.folder, route.label);
       }
-      await hideDevtoolsAndSettle(page);
-      await screenshotPage(page, route.folder, route.label);
     }
   });
 });
@@ -562,13 +576,16 @@ test.describe('📸 User Pages', () => {
   test.setTimeout(10 * 60 * 1000);
 
   test('crawl user routes + all servers + tabs + modals', async ({ page }) => {
-    await page.setViewportSize(RESOLUTION);
     await login(page);
     if (!isAuthed(page)) {
       console.log('  ⚠ Login failed — skipping user crawl');
       return;
     }
-    await crawlWorker(page, USER_ROUTES, 'user', { discoverEntities: true });
+    for (const vp of VIEWPORTS) {
+      await page.setViewportSize(vp);
+      viewportSuffix = `@${vp.width}x${vp.height}`;
+      await crawlWorker(page, USER_ROUTES, 'user', { discoverEntities: true });
+    }
   });
 });
 
@@ -576,12 +593,15 @@ test.describe('📸 Admin Pages', () => {
   test.setTimeout(15 * 60 * 1000);
 
   test('crawl admin routes + all entities + tabs + modals', async ({ page }) => {
-    await page.setViewportSize(RESOLUTION);
     await login(page);
     if (!isAuthed(page)) {
       console.log('  ⚠ Login failed — skipping admin crawl');
       return;
     }
-    await crawlWorker(page, ADMIN_ROUTES, 'admin', { discoverEntities: true });
+    for (const vp of VIEWPORTS) {
+      await page.setViewportSize(vp);
+      viewportSuffix = `@${vp.width}x${vp.height}`;
+      await crawlWorker(page, ADMIN_ROUTES, 'admin', { discoverEntities: true });
+    }
   });
 });

@@ -91,6 +91,9 @@ function BackupList({
  <span className="truncate text-data font-semibold text-foreground">{backup.name}</span>
  <BackupStatusBadge status={status} />
  </span>
+ <span className="font-mono text-micro tabular-nums text-muted-foreground/70 md:hidden">
+ {formatBackupSize(toNumber(backup.sizeMb))} · {backup.storageMode ?? 'local'}
+ </span>
  <span className="flex flex-wrap items-center gap-x-3 font-mono text-micro tabular-nums text-muted-foreground/70">
  <span>{t('backups.list.created', { date: formatDateTime(backup.createdAt) })}</span>
  {backup.restoredAt ? (
@@ -137,7 +140,7 @@ function BackupList({
  {backup.download ? (
  <button
  type="button"
- className={`inline-flex h-7 items-center rounded-sm border px-2 text-mini font-medium transition-colors disabled:opacity-60 ${
+ className={`inline-flex h-8 min-h-8 items-center rounded-sm border px-2 text-mini font-medium transition-colors disabled:opacity-60 ${
  downloading
  ? 'border-info/30 font-mono tabular-nums text-info'
  : 'border-border/60 text-muted-foreground hover:bg-surface-1/40 hover:text-foreground'

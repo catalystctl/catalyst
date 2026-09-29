@@ -26,10 +26,10 @@ function NodeList({ nodes, latestAgentVersion }: { nodes: NodeInfo[]; latestAgen
       <div
         className={`${NODE_GRID} hidden border-b border-border/50 bg-surface-1 px-3 py-1.5 text-muted-foreground/70 md:grid`}
       >
-        <span className="type-overline" aria-hidden />
-        <span className="type-overline hidden justify-end xl:inline-flex">{t('servers.title')}</span>
-        <span className="type-overline hidden justify-end md:inline-flex">{t('card.cpu')}</span>
-        <span className="type-overline hidden justify-end md:inline-flex">{t('card.memory')}</span>
+        <span className="type-overline">{t('form.name')}</span>
+        <span className="type-overline hidden justify-self-end md:inline-flex">{t('servers.title')}</span>
+        <span className="type-overline hidden justify-self-end md:inline-flex">{t('card.cpu')}</span>
+        <span className="type-overline hidden justify-self-end md:inline-flex">{t('card.memory')}</span>
         <span className="type-overline justify-self-end">{t('card.manage')}</span>
       </div>
 

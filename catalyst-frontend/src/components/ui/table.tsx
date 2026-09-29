@@ -62,7 +62,7 @@ const TableRow = React.forwardRef<
  <tr
  ref={ref}
  className={cn(
- "border-b border-border/50 transition-colors hover:bg-surface-2/45 data-[state=selected]:bg-primary/8",
+ "border-b border-border/50 transition-colors hover:bg-primary/[0.06] data-[state=selected]:bg-primary/10",
  className
  )}
  {...props}
@@ -70,6 +70,9 @@ const TableRow = React.forwardRef<
 ))
 TableRow.displayName = "TableRow"
 
+// Deck rule: standalone tables keep px-4 cells; tables inside px-3 cards
+// override to px-3 at the call site (TableHead/TableCell className) so cell
+// text aligns with the card header.
 const TableHead = React.forwardRef<
  HTMLTableCellElement,
  React.ThHTMLAttributes<HTMLTableCellElement>

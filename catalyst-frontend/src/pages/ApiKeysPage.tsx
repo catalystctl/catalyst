@@ -268,7 +268,7 @@ function ApiKeyRow({
               onClick={onEdit}
               title={t('apiKeys.row.edit')}
               aria-label={t('apiKeys.row.edit')}
-              className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
@@ -276,7 +276,7 @@ function ApiKeyRow({
               onClick={onDelete}
               title={t('apiKeys.row.revoke')}
               aria-label={t('apiKeys.row.revoke')}
-              className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-danger/5 hover:text-danger"
+              className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-danger/5 hover:text-danger"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>

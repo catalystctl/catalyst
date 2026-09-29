@@ -353,7 +353,7 @@ function PluginSettingsModal({
                             ? { ...(value as Record<string, any>), default: newVal }
                             : newVal);
                         }}
-                        className="flex h-9 w-full rounded-md border border-border bg-card px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex h-8 w-full rounded-sm border border-border bg-background/40 px-3 py-1 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {/* Empty placeholder only if current value is not in the list */}
                         {!selectOptions.some((o) => o.value === String(effectiveValue ?? '')) && (
@@ -387,7 +387,7 @@ function PluginSettingsModal({
                             ? { ...(value as Record<string, any>), default: e.target.value }
                             : e.target.value)
                         }
-                        className="flex min-h-[80px] w-full resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex min-h-[80px] w-full resize-none rounded-sm border border-border bg-background/40 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     ) : (
                       <Input

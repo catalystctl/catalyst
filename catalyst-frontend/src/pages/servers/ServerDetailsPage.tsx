@@ -1110,19 +1110,19 @@ function ServerDetailsPage() {
         banners={
           <>
             {isSuspended && (
-              <div className="mx-3 mb-2 flex h-7 items-center gap-2 rounded-sm border border-danger/30 bg-danger/10 px-2.5 text-mini text-danger">
+              <div className="mx-3 mb-2 flex min-h-7 h-auto flex-wrap items-center gap-2 rounded-sm border border-danger/30 bg-danger/10 px-2.5 py-1 text-mini text-danger">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 <span className="font-semibold">{t('common:status.suspended')}</span>
                 {server?.suspensionReason && (
-                  <span className="text-danger/80">— {server.suspensionReason}</span>
+                  <span className="min-w-0 break-words text-danger/80">— {server.suspensionReason}</span>
                 )}
               </div>
             )}
             {server?.status === 'cloning' && (
-              <div className="mx-3 mb-2 flex h-7 items-center gap-2 rounded-sm border border-info/30 bg-info/10 px-2.5 text-mini text-info">
+              <div className="mx-3 mb-2 flex min-h-7 h-auto flex-wrap items-center gap-2 rounded-sm border border-info/30 bg-info/10 px-2.5 py-1 text-mini text-info">
                 <Copy className="h-3.5 w-3.5 shrink-0 animate-pulse" />
                 <span className="font-semibold">{t('common:status.cloning')}</span>
-                <span className="text-info/80">{t('details.cloningNotice')}</span>
+                <span className="min-w-0 break-words text-info/80">{t('details.cloningNotice')}</span>
               </div>
             )}
           </>

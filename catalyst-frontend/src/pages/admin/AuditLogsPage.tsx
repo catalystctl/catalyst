@@ -228,7 +228,7 @@ return (
  </DialogDescription>
  </DialogHeader>
 
- <DialogBody className="space-y-5">
+ <DialogBody className="space-y-3">
  <div className="flex flex-wrap items-center gap-2">
  <StatusLed tone={TONE_LED[tone]} />
  <Badge variant="outline" className={`text-micro ${ts.border} ${ts.text}`}>
@@ -250,7 +250,7 @@ return (
  )}
  </div>
 
- <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+ <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <div className="space-y-1.5">
  <span className="type-overline">{t('audit.detailActor')}</span>
  <div className="flex items-center gap-2.5">
@@ -582,7 +582,7 @@ function AuditLogsPage() {
  return (
  <div
  key={log.id}
- className="group relative flex items-start gap-3 px-3 py-1.5 transition-colors hover:bg-surface-1/40"
+ className="group relative flex items-start gap-3 px-3 py-1.5 transition-colors hover:bg-surface-1/40 focus-within:bg-surface-1/40"
  >
  <StatusLed tone={TONE_LED[tone]} className="mt-1.5" />
  <div className="min-w-0 flex-1">
@@ -611,7 +611,7 @@ function AuditLogsPage() {
 
  <div className="flex shrink-0 items-center gap-1">
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary sm:opacity-0 sm:group-hover:opacity-100"
+ className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground opacity-100 transition-colors hover:bg-surface-2 hover:text-primary focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
  onClick={() => setSelectedLog(log)}
  title={t('audit.viewDetails')}
  >

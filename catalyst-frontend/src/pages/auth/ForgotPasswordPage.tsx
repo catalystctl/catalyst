@@ -11,6 +11,7 @@ import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { showsDemoChrome } from '../../demo/isDemo';
 
 /** One banner recipe shared by every auth card. */
 const AUTH_BANNER_CLASS = 'rounded-sm border px-3 py-2.5 text-mini';
@@ -51,7 +52,7 @@ function ForgotPasswordPage() {
 
  return (
  <div className="app-shell relative flex min-h-[100dvh] items-center justify-center px-4 font-sans">
- <div className="absolute right-4 top-4 z-20">
+ <div className={`absolute right-4 z-20 ${showsDemoChrome ? 'top-[calc(2rem+1rem)]' : 'top-4'}`}>
  <LanguageSwitcher variant="compact" />
  </div>
  <div className="deck-panel w-full max-w-md">

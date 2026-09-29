@@ -57,18 +57,18 @@ function VitalsRow({
         : severityClass(meter ?? null);
   const body = (
     <>
-      <span className="type-overline w-24 shrink-0">{label}</span>
-      <span className={cn('w-24 shrink-0 font-mono text-sm font-semibold tabular-nums', valueCls)}>
+      <span className="type-overline min-w-0 shrink-0 truncate">{label}</span>
+      <span className={cn('min-w-0 shrink-0 truncate font-mono text-sm font-semibold tabular-nums', valueCls)}>
         {value}
       </span>
-      {meter !== undefined ? <Meter value={meter} width="w-16" /> : null}
+      {meter !== undefined ? <span className="hidden sm:inline-flex"><Meter value={meter} width="w-16" /></span> : null}
       <span className="min-w-0 flex-1 truncate text-right type-meta">{sub}</span>
     </>
   );
-  const cls = 'flex items-center gap-3 px-3 py-2 transition-colors';
+  const cls = 'flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 transition-colors';
   if (to) {
     return (
-      <Link to={to} className={cn(cls, 'hover:bg-surface-1/40')}>
+      <Link to={to} className={cn(cls, 'hover:bg-surface-1/40 focus-visible:bg-surface-1/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50')}>
         {body}
       </Link>
     );
@@ -80,7 +80,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   return (
     <Link
       to={item.to}
-      className="group flex items-center gap-2.5 px-3 py-2 transition-colors hover:bg-surface-1/40"
+      className="group flex items-center gap-2.5 px-3 py-2 transition-colors hover:bg-surface-1/40 focus-visible:bg-surface-1/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50"
     >
       <StatusLed tone={item.tone === 'danger' ? 'alarm' : 'hazard'} />
       <span className="flex min-w-0 flex-1 items-baseline gap-2">
@@ -364,7 +364,7 @@ function DashboardPage() {
         {/* Plugin extension point — plugins register via components: [{ slot: 'dashboard-widgets', … }] */}
         <PluginSlot
           name="dashboard-widgets"
-          className="lg:col-span-2 space-y-3"
+          className="lg:col-span-5 space-y-3"
           />
       </div>
     </div>

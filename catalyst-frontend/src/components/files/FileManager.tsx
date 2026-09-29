@@ -774,11 +774,11 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 
  // Toolbar button styles
  const tbtn =
- 'inline-flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2 text-mini font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
+ 'inline-flex h-8 min-h-8 items-center gap-1.5 rounded-sm border border-border/60 px-2 text-mini font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
  const tbtnIcon =
- 'inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
+ 'inline-flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
  const tbtnDanger =
- 'inline-flex h-7 items-center gap-1.5 rounded-sm border border-danger/30 px-2 text-mini font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40';
+ 'inline-flex h-8 min-h-8 items-center gap-1.5 rounded-sm border border-danger/30 px-2 text-mini font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40';
 
  return (
  <motion.div
@@ -819,7 +819,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  <motion.div
  variants={itemVariants}
  className={`
- fixed inset-y-0 left-0 z-50 w-64 transform rounded-none border-r border-border bg-card p-3 transition-transform duration-300 ease-out
+ fixed inset-y-0 left-0 z-50 w-64 transform rounded-none border-r border-border bg-card p-3 transition-transform duration-normal ease-standard
  flex min-h-0 flex-col
  lg:static lg:z-auto lg:w-60 lg:shrink-0 lg:transform-none lg:rounded-sm lg:border lg:transition-none
  ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -833,8 +833,9 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  </div>
  <button
  type="button"
- className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground lg:hidden"
+ className="flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground lg:hidden"
  onClick={() => setShowSidebar(false)}
+ aria-label={t('common:actions.close')}
  >
  <X className="h-4 w-4" />
  </button>
@@ -894,7 +895,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  placeholder={t('files.manager.filterPlaceholder')}
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
- className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+ className="h-8 min-h-8 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
  />
  </div>
 
@@ -911,6 +912,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  onClick={() => setPath(getParentPath(path))}
  disabled={path === '/'}
  title={t('files.manager.goUp')}
+ aria-label={t('files.manager.goUp')}
  >
  <ArrowUp className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">{t('files.manager.up')}</span>
@@ -953,7 +955,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 
  <div className="hidden sm:block h-4 w-px bg-border/60" />
 
- <button type="button" className={tbtnIcon} onClick={() => refetch()} title={t('common:actions.refresh')}>
+ <button type="button" className={tbtnIcon} onClick={() => refetch()} aria-label={t('common:actions.refresh')}>
  <RefreshCw className="h-3.5 w-3.5" />
  </button>
 
@@ -1005,9 +1007,10 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  )}
  <button
  type="button"
- className="inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
+ className="inline-flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  onClick={() => setSelectedPaths(new Set())}
  title={t('files.manager.clearSelection')}
+ aria-label={t('files.manager.clearSelection')}
  >
  <XCircle className="h-4 w-4" />
  </button>
