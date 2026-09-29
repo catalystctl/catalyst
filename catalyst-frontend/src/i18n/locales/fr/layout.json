@@ -306,6 +306,7 @@
     "configuration": "Configuration",
     "extensions": "Extensions",
     "infrastructure": "Infrastructure",
+    "main": "Principal",
     "monitoring": "Surveillance",
     "plugins": "Plugins"
   },

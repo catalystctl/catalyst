@@ -389,6 +389,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
         >
           {expanded ? (
             <>
+              <SectionLabel>{t('layout:sections.main')}</SectionLabel>
               {mainLinks.map((link) => (
                 <NavRow key={link.to} to={link.to} label={link.label} icon={link.icon} expanded active={isActive(link.to)} badge={badgeFor(link.to)} />
               ))}
