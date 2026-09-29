@@ -38,7 +38,7 @@ const variantConfig = {
   warning: {
     icon: <AlertTriangle className="h-4 w-4" />,
     iconClassName: 'border-warning/20 bg-warning/10 text-warning',
-    buttonClass: buttonVariants({ size: 'sm', className: 'bg-warning text-foreground hover:bg-warning/90' }),
+    buttonClass: buttonVariants({ size: 'sm', className: 'bg-warning text-warning-foreground hover:bg-warning/90' }),
   },
 };
 
