@@ -351,7 +351,7 @@ export default function Sidebar() {
           className={cn(
             'flex min-h-0 flex-col',
             expanded
-              ? 'w-full flex-1 gap-px overflow-y-auto pb-6 [scrollbar-width:thin]'
+              ? 'w-full flex-1 gap-px overflow-y-auto pb-6 pr-2 [scrollbar-width:thin]'
               : 'items-center gap-1',
             expanded &&
               navScrolls &&

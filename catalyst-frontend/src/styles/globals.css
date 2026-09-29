@@ -3,6 +3,33 @@
 @config "../../tailwind.config.js";
 
 /*
+ * Tailwind v4's preflight leaves buttons on `cursor: default` (matching native
+ * controls), which made every button and button-role control look inert. Restore
+ * the pointer affordance for enabled controls. This stays in the base layer, so
+ * an explicit `cursor-*` utility on a component still wins.
+ */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']),
+  [role='menuitem']:not([aria-disabled='true']),
+  [role='menuitemcheckbox']:not([aria-disabled='true']),
+  [role='menuitemradio']:not([aria-disabled='true']),
+  [role='option']:not([aria-disabled='true']),
+  [role='switch']:not([aria-disabled='true']),
+  [role='checkbox']:not([aria-disabled='true']),
+  [role='radio']:not([aria-disabled='true']),
+  summary {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+}
+
+/*
  * Catalyst — "Server Browser" deck tokens.
  * See docs/design/deck-identity.md for the contract and the anti-default
  * audit behind it. Values are HSL channels without hsl() so themeStore can
