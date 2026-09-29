@@ -11,6 +11,7 @@ import {
 	EnvValidationError,
 	ensureInitialized,
 	getEnvOverview,
+	initializeEnvOverrides,
 	resetEnvSetting,
 	resetEnvSettingsState,
 	updateEnvSettings,
@@ -126,9 +127,15 @@ describe("env settings persistence", () => {
 	const RESTART_KEY = "LOG_LEVEL";
 	// No registry default: an empty assignment must not read as a change.
 	const EMPTY_KEY = "BACKUP_S3_BUCKET";
+	// Have registry defaults: an empty assignment must resolve to the default in
+	// both the boot snapshot and the desired value (the reporter's stuck prompt).
+	const DEFAULTED_EMPTY_KEYS = ["BACKUP_S3_REGION", "BACKUP_S3_PATH_STYLE"] as const;
 	const originalLive = process.env[LIVE_KEY];
 	const originalRestart = process.env[RESTART_KEY];
 	const originalEmpty = process.env[EMPTY_KEY];
+	const originalDefaulted = Object.fromEntries(
+		DEFAULTED_EMPTY_KEYS.map((key) => [key, process.env[key]]),
+	) as Record<string, string | undefined>;
 
 	beforeAll(async () => {
 		resetEnvSettingsState();
@@ -137,7 +144,9 @@ describe("env settings persistence", () => {
 
 	afterEach(async () => {
 		await prisma.envSetting.deleteMany({
-			where: { key: { in: [LIVE_KEY, RESTART_KEY, EMPTY_KEY] } },
+			where: {
+				key: { in: [LIVE_KEY, RESTART_KEY, EMPTY_KEY, ...DEFAULTED_EMPTY_KEYS] },
+			},
 		});
 		if (originalLive === undefined) delete process.env[LIVE_KEY];
 		else process.env[LIVE_KEY] = originalLive;
@@ -145,13 +154,19 @@ describe("env settings persistence", () => {
 		else process.env[RESTART_KEY] = originalRestart;
 		if (originalEmpty === undefined) delete process.env[EMPTY_KEY];
 		else process.env[EMPTY_KEY] = originalEmpty;
+		for (const key of DEFAULTED_EMPTY_KEYS) {
+			if (originalDefaulted[key] === undefined) delete process.env[key];
+			else process.env[key] = originalDefaulted[key];
+		}
 		resetEnvSettingsState();
 		await ensureInitialized();
 	});
 
 	afterAll(async () => {
 		await prisma.envSetting.deleteMany({
-			where: { key: { in: [LIVE_KEY, RESTART_KEY, EMPTY_KEY] } },
+			where: {
+				key: { in: [LIVE_KEY, RESTART_KEY, EMPTY_KEY, ...DEFAULTED_EMPTY_KEYS] },
+			},
 		});
 	});
 
@@ -208,6 +223,40 @@ describe("env settings persistence", () => {
 		const entry = overview.entries.find((item) => item.key === EMPTY_KEY);
 		expect(entry?.changedSinceBoot).toBe(false);
 		expect(overview.changedKeys).not.toContain(EMPTY_KEY);
+	});
+
+	it("does not flag an empty assignment for a variable with a default", async () => {
+		// Regression: `BACKUP_S3_REGION=` / `BACKUP_S3_PATH_STYLE=` resolved to
+		// the registry default on the read path but to null in the boot snapshot,
+		// so an untouched install showed a permanent "waiting on BACKUP_S3_*".
+		const check = async (label: string) => {
+			const overview = await getEnvOverview();
+			for (const key of DEFAULTED_EMPTY_KEYS) {
+				const entry = overview.entries.find((item) => item.key === key);
+				expect(entry?.changedSinceBoot, `${label}: ${key}`).toBe(false);
+				expect(overview.changedKeys, `${label}: ${key}`).not.toContain(key);
+			}
+		};
+
+		for (const key of DEFAULTED_EMPTY_KEYS) process.env[key] = "";
+
+		// Late-init path (no overrides applied).
+		resetEnvSettingsState();
+		await ensureInitialized();
+		await check("late");
+
+		// Boot path (overrides applied) — restore the real env afterwards so the
+		// dev database's overrides do not leak into other suites.
+		const applied = {
+			PUBLIC_URL: process.env.PUBLIC_URL,
+			CORS_ORIGIN: process.env.CORS_ORIGIN,
+		};
+		await initializeEnvOverrides();
+		await check("boot");
+		for (const [key, value] of Object.entries(applied)) {
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		}
 	});
 
 	it("masks secret values in the overview", async () => {

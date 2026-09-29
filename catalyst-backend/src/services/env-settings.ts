@@ -90,18 +90,29 @@ function captureBaseEnvironment(): void {
 	}
 }
 
-/** Effective value from the database, falling back to env, then default. */
-function desiredValue(
-	key: string,
+/**
+ * An empty environment assignment (`FOO=`) means "not set".
+ */
+function normalizeEffective(value: string | null | undefined): string | null {
+	return value === undefined || value === "" ? null : value;
+}
+
+/**
+ * The single source of truth for "what value should be in effect": a database
+ * override, else the `.env` value, else the registry default. Both the boot
+ * snapshot and the desired value computed on every read go through here, so
+ * they can never disagree — an empty `.env` entry (`FOO=`) must resolve to the
+ * default in both, or it looks like a permanent pending change.
+ */
+function resolveDesired(
+	spec: EnvVarSpec,
 	dbValue: string | undefined,
 ): { value: string | null; source: EnvValueSource } {
-	if (dbValue !== undefined) return { value: dbValue, source: "database" };
-	const envValue = baseEnvironment.get(key);
-	if (envValue !== undefined && envValue !== "") {
-		return { value: envValue, source: "environment" };
-	}
-	const spec = ENV_VAR_BY_KEY.get(key);
-	if (spec?.default !== undefined) return { value: spec.default, source: "default" };
+	const override = normalizeEffective(dbValue);
+	if (override !== null) return { value: override, source: "database" };
+	const envValue = normalizeEffective(baseEnvironment.get(spec.key));
+	if (envValue !== null) return { value: envValue, source: "environment" };
+	if (spec.default !== undefined) return { value: spec.default, source: "default" };
 	return { value: null, source: "unset" };
 }
 
@@ -112,7 +123,7 @@ async function readOverrideRows(): Promise<Map<string, string>> {
 
 /**
  * Apply database overrides to `process.env`. Must run before the app modules
- * are imported (see `src/start.ts`). Safe to call more than once; later calls
+ * are imported (see `src/index.ts`). Safe to call more than once; later calls
  * refresh the boot snapshot.
  */
 export async function initializeEnvOverrides(): Promise<void> {
@@ -130,8 +141,7 @@ export async function initializeEnvOverrides(): Promise<void> {
 		initialized = true;
 		bootEffective = new Map();
 		for (const spec of PUBLIC_ENV_VAR_REGISTRY) {
-			const envValue = process.env[spec.key];
-			bootEffective.set(spec.key, envValue ?? spec.default ?? null);
+			bootEffective.set(spec.key, resolveDesired(spec, undefined).value);
 		}
 		return;
 	}
@@ -142,19 +152,11 @@ export async function initializeEnvOverrides(): Promise<void> {
 		if (override !== undefined) {
 			process.env[spec.key] = override;
 		}
-		const effective = override ?? process.env[spec.key] ?? spec.default ?? null;
-		bootEffective.set(spec.key, normalizeEffective(effective));
+		// Use the same resolver as the read path so the snapshot cannot diverge
+		// from what `getEnvOverview` considers desired.
+		bootEffective.set(spec.key, resolveDesired(spec, override).value);
 	}
 	initialized = true;
-}
-
-/**
- * An empty environment assignment (`FOO=`) means "not set": `desiredValue`
- * treats it that way, so the boot snapshot must too or every empty `.env`
- * entry would look like a pending change.
- */
-function normalizeEffective(value: string | null): string | null {
-	return value === "" ? null : value;
 }
 
 /** Test/CLI helper — treats the current environment as the boot snapshot. */
@@ -169,10 +171,7 @@ export async function ensureInitialized(): Promise<void> {
 	captureBaseEnvironment();
 	bootEffective = new Map();
 	for (const spec of PUBLIC_ENV_VAR_REGISTRY) {
-		bootEffective.set(
-			spec.key,
-			normalizeEffective(process.env[spec.key] ?? spec.default ?? null),
-		);
+		bootEffective.set(spec.key, resolveDesired(spec, undefined).value);
 	}
 	initialized = true;
 }
@@ -276,7 +275,7 @@ async function buildEntries(): Promise<{
 
 	for (const spec of PUBLIC_ENV_VAR_REGISTRY) {
 		const hasOverride = rows.has(spec.key);
-		const desired = desiredValue(spec.key, rows.get(spec.key));
+		const desired = resolveDesired(spec, rows.get(spec.key));
 		const running = bootEffective.get(spec.key) ?? null;
 		const changedSinceBoot = desired.value !== running;
 		const isSet = desired.value !== null && desired.value !== "";
