@@ -312,7 +312,12 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
           ].map((m) => (
             <div key={m.label} className="flex items-center gap-3">
               <span className="type-overline w-16 shrink-0">{m.label}</span>
-              <Meter value={m.pct} width="w-full" />
+              {/* Wrapper lets the bar shrink; Meter is w-full shrink-0, which
+                  would otherwise overflow the row by the label/percent width
+                  and be clipped by the card's overflow-hidden. */}
+              <div className="min-w-0 flex-1">
+                <Meter value={m.pct} width="w-full" />
+              </div>
               <span className="shrink-0 font-mono text-micro tabular-nums text-foreground">
                 {m.pct.toFixed(1)}%
               </span>
