@@ -18,6 +18,7 @@ import {
 import { BracketLabel, Segmented, StatusLed } from '../../components/deck/primitives';
 import { cn } from '@/lib/utils';
 import EmptyState from '../../components/shared/EmptyState';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import NodeCreateModal, { NodeCreateButton } from '../../components/nodes/NodeCreateModal';
 import LocationsManagerModal from '../../components/nodes/LocationsManagerModal';
@@ -269,7 +270,7 @@ function AdminNodesPage() {
  );
  const [locationsModalOpen, setLocationsModalOpen] = useState(false);
 
- const { data, isLoading } = useAdminNodes({ search: search.trim() || undefined });
+ const { data, isLoading, isError, refetch } = useAdminNodes({ search: search.trim() || undefined });
  const { data: updateData } = useUpdateCheck();
  const user = useAuthStore((s) => s.user);
 
@@ -284,10 +285,27 @@ function AdminNodesPage() {
  [user?.permissions],
  );
 
+ const canCreate = useMemo(
+  () => Boolean(user?.permissions?.includes('node.create') || user?.permissions?.includes('*')),
+  [user?.permissions],
+  );
+
  const canDelete = useMemo(
  () => Boolean(user?.permissions?.includes('node.delete') || user?.permissions?.includes('*')),
  [user?.permissions],
  );
+ const canDeleteAnyNode = canDelete && Boolean(canWrite);
+ const { data: assignedNodeIds, isError: accessError, refetch: refetchAccess } = useQuery({
+ queryKey: ['admin', 'node-delete-access', user?.id],
+ enabled: canDelete && !canDeleteAnyNode && Boolean(user?.id),
+ queryFn: async () => {
+   const response = await fetch(`/api/roles/users/${encodeURIComponent(user!.id)}/nodes`);
+   if (!response.ok) throw new Error('Failed to load node access');
+   const payload = await response.json() as { data?: { id: string }[] };
+   return new Set((payload.data ?? []).map((node) => node.id));
+ },
+ });
+ const mayDeleteNode = (id: string) => canDeleteAnyNode || Boolean(assignedNodeIds?.has(id));
 
  useEffect(() => {
  const handler = () => setLocationsModalOpen(true);
@@ -386,13 +404,13 @@ function AdminNodesPage() {
  return entries;
  }, [filteredNodes, locationMap]);
 
- const filteredIds = useMemo(() => filteredNodes.map((node) => node.id), [filteredNodes]);
+ const filteredIds = filteredNodes.filter((node) => mayDeleteNode(node.id)).map((node) => node.id);
  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
 
  const currentNodeIds = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes]);
  const validSelectedIds = useMemo(
- () => selectedIds.filter((id) => currentNodeIds.has(id)),
- [selectedIds, currentNodeIds],
+ () => selectedIds.filter((id) => currentNodeIds.has(id) && (canDeleteAnyNode || assignedNodeIds?.has(id))),
+ [selectedIds, currentNodeIds, assignedNodeIds, canDeleteAnyNode],
  );
 
  if (validSelectedIds.length !== selectedIds.length) {
@@ -402,11 +420,14 @@ function AdminNodesPage() {
  // ── Delete mutation ──
  const deleteMutation = useMutation({
  mutationFn: (nodeIds: string[]) => {
- return Promise.all(nodeIds.map((nodeId) => nodesApi.remove(nodeId)));
+ return Promise.allSettled(nodeIds.map((nodeId) => nodesApi.remove(nodeId)));
  },
- onSuccess: (_data, nodeIds) => {
- notifySuccess(t('nodes.toast.deleted', { count: nodeIds.length }));
- setSelectedIds([]);
+ onSuccess: (results, nodeIds) => {
+ const failedIds = nodeIds.filter((_, index) => results[index].status === 'rejected');
+ const deletedCount = nodeIds.length - failedIds.length;
+ if (deletedCount) notifySuccess(t('nodes.toast.deleted', { count: deletedCount }));
+ if (failedIds.length) notifyError(t('nodes.toast.deleteFailed', { count: failedIds.length }));
+ setSelectedIds((prev) => [...prev.filter((id) => !nodeIds.includes(id)), ...failedIds]);
  setDeleteTargets(null);
  },
  onSettled: () => {
@@ -432,7 +453,7 @@ function AdminNodesPage() {
  key={node.id}
  node={node}
  isSelected={selectedIds.includes(node.id)}
- canDelete={canDelete}
+ canDelete={mayDeleteNode(node.id)}
  setSelectedIds={setSelectedIds}
  handleBulkDelete={handleBulkDelete}
  deleteMutation={deleteMutation}
@@ -442,7 +463,8 @@ function AdminNodesPage() {
 
  /** Toggle one grouped section's ids without disturbing other selections. */
  const toggleGroupSelection = (groupNodes: NodeInfo[]) => {
- const ids = groupNodes.map((n) => n.id);
+ const ids = groupNodes.filter((node) => mayDeleteNode(node.id)).map((node) => node.id);
+ if (!ids.length) return;
  setSelectedIds((prev) => {
  if (ids.every((id) => prev.includes(id))) {
  return prev.filter((id) => !ids.includes(id));
@@ -472,7 +494,7 @@ function AdminNodesPage() {
  <p className="text-mini text-muted-foreground">{t('nodes.description')}</p>
  </div>
  <div className="flex flex-wrap items-center gap-2">
- {canWrite && <NodeCreateModal />}
+ {canCreate && <NodeCreateModal />}
  {canWrite && (
  <button
  type="button"
@@ -488,6 +510,9 @@ function AdminNodesPage() {
 
  {/* ── The deck: tabs, controls, columns, rows and totals in one frame ── */}
  <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+ {accessError && (
+ <div className="p-3"><TabErrorState message={t('nodes.deleteAccessLoadFailed')} onRetry={() => refetchAccess()} /></div>
+ )}
  {/* Control strip */}
  <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
  {locations.length > 0 && (
@@ -571,9 +596,11 @@ function AdminNodesPage() {
  </SelectContent>
  </Select>
 
+ {!isError && !isLoading && (
  <span className="ml-auto font-mono text-micro tabular-nums text-muted-foreground">
  {t('nodes.resultCount', { shown: filteredNodes.length, total: nodes.length })}
  </span>
+ )}
  </div>
 
  {/* Expandable filter panel */}
@@ -679,7 +706,7 @@ function AdminNodesPage() {
  )}
  >
  <span className="flex items-center gap-2">
- {canDelete && (
+ {filteredIds.length > 0 && (
  <label className="-m-2 flex shrink-0 cursor-pointer items-center justify-center p-2">
  <input
  type="checkbox"
@@ -706,21 +733,24 @@ function AdminNodesPage() {
  </div>
 
  {/* Rows */}
- <div className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25">
+ <div className="max-h-[min(32rem,50dvh)] min-w-0 overflow-y-auto bg-background/25">
  {isLoading ? (
  <TableSkeleton />
+ ) : isError ? (
+ <div className="p-3"><TabErrorState message={t('nodes.loadFailed')} onRetry={() => refetch()} /></div>
  ) : showGroupedView ? (
  groupedByLocation.length > 0 ? (
  groupedByLocation.map(([locationId, groupNodes]) => {
  const location = locationId ? (locationMap.get(locationId) ?? null) : null;
- const groupSelected = groupNodes.length > 0 && groupNodes.every((n) => selectedIds.includes(n.id));
+ const deletableGroupNodes = groupNodes.filter((node) => mayDeleteNode(node.id));
+ const groupSelected = deletableGroupNodes.length > 0 && deletableGroupNodes.every((n) => selectedIds.includes(n.id));
  return (
  <div key={locationId ?? '__unassigned__'}>
  <LocationSectionHeader
  location={location}
  count={groupNodes.length}
  trailing={
- canDelete ? (
+ deletableGroupNodes.length > 0 ? (
  <label className="ml-auto -my-2 flex cursor-pointer items-center gap-1.5 py-2 text-micro text-muted-foreground">
  <input
  type="checkbox"
@@ -752,7 +782,7 @@ function AdminNodesPage() {
  <X className="mr-1.5 h-3.5 w-3.5" />
  {t('nodes.clearFilters')}
  </Button>
- ) : canWrite && !search.trim() ? (
+ ) : canCreate && !search.trim() ? (
  <NodeCreateButton />
  ) : undefined
  }
@@ -778,7 +808,7 @@ function AdminNodesPage() {
  <X className="mr-1.5 h-3.5 w-3.5" />
  {t('nodes.clearFilters')}
  </Button>
- ) : canWrite ? (
+ ) : canCreate ? (
  <NodeCreateButton />
  ) : undefined
  }
@@ -788,7 +818,7 @@ function AdminNodesPage() {
  </div>
 
  {/* Footer strip — fleet totals */}
- <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
+ {!isError && !isLoading && <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
  {summaryStats.map((stat) => (
  <span key={stat.label} className="flex items-center gap-1.5">
  <span className="type-overline">{stat.label}</span>
@@ -797,7 +827,7 @@ function AdminNodesPage() {
  </Segmented>
  </span>
  ))}
- </div>
+ </div>}
  </div>
 
  {/* ── Delete Confirmation Dialog ── */}

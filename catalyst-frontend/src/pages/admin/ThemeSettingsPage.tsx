@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
@@ -129,6 +129,7 @@ function ColorPicker({
  icon?: React.ComponentType<{ className?: string }>;
  compact?: boolean;
 }) {
+ const id = useId();
  const isValid = /^#[0-9A-Fa-f]{6}$/.test(value);
 
  if (compact) {
@@ -141,6 +142,7 @@ function ColorPicker({
  />
  <input
  type="color"
+ aria-label={label}
  value={isValid ? value : '#000000'}
  onChange={(e) => onChange(e.target.value)}
  className="absolute inset-0 h-full w-full cursor-pointer rounded-sm opacity-0"
@@ -151,6 +153,8 @@ function ColorPicker({
  <p className="truncate text-micro font-medium text-foreground">{label}</p>
  </div>
  <input
+ id={id}
+ aria-label={label}
  type="text"
  value={value}
  onChange={(e) => onChange(e.target.value)}
@@ -169,7 +173,7 @@ function ColorPicker({
  <div className="space-y-2">
  <div className="flex items-center gap-1.5">
  {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
- <label className="type-overline">{label}</label>
+ <label htmlFor={id} className="type-overline">{label}</label>
  </div>
  {description && (
  <p className="text-micro leading-relaxed text-muted-foreground">{description}</p>
@@ -182,12 +186,15 @@ function ColorPicker({
  />
  <input
  type="color"
+ aria-label={label}
  value={isValid ? value : '#000000'}
  onChange={(e) => onChange(e.target.value)}
  className="absolute inset-0 h-full w-full cursor-pointer rounded-sm opacity-0"
  />
  </div>
  <input
+ id={id}
+ aria-label={label}
  type="text"
  value={value}
  onChange={(e) => onChange(e.target.value)}
@@ -383,10 +390,12 @@ function InputField({
  placeholder?: string;
  type?: string;
 }) {
+ const id = useId();
  return (
  <div>
- <label className="type-overline mb-1 block">{label}</label>
+ <label htmlFor={id} className="type-overline mb-1 block">{label}</label>
  <input
+ id={id}
  type={type}
  value={value}
  onChange={(e) => onChange(e.target.value)}
@@ -901,8 +910,9 @@ function ThemeSettingsPage() {
  />
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
- <label className="type-overline mb-1.5 block">{t('theme.panelName')}</label>
+ <label htmlFor="panel-name" className="type-overline mb-1.5 block">{t('theme.panelName')}</label>
  <input
+ id="panel-name"
  type="text"
  value={panelName}
  onChange={(e) => setPanelName(e.target.value)}
@@ -912,8 +922,9 @@ function ThemeSettingsPage() {
  </div>
  <div />
  <div>
- <label className="type-overline mb-1.5 block">{t('theme.logoUrl')}</label>
+ <label htmlFor="logo-url" className="type-overline mb-1.5 block">{t('theme.logoUrl')}</label>
  <input
+ id="logo-url"
  type="text"
  value={logoUrl}
  onChange={(e) => setLogoUrl(e.target.value)}
@@ -925,8 +936,9 @@ function ThemeSettingsPage() {
  </p>
  </div>
  <div>
- <label className="type-overline mb-1.5 block">{t('theme.faviconUrl')}</label>
+ <label htmlFor="favicon-url" className="type-overline mb-1.5 block">{t('theme.faviconUrl')}</label>
  <input
+ id="favicon-url"
  type="text"
  value={faviconUrl}
  onChange={(e) => setFaviconUrl(e.target.value)}
@@ -942,8 +954,9 @@ function ThemeSettingsPage() {
  <PanelSectionHeader title={t('theme.themeMode')} description={t('theme.themeModeDescription')} />
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
- <label className="type-overline mb-1.5 block">{t('theme.defaultTheme')}</label>
+ <label htmlFor="default-theme" className="type-overline mb-1.5 block">{t('theme.defaultTheme')}</label>
  <select
+ id="default-theme"
  value={defaultTheme}
  onChange={(e) => setDefaultTheme(e.target.value)}
  className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 text-mini text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -954,9 +967,9 @@ function ThemeSettingsPage() {
  </select>
  </div>
  <div>
- <label className="type-overline mb-1.5 block">
+ <span className="type-overline mb-1.5 block">
  {t('theme.availableThemes')}
- </label>
+ </span>
  <div className="flex gap-2">
  {[
  { id: 'light', icon: Sun, color: 'text-warning' },
@@ -1008,6 +1021,7 @@ function ThemeSettingsPage() {
  />
  <input
  type="color"
+ aria-label={t('theme.seedColor')}
  value={isSeedValid ? seedColor : DEFAULTS.primaryColor}
  onChange={(e) => setSeedColor(e.target.value)}
  className="absolute inset-0 h-full w-full cursor-pointer rounded-sm opacity-0"
@@ -1015,9 +1029,10 @@ function ThemeSettingsPage() {
  </div>
  <div className="flex-1 space-y-3">
  <div>
- <label className="type-overline mb-1 block">{t('theme.seedColor')}</label>
+ <label htmlFor="theme-seed-color" className="type-overline mb-1 block">{t('theme.seedColor')}</label>
  <div className="flex items-center gap-2">
  <input
+ id="theme-seed-color"
  type="text"
  value={seedColor}
  onChange={(e) => setSeedColor(e.target.value)}
@@ -1053,9 +1068,9 @@ function ThemeSettingsPage() {
 
  {/* Harmony modes */}
  <div>
- <label className="type-overline mb-2 block">
+ <span className="type-overline mb-2 block">
  {t('theme.colorHarmony')}
- </label>
+ </span>
  <div className="flex flex-wrap gap-1.5">
  {(
  [
@@ -1075,6 +1090,7 @@ function ThemeSettingsPage() {
  key={m.id}
  type="button"
  onClick={() => setHarmonyMode(m.id)}
+ aria-pressed={harmonyMode === m.id}
  className={`rounded-sm px-3 py-1.5 text-micro font-medium transition-all ${
  harmonyMode === m.id
  ? 'bg-primary text-primary-foreground shadow-sm'
@@ -1295,6 +1311,8 @@ function ThemeSettingsPage() {
  <PanelSectionHeader title={t('theme.importTheme')} description={t('theme.importThemeDescription')} />
  <div className="space-y-3">
  <textarea
+ aria-label={t('theme.importTheme')}
+ aria-invalid={Boolean(importError)}
  value={importText}
  onChange={(e) => { setImportText(e.target.value); setImportError(null); }}
  placeholder='{"version": 1, "primaryColor": "#c48d5a", ...}'
@@ -1324,7 +1342,7 @@ function ThemeSettingsPage() {
  <input
  type="file"
  accept="application/json,.json"
- className="hidden"
+ className="sr-only"
  onChange={(e) => {
  const f = e.target.files?.[0];
  if (!f) return;
@@ -1530,6 +1548,7 @@ function ThemeSettingsPage() {
  <div className="flex items-center gap-3">
  <input
  type="range"
+ aria-label={t('theme.borderRadius')}
  min="0"
  max="1.5"
  step="0.0625"
@@ -1578,6 +1597,7 @@ function ThemeSettingsPage() {
  />
  <div className="space-y-3">
  <textarea
+ aria-label={t('theme.customCss')}
  value={customCss}
  onChange={(e) => setCustomCss(e.target.value.slice(0, 100_000))}
  placeholder="/* Your custom CSS here */&#10;.my-custom-class {&#10; color: red;&#10;}"
@@ -1788,6 +1808,7 @@ function ThemeSettingsPage() {
  key={m}
  type="button"
  onClick={() => setTheme(m as 'light' | 'dark')}
+ aria-pressed={currentTheme === m}
  className={`flex h-7 items-center gap-1.5 rounded-sm px-2.5 text-mini font-medium transition-colors ${
  (currentTheme === m)
  ? 'bg-card text-foreground shadow-sm ring-1 ring-border'

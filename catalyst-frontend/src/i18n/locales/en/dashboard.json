@@ -18,6 +18,15 @@
     "title": "Needs attention"
   },
   "description": "Infrastructure overview for {{name}}.",
+  "onboarding": {
+    "addNode": "Add a node",
+    "browseServers": "Browse servers",
+    "createServer": "Create a server",
+    "description": "Set up a node and template, then create a server. Only actions available to your account are shown.",
+    "overline": "GETTING STARTED",
+    "templates": "Set up templates",
+    "title": "Bring your first server online"
+  },
   "overview": {
     "alertsUnacknowledged": "{{alerts}} unacknowledged",
     "allResolved": "All resolved",

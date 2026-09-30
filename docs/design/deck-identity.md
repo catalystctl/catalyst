@@ -80,14 +80,18 @@ a colour, is what makes the panel recognisable.
 
 ## Structure
 
-- **Cabinet rail** (56px, always narrow, never expands): icon buttons with a
-  magenta LED active marker, fleet heartbeat LED at the top, user/logout pinned
-  to the bottom. Labels live in the marquee, not the rail.
+- **Cabinet navigation**: a 56px icon rail or a 240px labelled sidebar on
+  desktop; first-time users start labelled and their density choice persists.
+  The mobile drawer is always labelled, traps focus while open, and never
+  inherits the desktop collapsed preference. Long rails scroll while account
+  actions remain reachable at the bottom.
 - **Marquee**: horizontal strip carrying wordmark, breadcrumb, fleet status
   cluster and search — the game-launcher gesture.
-- **Fleet = browser rows**: zebra-striped, one row per server, columns
-  LED/status · name + game glyph · players (bars + count) · map · tick/ping ·
-  actions. **No cards on this surface.** Keyboard hints in the footer.
+- **Fleet = browser rows**: one row per server, with identity first, then
+  resource readings, address, state, and actions as deck width permits. Column
+  breakpoints follow the *deck container*, not the viewport, so an expanded
+  cabinet cannot crush the server name. Keyboard hints live in the footer.
+  A failed fetch gets a retry state, never a misleading empty fleet.
 - **Section device**: bracket labels (`[ FLEET ]` — small filled square +
   letterspaced display label). Not overline + hairline.
 - Panels are 1px-edged, 4px radius, flat; no glows, no gradients.

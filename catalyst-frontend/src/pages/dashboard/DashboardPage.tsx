@@ -13,6 +13,7 @@ import { serverStatusLabel } from '../../utils/constants';
 import { BracketLabel, Meter, StatusLed } from '../../components/deck/primitives';
 import { Skeleton } from '../../components/shared/Skeleton';
 import { cn } from '@/lib/utils';
+import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 
 // Statuses that mean "this server needs an operator" on the fleet wall.
 const DOWN_STATUSES = new Set(['crashed', 'error', 'suspended']);
@@ -133,6 +134,9 @@ function DashboardPage() {
   const nodesOnline = stats?.nodesOnline ?? 0;
   const nodesTotal = stats?.nodes ?? 0;
   const alertsUnacked = stats?.alertsUnacknowledged ?? 0;
+  const canCreateNodes = hasAnyPermission(user?.permissions, ['node.create']);
+  const canManageTemplates = hasAnyPermission(user?.permissions, ['template.create']);
+  const canCreateServers = hasAnyPermission(user?.permissions, ['server.create']);
 
   // ── Attention feed: only what needs an operator, most severe first ──
   const attentionItems = useMemo<AttentionItem[]>(() => {
@@ -195,6 +199,21 @@ function DashboardPage() {
           </span>
         )}
       </header>
+
+      {!statsLoading && !statsError && serversTotal === 0 && (
+        <section className="deck-panel px-3 py-3" aria-labelledby="onboarding-title">
+          <BracketLabel>{t('onboarding.overline')}</BracketLabel>
+          <h2 id="onboarding-title" className="mt-2 font-display text-base font-semibold text-foreground">{t('onboarding.title')}</h2>
+          <p className="type-meta mt-1">{t('onboarding.description')}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {nodesTotal === 0 && canCreateNodes && <Link to="/admin/nodes" className="rounded-sm border border-border px-3 py-2 text-mini text-foreground hover:border-primary focus-visible:outline-2 focus-visible:outline-primary">{t('onboarding.addNode')}</Link>}
+            {canManageTemplates && <Link to="/admin/templates" className="rounded-sm border border-border px-3 py-2 text-mini text-foreground hover:border-primary focus-visible:outline-2 focus-visible:outline-primary">{t('onboarding.templates')}</Link>}
+            <Link to={canCreateServers ? '/servers?action=create' : '/servers'} className="rounded-sm border border-primary px-3 py-2 text-mini text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary">
+              {t(canCreateServers ? 'onboarding.createServer' : 'onboarding.browseServers')}
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* ── Fleet vitals: one framed panel of readings ── */}
       <section className="deck-panel overflow-hidden">

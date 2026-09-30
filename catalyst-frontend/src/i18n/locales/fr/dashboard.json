@@ -20,6 +20,15 @@
     "title": "À traiter"
   },
   "description": "Vue d’ensemble de l’infrastructure pour {{name}}.",
+  "onboarding": {
+    "addNode": "Ajouter un nœud",
+    "browseServers": "Parcourir les serveurs",
+    "createServer": "Créer un serveur",
+    "description": "Configurez un nœud et un modèle, puis créez un serveur. Seules les actions autorisées pour votre compte sont affichées.",
+    "overline": "PREMIERS PAS",
+    "templates": "Configurer les modèles",
+    "title": "Mettez votre premier serveur en ligne"
+  },
   "overview": {
     "alertsUnacknowledged": "{{alerts}} non acquittées",
     "allResolved": "Toutes résolues",

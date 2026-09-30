@@ -4,7 +4,6 @@
     "create": {
       "action": "Create backup",
       "description": "Leave blank to auto-generate a name with the current timestamp.",
-      "failed": "Failed to create backup",
       "nameLabel": "Backup name (optional)",
       "success": "Backup creation started",
       "title": "Create backup"
@@ -12,7 +11,6 @@
     "delete": {
       "confirmPrefix": "Delete ",
       "confirmSuffix": "? This action cannot be undone.",
-      "failed": "Failed to delete backup",
       "success": "Backup deleted",
       "title": "Delete backup"
     },
@@ -44,10 +42,10 @@
       "previous": "Previous"
     },
     "restore": {
+      "acknowledgeOverwrite": "I understand that restoring this backup will overwrite the current server files.",
       "action": "Restore",
       "confirmPrefix": "Restore ",
       "confirmSuffix": " to this server? The server must be stopped before restoring and current files will be overwritten.",
-      "failed": "Failed to restore backup",
       "success": "Backup restoration started",
       "title": "Restore backup"
     },
@@ -288,15 +286,12 @@
       "remainingSeconds": "{{seconds}}s remaining",
       "remainingYears": "{{years}}y {{days}}d remaining",
       "revokeAll": "Revoke all sessions",
-      "revokeAllFailed": "Failed to revoke all tokens",
       "revokedCount_one": "Revoked {{count}} SFTP session",
       "revokedCount_other": "Revoked {{count}} SFTP sessions",
-      "revokeFailed": "Failed to revoke token",
       "revokeFor": "Revoke session for {{email}}",
       "revokeOwn": "Revoke your session",
       "rotate": "Rotate",
       "rotated": "SFTP password rotated",
-      "rotateFailed": "Failed to rotate SFTP token",
       "rotateNow": "Rotate now",
       "rotatePassword": "Rotate password",
       "sessionRevoked": "SFTP session revoked",
@@ -871,7 +866,6 @@
     "create": {
       "action": "Create task",
       "description": "Schedule a recurring action for this server.",
-      "failed": "Failed to create task",
       "namePlaceholder": "Nightly restart",
       "submitting": "Creating...",
       "success": "Task created",
@@ -890,7 +884,6 @@
     "descriptionLabel": "Description (optional)",
     "edit": {
       "description": "Update this scheduled task.",
-      "failed": "Failed to update task",
       "saving": "Saving...",
       "success": "Task updated",
       "title": "Edit task"

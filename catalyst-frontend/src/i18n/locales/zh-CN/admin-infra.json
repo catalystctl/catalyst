@@ -366,6 +366,7 @@
     "clearAll": "全部清除",
     "clearFilters": "清除筛选条件",
     "clearSelection": "清除",
+    "deleteAccessLoadFailed": "无法检查您可以删除哪些节点。",
     "deleteDialog": {
       "message": "您即将删除 <1>{{label}}</1>。",
       "title": "删除节点",
@@ -390,6 +391,7 @@
     "filters": "筛选条件",
     "hostnameUnavailable": "主机名 n/a",
     "lastSeen": "最后在线 {{time}}",
+    "loadFailed": "无法加载节点。",
     "locationNodeCount_other": "{{count}} 个节点",
     "locations": "位置",
     "manage": "管理",
@@ -422,7 +424,8 @@
     },
     "title": "节点",
     "toast": {
-      "deleted_other": "已删除 {{count}} 个节点"
+      "deleted_other": "已删除 {{count}} 个节点",
+      "deleteFailed_other": "有 {{count}} 个节点删除失败。"
     },
     "unassigned": "未分配"
   },
@@ -470,6 +473,7 @@
       "template": "模板"
     },
     "filters": "筛选条件",
+    "loadFailed": "无法加载服务器。",
     "resultCount": "{{shown}}/{{total}}",
     "runningCount": "{{value}} 台运行中",
     "searchPlaceholder": "按名称或 ID 搜索服务器…",

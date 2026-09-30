@@ -10,10 +10,13 @@ import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { BracketLabel, StatusLed } from '../../components/deck/primitives';
 import { Button } from '@/components/ui/button';
 import { formatTime } from '@/i18n/format';
+import { useAuthStore } from '../../stores/authStore';
 import { Server, Activity, ArrowUpRight, Database } from 'lucide-react';
 
 function AdminDashboardPage() {
   const { t } = useTranslation('admin');
+  const permissions = useAuthStore((state) => state.user?.permissions);
+  const canManageSettings = permissions?.includes('*') || permissions?.includes('admin.write');
   const { data: stats } = useAdminStats();
   const { data: health, isLoading: healthLoading } = useAdminHealth();
   const { data: nodesData } = useAdminNodes();
@@ -39,9 +42,11 @@ function AdminDashboardPage() {
             <Button variant="outline" size="sm" className="h-8 px-3 text-mini" asChild>
               <Link to="/admin/nodes">{t('dashboard.nav.nodes')}</Link>
             </Button>
-            <Button variant="outline" size="sm" className="h-8 px-3 text-mini" asChild>
-              <Link to="/admin/system">{t('dashboard.nav.settings')}</Link>
-            </Button>
+            {canManageSettings && (
+              <Button variant="outline" size="sm" className="h-8 px-3 text-mini" asChild>
+                <Link to="/admin/system">{t('dashboard.nav.settings')}</Link>
+              </Button>
+            )}
           </div>
         }
       />

@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SetupPage from './pages/setup/SetupPage';
 import { useSetupStatus } from './hooks/useSetupStatus';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ToastProvider } from './components/providers/ToastProvider';
@@ -72,12 +72,13 @@ function PageFallback() {
 
 /** Smooth page transition wrapper */
 function PageTransition({ children }: { children: React.ReactNode }) {
+ const reducedMotion = useReducedMotion();
  return (
  <motion.div
- initial={{ opacity: 0, y: 6 }}
+ initial={reducedMotion ? false : { opacity: 0, y: 6 }}
  animate={{ opacity: 1, y: 0 }}
- exit={{ opacity: 0, y: -6 }}
- transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+ exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
+ transition={reducedMotion ? { duration: 0 } : { duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
  className="h-full"
  >
  {children}

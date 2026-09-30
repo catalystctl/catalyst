@@ -373,6 +373,7 @@
     "clearAll": "Clear all",
     "clearFilters": "Clear filters",
     "clearSelection": "Clear",
+    "deleteAccessLoadFailed": "Unable to check which nodes you can delete.",
     "deleteDialog": {
       "message": "You are about to delete <1>{{label}}</1>.",
       "title": "Delete Nodes",
@@ -397,6 +398,7 @@
     "filters": "Filters",
     "hostnameUnavailable": "hostname n/a",
     "lastSeen": "Last seen {{time}}",
+    "loadFailed": "Unable to load nodes.",
     "locationNodeCount_one": "{{count}} node",
     "locationNodeCount_other": "{{count}} nodes",
     "locations": "Locations",
@@ -431,7 +433,9 @@
     "title": "Nodes",
     "toast": {
       "deleted_one": "{{count}} node deleted",
-      "deleted_other": "{{count}} nodes deleted"
+      "deleted_other": "{{count}} nodes deleted",
+      "deleteFailed_one": "Failed to delete {{count}} node.",
+      "deleteFailed_other": "Failed to delete {{count}} nodes."
     },
     "unassigned": "Unassigned"
   },
@@ -479,6 +483,7 @@
       "template": "Template"
     },
     "filters": "Filters",
+    "loadFailed": "Unable to load servers.",
     "resultCount": "{{shown}} of {{total}}",
     "runningCount": "{{value}} running",
     "searchPlaceholder": "Search servers by name or ID…",

@@ -16,6 +16,8 @@ type Props = {
  onChange: (value: string) => void;
  options: ComboboxOption[];
  placeholder?: string;
+ /** A stable accessible name, independent of the selected value. */
+ ariaLabel?: string;
  searchPlaceholder?: string;
  className?: string;
  /** Optional controlled search (e.g. for server-side filtering). */
@@ -29,6 +31,7 @@ function Combobox({
  onChange,
  options,
  placeholder,
+ ariaLabel,
  searchPlaceholder,
  className,
  searchValue,
@@ -47,6 +50,7 @@ function Combobox({
  };
 
  const listId = useId();
+ const triggerLabel = ariaLabel ?? placeholder ?? t('combobox.placeholder');
 const selected = useMemo(() => options.find((o) => o.value === value), [options, value]);
 
  const filtered = useMemo(() => {
@@ -110,9 +114,10 @@ const selected = useMemo(() => options.find((o) => o.value === value), [options,
  type="button"
  role="combobox"
  aria-expanded={open}
+ aria-label={triggerLabel}
 aria-haspopup="listbox"
 aria-controls={listId}
-aria-activedescendant={open && filtered.length > 0 ? `${listId}-option-${focusIdx}` : undefined}
+aria-activedescendant={open && !searchPlaceholder && filtered.length > 0 ? `${listId}-option-${focusIdx}` : undefined}
  className={cn(
  'flex h-9 w-full items-center justify-between rounded-sm border border-border/50 bg-card px-3 py-2 text-sm text-foreground transition-colors duration-normal ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
  className,
@@ -148,7 +153,7 @@ role="searchbox"
  />
  </div>
  ) : null}
- <div ref={listRef} role="listbox" id={listId} aria-label={searchPlaceholder} className="max-h-56 overflow-y-auto py-1">
+ <div ref={listRef} role="listbox" id={listId} aria-label={triggerLabel} className="max-h-56 overflow-y-auto py-1">
  {filtered.length === 0 ? (
  <div className="type-meta py-6 text-center">
  {emptyMessage ?? t('combobox.noMatches')}
@@ -159,7 +164,7 @@ role="searchbox"
  key={option.value}
 role="option"
 id={`${listId}-option-${idx}`}
-aria-selected={idx === focusIdx}
+aria-selected={option.value === value}
  type="button"
  className={cn(
  'relative mx-1 flex w-[calc(100%-0.5rem)] cursor-pointer items-center rounded-sm px-3 py-1.5 text-left text-sm outline-none',

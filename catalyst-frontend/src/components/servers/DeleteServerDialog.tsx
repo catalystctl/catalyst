@@ -8,7 +8,9 @@ import { isServerListQueryKey } from '@/lib/queryUtils';
 import { serversApi } from '../../services/api/servers';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
-import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 type Props = {
   serverId: string;
@@ -22,8 +24,10 @@ type Props = {
 function DeleteServerDialog({ serverId, serverName, disabled = false, open: controlledOpen, onOpenChange, onDeleted }: Props) {
   const { t } = useTranslation('servers');
   const [internalOpen, setInternalOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState('');
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
+    if (!value) setConfirmation('');
     setInternalOpen(value);
     onOpenChange?.(value);
   };
@@ -78,23 +82,29 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
           {t('common:actions.delete')}
         </Button>
       )}
-      <ConfirmDialog
-        open={open}
-        title={t('deleteServer.title')}
-        message={
-          <Trans
-            ns="servers"
-            i18nKey="deleteServer.confirm"
-            values={{ name: serverName }}
-            components={{ strong: <span className="font-semibold text-foreground" /> }}
-          />
-        }
-        confirmText={t('common:actions.delete')}
-        variant="danger"
-        loading={mutation.isPending || disabled}
-        onConfirm={() => mutation.mutate()}
-        onCancel={() => setOpen(false)}
-      />
+      <AlertDialog open={open} onOpenChange={(next) => { if (!mutation.isPending) setOpen(next); }}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('deleteServer.title')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              <Trans ns="servers" i18nKey="deleteServer.confirm" values={{ name: serverName }}
+                components={{ strong: <span className="font-semibold text-foreground" /> }} />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 px-5 pb-2">
+            <Label htmlFor="delete-server-confirm-name">{t('deleteServer.typeNameToConfirm', { name: serverName })}</Label>
+            <Input id="delete-server-confirm-name" autoComplete="off" value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={mutation.isPending}>{t('common:actions.cancel')}</AlertDialogCancel>
+            <AlertDialogAction disabled={mutation.isPending || disabled || confirmation !== serverName}
+              className="bg-danger text-danger-foreground hover:bg-danger/90" onClick={(event) => { event.preventDefault(); mutation.mutate(); }}>
+              {t('common:actions.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

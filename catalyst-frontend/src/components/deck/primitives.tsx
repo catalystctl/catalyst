@@ -184,9 +184,8 @@ export function GameChip({ game, className }: { game?: string | null; className?
         className,
       )}
       style={{
-        // Light game hues wash out on tinted chips — darken the glyph 22%
-        // toward black so it stays legible in both themes.
-        color: `color-mix(in srgb, hsl(${hue}), black 22%)`,
+        // Keep the tiny glyph at text contrast; hue belongs to the chip rim.
+        color: 'hsl(var(--foreground))',
         backgroundColor: `hsl(${hue} / 0.14)`,
         boxShadow: `inset 0 0 0 1px hsl(${hue} / 0.4)`,
       }}

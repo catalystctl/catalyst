@@ -31,8 +31,7 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
       setName('');
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || t('backups.create.failed');
-      notifyError(message);
+      notifyError(error);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });

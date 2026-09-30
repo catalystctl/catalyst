@@ -111,8 +111,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || t('files.sftp.rotateFailed');
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -129,8 +128,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || t('files.sftp.revokeFailed');
- notifyError(message);
+ notifyError(error);
  },
  });
 
@@ -146,8 +144,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || t('files.sftp.revokeAllFailed');
- notifyError(message);
+ notifyError(error);
  },
  });
 

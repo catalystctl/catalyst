@@ -31,6 +31,7 @@
     "logoTooLarge": "Logo must be smaller than 512KB",
     "passwordRequired": "Password is required",
     "passwordTooShort": "Password must be at least {{min}} characters",
+    "seedColorInvalid": "Enter a valid six-digit hex color, such as #c48d5a.",
     "usernameRequired": "Username is required",
     "usernameTooShort": "Username must be at least {{min}} characters"
   },
@@ -64,7 +65,8 @@
   },
   "submit": {
     "complete": "Complete Setup",
-    "completing": "Setting up..."
+    "completing": "Setting up...",
+    "reviewTitle": "Review your setup"
   },
   "welcome": {
     "chooseFile": "Choose file",

@@ -202,6 +202,7 @@
       "templateSearchPlaceholder": "Rechercher des modèles…",
       "useDefaultImage": "Utiliser l’image par défaut"
     },
+    "installFailed": "Le serveur a été créé, mais son installation n’a pas pu démarrer : {{error}}",
     "network": {
       "addBinding": "+ Ajouter une liaison",
       "additionalBindings": "Liaisons de ports supplémentaires",
@@ -225,9 +226,11 @@
       "selectInterface": "Sélectionner une interface"
     },
     "newServer": "Nouveau serveur",
+    "openCreatedServer": "Ouvrir le serveur créé",
     "resources": {
       "title": "Allocation des ressources"
     },
+    "retryInstall": "Réessayer l’installation",
     "startup": {
       "environmentVariables": "Variables d’environnement",
       "noVariables": "Aucune variable de démarrage pour ce modèle."
@@ -239,12 +242,20 @@
       "startup": "Démarrage"
     },
     "submit": "Créer le serveur",
-    "title": "Créer un nouveau serveur"
+    "title": "Créer un nouveau serveur",
+    "validation": {
+      "invalidName": "Le nom du serveur ne peut contenir que des lettres, chiffres, espaces, tirets, traits de soulignement, points, parenthèses, esperluettes et apostrophes.",
+      "minimum": "La valeur de {{field}} doit être au moins {{min}}.",
+      "portRange": "Le port doit être compris entre 1 et 65535.",
+      "required": "Le champ {{field}} est obligatoire.",
+      "unmetSteps": "Remplissez ces conditions avant de continuer :"
+    }
   },
   "deleteServer": {
     "confirm": "Voulez-vous vraiment supprimer <strong>{{name}}</strong> ? Cette action est irréversible.",
     "deleted": "Serveur supprimé",
-    "title": "Supprimer le serveur"
+    "title": "Supprimer le serveur",
+    "typeNameToConfirm": "Saisissez {{name}} pour confirmer la suppression."
   },
   "details": {
     "accessRemoved": "Accès retiré",

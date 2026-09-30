@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
  Search,
  X,
@@ -53,7 +53,7 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { hasAnyPermission } from '../auth/ProtectedRoute';
 import { useServers } from '../../hooks/useServers';
-import { useNodes } from '../../hooks/useNodes';
+import { useNodes, useAccessibleNodes } from '../../hooks/useNodes';
 import { useTemplates } from '../../hooks/useTemplates';
 import { useAvailableDatabaseHosts } from '../../hooks/useServerDatabases';
 import { canShowServerDatabasesTab } from '../../utils/serverTabs';
@@ -772,10 +772,12 @@ interface SearchPaletteProps {
 
 function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) {
  const navigate = useNavigate();
+ const reducedMotion = useReducedMotion();
  const { t } = useTranslation('layout');
  const user = useAuthStore((s) => s.user);
  const { data: servers, isLoading: serversLoading } = useServers();
  const { data: nodes, isLoading: nodesLoading } = useNodes();
+ const { data: accessibleNodes } = useAccessibleNodes();
  const { data: templates, isLoading: templatesLoading } = useTemplates();
  const { data: databaseHosts = [] } = useAvailableDatabaseHosts();
 
@@ -783,8 +785,10 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  const [selectedIndex, setSelectedIndex] = useState(0);
  const [activeCategory, setActiveCategory] = useState<SearchCategory | 'All'>('All');
  const inputRef = useRef<HTMLInputElement>(null);
+ const listId = useId();
+ const returnFocusRef = useRef<HTMLElement | null>(null);
  const listRef = useRef<HTMLDivElement>(null);
- const prevIsOpenRef = useRef(isOpen);
+ const prevIsOpenRef = useRef(false);
 
  // ── Static items (permission-filtered) ──
 
@@ -859,7 +863,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  to: `/admin/nodes/${node.id}`,
  category: 'Nodes',
  keywords: [node.hostname || '', node.publicAddress || '', 'node', 'machine'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: `/admin/nodes/${node.id}`,
  });
  items.push({
@@ -875,7 +879,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  `${node.name.toLowerCase()} ports`,
  'allocation', 'ip pool', 'cidr', 'port',
  ],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: `/admin/nodes/${node.id}/allocations`,
  });
  }
@@ -892,19 +896,21 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  to: `/admin/templates/${tmpl.id}`,
  category: 'Templates',
  keywords: [tmpl.nest?.name || '', 'template', 'egg', 'server template'],
- badge: 'Admin',
+ badge: t('layout:nav.admin'),
  path: `/admin/templates/${tmpl.id}`,
  });
  }
  }
 
- // Quick actions
- for (const action of buildQuickActions(t)) {
- items.push({ ...action, category: 'Actions' as SearchCategory });
+ // Only advertise an action when the destination can perform it.
+ if (hasAnyPermission(user?.permissions, ['server.create']) || accessibleNodes?.hasWildcard || accessibleNodes?.nodes.length) {
+   for (const action of buildQuickActions(t)) {
+     items.push({ ...action, category: 'Actions' as SearchCategory });
+   }
  }
 
  return items;
- }, [servers, nodes, templates, databaseHosts.length, user?.permissions, t]);
+ }, [servers, nodes, templates, databaseHosts.length, user?.permissions, accessibleNodes, t]);
 
  // ── Combined ──
 
@@ -966,12 +972,14 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  }));
  }, [filteredItems]);
 
- const flatItems = filteredItems;
+ // Keyboard order must match the grouped DOM order.
+ const flatItems = useMemo(() => groupedItems.flatMap((group) => group.items), [groupedItems]);
 
  // ── Reset on open ──
 
  useEffect(() => {
  if (isOpen && !prevIsOpenRef.current) {
+ returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
  setQuery('');
  setSelectedIndex(0);
  setActiveCategory('All');
@@ -980,10 +988,17 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  prevIsOpenRef.current = isOpen;
  }, [isOpen]);
 
+ const closeAndRestoreFocus = useCallback(() => {
+ onClose();
+ requestAnimationFrame(() => {
+ if (returnFocusRef.current?.isConnected) returnFocusRef.current.focus();
+ });
+ }, [onClose]);
+
  useEffect(() => {
  if (!isOpen) return;
  const handleWindowKeyDown = (event: KeyboardEvent) => {
- if (event.key === 'Escape') { event.preventDefault(); onClose(); }
+ if (event.key === 'Escape') { event.preventDefault(); closeAndRestoreFocus(); }
  if (event.key === 'Tab') {
  const root = inputRef.current?.closest('[role="dialog"]');
  const focusable = root?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
@@ -995,7 +1010,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  };
  window.addEventListener('keydown', handleWindowKeyDown);
  return () => window.removeEventListener('keydown', handleWindowKeyDown);
- }, [isOpen, onClose]);
+ }, [isOpen, closeAndRestoreFocus]);
 
  // Reset selection when query/category changes
  useEffect(() => {
@@ -1004,11 +1019,11 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
  // Scroll selected item into view
  useEffect(() => {
- if (listRef.current && flatItems.length > 0) {
+ if (isOpen && listRef.current && flatItems.length > 0) {
  const el = listRef.current.querySelector(`[data-index="${selectedIndex}"]`);
  if (el) el.scrollIntoView({ block: 'nearest' });
  }
- }, [selectedIndex, flatItems.length]);
+ }, [isOpen, selectedIndex, flatItems.length]);
 
  // ── Handlers ──
 
@@ -1017,11 +1032,11 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  switch (e.key) {
  case 'ArrowDown':
  e.preventDefault();
- setSelectedIndex((prev) => (prev + 1) % flatItems.length);
+ if (flatItems.length) setSelectedIndex((prev) => (prev + 1) % flatItems.length);
  break;
  case 'ArrowUp':
  e.preventDefault();
- setSelectedIndex((prev) => (prev - 1 + flatItems.length) % flatItems.length);
+ if (flatItems.length) setSelectedIndex((prev) => (prev - 1 + flatItems.length) % flatItems.length);
  break;
  case 'Enter':
  e.preventDefault();
@@ -1034,10 +1049,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  }
  onClose();
  }
- break;
- case 'Escape':
- e.preventDefault();
- onClose();
  break;
  case 'Backspace':
  if (!query && activeCategory !== 'All') {
@@ -1073,25 +1084,25 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  return createPortal(
  <AnimatePresence>
  <motion.div
- initial={{ opacity: 0 }}
+ initial={reducedMotion ? false : { opacity: 0 }}
  animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- transition={{ duration: 0.15 }}
+ exit={reducedMotion ? undefined : { opacity: 0 }}
+ transition={{ duration: reducedMotion ? 0 : 0.15 }}
  className="fixed inset-0 z-[100] overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label={t('common:actions.search')}
  >
  {/* Backdrop */}
  <div
  className="fixed inset-0 bg-[hsl(var(--scrim))] backdrop-blur-sm"
- onClick={onClose}
+ onClick={closeAndRestoreFocus}
  aria-hidden="true"
  />
 
  {/* Modal */}
  <motion.div
- initial={{ opacity: 0, scale: 0.97, y: -10 }}
+ initial={reducedMotion ? false : { opacity: 0, scale: 0.97, y: -10 }}
  animate={{ opacity: 1, scale: 1, y: 0 }}
- exit={{ opacity: 0, scale: 0.97, y: -10 }}
- transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+ exit={reducedMotion ? undefined : { opacity: 0, scale: 0.97, y: -10 }}
+ transition={reducedMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
  className="relative mx-auto max-w-2xl mt-[8vh]"
  >
  <div className="overflow-hidden rounded-md border border-border/50 bg-card shadow-elevated">
@@ -1105,6 +1116,12 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  onChange={(e) => setQuery(e.target.value)}
  onKeyDown={handleKeyDown}
  placeholder={t('search.placeholder')}
+ aria-label={t('search.placeholder')}
+ role="combobox"
+ aria-autocomplete="list"
+ aria-expanded={true}
+ aria-controls={listId}
+ aria-activedescendant={flatItems[selectedIndex] ? `${listId}-option-${selectedIndex}` : undefined}
  className="flex-1 border-none bg-transparent px-3 py-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
  />
  {isLoading && (
@@ -1112,7 +1129,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  )}
  <button
  type="button"
- onClick={onClose}
+ onClick={closeAndRestoreFocus}
  aria-label={t('search.close')}
  className="ml-2 rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
  >
@@ -1159,7 +1176,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  )}
 
  {/* ── Results List ── */}
- <div ref={listRef} className="max-h-[55vh] overflow-y-auto py-2">
+ <div ref={listRef} id={listId} role="listbox" aria-label={t('search.placeholder')} className="max-h-[55vh] overflow-y-auto py-2">
  {flatItems.length === 0 ? (
  <div className="py-12 text-center">
  <Search className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
@@ -1198,6 +1215,11 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  key={item.id}
  type="button"
  data-index={globalIndex}
+ id={`${listId}-option-${globalIndex}`}
+ role="option"
+ aria-selected={isSelected}
+ tabIndex={-1}
+ onMouseEnter={() => setSelectedIndex(globalIndex)}
  onClick={() => handleItemClick(item)}
  className={cn(
  'flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left transition-colors duration-fast',

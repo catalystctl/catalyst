@@ -23,6 +23,7 @@ import {
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import { BracketLabel, StatusLed } from '../../components/deck/primitives';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -353,7 +354,7 @@ function AuditLogsPage() {
  const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
  const [livePoll, setLivePoll] = useState(false);
 
- const { data, isLoading, refetch, isFetching } = useAuditLogs({
+ const { data, isLoading, isError, refetch, isFetching } = useAuditLogs({
  page,
  limit: pageSize,
  action: action || undefined,
@@ -373,6 +374,7 @@ function AuditLogsPage() {
  const logs = useMemo(() => data?.logs ?? [], [data?.logs]);
  const pagination = data?.pagination;
  const hasFilters = action || resource || userId || from || to;
+ const searchedPage = Boolean(searchQuery.trim());
 
  const filteredLogs = useMemo(() => {
  if (!searchQuery.trim()) return logs;
@@ -444,9 +446,9 @@ function AuditLogsPage() {
  {t('audit.live')}
  </Badge>
  )}
- <Badge variant="outline" className="font-mono text-micro tabular-nums">
+ {!isError && !isLoading && <Badge variant="outline" className="font-mono text-micro tabular-nums">
  {t('audit.eventCount', { count: pagination?.total ?? 0 })}
- </Badge>
+ </Badge>}
  <Button variant="outline" size="sm" onClick={() => setLivePoll(!livePoll)} className="h-8 gap-1.5 px-3 text-mini">
  <RefreshCw className={`h-3.5 w-3.5 ${livePoll && isFetching ? 'animate-spin' : ''}`} />
  {livePoll ? t('audit.auto') : t('audit.poll')}
@@ -499,6 +501,7 @@ function AuditLogsPage() {
  className="h-7 rounded-sm border-border/40 bg-card font-mono text-mini"
  />
  </div>
+ <p className="mt-2 text-micro text-muted-foreground">{t('audit.pageSearchHint')}</p>
  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
  <Input
  type="datetime-local"
@@ -557,13 +560,15 @@ function AuditLogsPage() {
  {/* ── Log Feed ── */}
  {isLoading ? (
  <TabLoadingState rows={6} rowHeight="h-16" />
+ ) : isError ? (
+ <TabErrorState message={t('audit.loadFailed')} onRetry={() => refetch()} />
  ) : filteredLogs.length > 0 ? (
- <div className="deck-panel max-h-[calc(100dvh-24rem)] overflow-y-auto">
+ <div className="deck-panel max-h-[min(32rem,45dvh)] overflow-y-auto">
  {/* Sticky header strip */}
  <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/50 bg-surface-1 px-3 py-1.5">
  <BracketLabel>{t('audit.title')}</BracketLabel>
  <span className="font-mono text-micro tabular-nums text-muted-foreground">
- {t('audit.eventCount', { count: filteredLogs.length })}
+ {t('audit.pageEventCount', { count: filteredLogs.length, page })}
  </span>
  </div>
  {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
@@ -631,12 +636,12 @@ function AuditLogsPage() {
  ) : (
  <TabEmptyState
  title={t('audit.emptyTitle')}
- description={hasFilters || searchQuery ? t('audit.emptyFilteredDescription') : t('audit.emptyDescription')}
+ description={searchedPage ? t('audit.emptyPageSearchDescription') : hasFilters ? t('audit.emptyFilteredDescription') : t('audit.emptyDescription')}
  />
  )}
 
  {/* ── Pagination ── */}
- {pagination && pagination.totalPages > 1 && (
+ {!isError && pagination && pagination.totalPages > 1 && (
  <div className="flex justify-center">
  <Pagination page={page} totalPages={pagination.totalPages} onPageChange={setPage} />
  </div>

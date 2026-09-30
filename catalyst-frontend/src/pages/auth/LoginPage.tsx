@@ -486,7 +486,9 @@ function LoginPage() {
  {totpError}
  </div>
  )}
+ <Label htmlFor="totp-code">{t('twoFactor.dialogTitle')}</Label>
  <Input
+ id="totp-code"
  type="text"
  inputMode="numeric"
  autoComplete="one-time-code"

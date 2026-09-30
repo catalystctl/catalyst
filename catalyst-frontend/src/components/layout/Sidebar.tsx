@@ -36,8 +36,9 @@ import { buildGroups, buildMain, type NavLinkItem } from './navSections';
 /**
  * Navigation with two densities over one source of truth.
  *
- * Collapsed (default) is the 56px cabinet rail: hot paths stay one click away
+ * Collapsed is the 56px cabinet rail: hot paths stay one click away
  * and every other destination lives in the sections popover and Ctrl+K.
+ * New operators start with labelled navigation; saved density is respected.
  * Expanded is a labelled, sectioned sidebar for people who prefer to read the
  * map rather than memorise it. Both render the same `buildMain`/`buildGroups`
  * data with the same RBAC filtering, so nothing can drift between them.
@@ -93,7 +94,7 @@ function NavRow({
   // Density is intentional: 30px labelled rows when expanded, 36px targets
   // on the collapsed rail (same split as RailButton below). Keep in sync.
   const className = cn(
-    'group/row relative flex items-center rounded-sm text-muted-foreground/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
+    'group/row relative flex items-center rounded-sm text-muted-foreground/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
     expanded
       ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data hover:bg-surface-2/70 hover:text-foreground'
       : 'h-9 w-9 justify-center hover:bg-surface-2 hover:text-foreground',
@@ -190,7 +191,7 @@ function RailButton({
       onClick={onClick}
       aria-label={label}
       className={cn(
-        'flex items-center rounded-sm text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
+        'flex items-center rounded-sm text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
         // Same 30px/36px density split as NavRow above. Keep in sync.
         expanded ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data' : "relative h-9 w-9 justify-center after:absolute after:-inset-1 after:content-['']",
         danger ? 'hover:bg-danger/10 hover:text-danger' : 'hover:bg-surface-2 hover:text-foreground',
@@ -217,7 +218,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   // Aligned with the row labels (icon column + gap), so the nav keeps two
   // clean columns instead of a ragged set of headings.
   return (
-    <div className="pb-1 pl-[calc(0.5rem+1rem+0.625rem)] pr-2 pt-4 text-micro font-semibold uppercase leading-none tracking-[0.14em] text-muted-foreground/55">
+    <div className="pb-1 pl-[calc(0.5rem+1rem+0.625rem)] pr-2 pt-4 text-micro font-semibold uppercase leading-none tracking-[0.14em] text-muted-foreground">
       {children}
     </div>
   );
@@ -246,7 +247,17 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const themeSettings = useThemeStore((s) => s.themeSettings);
-  const expanded = useThemeStore((s) => s.navExpanded);
+  const navExpanded = useThemeStore((s) => s.navExpanded);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)');
+    const update = () => setIsMobile(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  // The drawer is always labelled; the saved desktop rail preference must not
+  // turn mobile navigation into a 56px icon strip with no expand control.
+  const expanded = hideCollapseOnMobile && isMobile ? true : navExpanded;
   const toggleNav = useThemeStore((s) => s.toggleNav);
   const pluginTabs = usePluginTabs('admin');
   const [sectionsOpen, setSectionsOpen] = useState(false);
@@ -274,6 +285,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
   const panelName = themeSettings?.panelName || 'Catalyst';
   const logoUrl = themeSettings?.logoUrl || '/logo.png';
   const canViewVersion = hasAnyPermission(permissions, ['admin.read', 'admin.write']);
+  const canWriteAdmin = hasAnyPermission(permissions, ['admin.write']);
 
   const adminLinks = ADMIN_PRIMARY.filter((link) => hasAnyPermission(permissions, [...link.perms]));
   const groups = visibleGroups(t, permissions);
@@ -296,7 +308,10 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
     return () => observer.disconnect();
   }, [expanded, groups.length]);
 
-  const pluginRows: NavLinkItem[] = pluginTabs.map((tab) => ({
+  const pluginRows: NavLinkItem[] = pluginTabs
+    .filter((tab) => hasAnyPermission(permissions, ['admin.read', 'admin.write']) &&
+      (!tab.requiredPermissions?.length || hasAnyPermission(permissions, tab.requiredPermissions)))
+    .map((tab) => ({
     to: `/admin/plugin/${tab.id}`,
     label: tab.label,
     icon: tab.id.includes('ticket') ? Ticket : Plug,
@@ -339,7 +354,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
         >
           <Link
             to="/dashboard"
-            className={cn('flex h-9 items-center gap-2 rounded-sm px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40', expanded && 'min-w-0 flex-1')}
+            className={cn('flex h-9 items-center gap-2 rounded-sm px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', expanded && 'min-w-0 flex-1', hideCollapseOnMobile && 'max-lg:mr-9')}
             aria-label={panelName}
           >
             <img
@@ -381,7 +396,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
             'flex min-h-0 flex-col',
             expanded
               ? 'w-full flex-1 gap-px overflow-y-auto pb-10 pr-2 [scrollbar-width:thin]'
-              : 'items-center gap-1',
+              : 'flex-1 items-center gap-1 overflow-y-auto [scrollbar-width:none]',
             expanded &&
               navScrolls &&
               '[mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent_calc(100%-1rem))]',
@@ -425,7 +440,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
                     aria-label={t('shell.sections')}
                     aria-expanded={sectionsOpen}
                     onClick={openSections}
-                    className="relative flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className="relative flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
@@ -439,7 +454,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
                     type="button"
                     aria-label={t('shell.openSearch', { shortcut: 'Ctrl+K' })}
                     onClick={() => window.dispatchEvent(new CustomEvent('catalyst:open-search'))}
-                    className="relative flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className="relative flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     <Search className="h-4 w-4" />
                   </button>
@@ -449,8 +464,6 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
             </>
           )}
         </nav>
-
-        {!expanded && <div className="flex-1" />}
 
         {/* Footer: same controls, labelled when expanded */}
         <div
@@ -467,7 +480,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
           {expanded ? (
             <NavLink
               to="/profile"
-              className="group/me mt-1 flex w-full items-center gap-2.5 rounded-sm border border-border/60 bg-surface-1/60 px-2 py-2 text-muted-foreground transition-colors hover:border-border hover:bg-surface-2/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="group/me mt-1 flex w-full items-center gap-2.5 rounded-sm border border-border/60 bg-surface-1/60 px-2 py-2 text-muted-foreground transition-colors hover:border-border hover:bg-surface-2/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               title={`${displayName} · ${user?.role ? user.role : t('sidebar.fallbackRole')}`}
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-foreground ring-1 ring-border">
@@ -491,7 +504,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
                 <NavLink
                   to="/profile"
                   aria-label={displayName}
-                  className="flex h-9 w-9 items-center justify-center rounded-sm font-display text-micro font-semibold text-muted-foreground ring-1 ring-border transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="flex h-9 w-9 items-center justify-center rounded-sm font-display text-micro font-semibold text-muted-foreground ring-1 ring-border transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {user?.image ? (
                     <img src={user.image} alt="" className="h-full w-full rounded-sm object-cover" />
@@ -515,7 +528,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
 
           {canViewVersion && (
             <Link
-              to="/admin/system"
+              to={canWriteAdmin ? '/admin/system' : '/admin'}
               aria-label={`v${PANEL_VERSION}`}
               title={
                 updateData?.updateAvailable
@@ -526,7 +539,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
                   : t('sidebar.versionTooltip', { version: PANEL_VERSION })
               }
               className={cn(
-                'flex items-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
+                'flex items-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
                 expanded ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data' : 'h-9 w-9 justify-center',
               )}
             >

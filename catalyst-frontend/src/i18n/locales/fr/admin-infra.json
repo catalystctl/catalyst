@@ -380,6 +380,7 @@
     "clearAll": "Tout effacer",
     "clearFilters": "Effacer les filtres",
     "clearSelection": "Effacer",
+    "deleteAccessLoadFailed": "Impossible de vérifier les nœuds que vous pouvez supprimer.",
     "deleteDialog": {
       "message": "Vous êtes sur le point de supprimer <1>{{label}}</1>.",
       "title": "Supprimer des nœuds",
@@ -404,6 +405,7 @@
     "filters": "Filtres",
     "hostnameUnavailable": "nom d’hôte indisponible",
     "lastSeen": "Vu pour la dernière fois {{time}}",
+    "loadFailed": "Impossible de charger les nœuds.",
     "locationNodeCount_one": "{{count}} nœud",
     "locationNodeCount_many": "{{count}} nœuds",
     "locationNodeCount_other": "{{count}} nœuds",
@@ -440,7 +442,10 @@
     "toast": {
       "deleted_one": "{{count}} nœud supprimé",
       "deleted_many": "{{count}} nœuds supprimés",
-      "deleted_other": "{{count}} nœuds supprimés"
+      "deleted_other": "{{count}} nœuds supprimés",
+      "deleteFailed_one": "Échec de la suppression de {{count}} nœud.",
+      "deleteFailed_many": "Échec de la suppression de {{count}} nœuds.",
+      "deleteFailed_other": "Échec de la suppression de {{count}} nœuds."
     },
     "unassigned": "Non attribué"
   },
@@ -488,6 +493,7 @@
       "template": "Modèle"
     },
     "filters": "Filtres",
+    "loadFailed": "Impossible de charger les serveurs.",
     "resultCount": "{{shown}} sur {{total}}",
     "runningCount": "{{value}} en cours d’exécution",
     "searchPlaceholder": "Rechercher des serveurs par nom ou ID…",

@@ -20,6 +20,7 @@ import {
  X,
 } from 'lucide-react';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import Pagination from '../../components/shared/Pagination';
 import { Button } from '../../components/ui/button';
@@ -77,15 +78,16 @@ function stateTextClass(status: string) {
 
 /**
  * One grid template shared by the column header and every row so columns line
- * up at each breakpoint. Fixed / minmax(0,1fr) tracks only — never `auto`.
- *   base : identity · actions
- *   md   : identity · node · state · actions
- *   xl   : identity · owner · node · template · state · actions
+ * up as the deck container widens, without squeezing the identity track.
+ *   narrow : identity · actions
+ *   wide   : identity · node · state · actions
+ *   widest : identity · owner · node · template · state · actions
  */
 const GRID =
  'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
- 'md:grid-cols-[minmax(0,1fr)_9rem_6.5rem_8.5rem] ' +
- 'xl:grid-cols-[minmax(0,1fr)_9rem_9rem_8rem_6.5rem_8.5rem]';
+ '@md:grid-cols-[minmax(0,1fr)_auto] ' +
+ '@4xl:grid-cols-[minmax(0,1fr)_8rem_6.5rem_8.5rem] ' +
+ '@6xl:grid-cols-[minmax(0,1fr)_8rem_8rem_7rem_6.5rem_8.5rem]';
 
 // ── Server Action Label ──
 // Module-level helper, so the namespace is spelled out: this file is inside
@@ -130,7 +132,7 @@ function AdminServersPage() {
  const [suspendReason, setSuspendReason] = useState('');
  const [updateServerId, setUpdateServerId] = useState<string | null>(null);
  const [deleteServer, setDeleteServer] = useState<{ id: string; name: string } | null>(null);
- const { data, isLoading } = useAdminServers({
+ const { data, isLoading, isError, refetch } = useAdminServers({
  page,
  limit: pageSize,
  status: status || undefined,
@@ -285,7 +287,7 @@ function AdminServersPage() {
       </header>
 
       {/* ── The deck: controls, columns, rows and totals in one frame ── */}
-      <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+      <div className="deck-panel @container flex min-h-0 flex-col overflow-hidden">
         {/* Control strip */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
           <label className="relative flex min-w-[12rem] flex-1 items-center">
@@ -335,12 +337,12 @@ function AdminServersPage() {
             </SelectContent>
           </Select>
 
-          <span className="ml-auto font-mono text-micro tabular-nums text-muted-foreground">
+          {!isError && !isLoading && <span className="ml-auto font-mono text-micro tabular-nums text-muted-foreground">
             {t('servers.resultCount', {
               shown: filteredServers.length,
               total: data?.pagination?.total ?? servers.length,
             })}
-          </span>
+          </span>}
         </div>
 
         {/* Expandable filter panel */}
@@ -523,7 +525,7 @@ function AdminServersPage() {
           <div
             className={cn(
               GRID,
-              'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+              'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 @4xl:grid',
             )}
           >
             <span className="flex items-center gap-2">
@@ -543,16 +545,16 @@ function AdminServersPage() {
               />
               <span className="type-overline">{t('servers:columns.server')}</span>
             </span>
-            <span className="type-overline hidden justify-self-end xl:inline-flex">{t('servers.filter.owner')}</span>
-            <span className="type-overline hidden justify-self-end md:inline-flex">{t('servers.filter.node')}</span>
-            <span className="type-overline hidden justify-self-end xl:inline-flex">{t('servers.filter.template')}</span>
-            <span className="type-overline hidden justify-self-end md:inline-flex">{t('servers.filter.status')}</span>
+            <span className="type-overline hidden justify-self-end @6xl:inline-flex">{t('servers.filter.owner')}</span>
+            <span className="type-overline hidden justify-self-end @4xl:inline-flex">{t('servers.filter.node')}</span>
+            <span className="type-overline hidden justify-self-end @6xl:inline-flex">{t('servers.filter.template')}</span>
+            <span className="type-overline hidden justify-self-end @4xl:inline-flex">{t('servers.filter.status')}</span>
             <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
           </div>
         )}
 
         {/* Rows */}
-        <div className="max-h-[calc(100dvh-20rem)] min-w-0 overflow-y-auto bg-background/25">
+        <div className="max-h-[min(32rem,50dvh)] min-w-0 overflow-y-auto bg-background/25">
           {isLoading ? (
             <div>
               {Array.from({ length: 6 }).map((_, index) => (
@@ -564,6 +566,8 @@ function AdminServersPage() {
                 </div>
               ))}
             </div>
+          ) : isError ? (
+            <div className="p-3"><TabErrorState message={t('servers.loadFailed')} onRetry={() => refetch()} /></div>
           ) : filteredServers.length > 0 ? (
             filteredServers.map((server: AdminServer) => {
               const isSelected = selectedIds.includes(server.id);
@@ -609,7 +613,7 @@ function AdminServersPage() {
                       </Link>
                       <span className="flex min-w-0 items-center gap-2 text-micro text-muted-foreground">
                         <span className="truncate font-mono opacity-60">{server.id}</span>
-                        <span className={cn('shrink-0 uppercase md:hidden', stateTextClass(server.status))}>
+                        <span className={cn('shrink-0 uppercase @4xl:hidden', stateTextClass(server.status))}>
                           {serverStatusLabel(t, server.status)}
                         </span>
                       </span>
@@ -617,7 +621,7 @@ function AdminServersPage() {
                   </div>
 
                   {/* owner */}
-                  <span className="hidden min-w-0 justify-self-end text-right xl:block">
+                  <span className="hidden min-w-0 justify-self-end text-right @6xl:block">
                     <span
                       className="block truncate text-micro text-muted-foreground"
                       title={server.owner ? server.owner.username || server.owner.email : undefined}
@@ -627,24 +631,24 @@ function AdminServersPage() {
                   </span>
 
                   {/* node */}
-                  <span className="hidden min-w-0 justify-self-end text-right md:block">
+                  <span className="hidden min-w-0 justify-self-end text-right @4xl:block">
                     <span className="block truncate text-micro text-muted-foreground">{server.node.name}</span>
                   </span>
 
                   {/* template */}
-                  <span className="hidden min-w-0 justify-self-end text-right xl:block">
+                  <span className="hidden min-w-0 justify-self-end text-right @6xl:block">
                     <span className="block truncate text-micro text-muted-foreground">{server.template.name}</span>
                   </span>
 
                   {/* state */}
-                  <span className="hidden min-w-0 justify-end overflow-hidden md:flex">
+                  <span className="hidden min-w-0 justify-end overflow-hidden @4xl:flex">
                     <span className={cn('truncate text-micro uppercase', stateTextClass(server.status))}>
                       {serverStatusLabel(t, server.status)}
                     </span>
                   </span>
 
                   {/* actions */}
-                  <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
+                  <span className="col-span-full flex shrink-0 items-center justify-start gap-1 @md:col-auto @md:justify-end">
                     {!isSuspended && (
                       <button
                         className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
@@ -777,7 +781,7 @@ function AdminServersPage() {
         </div>
 
         {/* Pagination */}
-        {pagination && pagination.totalPages > 1 ? (
+        {!isError && pagination && pagination.totalPages > 1 ? (
           <div className="border-t border-border/50 px-3 py-2">
             <Pagination
               page={pagination.page}
@@ -788,7 +792,7 @@ function AdminServersPage() {
         ) : null}
 
         {/* Footer strip — fleet totals */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
+        {!isError && !isLoading && <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
           <LegendStat tone="idle" text={t('servers.totalCount', { value: pagination?.total ?? 0 })} />
           {statusCounts['running'] ? (
             <LegendStat tone="go" text={t('servers.runningCount', { value: statusCounts['running'] })} />
@@ -799,7 +803,7 @@ function AdminServersPage() {
           {statusCounts['suspended'] ? (
             <LegendStat tone="hazard" text={t('servers.suspendedCount', { value: statusCounts['suspended'] })} />
           ) : null}
-        </div>
+        </div>}
       </div>
 
   <ConfirmDialog

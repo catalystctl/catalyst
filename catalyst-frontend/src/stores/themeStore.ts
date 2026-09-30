@@ -296,14 +296,19 @@ function generateColorScale(baseHSL: string): Record<string, string> {
   };
 }
 
-function luminance(hsl: string): number {
-  return parseInt(hsl.split(' ')[2]) / 100;
-}
-
-/** Near-black foreground for light danger surfaces (dark theme ships light danger). */
-function dangerForeground(dangerHSL: string, isDark: boolean): string {
-  if (isDark) return '217 2% 7%';
-  return luminance(dangerHSL) > 0.55 ? '0 0% 9%' : '0 0% 100%';
+export function contrastForeground(hex: string): string {
+  const channels = /^#?([0-9a-f]{6})$/i.exec(hex)?.[1].match(/.{2}/g)?.map((channel) => {
+    const value = parseInt(channel, 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  if (!channels) return '0 0% 100%';
+  const luminance = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  // Compare actual WCAG contrast against near-black ink and white. HSL
+  // lightness gives white text on saturated greens and reds that fails 4.5:1.
+  const inkLuminance = 0.0086; // #171717, the 9% ink token below
+  return (luminance + 0.05) / (inkLuminance + 0.05) >= 1.05 / (luminance + 0.05)
+    ? '0 0% 9%'
+    : '0 0% 100%';
 }
 
 // ─── Pure DOM application (no store dependency) ───
@@ -331,18 +336,15 @@ function buildThemeCssVars(
   for (const [shade, value] of Object.entries(primaryScale)) {
     set(`--primary-${shade}`, value);
   }
-  const isLightPrimary = luminance(primaryHSL) > 0.55;
-  set('--primary-foreground', isLightPrimary ? '0 0% 9%' : '0 0% 100%');
+  set('--primary-foreground', contrastForeground(primaryColor));
 
   const secondaryHSL = hexToHSL(secondaryColor);
   set('--secondary', secondaryHSL);
-  const isLightSecondary = luminance(secondaryHSL) > 0.55;
-  set('--secondary-foreground', isLightSecondary ? '0 0% 9%' : '0 0% 100%');
+  set('--secondary-foreground', contrastForeground(secondaryColor));
 
   const accentHSL = hexToHSL(accentColor);
   set('--accent', accentHSL);
-  const isLightAccent = luminance(accentHSL) > 0.55;
-  set('--accent-foreground', isLightAccent ? '0 0% 9%' : '0 0% 100%');
+  set('--accent-foreground', contrastForeground(accentColor));
   set('--ring', colors.ringColor ? hexToHSL(colors.ringColor) : primaryHSL);
 
   const semanticKeys: (keyof ThemeColors)[] = ['successColor', 'warningColor', 'dangerColor', 'infoColor'];
@@ -352,7 +354,7 @@ function buildThemeCssVars(
     dangerColor: 'danger',
     infoColor: 'info',
   };
-  let dangerHSL: string | null = null;
+  let dangerHex: string | null = null;
   for (const key of semanticKeys) {
     const hex = colors[key];
     if (!hex) continue;
@@ -362,13 +364,14 @@ function buildThemeCssVars(
     set(`--${varName}-muted`, mutedVariant(hsl));
     if (key === 'dangerColor') {
       set('--destructive', hsl);
-      dangerHSL = hsl;
+      dangerHex = hex;
+    }
+    if (key === 'successColor' || key === 'infoColor') {
+      set(`--${varName}-foreground`, contrastForeground(hex));
     }
   }
-  // Solid warning surfaces (confirm dialogs) need an ink/dark-brown label;
-  // dark themes use ink, light themes a dark amber for contrast on bright yellow.
   const isDark = theme === 'dark';
-  set('--warning-foreground', isDark ? '217 2% 7%' : '32 90% 22%');
+  if (colors.warningColor) set('--warning-foreground', contrastForeground(colors.warningColor));
   const bgKey = isDark ? 'darkBackground' : 'lightBackground';
   const fgKey = isDark ? 'darkForeground' : 'lightForeground';
   const cardKey = isDark ? 'darkCard' : 'lightCard';
@@ -417,7 +420,7 @@ function buildThemeCssVars(
   const fallbackFg = isDark ? '#fafafa' : '#09090b';
   set('--popover', hexToHSL(colors[popoverKey] || colors[cardKey] || colors[bgKey] || fallbackBg));
   set('--popover-foreground', hexToHSL(colors[fgKey] || fallbackFg));
-  const dangerFg = dangerHSL ? dangerForeground(dangerHSL, isDark) : isDark ? '217 2% 7%' : '0 0% 100%';
+  const dangerFg = dangerHex ? contrastForeground(dangerHex) : contrastForeground(isDark ? '#ffadad' : '#d62727');
   set('--destructive-foreground', dangerFg);
   set('--danger-foreground', dangerFg);
 
@@ -545,7 +548,7 @@ export const useThemeStore = create<ThemeState>()(
       themePreference: initialThemePreference(),
       personalColors: initialPersonalColors(),
       sidebarCollapsed: false,
-      navExpanded: false,
+      navExpanded: true,
       serverViewMode: 'card' as const,
       themeSettings: initialThemeSettings(),
       customCssElement: null,

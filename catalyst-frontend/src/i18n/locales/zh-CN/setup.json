@@ -31,6 +31,7 @@
     "logoTooLarge": "徽标必须小于 512KB",
     "passwordRequired": "请输入密码",
     "passwordTooShort": "密码至少需要 {{min}} 个字符",
+    "seedColorInvalid": "请输入有效的六位十六进制颜色，例如 #c48d5a。",
     "usernameRequired": "请输入用户名",
     "usernameTooShort": "用户名至少需要 {{min}} 个字符"
   },
@@ -64,7 +65,8 @@
   },
   "submit": {
     "complete": "完成初始化",
-    "completing": "正在初始化…"
+    "completing": "正在初始化…",
+    "reviewTitle": "检查您的设置"
   },
   "welcome": {
     "chooseFile": "选择文件",

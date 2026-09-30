@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, type ChangeEvent } from 'rea
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
-import { useThemeStore, defaultThemeColors } from '../../stores/themeStore';
+import { useThemeStore } from '../../stores/themeStore';
 import { useSetupStatus } from '../../hooks/useSetupStatus';
 import apiClient from '../../services/api/client';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
@@ -18,7 +18,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generatePalette';
 import { cn } from '../../lib/utils';
-import type { ThemeColors } from '../../services/api/theme';
 import {
  Upload,
  Eye,
@@ -98,10 +97,6 @@ function SetupPage() {
  // ── Step 3 state ──
  const [seedColor, setSeedColor] = useState('#c48d5a');
  const [harmonyMode, setHarmonyMode] = useState<HarmonyMode>('auto');
- const [primaryColor] = useState('#c48d5a');
- const [secondaryColor] = useState('#5ac4c2');
- const [accentColor] = useState('#5a5cc4');
- const [themeColors] = useState<ThemeColors>({ ...defaultThemeColors });
  const [defaultTheme, setDefaultTheme] = useState<'light' | 'dark'>('dark');
 
  // ── Palette generation ──
@@ -146,12 +141,12 @@ function SetupPage() {
 
  // Live color preview — applies generated palette to DOM in real time
  useEffect(() => {
- previewColors({ primaryColor, secondaryColor, accentColor, themeColors });
+ if (generatedPalette) previewColors(generatedPalette);
  return () => {
  cancelPreview();
  applyTheme();
  };
- }, [primaryColor, secondaryColor, accentColor, themeColors, previewColors, cancelPreview, applyTheme]);
+ }, [generatedPalette, previewColors, cancelPreview, applyTheme]);
 
  // ── Validation ──
 
@@ -235,6 +230,14 @@ function SetupPage() {
 
  const handleSubmit = async () => {
  if (isSubmitting) return;
+ if (!validateStep2()) {
+ setCurrentStep(1);
+ return;
+ }
+ if (!generatedPalette) {
+ setError(t('errors.seedColorInvalid'));
+ return;
+ }
  setIsSubmitting(true);
  setError(null);
 
@@ -259,11 +262,11 @@ function SetupPage() {
  email: email.trim(),
  username: username.trim(),
  password,
- primaryColor,
- secondaryColor,
- accentColor,
+ primaryColor: generatedPalette.primaryColor,
+ secondaryColor: generatedPalette.secondaryColor,
+ accentColor: generatedPalette.accentColor,
  defaultTheme,
- metadata: { themeColors },
+ metadata: { themeColors: generatedPalette.themeColors },
  environment: publicUrl.trim() ? { PUBLIC_URL: publicUrl.trim() } : undefined,
  });
 
@@ -643,9 +646,10 @@ function SetupPage() {
  </div>
  <div className="flex-1 space-y-3">
  <div>
- <Label className="mb-1 block text-mini font-medium text-foreground">{t('appearance.seedColor')}</Label>
+ <Label htmlFor="seedColor" className="mb-1 block text-mini font-medium text-foreground">{t('appearance.seedColor')}</Label>
  <div className="flex items-center gap-2">
  <Input
+ id="seedColor"
  type="text"
  value={seedColor}
  onChange={(e) => setSeedColor(e.target.value)}
@@ -656,6 +660,7 @@ function SetupPage() {
  : 'border-danger/40 text-danger'
  }`}
  aria-invalid={isSeedValid ? undefined : true}
+ aria-describedby={!isSeedValid ? 'seedColor-error' : undefined}
  />
  <button
  type="button"
@@ -681,6 +686,7 @@ function SetupPage() {
  );
  })()}
  </div>
+ {!isSeedValid && <FieldError id="seedColor-error" message={t('errors.seedColorInvalid')} />}
  </div>
 
  {/* Harmony modes */}
@@ -840,6 +846,7 @@ function SetupPage() {
  onClick={() => {
  setDefaultTheme('dark');
  setTheme('dark');
+ if (generatedPalette) previewColors(generatedPalette);
  }}
  className={cn(
  'flex flex-1 items-center justify-center gap-2 rounded-sm border px-4 py-2 text-mini font-medium transition-colors',
@@ -856,6 +863,7 @@ function SetupPage() {
  onClick={() => {
  setDefaultTheme('light');
  setTheme('light');
+ if (generatedPalette) previewColors(generatedPalette);
  }}
  className={cn(
  'flex flex-1 items-center justify-center gap-2 rounded-sm border px-4 py-2 text-mini font-medium transition-colors',
@@ -871,13 +879,13 @@ function SetupPage() {
  </div>
 
  {/* Live preview */}
- <div className="space-y-2">
+ {generatedPalette && <div className="space-y-2">
  <Label className="text-mini text-muted-foreground">{t('appearance.livePreview')}</Label>
  <div className="overflow-hidden rounded-sm border border-border/60">
  {/* Mock header */}
  <div
  className="flex items-center gap-2 px-3 py-2"
- style={{ backgroundColor: primaryColor }}
+ style={{ backgroundColor: generatedPalette?.primaryColor }}
  >
  <Monitor className="h-4 w-4 text-primary-foreground" />
  <span className="font-display text-mini font-semibold text-primary-foreground">
@@ -890,7 +898,7 @@ function SetupPage() {
  <div className="h-2 w-24 bg-surface-3" />
  <div
  className="h-2 w-16"
- style={{ backgroundColor: accentColor, opacity: 0.4 }}
+ style={{ backgroundColor: generatedPalette?.accentColor, opacity: 0.4 }}
  />
  </div>
  <div className="grid grid-cols-2 gap-2">
@@ -906,19 +914,29 @@ function SetupPage() {
  <div className="flex gap-2">
  <div
  className="flex h-7 flex-1 items-center justify-center rounded-sm text-micro font-medium text-primary-foreground"
- style={{ backgroundColor: primaryColor }}
+ style={{ backgroundColor: generatedPalette?.primaryColor }}
  >
  {t('appearance.primaryButton')}
  </div>
  <div
  className="flex h-7 flex-1 items-center justify-center rounded-sm text-micro font-medium text-primary-foreground"
- style={{ backgroundColor: accentColor }}
+ style={{ backgroundColor: generatedPalette?.accentColor }}
  >
  {t('appearance.accentButton')}
  </div>
  </div>
  </div>
  </div>
+ </div>
+ }
+ <div className="space-y-2 rounded-sm border border-border/60 bg-surface-1/40 p-3 text-mini">
+ <BracketLabel>{t('submit.reviewTitle')}</BracketLabel>
+ <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+ <dt className="text-muted-foreground">{t('welcome.panelName')}</dt><dd className="truncate text-right">{panelName.trim() || 'Catalyst'}</dd>
+ <dt className="text-muted-foreground">{t('admin.email')}</dt><dd className="truncate text-right">{email.trim()}</dd>
+ <dt className="text-muted-foreground">{t('appearance.seedColor')}</dt><dd className="text-right font-mono">{seedColor}</dd>
+ <dt className="text-muted-foreground">{t('appearance.defaultTheme')}</dt><dd className="text-right">{t(`appearance.${defaultTheme}`)}</dd>
+ </dl>
  </div>
  </div>
  </div>
@@ -950,7 +968,7 @@ function SetupPage() {
  ) : (
  <button
  type="submit"
- disabled={isSubmitting}
+ disabled={isSubmitting || !generatedPalette}
  className="pressable flex h-8 items-center gap-1.5 rounded-sm bg-primary px-4 font-display text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70"
  >
  {isSubmitting ? (

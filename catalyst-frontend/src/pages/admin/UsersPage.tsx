@@ -34,6 +34,7 @@ import {
  MailCheck,
 } from 'lucide-react';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import { BracketLabel, Segmented, StatusLed } from '../../components/deck/primitives';
 import { cn } from '@/lib/utils';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
@@ -311,13 +312,14 @@ const SSO_PROVIDER_NAMES: Record<string, string> = {
 /** Resolve the display label for an SSO provider id. */
 /**
  * One grid template shared by the column header and every row so columns line
- * up. Fixed / minmax(0,1fr) tracks only — never `auto`.
- *   base : identity · actions
- *   md   : identity · role · status · actions
+ * up. Extra columns appear only when the deck itself has enough width.
+ *   narrow : identity · actions
+ *   wide   : identity · role · status · actions
  */
 const GRID =
  'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
- 'md:grid-cols-[minmax(0,1fr)_10rem_8rem_9rem]';
+ '@md:grid-cols-[minmax(0,1fr)_auto] ' +
+ '@4xl:grid-cols-[minmax(0,1fr)_8rem_7rem_9rem]';
 
 function providerLabel(t: TFunction<'admin-access'>, providerId: string): string {
  if (providerId === 'credential') return t('users.providerCredential');
@@ -377,7 +379,7 @@ function UsersPage() {
  const [enforce2faTarget, setEnforce2faTarget] = useState<{ id: string; username: string; enforce: boolean } | null>(null);
  const [unlinkTarget, setUnlinkTarget] = useState<{ userId: string; username: string; accountId: string; providerId: string } | null>(null);
 
- const { data, isLoading } = useAdminUsers({
+ const { data, isLoading, isError, refetch } = useAdminUsers({
  page,
  limit: pageSize,
  search: search.trim() || undefined,
@@ -906,7 +908,7 @@ function UsersPage() {
  </header>
 
  {/* ── The deck: controls, columns, rows and totals in one frame ── */}
- <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+ <div className="deck-panel @container flex min-h-0 flex-col overflow-hidden">
  {/* Control strip */}
  <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
  <label className="relative flex min-w-[12rem] flex-1 items-center">
@@ -955,10 +957,14 @@ function UsersPage() {
  </SelectContent>
  </Select>
 
- <span className="ml-auto font-mono text-micro tabular-nums text-muted-foreground">
- {t('users.showing', { shown: filteredUsers.length, total: data?.pagination?.total ?? users.length })}
- </span>
+ {!isError && !isLoading && <span className="ml-auto font-mono text-micro tabular-nums text-muted-foreground">
+ {t('users.showingPage', { shown: filteredUsers.length, total: users.length, page })}
+ </span>}
  </div>
+
+ <p className="border-b border-border/40 px-3 py-1 text-micro text-muted-foreground">
+ {t('users.pageScopeHint')}
+ </p>
 
  {/* Expandable filter panel */}
  {showFilters && (
@@ -1065,7 +1071,7 @@ function UsersPage() {
  <div
  className={cn(
  GRID,
- 'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+ 'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 @4xl:grid',
  )}
  >
  <span className="flex items-center gap-2">
@@ -1085,14 +1091,14 @@ function UsersPage() {
  />
  <span className="type-overline">{t('common:roles.user')}</span>
  </span>
- <span className="type-overline hidden justify-self-end md:inline-flex">{t('users.roleLabel')}</span>
- <span className="type-overline hidden justify-self-end md:inline-flex">{t('users.statusLabel')}</span>
+ <span className="type-overline hidden justify-self-end @4xl:inline-flex">{t('users.roleLabel')}</span>
+ <span className="type-overline hidden justify-self-end @4xl:inline-flex">{t('users.statusLabel')}</span>
  <span className="type-overline justify-self-end">{t('users.more')}</span>
  </div>
  )}
 
  {/* Rows */}
- <div className="max-h-[calc(100dvh-20rem)] min-w-0 overflow-y-auto bg-background/25">
+ <div className="max-h-[min(32rem,50dvh)] min-w-0 overflow-y-auto bg-background/25">
  {isLoading ? (
  <div>
  {Array.from({ length: 6 }).map((_, index) => (
@@ -1104,6 +1110,8 @@ function UsersPage() {
  </div>
  ))}
  </div>
+ ) : isError ? (
+ <div className="p-3"><TabErrorState message={t('users.loadFailed')} onRetry={() => refetch()} /></div>
  ) : filteredUsers.length > 0 ? (
  filteredUsers.map((user: AdminUser) => {
  const isSelected = selectedIds.includes(user.id);
@@ -1178,13 +1186,13 @@ function UsersPage() {
  {t('users.keyCount', { count: user.passkeys?.length ?? 0 })}
  </span>
  )}
- <span className={cn('shrink-0 uppercase md:hidden', statusClass)}>{statusLabel}</span>
+ <span className={cn('shrink-0 uppercase @4xl:hidden', statusClass)}>{statusLabel}</span>
  </span>
  </div>
  </div>
 
  {/* role */}
- <span className="hidden min-w-0 justify-self-end md:flex">
+ <span className="hidden min-w-0 justify-self-end @4xl:flex">
  {user.roles.length > 0 ? (
  <span className="flex min-w-0 items-center gap-1 text-micro text-muted-foreground" title={roleNames}>
  <Shield className="h-3 w-3 shrink-0" />
@@ -1196,12 +1204,12 @@ function UsersPage() {
  </span>
 
  {/* status */}
- <span className="hidden min-w-0 justify-self-end md:flex">
+ <span className="hidden min-w-0 justify-self-end @4xl:flex">
  <span className={cn('truncate text-micro uppercase', statusClass)}>{statusLabel}</span>
  </span>
 
  {/* actions */}
- <span className="col-span-full flex shrink-0 items-center justify-start gap-1 md:col-auto md:justify-end">
+ <span className="col-span-full flex shrink-0 items-center justify-start gap-1 @md:col-auto @md:justify-end">
  {user.banned ? (
  <button
  className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-success/50 hover:text-success disabled:pointer-events-none disabled:opacity-30"
@@ -1331,7 +1339,7 @@ function UsersPage() {
  </div>
 
  {/* Pagination */}
- {pagination && pagination.totalPages > 1 ? (
+ {!isError && pagination && pagination.totalPages > 1 ? (
  <div className="border-t border-border/50 px-3 py-2">
  <Pagination
  page={pagination.page}
@@ -1342,7 +1350,7 @@ function UsersPage() {
  ) : null}
 
  {/* Footer strip — directory totals */}
- <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
+ {!isError && !isLoading && <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
  <span className="flex items-center gap-1.5">
  <StatusLed tone="idle" />
  <Segmented muted className="text-micro">
@@ -1367,7 +1375,7 @@ function UsersPage() {
  <Segmented muted className="text-micro">{t('users.unverifiedCount', { count: unverifiedCount })}</Segmented>
  </span>
  )}
- </div>
+ </div>}
  </div>
 
  {/* ── Create/Edit User Wizard Modal ── */}

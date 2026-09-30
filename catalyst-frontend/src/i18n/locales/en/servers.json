@@ -201,6 +201,7 @@
       "templateSearchPlaceholder": "Search templates...",
       "useDefaultImage": "Use default image"
     },
+    "installFailed": "Server created, but installation could not start: {{error}}",
     "network": {
       "addBinding": "+ Add binding",
       "additionalBindings": "Additional Port Bindings",
@@ -223,9 +224,11 @@
       "selectInterface": "Select interface"
     },
     "newServer": "New server",
+    "openCreatedServer": "Open created server",
     "resources": {
       "title": "Resource Allocation"
     },
+    "retryInstall": "Retry installation",
     "startup": {
       "environmentVariables": "Environment Variables",
       "noVariables": "No startup variables for this template."
@@ -237,12 +240,20 @@
       "startup": "Startup"
     },
     "submit": "Create server",
-    "title": "Create new server"
+    "title": "Create new server",
+    "validation": {
+      "invalidName": "Use only letters, numbers, spaces, hyphens, underscores, periods, parentheses, ampersands, and apostrophes in the server name.",
+      "minimum": "{{field}} must be at least {{min}}.",
+      "portRange": "Port must be between 1 and 65535.",
+      "required": "{{field}} is required.",
+      "unmetSteps": "Complete these requirements before continuing:"
+    }
   },
   "deleteServer": {
     "confirm": "Are you sure you want to delete <strong>{{name}}</strong>? This action cannot be undone.",
     "deleted": "Server deleted",
-    "title": "Delete server"
+    "title": "Delete server",
+    "typeNameToConfirm": "Type {{name}} to confirm deletion."
   },
   "details": {
     "accessRemoved": "Access removed",

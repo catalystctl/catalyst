@@ -200,6 +200,7 @@
       "templateSearchPlaceholder": "搜索模板…",
       "useDefaultImage": "使用默认镜像"
     },
+    "installFailed": "服务器已创建，但无法开始安装：{{error}}",
     "network": {
       "addBinding": "+ 添加绑定",
       "additionalBindings": "附加端口绑定",
@@ -221,9 +222,11 @@
       "selectInterface": "选择接口"
     },
     "newServer": "新建服务器",
+    "openCreatedServer": "打开已创建的服务器",
     "resources": {
       "title": "资源分配"
     },
+    "retryInstall": "重试安装",
     "startup": {
       "environmentVariables": "环境变量",
       "noVariables": "此模板没有启动变量。"
@@ -235,12 +238,20 @@
       "startup": "启动"
     },
     "submit": "创建服务器",
-    "title": "创建新服务器"
+    "title": "创建新服务器",
+    "validation": {
+      "invalidName": "服务器名称只能包含字母、数字、空格、连字符、下划线、句点、括号、与号和撇号。",
+      "minimum": "{{field}}不能小于 {{min}}。",
+      "portRange": "端口必须介于 1 和 65535 之间。",
+      "required": "请填写{{field}}。",
+      "unmetSteps": "请先满足以下条件再继续："
+    }
   },
   "deleteServer": {
     "confirm": "确定要删除 <strong>{{name}}</strong> 吗？此操作无法撤销。",
     "deleted": "服务器已删除",
-    "title": "删除服务器"
+    "title": "删除服务器",
+    "typeNameToConfirm": "请输入 {{name}} 以确认删除。"
   },
   "details": {
     "accessRemoved": "访问权限已移除",

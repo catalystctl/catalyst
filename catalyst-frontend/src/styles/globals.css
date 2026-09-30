@@ -226,7 +226,7 @@
   --accent: var(--signal);
   --accent-foreground: 217 2% 7%;
   --destructive: var(--danger);
-  --destructive-foreground: 0 0% 100%;
+  --destructive-foreground: 217 2% 7%;
   --ring: var(--signal);
 
   /* Derived from --primary so a re-hued admin theme never flashes magenta. */
@@ -709,4 +709,21 @@ select option {
   animation: deck-led 2.4s var(--ease-standard) infinite;
   border-radius: 999px;
   box-shadow: inset 0 0 0 1px hsl(var(--background) / 0.55);
+}
+
+/* Server browser columns follow deck width rather than the viewport; the
+   expanded cabinet must never consume the server identity track. */
+.server-list-container { container: server-list / inline-size; }
+.server-list-grid { grid-template-columns: minmax(0, 1fr); }
+.server-list-actions { justify-self: end; }
+.server-list-columns, .server-list-md, .server-list-xl { display: none; }
+@container server-list (min-width: 48rem) {
+  .server-list-grid { grid-template-columns: minmax(14rem, 1fr) 9rem 6rem 12rem; }
+  .server-list-columns { display: grid; }
+  .server-list-md { display: flex; }
+  .server-list-mobile-meta { display: none; }
+}
+@container server-list (min-width: 80rem) {
+  .server-list-grid { grid-template-columns: minmax(14rem, 1fr) 9rem 6.5rem 6.5rem 6.5rem 11rem 5.5rem 12rem; }
+  .server-list-xl { display: flex; }
 }

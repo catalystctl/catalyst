@@ -4,7 +4,6 @@
     "create": {
       "action": "创建备份",
       "description": "留空将使用当前时间戳自动生成名称。",
-      "failed": "创建备份失败",
       "nameLabel": "备份名称（可选）",
       "success": "已开始创建备份",
       "title": "创建备份"
@@ -12,7 +11,6 @@
     "delete": {
       "confirmPrefix": "删除 ",
       "confirmSuffix": "？此操作无法撤销。",
-      "failed": "删除备份失败",
       "success": "备份已删除",
       "title": "删除备份"
     },
@@ -43,10 +41,10 @@
       "previous": "上一页"
     },
     "restore": {
+      "acknowledgeOverwrite": "我了解恢复此备份将覆盖服务器当前的文件。",
       "action": "恢复",
       "confirmPrefix": "将 ",
       "confirmSuffix": " 恢复到此服务器？恢复前必须先停止服务器，当前文件将被覆盖。",
-      "failed": "恢复备份失败",
       "success": "已开始恢复备份",
       "title": "恢复备份"
     },
@@ -280,14 +278,11 @@
       "remainingSeconds": "剩余 {{seconds}} 秒",
       "remainingYears": "剩余 {{years}} 年 {{days}} 天",
       "revokeAll": "撤销所有会话",
-      "revokeAllFailed": "撤销所有令牌失败",
       "revokedCount_other": "已撤销 {{count}} 个 SFTP 会话",
-      "revokeFailed": "撤销令牌失败",
       "revokeFor": "撤销 {{email}} 的会话",
       "revokeOwn": "撤销您的会话",
       "rotate": "轮换",
       "rotated": "SFTP 密码已轮换",
-      "rotateFailed": "轮换 SFTP 令牌失败",
       "rotateNow": "立即轮换",
       "rotatePassword": "轮换密码",
       "sessionRevoked": "SFTP 会话已撤销",
@@ -834,7 +829,6 @@
     "create": {
       "action": "创建任务",
       "description": "为此服务器安排周期性操作。",
-      "failed": "创建任务失败",
       "namePlaceholder": "每日夜间重启",
       "submitting": "正在创建…",
       "success": "任务已创建",
@@ -853,7 +847,6 @@
     "descriptionLabel": "描述（可选）",
     "edit": {
       "description": "更新此计划任务。",
-      "failed": "更新任务失败",
       "saving": "正在保存…",
       "success": "任务已更新",
       "title": "编辑任务"

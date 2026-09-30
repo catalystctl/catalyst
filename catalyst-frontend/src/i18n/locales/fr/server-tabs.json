@@ -4,7 +4,6 @@
     "create": {
       "action": "Créer une sauvegarde",
       "description": "Laissez vide pour générer automatiquement un nom avec l’horodatage actuel.",
-      "failed": "Échec de la création de la sauvegarde",
       "nameLabel": "Nom de la sauvegarde (facultatif)",
       "success": "Création de la sauvegarde démarrée",
       "title": "Créer une sauvegarde"
@@ -12,7 +11,6 @@
     "delete": {
       "confirmPrefix": "Supprimer ",
       "confirmSuffix": " ? Cette action est irréversible.",
-      "failed": "Échec de la suppression de la sauvegarde",
       "success": "Sauvegarde supprimée",
       "title": "Supprimer une sauvegarde"
     },
@@ -45,10 +43,10 @@
       "previous": "Précédent"
     },
     "restore": {
+      "acknowledgeOverwrite": "Je comprends que la restauration de cette sauvegarde écrasera les fichiers actuels du serveur.",
       "action": "Restaurer",
       "confirmPrefix": "Restaurer ",
       "confirmSuffix": " sur ce serveur ? Le serveur doit être arrêté avant la restauration et les fichiers actuels seront écrasés.",
-      "failed": "Échec de la restauration de la sauvegarde",
       "success": "Restauration de la sauvegarde démarrée",
       "title": "Restaurer une sauvegarde"
     },
@@ -296,16 +294,13 @@
       "remainingSeconds": "{{seconds}} s restantes",
       "remainingYears": "{{years}} ans {{days}} j restants",
       "revokeAll": "Révoquer toutes les sessions",
-      "revokeAllFailed": "Échec de la révocation de tous les jetons",
       "revokedCount_one": "{{count}} session SFTP révoquée",
       "revokedCount_many": "{{count}} sessions SFTP révoquées",
       "revokedCount_other": "{{count}} sessions SFTP révoquées",
-      "revokeFailed": "Échec de la révocation du jeton",
       "revokeFor": "Révoquer la session de {{email}}",
       "revokeOwn": "Révoquer votre session",
       "rotate": "Régénérer",
       "rotated": "Mot de passe SFTP régénéré",
-      "rotateFailed": "Échec de la régénération du jeton SFTP",
       "rotateNow": "Régénérer maintenant",
       "rotatePassword": "Régénérer le mot de passe",
       "sessionRevoked": "Session SFTP révoquée",
@@ -908,7 +903,6 @@
     "create": {
       "action": "Créer une tâche",
       "description": "Planifiez une action récurrente pour ce serveur.",
-      "failed": "Échec de la création de la tâche",
       "namePlaceholder": "Redémarrage nocturne",
       "submitting": "Création…",
       "success": "Tâche créée",
@@ -927,7 +921,6 @@
     "descriptionLabel": "Description (facultatif)",
     "edit": {
       "description": "Mettre à jour cette tâche planifiée.",
-      "failed": "Échec de la mise à jour de la tâche",
       "saving": "Enregistrement…",
       "success": "Tâche mise à jour",
       "title": "Modifier la tâche"

@@ -108,8 +108,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
       setCommand('');
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || t('tasks.create.failed');
-      notifyError(message);
+      notifyError(error);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });

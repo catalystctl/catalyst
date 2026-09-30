@@ -31,6 +31,7 @@
     "logoTooLarge": "Le logo doit être inférieur à 512KB",
     "passwordRequired": "Le mot de passe est requis",
     "passwordTooShort": "Le mot de passe doit contenir au moins {{min}} caractères",
+    "seedColorInvalid": "Saisissez une couleur hexadécimale valide à six chiffres, comme #c48d5a.",
     "usernameRequired": "Le nom d’utilisateur est requis",
     "usernameTooShort": "Le nom d’utilisateur doit contenir au moins {{min}} caractères"
   },
@@ -64,7 +65,8 @@
   },
   "submit": {
     "complete": "Terminer la configuration",
-    "completing": "Configuration…"
+    "completing": "Configuration…",
+    "reviewTitle": "Vérifiez votre configuration"
   },
   "welcome": {
     "chooseFile": "Choisir un fichier",

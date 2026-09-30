@@ -30,6 +30,8 @@ function AppLayout() {
   const shortcut = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘K' : 'Ctrl+K';
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
   const wasDrawerOpen = useRef(false);
@@ -37,7 +39,60 @@ function AppLayout() {
   useCmdK(() => setIsSearchOpen(true));
 
   useEffect(() => setIsMobileSidebarOpen(false), [pathname]);
-  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsMobileSidebarOpen(false); }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close); }, []);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)');
+    const update = () => {
+      setIsMobile(media.matches);
+      if (!media.matches) setIsMobileSidebarOpen(false);
+    };
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    if (!isMobile || !isMobileSidebarOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileSidebarOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const controls = Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? []).filter((element) => element.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && (document.activeElement === first || !sidebarRef.current?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !sidebarRef.current?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isMobile, isMobileSidebarOpen]);
+
+  // Announce client-side route changes to keyboard and screen-reader users.
+  const initialPath = useRef(pathname);
+  useEffect(() => {
+    if (pathname === initialPath.current) return;
+    initialPath.current = pathname;
+    const frame = requestAnimationFrame(() => {
+      const heading = document.querySelector<HTMLElement>('#main-content h1');
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus({ preventScroll: true });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pathname]);
 
   // The sections dialog and the drawer share z-50: the sidebar closes the
   // drawer before opening the dialog so the two never stack on mobile.
@@ -85,7 +140,7 @@ function AppLayout() {
       )}
 
       {/* Mobile header */}
-      <div className={cn('fixed left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 lg:hidden', showsDemoChrome ? 'top-8' : 'top-0')}>
+      <div inert={isMobile && isMobileSidebarOpen} className={cn('fixed left-0 right-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-card px-3 lg:hidden', showsDemoChrome ? 'top-8' : 'top-0')}>
         <button
           type="button"
           ref={menuButtonRef}
@@ -115,10 +170,12 @@ function AppLayout() {
 
       {/* Cabinet rail (desktop) / drawer (mobile) */}
       <div
+        ref={sidebarRef}
         id="mobile-sidebar"
-        role="dialog"
-        aria-modal="true"
-        aria-label={panelName}
+        role={isMobile && isMobileSidebarOpen ? 'dialog' : undefined}
+        aria-modal={isMobile && isMobileSidebarOpen ? true : undefined}
+        aria-label={isMobile && isMobileSidebarOpen ? panelName : undefined}
+        inert={isMobile && !isMobileSidebarOpen}
         className={cn(
           'fixed left-0 z-50 shrink-0 transform transition-transform duration-200 ease-standard lg:static lg:transform-none',
           showsDemoChrome ? 'top-8 bottom-0 z-[70]' : 'inset-y-0',
@@ -138,6 +195,7 @@ function AppLayout() {
       </div>
 
       <main
+        inert={isMobile && isMobileSidebarOpen}
         id="main-content"
         className={cn(
           'relative flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-[calc(3rem+env(safe-area-inset-top))] lg:px-6',

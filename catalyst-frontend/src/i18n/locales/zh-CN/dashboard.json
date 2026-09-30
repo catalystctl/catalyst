@@ -16,6 +16,15 @@
     "title": "需要关注"
   },
   "description": "{{name}} 的基础设施概览。",
+  "onboarding": {
+    "addNode": "添加节点",
+    "browseServers": "浏览服务器",
+    "createServer": "创建服务器",
+    "description": "请先设置节点和模板，再创建服务器。此处仅显示您有权限执行的操作。",
+    "overline": "开始使用",
+    "templates": "设置模板",
+    "title": "让您的第一台服务器上线"
+  },
   "overview": {
     "alertsUnacknowledged": "{{alerts}} 条未确认",
     "allResolved": "全部已解决",

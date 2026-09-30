@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import CreateServerModal from '../../components/servers/CreateServerModal';
 import ServerControls from '../../components/servers/ServerControls';
 import { useServers } from '../../hooks/useServers';
+import { useAccessibleNodes } from '../../hooks/useNodes';
 import type { Server, ServerListParams, ServerStatus } from '../../types/server';
 import { useAuthStore } from '../../stores/authStore';
 import {
@@ -32,6 +33,7 @@ import {
 import { cn } from '@/lib/utils';
 import { serverStatusLabel } from '../../utils/constants';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
 
 type AccessFilter = 'all' | 'owned' | 'other';
 type Tone = 'go' | 'hazard' | 'alarm' | 'idle' | 'info';
@@ -51,13 +53,10 @@ const toneForState = (status: string): Tone => STATE_TONE[status] ?? 'info';
  * up exactly at each breakpoint. Hidden cells drop out of grid placement, which
  * is why the visible order matches each template.
  *   base : identity · actions (one row)
- *   md   : identity · address · state · actions
- *   xl   : identity · game · cpu · ram · disk · address · state · actions
+ *   48rem deck : identity · address · state · actions
+ *   80rem deck : identity · game · cpu · ram · disk · address · state · actions
  */
-const GRID =
-  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 ' +
-  'md:grid-cols-[minmax(0,1fr)_9rem_6rem_12rem] ' +
-  'xl:grid-cols-[minmax(0,1fr)_9rem_6.5rem_6.5rem_6.5rem_11rem_5.5rem_12rem]';
+const GRID = 'server-list-grid grid items-center gap-x-3 gap-y-1.5';
 
 function gameVersion(server: Server): string | undefined {
   const env = server.environment ?? {};
@@ -131,10 +130,10 @@ function ServerRow({
 
   return (
     <div
-      role="row"
+      role="listitem"
       tabIndex={0}
-      aria-selected={false}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'ArrowDown') {
           event.preventDefault();
           onMoveFocus(1);
@@ -165,12 +164,12 @@ function ServerRow({
               <span className="truncate">{server.name}</span>
             </Link>
             {version && (
-              <Segmented muted className="hidden shrink-0 md:inline">
+              <Segmented muted className="server-list-xl shrink-0">
                 {version}
               </Segmented>
             )}
           </span>
-          <span className="flex items-center gap-2 text-micro text-muted-foreground md:hidden">
+          <span className="server-list-mobile-meta flex items-center gap-2 text-micro text-muted-foreground">
             <span className="truncate font-mono">
               {host}:{port}
             </span>
@@ -184,25 +183,25 @@ function ServerRow({
       </div>
 
       {/* game */}
-      <span className="hidden min-w-0 xl:block">
+      <span className="server-list-xl min-w-0">
         <span className="block truncate text-micro text-muted-foreground">{game ?? '—'}</span>
       </span>
 
       {/* live activity cluster — labelled by the column header, so the row
           carries only the reading (bars + value) to stay dense and aligned */}
-      <span className="hidden items-center justify-end gap-2 xl:flex">
+      <span className="server-list-xl items-center justify-end gap-2">
         <Meter value={cpu} />
         <Segmented muted={cpu == null} className={cn('min-w-[3rem] text-right', severityClass(cpu))}>
           {cpu == null ? '—' : `${Math.round(cpu)}%`}
         </Segmented>
       </span>
-      <span className="hidden items-center justify-end gap-2 xl:flex">
+      <span className="server-list-xl items-center justify-end gap-2">
         <Meter value={ramPct} />
         <Segmented muted={ramPct == null} className={cn('min-w-[3rem] text-right', severityClass(ramPct))}>
           {ramPct == null ? '—' : `${Math.round(ramPct)}%`}
         </Segmented>
       </span>
-      <span className="hidden items-center justify-end gap-2 xl:flex">
+      <span className="server-list-xl items-center justify-end gap-2">
         <Meter value={diskPct} />
         <Segmented muted={diskPct == null} className={cn('min-w-[3rem] text-right', severityClass(diskPct))}>
           {diskPct == null ? '—' : `${Math.round(diskPct)}%`}
@@ -210,7 +209,7 @@ function ServerRow({
       </span>
 
       {/* address */}
-      <span className="hidden min-w-0 items-center gap-1.5 md:flex">
+      <span className="server-list-md min-w-0 items-center gap-1.5">
         <Globe className="h-3 w-3 shrink-0 text-muted-foreground/60" />
         <span className="truncate font-mono text-micro text-muted-foreground">
           {host}:{port}
@@ -218,7 +217,7 @@ function ServerRow({
       </span>
 
       {/* state */}
-      <span className="hidden min-w-0 justify-end overflow-hidden md:flex">
+      <span className="server-list-md min-w-0 justify-end overflow-hidden">
         <span
           className={cn('truncate text-micro uppercase', stateTextClass(server.status))}
         >
@@ -226,7 +225,7 @@ function ServerRow({
         </span>
       </span>
 
-      <span className="flex shrink-0 items-center justify-end gap-1 md:justify-end">
+      <span className="server-list-actions flex shrink-0 items-center justify-end gap-1">
         <ServerControls
           serverId={server.id}
           status={server.status}
@@ -262,9 +261,18 @@ function ServersPage() {
   const [accessFilter, setAccessFilter] = useState<AccessFilter>('all');
   const listRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading } = useServers(debounced);
+  const { data, isLoading, isError, refetch } = useServers(debounced);
+  const { data: accessibleNodes } = useAccessibleNodes();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const cols = useColumns();
+  const clearCreateIntent = useCallback(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('action');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced({ search: search || undefined, status }), 200);
@@ -274,7 +282,9 @@ function ServersPage() {
   const canCreateServer =
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.write') ||
-    user?.permissions?.includes('server.create');
+    user?.permissions?.includes('server.create') ||
+    accessibleNodes?.hasWildcard ||
+    Boolean(accessibleNodes?.nodes.length);
 
   const isAdmin = useMemo(
     () =>
@@ -332,7 +342,7 @@ function ServersPage() {
   const hasFilters = Boolean(search || status);
 
   const moveFocus = (dir: 1 | -1) => {
-    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="row"]') ?? []);
+    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="listitem"]') ?? []);
     const idx = rows.findIndex((row) => row === document.activeElement);
     rows[idx + dir]?.focus();
   };
@@ -349,11 +359,13 @@ function ServersPage() {
 
         </div>
 
-        {canCreateServer && <CreateServerModal />}
+        {canCreateServer && (
+          <CreateServerModal openOnIntent={searchParams.get('action') === 'create'} onIntentHandled={clearCreateIntent} />
+        )}
       </header>
 
       {/* ── The deck: controls, columns, rows and footer in one frame ── */}
-      <div className="deck-panel flex min-h-0 flex-col overflow-hidden">
+      <div className="deck-panel server-list-container flex min-h-0 flex-col overflow-hidden">
         {/* Control strip */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
           <div className="flex items-center gap-0.5">
@@ -439,21 +451,23 @@ function ServersPage() {
         <div
           className={cn(
             GRID,
-            'sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground/70 md:grid',
+            'server-list-columns sticky top-0 z-10 border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground',
           )}
         >
           <span className="type-overline">{cols.server}</span>
-          <span className="type-overline hidden xl:inline-flex">{cols.game}</span>
-          <span className="type-overline hidden justify-end xl:inline-flex">{cols.cpu}</span>
-          <span className="type-overline hidden justify-end xl:inline-flex">{cols.ram}</span>
-          <span className="type-overline hidden justify-end xl:inline-flex">{cols.disk}</span>
-          <span className="type-overline hidden md:inline-flex">{cols.address}</span>
-          <span className="type-overline hidden justify-end md:inline-flex">{cols.state}</span>
+          <span className="type-overline server-list-xl">{cols.game}</span>
+          <span className="type-overline server-list-xl justify-end">{cols.cpu}</span>
+          <span className="type-overline server-list-xl justify-end">{cols.ram}</span>
+          <span className="type-overline server-list-xl justify-end">{cols.disk}</span>
+          <span className="type-overline server-list-md">{cols.address}</span>
+          <span className="type-overline server-list-md justify-end">{cols.state}</span>
           <span className="type-overline justify-self-end">{cols.actions}</span>
         </div>
 
+        {/* A refetch failure keeps any stale rows visible, but is never shown as an empty fleet. */}
+        {isError && data && <TabErrorState onRetry={() => void refetch()} />}
         {/* Rows */}
-        <div ref={listRef} className="min-h-[12rem] min-w-0 flex-1 overflow-y-auto bg-background/25">
+        <div ref={listRef} role="list" aria-label={t('page.title')} className="min-h-[12rem] min-w-0 flex-1 overflow-y-auto bg-background/25">
           {isLoading ? (
             <div role="status" aria-label={t('page.title')}>
               {Array.from({ length: 6 }).map((_, index) => (
@@ -462,25 +476,25 @@ function ServersPage() {
                     <div className="h-2 w-2 animate-pulse rounded-full bg-surface-3" />
                     <div className="h-3.5 w-40 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="hidden min-w-0 xl:block">
+                  <div className="server-list-xl min-w-0">
                     <div className="h-3 w-20 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="hidden items-center justify-end gap-2 xl:flex">
+                  <div className="server-list-xl items-center justify-end gap-2">
                     <div className="h-2 w-16 animate-pulse rounded-sm bg-surface-3" />
                     <div className="h-3 w-10 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="hidden items-center justify-end gap-2 xl:flex">
+                  <div className="server-list-xl items-center justify-end gap-2">
                     <div className="h-2 w-16 animate-pulse rounded-sm bg-surface-3" />
                     <div className="h-3 w-10 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="hidden items-center justify-end gap-2 xl:flex">
+                  <div className="server-list-xl items-center justify-end gap-2">
                     <div className="h-2 w-16 animate-pulse rounded-sm bg-surface-3" />
                     <div className="h-3 w-10 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="hidden min-w-0 md:block">
+                  <div className="server-list-md min-w-0">
                     <div className="h-3 w-24 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="hidden min-w-0 md:block">
+                  <div className="server-list-md min-w-0">
                     <div className="h-3 w-12 animate-pulse rounded-sm bg-surface-3" />
                   </div>
                   <div className="flex justify-end gap-1">
@@ -489,6 +503,8 @@ function ServersPage() {
                 </div>
               ))}
             </div>
+          ) : isError && !data ? (
+            <TabErrorState onRetry={() => void refetch()} />
           ) : filtered.length === 0 ? (
             <TabEmptyState
               title={hasFilters ? t('page.empty') : t('list.emptyTitle')}

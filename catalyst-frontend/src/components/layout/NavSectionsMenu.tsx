@@ -39,11 +39,14 @@ export default function NavSectionsMenu({
       }))
       .filter((group) => group.links.length > 0);
 
-    if (pluginTabs.length > 0 && hasAnyPermission(permissions, ['admin.read', 'admin.write'])) {
+    const visibleTabs = hasAnyPermission(permissions, ['admin.read', 'admin.write'])
+      ? pluginTabs.filter((tab) => !tab.requiredPermissions?.length || hasAnyPermission(permissions, tab.requiredPermissions))
+      : [];
+    if (visibleTabs.length > 0) {
       base.push({
         id: 'plugins',
         title: t('sections.plugins'),
-        links: pluginTabs.map((tab) => ({
+        links: visibleTabs.map((tab) => ({
           to: `/admin/plugin/${tab.id}`,
           label: tab.label,
           icon: tab.id.includes('ticket') ? Ticket : Plug,

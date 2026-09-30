@@ -35,7 +35,13 @@ const textareaClass =
 /** Labelled block on the dialog surface — never a nested rounded card. */
 const blockClass = 'rounded-sm border border-border/50 bg-surface-1/40 p-3';
 
-function CreateServerModal() {
+class InstallStartError extends Error {
+  constructor(readonly serverId: string, readonly reason: unknown) {
+    super('Installation did not start');
+  }
+}
+
+function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIntent?: boolean; onIntentHandled?: () => void }) {
  const { t } = useTranslation('servers');
  const user = useAuthStore((s) => s.user);
  const { data: accessibleNodesData } = useAccessibleNodes();
@@ -50,6 +56,13 @@ function CreateServerModal() {
  accessibleNodes.length > 0;
 
  const [open, setOpen] = useState(false);
+ useEffect(() => {
+   if (!openOnIntent) return;
+   setOpen(true);
+   onIntentHandled?.();
+ }, [openOnIntent, onIntentHandled]);
+ const [createdServerId, setCreatedServerId] = useState<string | null>(null);
+ const [installError, setInstallError] = useState<string | null>(null);
  const [name, setName] = useState('');
  const [templateId, setTemplateId] = useState('');
  const [nodeId, setNodeId] = useState('');
@@ -88,6 +101,8 @@ function CreateServerModal() {
  const [ipLoadError, setIpLoadError] = useState<string | null>(null);
 
  const isAdmin = user?.permissions?.includes('*') || user?.permissions?.includes('admin.write');
+ const canManageAllocations = isAdmin || Boolean(user?.permissions?.includes('node.manage_allocation') &&
+   (hasNodeWildcard || accessibleNodes.some((node) => node.id === nodeId)));
  const availableNodes: Array<{ id: string; name: string; locationId?: string }> =
  isAdmin || hasNodeWildcard ? nodes : accessibleNodes;
 
@@ -291,6 +306,14 @@ function CreateServerModal() {
 
  const mutation = useMutation({
  mutationFn: async () => {
+ if (createdServerId) {
+ try {
+ await serversApi.install(createdServerId);
+ return createdServerId;
+ } catch (error) {
+ throw new InstallStartError(createdServerId, error);
+ }
+ }
  const normalizedBindings = additionalBindings.reduce<Record<number, number>>(
  (acc, binding) => {
  const allocation = availableAllocations.find((a) => a.id === binding.allocationId);
@@ -349,15 +372,19 @@ function CreateServerModal() {
  }
 
  const server = await serversApi.create(payload);
-
- if (server?.id) {
+ if (!server?.id) throw new Error('Server creation did not return an ID');
+ setCreatedServerId(server.id);
+ try {
  await serversApi.install(server.id);
+ } catch (error) {
+ throw new InstallStartError(server.id, error);
  }
-
- return server;
+ return server.id;
  },
- onSuccess: (server) => {
+ onSuccess: (serverId) => {
  notifySuccess(t('createServer.created'));
+ setCreatedServerId(null);
+ setInstallError(null);
  setOpen(false);
  setName('');
  setDescription('');
@@ -373,15 +400,18 @@ function CreateServerModal() {
  setBackupAllocationMb('');
  setDatabaseAllocation('');
  setStep('details');
- if (server?.id) {
- navigate(`/servers/${server.id}/console`);
- }
+ navigate(`/servers/${serverId}/console`);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  queryClient.invalidateQueries({ queryKey: qk.adminServers() });
  },
  onError: (error: any) => {
+ if (error instanceof InstallStartError) {
+ setCreatedServerId(error.serverId);
+ setInstallError(getLocalizedErrorMessage(error.reason));
+ return;
+ }
  console.error('Server creation error:', error?.response?.data || error);
  // Field-level details are translated through their validation rule codes;
  // otherwise the error's own code drives the message.
@@ -409,8 +439,11 @@ function CreateServerModal() {
  parsedCpu >= 1 &&
  Number.isFinite(parsedDisk) &&
  parsedDisk >= 1024 &&
- (parsedSwap === undefined || (Number.isFinite(parsedSwap) && parsedSwap >= 0));
- const buildValid = Number.isFinite(parsedPort) && parsedPort >= 1 && parsedPort <= 65535;
+ (parsedSwap === undefined || (Number.isFinite(parsedSwap) && parsedSwap >= 0)) &&
+ (backupAllocationMb.trim() === '' || (Number.isFinite(Number(backupAllocationMb)) && Number(backupAllocationMb) >= 0)) &&
+ (databaseAllocation.trim() === '' || (Number.isFinite(Number(databaseAllocation)) && Number(databaseAllocation) >= 0));
+ const buildValid = Number.isFinite(parsedPort) && parsedPort >= 1 && parsedPort <= 65535 &&
+   (networkMode !== 'macvlan' || Boolean(macvlanInterface));
  const startupValid = !templateVariables.some((variable) => {
  if (!variable.required) return false;
  const value = environment[variable.name];
@@ -422,16 +455,38 @@ function CreateServerModal() {
  build: buildValid,
  startup: startupValid,
  } as const;
+ const unmetSteps = {
+ details: [
+   !name.trim() ? t('createServer.validation.required', { field: t('createServer.fields.name') }) :
+     !/^[a-zA-Z0-9\-_ .()&']+$/.test(name) ? t('createServer.validation.invalidName') : null,
+   !templateId ? t('createServer.validation.required', { field: t('createServer.fields.template') }) : null,
+   !nodeId ? t('createServer.validation.required', { field: t('createServer.fields.node') }) : null,
+ ],
+ resources: [
+   !Number.isFinite(parsedMemory) || parsedMemory < 256 ? t('createServer.validation.minimum', { field: t('fields.memoryMb'), min: 256 }) : null,
+   !Number.isFinite(parsedCpu) || parsedCpu < 1 ? t('createServer.validation.minimum', { field: t('fields.cpuCores'), min: 1 }) : null,
+   !Number.isFinite(parsedDisk) || parsedDisk < 1024 ? t('createServer.validation.minimum', { field: t('fields.diskMb'), min: 1024 }) : null,
+   parsedSwap !== undefined && (!Number.isFinite(parsedSwap) || parsedSwap < 0) ? t('createServer.validation.minimum', { field: t('fields.swapMb'), min: 0 }) : null,
+   backupAllocationMb.trim() !== '' && (!Number.isFinite(Number(backupAllocationMb)) || Number(backupAllocationMb) < 0) ? t('createServer.validation.minimum', { field: t('fields.backupMb'), min: 0 }) : null,
+   databaseAllocation.trim() !== '' && (!Number.isFinite(Number(databaseAllocation)) || Number(databaseAllocation) < 0) ? t('createServer.validation.minimum', { field: t('fields.databaseAllocation'), min: 0 }) : null,
+ ],
+ build: [
+   !Number.isFinite(parsedPort) || parsedPort < 1 || parsedPort > 65535 ? t('createServer.validation.portRange') : null,
+   networkMode === 'macvlan' && !macvlanInterface ? t('createServer.validation.required', { field: t('createServer.network.interface') }) : null,
+ ],
+ startup: templateVariables.filter((variable) => variable.required && !String(environment[variable.name] ?? '').trim())
+   .map((variable) => t('createServer.validation.required', { field: variable.name })),
+ }[step].filter((reason): reason is string => Boolean(reason));
  const canGoNext = stepValidMap[step];
  const canNavigateTo = (targetIndex: number) =>
  targetIndex <= stepIndex || stepOrder.slice(0, targetIndex).every((key) => stepValidMap[key]);
  const disableSubmit =
  mutation.isPending ||
+ (!createdServerId && (
  !detailsValid ||
  !resourcesValid ||
  !buildValid ||
- !startupValid ||
- (networkMode === 'macvlan' && !macvlanInterface);
+ !startupValid));
 
  if (!canCreateServer) {
  return null;
@@ -469,7 +524,7 @@ function CreateServerModal() {
  </DialogHeader>
 
  {/* Step rail — segmented, square markers, signal underline for the active step */}
- <DialogToolbar>
+ {!(createdServerId && installError) && <DialogToolbar>
  <div className="flex items-center gap-1">
  {stepOrder.map((key, index) => {
  const isActive = step === key;
@@ -515,11 +570,18 @@ function CreateServerModal() {
  );
  })}
  </div>
- </DialogToolbar>
+ </DialogToolbar>}
 
  {/* Content Area */}
  <DialogBody>
- <div key={step} className="step-content-enter">
+ {createdServerId && installError ? (
+ <div role="alert" className="space-y-3 rounded-sm border border-warning/40 bg-warning/5 p-3 text-mini">
+ <p>{t('createServer.installFailed', { error: installError })}</p>
+ <Button variant="outline" size="sm" onClick={() => { setOpen(false); navigate(`/servers/${createdServerId}/console`); }}>
+ {t('createServer.openCreatedServer')}
+ </Button>
+ </div>
+ ) : <div key={step} className="step-content-enter">
  <div className="space-y-3">
 
  {/* --- DETAILS STEP --- */}
@@ -537,14 +599,14 @@ function CreateServerModal() {
  </div>
  <div className={`${blockClass} space-y-3`}>
  <div className="grid gap-3 sm:grid-cols-2">
- <div className="space-y-1.5">
+ <label className="block space-y-1.5">
  <span className="type-overline">{t('createServer.fields.template')}</span>
  <Combobox value={templateId} onChange={(newTemplateId) => { setTemplateId(newTemplateId); setImageVariant(''); setEnvironment({}); }} options={templates.map((t) => ({ value: t.id, label: t.name, keywords: [t.name, t.description || ''].filter(Boolean) }))} placeholder={t('createServer.fields.templatePlaceholder')} searchPlaceholder={t('createServer.fields.templateSearchPlaceholder')} className={fieldClass}/>
- </div>
- <div className="space-y-1.5">
+ </label>
+ <label className="block space-y-1.5">
  <span className="type-overline">{t('createServer.fields.node')}</span>
  <Combobox value={nodeId} onChange={(newNodeId) => setNodeId(newNodeId)} options={availableNodes.map((n) => ({ value: n.id, label: n.name, keywords: [n.name] }))} placeholder={t('createServer.fields.nodePlaceholder')} searchPlaceholder={t('createServer.fields.nodeSearchPlaceholder')} className={fieldClass}/>
- </div>
+ </label>
  </div>
  {selectedTemplate?.images?.length ? (
  <label className="block space-y-1.5">
@@ -654,14 +716,14 @@ function CreateServerModal() {
  <option value="">{t('fields.selectAllocation')}</option>
  {availableAllocations.map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
  </select>
- <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 text-mini text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground" title={t('createServer.network.createAllocationsHint')}>
+ {canManageAllocations && <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 text-mini text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground" title={t('createServer.network.createAllocationsHint')}>
  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg> {t('createServer.network.newAllocation')}
- </a>
+ </a>}
  </div>
  </label>
  {allocLoadError ? (<p className="text-micro text-warning">{allocLoadError}</p>) : null}
  {!allocLoadError && availableAllocations.length === 0 ? (
- <p className="type-meta">{t('fields.noAllocations')}{' '}<a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">{t('fields.createOne')}</a></p>
+ <p className="type-meta">{t('fields.noAllocations')}{canManageAllocations && <> <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">{t('fields.createOne')}</a></>}</p>
  ) : null}
  </div>
 
@@ -715,8 +777,14 @@ function CreateServerModal() {
  )
  ) : null}
 
+ {unmetSteps.length > 0 && (
+ <div role="status" className="rounded-sm border border-warning/30 bg-warning/5 p-3 text-micro text-warning">
+ <p className="font-medium">{t('createServer.validation.unmetSteps')}</p>
+ <ul className="mt-1 list-inside list-disc">{unmetSteps.map((reason) => <li key={reason}>{reason}</li>)}</ul>
  </div>
+ )}
  </div>
+ </div>}
  </DialogBody>
 
  <DialogFooter className="sm:justify-between">
@@ -724,6 +792,11 @@ function CreateServerModal() {
  {t('common:actions.cancel')}
  </Button>
  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+ {createdServerId && installError ? (
+ <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+ {mutation.isPending ? t('createServer.creating') : t('createServer.retryInstall')}
+ </Button>
+ ) : <>
  {stepIndex > 0 ? (
  <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(stepOrder[stepIndex - 1])}>
  {t('common:actions.back')}
@@ -738,6 +811,7 @@ function CreateServerModal() {
  {mutation.isPending ? t('createServer.creating') : t('createServer.submit')}
  </Button>
  )}
+ </>}
  </div>
  </DialogFooter>
  </DialogContent>
