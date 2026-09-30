@@ -171,6 +171,7 @@ export interface CreateServerPayload {
   portBindings?: Record<number, number>;
   networkMode?: string;
   environment: Record<string, string>;
+  ownerId?: string;
 }
 
 export interface UpdateServerPayload {

@@ -336,11 +336,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access, server.create permission, or node assignment required");
       }
 
-      const effectiveOwnerId = (canCreate || hasNodeAccessResult) && bodyOwnerId ? bodyOwnerId : userId;
-
-      // If ownerId is specified, verify the target user exists and requester has permission
+      // An omitted owner means the caller; assigning another user requires user.create.
+      const effectiveOwnerId = bodyOwnerId ?? userId;
       if (effectiveOwnerId !== userId) {
-        // Check if user has permission to create resources for other users
         if (!checkPerm(request, 'user.create')) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create server for other user');
         }

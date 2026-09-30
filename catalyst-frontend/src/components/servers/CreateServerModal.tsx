@@ -22,6 +22,9 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import { getLocalizedErrorMessage, getLocalizedFieldErrors } from '../../i18n/api-errors';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
+import { adminApi } from '../../services/api/admin';
+import { useQuery } from '@/csync';
+import type { AdminUser } from '../../types/admin';
 import Combobox from '@/components/ui/combobox';
 import { cn } from '@/lib/utils';
 import { BracketLabel } from '@/components/deck/primitives';
@@ -64,6 +67,7 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
  const [createdServerId, setCreatedServerId] = useState<string | null>(null);
  const [installError, setInstallError] = useState<string | null>(null);
  const [name, setName] = useState('');
+ const [ownerId, setOwnerId] = useState('');
  const [templateId, setTemplateId] = useState('');
  const [nodeId, setNodeId] = useState('');
  const [description, setDescription] = useState('');
@@ -97,6 +101,25 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
 
  const { data: templates = [] } = useTemplates();
  const { data: nodes = [] } = useNodes();
+ const canSelectOwner = Boolean(user?.permissions?.some((permission) =>
+ permission === '*' || permission === 'admin.write' || permission === 'user.create'));
+ const { data: ownerOptions = [], isLoading: ownersLoading, error: ownersError } = useQuery({
+ queryKey: ['server-create-owners'],
+ queryFn: async () => {
+ const users: AdminUser[] = [];
+ let page = 1;
+ let totalPages = 1;
+ do {
+ const result = await adminApi.listUsers({ page, limit: 100 });
+ users.push(...result.users);
+ totalPages = result.pagination.totalPages;
+ page++;
+ } while (page <= totalPages);
+ return users;
+ },
+ enabled: open && canSelectOwner,
+ staleTime: 60_000,
+ });
  const [availableIps, setAvailableIps] = useState<string[]>([]);
  const [ipLoadError, setIpLoadError] = useState<string | null>(null);
 
@@ -338,6 +361,7 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
  const payload: Parameters<typeof serversApi.create>[0] = {
  name,
  description: description.trim() || undefined,
+ ownerId: ownerId || undefined,
  templateId,
  nodeId,
  locationId,
@@ -387,6 +411,7 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
  setInstallError(null);
  setOpen(false);
  setName('');
+ setOwnerId('');
  setDescription('');
  setTemplateId('');
  setNodeId('');
@@ -596,6 +621,22 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
  <span className="type-overline">{t('createServer.fields.description')} <span className="text-micro font-normal text-muted-foreground">{t('createServer.fields.optional')}</span></span>
  <textarea rows={3} className={textareaClass} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('createServer.fields.descriptionPlaceholder')}/>
  </label>
+ {canSelectOwner && (
+ <div className="space-y-1.5">
+ <span className="type-overline">{t('createServer.fields.owner')} <span className="text-micro font-normal text-muted-foreground">{t('createServer.fields.optional')}</span></span>
+ <Combobox
+ value={ownerId}
+ onChange={setOwnerId}
+ options={ownerOptions.map((u) => ({ value: u.id, label: `${u.username} (${u.email})`, keywords: [u.username, u.email, u.id] }))}
+ placeholder={t('createServer.fields.ownerPlaceholder')}
+ searchPlaceholder={t('createServer.fields.ownerSearchPlaceholder')}
+ className={fieldClass}
+ />
+ <p className="text-micro text-muted-foreground">{t('createServer.fields.ownerHint')}</p>
+ {ownersLoading && <p className="text-micro text-muted-foreground">{t('createServer.fields.ownerLoading')}</p>}
+ {ownersError && <p role="alert" className="text-micro text-destructive">{t('createServer.fields.ownerLoadError')}</p>}
+ </div>
+ )}
  </div>
  <div className={`${blockClass} space-y-3`}>
  <div className="grid gap-3 sm:grid-cols-2">
