@@ -1173,6 +1173,9 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
+      if (server.startupCommand) {
+        runtimeTemplate.startup = server.startupCommand;
+      }
 
       // If running, stop first (best-effort; restart path still proceeds)
       if (currentState === ServerState.RUNNING) {

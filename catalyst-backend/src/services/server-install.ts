@@ -104,6 +104,12 @@ export function buildInstallCommand(
   }
 
   const runtimeTemplate = patchTemplateForRuntime(server.template ?? {});
+  // A per-server startup command overrides the template default on every runtime
+  // path (start/restart/rebuild/install). Apply it here so install and
+  // reinstall cannot drift from the start route.
+  if (server.startupCommand) {
+    runtimeTemplate.startup = server.startupCommand;
+  }
 
   const portBindings = parseStoredPortBindings(server.portBindings);
   let syncedEnvironment = syncPortEnvironmentVariables(
