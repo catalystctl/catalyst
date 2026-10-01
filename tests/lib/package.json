@@ -1,6 +1,6 @@
 {
 	"name": "lib",
-	"version": "1.69.8",
+	"version": "1.69.9",
 	"description": "",
 	"main": "ws-client.js",
 	"scripts": {
