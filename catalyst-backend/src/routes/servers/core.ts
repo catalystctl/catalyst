@@ -998,7 +998,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Cannot access source server');
       }
 
-      const targetNodeId = body.nodeId ?? source.nodeId;
+      // `targetNodeId` is the preflight field name; accept it as an alias so a
+      // client that reuses the reviewed payload submits to the node it reviewed.
+      const targetNodeId = body.nodeId ?? body.targetNodeId ?? source.nodeId;
       const auth = await buildCloneAuth(request, source, targetNodeId);
       const raw: CloneRequest = {
         mode,

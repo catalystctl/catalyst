@@ -575,6 +575,44 @@ describe('POST /:serverId/clone', () => {
     await app.close();
   });
 
+  it('accepts the cross-node submit payload the clone dialog actually sends', async () => {
+    // The dialog builds ONE payload for both calls, so the submit body carries
+    // `targetNodeId` (the preflight field) and no `nodeId`. Reading only
+    // `nodeId` here silently fell back to the source node, which re-resolved
+    // the plan against the wrong node and tripped CLONE_PREFLIGHT_STALE.
+    const source = await createServer(nodeAId);
+    const app = buildTestApp();
+    await app.register(serverRoutes, { prefix: '/api/servers' });
+
+    const preflight = await app.inject({
+      method: 'POST',
+      url: `/api/servers/${source.id}/clone/preflight`,
+      payload: { mode: 'configuration', targetNodeId: nodeBId },
+    });
+    expect(preflight.statusCode).toBe(200);
+    const plan = JSON.parse(preflight.body).data;
+    expect(plan.resolved.nodeId).toBe(nodeBId);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/servers/${source.id}/clone`,
+      payload: {
+        name: 'cross clone from dialog',
+        mode: 'configuration',
+        targetNodeId: nodeBId,
+        preflightId: plan.preflightId,
+        fingerprint: plan.fingerprint,
+        acknowledgedWarnings: plan.warnings.map((w: any) => w.code),
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const clone = JSON.parse(response.body).data;
+    createdServerIds.push(clone.id);
+    expect(clone.nodeId).toBe(nodeBId);
+    await app.close();
+  });
+
   it('does not create a second server for a repeated Idempotency-Key', async () => {
     const source = await createServer(nodeAId);
     const app = buildTestApp();

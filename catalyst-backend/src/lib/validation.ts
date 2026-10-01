@@ -149,6 +149,14 @@ export const serverClonePreflightSchema = z.object({
 export const serverCloneSchema = z.object({
   mode: cloneModeSchema.optional(),
   nodeId: z.string().min(1, 'Node ID is required').optional(),
+  /**
+   * Alias for `nodeId` using the preflight's field name. Clients that reuse the
+   * exact preflight payload for the submit call (the clone dialog does) send
+   * `targetNodeId`; without this the key was stripped and the route silently
+   * fell back to the source node, failing the fingerprint check with
+   * CLONE_PREFLIGHT_STALE on every cross-node clone.
+   */
+  targetNodeId: z.string().min(1).optional(),
   /** Deprecated alias for `mode: 'full' | 'configuration'`. */
   copyFiles: z.boolean().optional(),
   preflightId: z.string().min(1).optional(),

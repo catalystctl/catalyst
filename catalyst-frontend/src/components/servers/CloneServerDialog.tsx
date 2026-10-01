@@ -193,9 +193,8 @@ function CloneServerDialog({ server, disabled = false }: Props) {
     user?.permissions?.includes('server.create') ||
     isAdmin;
 
-  const buildPayload = () => ({
+  const buildSharedPayload = () => ({
     mode,
-    targetNodeId: nodeId,
     name: name.trim() || undefined,
     networkMode: networkMode !== server.networkMode ? networkMode : undefined,
     allocationId: allocationId || undefined,
@@ -209,6 +208,11 @@ function CloneServerDialog({ server, disabled = false }: Props) {
     includeDatabases,
     includeInstalledMods,
   });
+
+  // The preflight route names the target `targetNodeId`; the submit route reads
+  // `nodeId`. Sending the preflight name on submit made the server fall back to
+  // the source node, re-resolve the plan there and reject the review as stale.
+  const buildPayload = () => ({ ...buildSharedPayload(), targetNodeId: nodeId });
 
   const preflightMutation = useMutation({
     mutationFn: () => serversApi.clonePreflight(server.id, buildPayload()),
@@ -225,7 +229,8 @@ function CloneServerDialog({ server, disabled = false }: Props) {
   const cloneMutation = useMutation({
     mutationFn: () =>
       serversApi.clone(server.id, {
-        ...buildPayload(),
+        ...buildSharedPayload(),
+        nodeId,
         preflightId: plan?.preflightId,
         fingerprint: plan?.fingerprint,
         acknowledgedWarnings,
