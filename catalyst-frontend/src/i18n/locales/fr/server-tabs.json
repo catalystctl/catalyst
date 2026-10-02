@@ -899,6 +899,10 @@
       "start": "Démarrer le serveur",
       "stop": "Arrêter le serveur"
     },
+    "advanced": "Avancé",
+    "advancedLocked": "Utilisez un préréglage au lieu d'une expression personnalisée.",
+    "advancedOff": "Utilisation des préréglages",
+    "advancedOn": "Utilisation d'une expression cron brute",
     "command": "Commande",
     "create": {
       "action": "Créer une tâche",
@@ -908,6 +912,9 @@
       "success": "Tâche créée",
       "title": "Créer une tâche"
     },
+    "cronHint": "Cinq champs : minute heure jour-du-mois mois jour-de-la-semaine.",
+    "dayOfMonth": "Jour du mois",
+    "dayOfMonthValue": "Jour {{day}}",
     "dayOfWeek": "Jour de la semaine",
     "days": {
       "friday": "Vendredi",
@@ -919,6 +926,7 @@
       "wednesday": "Mercredi"
     },
     "descriptionLabel": "Description (facultatif)",
+    "descriptionPlaceholder": "Note facultative pour votre équipe",
     "edit": {
       "description": "Mettre à jour cette tâche planifiée.",
       "saving": "Enregistrement…",
@@ -926,19 +934,38 @@
       "title": "Modifier la tâche"
     },
     "errors": {
-      "invalidStartTime": "Heure de début non valide"
+      "invalidSchedule": "Planification non valide"
     },
+    "interval": "Intervalle",
+    "intervalEvery_one": "Chaque minute",
+    "intervalEvery_many": "",
+    "intervalEvery_other": "Toutes les {{count}} minutes",
+    "minuteOfHour": "À la minute",
     "name": "Nom",
     "repeat": "Répétition",
     "repeatOptions": {
+      "custom": "Personnalisé (cron)",
       "daily": "Tous les jours",
       "hour": "Toutes les heures",
       "minute": "Toutes les minutes",
+      "minutes": "Toutes les N minutes",
       "monthly": "Tous les mois",
       "weekly": "Toutes les semaines"
     },
+    "repeatSummary": {
+      "custom": "S'exécute selon une expression cron personnalisée",
+      "daily": "S'exécute chaque jour à {{time}}",
+      "hour": "S'exécute toutes les heures à la minute :{{minute}}",
+      "minute": "S'exécute chaque minute",
+      "minutes_one": "S'exécute chaque minute",
+      "minutes_many": "",
+      "minutes_other": "S'exécute toutes les {{count}} minutes",
+      "monthly": "S'exécute le jour {{day}} de chaque mois à {{time}}",
+      "weekly": "S'exécute chaque {{day}} à {{time}}"
+    },
     "scheduleCron": "Planification (cron)",
-    "startTime": "Heure de début",
+    "scheduleRequired": "Saisissez une planification",
+    "timeOfDay": "Heure de la journée",
     "timezone": {
       "withLabel": "Les heures sont interprétées selon votre fuseau horaire local ({{timezone}}).",
       "withoutLabel": "Les heures sont interprétées selon votre fuseau horaire local."

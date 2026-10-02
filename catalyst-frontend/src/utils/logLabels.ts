@@ -523,8 +523,8 @@ export function systemErrorComponentLabel(t: TFunction, component: string): stri
       return t('admin-system:systemErrors.components.clonefiles');
     case 'ConsoleStream':
       return t('admin-system:systemErrors.components.consolestream');
-    case 'CreateTaskModal':
-      return t('admin-system:systemErrors.components.createtaskmodal');
+    case 'ScheduleTaskModal':
+      return t('admin-system:systemErrors.components.scheduletaskmodal');
     case 'EditApiKeyDialog':
       return t('admin-system:systemErrors.components.editapikeydialog');
     case 'FileManager':

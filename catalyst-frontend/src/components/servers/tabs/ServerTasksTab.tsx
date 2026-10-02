@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import EditTaskModal from '../../tasks/EditTaskModal';
-import CreateTaskModal from '../../tasks/CreateTaskModal';
+import ScheduleTaskModal from '../../tasks/ScheduleTaskModal';
 import ServerTabCard from './ServerTabCard';
 import StatGrid from './StatGrid';
 import TabHeader from './TabHeader';
@@ -48,7 +47,7 @@ export default function ServerTasksTab({
  title={t('tabs.tasks.title')}
  description={t('tabs.tasks.description')}
  actions={
- <CreateTaskModal serverId={serverId} disabled={isSuspended} />
+ <ScheduleTaskModal serverId={serverId} trigger="primary" disabled={isSuspended} />
  }
  />
 
@@ -60,7 +59,7 @@ export default function ServerTasksTab({
  title={t('tabs.tasks.emptyTitle')}
  description={t('tabs.tasks.emptyDescription')}
  action={
- <CreateTaskModal serverId={serverId} disabled={isSuspended} />
+ <ScheduleTaskModal serverId={serverId} trigger="primary" disabled={isSuspended} />
  }
  />
  ) : (
@@ -106,7 +105,7 @@ export default function ServerTasksTab({
  )}
 
  <div className="mt-3 flex flex-wrap gap-2 text-xs">
- <EditTaskModal
+ <ScheduleTaskModal
  serverId={serverId}
  task={task}
  disabled={isSuspended}

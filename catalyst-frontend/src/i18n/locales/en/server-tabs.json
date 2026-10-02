@@ -862,6 +862,10 @@
       "start": "Start server",
       "stop": "Stop server"
     },
+    "advanced": "Advanced",
+    "advancedLocked": "Use a preset instead of a custom expression.",
+    "advancedOff": "Using presets",
+    "advancedOn": "Using a raw cron expression",
     "command": "Command",
     "create": {
       "action": "Create task",
@@ -871,6 +875,9 @@
       "success": "Task created",
       "title": "Create task"
     },
+    "cronHint": "Five fields: minute hour day-of-month month day-of-week.",
+    "dayOfMonth": "Day of month",
+    "dayOfMonthValue": "Day {{day}}",
     "dayOfWeek": "Day of week",
     "days": {
       "friday": "Friday",
@@ -882,6 +889,7 @@
       "wednesday": "Wednesday"
     },
     "descriptionLabel": "Description (optional)",
+    "descriptionPlaceholder": "Optional note for your team",
     "edit": {
       "description": "Update this scheduled task.",
       "saving": "Saving...",
@@ -889,19 +897,36 @@
       "title": "Edit task"
     },
     "errors": {
-      "invalidStartTime": "Invalid start time"
+      "invalidSchedule": "Invalid schedule"
     },
+    "interval": "Interval",
+    "intervalEvery_one": "Every minute",
+    "intervalEvery_other": "Every {{count}} minutes",
+    "minuteOfHour": "At minute",
     "name": "Name",
     "repeat": "Repeat",
     "repeatOptions": {
+      "custom": "Custom (cron)",
       "daily": "Daily",
       "hour": "Every hour",
       "minute": "Every minute",
+      "minutes": "Every N minutes",
       "monthly": "Monthly",
       "weekly": "Weekly"
     },
+    "repeatSummary": {
+      "custom": "Runs on a custom cron expression",
+      "daily": "Runs every day at {{time}}",
+      "hour": "Runs hourly at minute :{{minute}}",
+      "minute": "Runs every minute",
+      "minutes_one": "Runs every minute",
+      "minutes_other": "Runs every {{count}} minutes",
+      "monthly": "Runs on day {{day}} of each month at {{time}}",
+      "weekly": "Runs every {{day}} at {{time}}"
+    },
     "scheduleCron": "Schedule (cron)",
-    "startTime": "Start time",
+    "scheduleRequired": "Enter a schedule",
+    "timeOfDay": "Time of day",
     "timezone": {
       "withLabel": "Times are interpreted using your local timezone ({{timezone}}).",
       "withoutLabel": "Times are interpreted using your local timezone."

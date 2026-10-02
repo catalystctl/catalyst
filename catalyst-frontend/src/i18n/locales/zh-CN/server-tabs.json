@@ -825,6 +825,10 @@
       "start": "启动服务器",
       "stop": "停止服务器"
     },
+    "advanced": "高级",
+    "advancedLocked": "请改用预设，而不是自定义表达式。",
+    "advancedOff": "使用预设",
+    "advancedOn": "使用原始 cron 表达式",
     "command": "命令",
     "create": {
       "action": "创建任务",
@@ -834,6 +838,9 @@
       "success": "任务已创建",
       "title": "创建任务"
     },
+    "cronHint": "五个字段：分 时 日 月 星期。",
+    "dayOfMonth": "每月第几天",
+    "dayOfMonthValue": "第 {{day}} 天",
     "dayOfWeek": "星期",
     "days": {
       "friday": "星期五",
@@ -845,6 +852,7 @@
       "wednesday": "星期三"
     },
     "descriptionLabel": "描述（可选）",
+    "descriptionPlaceholder": "供团队参考的可选备注",
     "edit": {
       "description": "更新此计划任务。",
       "saving": "正在保存…",
@@ -852,19 +860,36 @@
       "title": "编辑任务"
     },
     "errors": {
-      "invalidStartTime": "开始时间无效"
+      "invalidSchedule": "计划无效"
     },
+    "interval": "间隔",
+    "intervalEvery_one": "每分钟",
+    "intervalEvery_other": "每 {{count}} 分钟",
+    "minuteOfHour": "在第几分钟",
     "name": "名称",
     "repeat": "重复",
     "repeatOptions": {
+      "custom": "自定义（cron）",
       "daily": "每天",
       "hour": "每小时",
       "minute": "每分钟",
+      "minutes": "每 N 分钟",
       "monthly": "每月",
       "weekly": "每周"
     },
+    "repeatSummary": {
+      "custom": "按自定义 cron 表达式运行",
+      "daily": "每天 {{time}} 运行",
+      "hour": "每小时的第 {{minute}} 分钟运行",
+      "minute": "每分钟运行",
+      "minutes_one": "每分钟运行",
+      "minutes_other": "每 {{count}} 分钟运行",
+      "monthly": "每月 {{day}} 日 {{time}} 运行",
+      "weekly": "每周{{day}} {{time}} 运行"
+    },
     "scheduleCron": "计划（cron）",
-    "startTime": "开始时间",
+    "scheduleRequired": "请输入计划",
+    "timeOfDay": "执行时间",
     "timezone": {
       "withLabel": "时间按您的本地时区（{{timezone}}）解析。",
       "withoutLabel": "时间按您的本地时区解析。"
