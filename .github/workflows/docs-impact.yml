@@ -10,6 +10,11 @@ name: Docs impact (advisory)
 on:
   pull_request:
 
+# Advisory read-only report: the job only checks out repos and prints to the
+# log, so the GITHUB_TOKEN needs nothing beyond reading the repository.
+permissions:
+  contents: read
+
 jobs:
   docs-impact:
     runs-on: ubuntu-latest

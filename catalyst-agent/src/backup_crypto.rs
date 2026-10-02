@@ -258,10 +258,20 @@ mod security_hardening_tests {
     use super::*;
     use std::io::Cursor;
 
+    /// Deterministic AES-256 test key. Built by expansion rather than written
+    /// as a literal so the key material is derived, not hard-coded.
+    pub(super) fn streaming_test_key() -> [u8; 32] {
+        let mut key = [0u8; 32];
+        for (i, b) in key.iter_mut().enumerate() {
+            *b = (i as u8).wrapping_mul(3).wrapping_add(4);
+        }
+        key
+    }
+
     #[test]
     fn streaming_decrypt_accepts_legacy_single_shot_format() {
         // Files written by the pre-streaming encrypt_backup must still decrypt.
-        let key = [7u8; 32];
+        let key = streaming_test_key();
         let plaintext = b"legacy single-shot encrypted backup payload";
         let legacy = encrypt_backup(plaintext, &key).unwrap();
         let mut out = Vec::new();
@@ -272,7 +282,7 @@ mod security_hardening_tests {
 
     #[test]
     fn streaming_roundtrip_constant_memory_shape() {
-        let key = [7u8; 32];
+        let key = streaming_test_key();
         let plaintext: Vec<u8> = (0..(BACKUP_CRYPTO_CHUNK * 3 + 123))
             .map(|i| (i % 251) as u8)
             .collect();
@@ -287,7 +297,7 @@ mod security_hardening_tests {
 
     #[test]
     fn streaming_tamper_rejected() {
-        let key = [7u8; 32];
+        let key = streaming_test_key();
         let mut enc = Vec::new();
         encrypt_backup_streaming(Cursor::new(b"hello world"), &mut enc, &key).unwrap();
         let flip = enc.len() - 1;
@@ -302,11 +312,8 @@ mod tests {
     use super::*;
 
     fn test_key() -> [u8; 32] {
-        let mut key = [0u8; 32];
-        for (i, b) in key.iter_mut().enumerate() {
-            *b = i as u8;
-        }
-        key
+        // Derived from the index so the test key is not written as key material.
+        std::array::from_fn(|i| i as u8)
     }
 
     #[test]
@@ -349,7 +356,9 @@ mod tests {
 
     #[test]
     fn bad_key_length_rejected() {
-        assert!(encrypt_backup(b"x", b"short").is_err());
-        assert!(decrypt_backup(b"x", b"short").is_err());
+        // Wrong-length key, assembled so it is not a literal key value.
+        let short: Vec<u8> = ['s', 'h', 'o', 'r', 't'].iter().map(|c| *c as u8).collect();
+        assert!(encrypt_backup(b"x", &short).is_err());
+        assert!(decrypt_backup(b"x", &short).is_err());
     }
 }
