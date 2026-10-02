@@ -154,6 +154,9 @@ However, we kindly request:
 - **Validate all user input** on both frontend and backend
 - **Use parameterized queries** to prevent SQL injection
 - **Sanitize file paths** to prevent path traversal attacks
+- **Read the CodeQL guide** ([docs/codeql.md](codeql.md)) before dismissing a
+  code-scanning alert — it records the configuration, which findings are known
+  false positives and why, and the patterns that keep them from recurring
 
 ### For Deployment
 
