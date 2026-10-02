@@ -14,6 +14,20 @@ credential to jobs.
 | `gh-catalyst-runner.service` | systemd user unit |
 | `../../scripts/ci/ci-postgres.sh` | per-job Postgres starter used by the test job |
 
+## What these runners are for
+
+This pool now serves **PR gates only** (`ci.yml`, plus `e2e-lxc.yml` and the
+benchmark `live` job). Release builds in `auto-version.yml` — agent binaries and
+container images — run entirely on GitHub-hosted runners, natively per
+architecture, so a release never competes with the production panel or the
+second pool on this host.
+
+The aarch64 musl cross toolchain and `sccache` in the image are therefore no
+longer used by any release job: `agent-release` installs its own protoc and
+sccache and builds ARM64 on `ubuntu-24.04-arm`. They stay in the image because
+`ci.yml` still needs the cross linkers for the aarch64 target and `sccache`
+still fronts PR-job Rust compiles against `/cache/sccache`.
+
 ## Security model (public repo)
 
 `catalystctl/catalyst` is public, so any fork can open a pull request whose
@@ -28,7 +42,8 @@ is hardened for that threat:
   `dependabot/*` branches run on GitHub-hosted `ubuntu-latest`, never here.
   Only same-repo pushes and internal non-Dependabot PRs reach these runners
   (see `runs-on` expressions in `ci.yml`). `ci.yml` is PR gates only; pushes
-  to `main` go straight to `auto-version.yml` release builds.
+  to `main` go straight to `auto-version.yml`, which runs on GitHub-hosted
+  runners and never on this pool.
 - **Token hygiene**: the supervisor mints a fresh 1-hour registration token per
   spawn. The `gh` credential lives only in the supervisor process on the host.
 - **Least capability**: containers drop all capabilities except the file-ownership
