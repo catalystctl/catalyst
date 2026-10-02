@@ -59,9 +59,16 @@ Rules of thumb:
 | Requirement | Minimum | Notes |
 |---|---|---|
 | **Docker** 20.10+ **or** **Podman** 4.0+ | Required | Docker Compose v2 plugin or `podman-compose` |
+| **Architecture** | `linux/amd64` or `linux/arm64` | Pre-built images are multi-arch; `docker compose` pulls the matching manifest automatically |
 | **Ports** | 8080, 3000, 2022, 5432, 6379 | Adjust in `.env` if conflicts |
 | **RAM** | 2 GB | 4+ GB recommended |
 | **Disk** | 10 GB | SSD recommended |
+
+> **arm64 (Raspberry Pi, Ampere, Apple Silicon, Hetzner CAX, Oracle A1…):**
+> releases from **v1.71.0** onward publish a multi-arch manifest covering
+> `linux/amd64` and `linux/arm64`, so `docker compose up -d` just works. On
+> v1.70.0 and earlier the pull fails with `no matching manifest for
+> linux/arm64/v8` — see [Troubleshooting](#no-matching-manifest-for-linuxarm64v8).
 
 ### Rootless Podman — Privileged Ports
 
@@ -559,6 +566,47 @@ podman logs catalyst-redis
 ### Redis healthcheck failing
 
 The healthcheck must use `CMD-SHELL` string form (not JSON array) for podman compatibility. The compose file is already patched for this.
+
+### `no matching manifest for linux/arm64/v8`
+
+```
+Error response from daemon: no matching manifest for linux/arm64/v8
+in the manifest list entries
+```
+
+You are on an arm64 host and the release you are pulling predates multi-arch
+publishing, so the panel images exist for `linux/amd64` only. (The
+accompanying `No such image: postgres:16-alpine` / `redis:7.4-alpine` lines are
+a knock-on effect — those images are multi-arch and are only "missing" because
+the failed image build aborted their in-flight pulls.)
+
+Check which architectures a tag actually provides:
+
+```bash
+docker buildx imagetools inspect ghcr.io/catalystctl/catalyst-backend:latest
+```
+
+Then either:
+
+1. **Update to a release that ships arm64** (v1.71.0+). Run
+   `bash update.sh` in this directory to refresh the stack files, then
+   `docker compose pull && docker compose up -d`. The compose file references
+   the `:latest` tag for both panel images, so a fresh pull is what moves you
+   onto the multi-arch manifest. To pin a specific version instead, point the
+   `image:` line for `backend`/`frontend` at an explicit tag
+   (`ghcr.io/catalystctl/catalyst-backend:v1.71.0`).
+2. **Build from source instead of pulling** — the repo ships a compose overlay
+   that swaps the published images for local build contexts:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+   ```
+   Note `docker-compose.test.yml` also defines a `catalyst-agent` service; that
+   runtime belongs on a **game-server node**, not on the panel host, so omit it
+   for a panel-only deployment.
+
+Do **not** force `platform: linux/amd64` to run the amd64 images under
+emulation. The Node backend and Postgres under QEMU are slow enough to cause
+health-check timeouts and a boot loop.
 
 ### `rootlessport cannot expose privileged port 80`
 

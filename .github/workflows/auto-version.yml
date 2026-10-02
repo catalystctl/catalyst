@@ -600,20 +600,30 @@ jobs:
   # ci.yml cannot do this on main — GITHUB_TOKEN chore(release) commits do not
   # retrigger workflows.
   #
-  # Runs on GitHub-hosted ubuntu-latest with Docker Buildx + GHA layer cache:
-  # overlayfs + warm pnpm layers beat self-hosted buildah/vfs cold builds,
-  # and it frees the self-hosted pool for the musl agent compiles.
+  # MULTI-ARCH: each image is built as one single-platform leg per architecture
+  # (natively — no QEMU), pushed by DIGEST, and then assembled into a manifest
+  # list by the merge-images job below. amd64 runs on ubuntu-latest; arm64 runs
+  # on GitHub's hosted ubuntu-24.04-arm runners (GA in all repositories since
+  # 2026-01; free and 4 vCPU on public repos).
+  #
+  # Why per-arch legs instead of one buildx call with two platforms: emulated
+  # arm64 builds of the pnpm/Node layers cost far more wall-clock than native
+  # ones, and a single job would serialise both arches. Native legs also give
+  # per-arch GHA layer caches that actually hit on subsequent releases.
+  #
+  # CRITICAL: these legs must NEVER push by tag. Two legs pushing `:latest`
+  # would race and the second would clobber the first, silently leaving the
+  # tag pointing at a single-arch manifest. `outputs: type=image,push-by-digest`
+  # keeps each arch addressable by digest until merge-images retags them.
   publish-images:
-    name: Publish ${{ matrix.image }} Image
+    name: Build ${{ matrix.image }} (${{ matrix.arch }})
     needs: version
     if: needs.version.outputs.bump != 'none'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     permissions:
       contents: read
       packages: write
-      id-token: write # SLSA provenance via attest-build-provenance
-      attestations: write
       actions: write # Buildx GHA layer cache
     strategy:
       fail-fast: false
@@ -621,8 +631,24 @@ jobs:
         include:
           - image: backend
             file: catalyst-backend/Dockerfile
+            arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - image: backend
+            file: catalyst-backend/Dockerfile
+            arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
           - image: frontend
             file: catalyst-frontend/Dockerfile
+            arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - image: frontend
+            file: catalyst-frontend/Dockerfile
+            arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -660,23 +686,132 @@ jobs:
             type=raw,value=v${{ needs.version.outputs.new_version }}
             type=sha,prefix=
 
-      - name: Build and push
+      # push-by-digest: the tag list above is NOT applied here. Both arches are
+      # pushed untagged and re-tagged by merge-images, so neither leg can
+      # overwrite the other's tag. Output digest is the merge job's input.
+      - name: Build and push by digest
         id: build-push
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.file }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build-push.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digests-${{ matrix.image }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Assembles the per-arch digests into one multi-arch manifest list and applies
+  # the real tags. Runs once per image. The tags set here are what customers
+  # pull — until this succeeds, the published tags still point at the PREVIOUS
+  # release, which is the desired fail-safe: a half-built release never gets
+  # served as :latest.
+  merge-images:
+    name: Merge ${{ matrix.image }} manifest
+    needs: [version, publish-images]
+    if: needs.version.outputs.bump != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # SLSA provenance via attest-build-provenance
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+          - image: frontend
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.image }}-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ needs.version.outputs.new_version }}
+            type=raw,value=v${{ needs.version.outputs.new_version }}
+            type=sha,prefix=
+
+      - name: Create manifest list and push
+        id: merge
+        working-directory: /tmp/digests
+        run: |
+          set -euo pipefail
+          # Exactly one digest per architecture must be present. A missing leg
+          # would otherwise silently publish a single-arch image — the exact
+          # bug this job exists to fix. Digests are bare 64-char hex filenames.
+          mapfile -t digests < <(find . -maxdepth 1 -type f -name '[0-9a-f]*' -printf '%f\n' | sort)
+          if [ "${#digests[@]}" -ne 2 ]; then
+            echo "ERROR: expected 2 arch digests for ${{ matrix.image }}, found ${#digests[@]}"
+            printf '%s\n' "${digests[@]}"
+            exit 1
+          fi
+          # Build the source refs and the tag flags as arrays so nothing is
+          # re-split by the shell (SC2046 / SC2086).
+          srcs=()
+          for d in "${digests[@]}"; do
+            srcs+=("${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}@sha256:${d}")
+          done
+          mapfile -t tags < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          tag_flags=()
+          for t in "${tags[@]}"; do
+            tag_flags+=("-t" "$t")
+          done
+          docker buildx imagetools create "${tag_flags[@]}" "${srcs[@]}"
+          # Capture the digest of the manifest list we just published — this is
+          # what provenance must be attested against (not a per-arch digest).
+          digest="$(docker buildx imagetools inspect \
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}:latest \
+            --format '{{json .Manifest}}' | jq -r '.digest')"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect
+        run: |
+          docker buildx imagetools inspect \
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}:latest
 
       - name: Attest image provenance (SLSA/Sigstore)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
+          # Attested against the manifest list digest, so provenance covers the
+          # multi-arch index rather than a single architecture.
           subject-name: ${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}
-          subject-digest: ${{ steps.build-push.outputs.digest }}
+          subject-digest: ${{ steps.merge.outputs.digest }}
           push-to-registry: true
 
   # ══════════════════════════════════════════════════════════════════════════════
@@ -689,7 +824,7 @@ jobs:
   # ══════════════════════════════════════════════════════════════════════════════
   publish-release:
     name: Publish GitHub Release
-    needs: [version, agent-release, publish-install-script, mcp-release, publish-images]
+    needs: [version, agent-release, publish-install-script, mcp-release, merge-images]
     if: needs.version.outputs.bump != 'none'
     runs-on: ubuntu-latest
     permissions:

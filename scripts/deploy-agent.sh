@@ -117,6 +117,19 @@ os_arch() {
     esac
 }
 
+# Architecture token for the backend's ?arch= query parameter. The backend's
+# normalizeAgentArch (catalyst-backend/src/lib/agent-binary.ts) speaks
+# x86_64/aarch64 — NOT the amd64/arm64 os_arch() returns above — and maps any
+# unrecognized value to x86_64, so passing os_arch() here would silently
+# download the x86_64 agent on an arm64 node.
+agent_arch_query() {
+    case "$(uname -m)" in
+        x86_64|amd64) echo "x86_64" ;;
+        aarch64|arm64) echo "aarch64" ;;
+        *) fail "Unsupported architecture: $(uname -m)" ;;
+    esac
+}
+
 toml_escape() {
     printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
@@ -174,7 +187,7 @@ preflight() {
     fi
     if curl -fsSL --max-time 10 -H "Authorization: Bearer ${NODE_API_KEY}" "${BACKEND_HTTP_URL}/api/agent/version" -o /dev/null 2>&1; then
         backend_reachable=true
-    elif curl -fsSL --max-time 10 "${BACKEND_HTTP_URL}/api/agent/download?arch=x86_64" -o /dev/null 2>&1; then
+    elif curl -fsSL --max-time 10 "${BACKEND_HTTP_URL}/api/agent/download?arch=$(agent_arch_query)" -o /dev/null 2>&1; then
         backend_reachable=true
     fi
 
