@@ -1,0 +1,19 @@
+# CodeQL configuration for the advanced setup in .github/workflows/codeql.yml.
+#
+# security-and-quality is the broadest built-in query suite GitHub publishes.
+# It contains every query in security-extended, which in turn contains every
+# query in the default suite. All three are free on a public repository;
+# security-and-quality is the only one that requires advanced setup.
+#
+# The tracked tree contains no vendored or generated code (node_modules/, dist/
+# and catalyst-agent/target/ are gitignored and never checked out by Actions),
+# so paths-ignore stays deliberately narrow instead of masking real source.
+
+name: "Catalyst CodeQL config"
+
+queries:
+  - uses: security-and-quality
+
+paths-ignore:
+  - docs/**
+  - "**/*.md"

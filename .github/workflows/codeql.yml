@@ -1,0 +1,81 @@
+# CodeQL — advanced setup. Free on public repositories.
+#
+# Advanced setup is used instead of GitHub's managed default setup so the scan
+# can run the security-and-quality query suite (the broadest built-in suite;
+# default setup only offers the default and security-extended suites) and so the
+# whole configuration is version-controlled and reviewable here.
+#
+# Categories are kept as "/language:<lang>" using the standard combined language
+# names, which is exactly what the previous default setup uploaded. That keeps
+# this configuration's identity stable, so existing alerts continue to be
+# tracked instead of starting over as a new tool entry.
+#
+# Copilot Autofix (free for public repositories) applies to these alerts
+# automatically — there is no setting to enable here. Standard GitHub-hosted
+# runners are free in public repositories, so the weekly schedule costs nothing.
+#
+# Switching away from this file means re-enabling default setup in
+# Settings → Advanced Security; the two cannot run at the same time.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly drift check: new queries ship, and main moves between PRs.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Superseded runs on the same ref are cancelled; the upload happens at the end,
+# so a cancelled run simply never reports.
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read # only required for workflows in private repositories
+      security-events: write # required to upload CodeQL results
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Every language here supports build-mode: none, so no build step is
+          # needed. Rust still needs the pinned toolchain from
+          # catalyst-agent/rust-toolchain.toml, which rustup installs on demand.
+          - language: actions
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+          - language: python
+            build-mode: none
+          - language: rust
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: "/language:${{ matrix.language }}"
