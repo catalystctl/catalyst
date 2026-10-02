@@ -17,7 +17,6 @@ import type {
   ScopedPluginDB,
 } from './types.js';
 import type { TypedPluginContext, LoggerLike } from './types.js';
-import { createTypedCollection } from './storage.js';
 
 /**
  * Wraps a raw PluginBackendContext with typed Config and Events generics.

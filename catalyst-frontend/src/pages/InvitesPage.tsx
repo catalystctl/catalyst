@@ -202,7 +202,7 @@ function InvitesPage() {
             <button
               className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
               onClick={() => registerMutation.mutate()}
-              disabled={!token || !canRegister || registerMutation.isPending}
+              disabled={!canRegister || registerMutation.isPending}
             >
               {t('invite.createAccount')}
             </button>
@@ -243,7 +243,7 @@ function InvitesPage() {
             <button
               className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
               onClick={() => acceptMutation.mutate()}
-              disabled={!token || acceptMutation.isPending || accepted}
+              disabled={acceptMutation.isPending || accepted}
             >
               {t('invite.accept')}
             </button>

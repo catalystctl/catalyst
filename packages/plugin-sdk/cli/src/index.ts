@@ -110,7 +110,8 @@ async function createPlugin(name: string, options: Record<string, string | boole
     if (stat.isDirectory()) {
       await fs.mkdir(dst, { recursive: true });
     } else {
-      let content = await fs.readFile(src, 'utf-8');
+      const handle = await fs.open(src, 'r');
+      let content = await handle.readFile('utf-8').finally(() => handle.close());
       content = content
         .replace(/\{\{pluginName\}\}/g, name)
         .replace(/\{\{PluginName\}\}/g, displayName)

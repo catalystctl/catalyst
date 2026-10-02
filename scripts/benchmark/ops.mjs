@@ -11,7 +11,7 @@
  */
 
 import { performance } from "node:perf_hooks";
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,7 +24,6 @@ const getArg = (n, d) => {
   if (!v || v.startsWith("--")) return d;
   return v;
 };
-const hasFlag = (n) => args.includes(`--${n}`);
 
 function percentile(a, p) {
   if (!a.length) return 0;
@@ -51,57 +50,26 @@ function stats(latencies) {
   };
 }
 
-function loadState(stateFile) {
-  const out = {};
-  if (!stateFile || !existsSync(stateFile)) return out;
-  const raw = readFileSync(stateFile, "utf8");
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (!m) continue;
-    let v = m[2].trim();
-    // strip quoting from %q
-    if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
-      try { v = JSON.parse(v); } catch { v = v.slice(1, -1); }
-    }
-    // also handle $'...' from %q
-    if (v.startsWith("$'") && v.endsWith("'")) {
-      try { v = JSON.parse(`"${v.slice(2, -1).replace(/'/g, "'")}"`); } catch {}
-    }
-    // fallback: unescape bash $'' via eval-like
-    v = v.replace(/^'/, "").replace(/'$/, "").replace(/\\'/g, "'");
-    out[m[1]] = v;
-  }
-  // second pass: source-style eval for %q values (best effort)
-  try {
-    const txt = readFileSync(stateFile, "utf8");
-    // simple: parse AUTH_TOKEN, PAPER_SERVER_ID etc via regex
-    for (const k of ["AUTH_TOKEN","PAPER_SERVER_ID","NODE_ID","PTERO_APP_KEY","PTERO_CLIENT_KEY","PTERO_SERVER_ID","PTERO_SERVER_UUID","PTERO_URL","PTERO_NEST_ID","BACKEND_IP","PANEL_IP"]) {
-      const mm = txt.match(new RegExp(`^${k}=(.*)$`, "m"));
-      if (mm) {
-        let vv = mm[1].trim();
-        if (!out[k] || out[k] === vv) out[k] = vv.replace(/^['"]|['"]$/g, "");
-      }
-    }
-  } catch {}
-  return out;
-}
-
 // More robust state loader via bash source
 async function loadStateViaBash(stateFile) {
   if (!stateFile || !existsSync(stateFile)) return {};
-  const { execSync } = await import("node:child_process");
+  const statePath = resolve(String(stateFile));
+  const { execFileSync } = await import("node:child_process");
+  // Path travels as a positional argument (`$1`), so it is never parsed by the shell.
+  const sourceValue = (expr) =>
+    execFileSync("bash", ["-c", `source "$1" 2>/dev/null; printf "%s" ${expr}`, "_", statePath], { encoding: "utf8" }).trim();
   try {
     const keys = ["AUTH_TOKEN","PAPER_SERVER_ID","SOTF_SERVER_ID","NODE_ID","LOCATION_ID","PAPER_TEMPLATE_ID","PTERO_APP_KEY","PTERO_CLIENT_KEY","PTERO_SERVER_ID","PTERO_SERVER_UUID","PTERO_NEST_ID","PTERO_EGG_ID","PTERO_URL","BACKEND_IP","PANEL_IP","PTERO_NODE_ID"];
     const out = {};
     for (const k of keys) {
       try {
-        const v = execSync(`bash -c 'source "${stateFile}" 2>/dev/null; printf "%s" "\${${k}:-}"'`, { encoding: "utf8" }).trim();
+        const v = sourceValue(`"\${${k}:-}"`);
         if (v) out[k] = v;
       } catch {}
     }
     // also try PUBLIC_URL / API_BASE from last run
     try {
-      const api = execSync(`bash -c 'source "${stateFile}" 2>/dev/null; printf "%s" "\${API_BASE:-}\${PUBLIC_URL:-}"'`, { encoding: "utf8" }).trim();
+      const api = sourceValue('"${API_BASE:-}${PUBLIC_URL:-}"');
       if (api) out["API_BASE"] = api;
     } catch {}
     return out;
@@ -179,14 +147,11 @@ async function opFileUpload({ base, token, serverId }) {
     form.set("file", blob, `bench-upload-${Date.now()}.bin`);
     const r = await fetch(`${base}/api/servers/${serverId}/files/upload`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
       body: form,
     });
     const t = await r.text();
     if (!r.ok) throw new Error(`upload ${r.status} ${t.slice(0,200)}`);
-    // best-effort delete
-    const name = `bench-upload`;
-    // list and delete matching?
   }, 6);
 }
 
@@ -234,7 +199,7 @@ async function opSseTtfb({ base, token, serverId, concurrency = 12 }) {
       const res = await fetch(url, { headers, signal: ctrl.signal });
       if (!res.ok || !res.body) throw new Error(`sse ${res.status}`);
       const reader = res.body.getReader();
-      const { value } = await reader.read();
+      await reader.read();
       clearTimeout(to);
       latencies.push(performance.now() - t0);
       try { await reader.cancel(); } catch {}
@@ -353,8 +318,9 @@ async function main() {
   if (!base && st.BACKEND_IP) base = `http://${st.BACKEND_IP}:3000`;
   if (!base || base === "http://:3000" || base === "http://127.0.0.1:3000") {
     try {
-      const { execSync } = await import("node:child_process");
-      const cfgIp = execSync(`bash -c 'source "${process.cwd()}/scripts/lxc-lab/config.env" 2>/dev/null; printf "%s" "\${BACKEND_IP:-}"'`, { encoding: "utf8" }).trim();
+      const { execFileSync } = await import("node:child_process");
+      const cfgPath = resolve(process.cwd(), "scripts/lxc-lab/config.env");
+      const cfgIp = execFileSync("bash", ["-c", `source "$1" 2>/dev/null; printf "%s" "\${BACKEND_IP:-}"`, "_", cfgPath], { encoding: "utf8" }).trim();
       if (cfgIp) base = `http://${cfgIp}:3000`;
     } catch {}
   }

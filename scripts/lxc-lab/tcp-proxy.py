@@ -22,15 +22,18 @@ def pipe(src: socket.socket, dst: socket.socket) -> None:
                 break
             dst.sendall(data)
     except OSError:
+        # Peer reset the socket; stop splicing and fall through to cleanup.
         pass
     finally:
         try:
             src.shutdown(socket.SHUT_RDWR)
         except OSError:
+            # Best-effort: the peer may already have closed, which raises here.
             pass
         try:
             dst.shutdown(socket.SHUT_RDWR)
         except OSError:
+            # Best-effort: the target may already have closed, which raises here.
             pass
         src.close()
         dst.close()

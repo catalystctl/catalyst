@@ -37,20 +37,11 @@ module.exports = {
   ],
   rules: {
     // TypeScript-specific rules
-    '@typescript-eslint/no-unused-vars': [
-      'warn',
-      {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-      },
-    ],
-    '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unsafe-assignment': 'off',
     '@typescript-eslint/no-unsafe-call': 'off',
     '@typescript-eslint/no-unsafe-member-access': 'off',
     '@typescript-eslint/no-unsafe-return': 'off',
     '@typescript-eslint/no-unsafe-argument': 'off',
-    '@typescript-eslint/consistent-type-imports': 'off',
     '@typescript-eslint/unbound-method': 'off',
     '@typescript-eslint/no-unnecessary-type-assertion': 'off',
     '@typescript-eslint/ban-types': 'off',
@@ -62,10 +53,7 @@ module.exports = {
       },
     ],
     '@typescript-eslint/no-non-null-assertion': 'warn',
-    '@typescript-eslint/prefer-nullish-coalescing': 'warn',
-    '@typescript-eslint/prefer-optional-chain': 'warn',
     '@typescript-eslint/no-unnecessary-type-constraint': 'warn',
-    '@typescript-eslint/no-floating-promises': 'warn',
     '@typescript-eslint/no-misused-promises': [
       'warn',
       {
@@ -77,7 +65,6 @@ module.exports = {
     'react/react-in-jsx-scope': 'off', // Not needed with React 18 JSX transform
     'react/jsx-uses-react': 'off',
     'react/prop-types': 'off', // Using TypeScript instead
-    'react-hooks/exhaustive-deps': 'warn',
     'react-hooks/rules-of-hooks': 'error',
 
     // General rules
@@ -89,9 +76,6 @@ module.exports = {
     ],
     'no-debugger': 'error',
     'eqeqeq': 'off',
-    'complexity': 'off',
-    'arrow-body-style': 'off',
-    'no-nested-ternary': 'off',
     '@typescript-eslint/no-unused-vars': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/no-floating-promises': 'off',

@@ -26,11 +26,6 @@ function getArg(name, def = undefined) {
   if (val === undefined || val.startsWith("--")) return def;
   return val;
 }
-function getAllArgs(name) {
-  const out = [];
-  for (let i = 0; i < args.length; i++) if (args[i] === `--${name}` && args[i + 1] && !args[i + 1].startsWith("--")) out.push(args[i + 1]);
-  return out;
-}
 function hasFlag(name) {
   return args.includes(`--${name}`);
 }
@@ -253,7 +248,7 @@ Options:
     toRun = [{ id: "custom", catalyst: { path: p, method: getArg("method", "GET") } }];
   }
 
-  const vars = { paperId, "paper-id": paperId, pteroId, pteroUuid, nestId, paperId: paperId, pteroId: pteroId };
+  const vars = { paperId, "paper-id": paperId, pteroId, pteroUuid, nestId };
   // also allow :paperId style without dash alias already handled
 
   const headers = { Accept: accept };

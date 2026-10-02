@@ -17,7 +17,6 @@ const getArg = (n, d) => {
   if (!v || v.startsWith("--")) return d;
   return v;
 };
-const hasFlag = (n) => args.includes(`--${n}`);
 
 function loadJson(p) {
   if (!p || !existsSync(p)) return null;
@@ -44,7 +43,7 @@ function winner(a, b, lowerIsBetter = true) {
 }
 
 function mdEscape(s) {
-  return String(s).replace(/\|/g, "\\|");
+  return String(s).replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
 
 function main() {

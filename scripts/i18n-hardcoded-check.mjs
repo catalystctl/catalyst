@@ -20,7 +20,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const FRONTEND = path.join(ROOT, 'catalyst-frontend');
 const BASELINE_PATH = path.join(ROOT, 'scripts', 'i18n-hardcoded-baseline.json');
 
 /** Sample code that demonstrates the plugin API — not panel copy. */

@@ -89,10 +89,8 @@ export const DEK_WRAP_INFO = 'catalyst-catpkg-dek-wrap-v1';
 
 const GCM_NONCE_BYTES = 12;
 const GCM_TAG_BYTES = 16;
-const DEK_BYTES = 32;
 const KEK_BYTES = 32;
 const DEFAULT_TIMEOUT_MS = 10_000;
-const DEFAULT_CACHE_TTL_HOURS = 168;
 
 interface CacheRecord {
   installId: string;

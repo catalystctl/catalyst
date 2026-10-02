@@ -9,7 +9,6 @@ import type {
   FrontendRouteConfig,
   FrontendComponentSlot,
 } from './types.js';
-import { createPluginApi } from './api.js';
 
 export interface FrontendPluginOptions {
   manifest: FrontendPluginManifest;

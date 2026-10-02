@@ -108,13 +108,13 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
  queryFn: async () => {
  const users: AdminUser[] = [];
  let page = 1;
- let totalPages = 1;
+ let hasMorePages = true;
  do {
  const result = await adminApi.listUsers({ page, limit: 100 });
  users.push(...result.users);
- totalPages = result.pagination.totalPages;
+ hasMorePages = page < result.pagination.totalPages;
  page++;
- } while (page <= totalPages);
+ } while (hasMorePages);
  return users;
  },
  enabled: open && canSelectOwner,

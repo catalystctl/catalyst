@@ -48,7 +48,9 @@ ws.on('open', () => {
 });
 
 ws.on('message', (data) => {
-    console.log('← Received:', data.toString());
+    // Flatten CR/LF so a crafted frame cannot forge extra log lines.
+    const text = data.toString().replace(/[\r\n]+/g, ' ');
+    console.log('← Received:', text);
 });
 
 ws.on('error', (err) => {

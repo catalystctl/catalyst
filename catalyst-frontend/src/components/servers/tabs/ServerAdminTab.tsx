@@ -602,11 +602,11 @@ export default function ServerAdminTab({
         </button>
         {envExpanded && (
           <div className="mt-2 space-y-2">
-            {canAdminWrite ? (
-              <>
-                {envVars.length === 0 && (
-                  <p className="type-meta py-2">{t('tabs.admin.noEnvironment')}</p>
-                )}
+            {/* canAdminWrite is guaranteed here by the guard above. */}
+            <>
+              {envVars.length === 0 && (
+                <p className="type-meta py-2">{t('tabs.admin.noEnvironment')}</p>
+              )}
                 {envVars.map((row, idx) => (
                   <div key={idx} className="group flex flex-wrap items-center gap-2">
                     <input
@@ -673,17 +673,6 @@ export default function ServerAdminTab({
                   )}
                 </div>
               </>
-            ) : (
-              <div>
-                {server.environment && Object.keys(server.environment).length > 0 ? (
-                  Object.entries(server.environment).map(([key, value]) => (
-                    <DataField key={key} label={key} value={String(value)} />
-                  ))
-                ) : (
-                  <p className="type-meta py-2">{t('tabs.admin.noEnvironment')}</p>
-                )}
-              </div>
-            )}
           </div>
         )}
       </ServerTabCard>

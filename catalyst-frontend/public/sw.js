@@ -96,7 +96,9 @@ self.addEventListener('fetch', (event) => {
   // All other GET requests — network only, no caching
 });
 
-// Handle messages from the main thread
+// Handle messages from the main thread. Only the page on our own origin may
+// ask to activate immediately; a message from any other window is ignored.
 self.addEventListener('message', (event) => {
+  if (event.origin !== self.location.origin) return;
   if (event.data === 'skipWaiting') self.skipWaiting();
 });

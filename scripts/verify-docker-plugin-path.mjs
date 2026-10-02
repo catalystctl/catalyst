@@ -12,9 +12,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
 
-const require = createRequire(import.meta.url);
 const distDir = path.resolve('catalyst-backend/dist');
 const repoRoot = process.cwd();
 
@@ -23,7 +21,6 @@ const pluginsDir = await fsp.mkdtemp(path.join('/tmp', 'catalyst-plugins-verify-
 // Plugins repo root: sibling checkout of catalystctl/catalyst-plugins
 // (override with PLUGINS_REPO_DIR when it lives elsewhere).
 const pluginsRepo = path.resolve(process.env.PLUGINS_REPO_DIR ?? path.join(repoRoot, '..', 'catalyst-plugins'));
-const pkgPath = path.join(pluginsRepo, 'dist', 'plugins', 'fastdl-sync-1.0.0.catpkg.zip');
 const index = JSON.parse(await fsp.readFile(path.join(pluginsRepo, 'index.json'), 'utf-8'));
 const sha = index.plugins.find((p) => p.name === 'fastdl-sync').sha256;
 
@@ -44,7 +41,6 @@ const prisma = {
     update: async () => ({}),
   },
   pluginStorage: {
-    deleteMany: async () => ({}),
     findMany: async ({ where } = {}) => memRows.filter((r) => !where || r.pluginName === where.pluginName),
     findFirst: async ({ where } = {}) => memRows.find((r) => !where || r.pluginName === where.pluginName) ?? null,
     upsert: async ({ where, update, create }) => {
@@ -138,5 +134,3 @@ server.close();
 await fsp.rm(pluginsDir, { recursive: true, force: true });
 console.log('\nDOCKER-PATH-VERIFICATION: PASS');
 process.exit(0);
-
-function unused() {}
