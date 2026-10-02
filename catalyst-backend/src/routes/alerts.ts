@@ -1,6 +1,5 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { PrismaClient } from '@prisma/client';
 import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
 import { apiError } from '../lib/http-error';

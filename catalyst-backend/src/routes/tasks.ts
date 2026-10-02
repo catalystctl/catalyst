@@ -1,6 +1,5 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { PrismaClient } from '@prisma/client';
 import cron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
 import { serialize } from '../utils/serialize';

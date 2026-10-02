@@ -3,8 +3,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { hasPermission } from "../lib/permissions";
 import { serialize } from "../utils/serialize";
 import { githubRawFileUrl, githubRepoTreeUrl, parseGithubOwnerRepo } from "../lib/github-repo";
-import { importPterodactylEgg as convertEgg, importPterodactylEggSafe, importPterodactylEggsBatch, convertStartupCommand, convertInstallScript, parseStopCommand } from "../utils/egg-import";
-import type { ImportError, ImportSafeResult, BatchImportResult, ImportedEggResult } from "../utils/egg-import";
+import { importPterodactylEggSafe } from "../utils/egg-import";
+import type { ImportError } from "../utils/egg-import";
 import { SimpleCache } from "../lib/cache.js";
 import { registerCacheStats } from "../lib/cache.js";
 import { publishCacheInvalidate, subscribeCacheInvalidations } from "../lib/event-bus.js";
@@ -73,88 +73,6 @@ const ensurePermission = async (
 	}
 	return true;
 };
-
-/**
- * Import a single Pterodactyl egg into the database using the shared
- * egg-import utility for consistent conversion across all import paths.
- *
- * Shared between the single-egg and batch-egg import endpoints.
- */
-async function importPterodactylEgg(
-	egg: Record<string, any>,
-	nestId: string | null,
-	userId: string,
-): Promise<{ status: "created" | "skipped" | "error"; name?: string; error?: string }> {
-	try {
-		// Use the shared egg-import utility for all conversions
-		const converted = convertEgg(egg, { nestId });
-
-		const sanitizedName = converted.name;
-		if (!sanitizedName) {
-			return { status: "error", error: "Missing name" };
-		}
-
-		// Skip if template with same name already exists
-		const existing = await prisma.serverTemplate.findUnique({
-			where: { name: sanitizedName },
-		});
-		if (existing) {
-			return { status: "skipped", name: sanitizedName };
-		}
-
-		// Validate minimum fields
-		if (!converted.startup) {
-			return { status: "error", name: sanitizedName, error: "Missing startup" };
-		}
-		if (!converted.image) {
-			return { status: "error", name: sanitizedName, error: "Missing images" };
-		}
-
-		// Determine nest — auto-create from egg category if no nestId provided
-		let resolvedNestId = nestId;
-		if (!resolvedNestId && egg._category) {
-			const existingNest = await prisma.nest.findFirst({
-				where: { name: egg._category },
-			});
-			if (existingNest) {
-				resolvedNestId = existingNest.id;
-			} else {
-				const newNest = await prisma.nest.create({
-					data: { name: egg._category },
-				});
-				resolvedNestId = newNest.id;
-			}
-		}
-
-		const template = await prisma.serverTemplate.create({
-			data: {
-				name: sanitizedName,
-				description: converted.description,
-				author: converted.author,
-				version: converted.version,
-				image: converted.image,
-				images: converted.images as any,
-				defaultImage: converted.defaultImage,
-				installImage: converted.installImage,
-				installEntrypoint: converted.installEntrypoint,
-				startup: converted.startup,
-				stopCommand: converted.stopCommand,
-				sendSignalTo: converted.sendSignalTo,
-				variables: converted.variables as any,
-				installScript: converted.installScript,
-				supportedPorts: converted.supportedPorts,
-				allocatedMemoryMb: converted.allocatedMemoryMb,
-				allocatedCpuCores: converted.allocatedCpuCores,
-				features: converted.features as any,
-				nestId: resolvedNestId,
-			},
-		});
-
-		return { status: "created", name: sanitizedName };
-	} catch (err: any) {
-		return { status: "error", name: (egg.name || "").trim(), error: err.message || "Unknown error" };
-	}
-}
 
 export async function templateRoutes(app: FastifyInstance) {
 	// Using shared prisma instance from db.ts

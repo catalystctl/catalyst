@@ -5,7 +5,6 @@
  * while maintaining clean route handlers.
  */
 
-import type { FastifySchema } from 'fastify';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 

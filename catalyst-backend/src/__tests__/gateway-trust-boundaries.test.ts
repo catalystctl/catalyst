@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  sanitizeMetric,
   sanitizeIntMetric,
   toByteCounterBig,
 } from "../websocket/gateway.js";

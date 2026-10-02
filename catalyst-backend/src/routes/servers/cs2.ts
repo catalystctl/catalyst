@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from "../../middleware/audit.js";
 import {
-  buildProviderHeaders,
   ensureCs2FrameworkEnabled,
   fetchGitHubReleases,
   fileRateLimitMax,
@@ -12,13 +11,8 @@ import {
 } from "./_helpers.js";
 import path from "path";
 import { describeError } from "../../utils/describe-error.js";
-import { promises as fs } from "fs";
-import { fileURLToPath } from "url";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
-
-const __filenameCs2 = fileURLToPath(import.meta.url);
-const __dirnameCs2 = path.dirname(path.dirname(__filenameCs2));
 
 type Cs2FrameworkId = "metamod" | "counterstrikesharp" | "sourcemod";
 
@@ -304,11 +298,6 @@ export async function serverCs2Routes(app: FastifyInstance) {
           } catch {
             // continue even if dep install fails — main install will still attempt
           }
-        }
-        try {
-          installed = await getInstalledFrameworks(server.uuid, server.nodeId, fileTunnel);
-        } catch {
-          // ignore
         }
       }
 
@@ -661,7 +650,6 @@ async function ensureMetapluginsEntry(
   const next = content ? `${content.trimEnd()}\n${line}\n` : `${line}\n`;
   await fileTunnel.queueRequest(nodeId, "write", serverUuid, mpPath, { content: next });
 }
-
 
 async function removeMetapluginsEntry(
   serverUuid: string,

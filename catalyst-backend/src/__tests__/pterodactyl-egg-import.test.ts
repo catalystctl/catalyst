@@ -10,8 +10,9 @@
  */
 
 import 'dotenv/config';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
 
@@ -23,7 +24,8 @@ import { execSync } from 'child_process';
 function shellcheck(script: string, shell: string): Array<{ line: number; message: string; code: number }> {
 	// Strip \r (carriage returns) from scripts stored with Windows line endings in JSON
 	const cleanScript = script.replace(/\r/g, '');
-	const tmpFile = `/tmp/catalyst-shellcheck-${process.pid}-${Math.random().toString(36).slice(2)}.sh`;
+	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'catalyst-shellcheck-'));
+	const tmpFile = path.join(tmpDir, 'script.sh');
 	try {
 		fs.writeFileSync(tmpFile, cleanScript, 'utf-8');
 		const result = execSync(
@@ -38,7 +40,7 @@ function shellcheck(script: string, shell: string): Array<{ line: number; messag
 		}
 		return [];
 	} finally {
-		try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+		try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
 	}
 }
 
@@ -75,15 +77,8 @@ const UNSAFE_PATTERNS: Array<{ pattern: RegExp; severity: 'error' | 'warn'; labe
 /** Known Alpine-based images (agent uses this to pick interpreter) */
 const ALPINE_IMAGE_PATTERNS = [/alpine/i, /busybox/i];
 
-/** Known Debian/Ubuntu-based images (dash as /bin/sh, no bash by default) */
-const DEBIAN_IMAGE_PATTERNS = [/debian/i, /ubuntu/i, /jammy/i, /focal/i, /bullseye/i, /bookworm/i];
-
 function imageIsAlpine(image: string): boolean {
 	return ALPINE_IMAGE_PATTERNS.some((p) => p.test(image));
-}
-
-function imageIsDebian(image: string): boolean {
-	return DEBIAN_IMAGE_PATTERNS.some((p) => p.test(image));
 }
 
 /**
@@ -551,7 +546,6 @@ describe.skipIf(!eggsAvailable)('Pterodactyl Egg Import — All JSON Files in eg
 				let isEgg: boolean;
 				let hasScript: boolean;
 				let script: string;
-				let shell: string;
 				let entrypoint: string;
 
 				it('loads egg', () => {
@@ -560,7 +554,6 @@ describe.skipIf(!eggsAvailable)('Pterodactyl Egg Import — All JSON Files in eg
 					} catch { egg = {} as any; }
 					isEgg = !!(egg.meta?.version || egg.startup || egg.docker_images || egg.variables || egg.config);
 					script = egg.scripts?.installation?.script || '';
-					shell = egg.scripts?.installation?.container || '';
 					entrypoint = egg.scripts?.installation?.entrypoint || 'bash';
 					hasScript = isEgg && script.length > 0;
 				});
@@ -603,7 +596,6 @@ describe.skipIf(!eggsAvailable)('Pterodactyl Egg Import — All JSON Files in eg
 				let egg: PterodactylEgg;
 				let isEgg: boolean;
 				let definedVars: Set<string>;
-				let referencedVars: Set<string>;
 
 				it('loads and analyzes references', () => {
 					try {
@@ -857,7 +849,7 @@ describe.skipIf(!eggsAvailable)('Pterodactyl Egg Import — All JSON Files in eg
 
 			// ── High resource thresholds ────────────────────────────
 			highResourceEggs = [];
-			for (const { egg, imported, relativePath } of eggData) {
+			for (const { egg, relativePath } of eggData) {
 				// Check for startup commands referencing > 32GB
 				const memMatch = (egg.startup || '').match(/-X[mx]s(\d+)([GM])/i);
 				if (memMatch) {
@@ -889,7 +881,6 @@ describe.skipIf(!eggsAvailable)('Pterodactyl Egg Import — All JSON Files in eg
 			for (const { egg, relativePath } of eggData) {
 				const script = egg.scripts?.installation?.script;
 				if (!script) continue;
-				const shell = egg.scripts?.installation?.container || '';
 				const entrypoint = egg.scripts?.installation?.entrypoint || 'bash';
 				const dialect = entrypoint === 'ash' ? 'ash' : 'bash';
 				const issues = shellcheck(script, dialect);

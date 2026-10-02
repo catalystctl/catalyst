@@ -16,7 +16,6 @@ import {
   recordIpAttempt,
 } from "../middleware/brute-force";
 import {
-  passwordSchema,
   userRegistrationSchema,
   userLoginSchema,
   formatZodIssues,
@@ -541,7 +540,6 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       // Store as data URI in the user record
-      const ext = data.mimetype.split('/')[1]?.replace('svg+xml', 'svg') || 'png';
       const base64 = buffer.toString('base64');
       const dataUri = `data:${data.mimetype};base64,${base64}`;
 

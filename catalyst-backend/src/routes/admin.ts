@@ -1,6 +1,5 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { PrismaClient } from '@prisma/client';
 import { fromNodeHeaders } from 'better-auth/node';
 import { auth } from '../auth';
 import { ErrorCodes, ServerState } from '../shared-types';
@@ -8,7 +7,7 @@ import { apiError } from '../lib/http-error';
 import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
 import { describeError } from '../utils/describe-error.js';
-import { createAuditLog, buildServerAuditDetails, enrichAuditDetails, resolveActorDetails } from '../middleware/audit';
+import { createAuditLog, buildServerAuditDetails } from '../middleware/audit';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
 import {
   hasGrant,
@@ -70,15 +69,6 @@ export async function adminRoutes(app: FastifyInstance) {
     return permissions.some((p) => hasGrant(perms, p));
   };
 
-  // Helper to check if user has admin permissions (uses request.user.permissions
-  // populated by auth middleware — works for both session and API key auth)
-  const isAdminUser = (request: any, required: 'admin.read' | 'admin.write' = 'admin.read') => {
-    const perms: string[] = request.user?.permissions ?? [];
-    if (perms.includes('*')) return true;
-    // Exact match: admin.read must not satisfy an admin.write check.
-    return perms.includes(required);
-  };
-
   // Helper to check user management permissions
   const canManageUsers = (request: any, action: 'read' | 'create' | 'update' | 'delete' | 'ban' | 'unban' | 'set_roles' = 'read') => {
     const perms: string[] = request.user?.permissions ?? [];
@@ -130,7 +120,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/stats',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       // Check if user has any admin permission
       const hasAny = checkAnyPerm(request, [
@@ -163,7 +152,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/users',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(canManageUsers(request, 'read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User read permission required');
@@ -831,7 +819,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/users/:userId/servers',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(canManageUsers(request, 'read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'User read permission required');
@@ -857,7 +844,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/roles',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'role.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Role read permission required');
@@ -1119,7 +1105,6 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       const { userId } = request.params as { userId: string };
-      const user = request.user;
 
       const existingUser = await prisma.user.findUnique({ where: { id: userId } });
       if (!existingUser) {
@@ -1340,7 +1325,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/nodes',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'node.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Node read permission required');
@@ -1390,7 +1374,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/servers',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'server.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Server read permission required');
@@ -2085,7 +2068,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/audit-logs',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
@@ -2178,7 +2160,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/audit-logs/export',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
@@ -2269,7 +2250,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/system-errors',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
@@ -2617,7 +2597,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/system-errors/:id/resolve',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'admin.write'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
@@ -2695,7 +2674,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/security-settings',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
@@ -2949,7 +2927,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/health',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       // Check admin permissions
       if (!(checkAnyPerm(request, ['*', 'admin.read']))) {
@@ -3052,7 +3029,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/ip-pools',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
@@ -3416,7 +3392,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/database-hosts',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
 
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
@@ -3847,7 +3822,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/smtp',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
@@ -3960,7 +3934,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/mod-manager',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
@@ -4017,7 +3990,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/theme-settings',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
       // metadata stores OIDC client secrets. admin.read may read settings but
       // gets masked secrets (same contract as GET /oidc-config).
       if (!(checkPerm(request, 'admin.read'))) {
@@ -4170,7 +4142,6 @@ export async function adminRoutes(app: FastifyInstance) {
     '/auth-lockouts',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = request.user;
       if (!(checkPerm(request, 'admin.read'))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }

@@ -9,7 +9,6 @@ import type {
   WsEvent} from "../shared-types";
 import {
   ServerState,
-  CatalystError,
   ErrorCodes,
 } from "../shared-types";
 import { hasPermission, hasNodeAccess } from "../lib/permissions";
@@ -1064,7 +1063,7 @@ export class WebSocketGateway {
         // otherwise knock the real agent offline. The pre-auth socket is
         // registered under a temporary key so messages from it can be routed,
         // and it is bound to the real key only after a successful handshake.
-        const preAuthKey = `__preauth:${nodeId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+        const preAuthKey = `__preauth:${nodeId}:${Date.now()}:${crypto.randomUUID()}`;
         const existing = this.agents.get(nodeId);
         if (existing && existing.socket === socket) {
           // Duplicate registration of the same socket — ignore.
@@ -1305,22 +1304,6 @@ export class WebSocketGateway {
     } catch (err) {
       this.logger.warn({ err, userId }, "Failed to evaluate admin.write permission");
       return false;
-    }
-  }
-
-  /** Aggregate the user's role permissions (same query shape hasPermission uses). */
-  private async getUserRolePermissions(userId: string): Promise<string[]> {
-    try {
-      const userRoles = await this.prisma.role.findMany({
-        where: { users: { some: { id: userId } } },
-        select: { permissions: true },
-      });
-      const out: string[] = [];
-      for (const role of userRoles) out.push(...role.permissions);
-      return out;
-    } catch (err) {
-      this.logger.warn({ err, userId }, "Failed to load role permissions");
-      return [];
     }
   }
 

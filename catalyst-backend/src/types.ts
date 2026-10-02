@@ -1,4 +1,3 @@
-import { FastifyRequest, FastifyInstance } from "fastify";
 import type { WebSocketGateway } from "./websocket/gateway";
 
 declare module "fastify" {

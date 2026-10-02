@@ -211,15 +211,6 @@ function usesBashisms(script: string): boolean {
 	return /\[\[ /.test(script);
 }
 
-function usesPackageManager(script: string, pm: string): boolean {
-	const s = script.toLowerCase();
-	if (pm === 'apt') return s.includes('apt-get') || /\bapt\s/.test(s);
-	if (pm === 'apk') return s.includes('apk add') || s.includes('apk update');
-	if (pm === 'yum') return s.includes('yum install');
-	if (pm === 'dnf') return s.includes('dnf install');
-	return false;
-}
-
 /**
  * Check if a specific tool is self-installed by the script's package manager commands.
  * Looks for patterns like: apt install -y curl jq unzip, apk add --no-cache curl jq
@@ -276,7 +267,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 			for (const fp of allFiles) {
 				const parsed = parseEgg(fp);
 				if (!parsed) continue;
-				const { egg, rel } = parsed;
+				const { egg } = parsed;
 				const script = getInstallScript(egg);
 				if (!script.trim()) continue;
 

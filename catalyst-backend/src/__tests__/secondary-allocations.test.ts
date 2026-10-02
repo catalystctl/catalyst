@@ -521,7 +521,6 @@ describe('Port Conflict Detection', () => {
     const app = buildTestApp();
     await app.register(serverNetworkRoutes);
 
-    const server2 = await prisma.server.findUnique({ where: { id: server2Id } });
     const sharedPort = getNextPort();
 
     // Set server1 primaryIp to 10.0.0.1 and server2 to 10.0.0.2
@@ -543,7 +542,7 @@ describe('Port Conflict Detection', () => {
       expect(addRes.status).toBe(200);
 
       // Now try same port on server1 (different IP) — should succeed
-      const { status, body } = await request(app, 'POST', `/${server1Id}/allocations`, {
+      const { status } = await request(app, 'POST', `/${server1Id}/allocations`, {
         containerPort: sharedPort + 1,
         hostPort: sharedPort,
       });

@@ -15,7 +15,6 @@
  */
 
 import type { PrismaClient } from "@prisma/client";
-import type { Permission } from "../shared-types";
 import { SimpleCache } from "./cache";
 import { broadcastCacheInvalidate, onCacheInvalidate } from "./cache-bus";
 import { registerCacheStats } from "./cache";

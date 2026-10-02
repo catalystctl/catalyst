@@ -280,7 +280,7 @@ async function main() {
   console.log("✓ Administrator role created");
 
   // Create moderator role
-  const moderatorRole = await prisma.role.upsert({
+  await prisma.role.upsert({
     where: { name: "Moderator" },
     update: {
       description: "Limited management permissions",
@@ -332,7 +332,7 @@ async function main() {
   console.log("✓ Moderator role created");
 
   // Create user role
-  const userRole = await prisma.role.upsert({
+  await prisma.role.upsert({
     where: { name: "User" },
     update: {
       description: "Basic user permissions",
@@ -378,7 +378,7 @@ async function main() {
   // Supports all server types: Vanilla, Paper, Fabric, Forge, NeoForge, Quilt,
   // Spigot, Purpur, Folia, Pufferfish, Mohist, Arclight, Sponge, Leaves, Canvas,
   // Velocity, BungeeCord, and more.
-  const minecraftTemplate = await prisma.serverTemplate.upsert({
+  await prisma.serverTemplate.upsert({
     where: { name: "Minecraft Server (Universal)" },
     update: {},
     create: {

@@ -117,7 +117,7 @@ export class PluginWorkerHost {
 
   async terminate(): Promise<void> {
     this.shutdownRequested = true;
-    for (const [id, pending] of this.pendingRequests) {
+    for (const pending of this.pendingRequests.values()) {
       clearTimeout(pending.timeout);
       pending.reject(new Error('Plugin worker is shutting down'));
     }

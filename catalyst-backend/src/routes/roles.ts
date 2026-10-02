@@ -10,10 +10,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createAuditLog } from '../middleware/audit';
 import {
   hasPermission,
-  getUserRoles,
   getUserPermissions,
   PERMISSION_PRESETS,
-  getNodeAssignments,
   flushRbacCaches,
   invalidateAdminUserCache,
   invalidateNodeAccessCache,

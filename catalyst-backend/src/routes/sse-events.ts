@@ -29,7 +29,6 @@ import { apiError } from '../lib/http-error';
 import { ErrorCodes } from '../shared-types';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
-const CLEANUP_INTERVAL_MS = 60_000;
 
 interface SseSubscriber {
   unsubscribe: () => void;
@@ -245,9 +244,9 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
             EVENT_TYPES,
             push,
             allowedServerIds === undefined ? undefined : [...allowedServerIds],
-            userId ?? undefined,
+            userId,
           )
-        : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push, userId ?? undefined);
+        : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push, userId);
 
       // Push cached latest metric immediately so the client doesn't wait for the next agent tick.
       // Offline servers must read zero CPU/memory, never the last running sample.

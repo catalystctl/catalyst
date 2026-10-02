@@ -53,8 +53,6 @@ import { setupRoutes } from "./routes/setup";
 import { settingsRoutes } from "./routes/settings";
 import {
 	verifyApiKey as verifyApiKeyService,
-	createApiKey as createApiKeyService,
-	deleteApiKey as deleteApiKeyService,
 	resolveApiKeySecret,
 } from "./services/api-key-service";
 import { apiKeyRoutes } from "./routes/api-keys";
@@ -70,7 +68,6 @@ import {
 	generateSftpToken,
 	validateSftpToken,
 	rotateSftpToken,
-	getSftpTokenInfo,
 	listSftpTokensForServer,
 	revokeSftpToken,
 	revokeAllSftpTokensForServer,

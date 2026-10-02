@@ -15,8 +15,6 @@ import { ErrorCodes } from "../shared-types";
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const METRICS_EVENT_TYPES = ['resource_stats', 'storage_resize_complete'];
 
-type ReqHeaders = Record<string, string | string[] | undefined>;
-
 // Module-level subscriber registry
 interface Subscriber {
   unsubscribe: () => void;

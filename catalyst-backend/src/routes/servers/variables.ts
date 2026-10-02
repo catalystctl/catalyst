@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { canAccessServer, checkIsAdmin, ensureNotSuspended, validateVariableRule } from './_helpers.js';
+import { checkIsAdmin, ensureNotSuspended, validateVariableRule } from './_helpers.js';
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
 

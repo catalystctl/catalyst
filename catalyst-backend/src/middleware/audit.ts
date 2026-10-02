@@ -238,7 +238,7 @@ export async function createAuditLog(
           actorInfo = { '_actor.userId': userId };
         }
       } catch {
-        actorInfo = userId ? { '_actor.userId': userId } : {};
+        actorInfo = { '_actor.userId': userId };
       }
     }
 

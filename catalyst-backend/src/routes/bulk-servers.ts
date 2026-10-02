@@ -438,7 +438,6 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       const result: BulkResult = { success: [], failed: [] };
 
       const deletableStates = new Set(['stopped', 'error', 'crashed', 'installing']);
-      const { releaseIpForServer } = await import('../utils/ipam');
 
       const servers = await prisma.server.findMany({
         where: { id: { in: serverIds } },

@@ -549,7 +549,7 @@ export function importPterodactylEgg(
 
 	// Config files
 	const configFiles = tryParseJson(egg.config?.files);
-	if (configFiles && typeof configFiles === "object" && configFiles !== null) {
+	if (configFiles && typeof configFiles === "object") {
 		const keys = Object.keys(configFiles);
 		if (keys.length > 0) {
 			features.pterodactylConfigFiles = configFiles;

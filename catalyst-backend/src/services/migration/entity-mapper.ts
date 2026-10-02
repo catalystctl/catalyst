@@ -9,9 +9,7 @@ import {
   PTERODACTYL_PERMISSION_MAP,
   type PterodactylLocation,
   type PterodactylNode,
-  type PterodactylNest,
   type PterodactylEgg,
-  type PterodactylEggVariable,
   type PterodactylUser,
   type PterodactylServer,
   type PterodactylAllocation,
@@ -368,7 +366,7 @@ export class EntityMapper {
     // Ensure primary port is always in portBindings
     portBindings[primaryPort] = primaryPort;
 
-    if (threads && threads !== "0" && threads !== null) {
+    if (threads && threads !== "0") {
       cpuCores = parseInt(threads, 10) || 1;
     } else if (cpuPercent > 0) {
       cpuCores = Math.max(1, Math.round(cpuPercent / 100));
@@ -404,7 +402,6 @@ export class EntityMapper {
     // The Pterodactyl server also has `backups` field showing current count.
     const pteroBackupSlots = ptero.feature_limits?.backups ?? 0;
     const pteroDatabaseSlots = ptero.feature_limits?.databases ?? 0;
-    const pteroAllocationSlots = ptero.feature_limits?.allocations ?? 0;
 
     return {
       data: {

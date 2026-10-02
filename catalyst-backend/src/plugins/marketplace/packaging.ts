@@ -1,4 +1,6 @@
 import fs from 'fs';
+import { Transform, type Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import fsp from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -145,23 +147,20 @@ export async function downloadPackage(
     const hash = crypto.createHash('sha256');
     let bytes = 0;
     const out = fs.createWriteStream(tmpPath);
-    for await (const chunk of res.body) {
-      bytes += chunk.length;
-      if (bytes > MAX_PACKAGE_BYTES) {
-        out.destroy();
-        throw new PackagingError('TOO_LARGE', `Package exceeds ${MAX_PACKAGE_BYTES} byte limit`);
-      }
-      hash.update(chunk);
-      if (!out.write(chunk)) {
-        await new Promise<void>((resolve, reject) =>
-          out.once('drain', resolve).once('error', reject),
-        );
-      }
-    }
-    await new Promise<void>((resolve, reject) => {
-      out.end(resolve);
-      out.once('error', reject);
+    // Metering pass: enforce the byte cap and hash each chunk on its way to the
+    // temp file. `pipeline` owns backpressure, completion and teardown.
+    const meter = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        bytes += chunk.length;
+        if (bytes > MAX_PACKAGE_BYTES) {
+          callback(new PackagingError('TOO_LARGE', `Package exceeds ${MAX_PACKAGE_BYTES} byte limit`));
+          return;
+        }
+        hash.update(chunk);
+        callback(null, chunk);
+      },
     });
+    await pipeline(res.body as unknown as Readable, meter, out);
 
     const sha256 = hash.digest('hex');
     if (opts.expectedSha256 && !timingSafeEqualHex(opts.expectedSha256, sha256)) {

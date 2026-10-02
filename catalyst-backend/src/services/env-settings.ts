@@ -128,7 +128,7 @@ async function readOverrideRows(): Promise<Map<string, string>> {
  */
 export async function initializeEnvOverrides(): Promise<void> {
 	captureBaseEnvironment();
-	let rows = new Map<string, string>();
+	let rows: Map<string, string>;
 	try {
 		rows = await readOverrideRows();
 	} catch (error) {
@@ -428,7 +428,9 @@ export async function updateEnvSettings(
 
 /** Remove a single database override, restoring the .env / default value. */
 export async function resetEnvSetting(key: string): Promise<EnvOverview> {
-	return updateEnvSettings({ [key]: null });
+	// Object.fromEntries defines own properties, so a key such as "__proto__"
+	// cannot reach a prototype setter (updateEnvSettings rejects unknown keys).
+	return updateEnvSettings(Object.fromEntries([[key, null]]));
 }
 
 /**

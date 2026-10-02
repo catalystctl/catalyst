@@ -3,7 +3,6 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { v4 as uuidv4 } from "uuid";
 import { randomBytes } from "crypto";
 import { listAvailableIps, summarizePool, parseCidr, parseIp, formatIp } from "../utils/ipam";
-import { auth } from "../auth";
 import { serialize } from "../utils/serialize";
 import { verifyAgentApiKey } from "../lib/agent-auth";
 import { createApiKey, deleteApiKey } from "../services/api-key-service";
@@ -22,19 +21,6 @@ const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 /** Ceiling for a single bulk auto-update selection change. */
 const MAX_AUTO_UPDATE_BATCH = 200;
-
-/**
- * Safely escape a nodeId for use in JSON string queries.
- * Prevents JSON injection attacks by escaping quotes and backslashes.
- */
-const escapeForJsonQuery = (nodeId: string): string => {
-	// Validate ID format — must be alphanumeric (no quotes, backslashes, etc.)
-	if (!ID_PATTERN.test(nodeId)) {
-		throw new Error("Invalid nodeId format");
-	}
-	// Escape backslashes first, then quotes (defense in depth)
-	return nodeId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-};
 
 const validateOverallocatePercent = (value: unknown): number | null => {
 	if (value === undefined || value === null) return null;
@@ -727,7 +713,6 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// for this node (verifyAgentApiKey keys on nodeId+key). Require the
 			// node-manage path (admin, or node assignment + node.update), not
 			// just the node.create catalog permission.
-			const { checkIsAdmin } = await import("./servers/_helpers.js");
 			const { hasNodeAccess } = await import("../lib/permissions.js");
 			const { resolveServerPermissions } = await import(
 				"../lib/permissions-catalog.js"

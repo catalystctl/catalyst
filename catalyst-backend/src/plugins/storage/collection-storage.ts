@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
 import type { PluginCollectionAPI, PluginCollectionOptions } from '../types';
-import { captureSystemError } from '../../services/error-logger';
 import { randomBytes } from 'crypto';
 import { matchFilter, applyUpdateOperators } from '../path-utils';
 

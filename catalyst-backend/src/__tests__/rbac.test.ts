@@ -7,10 +7,9 @@
 
 import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { flushPermissionsCache, invalidateUserPermissions } from '../lib/permissions-catalog';
+import { flushPermissionsCache } from '../lib/permissions-catalog';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { auth } from '../auth';
 import { hasPermission, hasAnyPermission, hasAllPermissions, getUserPermissions, getUserRoles, parseScopedPermission } from '../lib/permissions';
 
 // Prisma v7: pass config directly to avoid instanceof mismatch in hoisted pnpm layouts

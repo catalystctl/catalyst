@@ -167,20 +167,22 @@ export function redactValue<T>(value: T, mode: RedactionMode = "standard", depth
     ) as unknown as T;
   }
 
-  const out: Record<string, unknown> = {};
+  // Build entries and materialise them with Object.fromEntries: it defines own
+  // properties, so a hostile key such as "__proto__" cannot pollute a prototype.
+  const entries: Array<[string, unknown]> = [];
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
     const lower = key.toLowerCase();
     if (lower === "authorization" || lower === "cookie" || lower === "set-cookie") {
-      out[key] = REDACTED;
+      entries.push([key, REDACTED]);
       continue;
     }
     if (isSensitiveKey(key)) {
-      out[key] = REDACTED;
+      entries.push([key, REDACTED]);
       continue;
     }
-    out[key] = redactValue(entry, mode, depth + 1);
+    entries.push([key, redactValue(entry, mode, depth + 1)]);
   }
-  return out as unknown as T;
+  return Object.fromEntries(entries) as unknown as T;
 }
 
 /** Redact a URL for logs: strip query string entirely (may carry apiKey). */
@@ -210,8 +212,7 @@ export function capMetadata(metadata: unknown): unknown {
     truncatedKeys = entries.length - MAX_ERROR_METADATA_KEYS;
     entries = entries.slice(0, MAX_ERROR_METADATA_KEYS);
   }
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of entries) out[key] = value;
+  const out = Object.fromEntries(entries) as Record<string, unknown>;
   let serialized = "";
   try {
     serialized = JSON.stringify(out);

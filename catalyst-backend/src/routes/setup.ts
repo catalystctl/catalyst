@@ -86,7 +86,6 @@ export async function setupRoutes(app: FastifyInstance) {
 	// user.delete, or DB maintenance), letting an unauthenticated attacker
 	// mint themselves a fresh administrator. A dedicated SystemSetting row
 	// (same pattern as the "security" settings row) survives those events.
-	const SETUP_COMPLETED_KEY = "setup:completed";
 	const isSetupCompleted = async (): Promise<boolean> => {
 		try {
 			const row = await prisma.systemSetting.findUnique({
@@ -171,8 +170,6 @@ export async function setupRoutes(app: FastifyInstance) {
 		existingUser: any,
 	) {
 		const {
-			email,
-			username,
 			panelName,
 			primaryColor,
 			secondaryColor,

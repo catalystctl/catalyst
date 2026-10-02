@@ -1969,11 +1969,11 @@ export function planUpstreamRequest(
     body = tool.body(args);
   } else if (tool.body === "rest") {
     const skip = new Set([...(tool.pathKeys ?? []), ...(tool.queryKeys ?? []), "confirm"]);
-    const rest: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(args)) {
-      if (!skip.has(key) && value !== undefined) rest[key] = value;
-    }
-    body = rest;
+    // Object.fromEntries keeps hostile keys as own properties instead of
+    // letting them reach a prototype setter.
+    body = Object.fromEntries(
+      Object.entries(args).filter(([key, value]) => !skip.has(key) && value !== undefined),
+    );
   } else {
     const picked: Record<string, unknown> = {};
     for (const key of tool.body) {

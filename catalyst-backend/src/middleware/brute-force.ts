@@ -19,7 +19,7 @@
  *   truth.
  */
 
-import type { FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyRequest } from "fastify";
 import type { PrismaClient, User } from "@prisma/client";
 import { getWsGateway } from '../websocket/gateway';
 

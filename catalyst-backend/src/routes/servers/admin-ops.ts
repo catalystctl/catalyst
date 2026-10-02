@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
-import { allocateIpForServer, canAccessServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, OWNER_SERVER_PERMISSIONS, path, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
+import { allocateIpForServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, OWNER_SERVER_PERMISSIONS, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { streamServerData } from "../../services/server-file-stream.js";
 import { publishCacheInvalidate } from "../../lib/event-bus.js";

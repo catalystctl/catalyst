@@ -16,7 +16,6 @@ import type { FastifyInstance } from 'fastify';
 import type { WebSocketGateway } from '../websocket/gateway';
 import { auth } from '../auth.js';
 import { fromNodeHeaders } from 'better-auth/node';
-import { resolveUserPermissions } from '../lib/permissions-catalog.js';
 import { prisma } from '../db.js';
 import { hasPermission } from '../lib/permissions.js';
 import { apiError } from '../lib/http-error';

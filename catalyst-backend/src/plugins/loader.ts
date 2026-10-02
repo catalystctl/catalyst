@@ -7,7 +7,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { Logger } from 'pino';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { WebSocketGateway } from '../websocket/gateway';
-import type { PluginManifest, PluginBackend, LoadedPlugin, PluginStatus } from './types';
+import type { PluginManifest, LoadedPlugin, PluginStatus } from './types';
 import { validateManifest, isVersionCompatible, validateDependencies, isValidPluginName } from './validator';
 import { getInstallId } from '../lib/install-id';
 import { createPluginContext, runMiddleware } from './context';
@@ -827,7 +827,7 @@ export class PluginLoader {
       }
 
       // Stop and remove tasks
-      for (const [taskId, task] of plugin.tasks) {
+      for (const task of plugin.tasks.values()) {
         if (task.job) {
           task.job.stop();
           task.job.destroy();

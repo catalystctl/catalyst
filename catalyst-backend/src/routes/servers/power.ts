@@ -153,7 +153,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const userId = request.user.userId;
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
@@ -251,7 +250,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const userId = request.user.userId;
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
@@ -516,7 +514,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const userId = request.user.userId;
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },

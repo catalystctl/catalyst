@@ -1,53 +1,19 @@
 import { prisma } from '../../db.js';
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { PrismaClient } from "@prisma/client";
-import { serialize } from '../../utils/serialize';
+import type { FastifyReply } from "fastify";
 import { describeError } from '../../utils/describe-error.js';
-import { v4 as uuidv4 } from "uuid";
 import { randomBytes } from "crypto";
-import { decryptBackupConfig, encryptBackupConfig, redactBackupConfig } from "../../services/backup-credentials";
-import { revokeSftpTokensForUser } from "../../services/sftp-token-manager";
-import {
-  validateAndNormalizePath,
-  validateAndNormalizePaths,
-  normalizeRequestPath,
-  validateServerId,
-} from "../../lib/path-validation.js";
+import { decryptBackupConfig, redactBackupConfig } from "../../services/backup-credentials";
+import { normalizeRequestPath } from "../../lib/path-validation.js";
 // SECURITY NOTE: decryptBackupConfig MUST always be followed by redactBackupConfig
 // when used in API response paths. Never expose decrypted credentials to clients.
-import { ServerStateMachine } from "../../services/state-machine";
-import { ServerState } from "../../shared-types";
-import { createWriteStream } from "fs";
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import type { Readable } from "stream";
-import { pipeline } from "stream/promises";
 import { captureSystemError } from "../../services/error-logger";
-import { nanoid } from "nanoid";
-import { auth } from "../../auth";
-import {
-  allocateIpForServer,
-  releaseIpForServer,
-  normalizeHostIp,
-  shouldUseIpam,
-} from "../../utils/ipam";
-import { hasGrant, hasNodeAccess, getUserAccessibleNodes } from "../../lib/permissions";
+import { normalizeHostIp, shouldUseIpam } from "../../utils/ipam";
+import { hasGrant, hasNodeAccess } from "../../lib/permissions";
 import { decideServerAccess } from "../../lib/server-access";
-import { serverCreateSchema, validateRequestBody } from "../../lib/validation";
-import {
-  DatabaseProvisioningError,
-  dropDatabase,
-  provisionDatabase,
-  rotateDatabasePassword,
-} from "../../services/mysql";
-import {
-  getModManagerSettings,
-  getSecuritySettings,
-  renderInviteEmail,
-  sendEmail,
-} from "../../services/mailer";
-import { resolveModrinthGameVersion } from "../../services/modrinth-version-resolver";
+import { getSecuritySettings } from "../../services/mailer";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
 
@@ -147,7 +113,8 @@ export const parseStoredPortBindings = (value: unknown): Record<number, number> 
 };
 
 export const normalizePortBindings = (value: unknown, primaryPort: number) => {
-  const bindings: Record<number, number> = {};
+  // The map keeps request-supplied port numbers out of dynamic property writes.
+  const bindings = new Map<number, number>();
   const usedHostPorts = new Set<number>();
 
   if (value && typeof value === "object") {
@@ -161,16 +128,15 @@ export const normalizePortBindings = (value: unknown, primaryPort: number) => {
         throw new Error(`Host port ${hostPort} appears multiple times in port bindings`);
       }
       usedHostPorts.add(hostPort);
-      bindings[containerPort] = hostPort;
+      bindings.set(containerPort, hostPort);
     }
   }
 
-  const primaryHostPort = bindings[primaryPort];
-  if (!primaryHostPort) {
-    bindings[primaryPort] = primaryPort;
+  if (!bindings.get(primaryPort)) {
+    bindings.set(primaryPort, primaryPort);
   }
 
-  return bindings;
+  return Object.fromEntries(bindings) as Record<number, number>;
 };
 
 export const WILDCARD_HOST = "*";
@@ -1590,13 +1556,12 @@ export const toDatabaseIdentifier = (value: string) => {
 
 
 
-// Re-exports for sub-route modules
+// Re-exports for sub-route modules. This module imports only what it uses
+// itself; everything sub-route modules need is re-exported straight from the
+// defining module, so nothing is imported twice under two names.
 export { prisma } from '../../db.js';
 export type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-export { PrismaClient } from "@prisma/client";
-export { serialize } from '../../utils/serialize.js';
-export { v4 as uuidv4 } from "uuid";
-export { randomBytes } from "crypto";
+export type { PrismaClient } from "@prisma/client";
 export { decryptBackupConfig, encryptBackupConfig, redactBackupConfig } from "../../services/backup-credentials.js";
 export { revokeSftpTokensForUser } from "../../services/sftp-token-manager.js";
 export { ServerStateMachine } from "../../services/state-machine.js";
@@ -1610,6 +1575,9 @@ export { pipeline } from "stream/promises";
 export { captureSystemError } from "../../services/error-logger.js";
 export { nanoid } from "nanoid";
 export { auth } from "../../auth.js";
+export { serialize } from '../../utils/serialize.js';
+export { v4 as uuidv4 } from "uuid";
+export { randomBytes } from "crypto";
 export {
   allocateIpForServer,
   releaseIpForServer,

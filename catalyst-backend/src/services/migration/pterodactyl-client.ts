@@ -9,7 +9,6 @@ import * as https from "node:https";
 import { Readable } from "node:stream";
 import type { URL as URLType } from "node:url";
 import { EventEmitter } from "node:events";
-import crypto from "node:crypto";
 import type {
   PterodactylListResponse,
   PterodactylResource,
@@ -475,7 +474,7 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
       this.http1Agent = null;
     }
     // Reject pending requests
-    for (const [id, req] of this.inflightRequests) {
+    for (const req of this.inflightRequests.values()) {
       clearTimeout(req.timeout);
       req.reject(new PterodactylClientError("CLOSED", "Client closed"));
     }

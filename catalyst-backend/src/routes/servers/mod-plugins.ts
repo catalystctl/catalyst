@@ -206,7 +206,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         url = `${baseUrl}${providerConfig.endpoints.search}?${params.toString()}`;
       } else {
         const loaderValue = typeof loader === "string" ? loader.trim().toLowerCase() : "";
-        let gameId = "432";
+        let gameId: string;
         let classId: string | undefined;
         try {
           gameId = await resolveCurseforgeGameId(providerConfig, providerEntry, baseUrl, headers);

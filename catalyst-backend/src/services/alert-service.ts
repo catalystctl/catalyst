@@ -510,7 +510,8 @@ export class AlertService {
   }
 
   private isDiscordWebhook(webhookUrl: string) {
-    return /discord\.com\/api\/webhooks/.test(webhookUrl);
+    // Anchored to the scheme so a look-alike path elsewhere in the URL cannot match.
+    return /^https?:\/\/(?:[\w-]+\.)*discord\.com\/api\/webhooks/i.test(webhookUrl);
   }
 
   private buildWebhookPayload(

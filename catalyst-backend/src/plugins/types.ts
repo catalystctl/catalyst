@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply, RouteOptions } from 'fastify';
+import type { FastifyRequest, FastifyReply, RouteOptions } from 'fastify';
 import type { Logger } from 'pino';
 import type { WebSocketGateway } from '../websocket/gateway';
 

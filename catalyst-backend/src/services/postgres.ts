@@ -108,7 +108,6 @@ export const provisionPostgresDatabase = async (
   try {
     await withPostgresConnection(host, async (client) => {
       let roleCreated = false;
-      let databaseCreated = false;
       try {
         await client.query(
           `CREATE ROLE ${quoteIdent(username)} WITH LOGIN PASSWORD ${quoteLiteral(password)}`,
@@ -117,15 +116,7 @@ export const provisionPostgresDatabase = async (
         await client.query(
           `CREATE DATABASE ${quoteIdent(databaseName)} OWNER ${quoteIdent(username)} ENCODING 'UTF8'`,
         );
-        databaseCreated = true;
       } catch (error) {
-        if (databaseCreated) {
-          try {
-            await client.query(`DROP DATABASE IF EXISTS ${quoteIdent(databaseName)}`);
-          } catch {
-            // ignore cleanup errors
-          }
-        }
         if (roleCreated) {
           try {
             await client.query(`DROP ROLE IF EXISTS ${quoteIdent(username)}`);

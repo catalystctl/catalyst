@@ -50,7 +50,7 @@ describe("secret hygiene: tracked files", () => {
       if (f.startsWith("catalyst-agent/target/") || f.startsWith("node_modules/")) continue;
       try {
         const content = execSync(
-          `git show "HEAD:${f.replace(/"/g, '\\"')}" 2>/dev/null`,
+          `git show "HEAD:${f.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}" 2>/dev/null`,
           { encoding: "utf-8", maxBuffer: 32 * 1024 * 1024, cwd: REPO_ROOT },
         );
         if (/catalyst_[A-Za-z0-9]{20,}/.test(content)) offenders.push(f);

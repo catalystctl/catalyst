@@ -1,19 +1,15 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { PrismaClient } from "@prisma/client";
 import { createReadStream } from "fs";
 import * as fs from "fs/promises";
 import { describeError } from '../utils/describe-error.js';
 import { PassThrough } from "stream";
 import * as path from "path";
 import {
-  resolveBackupStorageMode,
-  buildBackupPaths,
   openStorageStream,
   deleteBackupFromStorage,
   uploadStreamToAgent,
 } from "../services/backup-storage";
-import { randomUUID } from "crypto";
 import { serialize } from '../utils/serialize';
 import { captureSystemError } from '../services/error-logger';
 import { hasNodeAccess } from '../lib/permissions';
@@ -31,13 +27,6 @@ export async function backupRoutes(app: FastifyInstance) {
   const buildServerDir = (serverUuid: string) => {
     const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
     return `${serverDir}/${serverUuid}`;
-  };
-
-  const sanitizeBackupName = (value?: string) => {
-    const trimmed = (value || "").trim();
-    if (!trimmed) return "";
-    const cleaned = trimmed.replace(/[^a-z0-9._-]/gi, "_");
-    return cleaned.slice(0, 120);
   };
 
   const isAllowedLocalBackupPath = (target: string) => {
