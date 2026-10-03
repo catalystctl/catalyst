@@ -48,8 +48,10 @@ ws.on('open', () => {
 });
 
 ws.on('message', (data) => {
-    // Flatten CR/LF so a crafted frame cannot forge extra log lines.
-    const text = data.toString().replace(/[\r\n]+/g, ' ');
+    // Strip every control character (CR, LF, ANSI escapes) so a crafted frame
+    // cannot forge extra log lines or rewrite the terminal.
+    // eslint-disable-next-line no-control-regex
+    const text = data.toString().replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
     console.log('← Received:', text);
 });
 

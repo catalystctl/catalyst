@@ -11,7 +11,7 @@
  */
 
 import { performance } from "node:perf_hooks";
-import { writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,30 +50,103 @@ function stats(latencies) {
   };
 }
 
-// More robust state loader via bash source
-async function loadStateViaBash(stateFile) {
-  if (!stateFile || !existsSync(stateFile)) return {};
-  const statePath = resolve(String(stateFile));
-  const { execFileSync } = await import("node:child_process");
-  // Path travels as a positional argument (`$1`), so it is never parsed by the shell.
-  const sourceValue = (expr) =>
-    execFileSync("bash", ["-c", `source "$1" 2>/dev/null; printf "%s" ${expr}`, "_", statePath], { encoding: "utf8" }).trim();
-  try {
-    const keys = ["AUTH_TOKEN","PAPER_SERVER_ID","SOTF_SERVER_ID","NODE_ID","LOCATION_ID","PAPER_TEMPLATE_ID","PTERO_APP_KEY","PTERO_CLIENT_KEY","PTERO_SERVER_ID","PTERO_SERVER_UUID","PTERO_NEST_ID","PTERO_EGG_ID","PTERO_URL","BACKEND_IP","PANEL_IP","PTERO_NODE_ID"];
-    const out = {};
-    for (const k of keys) {
-      try {
-        const v = sourceValue(`"\${${k}:-}"`);
-        if (v) out[k] = v;
-      } catch {}
+// State loader. Two file shapes are read here:
+//   state.env  — written by lib.sh with `printf '%s=%q\n'`, so values are
+//                bash-quoted (bare, 'single', $'ansi-c', or \ escaped).
+//   config.env — lab defaults written as "${VAR:-default}".
+// Both are parsed with plain string work: no shell is spawned and no file
+// content is ever evaluated as code. A self-reference falls back to the
+// variable's own default (or is dropped), which is what `${VAR:-...}` means
+// when nothing is set.
+function unquoteBashValue(raw) {
+  const v = raw.trim();
+  if (v.startsWith("$'") && v.endsWith("'")) {
+    return v
+      .slice(2, -1)
+      .replace(/\\(x[0-9a-fA-F]{2}|[0-7]{1,3}|.)/g, (_, esc) => {
+        if (esc[0] === "x") return String.fromCharCode(parseInt(esc.slice(1), 16));
+        if (/^[0-7]{1,3}$/.test(esc)) return String.fromCharCode(parseInt(esc, 8));
+        return { n: "\n", t: "\t", r: "\r", "\\": "\\", "'": "'", '"': '"' }[esc] ?? esc;
+      });
+  }
+  if (v.startsWith("'") && v.endsWith("'") && v.length >= 2) return v.slice(1, -1);
+  if (v.startsWith('"') && v.endsWith('"') && v.length >= 2) {
+    return v.slice(1, -1).replace(/\\(.)/g, "$1");
+  }
+  return v.replace(/\\(.)/g, "$1");
+}
+
+// Expand "${NAME}", "${NAME:-default}" and "${NAME-default}" against values
+// already parsed from the file (falling back to this process's environment).
+// A self-reference uses its own default, which is what `${VAR:-x}` means when
+// nothing else set VAR. Unresolvable references stay as written rather than
+// becoming a misleading empty string.
+function expandRefs(value, vars, self) {
+  const lookup = (ref, fallback) => {
+    if (ref === self) return fallback ?? "";
+    const found = vars[ref] ?? process.env[ref];
+    if (found !== undefined && found !== "") return found;
+    return fallback ?? null;
+  };
+
+  let out = value;
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = false;
+    let next = "";
+    for (let i = 0; i < out.length; i++) {
+      if (out[i] !== "$" || out[i + 1] !== "{") {
+        next += out[i];
+        continue;
+      }
+      // Walk to the matching close brace so nested "${...}" is handled.
+      let depth = 1;
+      let j = i + 2;
+      for (; j < out.length && depth > 0; j++) {
+        if (out[j] === "{") depth++;
+        else if (out[j] === "}") depth--;
+      }
+      if (depth !== 0) {
+        next += out[i];
+        continue;
+      }
+      const inner = out.slice(i + 2, j - 1);
+      const m = inner.match(/^([A-Za-z_][A-Za-z0-9_]*)(:?-)?([\s\S]*)$/);
+      if (!m) {
+        next += out.slice(i, j);
+        i = j - 1;
+        continue;
+      }
+      const [, ref, , fallbackRaw] = m;
+      const fallback = fallbackRaw ? expandRefs(fallbackRaw, vars, self) : undefined;
+      const resolved = lookup(ref, fallback);
+      if (resolved === null) next += out.slice(i, j);
+      else changed = true;
+      next += resolved ?? "";
+      i = j - 1;
     }
-    // also try PUBLIC_URL / API_BASE from last run
-    try {
-      const api = sourceValue('"${API_BASE:-}${PUBLIC_URL:-}"');
-      if (api) out["API_BASE"] = api;
-    } catch {}
-    return out;
-  } catch { return {}; }
+    out = next;
+    if (!changed) break;
+  }
+  return out;
+}
+
+function loadState(stateFile) {
+  if (!stateFile || !existsSync(stateFile)) return {};
+  try {
+    const vars = {};
+    for (const line of readFileSync(stateFile, "utf8").split("\n")) {
+      if (/^\s*#/.test(line)) continue;
+      const m = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+      if (!m) continue;
+      const value = expandRefs(unquoteBashValue(m[2]), vars, m[1]);
+      if (value) vars[m[1]] = value;
+    }
+    // The API base may be recorded either explicitly or as PUBLIC_URL.
+    if (!vars.API_BASE && vars.PUBLIC_URL) vars.API_BASE = vars.PUBLIC_URL;
+    return vars;
+  } catch {
+    return {};
+  }
 }
 
 async function fetchJson(url, opts = {}) {
@@ -313,16 +386,13 @@ async function main() {
   const tokenArg = getArg("token", "");
   const stateFile = getArg("state-file", process.env.STATE_FILE || `${process.env.HOME || "/root"}/.local/share/catalyst-lxc-lab/state.env`);
 
-  const st = await loadStateViaBash(stateFile);
+  const st = loadState(stateFile);
   let base = urlArg || st.API_BASE || "";
   if (!base && st.BACKEND_IP) base = `http://${st.BACKEND_IP}:3000`;
   if (!base || base === "http://:3000" || base === "http://127.0.0.1:3000") {
-    try {
-      const { execFileSync } = await import("node:child_process");
-      const cfgPath = resolve(process.cwd(), "scripts/lxc-lab/config.env");
-      const cfgIp = execFileSync("bash", ["-c", `source "$1" 2>/dev/null; printf "%s" "\${BACKEND_IP:-}"`, "_", cfgPath], { encoding: "utf8" }).trim();
-      if (cfgIp) base = `http://${cfgIp}:3000`;
-    } catch {}
+    // Same parser, same file format — no shell involved.
+    const cfg = loadState(resolve(process.cwd(), "scripts/lxc-lab/config.env"));
+    if (cfg.BACKEND_IP) base = `http://${cfg.BACKEND_IP}:3000`;
   }
   if (!base || base === "http://:3000") base = "http://10.0.3.20:3000";
   const token = tokenArg || st.AUTH_TOKEN || "";

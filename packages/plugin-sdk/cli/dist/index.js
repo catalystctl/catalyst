@@ -92,16 +92,25 @@ async function createPlugin(name, options) {
     const displayName = titleCase(name);
     const description = `A Catalyst plugin: ${displayName}`;
     const author = 'Catalyst Developer';
-    const files = await fs.readdir(templatesDir, { recursive: true });
-    for (const file of files) {
-        const src = path.join(templatesDir, file);
-        const dst = path.join(targetPath, file);
-        const stat = await fs.stat(src);
-        if (stat.isDirectory()) {
+    // withFileTypes: the directory/file decision comes from the same readdir
+    // call, so there is no stat-then-use window on each entry.
+    const entries = await fs.readdir(templatesDir, { recursive: true, withFileTypes: true });
+    for (const entry of entries) {
+        const rel = path.relative(templatesDir, path.join(entry.parentPath, entry.name));
+        const src = path.join(templatesDir, rel);
+        const dst = path.join(targetPath, rel);
+        if (entry.isDirectory()) {
             await fs.mkdir(dst, { recursive: true });
         }
         else {
-            let content = await fs.readFile(src, 'utf-8');
+            const handle = await fs.open(src, 'r');
+            let content;
+            try {
+                content = await handle.readFile('utf-8');
+            }
+            finally {
+                await handle.close();
+            }
             content = content
                 .replace(/\{\{pluginName\}\}/g, name)
                 .replace(/\{\{PluginName\}\}/g, displayName)

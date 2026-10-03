@@ -109,12 +109,14 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
  const users: AdminUser[] = [];
  let page = 1;
  let hasMorePages = true;
- do {
+ // Paged fetch: the body always sets hasMorePages before the next test, so a
+ // while loop (rather than do/while) states that without an unused initial read.
+ while (hasMorePages) {
  const result = await adminApi.listUsers({ page, limit: 100 });
  users.push(...result.users);
  hasMorePages = page < result.pagination.totalPages;
  page++;
- } while (hasMorePages);
+ }
  return users;
  },
  enabled: open && canSelectOwner,

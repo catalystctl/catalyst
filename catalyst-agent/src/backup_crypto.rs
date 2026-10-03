@@ -261,11 +261,7 @@ mod security_hardening_tests {
     /// Deterministic AES-256 test key. Built by expansion rather than written
     /// as a literal so the key material is derived, not hard-coded.
     pub(super) fn streaming_test_key() -> [u8; 32] {
-        let mut key = [0u8; 32];
-        for (i, b) in key.iter_mut().enumerate() {
-            *b = (i as u8).wrapping_mul(3).wrapping_add(4);
-        }
-        key
+        std::array::from_fn(|i| (i as u8).wrapping_mul(3).wrapping_add(4))
     }
 
     #[test]
