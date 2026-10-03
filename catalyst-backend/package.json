@@ -41,7 +41,7 @@
 		"@fastify/websocket": "~11.3.1",
 		"@prisma/adapter-pg": "~7.10.0",
 		"@prisma/client": "~7.10.0",
-		"@simplewebauthn/server": "~13.3.3",
+		"@simplewebauthn/server": "~14.0.2",
 		"@types/nodemailer": "~8.0.2",
 		"archiver": "^8.0.0",
 		"better-auth": "~1.7.5",
