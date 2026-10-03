@@ -50,6 +50,19 @@ Rules we hold ourselves to:
 - Use `won't fix` for accepted risks (for example lab-only scripts bound to
   `0.0.0.0` on purpose), not for analyser blind spots.
 
+### Expect to iterate
+
+An alert does not close because the sink changed; it closes because the flow the
+query was tracking is gone. Changing one function and stopping will leave the
+alert open at a new line number, because the taint just moves. Two consequences:
+
+- **Re-run the scan after pushing, and re-query.** Do not report an alert as
+  fixed from a local diff.
+- **A fix that relocates a flow is not a fix.** Passing a path as a positional
+  argument instead of interpolating it into a shell string is a real
+  improvement, but if a shell is still spawned the query still reports it.
+  Removing the shell is what closed it here.
+
 ### Known false positives
 
 These recur, because each is a case CodeQL cannot model in this codebase.
@@ -59,7 +72,7 @@ re-investigating.
 | Query | Why it fires | Why it is not a real finding |
 |-------|--------------|------------------------------|
 | `js/missing-rate-limiting` | The query only recognises `express-rate-limit`; it does not model `@fastify/rate-limit`. | `server.ts` registers `@fastify/rate-limit` with `global: true`, so every route is covered, and individual routes tighten the limit through `config.rateLimit`. A finding here is a signal that a route was *added* under a limiter the query cannot see, not that one is missing. |
-| `js/file-access-to-http` | Tracks a config-file read into a `fetch` URL. | The provider `baseUrl` comes from `loadProviderConfig()` / `getModManagerSettings()` — operator-set panel configuration, not request data. Routes are additionally behind authentication and per-server access checks. |
+| `js/file-access-to-http` | Tracks a config-file read into a `fetch` URL. | The provider `baseUrl` comes from `loadProviderConfig()` / `getModManagerSettings()` — operator-set panel configuration, not request data. Routes are additionally behind authentication and per-server access checks. The same holds for `scripts/benchmark/*.mjs`, where the host and token come from a local operator-owned state file or CLI flags; those scripts are a developer harness, not shipped runtime. |
 | `js/path-injection` | Cannot see through a two-step guard. | Plugin names must match `PLUGIN_NAME_REGEX` (`/^[a-z0-9-]+$/`, ≤50 chars — no `/`, no `.`), asset names must pass `/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/` plus an extension allowlist, and every joined path is re-checked with `path.dirname(candidate) === expectedRoot`. |
 | `js/insufficient-password-hash` | Treats any SHA-256 of a string named `apiKey` as password hashing. | These are 256-bit random tokens (`randomBytes(32)`) hashed with HMAC-SHA256 under a dedicated secret plus a per-key random salt. That is correct storage for a high-entropy bearer credential; a slow KDF would add cost without adding security. Truncated digests are used only as non-secret lookup/rate-limit bucket keys. |
 | `js/clear-text-logging` | Tracks the credential object into the log call without modelling the redaction. | `configSummary()` reduces the key to a 10-character prefix plus a 4-character suffix, or `***` when short. |
@@ -87,6 +100,23 @@ if (path.dirname(dir) !== root) throw new Error('invalid name');
 
 Same for rate limiting: register it where a reviewer will see it applies
 globally, and keep the per-route override next to the handler.
+
+Sanitizers have the same problem. `js/log-injection` recognises
+`String.prototype.replace` with a line-break pattern; a hand-written
+per-character filter that removes the same characters is still reported. When a
+query documents a sanitizer shape, use that shape:
+
+```js
+// Reported: correct, but the query does not model it.
+let out = '';
+for (const ch of raw) if (ch.codePointAt(0) >= 0x20) out += ch;
+
+// Recognised, and equally safe.
+const out = raw.replace(/\n|\r/g, '');
+```
+
+Treat this as documentation of the analyser, not a reason to weaken the code:
+if the recognised form genuinely sanitizes as well as the custom one, prefer it.
 
 ### 2. Do not build objects from untrusted keys
 
