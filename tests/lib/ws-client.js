@@ -48,15 +48,12 @@ ws.on('open', () => {
 });
 
 ws.on('message', (data) => {
-    // Build the log line from safe characters only: control characters (CR, LF,
-    // ANSI escapes) are dropped so a crafted frame cannot forge log lines or
-    // rewrite the terminal.
-    const raw = data.toString();
-    let text = '';
-    for (const ch of raw) {
-        const code = ch.codePointAt(0);
-        text += code < 0x20 || (code >= 0x7f && code <= 0x9f) ? ' ' : ch;
-    }
+    // Remove line breaks before logging, so a crafted frame cannot forge extra
+    // log lines. Covers LF/CR plus the Unicode line separators.
+    const text = data
+        .toString()
+        .replace(/\n|\r/g, '')
+        .replace(/\u2028|\u2029|\u0085/g, '');
     console.log('← Received:', text);
 });
 
