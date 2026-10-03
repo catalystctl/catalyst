@@ -48,10 +48,15 @@ ws.on('open', () => {
 });
 
 ws.on('message', (data) => {
-    // Strip every control character (CR, LF, ANSI escapes) so a crafted frame
-    // cannot forge extra log lines or rewrite the terminal.
-    // eslint-disable-next-line no-control-regex
-    const text = data.toString().replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
+    // Build the log line from safe characters only: control characters (CR, LF,
+    // ANSI escapes) are dropped so a crafted frame cannot forge log lines or
+    // rewrite the terminal.
+    const raw = data.toString();
+    let text = '';
+    for (const ch of raw) {
+        const code = ch.codePointAt(0);
+        text += code < 0x20 || (code >= 0x7f && code <= 0x9f) ? ' ' : ch;
+    }
     console.log('← Received:', text);
 });
 
