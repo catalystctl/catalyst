@@ -266,9 +266,52 @@ on_error() {
 trap 'on_error $LINENO' ERR
 
 # ── Prompt helpers ────────────────────────────────────────────────────────────
+# When a prompt cannot be shown, TTY_UNAVAILABLE is true and every prompt falls
+# back to its default instead of blocking forever on an unanswered /dev/tty.
+TTY_TTY="/dev/tty"
+TTY_UNAVAILABLE=false
+
+init_tty() {
+    # Resolve the controlling terminal once, up front, so we never hand an
+    # unreachable /dev/tty to `read`. `curl … | bash` and `bash -s < install.sh`
+    # leave stdin as the pipe (stdin is not a tty), and a detached / CI / proxmox
+    # shell can have no controlling terminal at all — there `read -r x </dev/tty`
+    # fails instantly or, worse, blocks forever on a terminal nobody is typing
+    # into. The banner is printed first so this diagnostic has context.
+    if { : </dev/tty; } 2>/dev/null; then
+        TTY_TTY="/dev/tty"
+    elif [[ -t 0 ]]; then
+        # No controlling terminal, but stdin itself is a terminal. Prompt on
+        # stdin instead of /dev/tty.
+        TTY_TTY=""
+    else
+        TTY_TTY=""
+        TTY_UNAVAILABLE=true
+    fi
+}
+
+# read_tty VAR — read one line, blocking only while a human can actually answer.
+# Sets VAR to "" (so callers use the default) and returns 1 when no usable input
+# exists. Never lets a failed redirect abort the script under `set -e`.
+read_tty() {
+    local __var="$1"
+    printf -v "$__var" '%s' ""
+    if [[ "$TTY_UNAVAILABLE" == "true" ]]; then
+        return 1
+    fi
+    if [[ -n "$TTY_TTY" ]]; then
+        # shellcheck disable=SC2229  # $__var is deliberate: read targets that name
+        read -r "$__var" <"$TTY_TTY" 2>/dev/null || true
+    else
+        # shellcheck disable=SC2229  # $__var is deliberate: read targets that name
+        read -r "$__var" || true
+    fi
+    return 0
+}
+
 # ask VAR_NAME "prompt text" "default value"
 # Reads from env var first, then interactive prompt, then default.
-# In non-interactive mode, uses env var or default (no prompt).
+# In non-interactive mode (or with no usable terminal), uses env var or default.
 ask() {
     local var_name="$1"
     local prompt_text="$2"
@@ -282,7 +325,7 @@ ask() {
         return
     fi
 
-    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+    if [[ "$NON_INTERACTIVE" == "true" || "$TTY_UNAVAILABLE" == "true" ]]; then
         printf -v "$var_name" '%s' "$default_val"
         info "${var_name}=${default_val}  (default, non-interactive)"
         return
@@ -295,7 +338,7 @@ ask() {
     else
         echo -en "\n  ${BLD}?${RST} ${prompt_text}: "
     fi
-    read -r answer </dev/tty
+    read_tty answer
     # Use default if empty
     if [[ -z "$answer" ]]; then
         answer="$default_val"
@@ -305,8 +348,13 @@ ask() {
 
 confirm() {
     # confirm "Question" → returns 0 (yes) or 1 (no)
+    if [[ "$TTY_UNAVAILABLE" == "true" ]]; then
+        # Nothing can answer, so fall back to the documented default ("no").
+        return 1
+    fi
+    local ans
     echo -en "\n  ${BLD}?${RST} $1 ${DIM}[y/N]${RST}: "
-    read -r ans </dev/tty
+    read_tty ans
     [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]
 }
 
@@ -769,7 +817,24 @@ phase_install_docker() {
         warn "This installs packages from Docker's official repository."
         warn "After install, you may need to log out/in for the 'docker' group to take effect."
 
-        if confirm "Install Docker now?"; then
+        if [[ "$TTY_UNAVAILABLE" == "true" ]] || ! confirm "Install Docker now?"; then
+            # No one can answer (piped/detached shell) or the user said no:
+            # explain how to get the prompt or install by hand.
+            if [[ "$TTY_UNAVAILABLE" == "true" ]]; then
+                echo ""
+                warn "This shell has no usable terminal, so the install prompt was skipped."
+                echo -e "  ${DIM}Piping the installer (curl … | bash) or a detached/CI console can hide prompts.${RST}"
+                echo -e "  ${DIM}Download install.sh and run it from a terminal to be asked first:${RST}"
+                echo -e "  ${CYN}curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh -o install.sh && bash install.sh${RST}"
+            fi
+            echo ""
+            echo -e "  ${BLD}To install Docker manually:${RST}"
+            echo -e "  Copy and paste the commands shown above, or follow:"
+            echo -e "  ${CYN}https://docs.docker.com/engine/install/${RST}"
+            echo ""
+            echo "  After installing, re-run this script."
+            exit 1
+        else
             echo ""
             if $DRY_RUN; then
                 info "[dry-run] Would install Docker"
@@ -827,17 +892,9 @@ phase_install_docker() {
                 echo -e "  ${DIM}Then re-run this script.${RST}"
                 exit 1
             fi
-        else
-            echo ""
-            echo -e "  ${BLD}To install Docker manually:${RST}"
-            echo -e "  Copy and paste the commands shown above, or follow:"
-            echo -e "  ${CYN}https://docs.docker.com/engine/install/${RST}"
-            echo ""
-            echo "  After installing, re-run this script."
-            exit 1
         fi
     else
-        # Non-interactive or unsupported distro
+        # Non-interactive, no usable terminal, or unsupported distro
         if [[ -n "$DOCKER_INSTALL_CMDS" ]]; then
             echo -e "  ${BLD}Detected:${RST} ${DETECTED_DISTRO_PRETTY}"
         fi
@@ -848,6 +905,12 @@ phase_install_docker() {
         if [[ "$NON_INTERACTIVE" == "true" ]]; then
             echo ""
             warn "Run interactively (without -y) to get an automatic Docker install option."
+        elif [[ "$TTY_UNAVAILABLE" == "true" ]]; then
+            echo ""
+            warn "This shell has no usable terminal, so the install prompt was skipped."
+            echo -e "  ${DIM}Piping the installer (curl … | bash) or a detached/CI shell can hide prompts.${RST}"
+            echo -e "  ${DIM}To be asked first, download install.sh and run it from a terminal:${RST}"
+            echo -e "  ${CYN}curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh -o install.sh && bash install.sh${RST}"
         fi
         echo ""
         echo "  After installing, re-run this script."
@@ -1507,6 +1570,11 @@ phase_update() {
 
 main() {
     print_banner
+    init_tty
+    if [[ "$TTY_UNAVAILABLE" == "true" ]]; then
+        warn "No usable terminal — prompts are disabled and defaults will be used."
+        echo -e "  ${DIM}Re-run in an interactive shell to answer prompts, or pass -y with env var overrides.${RST}"
+    fi
 
     if [[ "$MODE" == "uninstall" ]]; then
         # Need runtime for compose down

@@ -311,6 +311,64 @@ rm -rf "$TESTROOT4"
 echo ""
 echo "Test 4: PASSED ✓"
 
+# ── Test 5: Piped / no-terminal run must not hang at prompts (issue #273) ────
+# When the installer is piped to bash (curl … | bash) or run in a detached /
+# CI / proxmox console there may be no usable terminal. It must fall back to
+# defaults, explain itself, and exit — never block forever on /dev/tty.
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║  Test 5: Piped install with no terminal (no hang)   ║"
+echo "╚══════════════════════════════════════════════════════╝"
+
+TESTROOT5=$(mktemp -d)
+mkdir -p "$TESTROOT5/bin"
+for dir in /usr/bin /bin /usr/sbin /sbin; do
+    [[ -d "$dir" ]] || continue
+    for bin in "$dir"/*; do
+        name=$(basename "$bin")
+        case "$name" in
+            docker|dockerd|docker-compose|docker-containerd|docker-proxy|podman)
+                ;; # exclude container runtimes
+            *)
+                ln -sf "$bin" "$TESTROOT5/bin/$name" 2>/dev/null || true
+                ;;
+        esac
+    done
+done
+rm -f "$TESTROOT5/bin/curl"
+cp "$SCRIPT_DIR/mock-curl" "$TESTROOT5/bin/curl"
+
+cd "$TESTROOT5"
+# `setsid` + stdin from a pipe: no controlling terminal, so /dev/tty is
+# unusable — the exact condition that used to hang at the y/n prompt.
+# `timeout` guards the assertion: a hang is reported as exit 124.
+OUTPUT=$(PATH="$TESTROOT5/bin" timeout 60 setsid bash "$PROJECT_DIR/install.sh" 0</dev/null 2>&1) && EXIT_CODE=$? || EXIT_CODE=$?
+
+if [[ "$EXIT_CODE" -eq 124 ]]; then
+    echo "  FAIL: installer hung (timeout) with no usable terminal"
+    exit 1
+fi
+echo "  OK: completed without hanging (exit ${EXIT_CODE})"
+
+if echo "$OUTPUT" | grep -qi "no usable terminal"; then
+    echo "  OK: explains the skipped prompt"
+else
+    echo "  FAIL: missing 'no usable terminal' guidance"
+    exit 1
+fi
+
+if echo "$OUTPUT" | grep -qi "to install docker manually"; then
+    echo "  OK: offers manual Docker install instructions"
+else
+    echo "  FAIL: missing manual install instructions"
+    exit 1
+fi
+
+rm -rf "$TESTROOT5"
+
+echo ""
+echo "Test 5: PASSED ✓"
+
 # ── Final cleanup ─────────────────────────────────────────────────────────────
 rm -rf /tmp/test-catalyst-archive
 
