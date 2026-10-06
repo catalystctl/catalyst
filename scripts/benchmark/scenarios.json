@@ -7,6 +7,20 @@
   },
   "suites": [
     {
+      "id": "api-settings-locale",
+      "label": "Settings (unauth)",
+      "description": "GET /api/settings/locale — unauthenticated pre-login settings. The one scenario every panel answers with real 200s (Calagopus/PufferPanel headline scenario). No auth headers.",
+      "catalyst": { "path": "/api/settings/locale", "method": "GET" },
+      "pterodactyl": null
+    },
+    {
+      "id": "api-health",
+      "label": "Health (unauth)",
+      "description": "GET /api/health — liveness probe (DB ping + Redis status), unauthenticated.",
+      "catalyst": { "path": "/api/health", "method": "GET" },
+      "pterodactyl": null
+    },
+    {
       "id": "api-list-servers",
       "label": "List servers",
       "description": "GET server list — primary pagination path. Catalyst: /api/servers filtered by user access. Ptero: Application API paginated list.",
@@ -44,8 +58,8 @@
     {
       "id": "api-auth-me",
       "label": "Auth session check",
-      "description": "GET /api/auth/session or /api/auth/me — token validation cost.",
-      "catalyst": { "path": "/api/auth/session", "method": "GET" },
+      "description": "GET /api/auth/get-session — session validation cost via the better-auth proxy.",
+      "catalyst": { "path": "/api/auth/get-session", "method": "GET" },
       "pterodactyl": null
     },
     {

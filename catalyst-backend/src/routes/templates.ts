@@ -97,12 +97,14 @@ export async function templateRoutes(app: FastifyInstance) {
 			const hit = templateListCache.get(cacheKey);
 			if (hit) {
 				reply.header("X-Cache", "HIT");
+				reply.header("content-type", "application/json; charset=utf-8");
 				return reply.send(hit);
 			}
 			const inflight = templateListInflight.get(cacheKey);
 			if (inflight) {
 				const data = await inflight;
 				reply.header("X-Cache", "HIT-inflight");
+				reply.header("content-type", "application/json; charset=utf-8");
 				return reply.send(data);
 			}
 
@@ -132,15 +134,18 @@ export async function templateRoutes(app: FastifyInstance) {
 							};
 						});
 				const payload = { success: true, data };
+				// Pre-serialized: warm hits skip Fastify's stringify entirely.
+				const responseStr = JSON.stringify(payload);
 				// 10s TTL for lean list, 5s for full (heavier)
-				templateListCache.set(cacheKey, payload, wantFull ? 5000 : 10000);
-				return payload;
+				templateListCache.set(cacheKey, responseStr, wantFull ? 5000 : 10000);
+				return responseStr;
 			})();
 
 			templateListInflight.set(cacheKey, p);
 			try {
 				const data = await p;
 				reply.header("X-Cache", "MISS");
+				reply.header("content-type", "application/json; charset=utf-8");
 				return reply.send(data);
 			} finally {
 				templateListInflight.delete(cacheKey);

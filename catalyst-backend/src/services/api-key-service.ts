@@ -12,8 +12,10 @@
  */
 
 import { prisma } from "../db";
-import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { invalidateAgentApiKeyCache } from "../lib/agent-auth";
+import { SimpleCache, registerCacheStats } from "../lib/cache";
+import { broadcastCacheInvalidate, onCacheInvalidate } from "../lib/cache-bus";
 
 const DEFAULT_PREFIX = "catalyst";
 const KEY_LENGTH = 32; // bytes of randomness
@@ -288,52 +290,118 @@ export async function createApiKey(params: CreateApiKeyParams): Promise<ApiKeyRe
  * HMACs with each candidate's stored salt (constant-time). Pre-salt keys
  * (deterministic salt) verify during the rotation window; the legacy
  * unsalted sha256/base64url formats only verify when explicitly enabled.
+ *
+ * The identity resolution (prefix scan + user/role includes + HMAC compares)
+ * is cached for a short TTL keyed by the hashed full key, flushed via the
+ * 'apikey' cache-bus channel on revoke/update. Rate-limit accounting still
+ * runs against the DB with CAS guards, so cross-worker budgets stay exact;
+ * the cached `remaining` is advisory only. Set AUTH_APIKEY_CACHE_TTL_MS=0 to
+ * disable.
  */
+const DEFAULT_APIKEY_CACHE_TTL_MS = 15_000;
+
+function resolvedApikeyCacheTtl(): number {
+  const raw = Number(process.env.AUTH_APIKEY_CACHE_TTL_MS);
+  if (!Number.isFinite(raw)) return DEFAULT_APIKEY_CACHE_TTL_MS;
+  if (raw <= 0) return 0;
+  return Math.min(300_000, Math.floor(raw));
+}
+
+type ApiKeyCandidate = {
+  id: string;
+  name: string | null;
+  enabled: boolean;
+  expiresAt: Date | null;
+  rateLimitEnabled: boolean;
+  rateLimitMax: number;
+  refillInterval: number | null;
+  refillAmount: number | null;
+  lastRefillAt: Date | null;
+  remaining: number | null;
+  allPermissions: boolean;
+  permissions: string[];
+  metadata: unknown;
+  userId: string;
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    username: string;
+    emailVerified: boolean;
+    role: string;
+    roles: Array<{ name: string; permissions: string[] }>;
+  };
+};
+
+const verifiedKeyCache = new SimpleCache<string, ApiKeyCandidate>(DEFAULT_APIKEY_CACHE_TTL_MS, 2000);
+registerCacheStats('apikey.verify', () => verifiedKeyCache.stats());
+
+export function invalidateVerifiedApiKeyCache(): void {
+  verifiedKeyCache.clear();
+  broadcastCacheInvalidate('apikey', { flushAll: true });
+}
+
+onCacheInvalidate('apikey', () => verifiedKeyCache.clear());
+
 export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | null> {
-  const prefix = fullKey.includes("_") ? fullKey.split("_")[0] : "";
-  const candidates = await prisma.apikey.findMany({
-    where: prefix ? { prefix } : {},
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          username: true,
-          emailVerified: true,
-          role: true,
-          roles: {
-            select: { name: true, permissions: true },
+  const cacheTtl = resolvedApikeyCacheTtl();
+  const cacheKey = cacheTtl > 0 ? createHash("sha256").update(fullKey).digest("hex") : null;
+
+  let apiKeyRecord: ApiKeyCandidate | null = null;
+
+  if (cacheKey) {
+    apiKeyRecord = verifiedKeyCache.get(cacheKey) ?? null;
+  }
+
+  if (!apiKeyRecord) {
+    const prefix = fullKey.includes("_") ? fullKey.split("_")[0] : "";
+    const candidates = await prisma.apikey.findMany({
+      where: prefix ? { prefix } : {},
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            emailVerified: true,
+            role: true,
+            roles: {
+              select: { name: true, permissions: true },
+            },
           },
         },
       },
-    },
-  });
+    });
 
-  let apiKeyRecord: (typeof candidates)[number] | null = null;
-  for (const candidate of candidates) {
-    const meta = parseApiKeyRecordMetadata(candidate.metadata);
-    const saltedHash = meta?.salt ? hashApiKey(fullKey, meta.salt) : null;
-    // Rotation window: keys minted before per-key salts used key.slice(0,16).
-    const deterministicHash = hashApiKey(fullKey);
-    const legacyAllowed = isLegacyHashAllowed();
-    const legacyHash = legacyAllowed ? hashApiKeyLegacyUnsalted(fullKey) : null;
-    // Secret-rotation grace: keys minted before the dedicated secret existed.
-    const prevSaltedHash = meta?.salt ? hashApiKeyPreviousSecret(fullKey, meta.salt) : null;
-    const prevDeterministicHash = hashApiKeyPreviousSecret(fullKey);
-    const matchedCurrent =
-      (saltedHash && timingSafeCompare(candidate.key, saltedHash)) ||
-      timingSafeCompare(candidate.key, deterministicHash) ||
-      (legacyHash && timingSafeCompare(candidate.key, legacyHash));
-    const matchedPrevious =
-      (prevSaltedHash && timingSafeCompare(candidate.key, prevSaltedHash)) ||
-      (prevDeterministicHash !== null && timingSafeCompare(candidate.key, prevDeterministicHash));
-    if (matchedCurrent || matchedPrevious) {
-      if (matchedPrevious && !matchedCurrent) {
-        warnApiKeySecretRotationNeeded();
+    for (const candidate of candidates) {
+      const meta = parseApiKeyRecordMetadata(candidate.metadata);
+      const saltedHash = meta?.salt ? hashApiKey(fullKey, meta.salt) : null;
+      // Rotation window: keys minted before per-key salts used key.slice(0,16).
+      const deterministicHash = hashApiKey(fullKey);
+      const legacyAllowed = isLegacyHashAllowed();
+      const legacyHash = legacyAllowed ? hashApiKeyLegacyUnsalted(fullKey) : null;
+      // Secret-rotation grace: keys minted before the dedicated secret existed.
+      const prevSaltedHash = meta?.salt ? hashApiKeyPreviousSecret(fullKey, meta.salt) : null;
+      const prevDeterministicHash = hashApiKeyPreviousSecret(fullKey);
+      const matchedCurrent =
+        (saltedHash && timingSafeCompare(candidate.key, saltedHash)) ||
+        timingSafeCompare(candidate.key, deterministicHash) ||
+        (legacyHash && timingSafeCompare(candidate.key, legacyHash));
+      const matchedPrevious =
+        (prevSaltedHash && timingSafeCompare(candidate.key, prevSaltedHash)) ||
+        (prevDeterministicHash !== null && timingSafeCompare(candidate.key, prevDeterministicHash));
+      if (matchedCurrent || matchedPrevious) {
+        if (matchedPrevious && !matchedCurrent) {
+          warnApiKeySecretRotationNeeded();
+        }
+        apiKeyRecord = candidate as unknown as ApiKeyCandidate;
+        break;
       }
-      apiKeyRecord = candidate;
-      break;
+    }
+
+    if (cacheKey && apiKeyRecord) {
+      verifiedKeyCache.set(cacheKey, apiKeyRecord, cacheTtl);
     }
   }
 
@@ -394,14 +462,22 @@ export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | nu
     if (consumed.count === 0) {
       return null; // Lost the race — budget exhausted
     }
+    // Keep the cached snapshot aligned with the successful consume; the DB
+    // CAS guards true budgets, this only refreshes the advisory local value.
+    apiKeyRecord.remaining = (apiKeyRecord.remaining ?? 1) - 1;
   } else {
-    await prisma.apikey.update({
-      where: { id: apiKeyRecord.id },
-      data: {
-        lastRequest: new Date(),
-        requestCount: { increment: 1 },
-      },
-    });
+    // Pure usage statistics — no correctness impact. Fire-and-forget (same
+    // trade-off agent-auth already makes) so the hot path never waits on the
+    // write; a crash can lose the last counter tick.
+    prisma.apikey
+      .update({
+        where: { id: apiKeyRecord.id },
+        data: {
+          lastRequest: new Date(),
+          requestCount: { increment: 1 },
+        },
+      })
+      .catch(() => {});
   }
 
   const userRole = apiKeyRecord.user.roles?.[0]?.name || "user";
@@ -446,6 +522,8 @@ export async function deleteApiKey(keyId: string, userId?: string): Promise<bool
     await prisma.apikey.delete({ where });
     // Invalidate agent-auth cache so revoked keys are immediately rejected
     invalidateAgentApiKeyCache();
+    // Flush cached verifications for the same reason (no TTL lag).
+    invalidateVerifiedApiKeyCache();
     try {
       const { getWsGateway } = await import("../websocket/gateway.js");
       const gw = getWsGateway();
@@ -522,6 +600,8 @@ export async function updateApiKey(
 
     // Invalidate agent-auth cache so changes take effect immediately
     invalidateAgentApiKeyCache();
+    // Flush cached verifications so enable/disable/limit changes apply now.
+    invalidateVerifiedApiKeyCache();
     // enabled=false revokes now: close live sockets + fail pending requests.
     if (params.enabled === false) {
       try {

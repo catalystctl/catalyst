@@ -158,6 +158,8 @@ export class CatalystRedis {
   private subParser = new RespParser();
   private subHandlers = new Map<string, Set<(message: string) => void>>();
   private subChannels: string[] = [];
+  /** SCRIPT LOAD digests, keyed by full Lua source (never expire client-side). */
+  private scriptHashes = new Map<string, string>();
   private subAckWaiters: Array<{
     command: string;
     channel: string;
@@ -457,7 +459,33 @@ export class CatalystRedis {
   }
 
   async evalSha<T = unknown>(script: string, keys: string[], args: Array<string | number>): Promise<T> {
-    return this.command<T>('EVAL', script, String(keys.length), ...keys, ...args);
+    // Real EVALSHA: SCRIPT LOAD once per script, then send only the 40-char
+    // digest. Previously this method sent the full Lua body as EVAL on every
+    // call — correct, but wasteful on hot paths (the global rate limiter runs
+    // it per request). NOSCRIPT (after a Redis restart or SCRIPT FLUSH) falls
+    // back to a single full EVAL.
+    let sha = this.scriptHashes.get(script);
+    if (!sha) {
+      try {
+        sha = await this.command<string>('SCRIPT', 'LOAD', script);
+      } catch {
+        return this.command<T>('EVAL', script, String(keys.length), ...keys, ...args);
+      }
+      if (typeof sha !== 'string' || sha.length === 0) {
+        return this.command<T>('EVAL', script, String(keys.length), ...keys, ...args);
+      }
+      this.scriptHashes.set(script, sha);
+    }
+    try {
+      return await this.command<T>('EVALSHA', sha, String(keys.length), ...keys, ...args);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/NOSCRIPT/i.test(msg)) {
+        this.scriptHashes.delete(script);
+        return this.command<T>('EVAL', script, String(keys.length), ...keys, ...args);
+      }
+      throw err;
+    }
   }
 
   async publish(channel: string, message: string): Promise<number> {

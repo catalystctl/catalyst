@@ -557,6 +557,13 @@ export function initAuth() {
               invalidateAdminUserCache(userId);
               invalidateNodeAccessCache(userId);
             } catch { /* non-critical */ }
+            // Cached request contexts must not outlive the ban's session
+            // revocation (the out-of-band TTL would otherwise keep them warm
+            // for up to its duration).
+            try {
+              const { invalidateAuthSessionCache } = await import('./lib/auth-session-cache');
+              invalidateAuthSessionCache(userId);
+            } catch { /* non-critical */ }
 
             // Disconnect WebSocket sessions
             try {
@@ -647,6 +654,22 @@ export function initAuth() {
               }
             } catch { /* non-critical */ }
           }
+        }
+
+        // ── After sign-out / password change / session revocation ────
+        // These actions invalidate existing sessions; flush cached request
+        // contexts so they never outlive the sessions they authenticate.
+        // Full flush: these are rare, low-rate actions.
+        if (
+          path === '/sign-out' ||
+          path === '/change-password' ||
+          (path.startsWith('/admin/') &&
+            (path.includes('session') || path.includes('password')))
+        ) {
+          try {
+            const { invalidateAuthSessionCache } = await import('./lib/auth-session-cache');
+            invalidateAuthSessionCache(ctx.body?.userId ?? ctx.context?.session?.user?.id);
+          } catch { /* non-critical */ }
         }
 
         // Must return an object — Better Auth's runAfterHooks accesses

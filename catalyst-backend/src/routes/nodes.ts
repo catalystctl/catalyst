@@ -38,6 +38,21 @@ import {
 	removeNodeAssignment,
 	invalidateNodeAccessCache,
 } from "../lib/permissions";
+import { SimpleCache } from "../lib/cache";
+import { broadcastCacheInvalidate, onCacheInvalidate } from "../lib/cache-bus";
+
+// Pre-serialized node-list responses (GET /), 5s TTL. Node create/update/
+// delete and assignment mutations flush it via the 'node-list' cache-bus
+// channel; the TTL bounds drift for anything that only changes the per-node
+// server _count (server create/delete elsewhere).
+const nodeListCache = new SimpleCache<string, string>(5_000, 200);
+
+function invalidateNodeListCache(): void {
+	nodeListCache.clear();
+	broadcastCacheInvalidate("node-list", { flushAll: true });
+}
+
+onCacheInvalidate("node-list", () => nodeListCache.clear());
 
 const ensurePermission = (
 	request: any,
@@ -477,6 +492,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// A new node changes wildcard-assignment reachability — evict
 			// node-access caches so accessible-node lists include it now.
 			invalidateNodeAccessCache();
+			invalidateNodeListCache();
 
 			// Log warning about wildcard node assignments if any exist
 			const wildcardAssignments = await prisma.nodeAssignment.findMany({
@@ -561,6 +577,18 @@ export async function nodeRoutes(app: FastifyInstance) {
 				perms.includes("admin.write") ||
 				perms.includes("admin.read");
 
+			// Short TTL on the pre-serialized response: this list is polled by
+			// the dashboard and each node card, and every miss pays a findMany
+			// with a _count GROUP BY per node. Mutations flush it via the
+			// 'node-list' cache-bus channel; the 5s TTL bounds any drift.
+			const cacheKey = isAdmin ? "admin" : `user:${userId}`;
+			const cached = nodeListCache.get(cacheKey);
+			if (cached !== undefined) {
+				reply.header("X-Cache", "HIT");
+				reply.header("content-type", "application/json; charset=utf-8");
+				return reply.send(cached);
+			}
+
 			let nodes;
 			if (isAdmin) {
 				// Admins see all nodes
@@ -590,7 +618,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 				});
 			}
 
-			reply.send(serialize({ success: true, data: nodes }));
+			const responseStr = JSON.stringify(serialize({ success: true, data: nodes }));
+			nodeListCache.set(cacheKey, responseStr);
+			reply.header("X-Cache", "MISS");
+			reply.header("content-type", "application/json; charset=utf-8");
+			reply.send(responseStr);
 		},
 	);
 
@@ -1082,6 +1114,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			// SECURITY: never echo the node secret back — every GET route omits
 			// it via `omit: { secret: true }`; the update response must match.
+			invalidateNodeListCache();
 			reply.send(
 				serialize({ success: true, data: { ...updated, secret: undefined } })
 			);
@@ -1439,6 +1472,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				gw?.failPendingRequestsForNodePublic?.(nodeId, "Node deleted");
 			} catch { /* best-effort */ }
 
+			invalidateNodeListCache();
 			reply.send({ success: true, deletedApiKeys: deletedKeys });
 
 			// Broadcast node_deleted event

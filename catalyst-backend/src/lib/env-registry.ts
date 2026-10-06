@@ -415,6 +415,34 @@ export const ENV_VAR_REGISTRY: readonly EnvVarSpec[] = [
 		min: 0,
 		description: "Worker processes (0 = single process / cluster off). Set in .env before startup.",
 	}),
+	base("REQUEST_LOGGING", "performance", "enum", {
+		default: "auto",
+		options: ["auto", "true", "false"],
+		restartRequired: true,
+		description:
+			"Per-request access log lines (incoming/completed). Production defaults to off for throughput; true re-enables, false disables everywhere (errors always log).",
+	}),
+	base("AUTH_SESSION_CACHE_TTL_MS", "performance", "number", {
+		default: "10000",
+		min: 0,
+		restartRequired: false,
+		description:
+			"TTL for the cached session-auth context (skips the per-request session/user queries). 0 disables. Panel-initiated bans/sign-outs flush it immediately.",
+	}),
+	base("AUTH_APIKEY_CACHE_TTL_MS", "performance", "number", {
+		default: "15000",
+		min: 0,
+		restartRequired: false,
+		description:
+			"TTL for cached API-key verification (skips the prefix scan + HMAC compare per request). 0 disables. Revocation flushes it immediately.",
+	}),
+	base("HEALTH_DB_CACHE_MS", "performance", "number", {
+		default: "2000",
+		min: 0,
+		restartRequired: true,
+		description:
+			"How long a healthy /api/health database probe is cached (0 = probe on every hit). Failures are never cached.",
+	}),
 	base("MAX_AGENT_CONNECTIONS", "performance", "number", {
 		default: "2000",
 		min: 1,

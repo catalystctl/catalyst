@@ -15,6 +15,9 @@ import {
   handleSuccessfulLogin,
   recordIpAttempt,
 } from "../middleware/brute-force";
+import { SimpleCache } from "../lib/cache.js";
+import { onCacheInvalidate } from "../lib/cache-bus.js";
+import { invalidateAuthSessionCache } from "../lib/auth-session-cache.js";
 import {
   userRegistrationSchema,
   userLoginSchema,
@@ -23,6 +26,16 @@ import {
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 import { isSupportedLocale, SUPPORTED_LOCALES } from "../i18n/locales";
+
+// Pre-serialized GET /api/auth/me responses, 5s TTL. The /me handler runs
+// one user+roles query per request and is the panel's session bootstrap call.
+// Profile edits, role changes, bans and sign-outs already broadcast on the
+// subscribed channels (the profile PATCHes below also flush the session
+// cache explicitly); the TTL is a staleness backstop only.
+const meCache = new SimpleCache<string, string>(5_000, 500);
+onCacheInvalidate('auth-session', () => meCache.clear());
+onCacheInvalidate('permissions', () => meCache.clear());
+onCacheInvalidate('admin-user', () => meCache.clear());
 
 // Helper to forward response headers (set-auth-token, set-cookie) from better-auth to Fastify reply.
 // Must use getSetCookie() when available because Headers.get("set-cookie")
@@ -346,6 +359,13 @@ export async function authRoutes(app: FastifyInstance) {
     "/me",
     { onRequest: [app.authenticate], config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const meCacheKey = `user:${request.user.userId}`;
+      const cachedMe = meCache.get(meCacheKey);
+      if (cachedMe !== undefined) {
+        reply.header('content-type', 'application/json; charset=utf-8');
+        return reply.send(cachedMe);
+      }
+
       const user = await prisma.user.findUnique({
         where: { id: request.user.userId },
         select: {
@@ -360,7 +380,7 @@ export async function authRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.AUTH_USER_NOT_FOUND, "User not found");
       }
 
-      reply.send({
+      const meStr = JSON.stringify(serialize({
         success: true,
         data: {
           id: user.id, email: user.email, username: user.username,
@@ -371,7 +391,10 @@ export async function authRoutes(app: FastifyInstance) {
           preferences: user.preferences,
           createdAt: user.createdAt,
         },
-      });
+      }));
+      meCache.set(meCacheKey, meStr);
+      reply.header('content-type', 'application/json; charset=utf-8');
+      reply.send(meStr);
     }
   );
 
@@ -513,6 +536,12 @@ export async function authRoutes(app: FastifyInstance) {
           }
         } catch { /* best-effort */ }
 
+        // Self-edits change the /me and auth-session cached payloads — flush
+        // both locally and across workers/hosts so the next /me is fresh.
+        try {
+          invalidateAuthSessionCache();
+        } catch { /* best-effort */ }
+
         // Response shape unchanged: only the editable profile fields.
         reply.send(serialize({
           success: true,
@@ -554,6 +583,9 @@ export async function authRoutes(app: FastifyInstance) {
         where: { id: request.user.userId },
         data: { preferences: parsed.data as any },
       });
+      try {
+        invalidateAuthSessionCache();
+      } catch { /* best-effort */ }
       reply.send(serialize({ success: true }));
     }
   );
@@ -599,6 +631,9 @@ export async function authRoutes(app: FastifyInstance) {
         data: { image: dataUri },
       });
 
+      try {
+        invalidateAuthSessionCache();
+      } catch { /* best-effort */ }
       reply.send(serialize({ success: true, data: { image: dataUri } }));
     }
   );
@@ -612,6 +647,9 @@ export async function authRoutes(app: FastifyInstance) {
         where: { id: request.user.userId },
         data: { image: null },
       });
+      try {
+        invalidateAuthSessionCache();
+      } catch { /* best-effort */ }
       reply.send(serialize({ success: true, message: 'Avatar removed' }));
     }
   );

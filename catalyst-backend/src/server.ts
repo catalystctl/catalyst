@@ -2,7 +2,7 @@
 import "dotenv/config";
 
 import Fastify from "fastify";
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyBaseLogger, FastifyReply, FastifyRequest } from "fastify";
 import fastifyCompress from "@fastify/compress";
 import fs from "fs";
 import path from "path";
@@ -26,6 +26,12 @@ import { mapHttpError } from "./lib/http-error";
 import { applyRemoteCacheInvalidate, onCacheInvalidate } from "./lib/cache-bus";
 import { subscribeCacheInvalidations } from "./lib/event-bus";
 import { cachedConfig } from "./lib/config-cache";
+import {
+	cacheSessionUser,
+	extractSessionToken,
+	getCachedSessionUser,
+} from "./lib/auth-session-cache";
+import { resolveUserPermissions } from "./lib/permissions-catalog";
 import { closeRedis, getRedis, getRedisStats } from "./lib/redis";
 import { authRoutes } from "./routes/auth";
 import { nodeRoutes } from "./routes/nodes";
@@ -131,9 +137,29 @@ const trustProxy =
 		: ["1", "true", "yes", "on"].includes(trustProxyEnv.toLowerCase());
 
 const app = Fastify({
-	logger: true,
+	// Share the module logger with Fastify so request logs honor LOG_LEVEL and
+	// go through pino-pretty in dev (previously `logger: true` built a second,
+	// default pino instance that logged every request at info in production).
+	// The cast is type-only: pino's Logger satisfies FastifyBaseLogger at
+	// runtime, but pino 10's BaseLogger declares msgPrefix which Fastify's
+	// structural type does not.
+	loggerInstance: logger as FastifyBaseLogger,
+	// Request logging (the default incoming/completed lines) is the largest
+	// fixed per-request cost once handlers are cached — 2 log lines × every
+	// request. Errors still log via the error handler and request.log.* calls.
+	// Production defaults to OFF (opt back in with REQUEST_LOGGING=true); dev
+	// keeps it ON; REQUEST_LOGGING=false disables everywhere.
+	disableRequestLogging:
+		process.env.REQUEST_LOGGING === "false" ||
+		(process.env.NODE_ENV === "production" &&
+			process.env.REQUEST_LOGGING !== "true"),
 	bodyLimit: 10485760, // 10MB global — upload/file routes override with a higher per-route limit
 	trustProxy,
+	// Keep client connections (and idle pooled connections from reverse
+	// proxies) alive across Node's 5s default so benchmark/load traffic does
+	// not churn TCP handshakes; aligned above the typical nginx 60s upstream
+	// idle timeout.
+	keepAliveTimeout: 61_000,
 });
 
 // Parse application/octet-stream as raw Buffer (used by file tunnel stream responses)
@@ -445,9 +471,6 @@ const authenticate = async (request: any, reply: any) => {
 				}
 
 				// Attach user info and resolved permissions from the API key
-				const { resolveUserPermissions } = await import(
-					"./lib/permissions-catalog"
-				);
 				const currentUserPermissions = await resolveUserPermissions(
 					verification.key.userId,
 				);
@@ -508,7 +531,19 @@ const authenticate = async (request: any, reply: any) => {
 		}
 	}
 
-	// Fall back to session authentication
+	// Fall back to session authentication.
+	// Short-TTL L1 cache keyed by the session cookie: a warm request skips the
+	// better-auth session/user queries and the banned/locked lookup entirely
+	// (2-3 SQL round trips). Revocations flush it via the 'auth-session'
+	// cache-bus channel; see lib/auth-session-cache.ts for the staleness bound.
+	const sessionToken = extractSessionToken(request.headers.cookie);
+	if (sessionToken) {
+		const cachedUser = getCachedSessionUser(sessionToken);
+		if (cachedUser) {
+			request.user = { ...cachedUser };
+			return;
+		}
+	}
 	try {
 		const session = await auth.api.getSession({
 			headers: fromNodeHeaders(
@@ -537,9 +572,6 @@ const authenticate = async (request: any, reply: any) => {
 		// Resolve permissions from roles for session auth too
 		let permissions: string[] = [];
 		try {
-			const { resolveUserPermissions } = await import(
-				"./lib/permissions-catalog"
-			);
 			permissions = await resolveUserPermissions(session.user.id);
 		} catch (permError) {
 			logger.error(permError, "Failed to resolve user permissions");
@@ -551,6 +583,9 @@ const authenticate = async (request: any, reply: any) => {
 			username: (session.user as any).username,
 			permissions,
 		};
+		if (sessionToken) {
+			cacheSessionUser(sessionToken, { ...request.user });
+		}
 	} catch {
 		reply.status(401).send({ error: "Unauthorized" });
 		return;
@@ -840,7 +875,24 @@ async function bootstrap() {
 		// Redis is OPTIONAL: degraded Redis never fails liveness, it is reported.
 		// Served at both /health (direct) and /api/health (through the panel's
 		// nginx, which only proxies /api, /auth, /ws and /docs).
+		// The SELECT 1 result is cached briefly (HEALTH_DB_CACHE_MS, default
+		// 2s, 0 disables) because monitoring and load balancers poll this
+		// endpoint constantly — a cached healthy probe skips the per-hit DB
+		// round trip. Failures are never cached, so an outage is still
+		// reported on the very next probe.
+		const healthDbCacheMs = Math.max(
+			0,
+			Number(process.env.HEALTH_DB_CACHE_MS ?? 2000),
+		);
+		let healthDbOkUntil = 0;
 		const healthHandler = async (_request: FastifyRequest, reply: FastifyReply) => {
+			const redis = getRedisStats();
+			if (healthDbCacheMs > 0 && Date.now() < healthDbOkUntil) {
+				return {
+					status: "ok",
+					redis: redis.configured ? redis.status : "disabled",
+				};
+			}
 			try {
 				await prisma.$queryRaw`SELECT 1`;
 			} catch (dbError: any) {
@@ -855,7 +907,7 @@ async function bootstrap() {
 					status: "unhealthy",
 				});
 			}
-			const redis = getRedisStats();
+			healthDbOkUntil = Date.now() + healthDbCacheMs;
 			return {
 				status: "ok",
 				redis: redis.configured ? redis.status : "disabled",

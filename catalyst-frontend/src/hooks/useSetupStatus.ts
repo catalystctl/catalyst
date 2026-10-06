@@ -5,6 +5,31 @@ import i18n from '@/i18n';
 import { getLocalizedErrorMessage } from '../i18n/api-errors';
 
 const SETUP_STATUS_TIMEOUT_MS = 15000;
+const INSTALLED_MEMORY_KEY = 'catalyst:setup-installed:v1';
+
+/**
+ * "This browser has seen a completed install." The setup answer flips from
+ * true to false exactly once, so a remembered *false* (installed) can only be
+ * wrong after a database wipe — and the background revalidation below recovers
+ * from that within one request by routing to /setup. A remembered *true* is
+ * never stored: replaying it was the historical "stranded on the wizard" bug.
+ */
+function readInstalledMemory(): boolean {
+  try {
+    return localStorage.getItem(INSTALLED_MEMORY_KEY) === '1';
+  } catch {
+    return false; // private mode / SSR — memory is a pure optimization
+  }
+}
+
+function rememberInstalled(installed: boolean): void {
+  try {
+    if (installed) localStorage.setItem(INSTALLED_MEMORY_KEY, '1');
+    else localStorage.removeItem(INSTALLED_MEMORY_KEY);
+  } catch {
+    /* best-effort */
+  }
+}
 
 interface SetupStatus {
   setupRequired: boolean;
@@ -28,10 +53,16 @@ interface SetupStatus {
  *
  * The app must not fall through to the normal router while the answer is
  * unknown either: ProtectedRoute would bounce unauthenticated users to
- * `/login`. Unknown = loading, then the retry screen.
+ * `/login`. Unknown = loading, then the retry screen — except when this
+ * browser remembers a completed install, in which case routing starts
+ * immediately and the network answer only arrives as a revalidation
+ * (so the login page never blocks behind a booting or restarting backend).
  */
 export function useSetupStatus(): SetupStatus {
   const queryClient = useQueryClient();
+  // Read once per mount — a memory flip mid-session comes through the
+  // revalidation path instead, with its own routing transition.
+  const [hasInstalledMemory] = useState(readInstalledMemory);
 
   const {
     data,
@@ -55,17 +86,26 @@ export function useSetupStatus(): SetupStatus {
         throw err;
       }
     },
-    // Backend often needs a few seconds for migrate-on-boot on fresh Docker
-    // volumes. Keep retrying transient failures so we don't freeze on a wrong
-    // answer.
+    // Fail fast and let the unreachable poll below own the cadence: an
+    // exponential backoff ladder here would park the retry screen for
+    // minutes while a booting backend comes up. The 3s poll preserves the
+    // "backend needs a few seconds for migrate-on-boot" recovery without the
+    // ladder.
     retry: (failureCount, err: any) => {
       if (err?.response?.status === 404) return false;
       if (err?.response?.status === 401 || err?.response?.status === 403) return false;
-      return failureCount < 8;
+      return failureCount < 1;
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
+
+  // Persist definitive answers: false = installed (enables the instant
+  // routing fast path on the next load), true = clear any stale memory.
+  useEffect(() => {
+    if (data === false) rememberInstalled(true);
+    else if (data === true) rememberInstalled(false);
+  }, [data]);
 
   const recheck = useCallback(() => {
     refetch();
@@ -89,14 +129,30 @@ export function useSetupStatus(): SetupStatus {
   }, [isFetched]);
 
   const isDefinitive = typeof data === 'boolean';
-  const unreachable = !isDefinitive && (timedOut || (isFetched && !!queryError));
+  // With install memory the answer is only a revalidation: routing proceeds
+  // immediately and a `true` (wiped database) arrives as a routing transition.
+  const unreachable = !hasInstalledMemory && !isDefinitive && (timedOut || (isFetched && !!queryError));
 
-  // Block routing until the first attempt settles (success or terminal error).
+  // Auto-heal: while the backend cannot be reached (and this browser has no
+  // install memory), keep re-checking so the panel recovers the moment the
+  // backend answers — the manual Retry button stays, but is no longer the
+  // only way off the retry screen.
+  useEffect(() => {
+    if (!unreachable) return;
+    const id = setInterval(() => {
+      refetch().catch(() => {});
+    }, 3000);
+    return () => clearInterval(id);
+  }, [unreachable, refetch]);
+
+  // Block routing until the first attempt settles (success or terminal
+  // error) — unless install memory lets the app start immediately.
   // Do NOT use csync's isLoading — it is false on the pre-fetch first paint.
   // Never block longer than the timeout — the retry screen takes over.
-  const isLoading = !isFetched && !timedOut;
+  const isLoading = !hasInstalledMemory && !isFetched && !timedOut;
 
-  // Definitive true only from a successful response. Unknown is NOT setup.
+  // Definitive true only from a successful response (or a revalidation after
+  // a wipe). Unknown is NOT setup.
   const setupRequired = data === true;
 
   const error = unreachable

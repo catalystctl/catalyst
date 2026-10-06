@@ -173,6 +173,7 @@ model apikey {
   @@index([userId])
   @@index([key])
   @@index([expiresAt])
+  @@index([prefix])
 }
 
 // ============================================================================

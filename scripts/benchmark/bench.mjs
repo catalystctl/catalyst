@@ -11,7 +11,7 @@
  */
 
 import { performance } from "node:perf_hooks";
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -65,10 +65,10 @@ export function substitutePath(path, vars) {
 
 /**
  * Run a single HTTP benchmark scenario.
- * opts: { url, method, path, headers, body, connections, duration, warmup, name }
+ * opts: { url, method, path, headers, body, connections, duration, warmup, name, rawLatencies }
  */
 export async function runHttpBenchmark(opts) {
-  const { url, method = "GET", path = "/", headers = {}, body = undefined, connections = 10, duration = 10, warmup = 2, name = path } = opts;
+  const { url, method = "GET", path = "/", headers = {}, body = undefined, connections = 10, duration = 10, warmup = 2, name = path, rawLatencies = false } = opts;
   const target = url.replace(/\/$/, "") + path;
   const latencies = [];
   const statusCodes = {};
@@ -133,6 +133,7 @@ export async function runHttpBenchmark(opts) {
     bytesPerSec: elapsed ? Math.round(bytes / elapsed) : 0,
     statusCodes,
     latency: s,
+    ...(rawLatencies ? { latencyRaw: latencies.map((l) => +l.toFixed(2)) } : {}),
   };
 }
 
@@ -192,6 +193,9 @@ Options:
   --path <path>         Raw path when not using scenarios.json
   --method <verb>       HTTP method (default GET)
   --connections <n>     Concurrency (default 10)
+  --processes <n>       Fork N client processes and merge results (default 1).
+                        A single client process saturates around ~8-9k rps;
+                        use --processes 4-8 to measure peak server throughput.
   --duration <s>        Duration seconds (default 10)
   --warmup <s>          Warmup seconds (default 2)
   --accept <mime>       Accept header (default application/json, ptero: application/vnd.pterodactyl.v1+json)
@@ -255,6 +259,94 @@ Options:
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (accept.includes("json")) headers["Content-Type"] = "application/json";
 
+  // Multi-process client mode: a single bench.mjs process is itself CPU-bound
+  // around ~8-9k rps (undici fetch loop), which caps measurable server
+  // throughput. --processes N forks N child clients with identical arguments,
+  // then merges per-suite results (rps sums, percentiles recomputed from the
+  // concatenated raw latency arrays).
+  const processes = Math.max(1, parseInt(getArg("processes", "1"), 10) || 1);
+  if (processes > 1 && process.env.BENCH_CHILD !== "1") {
+    const { spawn } = await import("node:child_process");
+    const { tmpdir } = await import("node:os");
+    // Children must not inherit --processes or the parent's --out.
+    const childArgs = args.filter((a, i) => a !== "--processes" && args[i - 1] !== "--processes" && a !== "--out" && args[i - 1] !== "--out");
+    const tmpFiles = [];
+    const children = [];
+    for (let i = 0; i < processes; i++) {
+      const tmpOut = resolve(tmpdir(), `bench-child-${process.pid}-${i}.json`);
+      tmpFiles.push(tmpOut);
+      children.push(new Promise((res, rej) => {
+        const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...childArgs, "--out", tmpOut], {
+          env: { ...process.env, BENCH_CHILD: "1" },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        let stderr = "";
+        child.stderr.on("data", (d) => (stderr += d));
+        child.on("close", (code) => {
+          if (code === 0) res(tmpOut);
+          else rej(new Error(`bench child ${i} exited ${code}: ${stderr.slice(0, 2000)}`));
+        });
+      }));
+    }
+    console.log(`[bench] ${processes} client processes × ${toRun.length} suite(s)`);
+    const files = await Promise.all(children);
+    const childData = files.map((f) => JSON.parse(readFileSync(f, "utf8")));
+    // Group child rows by suite id — children skip unresolved-template suites,
+    // so positional indexing would misalign.
+    const rowsBySuite = new Map();
+    for (const d of childData) {
+      for (const r of d.results || []) {
+        const key = r.suite ?? r.name;
+        if (!rowsBySuite.has(key)) rowsBySuite.set(key, []);
+        rowsBySuite.get(key).push(r);
+      }
+    }
+    const mergedResults = [];
+    for (const suite of toRun) {
+      const rows = rowsBySuite.get(suite.id);
+      if (!rows || !rows.length) continue;
+      const allLatencies = rows.flatMap((r) => r.latencyRaw ?? []);
+      const s = allLatencies.length ? stats(allLatencies) : rows[0].latency;
+      const completed = rows.reduce((a, r) => a + r.completed, 0);
+      const errors = rows.reduce((a, r) => a + r.errors, 0);
+      const statusCodes = {};
+      for (const r of rows) for (const [c, n] of Object.entries(r.statusCodes || {})) statusCodes[c] = (statusCodes[c] || 0) + n;
+      const elapsed = Math.max(...rows.map((r) => r.duration));
+      const rps = +rows.reduce((a, r) => a + r.rps, 0).toFixed(2);
+      const merged = {
+        suite: rows[0].suite ?? rows[0].name,
+        name: rows[0].name,
+        target: rows[0].target,
+        method: rows[0].method,
+        connections: rows.reduce((a, r) => a + r.connections, 0),
+        processes,
+        duration: elapsed,
+        completed,
+        errors,
+        errorRate: completed ? +((errors / completed) * 100).toFixed(2) : 0,
+        rps,
+        bytesPerSec: rows.reduce((a, r) => a + (r.bytesPerSec || 0), 0),
+        statusCodes,
+        latency: s,
+      };
+      console.log(`  [${processes}p merged] ${merged.suite}: rps=${rps} p50=${s.p50}ms p95=${s.p95}ms p99=${s.p99}ms err=${merged.errorRate}% ${JSON.stringify(statusCodes)}`);
+      mergedResults.push(merged);
+    }
+    const outObj = {
+      meta: { url, timestamp: new Date().toISOString(), node: process.version, vars, processes },
+      results: mergedResults,
+    };
+    if (out) {
+      mkdirSync(dirname(resolve(out)), { recursive: true });
+      writeFileSync(resolve(out), JSON.stringify(outObj, null, 2));
+      console.log(`\nWrote ${out}`);
+    } else {
+      console.log(JSON.stringify(outObj, null, 2));
+    }
+    for (const f of tmpFiles) { try { unlinkSync(f); } catch {} }
+    process.exit(0);
+  }
+
   const results = [];
   for (const suite of toRun) {
     const spec = suite.catalyst || suite;
@@ -283,6 +375,7 @@ Options:
       connections: c,
       duration: d,
       warmup: warm,
+      rawLatencies: process.env.BENCH_CHILD === "1",
     });
     console.log(`  rps=${r.rps} p50=${r.latency.p50}ms p95=${r.latency.p95}ms p99=${r.latency.p99}ms err=${r.errorRate}% ${JSON.stringify(r.statusCodes)}`);
     results.push({ suite: suite.id, ...r });

@@ -20,6 +20,17 @@ import { publishCacheInvalidate } from '../lib/event-bus.js';
 import { invalidateConfig } from '../lib/config-cache.js';
 import { invalidateAgentApiKeyCache } from '../lib/agent-auth.js';
 import { captureSystemError } from '../services/error-logger';
+import { SimpleCache } from '../lib/cache.js';
+import { onCacheInvalidate } from '../lib/cache-bus.js';
+
+// Pre-serialized GET /api/admin/users responses, 5s TTL. The list fans out
+// six relation includes + a count query; the admin users page polls it.
+// Every user mutation already broadcasts on the 'admin-user' cache-bus
+// channel (via invalidateAdminUserCache), which flushes this cache
+// process-locally and across workers/hosts — the TTL only bounds drift for
+// side effects that do not broadcast (new sessions, last sign-in IP).
+const adminUsersCache = new SimpleCache<string, string>(5_000, 200);
+onCacheInvalidate('admin-user', () => adminUsersCache.clear());
 import {
   collectDiagnostics,
   DIAGNOSTICS_SECTIONS,
@@ -190,6 +201,13 @@ export async function adminRoutes(app: FastifyInstance) {
           }
         : undefined;
 
+      const usersCacheKey = `${Number(page)}:${Number(limit)}:${searchQuery}`;
+      const cachedUsers = adminUsersCache.get(usersCacheKey);
+      if (cachedUsers !== undefined) {
+        reply.header('content-type', 'application/json; charset=utf-8');
+        return reply.send(cachedUsers);
+      }
+
       const skip = (Number(page) - 1) * Number(limit);
 
       const [users, total] = await Promise.all([
@@ -265,7 +283,7 @@ export async function adminRoutes(app: FastifyInstance) {
         return { ...rest, lastSignInIp: lastIp ?? null };
       });
 
-      reply.send({
+      const payload = {
         users: usersWithLastIp,
         pagination: {
           page: Number(page),
@@ -273,7 +291,11 @@ export async function adminRoutes(app: FastifyInstance) {
           total,
           totalPages: Math.ceil(total / Number(limit)),
         },
-      });
+      };
+      const responseStr = JSON.stringify(payload);
+      adminUsersCache.set(usersCacheKey, responseStr);
+      reply.header('content-type', 'application/json; charset=utf-8');
+      reply.send(responseStr);
     }
   );
 
@@ -1124,6 +1146,11 @@ export async function adminRoutes(app: FastifyInstance) {
           // Fallback skips auth.ts's ban after-hook, which is where the
           // better-auth path broadcasts — push the same admin event here.
           pushUserUpdated(userId, 'banned', { banned: true });
+          // …and flush cached request contexts for the same reason.
+          try {
+            const { invalidateAuthSessionCache } = await import('../lib/auth-session-cache.js');
+            invalidateAuthSessionCache(userId);
+          } catch { /* non-critical */ }
         } else {
           throw err;
         }

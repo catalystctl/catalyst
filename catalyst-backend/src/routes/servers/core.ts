@@ -8,6 +8,7 @@ import { describeError } from "../../utils/describe-error.js";
 import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../../utils/java-memory.js";
 import { SimpleCache } from "../../lib/cache.js";
 import { registerCacheStats } from "../../lib/cache.js";
+import { resolveUserPermissions } from "../../lib/permissions-catalog";
 import { publishCacheInvalidate, subscribeCacheInvalidations } from "../../lib/event-bus.js";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
@@ -1423,7 +1424,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   );
 
   // List user's servers — optimized for max throughput (benchmark hot-path)
-  // Supports ?limit &offset &withMetrics=1 (default limit 50, max 100, metrics off)
+  // Supports ?limit &offset &withMetrics=1 (default limit 50, max 500, metrics off)
   app.get(
     "/",
     { onRequest: [app.authenticate] },
@@ -1431,7 +1432,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       const query = request.query as { limit?: string; offset?: string; withMetrics?: string; metrics?: string };
       const limitRaw = Math.floor(Number(query.limit ?? 50));
-      const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, limitRaw)) : 50;
+      const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, limitRaw)) : 50;
       const offsetRaw = Math.floor(Number(query.offset ?? 0));
       const offset = Number.isFinite(offsetRaw) ? Math.max(0, offsetRaw) : 0;
       const withMetrics = query.withMetrics === "1" || query.metrics === "1" || query.withMetrics === "true";
@@ -1446,12 +1447,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         const hit = serverListCache.get(fastKey);
         if (hit) {
           reply.header("X-Cache", "HIT");
+          reply.header("content-type", "application/json; charset=utf-8");
           return reply.send(hit);
         }
         const inflight = serverListInflight.get(fastKey);
         if (inflight) {
           const data = await inflight;
           reply.header("X-Cache", "HIT-inflight");
+          reply.header("content-type", "application/json; charset=utf-8");
           return reply.send(data);
         }
         const p = (async () => {
@@ -1473,7 +1476,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             });
             metricsByServer = new Map(metrics.map((m) => [m.serverId, m]));
           }
-          const payload = serialize({
+          // Cache the fully serialized response string: warm hits skip both
+          // the BigInt-safe serialize() round trip and Fastify's stringify.
+          const responseStr = JSON.stringify(serialize({
             success: true,
             data: servers.map((s: any) => {
               const m = metricsByServer.get(s.id) as any;
@@ -1486,14 +1491,15 @@ export async function serverCoreRoutes(app: FastifyInstance) {
                 effectivePermissions: [...ALL_SERVER_PERMISSIONS],
               };
             }),
-          });
-          serverListCache.set(fastKey, payload, withMetrics ? 1500 : 5000);
-          return payload;
+          }));
+          serverListCache.set(fastKey, responseStr, withMetrics ? 1500 : 5000);
+          return responseStr;
         })();
         serverListInflight.set(fastKey, p);
         try {
           const data = await p;
           reply.header("X-Cache", "MISS");
+          reply.header("content-type", "application/json; charset=utf-8");
           return reply.send(data);
         } finally {
           serverListInflight.delete(fastKey);
@@ -1536,12 +1542,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const hit = serverListCache.get(cacheKey);
       if (hit) {
         reply.header("X-Cache", "HIT");
+        reply.header("content-type", "application/json; charset=utf-8");
         return reply.send(hit);
       }
       const inflight = serverListInflight.get(cacheKey);
       if (inflight) {
         const data = await inflight;
         reply.header("X-Cache", "HIT-inflight");
+        reply.header("content-type", "application/json; charset=utf-8");
         return reply.send(data);
       }
 
@@ -1550,12 +1558,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         // Avoids Prisma OR with jsonb has + large OR which forces Seq Scan.
         // Each sub-query uses indexed equality (ownerId, nodeId) or indexed join (ServerAccess).
         const promises: Promise<any[]>[] = [];
+        // Page windows must resolve over the MERGED set, not per sub-query:
+        // every sub-query fetches the first offset+limit rows of its own set,
+        // so dedup+sort below can slice an exact [offset, offset+limit) window
+        // of the union. (skip per sub-query would dedup into gaps and overlaps.)
+        const windowTake = offset + limit;
         promises.push(
           prisma.server.findMany({
             where: { ownerId: userId },
             orderBy: { updatedAt: "desc" },
-            take: limit,
-            skip: offset,
+            take: windowTake,
             select: serverListSelect,
           })
         );
@@ -1563,8 +1575,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           prisma.server.findMany({
             where: { access: { some: { userId } } },
             orderBy: { updatedAt: "desc" },
-            take: limit,
-            skip: offset,
+            take: windowTake,
             select: serverListSelect,
           })
         );
@@ -1573,8 +1584,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             prisma.server.findMany({
               where: { nodeId: { in: accessibleNodeIds } },
               orderBy: { updatedAt: "desc" },
-              take: limit,
-              skip: offset,
+              take: windowTake,
               select: serverListSelect,
             })
           );
@@ -1584,8 +1594,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             prisma.server.findMany({
               where: { id: { in: grantedServerIds } },
               orderBy: { updatedAt: "desc" },
-              take: limit,
-              skip: offset,
+              take: windowTake,
               select: serverListSelect,
             })
           );
@@ -1595,20 +1604,18 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             prisma.server.findMany({
               where: { nodeId: { in: grantedNodeIds } },
               orderBy: { updatedAt: "desc" },
-              take: limit,
-              skip: offset,
+              take: windowTake,
               select: serverListSelect,
             })
           );
         }
         const chunks = await Promise.all(promises);
-        // Merge, dedup, sort, slice to limit (over-fetched at most 3*limit, cheap vs full scan)
+        // Merge, dedup, sort, then window [offset, offset+limit) — exact
+        // pagination over the union (over-fetch ≤ 5×window, cheap vs full
+        // scan; offset=0, the benchmark shape, is unchanged by this).
         const map = new Map<string, any>();
         for (const arr of chunks) for (const s of arr) if (!map.has(s.id)) map.set(s.id, s);
-        const servers = Array.from(map.values()).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, limit);
-
-        // If we fetched paginated sub-queries with take/skip, true pagination across UNION
-        // needs offset applied after merge; for benchmark limit=50 offset=0 this is exact.
+        const servers = Array.from(map.values()).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(offset, offset + limit);
 
         let metricsByServer = new Map<string, any>();
         let accessByServer = new Map<string, any>();
@@ -1634,14 +1641,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         const rolePermsForList: string[] = isUserAdmin ? ['*'] : [];
         let listRolePermissions = rolePermsForList;
         if (listRolePermissions.length === 0 && servers.length) {
-          const roles = await prisma.role.findMany({
-            where: { users: { some: { id: userId } } },
-            select: { permissions: true },
-          });
-          listRolePermissions = roles.flatMap((r) => r.permissions);
+          // 30s-cached global role permissions — this used to be a second
+          // uncached role.findMany duplicating resolveUserPermissions.
+          listRolePermissions = await resolveUserPermissions(userId);
         }
 
-        const payload = serialize({
+        const responseStr = JSON.stringify(serialize({
           success: true,
           data: servers.map((server: any) => {
             const m = metricsByServer.get(server.id) as any;
@@ -1681,14 +1686,15 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               effectivePermissions,
             };
           }),
-        });
-        serverListCache.set(cacheKey, payload, withMetrics ? 1500 : 5000);
-        return payload;
+        }));
+        serverListCache.set(cacheKey, responseStr, withMetrics ? 1500 : 5000);
+        return responseStr;
       })();
       serverListInflight.set(cacheKey, p);
       try {
         const data = await p;
         reply.header("X-Cache", "MISS");
+        reply.header("content-type", "application/json; charset=utf-8");
         return reply.send(data);
       } finally {
         serverListInflight.delete(cacheKey);
@@ -1727,12 +1733,14 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const hasExplicitAccess = server.access.some((a) => a.userId === userId);
       // Server-scoped role resolution: global roles + RoleServerGrant +
       // RoleNodeGrant rows covering this server. Grant rows make the server
-      // visible here even without a ServerAccess row.
-      const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
-      const { decideServerAccess } = await import("../../lib/server-access.js");
-      const scopedRolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+      // visible here even without a ServerAccess row. Only the
+      // !owner && !explicit branch needs it, so it is resolved lazily there.
+      let scopedRolePerms: string[] = [];
 
       if (!isOwner && !hasExplicitAccess) {
+        const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+        const { decideServerAccess } = await import("../../lib/server-access.js");
+        scopedRolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
         nodeAccessGranted = await hasNodeAccess(prisma, userId, server.nodeId);
         const decision = decideServerAccess({
           isOwner: false,

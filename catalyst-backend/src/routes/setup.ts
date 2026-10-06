@@ -135,12 +135,26 @@ export async function setupRoutes(app: FastifyInstance) {
 			return true;
 		}
 	};
+
+	// The flag row is written exactly once per install (markSetupCompleted
+	// below) and never deleted by the panel, so "installed" is a one-way
+	// ratchet and is cached in-process. Only the "installed" answer is
+	// cached — "setup required" always re-queries, so a fresh install flips
+	// to the wizard the moment setup completes (markSetupCompleted sets the
+	// cache directly, and workers that never saw a request have no cache to
+	// be stale). The TTL is a backstop for out-of-band DB surgery.
+	const SETUP_INSTALLED_CACHE_MS = 60_000;
+	let setupInstalledUntil = 0;
+	const rememberSetupInstalled = () => {
+		setupInstalledUntil = Date.now() + SETUP_INSTALLED_CACHE_MS;
+	};
 	const markSetupCompleted = async (): Promise<void> => {
 		await prisma.systemSetting.upsert({
 			where: { id: "setup" },
 			create: { id: "setup" },
 			update: {},
 		});
+		rememberSetupInstalled();
 	};
 
 	// ── Check if setup is needed ───────────────────────────────────────
@@ -152,9 +166,14 @@ export async function setupRoutes(app: FastifyInstance) {
 			// true" would strand an installed panel on the wizard until it
 			// expires — never let it be stored.
 			reply.header("Cache-Control", "no-store");
+			// Cached "installed" answer — see the ratchet note above.
+			if (Date.now() < setupInstalledUntil) {
+				return reply.send({ setupRequired: false });
+			}
 			// SECURITY: once setup has completed (flag row exists), the wizard is
 			// closed permanently regardless of the live user/admin counts.
 			if (await isSetupCompleted()) {
+				rememberSetupInstalled();
 				return reply.send({ setupRequired: false });
 			}
 			const userCount = await prisma.user.count();
@@ -162,6 +181,9 @@ export async function setupRoutes(app: FastifyInstance) {
 				// Installs older than the flag row never had it written. Backfill
 				// now so a later account deletion cannot re-arm the wizard.
 				await markSetupCompleted().catch(() => {});
+				// The count itself is definitive — remember even if the
+				// backfill write failed.
+				rememberSetupInstalled();
 				return reply.send({ setupRequired: false });
 			}
 			// The flag row is missing AND there are no users. If any other settings
@@ -178,6 +200,7 @@ export async function setupRoutes(app: FastifyInstance) {
 					"Setup flag missing on an installed panel — backfilling setup:completed",
 				);
 				await markSetupCompleted().catch(() => {});
+				rememberSetupInstalled();
 				return reply.send({ setupRequired: false });
 			}
 			return reply.send({ setupRequired: true });

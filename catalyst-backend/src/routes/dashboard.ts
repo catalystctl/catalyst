@@ -1,11 +1,16 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { SimpleCache } from '../lib/cache.js';
+import { getUserAccessibleNodes } from '../lib/permissions.js';
 
 // Per-viewer+permission-shape cache (10s TTL). A single-entry slot thrashed
 // to 0% hit rate with two alternating users; a capped multi-entry map keeps
-// every dashboard viewer's poll on-cache.
-const dashboardCache = new SimpleCache<string, any>(10_000, 200);
+// every dashboard viewer's poll on-cache. Entries are pre-serialized
+// response strings so warm hits skip re-stringification.
+const dashboardCache = new SimpleCache<string, string>(10_000, 200);
+// Recent-activity feed (5s TTL, key: viewer scope + limit). Polled by every
+// open dashboard; entries are pre-serialized response strings.
+const activityCache = new SimpleCache<string, string>(5_000, 200);
 
 // /resources aggregates are fleet-global (identical for every viewer) and
 // polled every 30s per open dashboard. A shared 10s cache turns N viewers
@@ -31,7 +36,8 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
       const cachedStats = dashboardCache.get(cacheKey);
       if (cachedStats !== undefined) {
-        return reply.send({ data: cachedStats });
+        reply.header('content-type', 'application/json; charset=utf-8');
+        return reply.send(cachedStats);
       }
 
       const perms: string[] = user?.permissions ?? [];
@@ -56,7 +62,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
         });
         const accessIds = accessRows.map((r) => r.serverId);
         // Include nodes the user is assigned to (node operators managing those hosts).
-        const { getUserAccessibleNodes } = await import('../lib/permissions.js');
         const accessible = await getUserAccessibleNodes(prisma, user.userId);
         const orClauses: Array<Record<string, unknown>> = [{ ownerId: user.userId }];
         if (accessIds.length > 0) {
@@ -75,17 +80,47 @@ export async function dashboardRoutes(app: FastifyInstance) {
       // canReadServers kept for backward-compat of other UI gates; counts always scoped above.
       void canReadServers;
 
-      const [serverCount, serversOnline, nodeCount, nodesOnline, alertCount, alertsUnacknowledged] = await Promise.all([
-        prisma.server.count({ where: serverWhere }),
-        prisma.server.count({ where: { ...serverWhere, status: 'running' } }),
-        // Only show node count to users with node permission
-        canReadNodes || isAdmin ? prisma.node.count() : 0,
-        canReadNodes || isAdmin ? prisma.node.count({ where: { isOnline: true } }) : 0,
-        // Only show alert count to users with alert permission
-        canReadAlerts || isAdmin ? prisma.alert.count() : 0,
-        // The schema uses `resolved` rather than `acknowledged`.
-        canReadAlerts || isAdmin ? prisma.alert.count({ where: { resolved: false } }) : 0,
-      ]);
+      const wantNodes = canReadNodes || isAdmin;
+      const wantAlerts = canReadAlerts || isAdmin;
+
+      // One round trip for the fleet-global counts (scalar subqueries)
+      // instead of one count() query per figure. Scoped server counts below
+      // still use Prisma's where builder for the per-user OR clauses.
+      // $queryRaw resolves to the array of result rows — take the first row.
+      const globalCounts =
+        isGlobalAdmin || wantNodes || wantAlerts
+          ? (
+              await prisma.$queryRaw<{
+                servers: number;
+                servers_online: number;
+                nodes: number;
+                nodes_online: number;
+                alerts: number;
+                alerts_unack: number;
+              }>`
+                SELECT
+                  (SELECT COUNT(*)::int FROM "Server") AS servers,
+                  (SELECT COUNT(*)::int FROM "Server" WHERE status = 'running') AS servers_online,
+                  (SELECT COUNT(*)::int FROM "Node") AS nodes,
+                  (SELECT COUNT(*)::int FROM "Node" WHERE "isOnline" = true) AS nodes_online,
+                  (SELECT COUNT(*)::int FROM "Alert") AS alerts,
+                  (SELECT COUNT(*)::int FROM "Alert" WHERE resolved = false) AS alerts_unack
+              `
+            )[0]
+          : null;
+
+      // The ternary above guarantees a row whenever any of the three flags
+      // is set, so the ?? 0 fallbacks below are unreachable-defensive only.
+      const [serverCount, serversOnline] = isGlobalAdmin
+        ? [globalCounts?.servers ?? 0, globalCounts?.servers_online ?? 0]
+        : await Promise.all([
+            prisma.server.count({ where: serverWhere }),
+            prisma.server.count({ where: { ...serverWhere, status: 'running' } }),
+          ]);
+      const nodeCount = wantNodes ? globalCounts?.nodes ?? 0 : 0;
+      const nodesOnline = wantNodes ? globalCounts?.nodes_online ?? 0 : 0;
+      const alertCount = wantAlerts ? globalCounts?.alerts ?? 0 : 0;
+      const alertsUnacknowledged = wantAlerts ? globalCounts?.alerts_unack ?? 0 : 0;
 
       const data = {
         servers: serverCount,
@@ -96,9 +131,11 @@ export async function dashboardRoutes(app: FastifyInstance) {
         alertsUnacknowledged,
       };
 
-      dashboardCache.set(cacheKey, data);
+      const responseStr = JSON.stringify({ data });
+      dashboardCache.set(cacheKey, responseStr);
 
-      return reply.send({ data });
+      reply.header('content-type', 'application/json; charset=utf-8');
+      return reply.send(responseStr);
     }
   );
 
@@ -111,6 +148,13 @@ export async function dashboardRoutes(app: FastifyInstance) {
       const limit = Math.min(20, parseInt(request.query.limit || '5', 10));
       const perms: string[] = user?.permissions ?? [];
       const isAdmin = perms.includes('*') || perms.some(p => ['admin.read', 'admin.write'].includes(p));
+
+      const activityCacheKey = `${isAdmin ? 'admin' : 'user'}:${user.userId}:${limit}`;
+      const cachedActivity = activityCache.get(activityCacheKey);
+      if (cachedActivity !== undefined) {
+        reply.header('content-type', 'application/json; charset=utf-8');
+        return reply.send(cachedActivity);
+      }
 
       // Get recent audit logs as activity
       const auditWhere = isAdmin ? {} : { userId: user.userId };
@@ -141,7 +185,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
         };
       });
 
-      return reply.send({ data: activities });
+      const responseStr = JSON.stringify({ data: activities });
+      activityCache.set(activityCacheKey, responseStr);
+      reply.header('content-type', 'application/json; charset=utf-8');
+      return reply.send(responseStr);
     }
   );
 

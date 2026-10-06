@@ -24,14 +24,41 @@ type ApiResponse<T> = {
   error?: string;
 };
 
+/**
+ * GET /api/servers caps a single response (default 50, max 500 rows —
+ * routes/servers/core.ts). Every list consumer in the panel (fleet deck,
+ * dashboard, search palette, alerts) wants the complete fleet in one array
+ * and filters client-side, so `list` transparently follows offset pages
+ * until a short page says the fleet is exhausted. An explicit `limit` param
+ * caps the total instead.
+ */
+const SERVERS_PAGE_SIZE = 500;
+const SERVERS_MAX_PAGES = 20; // hard stop: 20 × 500 = 10k rows
+
 export const serversApi = {
   list: async (params?: ServerListParams) => {
     const merged: Record<string, string | number | boolean | null | undefined> = {
       ...(params ?? {}),
     };
     if (merged.withMetrics == null && merged.metrics == null) merged.withMetrics = 1;
-    const data = await apiClient.get<ApiResponse<Server[]>>('/api/servers', { params: merged });
-    return Array.isArray(data.data) ? data.data : [];
+    const requestedLimit = Number(merged.limit);
+    const totalCap = Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined;
+    const results: Server[] = [];
+    for (let page = 0; page < SERVERS_MAX_PAGES; page++) {
+      const remaining = totalCap != null ? totalCap - results.length : undefined;
+      const requestLimit =
+        remaining != null ? Math.min(SERVERS_PAGE_SIZE, remaining) : SERVERS_PAGE_SIZE;
+      if (requestLimit <= 0) break;
+      const data = await apiClient.get<ApiResponse<Server[]>>('/api/servers', {
+        params: { ...merged, limit: requestLimit, offset: results.length },
+      });
+      const rows = Array.isArray(data.data) ? data.data : [];
+      results.push(...rows);
+      // A short page means the fleet is exhausted; a full page may have a
+      // successor, so keep following offsets until then.
+      if (rows.length < requestLimit) break;
+    }
+    return results;
   },
   get: async (id: string) => {
     const data = await apiClient.get<ApiResponse<Server>>(`/api/servers/${id}`);

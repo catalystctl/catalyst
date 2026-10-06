@@ -46,7 +46,9 @@ export type CacheInvalidateChannel =
   | 'template'
   | 'server-list'
   | 'server-access'
-  | 'apikey';
+  | 'apikey'
+  | 'auth-session'
+  | 'node-list';
 
 export type CacheInvalidatePayload = {
   /** Optional node id for agent-auth scoped invalidation */

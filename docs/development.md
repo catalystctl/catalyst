@@ -402,7 +402,7 @@ const { mutate: sendCommand } = useSendConsoleCommand(serverId);
 
 #### `useFileManager` — System & Admin Hooks
 
-- `useSetupStatus()` — Checks if first-time panel setup is required; redirects if so
+- `useSetupStatus()` — First-run/OOBE gate. Blocks routing only until the first `/api/setup/status` answer; a browser that has seen a completed install (localStorage) routes immediately and revalidates in the background, and an unreachable backend gets a 3s auto-poll instead of a manual-only retry screen
 - `useSystemErrors()` — Fetches client-side error reports from `reportSystemError()`
 - `useAuditLogs()` — Fetches system audit logs with filtering
 - `useNodeHealth(nodeId)` — Fetches node resource metrics (CPU, memory, disk)

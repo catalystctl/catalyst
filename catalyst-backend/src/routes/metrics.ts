@@ -2,14 +2,18 @@ import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
+import { resolveServerPermissions } from '../lib/permissions-catalog';
 import { SimpleCache } from '../lib/cache.js';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 
 // History payloads are polled frequently per open server tab and each miss
 // scans up to 10k metric rows. TTL is short (time-series data: TTL-only,
-// no invalidation possible).
+// no invalidation possible). Entries are pre-serialized response strings.
 const metricsHistoryCache = new SimpleCache<string, unknown>(10_000, 500);
+// Latest-stats snapshot, polled every few seconds per open tab. 2s TTL
+// coalesces bursts without visible staleness; entries are response strings.
+const serverStatsCache = new SimpleCache<string, string>(2_000, 1000);
 
 export async function metricsRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -19,7 +23,6 @@ export async function metricsRoutes(app: FastifyInstance) {
     "/servers/:serverId/metrics",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const startTime = Date.now();
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
       const { hours, limit } = request.query as { hours?: string; limit?: string };
@@ -35,34 +38,14 @@ export async function metricsRoutes(app: FastifyInstance) {
       // below, so a cache hit can never bypass permission checks.
       const cacheKey = `${serverId}:${hoursBack}h:${maxRecords}`;
 
-      // Run ALL queries in parallel - server, metrics, and access all at once
-      const queryStart = Date.now();
-      // fetchLimit: get more raw points than `maxRecords` so bucketization uses
-      // data across the whole requested window instead of only the newest N rows.
-      const fetchLimit = Math.min(10000, Math.max(maxRecords * 25, maxRecords));
-      const [server, metrics, access] = await Promise.all([
+      // Authz-first, cache-second, metrics-query-only-on-miss: a warm hit
+      // pays just the lean server + access reads instead of the up-to-10k-row
+      // metrics scan that used to run on every poll.
+      const [server, access] = await Promise.all([
         prisma.server.findUnique({
           where: { id: serverId },
           select: { id: true, ownerId: true, nodeId: true, suspendedAt: true, suspensionReason: true },
         }),
-        prisma.serverMetrics.findMany({
-          where: {
-            serverId,
-            timestamp: { gte: since },
-          },
-          orderBy: { timestamp: "desc" },
-          take: fetchLimit,
-          select: {
-            cpuPercent: true,
-            memoryUsageMb: true,
-            diskIoMb: true,
-            diskUsageMb: true,
-            networkRxBytes: true,
-            networkTxBytes: true,
-            timestamp: true,
-          },
-        }),
-        // Run permission check in parallel
         prisma.serverAccess.findUnique({
           where: {
             userId_serverId: {
@@ -73,8 +56,6 @@ export async function metricsRoutes(app: FastifyInstance) {
           select: { permissions: true },
         }),
       ]);
-      const queryTime = Date.now() - queryStart;
-      app.log.info({ serverId, queryMs: queryTime }, "Metrics query time");
 
       if (!server) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
@@ -91,7 +72,6 @@ export async function metricsRoutes(app: FastifyInstance) {
 
       // Check permissions — owner, explicit access, global role grant
       // (server.read / admin), or node assignment
-      const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       // SECURITY: bare node assignment must not expose other tenants'
       // metrics — require the node.update management pairing
@@ -111,11 +91,32 @@ export async function metricsRoutes(app: FastifyInstance) {
 
       const cached = metricsHistoryCache.get(cacheKey);
       if (cached !== undefined) {
-        return reply.send(serialize({
-          success: true,
-          data: cached,
-        }));
+        reply.header("content-type", "application/json; charset=utf-8");
+        return reply.send(cached as string);
       }
+
+      // fetchLimit: get more raw points than `maxRecords` so bucketization uses
+      // data across the whole requested window instead of only the newest N rows.
+      const fetchLimit = Math.min(10000, Math.max(maxRecords * 25, maxRecords));
+      const queryStart = Date.now();
+      const metrics = await prisma.serverMetrics.findMany({
+        where: {
+          serverId,
+          timestamp: { gte: since },
+        },
+        orderBy: { timestamp: "desc" },
+        take: fetchLimit,
+        select: {
+          cpuPercent: true,
+          memoryUsageMb: true,
+          diskIoMb: true,
+          diskUsageMb: true,
+          networkRxBytes: true,
+          networkTxBytes: true,
+          timestamp: true,
+        },
+      });
+      app.log.debug({ serverId, queryMs: Date.now() - queryStart }, "Metrics query time");
 
       // Return early if no metrics
       if (metrics.length === 0) {
@@ -258,21 +259,18 @@ export async function metricsRoutes(app: FastifyInstance) {
           }
         : null;
 
-      const totalTime = Date.now() - startTime;
-      app.log.info({ serverId, totalMs: totalTime }, "Total metrics endpoint time");
-
       const payload = {
         latest,
         averages: avg,
         history: normalizedMetrics, // chronological
         count: normalizedMetrics.length,
       };
-      metricsHistoryCache.set(cacheKey, payload);
-
-      reply.send(serialize({
-        success: true,
-        data: payload,
-      }));
+      // Cache + serve the fully serialized response string so warm hits skip
+      // the BigInt-safe serialize() round trip AND Fastify's stringify.
+      const responseStr = JSON.stringify(serialize({ success: true, data: payload }));
+      metricsHistoryCache.set(cacheKey, responseStr);
+      reply.header("content-type", "application/json; charset=utf-8");
+      reply.send(responseStr);
     }
   );
 
@@ -340,7 +338,6 @@ export async function metricsRoutes(app: FastifyInstance) {
 
       // Check permissions — owner, explicit access, global role grant
       // (server.read / admin), or node assignment
-      const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       // SECURITY: bare node assignment must not expose other tenants'
       // metrics — require the node.update management pairing
@@ -358,10 +355,14 @@ export async function metricsRoutes(app: FastifyInstance) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
-      if (!latest) {
-        return reply.send(serialize({
-          success: true,
-          data: {
+      const cachedStats = serverStatsCache.get(serverId);
+      if (cachedStats !== undefined) {
+        reply.header("content-type", "application/json; charset=utf-8");
+        return reply.send(cachedStats);
+      }
+
+      const data = !latest
+        ? {
             message: "No metrics available yet",
             server: {
               id: server.id,
@@ -370,31 +371,29 @@ export async function metricsRoutes(app: FastifyInstance) {
               allocatedMemoryMb: server.allocatedMemoryMb,
               allocatedCpuCores: server.allocatedCpuCores,
             },
-          },
-        }));
-      }
-
-      reply.send(serialize({
-        success: true,
-        data: {
-          cpuPercent: latest.cpuPercent,
-          memoryUsageMb: latest.memoryUsageMb,
-          memoryAllocatedMb: server.allocatedMemoryMb,
-          memoryPercentage: server.allocatedMemoryMb > 0
-            ? (latest.memoryUsageMb / server.allocatedMemoryMb) * 100
-            : 0,
-          diskIoMb: latest.diskIoMb ?? 0,
-          diskUsageMb: latest.diskUsageMb,
-          networkRxBytes: latest.networkRxBytes.toString(),
-          networkTxBytes: latest.networkTxBytes.toString(),
-          timestamp: latest.timestamp,
-          server: {
-            id: server.id,
-            name: server.name,
-            status: server.status,
-          },
-        },
-      }));
+          }
+        : {
+            cpuPercent: latest.cpuPercent,
+            memoryUsageMb: latest.memoryUsageMb,
+            memoryAllocatedMb: server.allocatedMemoryMb,
+            memoryPercentage: server.allocatedMemoryMb > 0
+              ? (latest.memoryUsageMb / server.allocatedMemoryMb) * 100
+              : 0,
+            diskIoMb: latest.diskIoMb ?? 0,
+            diskUsageMb: latest.diskUsageMb,
+            networkRxBytes: latest.networkRxBytes.toString(),
+            networkTxBytes: latest.networkTxBytes.toString(),
+            timestamp: latest.timestamp,
+            server: {
+              id: server.id,
+              name: server.name,
+              status: server.status,
+            },
+          };
+      const responseStr = JSON.stringify(serialize({ success: true, data }));
+      serverStatsCache.set(serverId, responseStr);
+      reply.header("content-type", "application/json; charset=utf-8");
+      reply.send(responseStr);
     }
   );
 
