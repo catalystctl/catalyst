@@ -139,6 +139,9 @@ export default function ProfilePage() {
  try { return await profileApi.listPasskeys(); } catch { return []; }
  },
  enabled: Boolean(profile?.id),
+ // P2-2: passkey changes are not pushed — slow safety poll.
+ refetchInterval: 60_000,
+ refetchIntervalInBackground: false,
  });
  const [editPkId, setEditPkId] = useState<string | null>(null);
  const [editPkName, setEditPkName] = useState('');

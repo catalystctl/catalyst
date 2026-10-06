@@ -505,7 +505,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
-      const { lines, stream } = request.query as { lines?: string; stream?: string };
+      const { lines, stream, sinceTs } = request.query as { lines?: string; stream?: string; sinceTs?: string };
 
       const server = await requireFileAccess(serverId, userId, "console.read", reply, request.user);
       if (!server) {
@@ -516,33 +516,55 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const lineCount = lines ? parseInt(lines) : 100;
       const streamFilter = stream || undefined;
 
+      // Optional cursor (P1-18): epoch ms or ISO string. When present, return
+      // rows with timestamp >= sinceTs ordered ASC instead of the latest tail.
+      let sinceDate: Date | undefined;
+      if (sinceTs !== undefined) {
+        const trimmed = sinceTs.trim();
+        const parsedMs = /^\d+$/.test(trimmed) ? Number(trimmed) : Date.parse(trimmed);
+        if (!trimmed || !Number.isFinite(parsedMs)) {
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid sinceTs — expected epoch milliseconds or an ISO timestamp");
+        }
+        sinceDate = new Date(parsedMs);
+      }
+
+      // Cap cursor queries to protect the DB from unbounded reads.
+      const SINCE_TS_CAP = 5000;
+      const take = sinceDate
+        ? (lines && Number.isFinite(lineCount) ? Math.min(lineCount, SINCE_TS_CAP) : SINCE_TS_CAP)
+        : lineCount;
+
       const logs = await prisma.serverLog.findMany({
         where: {
           serverId,
+          ...(sinceDate ? { timestamp: { gte: sinceDate } } : {}),
           ...(streamFilter && { stream: streamFilter }),
         },
         // Timestamp alone is not unique: batch inserts share the same
         // millisecond, so ordering by timestamp only returns an arbitrary
         // subset for `take` and the console can show older rows instead of
         // the true latest. Tie-break on id so "latest N" is deterministic.
-        orderBy: [{ timestamp: "desc" }, { id: "desc" }],
-        take: lineCount,
+        orderBy: sinceDate
+          ? [{ timestamp: "asc" }, { id: "asc" }]
+          : [{ timestamp: "desc" }, { id: "desc" }],
+        take,
       });
 
-      // Reverse to get chronological order
-      const reversedLogs = logs.reverse();
+      // Tail path fetches DESC — reverse to get chronological order. The
+      // cursor path is already ASC.
+      const orderedLogs = sinceDate ? logs : logs.reverse();
 
       reply.send({
         success: true,
         data: {
-          logs: reversedLogs.map(log => ({
+          logs: orderedLogs.map(log => ({
             id: log.id,
             stream: log.stream,
             data: log.data,
             timestamp: log.timestamp,
           })),
-          count: reversedLogs.length,
-          requestedLines: lineCount,
+          count: orderedLogs.length,
+          requestedLines: take,
         },
       });
     }

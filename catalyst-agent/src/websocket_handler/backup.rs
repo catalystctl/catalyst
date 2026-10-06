@@ -312,7 +312,7 @@ impl WebSocketHandler {
     pub(crate) async fn handle_create_backup(
         &self,
         msg: &Value,
-        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+        _write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
         let server_id = msg["serverId"]
             .as_str()
@@ -522,9 +522,8 @@ impl WebSocketHandler {
             "timestamp": chrono::Utc::now().timestamp_millis(),
         });
 
-        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
-            .await
-            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        // P1-27: completion must survive a disconnect — send now or replay.
+        self.send_or_buffer_event(&event.to_string()).await?;
 
         Ok(())
     }
@@ -532,7 +531,7 @@ impl WebSocketHandler {
     pub(crate) async fn handle_restore_backup(
         &self,
         msg: &Value,
-        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+        _write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
         let server_id = msg["serverId"]
             .as_str()
@@ -768,9 +767,8 @@ impl WebSocketHandler {
             })
         };
 
-        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
-            .await
-            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        // P1-27: completion must survive a disconnect — send now or replay.
+        self.send_or_buffer_event(&event.to_string()).await?;
 
         Ok(())
     }
@@ -838,7 +836,7 @@ impl WebSocketHandler {
     pub(crate) async fn handle_delete_backup(
         &self,
         msg: &Value,
-        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+        _write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
         let server_id = msg["serverId"]
             .as_str()
@@ -864,9 +862,8 @@ impl WebSocketHandler {
             "backupPath": backup_path,
         });
 
-        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
-            .await
-            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        // P1-27: completion must survive a disconnect — send now or replay.
+        self.send_or_buffer_event(&event.to_string()).await?;
 
         Ok(())
     }

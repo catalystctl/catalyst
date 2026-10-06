@@ -29,10 +29,11 @@ const OPTIMISTIC_STATUS: Record<string, ServerStatus> = {
   kill: 'stopping',
 };
 
-const STARTABLE: ServerStatus[] = ['stopped', 'crashed', 'error'];
-const STOPPABLE: ServerStatus[] = ['running', 'starting', 'error', 'crashed'];
-const RESTARTABLE: ServerStatus[] = ['running', 'stopped', 'error', 'crashed'];
-const KILLABLE: ServerStatus[] = ['running', 'starting', 'stopping', 'error', 'crashed'];
+// 'unhealthy' (failed agent TCP probe) takes the same power actions as crashed/error.
+const STARTABLE: ServerStatus[] = ['stopped', 'crashed', 'unhealthy', 'error'];
+const STOPPABLE: ServerStatus[] = ['running', 'starting', 'error', 'crashed', 'unhealthy'];
+const RESTARTABLE: ServerStatus[] = ['running', 'stopped', 'error', 'crashed', 'unhealthy'];
+const KILLABLE: ServerStatus[] = ['running', 'starting', 'stopping', 'error', 'crashed', 'unhealthy'];
 
 function ServerControls({ serverId, status, permissions, compact = false }: Props) {
   const { t } = useTranslation('servers');

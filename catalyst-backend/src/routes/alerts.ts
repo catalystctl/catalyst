@@ -4,6 +4,7 @@ import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
 import { apiError } from '../lib/http-error';
 import { ErrorCodes } from '../shared-types';
+import { pushOwnerVisibleAlertEvent } from '../services/alert-service.js';
 
 export async function alertRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -459,6 +460,12 @@ export async function alertRoutes(app: FastifyInstance) {
             node: {
               select: { id: true, name: true },
             },
+            // P1-12: latest delivery attempts per alert so the list view can
+            // show webhook/email status without N+1 fetches.
+            deliveries: {
+              orderBy: { createdAt: 'desc' },
+              take: 5,
+            },
           },
           orderBy: { createdAt: 'desc' },
         }),
@@ -560,14 +567,26 @@ export async function alertRoutes(app: FastifyInstance) {
       if (alertService) {
         await alertService.resolveAlert(alertId, user.userId);
       } else {
-        await prisma.alert.update({
+        // Fallback when the alert service is not wired: emit the same
+        // admin + owner-visible events alertService.resolveAlert() pushes.
+        const updated = await prisma.alert.update({
           where: { id: alertId },
           data: {
             resolved: true,
             resolvedAt: new Date(),
             resolvedBy: user.userId,
           },
+          select: { id: true, serverId: true, userId: true, severity: true, title: true, message: true },
         });
+        const wsGatewayFallback = (app as any).wsGateway;
+        if (wsGatewayFallback?.pushToAdminSubscribers) {
+          wsGatewayFallback.pushToAdminSubscribers('alert_resolved', {
+            type: 'alert_resolved',
+            alertId: updated.id,
+            timestamp: Date.now(),
+          });
+        }
+        pushOwnerVisibleAlertEvent(wsGatewayFallback, updated, true);
       }
 
       reply.send({ success: true, message: 'Alert resolved' });
@@ -622,16 +641,24 @@ export async function alertRoutes(app: FastifyInstance) {
         },
       });
 
-      // Notify admin SSE subscribers for each resolved alert
+      // Notify admin SSE subscribers + owner-visible 'alert' events for each
+      // resolved alert (per-server / user-scoped global delivery).
       const wsGateway = (app as any).wsGateway;
+      const resolvedAlerts = await prisma.alert.findMany({
+        where: { id: { in: alertIds } },
+        select: { id: true, serverId: true, userId: true, severity: true, title: true, message: true },
+      });
       if (wsGateway?.pushToAdminSubscribers) {
-        for (const alertId of alertIds) {
+        for (const alert of resolvedAlerts) {
           wsGateway.pushToAdminSubscribers('alert_resolved', {
             type: 'alert_resolved',
-            alertId,
+            alertId: alert.id,
             timestamp: Date.now(),
           });
         }
+      }
+      for (const alert of resolvedAlerts) {
+        pushOwnerVisibleAlertEvent(wsGateway, alert, true);
       }
 
       reply.send({ success: true, message: `${alertIds.length} alerts resolved` });

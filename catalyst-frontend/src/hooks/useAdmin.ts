@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { adminApi } from '../services/api/admin';
+import { useStreamAwareInterval } from './useStreamAwareInterval';
 
 export function useAdminStats() {
   return useQuery({
@@ -29,17 +30,22 @@ export function useAdminUsers(params?: { page?: number; limit?: number; search?:
     queryKey: qk.adminUsers(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listUsers(params),
     staleTime: 60_000,
-    // user_* admin SSE keeps lists fresh.
-    refetchInterval: false,
+    // P1-15: user_* admin SSE keeps lists fresh — but narrower admins never
+    // get the admin stream, so keep a slow safety poll.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }
 
 export function useAdminRoles() {
+  // P1-24: role CRUD arrives via the admin stream only — poll during outages.
+  const outagePoll = useStreamAwareInterval(60_000);
   return useQuery({
     queryKey: qk.adminRoles(),
     queryFn: adminApi.listRoles,
     staleTime: 5 * 60 * 1000,
+    refetchInterval: outagePoll,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -54,8 +60,9 @@ export function useAdminServers(params?: {
     queryKey: qk.adminServers(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listServers(params),
     staleTime: 60_000,
-    // server_* admin + global SSE.
-    refetchInterval: false,
+    // P1-15: server_* admin + global SSE, plus a slow safety poll for
+    // narrower admins who never receive the admin stream.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -65,8 +72,9 @@ export function useAdminNodes(params?: { search?: string }) {
     queryKey: qk.adminNodes(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listNodes(params),
     staleTime: 60_000,
-    // node_* + node_updated (online/offline) admin SSE.
-    refetchInterval: false,
+    // P1-15: node_* + node_updated (online/offline) admin SSE, plus a slow
+    // safety poll for narrower admins who never receive the admin stream.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -84,8 +92,9 @@ export function useAuditLogs(params?: {
     queryKey: qk.adminAuditLogs(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listAuditLogs(params),
     staleTime: 60_000,
-    // audit_log_created SSE.
-    refetchInterval: false,
+    // P1-15: audit_log_created SSE, plus a slow safety poll for narrower
+    // admins who never receive the admin stream.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -113,6 +122,9 @@ export function useDbStatus() {
     queryKey: qk.adminDbStatus(),
     queryFn: adminApi.getDbStatus,
     staleTime: 5 * 60 * 1000,
+    // No SSE for panel DB status and no refresh button on the card; 60s poll (A5).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     placeholderData: (prev) => prev,
   });
 }
@@ -167,8 +179,9 @@ export function useAuthLockouts(params?: { page?: number; limit?: number; search
     queryKey: qk.adminAuthLockouts(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listAuthLockouts(params),
     staleTime: 60_000,
-    // auth_lockout_* SSE.
-    refetchInterval: false,
+    // P1-15: auth_lockout_* SSE, plus a slow safety poll for narrower admins
+    // who never receive the admin stream.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -205,8 +218,9 @@ export function useSystemErrors(params?: {
     queryKey: qk.adminSystemErrors(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listSystemErrors(params),
     staleTime: 60_000,
-    // system_error SSE inserts into cache.
-    refetchInterval: false,
+    // P1-15: system_error SSE inserts into cache, plus a slow safety poll
+    // for narrower admins who never receive the admin stream.
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }

@@ -48,6 +48,153 @@ use crate::config::AgentConfig;
 use crate::file_manager::FileManager;
 
 // ---------------------------------------------------------------------------
+// File-change notifications
+// ---------------------------------------------------------------------------
+//
+// The panel's file manager refreshes on the `server_files_changed` SSE event.
+// Web uploads emit it from the backend's file routes; SFTP mutations happen
+// entirely on the node, so the agent reports them over its own control-plane
+// WebSocket and the gateway translates the message into the same SSE event.
+//
+// The message carries `serverId` (mandatory: the gateway fans out per server
+// and applies access scoping) and mirrors the backend's payload shape
+// (routes/servers/files.ts `notifyFileChange`): `{ type, serverId, action,
+// path | from/to, timestamp }`.
+
+/// Backend-visible message type. The gateway maps this onto the
+/// `server_files_changed` SSE event.
+const FILES_CHANGED_MESSAGE_TYPE: &str = "server_files_changed";
+
+/// Coalescing window for repeated writes to the same (server, path).
+///
+/// SFTP delivers a file as many `write` calls at increasing offsets (32 KB
+/// chunks in practice). Emitting per chunk would flood the panel for a large
+/// upload, so successive writes to one path collapse into a single event.
+const WRITE_COALESCE_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Paths with a pending coalesced write, keyed by `"{server_id}\u{1}{path}"`.
+/// Value = when the first un-emitted write for that path was seen.
+static PENDING_WRITES: once_cell::sync::Lazy<
+    std::sync::Mutex<HashMap<String, std::time::Instant>>,
+> = once_cell::sync::Lazy::new(|| std::sync::Mutex::new(HashMap::new()));
+
+/// Lock the pending-write map, recovering from poisoning like DIR_READ_STATE.
+fn pending_writes_lock() -> std::sync::MutexGuard<'static, HashMap<String, std::time::Instant>> {
+    PENDING_WRITES.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!("PENDING_WRITES mutex was poisoned; recovering inner map");
+        poisoned.into_inner()
+    })
+}
+
+/// Key uniquely identifying one (server, path) coalescing slot.
+///
+/// The separator is a control character that cannot appear in a resolved SFTP
+/// path, so `({"a", "b/c"})` can never collide with `({"a/b", "c"})`.
+fn write_coalesce_key(server_id: &str, path: &str) -> String {
+    format!("{}\u{1}{}", server_id, path)
+}
+
+/// Pure coalescing decision over a set of recently-emitted `(server, path)`
+/// keys. Split out from the global map so the rule can be tested exactly,
+/// without sharing process-wide mutable state between tests.
+///
+/// Returns `true` when this write should emit. On `true` the key is recorded at
+/// `now`; expired entries are swept so the map stays bounded on a long-lived
+/// agent that touches many distinct paths.
+fn coalesce_write_at(
+    seen: &mut HashMap<String, std::time::Instant>,
+    key: &str,
+    now: std::time::Instant,
+    window: std::time::Duration,
+) -> bool {
+    seen.retain(|_, first_seen| now.saturating_duration_since(*first_seen) < window);
+    if seen.contains_key(key) {
+        return false;
+    }
+    seen.insert(key.to_string(), now);
+    true
+}
+
+/// Decide whether a write to `(server_id, path)` should emit now.
+///
+/// Returns `true` only for the first write of a burst: within
+/// [`WRITE_COALESCE_WINDOW`] further writes to the same path are suppressed, so
+/// a chunked upload produces a bounded number of events regardless of size.
+/// The first emit is never delayed — the panel must not wait a second to hear
+/// that a file changed, and SFTP gives no reliable "final chunk" signal.
+fn should_emit_write(server_id: &str, path: &str, now: std::time::Instant) -> bool {
+    let key = write_coalesce_key(server_id, path);
+    let mut pending = pending_writes_lock();
+    coalesce_write_at(&mut pending, &key, now, WRITE_COALESCE_WINDOW)
+}
+
+/// Build the `server_files_changed` payload for one mutation.
+///
+/// `action` uses the same vocabulary as the backend's file routes (`write`,
+/// `create`, `delete`, `rename`, `permissions`, `mkdir`, `rmdir`). `path` is the
+/// SFTP-visible path; `rename` sends `from`/`to` instead, matching the backend.
+fn files_changed_payload(
+    server_id: &str,
+    action: &str,
+    path: Option<&str>,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Option<serde_json::Value> {
+    // A missing server id would make the gateway drop the event (it fans out
+    // per server and scopes access by it), and a payload without a path cannot
+    // be invalidated by the frontend. Refuse to emit either.
+    if server_id.is_empty() {
+        return None;
+    }
+    if path.is_none() && (from.is_none() || to.is_none()) {
+        return None;
+    }
+    let mut payload = serde_json::json!({
+        "type": FILES_CHANGED_MESSAGE_TYPE,
+        "serverId": server_id,
+        "action": action,
+        "timestamp": chrono::Utc::now().timestamp_millis(),
+    });
+    let obj = payload.as_object_mut()?;
+    if let Some(p) = path {
+        obj.insert("path".to_string(), serde_json::Value::String(p.to_string()));
+    }
+    if let Some(f) = from {
+        obj.insert("from".to_string(), serde_json::Value::String(f.to_string()));
+    }
+    if let Some(t) = to {
+        obj.insert("to".to_string(), serde_json::Value::String(t.to_string()));
+    }
+    Some(payload)
+}
+
+/// Emit a file-change notification for a successful SFTP mutation.
+///
+/// Fire-and-forget: the payload is handed to the control-plane WebSocket
+/// dispatcher, which spawns the send (and falls back to the existing
+/// buffer-for-replay path when disconnected). A failure or a missing handler
+/// is logged and dropped — it must never fail or delay the SFTP operation.
+fn notify_files_changed(
+    server_id: &str,
+    action: &str,
+    path: Option<&str>,
+    from: Option<&str>,
+    to: Option<&str>,
+) {
+    let Some(payload) = files_changed_payload(server_id, action, path, from, to) else {
+        return;
+    };
+    let text = payload.to_string();
+    if !crate::websocket_handler::dispatch_outbound_event(text) {
+        tracing::debug!(
+            "SFTP {} for server {} not dispatched (agent WebSocket not ready)",
+            action,
+            server_id
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // SFTP server configuration
 // ---------------------------------------------------------------------------
 
@@ -362,11 +509,16 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                     }
                 }
                 let exists = tokio::fs::metadata(&full_path).await.is_ok();
-                if pflags.contains(OpenFlags::TRUNCATE)
-                    || (pflags.contains(OpenFlags::CREATE) && !exists)
-                {
+                let created = pflags.contains(OpenFlags::TRUNCATE)
+                    || (pflags.contains(OpenFlags::CREATE) && !exists);
+                if created {
                     // Only wipe/create when TRUNCATE is set, or CREATE on a missing file.
                     let _ = fm.write_file(&server_id, &filename, "").await;
+                    // TRUNCATE/create is a real mutation on its own (a client may
+                    // open-write and never send data). One event per open — no
+                    // coalescing needed, and the subsequent chunk writes coalesce
+                    // separately.
+                    notify_files_changed(&server_id, "create", Some(&filename), None, None);
                 } else if pflags.contains(OpenFlags::CREATE) && exists {
                     // CREATE without TRUNCATE on existing file: leave content intact.
                 } else if !exists {
@@ -555,6 +707,12 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             // hand the file (and created parents) to the container user (#237).
             crate::ownership::ensure_container_owned(fm.data_dir(), &full_path).await;
 
+            // Only after the bytes are durably written: coalesced so a chunked
+            // upload emits once per window instead of once per 32 KB chunk.
+            if should_emit_write(&server_id, &path, std::time::Instant::now()) {
+                notify_files_changed(&server_id, "write", Some(&path), None, None);
+            }
+
             Ok(Self::status_ok(id))
         }
     }
@@ -635,6 +793,7 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                 fm.set_permissions(&server_id, &path, mode)
                     .await
                     .map_err(|e| SftpError(format!("chmod failed: {}", e)))?;
+                notify_files_changed(&server_id, "permissions", Some(&path), None, None);
             }
 
             Ok(Self::status_ok(id))
@@ -799,6 +958,7 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             fm.delete_file(&server_id, &filename)
                 .await
                 .map_err(|e| SftpError(format!("{}", e)))?;
+            notify_files_changed(&server_id, "delete", Some(&filename), None, None);
             Ok(Self::status_ok(id))
         }
     }
@@ -819,6 +979,7 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             fm.mkdir(&server_id, &path)
                 .await
                 .map_err(|e| SftpError(format!("{}", e)))?;
+            notify_files_changed(&server_id, "mkdir", Some(&path), None, None);
             Ok(Self::status_ok(id))
         }
     }
@@ -838,6 +999,7 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             fm.delete_file(&server_id, &path)
                 .await
                 .map_err(|e| SftpError(format!("{}", e)))?;
+            notify_files_changed(&server_id, "rmdir", Some(&path), None, None);
             Ok(Self::status_ok(id))
         }
     }
@@ -933,6 +1095,14 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             .rename_file(&self.server_id, &oldpath, &newpath)
             .await
             .map_err(|e| SftpError(format!("{}", e)))?;
+        // Backend sends rename as from/to (no `path`); mirror that shape.
+        notify_files_changed(
+            &self.server_id,
+            "rename",
+            None,
+            Some(&oldpath),
+            Some(&newpath),
+        );
         Ok(Self::status_ok(id))
     }
 
@@ -1257,4 +1427,210 @@ pub async fn start_sftp_server(
         .map_err(|e| format!("SFTP server failed to start: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod file_change_notification_tests {
+    use super::*;
+    use serde_json::json;
+    use std::time::{Duration, Instant};
+
+    /// The payload must match the backend's `server_files_changed` contract
+    /// (routes/servers/files.ts `notifyFileChange`): type, serverId, action,
+    /// optional path / from+to, plus a timestamp.
+    #[test]
+    fn payload_matches_backend_contract_for_path_actions() {
+        let p = files_changed_payload("srv1", "write", Some("/plugins/a.jar"), None, None)
+            .expect("payload");
+        assert_eq!(p["type"], json!("server_files_changed"));
+        assert_eq!(p["serverId"], json!("srv1"));
+        assert_eq!(p["action"], json!("write"));
+        assert_eq!(p["path"], json!("/plugins/a.jar"));
+        assert!(p["timestamp"].is_i64());
+        // Absent keys must not be present as nulls — the FE checks `typeof`.
+        assert!(p.get("from").is_none());
+        assert!(p.get("to").is_none());
+    }
+
+    #[test]
+    fn rename_payload_uses_from_to_and_no_path() {
+        let p = files_changed_payload("srv1", "rename", None, Some("/a.txt"), Some("/b.txt"))
+            .expect("payload");
+        assert_eq!(p["from"], json!("/a.txt"));
+        assert_eq!(p["to"], json!("/b.txt"));
+        assert!(
+            p.get("path").is_none(),
+            "rename must mirror the backend shape"
+        );
+    }
+
+    /// serverId is mandatory: the gateway fans out per server and applies
+    /// access scoping with it, so an empty id must never be emitted.
+    #[test]
+    fn payload_refuses_empty_server_id() {
+        assert!(files_changed_payload("", "write", Some("/a"), None, None).is_none());
+    }
+
+    /// A payload with neither a path nor a from/to pair gives the frontend
+    /// nothing to invalidate.
+    #[test]
+    fn payload_refuses_missing_target() {
+        assert!(files_changed_payload("srv1", "write", None, None, None).is_none());
+        // Half a rename is not a usable target either.
+        assert!(files_changed_payload("srv1", "rename", None, Some("/a"), None).is_none());
+    }
+
+    // ── Coalescing rule ─────────────────────────────────────────────────────
+    // Tested through the pure `coalesce_write_at` over a local map: the real
+    // rule is process-wide, and sharing that map across parallel tests would
+    // make the sweep in one test prune another's entries.
+
+    fn emit(seen: &mut HashMap<String, Instant>, server: &str, path: &str, at: Instant) -> bool {
+        let key = write_coalesce_key(server, path);
+        coalesce_write_at(seen, &key, at, WRITE_COALESCE_WINDOW)
+    }
+
+    #[test]
+    fn write_coalesces_within_window() {
+        let mut seen = HashMap::new();
+        let t0 = Instant::now();
+        assert!(emit(&mut seen, "srv", "/big.bin", t0), "first write emits");
+        // Chunks arriving back-to-back at increasing offsets stay silent.
+        for i in 1..=64u64 {
+            assert!(
+                !emit(
+                    &mut seen,
+                    "srv",
+                    "/big.bin",
+                    t0 + Duration::from_millis(i * 10)
+                ),
+                "chunk {} within the window must be coalesced",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn write_emits_again_after_window_elapses() {
+        let mut seen = HashMap::new();
+        let t0 = Instant::now();
+        assert!(emit(&mut seen, "srv", "/f", t0));
+        assert!(!emit(
+            &mut seen,
+            "srv",
+            "/f",
+            t0 + WRITE_COALESCE_WINDOW / 2
+        ));
+        assert!(
+            emit(&mut seen, "srv", "/f", t0 + WRITE_COALESCE_WINDOW),
+            "a later burst once the window elapsed emits again"
+        );
+    }
+
+    /// Coalescing is per (server, path): a busy upload must not silence a
+    /// different file, and one server's activity must not silence another's.
+    #[test]
+    fn write_coalescing_is_keyed_by_server_and_path() {
+        let mut seen = HashMap::new();
+        let t0 = Instant::now();
+        assert!(emit(&mut seen, "srv-a", "/a", t0));
+        assert!(emit(&mut seen, "srv-a", "/b", t0), "different path emits");
+        assert!(emit(&mut seen, "srv-b", "/a", t0), "different server emits");
+        assert!(
+            !emit(&mut seen, "srv-a", "/a", t0 + Duration::from_millis(5)),
+            "the original (server, path) is still coalescing"
+        );
+    }
+
+    /// The separator must make (server, path) pairs unambiguous — a server id
+    /// is attacker-influenced only via the backend, but the join must still not
+    /// allow two distinct pairs to share one coalescing slot.
+    #[test]
+    fn coalesce_key_separates_server_from_path() {
+        assert_ne!(
+            write_coalesce_key("a", "b/c"),
+            write_coalesce_key("a/b", "c"),
+            "different (server, path) pairs must not collide"
+        );
+    }
+
+    /// A large upload must produce a bounded number of events: N chunks in one
+    /// window yield exactly one.
+    #[test]
+    fn large_upload_event_count_is_bounded() {
+        let mut seen = HashMap::new();
+        let t0 = Instant::now();
+        // 100 MB in 32 KB chunks = 3200 write calls, all inside one window.
+        let chunks = 3200u64;
+        // 3200 * 200us = 0.64s < the 1s window.
+        let step = Duration::from_micros(200);
+        let emitted = (0..chunks)
+            .filter(|i| emit(&mut seen, "srv", "/huge.tar", t0 + step * (*i as u32)))
+            .count();
+        assert_eq!(emitted, 1, "a chunked upload within one window emits once");
+        assert_eq!(seen.len(), 1, "the map holds only the one live path");
+    }
+
+    /// Expired entries are swept, so the map cannot grow without bound on a
+    /// long-lived agent that touches many distinct paths.
+    #[test]
+    fn expired_entries_are_swept() {
+        let mut seen = HashMap::new();
+        let t0 = Instant::now();
+        assert!(emit(&mut seen, "srv", "/a", t0));
+        assert!(emit(&mut seen, "srv", "/b", t0));
+        assert_eq!(seen.len(), 2);
+
+        // A write past the window prunes the stale entries, then records its own.
+        assert!(emit(&mut seen, "srv", "/c", t0 + WRITE_COALESCE_WINDOW * 3));
+        assert_eq!(seen.len(), 1, "expired entries must not accumulate");
+    }
+
+    /// The global wrapper must agree with the pure rule (one smoke test — the
+    /// real rule is covered above without shared state).
+    #[test]
+    fn global_wrapper_emits_once_per_window() {
+        // Unique ids keep this test independent of any other test's entries.
+        let srv = "srv-global-wrapper";
+        let t0 = Instant::now();
+        assert!(should_emit_write(srv, "/smoke", t0));
+        assert!(!should_emit_write(
+            srv,
+            "/smoke",
+            t0 + WRITE_COALESCE_WINDOW / 2
+        ));
+    }
+
+    /// Actions shared with the backend file routes must use the same spelling,
+    /// so one frontend case covers both paths. `mkdir`/`rmdir` are SFTP-only
+    /// (the backend creates directories via `create`); the frontend keys its
+    /// invalidation on `path`/`from`/`to`, not on `action`, so they need no
+    /// frontend change.
+    #[test]
+    fn shared_actions_keep_the_backend_spelling() {
+        const BACKEND_ACTIONS: &[&str] = &[
+            "upload",
+            "create",
+            "compress",
+            "decompress",
+            "write",
+            "permissions",
+            "delete",
+            "rename",
+        ];
+        for action in ["create", "write", "delete", "permissions", "rename"] {
+            assert!(
+                BACKEND_ACTIONS.contains(&action),
+                "action {} must match the backend vocabulary",
+                action
+            );
+        }
+        for action in ["mkdir", "rmdir"] {
+            assert!(
+                !BACKEND_ACTIONS.contains(&action),
+                "{} is SFTP-only; document it if the backend adopts it",
+                action
+            );
+        }
+    }
 }

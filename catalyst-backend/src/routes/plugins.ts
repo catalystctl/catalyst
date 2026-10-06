@@ -306,6 +306,16 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       try {
         const created = await addMarketplaceSource(prisma, body.url, body.label ?? null, userId ?? null);
         await writeAudit(prisma, 'marketplace.source.added', 'marketplace', { url: created.url, label: created.label }, userId);
+        try {
+          getWsGateway()?.pushToAdminSubscribers('plugin_updated', {
+            type: 'plugin_updated',
+            name: created.label || created.url,
+            action: 'marketplace_source_added',
+            sourceId: created.id,
+            updatedBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        } catch { /* ignore — WS push is best-effort */ }
         return { success: true, data: created };
       } catch (error: any) {
         if (error?.message === 'That marketplace is already configured') {
@@ -344,6 +354,17 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       try {
         const updated = await setMarketplaceSourceEnabled(prisma, id, body.enabled);
         await writeAudit(prisma, 'marketplace.source.updated', 'marketplace', { url: updated.url, enabled: body.enabled }, userId);
+        try {
+          getWsGateway()?.pushToAdminSubscribers('plugin_updated', {
+            type: 'plugin_updated',
+            name: updated.label || updated.url,
+            action: 'marketplace_source_updated',
+            sourceId: updated.id,
+            enabled: body.enabled,
+            updatedBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        } catch { /* ignore — WS push is best-effort */ }
         return { success: true, data: updated };
       } catch {
         return reply.status(404).send({ success: false, error: 'Marketplace source not found', code: ErrorCodes.PLUGIN_MARKETPLACE_SOURCE_NOT_FOUND });
@@ -371,6 +392,16 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       try {
         const removed = await removeMarketplaceSource(prisma, id);
         await writeAudit(prisma, 'marketplace.source.removed', 'marketplace', { url: removed.url }, userId);
+        try {
+          getWsGateway()?.pushToAdminSubscribers('plugin_updated', {
+            type: 'plugin_updated',
+            name: removed.label || removed.url,
+            action: 'marketplace_source_removed',
+            sourceId: removed.id,
+            updatedBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        } catch { /* ignore — WS push is best-effort */ }
         return { success: true, data: { id } };
       } catch {
         return reply.status(404).send({ success: false, error: 'Marketplace source not found', code: ErrorCodes.PLUGIN_MARKETPLACE_SOURCE_NOT_FOUND });

@@ -398,6 +398,9 @@ function TemplatesPage({ hideHeader }: Props) {
     queryKey: qk.nests(),
     queryFn: nestsApi.list,
     staleTime: 5 * 60 * 1000,
+    // P1-19: nest_* admin SSE only reaches admins — slow safety poll.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const [search, setSearch] = useState('');

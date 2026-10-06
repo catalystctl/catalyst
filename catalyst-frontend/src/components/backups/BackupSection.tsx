@@ -13,6 +13,7 @@ import ServerTabCard from '../servers/tabs/ServerTabCard';
 import TabLoadingState from '../servers/tabs/TabLoadingState';
 import TabErrorState from '../servers/tabs/TabErrorState';
 import TabEmptyState from '../servers/tabs/TabEmptyState';
+import LastUpdated from '../shared/LastUpdated';
 import BackupList from './BackupList';
 import CreateBackupModal from './CreateBackupModal';
 import { backupsApi } from '../../services/api/backups';
@@ -103,7 +104,7 @@ function BackupSection({
   const progressByBackup = useBackupDownloadStore((s) => s.progressByBackup);
  const setProgress = useBackupDownloadStore((s) => s.setProgress);
  const clearProgress = useBackupDownloadStore((s) => s.clearProgress);
- const { data, isLoading, isError } = useBackups(serverId, { page, limit: 10 });
+ const { data, isLoading, isError, refetch } = useBackups(serverId, { page, limit: 10 });
  const progressKeyPrefix = useMemo(() => `server:${serverId}:backup:`, [serverId]);
  const backupAllocationMb = server?.backupAllocationMb ?? 0;
  const backupBlocked = backupAllocationMb <= 0 && (storageMode === 'local' || storageMode === 'stream');
@@ -171,7 +172,12 @@ function BackupSection({
  description={t('backups.description', {
  allocation: backupAllocationMb > 0 ? `${backupAllocationMb} MB` : t('common:actions.disabled'),
  })}
- actions={<CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} />}
+ actions={
+ <div className="flex flex-wrap items-center justify-end gap-2">
+ <LastUpdated queryKey={qk.backups(serverId)} />
+ <CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} />
+ </div>
+ }
  />
  {backupAllocationMb <= 0 ? (
  <div className="flex items-center gap-2 rounded-sm border border-warning/25 bg-warning/10 px-3 py-1.5 text-mini text-warning">
@@ -506,10 +512,15 @@ function BackupSection({
  </div>
  </ServerTabCard>
 
+ {/* A refetch failure keeps the cached rows visible and surfaces a retry strip. */}
+ {isError && data && (
+ <TabErrorState message={t('backups.loadFailed')} onRetry={() => refetch()} />
+ )}
+
  {isLoading ? (
  <TabLoadingState rows={5} />
- ) : isError ? (
- <TabErrorState message={t('backups.loadFailed')} />
+ ) : isError && !data ? (
+ <TabErrorState message={t('backups.loadFailed')} onRetry={() => refetch()} />
  ) : backups.length ? (
  <div className="space-y-3">
  <div className="flex flex-wrap items-center justify-between gap-2 text-micro text-muted-foreground">

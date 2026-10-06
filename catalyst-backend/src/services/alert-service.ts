@@ -6,7 +6,7 @@ import net from 'net';
 import { renderAlertEmail, sendEmail } from './mailer';
 import { captureSystemError } from '../services/error-logger';
 import { localeForEmail } from '../i18n/user-locale.js';
-import { getWsGateway } from '../websocket/gateway';
+import { getWsGateway, type WebSocketGateway } from '../websocket/gateway';
 import { withDistributedLock } from '../lib/distributed-lock';
 
 interface AlertConditions {
@@ -22,6 +22,63 @@ interface AlertActions {
   notifyOwner?: boolean;
   createAlert?: boolean;
   cooldownMinutes?: number;
+}
+
+/**
+ * Push the owner-visible `alert` event so non-admin owners see alert changes
+ * (U1 / P1.3): the FE handler for `type === 'alert'` invalidates alerts +
+ * alertStats on the per-server and global streams.
+ *
+ * - Alert with a `serverId`: fan out through routeToClients so every
+ *   authorized viewer (all owners of that server) receives it — the gateway
+ *   re-checks server access per emit.
+ * - Alert without a server but with an owner: push to the global stream with
+ *   an explicit `userId`; the gateway's user-scope filter delivers it only to
+ *   that user's own subscriber (full-admin unfiltered streams aside).
+ *
+ * Admins additionally keep receiving alert_created/alert_resolved on the
+ * admin stream. Payload carries only what the FE needs.
+ */
+export function pushOwnerVisibleAlertEvent(
+  gateway: WebSocketGateway | null | undefined,
+  alert: {
+    id: string;
+    serverId?: string | null;
+    userId?: string | null;
+    severity: string;
+    title: string;
+    message: string;
+  },
+  resolved: boolean,
+): void {
+  if (!gateway) return;
+  const payload = {
+    alertId: alert.id,
+    severity: alert.severity,
+    title: alert.title,
+    message: alert.message,
+    resolved,
+    timestamp: Date.now(),
+  };
+  if (alert.serverId) {
+    if (typeof gateway.routeToClients !== 'function') return;
+    try {
+      void Promise.resolve(
+        gateway.routeToClients(alert.serverId, { type: 'alert', serverId: alert.serverId, ...payload }),
+      ).catch(() => {});
+    } catch {
+      /* gateway unavailable */
+    }
+  } else if (alert.userId) {
+    if (typeof gateway.pushToGlobalSubscribers !== 'function') return;
+    try {
+      // Never rejects (the gateway catches internally) — no .catch here so
+      // lightweight gateway stubs in tests keep working.
+      void gateway.pushToGlobalSubscribers('alert', { type: 'alert', userId: alert.userId, ...payload });
+    } catch {
+      /* gateway unavailable */
+    }
+  }
 }
 
 export class AlertService {
@@ -473,6 +530,9 @@ export class AlertService {
         alert,
         timestamp: Date.now(),
       });
+      // Owner-visible per-server/global 'alert' event: non-admin owners'
+      // alert lists are SSE-invalidated via type==='alert' (U1/P1.3).
+      pushOwnerVisibleAlertEvent(gateway, alert, false);
     }
 
     return alert;
@@ -560,6 +620,24 @@ export class AlertService {
     return isPrivateHostname(url.hostname);
   }
 
+  /**
+   * P1-12: notify admin subscribers about alert-delivery lifecycle changes.
+   * Best-effort — an emission failure must never break delivery or retries.
+   */
+  private emitDeliveryUpdate(alertId: string, deliveryId: string | undefined, status: string): void {
+    try {
+      const gateway = getWsGateway();
+      if (typeof gateway?.pushToAdminSubscribers !== 'function') return;
+      gateway.pushToAdminSubscribers('alert_delivery_updated', {
+        type: 'alert_delivery_updated',
+        alertId,
+        deliveryId,
+        status,
+        timestamp: Date.now(),
+      });
+    } catch { /* best-effort */ }
+  }
+
   private async dispatchWebhook(alertId: string, webhookUrl: string, context: any) {
     // Validate webhook URL before fetching to prevent SSRF
     let parsedUrl: URL;
@@ -567,7 +645,7 @@ export class AlertService {
       parsedUrl = new URL(webhookUrl);
     } catch {
       this.logger.warn({ webhookUrl }, 'Invalid webhook URL format');
-      await this.prisma.alertDelivery.create({
+      const failed = await this.prisma.alertDelivery.create({
         data: {
           alertId,
           channel: 'webhook',
@@ -576,12 +654,13 @@ export class AlertService {
           lastError: 'Invalid webhook URL format',
         },
       });
+      this.emitDeliveryUpdate(alertId, failed.id, 'failed');
       return;
     }
 
     if (this.isPrivateUrl(parsedUrl)) {
       this.logger.warn({ webhookUrl }, 'Webhook URL blocked: private network or non-HTTPS');
-      await this.prisma.alertDelivery.create({
+      const failed = await this.prisma.alertDelivery.create({
         data: {
           alertId,
           channel: 'webhook',
@@ -590,12 +669,14 @@ export class AlertService {
           lastError: 'Webhook URL must be HTTPS and cannot point to private networks',
         },
       });
+      this.emitDeliveryUpdate(alertId, failed.id, 'failed');
       return;
     }
 
     const delivery = await this.prisma.alertDelivery.create({
       data: { alertId, channel: 'webhook', target: webhookUrl, status: 'pending' },
     });
+    this.emitDeliveryUpdate(alertId, delivery.id, 'pending');
     try {
       const alert = await this.prisma.alert.findUnique({ where: { id: alertId } });
       if (!alert) {
@@ -656,6 +737,7 @@ export class AlertService {
         where: { id: delivery.id },
         data: { status: 'sent', attempts: delivery.attempts + 1, lastAttemptAt: new Date() },
       });
+      this.emitDeliveryUpdate(alertId, delivery.id, 'sent');
       this.logger.info(`Webhook sent to ${webhookUrl}`);
     } catch (error) {
       await this.prisma.alertDelivery.update({
@@ -667,6 +749,7 @@ export class AlertService {
           lastError: error instanceof Error ? error.message : 'Webhook delivery failed',
         },
       });
+      this.emitDeliveryUpdate(alertId, delivery.id, 'failed');
       captureSystemError({ level: 'error', component: 'AlertService', message: `Failed to send webhook to ${webhookUrl}`, stack: error instanceof Error ? error.stack : undefined, metadata: { alertId, webhookUrl } }).catch(() => {});
       this.logger.error(error, `Failed to send webhook to ${webhookUrl}`);
     }
@@ -676,6 +759,7 @@ export class AlertService {
     const delivery = await this.prisma.alertDelivery.create({
       data: { alertId, channel: 'email', target: email, status: 'pending' },
     });
+    this.emitDeliveryUpdate(alertId, delivery.id, 'pending');
     try {
       const alert = await this.prisma.alert.findUnique({ where: { id: alertId } });
       if (!alert) {
@@ -701,6 +785,7 @@ export class AlertService {
         where: { id: delivery.id },
         data: { status: 'sent', attempts: delivery.attempts + 1, lastAttemptAt: new Date() },
       });
+      this.emitDeliveryUpdate(alertId, delivery.id, 'sent');
       this.logger.info(`Alert email sent to ${email}`);
     } catch (error) {
       await this.prisma.alertDelivery.update({
@@ -712,6 +797,7 @@ export class AlertService {
           lastError: error instanceof Error ? error.message : 'Email delivery failed',
         },
       });
+      this.emitDeliveryUpdate(alertId, delivery.id, 'failed');
       captureSystemError({ level: 'error', component: 'AlertService', message: `Failed to send alert email to ${email}`, stack: error instanceof Error ? error.stack : undefined, metadata: { alertId, email } }).catch(() => {});
       this.logger.error(error, `Failed to send alert email to ${email}`);
     }
@@ -790,6 +876,7 @@ export class AlertService {
         where: { id: deliveryId },
         data: { status: 'sent', attempts: { increment: 1 }, lastAttemptAt: new Date(), lastError: null },
       });
+      this.emitDeliveryUpdate(context.alertId, deliveryId, 'sent');
       this.logger.info(`Retried webhook delivery to ${webhookUrl}`);
     } catch (error) {
       await this.prisma.alertDelivery.update({
@@ -801,6 +888,7 @@ export class AlertService {
           lastError: error instanceof Error ? error.message : 'Webhook delivery failed',
         },
       });
+      this.emitDeliveryUpdate(context.alertId, deliveryId, 'failed');
       captureSystemError({ level: 'error', component: 'AlertService', message: `Retry webhook failed for ${webhookUrl}`, stack: error instanceof Error ? error.stack : undefined, metadata: { deliveryId, webhookUrl } }).catch(() => {});
       this.logger.error(error, `Retry webhook failed for ${webhookUrl}`);
     }
@@ -809,7 +897,7 @@ export class AlertService {
   private async retryEmailDelivery(
     deliveryId: string,
     email: string,
-    alert: { title: string; message: string; severity: string; type: string; createdAt: Date },
+    alert: { id: string; title: string; message: string; severity: string; type: string; createdAt: Date },
   ) {
     try {
       const alertUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/alerts`;
@@ -832,6 +920,7 @@ export class AlertService {
         where: { id: deliveryId },
         data: { status: 'sent', attempts: { increment: 1 }, lastAttemptAt: new Date(), lastError: null },
       });
+      this.emitDeliveryUpdate(alert.id, deliveryId, 'sent');
       this.logger.info(`Retried alert email to ${email}`);
     } catch (error) {
       await this.prisma.alertDelivery.update({
@@ -843,6 +932,7 @@ export class AlertService {
           lastError: error instanceof Error ? error.message : 'Email delivery failed',
         },
       });
+      this.emitDeliveryUpdate(alert.id, deliveryId, 'failed');
       captureSystemError({ level: 'error', component: 'AlertService', message: `Retry email failed for ${email}`, stack: error instanceof Error ? error.stack : undefined, metadata: { deliveryId, email } }).catch(() => {});
       this.logger.error(error, `Retry email failed for ${email}`);
     }
@@ -852,25 +942,36 @@ export class AlertService {
    * Resolve an alert
    */
   async resolveAlert(alertId: string, resolvedBy?: string) {
-    await this.prisma.alert.update({
+    const alert = await this.prisma.alert.update({
       where: { id: alertId },
       data: {
         resolved: true,
         resolvedAt: new Date(),
         resolvedBy,
       },
+      select: {
+        id: true,
+        serverId: true,
+        userId: true,
+        severity: true,
+        title: true,
+        message: true,
+      },
     });
 
-    this.logger.info(`Alert resolved: ${alertId}`);
+    this.logger.info(`Alert resolved: ${alert.id}`);
 
     // Notify admin SSE subscribers
     const gateway = getWsGateway();
     if (gateway) {
       gateway.pushToAdminSubscribers('alert_resolved', {
         type: 'alert_resolved',
-        alertId,
+        alertId: alert.id,
         timestamp: Date.now(),
       });
+      // Owner-visible 'alert' event — resolution must refresh non-admin
+      // owners' alert lists the same way creation does (U1).
+      pushOwnerVisibleAlertEvent(gateway, alert, true);
     }
   }
 }

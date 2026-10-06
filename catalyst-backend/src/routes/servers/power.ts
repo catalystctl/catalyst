@@ -27,6 +27,25 @@ type PowerSendResult =
   | { mode: "failed"; error: Error };
 
 /**
+ * Push an optimistic status write to the per-server + global SSE streams so
+ * viewers see the transition immediately instead of waiting for the agent's
+ * own state report (which may never arrive on a slow/offline node).
+ * Fire-and-forget, matching the gateway's other emissions.
+ */
+function pushServerState(app: FastifyInstance, serverId: string, state: string): void {
+  const gateway = (app as any).wsGateway;
+  if (typeof gateway?.routeToClients !== "function") return;
+  void gateway
+    .routeToClients(serverId, {
+      type: "server_state_update",
+      serverId,
+      state,
+      timestamp: Date.now(),
+    })
+    .catch(() => {});
+}
+
+/**
  * Power/lifecycle gates previously accepted only the owner, admin.write, or a
  * ServerAccess row. Node managers (node assignment + node.update) and global
  * roles holding the matching server permission are advertised through
@@ -495,6 +514,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         where: { id: serverId },
         data: { status: accepted ? "stopped" : "error" },
       });
+      pushServerState(app, serverId, accepted ? "stopped" : "error");
 
       await prisma.serverLog.create({
         data: {
@@ -820,6 +840,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         data: { status: "starting" },
       });
       emitServerStatusEvent(app, serverId, "starting", { action: "start" });
+      pushServerState(app, serverId, "starting");
 
       await createAuditLog(userId, {
         action: "server.start",
@@ -905,6 +926,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           where: { id: serverId },
           data: { status: "stopped" },
         });
+        pushServerState(app, serverId, "stopped");
         await createAuditLog(userId, {
           action: "server.stop",
           resource: "server",
@@ -937,6 +959,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         data: { status: "stopping" },
       });
       emitServerStatusEvent(app, serverId, "stopping", { action: "stop" });
+      pushServerState(app, serverId, "stopping");
 
       const powerResult = await sendPowerCommand(
         gateway,
@@ -956,6 +979,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           where: { id: serverId },
           data: { status: server.status },
         });
+        pushServerState(app, serverId, server.status);
         return apiError(reply, powerFailureStatus(powerResult), ErrorCodes.AGENT_COMMAND_FAILED,
           powerResult.error.message || "Failed to send command to agent");
       }
@@ -1038,6 +1062,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           where: { id: serverId },
           data: { status: "stopped" },
         });
+        pushServerState(app, serverId, "stopped");
         await createAuditLog(userId, {
           action: "server.kill",
           resource: "server",
@@ -1067,6 +1092,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         data: { status: "stopping" },
       });
       emitServerStatusEvent(app, serverId, "stopping", { action: "kill" });
+      pushServerState(app, serverId, "stopping");
 
       const powerResult = await sendPowerCommand(
         gateway,
@@ -1085,6 +1111,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           where: { id: serverId },
           data: { status: server.status },
         });
+        pushServerState(app, serverId, server.status);
         return apiError(reply, powerFailureStatus(powerResult), ErrorCodes.AGENT_COMMAND_FAILED,
           powerResult.error.message || "Failed to send command to agent");
       }
@@ -1180,6 +1207,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           where: { id: serverId },
           data: { status: "stopping" },
         });
+        pushServerState(app, serverId, "stopping");
         // Dedicated stop is not waited here — restart_server on the agent
         // performs stop+wait+start. The restart request below carries the ack.
       }
@@ -1257,6 +1285,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         data: { status: "starting" },
       });
       emitServerStatusEvent(app, serverId, "starting", { action: "restart" });
+      pushServerState(app, serverId, "starting");
 
       await createAuditLog(userId, {
         action: "server.restart",
@@ -1393,6 +1422,19 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         for (const task of tasks) {
           if (scheduler) scheduler.unscheduleTask(task.id);
         }
+        // One aggregate event — FE invalidates the whole tasks(serverId) key.
+        const wsGatewayTaskToggle = (app as any).wsGateway;
+        const taskToggleEvent = {
+          type: 'task_updated',
+          serverId,
+          timestamp: new Date().toISOString(),
+        };
+        if (wsGatewayTaskToggle?.pushToGlobalSubscribers) {
+          wsGatewayTaskToggle.pushToGlobalSubscribers('task_updated', taskToggleEvent);
+        }
+        if (wsGatewayTaskToggle?.routeToClients) {
+          void wsGatewayTaskToggle.routeToClients(serverId, taskToggleEvent).catch(() => {});
+        }
       }
 
       await createAuditLog(userId, {
@@ -1429,6 +1471,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           type: 'server_suspended',
           serverId,
           serverName: server.name,
+          nodeId: server.nodeId,
           suspendedBy: userId,
           timestamp: new Date().toISOString(),
         });
@@ -1438,9 +1481,22 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           type: 'server_suspended',
           serverId,
           serverName: server.name,
+          nodeId: server.nodeId,
           suspendedBy: userId,
           timestamp: new Date().toISOString(),
         });
+      }
+      if (wsGatewayServerSuspended?.routeToClients) {
+        void wsGatewayServerSuspended
+          .routeToClients(serverId, {
+            type: 'server_suspended',
+            serverId,
+            serverName: server.name,
+            nodeId: server.nodeId,
+            suspendedBy: userId,
+            timestamp: new Date().toISOString(),
+          })
+          .catch(() => {});
       }
 
       return reply.send({ success: true, data: updated });
@@ -1494,6 +1550,19 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         for (const task of tasks) {
           if (scheduler) scheduler.scheduleTask(task);
         }
+        // One aggregate event — FE invalidates the whole tasks(serverId) key.
+        const wsGatewayTaskToggle = (app as any).wsGateway;
+        const taskToggleEvent = {
+          type: 'task_updated',
+          serverId,
+          timestamp: new Date().toISOString(),
+        };
+        if (wsGatewayTaskToggle?.pushToGlobalSubscribers) {
+          wsGatewayTaskToggle.pushToGlobalSubscribers('task_updated', taskToggleEvent);
+        }
+        if (wsGatewayTaskToggle?.routeToClients) {
+          void wsGatewayTaskToggle.routeToClients(serverId, taskToggleEvent).catch(() => {});
+        }
       }
 
       await createAuditLog(userId, {
@@ -1528,6 +1597,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           type: 'server_unsuspended',
           serverId,
           serverName: server.name,
+          nodeId: server.nodeId,
           unsuspendedBy: userId,
           timestamp: new Date().toISOString(),
         });
@@ -1537,9 +1607,22 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           type: 'server_unsuspended',
           serverId,
           serverName: server.name,
+          nodeId: server.nodeId,
           unsuspendedBy: userId,
           timestamp: new Date().toISOString(),
         });
+      }
+      if (wsGatewayServerUnsuspended?.routeToClients) {
+        void wsGatewayServerUnsuspended
+          .routeToClients(serverId, {
+            type: 'server_unsuspended',
+            serverId,
+            serverName: server.name,
+            nodeId: server.nodeId,
+            unsuspendedBy: userId,
+            timestamp: new Date().toISOString(),
+          })
+          .catch(() => {});
       }
 
       return reply.send({ success: true, data: updated });

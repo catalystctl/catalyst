@@ -76,6 +76,23 @@ export async function adminRoutes(app: FastifyInstance) {
     return perms.includes(`user.${action}`);
   };
 
+  // User security-state edits below run outside auth.ts's ban/unban after-hook
+  // broadcast — push user_updated so admin viewers refresh instead of relying
+  // on the 5-min user poll.
+  const pushUserUpdated = (userId: string, change: string, extra: Record<string, unknown> = {}) => {
+    try {
+      const wsGateway = (app as any).wsGateway;
+      if (!wsGateway?.pushToAdminSubscribers) return;
+      wsGateway.pushToAdminSubscribers('user_updated', {
+        type: 'user_updated',
+        userId,
+        change,
+        ...extra,
+        timestamp: new Date().toISOString(),
+      });
+    } catch { /* WS push is best-effort */ }
+  };
+
   const parseStoredPortBindings = (value: unknown): Record<number, number> => {
     if (!value || typeof value !== 'object') {
       return {};
@@ -758,6 +775,11 @@ export async function adminRoutes(app: FastifyInstance) {
           for (const removed of removedAccess) gw?.invalidateServerAccess?.(removed.serverId);
           for (const sid of uniqueServerIds) gw?.invalidateServerAccess?.(sid);
         } catch { /* ignore */ }
+        // P1-33: drop cached server-access allowlists on sibling workers/hosts
+        // for every affected server (removed + granted), not just locally.
+        for (const sid of [...removedAccess.map((entry) => entry.serverId), ...uniqueServerIds]) {
+          try { publishCacheInvalidate('server-access', { serverId: sid }); } catch { /* degraded */ }
+        }
         const existingAccess = await prisma.serverAccess.findMany({
           where: { userId, serverId: { in: uniqueServerIds } },
           select: { serverId: true, permissions: true },
@@ -780,6 +802,22 @@ export async function adminRoutes(app: FastifyInstance) {
               }),
             ),
         );
+      }
+
+      // F27: role or server-access changes alter the target user's effective
+      // permissions — tell their own clients to refresh (user-targeted global
+      // push; the gateway delivers it only to that user's subscribers).
+      if (roleIds || serverIds) {
+        try {
+          const gwPerms = (app as any).wsGateway;
+          if (typeof gwPerms?.pushToGlobalSubscribers === 'function') {
+            void gwPerms.pushToGlobalSubscribers('permissions_updated', {
+              type: 'permissions_updated',
+              userId,
+              timestamp: Date.now(),
+            });
+          }
+        } catch { /* best-effort */ }
       }
 
       await createAuditLog(user.userId, {
@@ -1083,6 +1121,9 @@ export async function adminRoutes(app: FastifyInstance) {
             },
           });
           await prisma.session.deleteMany({ where: { userId } });
+          // Fallback skips auth.ts's ban after-hook, which is where the
+          // better-auth path broadcasts — push the same admin event here.
+          pushUserUpdated(userId, 'banned', { banned: true });
         } else {
           throw err;
         }
@@ -1132,6 +1173,8 @@ export async function adminRoutes(app: FastifyInstance) {
             where: { id: userId },
             data: { banned: false, banReason: null, banExpires: null },
           });
+          // Same fallback gap as ban: auth.ts's unban after-hook never runs.
+          pushUserUpdated(userId, 'unbanned', { banned: false });
         } else {
           throw err;
         }
@@ -1167,6 +1210,7 @@ export async function adminRoutes(app: FastifyInstance) {
         resourceId: userId,
         details: { username: existingUser.username, count: result.count },
       });
+      pushUserUpdated(userId, 'passkeys_wiped', { count: result.count });
       return reply.send({ success: true, wiped: result.count });
     }
   );
@@ -1196,6 +1240,7 @@ export async function adminRoutes(app: FastifyInstance) {
         resourceId: userId,
         details: { username: existingUser.username },
       });
+      pushUserUpdated(userId, 'two_factor_wiped', { twoFactorEnabled: false });
       return reply.send({ success: true });
     }
   );
@@ -1231,6 +1276,7 @@ export async function adminRoutes(app: FastifyInstance) {
         resourceId: userId,
         details: { username: existingUser.username, twoFactorEnabled: !!enforce },
       });
+      pushUserUpdated(userId, enforce ? 'two_factor_enforced' : 'two_factor_unenforced', { twoFactorEnabled: !!enforce });
       return reply.send({ success: true, twoFactorEnabled: !!enforce });
     }
   );
@@ -1268,6 +1314,7 @@ export async function adminRoutes(app: FastifyInstance) {
         resourceId: userId,
         details: { providerId: account.providerId, accountId: account.accountId },
       });
+      pushUserUpdated(userId, 'sso_unlinked', { providerId: account.providerId });
       return reply.send({ success: true });
     }
   );
@@ -1642,6 +1689,14 @@ export async function adminRoutes(app: FastifyInstance) {
                 where: { id: server.id },
                 data: { status: 'starting' },
               });
+              if (gateway?.routeToClients) {
+                void gateway.routeToClients(server.id, {
+                  type: 'server_state_update',
+                  serverId: server.id,
+                  state: 'starting',
+                  timestamp: Date.now(),
+                }).catch(() => {});
+              }
               await createAuditLog(user.userId, {
                 action: 'server.start',
                 resource: 'server',
@@ -1680,6 +1735,14 @@ export async function adminRoutes(app: FastifyInstance) {
                 where: { id: server.id },
                 data: { status: 'stopping' },
               });
+              if (gateway?.routeToClients) {
+                void gateway.routeToClients(server.id, {
+                  type: 'server_state_update',
+                  serverId: server.id,
+                  state: 'stopping',
+                  timestamp: Date.now(),
+                }).catch(() => {});
+              }
               await createAuditLog(user.userId, {
                 action: 'server.stop',
                 resource: 'server',
@@ -1721,6 +1784,14 @@ export async function adminRoutes(app: FastifyInstance) {
                 where: { id: server.id },
                 data: { status: 'stopping' },
               });
+              if (gateway?.routeToClients) {
+                void gateway.routeToClients(server.id, {
+                  type: 'server_state_update',
+                  serverId: server.id,
+                  state: 'stopping',
+                  timestamp: Date.now(),
+                }).catch(() => {});
+              }
               await createAuditLog(user.userId, {
                 action: 'server.kill',
                 resource: 'server',
@@ -1757,6 +1828,14 @@ export async function adminRoutes(app: FastifyInstance) {
                   where: { id: server.id },
                   data: { status: 'stopping' },
                 });
+                if (gateway?.routeToClients) {
+                  void gateway.routeToClients(server.id, {
+                    type: 'server_state_update',
+                    serverId: server.id,
+                    state: 'stopping',
+                    timestamp: Date.now(),
+                  }).catch(() => {});
+                }
               }
               const serverDir = process.env.SERVER_DATA_DIR || '/var/lib/catalyst/servers';
               const fullServerDir = `${serverDir}/${server.uuid}`;
@@ -1862,6 +1941,7 @@ export async function adminRoutes(app: FastifyInstance) {
                   type: 'server_suspended',
                   serverId: server.id,
                   serverName: server.name,
+                  nodeId: server.nodeId,
                   suspendedBy: user.userId,
                   timestamp: new Date().toISOString(),
                 });
@@ -1871,9 +1951,22 @@ export async function adminRoutes(app: FastifyInstance) {
                   type: 'server_suspended',
                   serverId: server.id,
                   serverName: server.name,
+                  nodeId: server.nodeId,
                   suspendedBy: user.userId,
                   timestamp: new Date().toISOString(),
                 });
+              }
+              if (wsGatewayBulkSuspend?.routeToClients) {
+                void wsGatewayBulkSuspend
+                  .routeToClients(server.id, {
+                    type: 'server_suspended',
+                    serverId: server.id,
+                    serverName: server.name,
+                    nodeId: server.nodeId,
+                    suspendedBy: user.userId,
+                    timestamp: new Date().toISOString(),
+                  })
+                  .catch(() => {});
               }
 
               return { serverId: server.id, status: 'success' };
@@ -1919,6 +2012,7 @@ export async function adminRoutes(app: FastifyInstance) {
                   type: 'server_unsuspended',
                   serverId: server.id,
                   serverName: server.name,
+                  nodeId: server.nodeId,
                   unsuspendedBy: user.userId,
                   timestamp: new Date().toISOString(),
                 });
@@ -1928,9 +2022,22 @@ export async function adminRoutes(app: FastifyInstance) {
                   type: 'server_unsuspended',
                   serverId: server.id,
                   serverName: server.name,
+                  nodeId: server.nodeId,
                   unsuspendedBy: user.userId,
                   timestamp: new Date().toISOString(),
                 });
+              }
+              if (wsGatewayBulkUnsuspend?.routeToClients) {
+                void wsGatewayBulkUnsuspend
+                  .routeToClients(server.id, {
+                    type: 'server_unsuspended',
+                    serverId: server.id,
+                    serverName: server.name,
+                    nodeId: server.nodeId,
+                    unsuspendedBy: user.userId,
+                    timestamp: new Date().toISOString(),
+                  })
+                  .catch(() => {});
               }
 
               return { serverId: server.id, status: 'success' };
@@ -1999,6 +2106,23 @@ export async function adminRoutes(app: FastifyInstance) {
                 }
               }
 
+              // Per-server viewers get server_deleted while the row still
+              // exists — routeToClients re-checks access against it, so a push
+              // after the delete below would be dropped.
+              const wsGatewayBeforeDelete = (app as any).wsGateway;
+              if (wsGatewayBeforeDelete?.routeToClients) {
+                void wsGatewayBeforeDelete
+                  .routeToClients(server.id, {
+                    type: 'server_deleted',
+                    serverId: server.id,
+                    serverName: server.name,
+                    nodeId: server.nodeId,
+                    deletedBy: user.userId,
+                    timestamp: new Date().toISOString(),
+                  })
+                  .catch(() => {});
+              }
+
               await prisma.$transaction(async (tx) => {
                 await releaseIpForServer(tx, server.id);
                 await tx.server.delete({ where: { id: server.id } });
@@ -2022,10 +2146,10 @@ export async function adminRoutes(app: FastifyInstance) {
 
               const wsGateway = (app as any).wsGateway;
               if (wsGateway?.pushToAdminSubscribers) {
-                wsGateway.pushToAdminSubscribers('server_deleted', { type: 'server_deleted', serverId: server.id, serverName: server.name, deletedBy: user.userId, timestamp: new Date().toISOString() });
+                wsGateway.pushToAdminSubscribers('server_deleted', { type: 'server_deleted', serverId: server.id, serverName: server.name, nodeId: server.nodeId, deletedBy: user.userId, timestamp: new Date().toISOString() });
               }
               if (wsGateway?.pushToGlobalSubscribers) {
-                wsGateway.pushToGlobalSubscribers('server_deleted', { type: 'server_deleted', serverId: server.id, serverName: server.name, deletedBy: user.userId, timestamp: new Date().toISOString() });
+                wsGateway.pushToGlobalSubscribers('server_deleted', { type: 'server_deleted', serverId: server.id, serverName: server.name, nodeId: server.nodeId, deletedBy: user.userId, timestamp: new Date().toISOString() });
               }
               return {
                 serverId: server.id,
@@ -2614,6 +2738,15 @@ export async function adminRoutes(app: FastifyInstance) {
         data: { resolved: true },
       });
 
+      const wsGatewaySysErr = (app as any).wsGateway;
+      if (wsGatewaySysErr?.pushToAdminSubscribers) {
+        wsGatewaySysErr.pushToAdminSubscribers('system_error_resolved', {
+          type: 'system_error_resolved',
+          errorId: id,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       reply.send({ success: true, error: updated });
     }
   );
@@ -2660,10 +2793,21 @@ export async function adminRoutes(app: FastifyInstance) {
         };
       }
 
+      const resolvedIds = await prisma.systemError.findMany({ where, select: { id: true } });
       const result = await prisma.systemError.updateMany({
         where,
         data: { resolved: true },
       });
+
+      const wsGatewayResolveAll = (app as any).wsGateway;
+      if (wsGatewayResolveAll?.pushToAdminSubscribers) {
+        wsGatewayResolveAll.pushToAdminSubscribers('system_error_resolved', {
+          type: 'system_error_resolved',
+          errorIds: resolvedIds.map((entry) => entry.id),
+          resolvedCount: result.count,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       reply.send({ success: true, resolvedCount: result.count });
     }
@@ -2917,6 +3061,17 @@ export async function adminRoutes(app: FastifyInstance) {
         resource: 'system',
         details: { defaultLocale: requested },
       });
+
+      try {
+        const wsGateway = (app as any).wsGateway;
+        wsGateway?.pushToAdminSubscribers('system_settings_updated', {
+          type: 'system_settings_updated',
+          updatedBy: user.userId,
+          change: 'localization',
+          defaultLocale: requested,
+          timestamp: new Date().toISOString(),
+        });
+      } catch { /* WS push is best-effort */ }
 
       reply.send({ success: true, data: { defaultLocale: requested } });
     }

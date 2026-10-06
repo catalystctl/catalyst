@@ -352,10 +352,30 @@ export async function backupRoutes(app: FastifyInstance) {
         return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, `Server must be stopped before restoring (current: ${current?.status ?? "unknown"})`, { params: { status: current?.status ?? "unknown" } });
       }
 
+      // Per-server state push for restore transitions (P1-29).
+      const emitRestoreState = (state: string) => {
+        const gw = (app as any).wsGateway;
+        if (gw?.routeToClients) {
+          void gw
+            .routeToClients(serverId, {
+              type: 'server_state_update',
+              serverId,
+              state,
+              timestamp: new Date().toISOString(),
+            })
+            .catch(() => {});
+        }
+      };
+      const revertToStopped = async () => {
+        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+        emitRestoreState(ServerState.STOPPED);
+      };
+      emitRestoreState(ServerState.RESTORING);
+
       // Check if node is online
       if (!server.node.isOnline) {
         // Revert status since we can't proceed
-        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+        await revertToStopped();
         return apiError(reply, 503, ErrorCodes.NODE_OFFLINE, "Node is offline");
       }
 
@@ -363,14 +383,14 @@ export async function backupRoutes(app: FastifyInstance) {
 
       const gateway = app.wsGateway;
       if (!gateway) {
-        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+        await revertToStopped();
         return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "Gateway not available");
       }
        let restorePath = backup.path;
        if (backup.storageMode === "s3" || backup.storageMode === "sftp") {
          const { storageKey, agentPath } = backup.metadata as { storageKey?: string; agentPath?: string };
          if (!storageKey) {
-           await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+           await revertToStopped();
            return apiError(reply, 500, ErrorCodes.BACKUP_STORAGE_KEY_MISSING, `Missing ${backup.storageMode?.toUpperCase() || "remote"} storage key`, { params: { mode: backup.storageMode?.toUpperCase() || "remote" } });
          }
          try {
@@ -379,7 +399,7 @@ export async function backupRoutes(app: FastifyInstance) {
            await uploadStreamToAgent(gateway, server.nodeId, server.id, server.uuid, targetPath, stream);
            restorePath = targetPath;
          } catch (dlError: any) {
-           await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+           await revertToStopped();
            return apiError(reply, 500, ErrorCodes.BACKUP_DOWNLOAD_FAILED, dlError?.message || "Failed to stream backup to agent");
          }
        }
@@ -390,7 +410,7 @@ export async function backupRoutes(app: FastifyInstance) {
       if (isEncrypted) {
         const rawKey = process.env.BACKUP_ENCRYPTION_KEY;
         if (!rawKey) {
-          await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+          await revertToStopped();
           return apiError(reply, 400, ErrorCodes.BACKUP_ENCRYPTION_KEY_MISSING, "Backup is encrypted but no encryption key is configured");
         }
         encryptionKey = rawKey;
@@ -408,7 +428,7 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!success) {
-        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+        await revertToStopped();
         return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send restore request to agent");
       }
 

@@ -225,17 +225,24 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
             },
         });
 
-        // Broadcast database_created event
+        // Broadcast database_created event — admin + global + per-server stream.
         const wsGatewayDbCreated = (app as any).wsGateway;
+        const dbCreatedEvent = {
+          type: 'database_created',
+          serverId,
+          databaseId: database.id,
+          databaseName: database.name,
+          createdBy: userId,
+          timestamp: new Date().toISOString(),
+        };
         if (wsGatewayDbCreated?.pushToAdminSubscribers) {
-          wsGatewayDbCreated.pushToAdminSubscribers('database_created', {
-            type: 'database_created',
-            serverId,
-            databaseId: database.id,
-            databaseName: database.name,
-            createdBy: userId,
-            timestamp: new Date().toISOString(),
-          });
+          wsGatewayDbCreated.pushToAdminSubscribers('database_created', dbCreatedEvent);
+        }
+        if (wsGatewayDbCreated?.pushToGlobalSubscribers) {
+          wsGatewayDbCreated.pushToGlobalSubscribers('database_created', dbCreatedEvent);
+        }
+        if (wsGatewayDbCreated?.routeToClients) {
+          void wsGatewayDbCreated.routeToClients(serverId, dbCreatedEvent).catch(() => {});
         }
 
         reply.status(201).send({
@@ -336,17 +343,24 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
           },
       });
 
-      // Broadcast database_password_rotated event
+      // Broadcast database_password_rotated event — admin + global + per-server stream.
       const wsGatewayDbRotated = (app as any).wsGateway;
+      const dbRotatedEvent = {
+        type: 'database_password_rotated',
+        serverId,
+        databaseId: database.id,
+        databaseName: database.name,
+        rotatedBy: userId,
+        timestamp: new Date().toISOString(),
+      };
       if (wsGatewayDbRotated?.pushToAdminSubscribers) {
-        wsGatewayDbRotated.pushToAdminSubscribers('database_password_rotated', {
-          type: 'database_password_rotated',
-          serverId,
-          databaseId: database.id,
-          databaseName: database.name,
-          rotatedBy: userId,
-          timestamp: new Date().toISOString(),
-        });
+        wsGatewayDbRotated.pushToAdminSubscribers('database_password_rotated', dbRotatedEvent);
+      }
+      if (wsGatewayDbRotated?.pushToGlobalSubscribers) {
+        wsGatewayDbRotated.pushToGlobalSubscribers('database_password_rotated', dbRotatedEvent);
+      }
+      if (wsGatewayDbRotated?.routeToClients) {
+        void wsGatewayDbRotated.routeToClients(serverId, dbRotatedEvent).catch(() => {});
       }
 
       reply.send({
@@ -428,16 +442,23 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         details: { databaseId },
       });
 
-      // Broadcast database_deleted event
+      // Broadcast database_deleted event — admin + global + per-server stream.
       const wsGatewayDbDeleted = (app as any).wsGateway;
+      const dbDeletedEvent = {
+        type: 'database_deleted',
+        serverId,
+        databaseId,
+        deletedBy: userId,
+        timestamp: new Date().toISOString(),
+      };
       if (wsGatewayDbDeleted?.pushToAdminSubscribers) {
-        wsGatewayDbDeleted.pushToAdminSubscribers('database_deleted', {
-          type: 'database_deleted',
-          serverId,
-          databaseId,
-          deletedBy: userId,
-          timestamp: new Date().toISOString(),
-        });
+        wsGatewayDbDeleted.pushToAdminSubscribers('database_deleted', dbDeletedEvent);
+      }
+      if (wsGatewayDbDeleted?.pushToGlobalSubscribers) {
+        wsGatewayDbDeleted.pushToGlobalSubscribers('database_deleted', dbDeletedEvent);
+      }
+      if (wsGatewayDbDeleted?.routeToClients) {
+        void wsGatewayDbDeleted.routeToClients(serverId, dbDeletedEvent).catch(() => {});
       }
 
       reply.send({ success: true });

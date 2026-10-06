@@ -26,7 +26,7 @@ import {
   initialRelayFlowState,
   type RelayFlowState,
 } from "./relay-flow-control";
-import { acknowledgeAgentCommand, publishAgentCommand, publishFanout, subscribeAgentCommand, subscribeFanout, type AgentCommandRelayResult, type FanoutEvent } from "../lib/event-bus.js";
+import { acknowledgeAgentCommand, onFanoutResubscribed, publishAgentCommand, publishFanout, subscribeAgentCommand, subscribeFanout, type AgentCommandRelayResult, type FanoutEvent } from "../lib/event-bus.js";
 
 /**
  * Simple capped Map that evicts the oldest entries when max size is reached.
@@ -113,6 +113,20 @@ interface ConnectedAgent {
   /** SEC-C-01: nonce echo + tag to send in node_handshake_response. */
   handshakeNonce?: string;
   handshakeAuthTag?: string;
+}
+
+/** One unregistered container discovered on a node (auto-import candidates). */
+interface DiscoveredContainer {
+  containerId: string;
+  image: string;
+  status: string;
+  labels: Record<string, string>;
+  networkMode?: string;
+  memoryLimitMb?: number;
+  cpuCores?: number;
+  startupCommand?: string;
+  envVarNames?: string[];
+  discoveredAt: number;
 }
 
 // Message types considered control-plane critical: always delivered when a
@@ -234,6 +248,74 @@ export function sanitizeBatchTimestamp(value: unknown): Date | null {
   if (Math.abs(ms) > 8.64e15) return null;
   const d = new Date(ms);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Scope decision for one global-stream subscriber (see evaluateGlobalSseDelivery). */
+export type GlobalSseDeliveryDecision = 'deliver' | 'drop' | 'recheck-live';
+
+/** One global-stream (all-servers / metrics) SSE subscriber. */
+interface GlobalSseSubscriber {
+  eventTypes: string[];
+  push: (event: string, data: any) => void;
+  /** Handshake access snapshot; undefined = full-admin (unfiltered). */
+  serverIds?: Set<string>;
+  lastActivity: number;
+  userId?: string;
+}
+
+/** One admin entity-events SSE subscriber (unfiltered — admin.read gated). */
+interface AdminSseSubscriber {
+  eventTypes: string[];
+  push: (event: string, data: any) => void;
+  lastActivity: number;
+  /** Owner of the stream — re-checked against admin.read every 60s. */
+  userId?: string;
+  /** Ends the hijacked socket when re-auth fails (provided by the route). */
+  close?: () => void;
+  /** Last re-auth result, cached between sweeper runs for observability. */
+  adminOk?: boolean;
+}
+
+/**
+ * Pure scope predicate for global-stream fan-out. Unit-tested; no I/O.
+ *
+ * Subscriber scope is `serverIds === undefined` (full-admin, unfiltered →
+ * receives everything) vs an explicit snapshot set (everyone else).
+ *
+ * Rules:
+ * 1. Unfiltered subscribers ('serverIds' undefined) always deliver.
+ * 2. Payload `serverId` inside the handshake snapshot → check user scope,
+ *    then 'deliver'. The snapshot can predate a grant, so a payload serverId
+ *    outside the snapshot returns 'recheck-live' (caller must re-check access
+ *    against the live/cache access list — gap G3) unless the subscriber has
+ *    no userId to check, in which case it is 'drop'.
+ * 3. User scope: when the payload carries a string `userId` and the
+ *    subscriber is scoped with a known userId, only the matching user's own
+ *    subscriber delivers (keeps user-scoped events off other tenants'
+ *    streams). Payloads without `userId` are unaffected.
+ */
+export function evaluateGlobalSseDelivery(
+  payload: { serverId?: unknown; userId?: unknown },
+  sub: { serverIds?: Set<string> | undefined; userId?: string | undefined },
+): GlobalSseDeliveryDecision {
+  // Unfiltered (full-admin) subscribers receive everything.
+  if (sub.serverIds === undefined) return 'deliver';
+
+  const payloadServerId = typeof payload.serverId === 'string' ? payload.serverId : undefined;
+  const payloadUserId = typeof payload.userId === 'string' ? payload.userId : undefined;
+
+  // User scope: a user-scoped payload only reaches that user's own subscriber.
+  if (payloadUserId !== undefined && typeof sub.userId === 'string' && payloadUserId !== sub.userId) {
+    return 'drop';
+  }
+
+  if (payloadServerId === undefined) return 'deliver';
+  if (sub.serverIds.has(payloadServerId)) return 'deliver';
+
+  // Snapshot miss: the grant may be newer than the handshake snapshot —
+  // deliver only after a live access re-check (needs a subscriber userId).
+  if (typeof sub.userId === 'string') return 'recheck-live';
+  return 'drop';
 }
 
 export class WebSocketGateway {
@@ -396,6 +478,7 @@ export class WebSocketGateway {
   // directions, not just that the agent is still sending.
   private pingInterval?: ReturnType<typeof setInterval>;
   private subscriberSweepInterval?: ReturnType<typeof setInterval>;
+  private adminReauthInterval?: ReturnType<typeof setInterval>;
 
   // ── Agent outbox ───────────────────────────────────────────────────────────
   // Commands queued per node when sendToAgent() finds no connected agent
@@ -722,22 +805,70 @@ export class WebSocketGateway {
   // Used for non-console events (state updates, backups, alerts, etc.)
   private readonly sseEventSubscribers = new Map<string, Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; lastActivity: number; userId?: string }>>();
   // Global SSE event subscribers — receive ALL events across all servers (for AppLayout)
-  private readonly globalSseSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; serverIds?: Set<string>; lastActivity: number; userId?: string }>();
+  private readonly globalSseSubscribers = new Map<string, GlobalSseSubscriber>();
   // Admin SSE event subscribers — receive entity-level admin events (users, nodes, templates, alerts)
-  private readonly adminEventSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; lastActivity: number }>();
+  private readonly adminEventSubscribers = new Map<string, AdminSseSubscriber>();
+
+  /** Throttled fan-out push-failure warnings: at most ~1 warn/min per scope+event. */
+  private static readonly EMIT_WARN_THROTTLE_MS = 60_000;
+  private readonly emitWarnLastAt = new Map<string, number>();
+
+  /**
+   * Log a subscriber push failure without flooding the log on the hot path.
+   * Fan-out loops are per-event-per-subscriber; a dead stream would otherwise
+   * emit a warn line every tick. Keeps the counter tiny (scope+event keys).
+   */
+  private warnEmitFailure(scope: string, eventType: string, err: unknown): void {
+    const key = `${scope}:${eventType}`;
+    const now = Date.now();
+    const last = this.emitWarnLastAt.get(key);
+    if (last !== undefined && now - last < WebSocketGateway.EMIT_WARN_THROTTLE_MS) return;
+    this.emitWarnLastAt.set(key, now);
+    this.logger.warn({ err, scope, eventType }, 'SSE fan-out push failed');
+  }
+
   // Discovered containers on nodes (for auto-import of existing servers)
-  private discoveredContainers = new Map<string, Array<{
-    containerId: string;
-    image: string;
-    status: string;
-    labels: Record<string, string>;
-    networkMode?: string;
-    memoryLimitMb?: number;
-    cpuCores?: number;
-    startupCommand?: string;
-    envVarNames?: string[];
-    discoveredAt: number;
-  }>>();
+  private discoveredContainers = new Map<string, DiscoveredContainer[]>();
+  // discovered_servers_updated admin-event throttle: at most 1 emit / 2s per
+  // node; a trailing timer reports the latest count after a burst.
+  private readonly discoveredEmitLastAt = new Map<string, number>();
+  private readonly discoveredEmitTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private static readonly DISCOVERED_EMIT_THROTTLE_MS = 2_000;
+
+  /**
+   * Replace a node's discovered-container list; notify admin subscribers when
+   * the content actually changed (containerId/status signature compare).
+   */
+  private setDiscoveredContainers(nodeId: string, next: DiscoveredContainer[]): void {
+    const signature = (list?: DiscoveredContainer[]): string =>
+      (list ?? []).map((c) => `${c.containerId}:${c.status}`).join('|');
+    const changed = signature(this.discoveredContainers.get(nodeId)) !== signature(next);
+    this.discoveredContainers.set(nodeId, next);
+    if (changed) this.notifyDiscoveredServers(nodeId);
+  }
+
+  private notifyDiscoveredServers(nodeId: string): void {
+    const emit = (): void => {
+      this.discoveredEmitTimers.delete(nodeId);
+      this.discoveredEmitLastAt.set(nodeId, Date.now());
+      this.pushToAdminSubscribers('discovered_servers_updated', {
+        type: 'discovered_servers_updated',
+        nodeId,
+        count: this.discoveredContainers.get(nodeId)?.length ?? 0,
+        timestamp: Date.now(),
+      });
+    };
+    const last = this.discoveredEmitLastAt.get(nodeId) ?? 0;
+    const now = Date.now();
+    if (now - last >= WebSocketGateway.DISCOVERED_EMIT_THROTTLE_MS) {
+      emit();
+      return;
+    }
+    if (this.discoveredEmitTimers.has(nodeId)) return;
+    const timer = setTimeout(emit, WebSocketGateway.DISCOVERED_EMIT_THROTTLE_MS - (now - last));
+    timer.unref?.();
+    this.discoveredEmitTimers.set(nodeId, timer);
+  }
 
   // ── Agent auth lockout tracker (progressive backoff) ───────────────────────
   // Dual (IP+nodeId) buckets: attempts are keyed by node AND source IP so a
@@ -811,7 +942,8 @@ export class WebSocketGateway {
   private readonly MAX_CLIENT_CONNECTIONS = Number(process.env.MAX_CLIENT_CONNECTIONS || 10000);
   private readonly MAX_CONNECTIONS_PER_USER = Number(process.env.MAX_CONNECTIONS_PER_USER || 10);
 
-  // SSE hard caps
+  // SSE hard caps (per-worker: registries are process-local, each cluster
+  // worker enforces its own cap)
   private readonly MAX_SSE_CONSOLE_PER_SERVER = 50;
   private readonly MAX_SSE_EVENTS_PER_SERVER = 100;
 
@@ -828,6 +960,9 @@ export class WebSocketGateway {
     subscribeFanout((event) => this.deliverRemoteFanout(event)).catch(() => {
       // Degraded mode — local delivery still works
     });
+    // Fan-out events published while the bus subscriber was disconnected are
+    // lost (pub/sub has no replay): tell every local SSE subscriber to resync.
+    onFanoutResubscribed(() => this.pushResyncToLocalSubscribers('bus-reconnect'));
     // Receive agent commands published by sibling instances (multi-instance
     // deployments: the agent socket lives in exactly one process).
     subscribeAgentCommand((nodeId, relayId, message) => {
@@ -861,13 +996,37 @@ export class WebSocketGateway {
       if (event.scope === 'server' && event.serverId) {
         await this.deliverToLocalSubscribers(event.serverId, event.payload);
       } else if (event.scope === 'global') {
-        this.deliverToLocalGlobalSubscribers(event.eventType, event.payload);
+        await this.deliverToLocalGlobalSubscribers(event.eventType, event.payload);
       } else if (event.scope === 'admin') {
         this.deliverToLocalAdminSubscribers(event.eventType, event.payload);
       }
     } catch (err) {
       this.logger.debug({ err }, "Remote fan-out delivery failed");
     }
+  }
+
+  /**
+   * Push a 'resync' event to every local SSE subscriber in all registries.
+   * Used after a bus reconnect: events published while the subscriber socket
+   * was down are lost, so clients must refetch their state. Bypasses the
+   * eventTypes filters on purpose (a resync is transport-level, not domain
+   * data) and never throws — dead streams are swept by the idle cleaner.
+   */
+  private pushResyncToLocalSubscribers(reason: string): void {
+    const payload = JSON.stringify({ type: 'resync', reason, timestamp: Date.now() });
+    const safePush = (push: (event: string, data: any) => void): void => {
+      try {
+        push('resync', payload);
+      } catch { /* dead stream — heartbeat/sweeper cleans it up */ }
+    };
+    for (const subs of this.sseSubscribers.values()) {
+      for (const [, sub] of subs) safePush(sub.push);
+    }
+    for (const subs of this.sseEventSubscribers.values()) {
+      for (const [, sub] of subs) safePush(sub.push);
+    }
+    for (const [, sub] of this.globalSseSubscribers) safePush(sub.push);
+    for (const [, sub] of this.adminEventSubscribers) safePush(sub.push);
   }
 
   private async refreshConsoleLimits() {
@@ -973,7 +1132,7 @@ export class WebSocketGateway {
         // Fail-fast any commands still awaiting an ack from this agent instead
         // of letting them hang until their per-request timeout (15-60s).
         this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} disconnected`);
-        this.discoveredContainers.delete(nodeId);
+        this.clearDiscoveredContainers(nodeId);
         // Release an active backup relay owned by this node so node-to-node
         // transfers fail fast instead of wedging until the 5-minute timeout.
         this.rejectBackupRelay(nodeId, new Error(`Source or target agent ${nodeId} disconnected mid-relay`));
@@ -2526,6 +2685,13 @@ export class WebSocketGateway {
             where: { id: server.id },
             data: { status: ServerState.STARTING },
           });
+          // Gateway-internal state write — fan out so viewers see the restart.
+          await this.routeToClients(server.id, {
+            type: "server_state_update",
+            serverId: server.id,
+            state: ServerState.STARTING,
+            timestamp: Date.now(),
+          });
           const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
           const fullServerDir = `${serverDir}/${server.uuid}`;
           const templateVariables = (server.template.variables as any[]) || [];
@@ -2608,6 +2774,14 @@ export class WebSocketGateway {
               where: { id: server.id },
               data: { status: ServerState.CRASHED },
             });
+            // Failure revert of the STARTING write above — fan out the state
+            // that is actually in the DB now.
+            await this.routeToClients(server.id, {
+              type: "server_state_update",
+              serverId: server.id,
+              state: ServerState.CRASHED,
+              timestamp: Date.now(),
+            });
             this.logger.warn({ serverId: server.id }, "Auto-restart failed to send to agent");
           }
         }
@@ -2655,7 +2829,7 @@ export class WebSocketGateway {
               labels: {},
               discoveredAt: Date.now(),
             });
-            this.discoveredContainers.set(nodeId, existing);
+            this.setDiscoveredContainers(nodeId, existing);
           }
           return;
         }
@@ -2812,8 +2986,8 @@ export class WebSocketGateway {
         // stale entries from deleted servers or outdated event-driven syncs.
         const discovered = this.discoveredContainers.get(nodeId) ?? [];
         const stillPresent = discovered.filter((c) => foundContainers.has(c.containerId));
+        this.setDiscoveredContainers(nodeId, stillPresent);
         if (stillPresent.length !== discovered.length) {
-          this.discoveredContainers.set(nodeId, stillPresent);
           this.logger.debug({ nodeId, pruned: discovered.length - stillPresent.length }, 'Pruned stale discovered containers');
         }
       } else if (message.type === "backup_complete") {
@@ -2835,6 +3009,14 @@ export class WebSocketGateway {
           await this.prisma.server.update({
             where: { id: message.serverId },
             data: { status: ServerState.STOPPED },
+          });
+          // Gateway-internal state write: fan it out like the agent's own
+          // server_state_update so viewers leave the "creating backup" state.
+          await this.routeToClients(message.serverId, {
+            type: "server_state_update",
+            serverId: message.serverId,
+            state: ServerState.STOPPED,
+            timestamp: Date.now(),
           });
         }
 
@@ -2913,6 +3095,13 @@ export class WebSocketGateway {
                 where: { id: backupRecord.id },
                 data: { metadata: { ...(backupRecord.metadata as any), remoteUploadStatus: "completed" } },
               });
+              // remoteUploadStatus changed — tell viewers to refresh backup metadata.
+              await this.routeToClients(message.serverId, {
+                type: "backup_updated",
+                serverId: message.serverId,
+                backupId: backupRecord.id,
+                timestamp: Date.now(),
+              });
             }
           } catch (error) {
             captureSystemError({
@@ -2932,6 +3121,12 @@ export class WebSocketGateway {
                   remoteUploadError: error instanceof Error ? error.message : "S3 upload failed",
                 },
               },
+            });
+            await this.routeToClients(message.serverId, {
+              type: "backup_updated",
+              serverId: message.serverId,
+              backupId: backupRecord.id,
+              timestamp: Date.now(),
             });
             // Clean up agent-local copy so the failed upload doesn't leak disk
             this.sendToAgent(server.nodeId, {
@@ -2959,6 +3154,13 @@ export class WebSocketGateway {
                 where: { id: backupRecord.id },
                 data: { metadata: { ...(backupRecord.metadata as any), remoteUploadStatus: "completed" } },
               });
+              // remoteUploadStatus changed — tell viewers to refresh backup metadata.
+              await this.routeToClients(message.serverId, {
+                type: "backup_updated",
+                serverId: message.serverId,
+                backupId: backupRecord.id,
+                timestamp: Date.now(),
+              });
             }
           } catch (error) {
             captureSystemError({
@@ -2978,6 +3180,12 @@ export class WebSocketGateway {
                   remoteUploadError: error instanceof Error ? error.message : "SFTP upload failed",
                 },
               },
+            });
+            await this.routeToClients(message.serverId, {
+              type: "backup_updated",
+              serverId: message.serverId,
+              backupId: backupRecord.id,
+              timestamp: Date.now(),
             });
             // Clean up agent-local copy so the failed upload doesn't leak disk
             this.sendToAgent(server.nodeId, {
@@ -3040,7 +3248,18 @@ export class WebSocketGateway {
                 });
                 // Use deleteMany to avoid P2025 (RecordNotFound) when periodic
                 // retention already deleted this backup between our findMany and here.
-                await this.prisma.backup.deleteMany({ where: { id: backup.id } });
+                const deleted = await this.prisma.backup.deleteMany({ where: { id: backup.id } });
+                if (deleted.count > 0) {
+                  // Gateway-internal delete — fan out so backup lists update.
+                  // ISO timestamp matches the backup_deleted emission in
+                  // services/backup-retention.ts (same event type).
+                  await this.routeToClients(message.serverId, {
+                    type: "backup_deleted",
+                    serverId: message.serverId,
+                    backupId: backup.id,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
               } catch (error) {
                 this.logger.warn({ err: error, backupId: backup.id }, "Failed to enforce retention");
               }
@@ -3063,10 +3282,19 @@ export class WebSocketGateway {
           return;
         }
         // Transition server back to STOPPED after restore completes
-        await this.prisma.server.updateMany({
+        const restoredFromRestoring = await this.prisma.server.updateMany({
           where: { id: message.serverId, status: ServerState.RESTORING },
           data: { status: ServerState.STOPPED },
         });
+        if (restoredFromRestoring.count > 0) {
+          // Gateway-internal state write — fan out so viewers leave "restoring".
+          await this.routeToClients(message.serverId, {
+            type: "server_state_update",
+            serverId: message.serverId,
+            state: ServerState.STOPPED,
+            timestamp: Date.now(),
+          });
+        }
 
         // Update backup record with restore timestamp only after agent confirms success
         if (message.backupId) {
@@ -3081,6 +3309,40 @@ export class WebSocketGateway {
         await this.routeToClients(message.serverId, message);
       } else if (message.type === "storage_resize_complete") {
         await this.routeToClients(message.serverId, message);
+      } else if (message.type === "server_files_changed") {
+        // SFTP mutations happen entirely on the node, so the agent reports
+        // them here. Re-emit the same event the panel's file routes produce
+        // (routes/servers/files.ts notifyFileChange) so every file manager —
+        // web included — invalidates its listing.
+        if (typeof message.serverId !== "string" || !message.serverId) {
+          this.logger.warn({ nodeId }, "server_files_changed without serverId — dropping");
+          return;
+        }
+        // Path data is server-scoped: only accept a server on the reporting
+        // node, so a compromised node cannot leak or spoof another node's paths.
+        const changedServer = await this.prisma.server.findUnique({
+          where: { id: message.serverId },
+          select: { nodeId: true },
+        });
+        if (!changedServer || changedServer.nodeId !== nodeId) {
+          this.logger.warn(
+            { nodeId, serverId: message.serverId },
+            "server_files_changed for server not on this node — dropping",
+          );
+          return;
+        }
+        // Rebuild the payload explicitly instead of forwarding the agent
+        // message: the agent controls its own frames, and only these fields
+        // are consumed by the SSE allowlist and the frontend handler.
+        await this.routeToClients(message.serverId, {
+          type: "server_files_changed",
+          serverId: message.serverId,
+          ...(typeof message.action === "string" ? { action: message.action } : {}),
+          ...(typeof message.path === "string" ? { path: message.path } : {}),
+          ...(typeof message.from === "string" ? { from: message.from } : {}),
+          ...(typeof message.to === "string" ? { to: message.to } : {}),
+          timestamp: Date.now(),
+        });
       } else if (message.type === "agent_error_report") {
         // Agent (node) is reporting an error — store it as a system error with nodeId
         const level = (typeof message.level === "string" && ["error", "warn", "critical"].includes(message.level))
@@ -3160,7 +3422,7 @@ export class WebSocketGateway {
         }
         const containers = Array.isArray(message.containers) ? message.containers : [];
 
-        this.discoveredContainers.set(nodeId, containers.map((c: any) => ({
+        this.setDiscoveredContainers(nodeId, containers.map((c: any) => ({
           containerId: String(c.containerId || ""),
           image: String(c.image || ""),
           status: String(c.status || ""),
@@ -3734,20 +3996,27 @@ export class WebSocketGateway {
           const subUser = (sub as { userId?: string }).userId;
           if (subUser && !allowedUsers.has(subUser)) continue;
           sub.lastActivity = Date.now();
-          try { sub.push(eventType, wire); } catch { /* ignore */ }
+          try { sub.push(eventType, wire); } catch (err) { this.warnEmitFailure('per-server-sse', eventType, err); }
         }
       }
     }
 
-    // Also push to global SSE subscribers (serverIds filter applies)
+    // Also push to global SSE subscribers. Scope is evaluated per emit:
+    // a payload serverId outside the subscriber's handshake snapshot still
+    // delivers when the live access check below (bypass-cache on mutation
+    // fan-out) allows the subscriber — closes the "grant newer than snapshot"
+    // gap (G3) for server_created / new shares. User-scoped payloads only
+    // reach their own subscriber.
+    const payloadUserId = typeof messageToSend?.userId === 'string' ? (messageToSend.userId as string) : undefined;
     for (const [, sub] of this.globalSseSubscribers) {
-      if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
-      const globalUser = (sub as { userId?: string }).userId;
+      if (!sub.eventTypes.includes(eventType)) continue;
+      const decision = evaluateGlobalSseDelivery({ serverId, userId: payloadUserId }, sub);
+      if (decision === 'drop') continue;
+      const globalUser = sub.userId;
+      // Also covers 'recheck-live': allowedUsers was just resolved above.
       if (globalUser && !allowedUsers.has(globalUser)) continue;
-      if (sub.eventTypes.includes(eventType)) {
-        sub.lastActivity = Date.now();
-        try { sub.push(eventType, wire); } catch { /* ignore */ }
-      }
+      sub.lastActivity = Date.now();
+      try { sub.push(eventType, wire); } catch (err) { this.warnEmitFailure('global-sse', eventType, err); }
     }
 
     publishFanout({ scope: 'server', serverId, eventType, payload: messageToSend });
@@ -3759,19 +4028,29 @@ export class WebSocketGateway {
     await this.deliverServerFanoutLocally(serverId, eventType, message);
   }
 
-  private deliverToLocalGlobalSubscribers(eventType: string, data: unknown): void {
-    const eventData = JSON.stringify(data);
-    const payloadServerId =
-      data && typeof data === 'object' && typeof (data as { serverId?: unknown }).serverId === 'string'
-        ? ((data as { serverId: string }).serverId)
-        : undefined;
-    for (const [, sub] of this.globalSseSubscribers) {
-      if (!sub.eventTypes.includes(eventType)) continue;
-      if (payloadServerId && sub.serverIds && !sub.serverIds.has(payloadServerId)) continue;
-      sub.lastActivity = Date.now();
-      try {
-        sub.push(eventType, eventData);
-      } catch { /* ignore */ }
+  private async deliverToLocalGlobalSubscribers(eventType: string, data: unknown): Promise<void> {
+    try {
+      const eventData = JSON.stringify(data);
+      const payload = (data ?? {}) as { serverId?: unknown; userId?: unknown };
+      for (const [, sub] of this.globalSseSubscribers) {
+        if (!sub.eventTypes.includes(eventType)) continue;
+        const decision = evaluateGlobalSseDelivery(payload, sub);
+        if (decision === 'drop') continue;
+        if (decision === 'recheck-live') {
+          // Snapshot predates the grant — deliver only after a live check
+          // (30s access cache, DB fallback on miss).
+          if (!sub.userId || typeof payload.serverId !== 'string') continue;
+          if (!(await this.serverAllowsUser(payload.serverId, sub.userId))) continue;
+        }
+        sub.lastActivity = Date.now();
+        try {
+          sub.push(eventType, eventData);
+        } catch (err) {
+          this.warnEmitFailure('global-sse-remote', eventType, err);
+        }
+      }
+    } catch (err) {
+      this.logger.warn({ err, eventType }, 'Remote global fan-out delivery failed');
     }
   }
 
@@ -3782,7 +4061,9 @@ export class WebSocketGateway {
         sub.lastActivity = Date.now();
         try {
           sub.push(eventType, eventData);
-        } catch { /* ignore */ }
+        } catch (err) {
+          this.warnEmitFailure('admin-sse-remote', eventType, err);
+        }
       }
     }
   }
@@ -3791,10 +4072,26 @@ export class WebSocketGateway {
   private async deliverServerFanoutLocally(serverId: string, eventType: string, payload: unknown): Promise<void> {
     const allowedUsers = await this.getAllowedUsersForServer(serverId);
     if (!allowedUsers) return;
+    // Console output is console.read territory (mirrors routeConsoleToSubscribers).
+    // The second allowlist is only resolved for console-scoped fan-out events
+    // so the hot path keeps a single access fetch for everything else.
+    const isConsoleEvent = eventType === 'console_output';
+    let consoleAllowedUsers: Set<string> | null = null;
+    if (isConsoleEvent) {
+      consoleAllowedUsers = await this.getAllowedUsersForServer(serverId, false, "console.read");
+      if (!consoleAllowedUsers) return;
+    }
     const data = JSON.stringify(payload);
     for (const [, client] of this.clients) {
       if (!client.subscriptions.has(serverId)) continue;
       if (!allowedUsers.has(client.userId)) continue;
+      if (isConsoleEvent) {
+        // Mirror local console delivery: only clients holding a console
+        // subscription (granted at subscribe time via console.read) receive
+        // console_output; the console.read allowlist is the revocation backstop.
+        if (!client.consoleSubscriptions?.has(serverId)) continue;
+        if (!consoleAllowedUsers?.has(client.userId)) continue;
+      }
       if (client.socket.readyState === 1) {
         try { client.socket.send(data); } catch { /* ignore */ }
       }
@@ -3803,22 +4100,37 @@ export class WebSocketGateway {
     if (sseEventSubs) {
       for (const [, sub] of sseEventSubs) {
         if (!sub.eventTypes.includes(eventType)) continue;
+        // Per-subscriber allowlist (same as local routeToClients): a grant
+        // revoked after the handshake drops the subscriber here too.
+        const subUser = sub.userId;
+        if (subUser && !allowedUsers.has(subUser)) continue;
         sub.lastActivity = Date.now();
-        try { sub.push(eventType, data); } catch { /* ignore */ }
+        try { sub.push(eventType, data); } catch (err) { this.warnEmitFailure('per-server-sse-remote', eventType, err); }
       }
     }
+    const remotePayload = (payload ?? {}) as { userId?: unknown };
+    const remotePayloadUserId = typeof remotePayload.userId === 'string' ? remotePayload.userId : undefined;
     for (const [, sub] of this.globalSseSubscribers) {
-      if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
       if (!sub.eventTypes.includes(eventType)) continue;
+      const decision = evaluateGlobalSseDelivery({ serverId, userId: remotePayloadUserId }, sub);
+      if (decision === 'drop') continue;
+      // Snapshot miss → re-check against the access list resolved above.
+      if (decision === 'recheck-live' && !(sub.userId && allowedUsers.has(sub.userId))) continue;
       sub.lastActivity = Date.now();
-      try { sub.push(eventType, data); } catch { /* ignore */ }
+      try { sub.push(eventType, data); } catch (err) { this.warnEmitFailure('global-sse-remote', eventType, err); }
     }
-    if (eventType === 'console_output' || eventType === 'eula_required' || eventType === 'error' || eventType === 'connected') {
+    // Console SSE streams receive console_output only: eula_required/error
+    // reach them through the server-scoped registries above (locally they
+    // never arrive on the console stream either — pushing them here was a
+    // remote-only asymmetry).
+    if (isConsoleEvent && consoleAllowedUsers) {
       const sseSubs = this.sseSubscribers.get(serverId);
       if (sseSubs) {
         for (const [, sub] of sseSubs) {
+          const consoleUser = sub.userId;
+          if (consoleUser && !consoleAllowedUsers.has(consoleUser)) continue;
           sub.lastActivity = Date.now();
-          try { sub.push(eventType, data); } catch { /* ignore */ }
+          try { sub.push(eventType, data); } catch (err) { this.warnEmitFailure('console-sse-remote', eventType, err); }
         }
       }
     }
@@ -3826,36 +4138,48 @@ export class WebSocketGateway {
 
   /**
    * Push an event to all global SSE subscribers listening for that event type.
-   * Used for user-level events (user_created, user_deleted) that don't belong to a server.
+   * Used for cross-server lifecycle events and user-scoped events (payload
+   * `userId` — delivered only to that user's own subscriber, full-admin
+   * unfiltered streams aside).
    *
-   * @param eventType - The event type (e.g. 'user_created')
+   * Snapshot-miss subscribers (payload serverId outside the handshake access
+   * snapshot) are re-checked live via serverAllowsUser() so events for
+   * servers granted/created after the connect still deliver (gap G3).
+   *
+   * @param eventType - The event type (e.g. 'alert', 'server_created')
    * @param data - Event payload
    */
-  pushToGlobalSubscribers(eventType: string, data: unknown): void {
-    const eventData = JSON.stringify(data);
-    // When payload carries a serverId, honor per-subscriber server scope so
-    // non-admin global streams cannot observe other tenants' lifecycle events.
-    const payloadServerId =
-      data && typeof data === 'object' && typeof (data as any).serverId === 'string'
-        ? ((data as any).serverId as string)
-        : undefined;
-    for (const [, sub] of this.globalSseSubscribers) {
-      if (!sub.eventTypes.includes(eventType)) continue;
-      if (
-        payloadServerId &&
-        sub.serverIds &&
-        !sub.serverIds.has(payloadServerId)
-      ) {
-        continue;
+  async pushToGlobalSubscribers(eventType: string, data: unknown): Promise<void> {
+    try {
+      const eventData = JSON.stringify(data);
+      // When payload carries a serverId, honor per-subscriber server scope so
+      // non-admin global streams cannot observe other tenants' lifecycle events.
+      const payload = (data ?? {}) as { serverId?: unknown; userId?: unknown };
+      const deliver = (sub: GlobalSseSubscriber) => {
+        sub.lastActivity = Date.now();
+        try {
+          sub.push(eventType, eventData);
+        } catch (err) {
+          // subscriber connection closed — will be cleaned up
+          this.warnEmitFailure('global-sse', eventType, err);
+        }
+      };
+      const recheck: GlobalSseSubscriber[] = [];
+      for (const [, sub] of this.globalSseSubscribers) {
+        if (!sub.eventTypes.includes(eventType)) continue;
+        const decision = evaluateGlobalSseDelivery(payload, sub);
+        if (decision === 'deliver') deliver(sub);
+        else if (decision === 'recheck-live') recheck.push(sub);
       }
-      sub.lastActivity = Date.now();
-      try {
-        sub.push(eventType, eventData);
-      } catch {
-        // subscriber connection closed — will be cleaned up
+      if (recheck.length > 0 && typeof payload.serverId === 'string') {
+        for (const sub of recheck) {
+          if (sub.userId && (await this.serverAllowsUser(payload.serverId, sub.userId))) deliver(sub);
+        }
       }
+      publishFanout({ scope: 'global', eventType, payload: data });
+    } catch (err) {
+      this.logger.warn({ err, eventType }, 'pushToGlobalSubscribers failed');
     }
-    publishFanout({ scope: 'global', eventType, payload: data });
   }
 
 
@@ -3870,8 +4194,9 @@ export class WebSocketGateway {
         sub.lastActivity = Date.now();
         try {
           sub.push(eventType, eventData);
-        } catch {
+        } catch (err) {
           // subscriber connection closed — will be cleaned up
+          this.warnEmitFailure('admin-sse', eventType, err);
         }
       }
     }
@@ -3881,13 +4206,24 @@ export class WebSocketGateway {
   /**
    * Register an SSE subscriber for admin entity events.
    * Returns an unsubscribe function.
+   *
+   * @param opts.userId - Stream owner; the periodic re-auth sweeper re-checks
+   *   admin.read for it and closes the stream on revocation.
+   * @param opts.close - Ends the hijacked socket when re-auth fails.
    */
   addAdminEventSubscriber(
     eventTypes: string[],
     push: (event: string, data: any) => void,
+    opts?: { userId?: string; close?: () => void },
   ): { unsubscribe: () => void; touch: () => void } {
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    this.adminEventSubscribers.set(subscriberId, { eventTypes, push, lastActivity: Date.now() });
+    this.adminEventSubscribers.set(subscriberId, {
+      eventTypes,
+      push,
+      lastActivity: Date.now(),
+      userId: opts?.userId,
+      close: opts?.close,
+    });
     this.logger.debug({ subscriberId, eventTypes }, 'Admin SSE subscriber added');
     const unsubscribe = () => {
       this.adminEventSubscribers.delete(subscriberId);
@@ -3899,6 +4235,14 @@ export class WebSocketGateway {
       if (sub) sub.lastActivity = Date.now();
     };
     return { unsubscribe, touch };
+  }
+
+  /**
+   * Active admin entity-events SSE subscribers (route cap: 150, checked
+   * before the stream is hijacked so a full stream still returns JSON 503).
+   */
+  getAdminSseSubscriberCount(): number {
+    return this.adminEventSubscribers.size;
   }
 
   /**
@@ -3958,6 +4302,18 @@ export class WebSocketGateway {
     return allowedUsers;
   }
 
+  /**
+   * Live server-access check for a single user (server.read).
+   * Reads the 30s serverAccessCache and falls back to a full DB resolution
+   * on miss/expiry — the same source routeToClients uses per emit. Used when
+   * a global-stream subscriber's handshake snapshot predates a grant
+   * (server_created / mid-session share): deliver only if access is real.
+   */
+  private async serverAllowsUser(serverId: string, userId: string): Promise<boolean> {
+    const allowedUsers = await this.getAllowedUsersForServer(serverId);
+    return allowedUsers !== null && allowedUsers.has(userId);
+  }
+
   private async routeConsoleToSubscribers(serverId: string, message: any) {
     // Console output is console.read territory. stats and lifecycle fan-out
     // use routeToClients (server.read); this path must not piggyback on it.
@@ -4014,28 +4370,19 @@ export class WebSocketGateway {
       return;
     }
 
-    const event = msgType === 'console_output'
-      ? 'console_output'
-      : msgType === 'error'
-        ? 'error'
-        : msgType === 'eula_required'
-          ? 'eula_required'
-          : 'message';
-
-    const payload = event === 'message'
-      ? { ...sanitizedMessage }
-      : {
-        serverId: message.serverId,
-        stream: message.stream ?? 'stdout',
-        data: (sanitizedMessage as any).data ?? '',
-        timestamp: message.timestamp ?? new Date().toISOString(),
-        type: message.type,
-        logId: message.logId ?? message.id ?? undefined,
-        eulaText: message.eulaText,
-        eulaServerUuid: message.serverUuid,
-        error: message.error,
-        code: message.code,
-      };
+    const event = msgType;
+    const payload = {
+      serverId: message.serverId,
+      stream: message.stream ?? 'stdout',
+      data: (sanitizedMessage as any).data ?? '',
+      timestamp: message.timestamp ?? new Date().toISOString(),
+      type: message.type,
+      logId: message.logId ?? message.id ?? undefined,
+      eulaText: message.eulaText,
+      eulaServerUuid: message.serverUuid,
+      error: message.error,
+      code: message.code,
+    };
     const eventData = JSON.stringify(payload);
 
     // Also push to SSE subscribers (HTTP/2 streaming)
@@ -4241,6 +4588,14 @@ export class WebSocketGateway {
     return { unsubscribe, touch };
   }
 
+  /**
+   * Active global SSE subscribers (all-servers events + metrics streams).
+   * Route cap: 200, enforced before the stream is hijacked (JSON 503 path).
+   */
+  getGlobalSseSubscriberCount(): number {
+    return this.globalSseSubscribers.size;
+  }
+
   private allowConsoleCommand(clientId: string) {
     const now = Date.now();
     const windowMs = this.consoleInputLimit.windowMs;
@@ -4341,7 +4696,7 @@ export class WebSocketGateway {
           // early-return (its map entry is already gone), so the reap must do
           // everything the close path would have done.
           this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} heartbeat timeout`);
-          this.discoveredContainers.delete(nodeId);
+          this.clearDiscoveredContainers(nodeId);
           this.rejectBackupRelay(nodeId, new Error(`Source or target agent ${nodeId} disconnected mid-relay`));
           this.prisma.node.update({
             where: { id: nodeId },
@@ -4495,6 +4850,11 @@ export class WebSocketGateway {
       this.sweepAdminSubscribers();
       this.sweepCounters();
     }, 60000);
+    // Admin streams authenticate once at subscribe time; re-check admin.read
+    // periodically so a revoked admin does not keep receiving the feed.
+    this.adminReauthInterval = setInterval(() => {
+      void this.reauthAdminSubscribers();
+    }, 60_000);
   }
 
   private sweepSseSubscribers() {
@@ -4545,6 +4905,50 @@ export class WebSocketGateway {
         this.adminEventSubscribers.delete(subId);
       }
     }
+  }
+
+  /**
+   * Periodic admin-stream re-auth (P1-6): SSE has no per-request auth gate,
+   * so admin.read is re-checked while the stream lives. On failure: push an
+   * error event, close the hijacked socket, unsubscribe. Checks are batched
+   * (Promise.allSettled) and deduplicated per userId within a run; the result
+   * is cached on the subscriber between runs.
+   */
+  private async reauthAdminSubscribers(): Promise<void> {
+    if (this.adminEventSubscribers.size === 0) return;
+    const checks = new Map<string, Promise<boolean>>();
+    const targets: Array<[string, AdminSseSubscriber]> = [];
+    for (const [subId, sub] of this.adminEventSubscribers) {
+      if (sub.userId) targets.push([subId, sub]);
+    }
+    await Promise.allSettled(
+      targets.map(async ([subId, sub]) => {
+        const userId = sub.userId as string;
+        let check = checks.get(userId);
+        if (!check) {
+          // A DB failure must not kick admins off their streams — treat an
+          // errored check as "unknown, keep previous result" (defaults true).
+          check = hasPermission(this.prisma, userId, "admin.read").catch(() => sub.adminOk !== false);
+          checks.set(userId, check);
+        }
+        const ok = await check;
+        sub.adminOk = ok;
+        if (ok) return;
+        this.logger.info({ userId, subId }, "Admin SSE subscriber lost admin.read — closing stream");
+        try {
+          sub.push('error', JSON.stringify({
+            type: 'error',
+            error: 'admin_permission_revoked',
+            code: ErrorCodes.PERMISSION_DENIED,
+            timestamp: Date.now(),
+          }));
+        } catch { /* stream already dead */ }
+        try {
+          sub.close?.();
+        } catch { /* socket already gone */ }
+        this.adminEventSubscribers.delete(subId);
+      }),
+    );
   }
 
   // Send message to agent (for API endpoints)
@@ -5083,17 +5487,33 @@ export class WebSocketGateway {
 
     // Get the agent for this server's node
     const agent = this.agents.get(server.nodeId);
-    if (!agent) {
-      throw new Error('Node agent is not connected');
-    }
-
-    // Forward to agent
-    const agentMessage = JSON.stringify({
+    const consoleInputMessage = {
       type: 'console_input',
       serverId,
       serverUuid: server.uuid,
       data: command,
-    });
+    };
+    if (!agent) {
+      // Multi-instance: the agent socket lives in a sibling process. Use the
+      // same acknowledged relay as sendToAgent — permission, suspension and
+      // rate-limit checks above already passed before reaching this point.
+      const relayResult = await publishAgentCommand(server.nodeId, consoleInputMessage);
+      if (relayResult === 'delivered') {
+        this.logger.debug(
+          { serverId, userId, nodeId: server.nodeId },
+          'Console command relayed to sibling instance',
+        );
+        return;
+      }
+      if (relayResult === 'timeout') {
+        throw new Error('Failed to communicate with node agent');
+      }
+      // 'no-subscribers': no sibling owns the socket — same as no local agent.
+      throw new Error('Node agent is not connected');
+    }
+
+    // Forward to agent
+    const agentMessage = JSON.stringify(consoleInputMessage);
 
     try {
       agent.socket.send(agentMessage);
@@ -5167,14 +5587,17 @@ export class WebSocketGateway {
   }
 
   clearDiscoveredContainers(nodeId: string) {
+    const had = (this.discoveredContainers.get(nodeId)?.length ?? 0) > 0;
     this.discoveredContainers.delete(nodeId);
+    // Node went offline / list reset — keep admin viewers in sync.
+    if (had) this.notifyDiscoveredServers(nodeId);
   }
 
   removeDiscoveredContainer(nodeId: string, containerId: string): boolean {
     const discovered = this.discoveredContainers.get(nodeId) ?? [];
     const filtered = discovered.filter((c) => c.containerId !== containerId);
     if (filtered.length !== discovered.length) {
-      this.discoveredContainers.set(nodeId, filtered);
+      this.setDiscoveredContainers(nodeId, filtered);
       return true;
     }
     return false;
@@ -5188,6 +5611,9 @@ export class WebSocketGateway {
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
     if (this.pingInterval) clearInterval(this.pingInterval);
     if (this.subscriberSweepInterval) clearInterval(this.subscriberSweepInterval);
+    if (this.adminReauthInterval) clearInterval(this.adminReauthInterval);
+    for (const timer of this.discoveredEmitTimers.values()) clearTimeout(timer);
+    this.discoveredEmitTimers.clear();
     for (const [nodeId, agent] of this.agents) {
       try {
         agent.socket.close();

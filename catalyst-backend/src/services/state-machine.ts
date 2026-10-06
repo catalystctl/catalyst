@@ -26,10 +26,16 @@ export class ServerStateMachine {
     ],
     [
       ServerState.RUNNING,
-      [ServerState.STOPPING, ServerState.CRASHED, ServerState.ERROR, ServerState.SUSPENDED, ServerState.INSTALLING, ServerState.TRANSFERRING],
+      // STARTING: agent-initiated auto-restart emits 'starting' while the DB
+      // still reads RUNNING (the agent suppresses the intermediate 'crashed'
+      // when the restart succeeds) — rejecting it made restarts invisible.
+      [ServerState.STOPPING, ServerState.CRASHED, ServerState.ERROR, ServerState.SUSPENDED, ServerState.INSTALLING, ServerState.TRANSFERRING, ServerState.UNHEALTHY, ServerState.STARTING],
     ],
     [ServerState.STOPPING, [ServerState.STOPPED, ServerState.ERROR]],
     [ServerState.CRASHED, [ServerState.STARTING, ServerState.STOPPED, ServerState.INSTALLING]],
+    // TCP-probe failure while running; recovers to RUNNING or ends in any
+    // stop/crash path the agent reports next.
+    [ServerState.UNHEALTHY, [ServerState.RUNNING, ServerState.STOPPED, ServerState.CRASHED, ServerState.STARTING, ServerState.STOPPING]],
     [ServerState.SUSPENDED, [ServerState.STOPPED, ServerState.STARTING, ServerState.ERROR]],
     [ServerState.ARCHIVED, [ServerState.STOPPED, ServerState.ERROR]],
     [ServerState.ERROR, [ServerState.STOPPED, ServerState.INSTALLING, ServerState.STARTING, ServerState.STOPPING]],

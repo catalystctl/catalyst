@@ -8,6 +8,9 @@ export function useTemplates() {
     queryKey: qk.templates(),
     queryFn: templatesApi.list,
     staleTime: 5 * 60 * 1000,
+    // Admin SSE 403s for template.read-only users; 60s safety poll (U12).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -21,5 +24,8 @@ export function useTemplate(templateId?: string) {
     },
     enabled: Boolean(templateId),
     staleTime: 5 * 60 * 1000,
+    // Admin SSE 403s for template.read-only users; 60s safety poll (U12).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }

@@ -190,17 +190,24 @@ export async function taskRoutes(app: FastifyInstance) {
 
       reply.send(serialize({ success: true, task }));
 
-      // Broadcast task_created event
+      // Broadcast task_created event — admin + global + per-server stream.
       const wsGatewayTaskCreated = (app as any).wsGateway;
+      const taskCreatedEvent = {
+        type: 'task_created',
+        serverId,
+        taskId: task.id,
+        taskName: task.name,
+        createdBy: user.userId,
+        timestamp: new Date().toISOString(),
+      };
       if (wsGatewayTaskCreated?.pushToAdminSubscribers) {
-        wsGatewayTaskCreated.pushToAdminSubscribers('task_created', {
-          type: 'task_created',
-          serverId,
-          taskId: task.id,
-          taskName: task.name,
-          createdBy: user.userId,
-          timestamp: new Date().toISOString(),
-        });
+        wsGatewayTaskCreated.pushToAdminSubscribers('task_created', taskCreatedEvent);
+      }
+      if (wsGatewayTaskCreated?.pushToGlobalSubscribers) {
+        wsGatewayTaskCreated.pushToGlobalSubscribers('task_created', taskCreatedEvent);
+      }
+      if (wsGatewayTaskCreated?.routeToClients) {
+        void wsGatewayTaskCreated.routeToClients(serverId, taskCreatedEvent).catch(() => {});
       }
     }
   );
@@ -359,17 +366,24 @@ export async function taskRoutes(app: FastifyInstance) {
 
       reply.send(serialize({ success: true, task: reloadedTask }));
 
-      // Broadcast task_updated event
+      // Broadcast task_updated event — admin + global + per-server (see task_created).
       const wsGatewayTaskUpdated = (app as any).wsGateway;
+      const taskUpdatedEvent = {
+        type: 'task_updated',
+        serverId,
+        taskId,
+        taskName: reloadedTask?.name,
+        updatedBy: user.userId,
+        timestamp: new Date().toISOString(),
+      };
       if (wsGatewayTaskUpdated?.pushToAdminSubscribers) {
-        wsGatewayTaskUpdated.pushToAdminSubscribers('task_updated', {
-          type: 'task_updated',
-          serverId,
-          taskId,
-          taskName: reloadedTask?.name,
-          updatedBy: user.userId,
-          timestamp: new Date().toISOString(),
-        });
+        wsGatewayTaskUpdated.pushToAdminSubscribers('task_updated', taskUpdatedEvent);
+      }
+      if (wsGatewayTaskUpdated?.pushToGlobalSubscribers) {
+        wsGatewayTaskUpdated.pushToGlobalSubscribers('task_updated', taskUpdatedEvent);
+      }
+      if (wsGatewayTaskUpdated?.routeToClients) {
+        void wsGatewayTaskUpdated.routeToClients(serverId, taskUpdatedEvent).catch(() => {});
       }
     }
   );
@@ -407,16 +421,23 @@ export async function taskRoutes(app: FastifyInstance) {
 
       reply.send({ success: true, message: 'Task deleted' });
 
-      // Broadcast task_deleted event
+      // Broadcast task_deleted event — admin + global + per-server (see task_created).
       const wsGatewayTaskDeleted = (app as any).wsGateway;
+      const taskDeletedEvent = {
+        type: 'task_deleted',
+        serverId,
+        taskId,
+        deletedBy: user.userId,
+        timestamp: new Date().toISOString(),
+      };
       if (wsGatewayTaskDeleted?.pushToAdminSubscribers) {
-        wsGatewayTaskDeleted.pushToAdminSubscribers('task_deleted', {
-          type: 'task_deleted',
-          serverId,
-          taskId,
-          deletedBy: user.userId,
-          timestamp: new Date().toISOString(),
-        });
+        wsGatewayTaskDeleted.pushToAdminSubscribers('task_deleted', taskDeletedEvent);
+      }
+      if (wsGatewayTaskDeleted?.pushToGlobalSubscribers) {
+        wsGatewayTaskDeleted.pushToGlobalSubscribers('task_deleted', taskDeletedEvent);
+      }
+      if (wsGatewayTaskDeleted?.routeToClients) {
+        void wsGatewayTaskDeleted.routeToClients(serverId, taskDeletedEvent).catch(() => {});
       }
     }
   );

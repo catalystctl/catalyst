@@ -48,9 +48,13 @@ function cleanupSubscriber(id: string) {
 
 type ReqHeaders = Record<string, string | string[] | undefined>;
 
-const EVENT_TYPES = [
+// Cap the global stream (all-servers + metrics subscribers share the gateway
+// registry). Checked before openSseStream so a full stream still returns JSON 503.
+// Per-worker: each cluster worker enforces its own registry cap.
+export const MAX_GLOBAL_SSE_SUBSCRIBERS = 200;
+
+export const EVENT_TYPES = [
   'server_state_update',
-  'server_state',
   'backup_complete',
   'backup_restore_complete',
   'backup_delete_complete',
@@ -59,8 +63,9 @@ const EVENT_TYPES = [
   'backup_restore_started',
   'backup_delete_started',
   'eula_required',
+  // Owner-visible alert lifecycle (creation + resolution both emit 'alert';
+  // reaches non-admin owners through routeToClients / user-scoped global push).
   'alert',
-  'server_log',
   'task_progress',
   'task_complete',
   'resource_stats',
@@ -72,9 +77,6 @@ const EVENT_TYPES = [
   'server_unsuspended',
   // File manager realtime (emitted from files routes; was missing from subscriber filter)
   'server_files_changed',
-  'user_created',
-  'user_deleted',
-  'user_updated',
   // Mod manager events
   'mod_install_complete',
   'mod_uninstall_complete',
@@ -85,6 +87,29 @@ const EVENT_TYPES = [
   'plugin_update_complete',
   // Dense install/transfer/clone progress (% + stage)
   'server_operation_progress',
+  // Failed clone (servers/core.ts) — a failed clone looked still-cloning without it
+  'clone_failed',
+  // Task CRUD (emitted by task routes)
+  'task_created',
+  'task_updated',
+  'task_deleted',
+  // Database lifecycle (emitted by database routes)
+  'database_created',
+  'database_deleted',
+  'database_password_rotated',
+  // Backup metadata changed / removed (gateway remote-upload + retention paths)
+  'backup_updated',
+  'backup_deleted',
+  // User-scoped: permission set changed (delivered only to the global
+  // subscribers of that userId via the payload-userId rule in evaluateGlobalSseDelivery)
+  // NOTE: no apostrophes in comments inside this array — the FE contract test
+  // extracts these names with a quote-pair regex.
+  'permissions_updated',
+  // Bus-reconnect signal: subscribers refetch state after possible event loss
+  'resync',
+  // P1.4 pruning: server_log, server_state, user_created, user_deleted and
+  // user_updated were never routed to this per-server/global stream (they are
+  // admin-stream only), so they were dead entries here.
 ];
 
 export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGateway) {
@@ -211,8 +236,18 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       }
 
       // Enforce SSE subscriber caps BEFORE opening the stream (JSON error path).
+      // Per-worker cap (registry is process-local).
       const MAX_SSE_EVENTS_PER_SERVER = 100;
       if (!isGlobal && wsGateway.getSseEventSubscriberCount(serverId) >= MAX_SSE_EVENTS_PER_SERVER) {
+        apiError(
+          reply,
+          503,
+          ErrorCodes.SSE_SUBSCRIBER_LIMIT_REACHED,
+          'Too many event subscribers. Please try again later.',
+        );
+        return;
+      }
+      if (isGlobal && wsGateway.getGlobalSseSubscriberCount() >= MAX_GLOBAL_SSE_SUBSCRIBERS) {
         apiError(
           reply,
           503,
@@ -239,68 +274,92 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       // For non-admins always pass an explicit list (may be empty). Only full
       // admins pass undefined (= unfiltered). Empty must NOT become unfiltered.
       const wasFirstSubscriber = !isGlobal && wsGateway.getSseEventSubscriberCount(serverId) === 0;
-      const { unsubscribe, touch } = isGlobal
-        ? wsGateway.addGlobalSseSubscriber(
-            EVENT_TYPES,
-            push,
-            allowedServerIds === undefined ? undefined : [...allowedServerIds],
-            userId,
-          )
-        : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push, userId);
+      let unsubscribe: () => void;
+      let touch: () => void;
+      try {
+        ({ unsubscribe, touch } = isGlobal
+          ? wsGateway.addGlobalSseSubscriber(
+              EVENT_TYPES,
+              push,
+              allowedServerIds === undefined ? undefined : [...allowedServerIds],
+              userId,
+            )
+          : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push, userId));
+      } catch {
+        // Cap TOCTOU: the registry filled between the pre-check and here.
+        // Notify and destroy the socket so the browser doesn't sit on a
+        // silent open stream.
+        try {
+          sse.push('error', {
+            type: 'error',
+            error: ErrorCodes.SSE_SUBSCRIBER_LIMIT_REACHED,
+            code: ErrorCodes.SSE_SUBSCRIBER_LIMIT_REACHED,
+            timestamp: Date.now(),
+          });
+        } catch { /* socket already gone */ }
+        request.raw.destroy();
+        return;
+      }
 
       // Push cached latest metric immediately so the client doesn't wait for the next agent tick.
       // Offline servers must read zero CPU/memory, never the last running sample.
+      // A DB blip (or a socket that died mid-snapshot) must not kill the stream
+      // before the heartbeat is registered — skip the snapshot and continue.
       if (!isGlobal) {
-        const liveOwner = await prisma.server.findUnique({
-          where: { id: serverId },
-          select: { status: true, allocatedDiskMb: true },
-        });
-        if (liveOwner && liveOwner.status !== 'running') {
-          const cached = wsGateway.getLatestResourceStats(serverId) as Record<string, unknown> | undefined;
-          const diskUsageMb = typeof cached?.diskUsageMb === 'number' ? (cached.diskUsageMb as number) : 0;
-          push('resource_stats', {
-            type: 'resource_stats',
-            serverId,
-            cpuPercent: 0,
-            memoryUsageMb: 0,
-            networkRxBytes: '0',
-            networkTxBytes: '0',
-            diskIoMb: 0,
-            diskUsageMb,
-            diskTotalMb: liveOwner.allocatedDiskMb ?? 0,
-            timestamp: Date.now(),
+        try {
+          const liveOwner = await prisma.server.findUnique({
+            where: { id: serverId },
+            select: { status: true, allocatedDiskMb: true },
           });
-        } else {
-          const cached = wsGateway.getLatestResourceStats(serverId);
-          if (cached) {
-            push('resource_stats', cached);
+          if (liveOwner && liveOwner.status !== 'running') {
+            const cached = wsGateway.getLatestResourceStats(serverId) as Record<string, unknown> | undefined;
+            const diskUsageMb = typeof cached?.diskUsageMb === 'number' ? (cached.diskUsageMb as number) : 0;
+            push('resource_stats', {
+              type: 'resource_stats',
+              serverId,
+              cpuPercent: 0,
+              memoryUsageMb: 0,
+              networkRxBytes: '0',
+              networkTxBytes: '0',
+              diskIoMb: 0,
+              diskUsageMb,
+              diskTotalMb: liveOwner.allocatedDiskMb ?? 0,
+              timestamp: Date.now(),
+            });
           } else {
-            // Fallback: query the DB for the most recent metric
-            const [latest, diskOwner] = await Promise.all([
-              prisma.serverMetrics.findFirst({
-                where: { serverId },
-                orderBy: { timestamp: 'desc' },
-              }),
-              prisma.server.findUnique({
-                where: { id: serverId },
-                select: { allocatedDiskMb: true },
-              }),
-            ]);
-            if (latest) {
-              push('resource_stats', {
-                type: 'resource_stats',
-                serverId,
-                cpuPercent: latest.cpuPercent,
-                memoryUsageMb: latest.memoryUsageMb,
-                networkRxBytes: latest.networkRxBytes.toString(),
-                networkTxBytes: latest.networkTxBytes.toString(),
-                diskIoMb: latest.diskIoMb ?? 0,
-                diskUsageMb: latest.diskUsageMb,
-                diskTotalMb: diskOwner?.allocatedDiskMb ?? 0,
-                timestamp: latest.timestamp.getTime(),
-              });
+            const cached = wsGateway.getLatestResourceStats(serverId);
+            if (cached) {
+              push('resource_stats', cached);
+            } else {
+              // Fallback: query the DB for the most recent metric
+              const [latest, diskOwner] = await Promise.all([
+                prisma.serverMetrics.findFirst({
+                  where: { serverId },
+                  orderBy: { timestamp: 'desc' },
+                }),
+                prisma.server.findUnique({
+                  where: { id: serverId },
+                  select: { allocatedDiskMb: true },
+                }),
+              ]);
+              if (latest) {
+                push('resource_stats', {
+                  type: 'resource_stats',
+                  serverId,
+                  cpuPercent: latest.cpuPercent,
+                  memoryUsageMb: latest.memoryUsageMb,
+                  networkRxBytes: latest.networkRxBytes.toString(),
+                  networkTxBytes: latest.networkTxBytes.toString(),
+                  diskIoMb: latest.diskIoMb ?? 0,
+                  diskUsageMb: latest.diskUsageMb,
+                  diskTotalMb: diskOwner?.allocatedDiskMb ?? 0,
+                  timestamp: latest.timestamp.getTime(),
+                });
+              }
             }
           }
+        } catch {
+          /* snapshot skipped — live events and heartbeats continue */
         }
       }
 
@@ -314,10 +373,14 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       const heartbeatTimer = setInterval(() => {
         try {
           sse.comment('heartbeat');
+          // Named-event heartbeat: the FE half-open watchdog (P2.5) waits on a
+          // dispatched event, which an SSE comment can never produce.
+          sse.push('ping', { t: Date.now() });
           // Keep the gateway subscriber alive while the browser stream lives
           // (otherwise the idle sweeper drops it after 300s of quiet).
           touch();
         } catch {
+          // Socket is dead (destroyed by the write failure) — stop the timer.
           clearInterval(heartbeatTimer);
         }
       }, HEARTBEAT_INTERVAL_MS);

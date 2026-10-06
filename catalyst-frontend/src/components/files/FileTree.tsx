@@ -41,7 +41,8 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
     enabled: Boolean(serverId) && isExpanded,
     refetchOnWindowFocus: false,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    // Matches the useFileManager listing poll (30s).
+    refetchInterval: 30_000,
     refetchIntervalInBackground: false,
   });
   const files = data?.files;
@@ -166,7 +167,8 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
     enabled: Boolean(serverId),
     refetchOnWindowFocus: false,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    // Matches the useFileManager listing poll (30s).
+    refetchInterval: 30_000,
     refetchIntervalInBackground: false,
   });
 
@@ -205,7 +207,7 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
             </div>
           ))}
         </div>
-      ) : isError ? (
+      ) : isError && !data ? (
         <div className="px-2 py-2 text-micro text-danger">{t('files.tree.loadFailed')}</div>
       ) : directories.length ? (
         directories.map((entry) => (

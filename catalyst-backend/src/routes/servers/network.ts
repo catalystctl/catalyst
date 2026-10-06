@@ -311,23 +311,23 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         });
       }
 
+      // 3-scope broadcast: admin + global + per-server stream.
+      const allocationAddedEvent = {
+        type: 'server_updated',
+        serverId,
+        nodeId: server.nodeId,
+        updatedBy: userId,
+        change: 'allocation_added',
+        timestamp: new Date().toISOString(),
+      };
       if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'allocation_added',
-          timestamp: new Date().toISOString(),
-        });
+        wsGateway.pushToAdminSubscribers('server_updated', allocationAddedEvent);
       }
       if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'allocation_added',
-          timestamp: new Date().toISOString(),
-        });
+        wsGateway.pushToGlobalSubscribers('server_updated', allocationAddedEvent);
+      }
+      if (wsGateway?.routeToClients) {
+        void wsGateway.routeToClients(serverId, allocationAddedEvent).catch(() => {});
       }
 
       reply.send({
@@ -447,23 +447,23 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         });
       }
 
+      // 3-scope broadcast: admin + global + per-server stream.
+      const allocationRemovedEvent = {
+        type: 'server_updated',
+        serverId,
+        nodeId: server.nodeId,
+        updatedBy: userId,
+        change: 'allocation_removed',
+        timestamp: new Date().toISOString(),
+      };
       if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'allocation_removed',
-          timestamp: new Date().toISOString(),
-        });
+        wsGateway.pushToAdminSubscribers('server_updated', allocationRemovedEvent);
       }
       if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'allocation_removed',
-          timestamp: new Date().toISOString(),
-        });
+        wsGateway.pushToGlobalSubscribers('server_updated', allocationRemovedEvent);
+      }
+      if (wsGateway?.routeToClients) {
+        void wsGateway.routeToClients(serverId, allocationRemovedEvent).catch(() => {});
       }
 
       reply.send({ success: true });
@@ -529,23 +529,23 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       });
 
       const wsGateway = app.wsGateway;
+      // 3-scope broadcast: admin + global + per-server stream.
+      const primaryChangedEvent = {
+        type: 'server_updated',
+        serverId,
+        nodeId: server.nodeId,
+        updatedBy: userId,
+        change: 'primary_allocation_changed',
+        timestamp: new Date().toISOString(),
+      };
       if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'primary_allocation_changed',
-          timestamp: new Date().toISOString(),
-        });
+        wsGateway.pushToAdminSubscribers('server_updated', primaryChangedEvent);
       }
       if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'primary_allocation_changed',
-          timestamp: new Date().toISOString(),
-        });
+        wsGateway.pushToGlobalSubscribers('server_updated', primaryChangedEvent);
+      }
+      if (wsGateway?.routeToClients) {
+        void wsGateway.routeToClients(serverId, primaryChangedEvent).catch(() => {});
       }
 
       reply.send({

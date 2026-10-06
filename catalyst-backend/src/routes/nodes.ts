@@ -141,6 +141,110 @@ const parseAllocationIps = async (input: string): Promise<string[]> => {
 	return ips;
 };
 
+/**
+ * Push node_updated to admin SSE after node-scoped edits (allocations,
+ * agent config, host networking). The FE node_updated handler invalidates
+ * the node + allocations queries keyed by nodeId.
+ */
+const pushNodeUpdated = (app: FastifyInstance, nodeId: string, userId: string, change: string): void => {
+	try {
+		(app as any).wsGateway?.pushToAdminSubscribers?.("node_updated", {
+			type: "node_updated",
+			nodeId,
+			change,
+			updatedBy: userId,
+			timestamp: new Date().toISOString(),
+		});
+	} catch {
+		/* WS push is best-effort */
+	}
+};
+
+/**
+ * Push allocation CRUD events to admin SSE (P0-F). FE contract payload:
+ * {type, nodeId, allocationIds?, timestamp}. allocationIds is omitted when
+ * the write path doesn't produce ids (bulk createMany).
+ */
+const pushAllocationEvent = (
+	app: FastifyInstance,
+	type: "allocation_created" | "allocation_updated" | "allocation_deleted",
+	nodeId: string,
+	allocationIds?: string[],
+): void => {
+	try {
+		(app as any).wsGateway?.pushToAdminSubscribers?.(type, {
+			type,
+			nodeId,
+			...(allocationIds ? { allocationIds } : {}),
+			timestamp: new Date().toISOString(),
+		});
+	} catch {
+		/* WS push is best-effort */
+	}
+};
+
+// ── Shared agent-log tail plumbing ──────────────────────────────────────────
+// One requestFromAgent poll per node every 2s, fanned out to every viewer
+// (ref-counted). Viewers keep their own dedupe set so a joining viewer still
+// receives the current log window as fresh lines. Per-worker maps/cap.
+const MAX_AGENT_LOG_VIEWERS_PER_NODE = 20; // per worker
+
+type AgentLogPusher = (kind: "logs" | "offline" | "error", logs: unknown[]) => void;
+
+const agentLogStreams = new Map<
+	string,
+	{ pushers: Set<AgentLogPusher>; timer: ReturnType<typeof setInterval> }
+>();
+
+function createAgentLogStream(
+	nodeId: string,
+	gateway: { requestFromAgent: (nodeId: string, message: Record<string, unknown>) => Promise<any> },
+	firstPusher: AgentLogPusher,
+): { pushers: Set<AgentLogPusher>; timer: ReturnType<typeof setInterval> } {
+	// The first pusher is registered synchronously so the initial pull below
+	// never sees an empty stream (which would tear the loop down immediately).
+	const entry = { pushers: new Set<AgentLogPusher>([firstPusher]), timer: undefined as unknown as ReturnType<typeof setInterval> };
+	agentLogStreams.set(nodeId, entry);
+	const cleanupIfEmpty = () => {
+		if (entry.pushers.size === 0 && agentLogStreams.get(nodeId) === entry) {
+			clearInterval(entry.timer);
+			agentLogStreams.delete(nodeId);
+		}
+	};
+	const pull = async () => {
+		if (agentLogStreams.get(nodeId) !== entry) return;
+		const broadcast = (kind: "logs" | "offline" | "error", logs: unknown[]) => {
+			for (const p of [...entry.pushers]) {
+				try {
+					p(kind, logs);
+				} catch {
+					// Viewer socket died between pulls — drop it.
+					entry.pushers.delete(p);
+				}
+			}
+			cleanupIfEmpty();
+		};
+		try {
+			const online = (await prisma.node.findUnique({ where: { id: nodeId }, select: { isOnline: true } }))?.isOnline;
+			if (!online) {
+				broadcast("offline", []);
+				return;
+			}
+			const response = await gateway.requestFromAgent(nodeId, {
+				type: "agent_logs",
+				lines: 150,
+			});
+			const logs: unknown[] = Array.isArray(response?.logs) ? response.logs : [];
+			broadcast("logs", logs);
+		} catch {
+			broadcast("error", []);
+		}
+	};
+	entry.timer = setInterval(() => void pull(), 2000);
+	void pull();
+	return entry;
+}
+
 export async function nodeRoutes(app: FastifyInstance) {
 	// Using shared prisma instance from db.ts
 
@@ -772,6 +876,18 @@ export async function nodeRoutes(app: FastifyInstance) {
 						{ keyId: existingKey.id, nodeId },
 						"Deleted old API key for regeneration",
 					);
+					// F18: same payload shape as routes/api-keys.ts delete.
+					try {
+						(app as any).wsGateway?.pushToAdminSubscribers?.("api_key_deleted", {
+							type: "api_key_deleted",
+							keyId: existingKey.id,
+							keyName: existingKey.name,
+							deletedBy: request.user.userId,
+							timestamp: new Date().toISOString(),
+						});
+					} catch {
+						/* WS push is best-effort */
+					}
 				} catch (error) {
 					captureSystemError({
 						level: 'error',
@@ -802,6 +918,19 @@ export async function nodeRoutes(app: FastifyInstance) {
 				const apiKey = apiKeyResponse.key;
 				if (!apiKey) {
 					return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to create API key");
+				}
+
+				// F18: same payload shape as routes/api-keys.ts create.
+				try {
+					(app as any).wsGateway?.pushToAdminSubscribers?.("api_key_created", {
+						type: "api_key_created",
+						keyId: apiKeyResponse.id,
+						keyName: apiKeyResponse.name ?? `agent-${nodeId.slice(0, 8)}`,
+						createdBy: request.user.userId,
+						timestamp: new Date().toISOString(),
+					});
+				} catch {
+					/* WS push is best-effort */
 				}
 
 				reply.send({
@@ -1206,6 +1335,37 @@ export async function nodeRoutes(app: FastifyInstance) {
 				},
 			});
 
+			// P1-32: fan out node liveness + metrics so admin dashboards refresh
+			// on the HTTP heartbeat path too. Payload mirrors the gateway's WS
+			// health_report emission (node_metrics_updated); uptimeSeconds is
+			// not part of the HTTP heartbeat body and is omitted.
+			try {
+				const wsGateway = (app as any).wsGateway;
+				wsGateway?.pushToAdminSubscribers?.("node_updated", {
+					type: "node_updated",
+					nodeId,
+					isOnline: true,
+					timestamp: Date.now(),
+				});
+				wsGateway?.pushToAdminSubscribers?.("node_metrics_updated", {
+					type: "node_metrics_updated",
+					nodeId,
+					isOnline: true,
+					agentVersion: node.agentVersion ?? undefined,
+					cpuPercent,
+					memoryUsageMb: Math.round(memoryUsageMb),
+					memoryTotalMb: Math.round(memoryTotalMb),
+					diskUsageMb: Math.round(diskUsageMb),
+					diskTotalMb: Math.round(diskTotalMb),
+					networkRxBytes: Number(networkRxBytes),
+					networkTxBytes: Number(networkTxBytes),
+					containerCount: Math.max(0, Math.round(containerCount)),
+					timestamp: new Date().toISOString(),
+				});
+			} catch {
+				/* WS push is best-effort */
+			}
+
 			reply.send({ success: true });
 		},
 	);
@@ -1521,6 +1681,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 				});
 			});
 
+			pushNodeUpdated(app, nodeId, userId, "allocation_created");
+			pushAllocationEvent(app, "allocation_created", nodeId);
+
 			reply
 				.status(201)
 				.send({ success: true, data: { created: created.count } });
@@ -1564,6 +1727,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 				},
 			});
 
+			pushNodeUpdated(app, nodeId, userId, "allocation_updated");
+			pushAllocationEvent(app, "allocation_updated", nodeId, [allocationId]);
+
 			reply.send(serialize({ success: true, data: updated }));
 		},
 	);
@@ -1596,6 +1762,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 			}
 
 			await prisma.nodeAllocation.delete({ where: { id: allocationId } });
+			pushNodeUpdated(app, nodeId, userId, "allocation_deleted");
+			pushAllocationEvent(app, "allocation_deleted", nodeId, [allocationId]);
 			reply.send({ success: true });
 		},
 	);
@@ -1642,6 +1810,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 				await prisma.nodeAllocation.deleteMany({
 					where: { id: { in: deletableIds }, nodeId, serverId: null },
 				});
+			}
+
+			pushNodeUpdated(app, nodeId, userId, "allocation_bulk_deleted");
+			if (deletableIds.length > 0) {
+				pushAllocationEvent(app, "allocation_deleted", nodeId, deletableIds);
 			}
 
 			reply.send({
@@ -2277,6 +2450,19 @@ export async function nodeRoutes(app: FastifyInstance) {
 					timestamp: new Date().toISOString(),
 				});
 			}
+			// Global stream too — the importer's owner list must see the row
+			// without a manual refresh (mirrors routes/servers/core.ts).
+			if (wsGateway?.pushToGlobalSubscribers) {
+				wsGateway.pushToGlobalSubscribers('server_created', {
+					type: 'server_created',
+					serverId: server.id,
+					serverName: server.name,
+					nodeId,
+					ownerId,
+					createdBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 
@@ -2614,6 +2800,17 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return apiError(reply, 503, ErrorCodes.WEBSOCKET_GATEWAY_UNAVAILABLE, "WebSocket gateway unavailable");
 			}
 
+			// Cap viewers per node BEFORE hijacking so a full stream still
+			// returns JSON 503 (per-worker cap, like the console/admin streams).
+			if ((agentLogStreams.get(nodeId)?.pushers.size ?? 0) >= MAX_AGENT_LOG_VIEWERS_PER_NODE) {
+				return apiError(
+					reply,
+					503,
+					ErrorCodes.SSE_SUBSCRIBER_LIMIT_REACHED,
+					"Too many agent log viewers. Please try again later.",
+				);
+			}
+
 			const sse = openSseStream(request, reply);
 			sse.comment("connected");
 			const writeEvent = (event: string, data: unknown) => {
@@ -2621,57 +2818,90 @@ export async function nodeRoutes(app: FastifyInstance) {
 			};
 			writeEvent("connected", { nodeId, timestamp: new Date().toISOString() });
 
+			// Per-viewer dedupe: a joining viewer receives the current log
+			// window as fresh lines, then only new ones.
 			const seen = new Set<string>();
 			const keyOf = (l: any) =>
 				`${l?.timestamp ?? ""}|${l?.target ?? ""}|${l?.message ?? ""}`;
 
-			const pull = async () => {
-				if (!node.isOnline && !(await prisma.node.findUnique({ where: { id: nodeId }, select: { isOnline: true } }))?.isOnline) {
+			const deliver: AgentLogPusher = (kind, logs) => {
+				if (kind === "offline") {
 					writeEvent("agent_logs", { nodeId, logs: [], offline: true });
 					return;
 				}
-				try {
-					const response = await gateway.requestFromAgent(nodeId, {
-						type: "agent_logs",
-						lines: 150,
-					});
-					const logs: unknown[] = Array.isArray(response?.logs) ? response.logs : [];
-					const fresh: unknown[] = [];
-					for (const l of logs) {
-						const k = keyOf(l);
-						if (seen.has(k)) continue;
-						seen.add(k);
-						fresh.push(l);
-					}
-					// Cap seen set
-					if (seen.size > 5000) {
-						const keep = [...seen].slice(-2000);
-						seen.clear();
-						for (const k of keep) seen.add(k);
-					}
-					if (fresh.length > 0) {
-						writeEvent("agent_logs", { nodeId, logs: fresh });
-					}
-				} catch {
+				if (kind === "error") {
 					writeEvent("agent_logs_error", { nodeId, error: "pull_failed" });
+					return;
+				}
+				const fresh: unknown[] = [];
+				for (const l of logs) {
+					const k = keyOf(l);
+					if (seen.has(k)) continue;
+					seen.add(k);
+					fresh.push(l);
+				}
+				// Cap seen set
+				if (seen.size > 5000) {
+					const keep = [...seen].slice(-2000);
+					seen.clear();
+					for (const k of keep) seen.add(k);
+				}
+				if (fresh.length > 0) {
+					writeEvent("agent_logs", { nodeId, logs: fresh });
 				}
 			};
 
-			// Initial snapshot then interval tail
-			void pull();
-			const interval = setInterval(() => void pull(), 2000);
+			// Shared pull loop: one 2s poll per node across all viewers.
+			const existingStream = agentLogStreams.get(nodeId);
+			if (existingStream && existingStream.pushers.size >= MAX_AGENT_LOG_VIEWERS_PER_NODE) {
+				// Cap TOCTOU between the pre-hijack check and registration.
+				try {
+					sse.push("error", {
+						type: "error",
+						error: ErrorCodes.SSE_SUBSCRIBER_LIMIT_REACHED,
+						code: ErrorCodes.SSE_SUBSCRIBER_LIMIT_REACHED,
+						timestamp: Date.now(),
+					});
+				} catch {
+					/* socket already gone */
+				}
+				request.raw.destroy();
+				return;
+			}
+			if (existingStream) {
+				existingStream.pushers.add(deliver);
+			} else {
+				createAgentLogStream(nodeId, gateway, deliver);
+			}
+
+			let detached = false;
+			const detach = () => {
+				if (detached) return;
+				detached = true;
+				const entry = agentLogStreams.get(nodeId);
+				if (!entry) return;
+				entry.pushers.delete(deliver);
+				if (entry.pushers.size === 0) {
+					clearInterval(entry.timer);
+					agentLogStreams.delete(nodeId);
+				}
+			};
+
 			const heartbeat = setInterval(() => {
 				try {
 					sse.comment("heartbeat");
+					// Named-event heartbeat: the FE half-open watchdog (P2.5)
+					// needs a dispatched event, not just an SSE comment.
+					sse.push("ping", { t: Date.now() });
 				} catch {
-					clearInterval(interval);
 					clearInterval(heartbeat);
+					detach();
 				}
 			}, 25_000);
 
 			request.raw.on("close", () => {
-				clearInterval(interval);
 				clearInterval(heartbeat);
+				detach();
 			});
 		},
 	);
@@ -2990,6 +3220,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 						},
 					});
 
+					pushNodeUpdated(app, nodeId, request.user.userId, "agent_config_updated");
+
 					return reply.send({ success: true, data: { saved: true } });
 				}
 
@@ -3058,6 +3290,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 							persisted: response.persisted ?? false,
 						},
 					});
+
+					pushNodeUpdated(app, nodeId, request.user.userId, "host_network_updated");
 
 					return reply.send({
 						success: true,

@@ -350,7 +350,10 @@ impl CatalystAgent {
     }
 
     async fn start_health_monitoring(&self, mut shutdown_rx: broadcast::Receiver<()>) {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+        // Configurable cadence (agent.stats_interval_secs); floor guards against
+        // a hand-built config bypassing the load-time clamp.
+        let interval_secs = self.config.agent.stats_interval_secs.max(1);
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
 
         loop {
             tokio::select! {

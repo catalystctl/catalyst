@@ -4,6 +4,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
 import {
  Play,
@@ -59,6 +60,7 @@ const STATE_TONE: Record<string, Tone> = {
  running: 'go',
  stopped: 'idle',
  suspended: 'hazard',
+ unhealthy: 'hazard',
  starting: 'info',
  stopping: 'info',
  restoring: 'hazard',
@@ -70,7 +72,7 @@ const STATE_TONE: Record<string, Tone> = {
 const toneForState = (status: string): Tone => STATE_TONE[status] ?? 'idle';
 
 function stateTextClass(status: string) {
- if (status === 'suspended') return 'text-warning';
+ if (status === 'suspended' || status === 'unhealthy') return 'text-warning';
  if (status === 'crashed' || status === 'error') return 'text-danger';
  if (status === 'running') return 'text-success';
  return 'text-muted-foreground';
@@ -282,6 +284,7 @@ function AdminServersPage() {
           <p className="text-mini text-muted-foreground">{t('servers.description')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <LastUpdated queryKey={qk.adminServers()} />
           <CreateServerModal />
         </div>
       </header>
@@ -566,7 +569,7 @@ function AdminServersPage() {
                 </div>
               ))}
             </div>
-          ) : isError ? (
+          ) : isError && !data ? (
             <div className="p-3"><TabErrorState message={t('servers.loadFailed')} onRetry={() => refetch()} /></div>
           ) : filteredServers.length > 0 ? (
             filteredServers.map((server: AdminServer) => {

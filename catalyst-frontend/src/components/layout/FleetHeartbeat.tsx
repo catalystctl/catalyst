@@ -7,8 +7,14 @@ import { useAuthStore } from '../../stores/authStore';
 /**
  * Live fleet heartbeat for the shell status row — a colored pulse plus an
  * up/total readout. Node operators see node health, everyone else sees their
- * servers. SSE server/node events invalidate the dashboard-stats query, so
- * the dot reacts within seconds; the 60s poll is only a safety net.
+ * servers.
+ *
+ * Freshness, precisely: `server_state_update` on the global SSE stream
+ * (useServerStateUpdates) invalidates the dashboard-stats query for every
+ * authenticated user, so server power transitions move the dot within
+ * seconds. Node counters additionally react to `node_*` admin-stream events,
+ * which reach admin.read holders only — everyone else relies on the 60s
+ * safety poll (useDashboard.ts) for node-side changes.
  */
 export default function FleetHeartbeat() {
   const { t } = useTranslation('layout');

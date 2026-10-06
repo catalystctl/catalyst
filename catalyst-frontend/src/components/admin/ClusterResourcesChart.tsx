@@ -19,6 +19,7 @@ import type {
  TimeRange,
 } from '@/hooks/useClusterMetrics';
 import { useClusterHistoricalMetrics } from '@/hooks/useClusterMetrics';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { formatTime } from '@/i18n/format';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -170,6 +171,9 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
 
  const nodesList = data?.nodes ?? historical?.nodes ?? [];
 
+ // Cluster data fetch time (useClusterMetrics.lastUpdated) for the header stamp.
+ const liveDataMs = data ? Date.parse(data.lastUpdated) : NaN;
+
  return (
  <div className="deck-panel overflow-hidden">
  {/* Header strip: identity + live/historical state */}
@@ -201,6 +205,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
  })
  : '—'}
  </span>
+ {isLive && Number.isFinite(liveDataMs) && <LastUpdated updatedAt={liveDataMs} />}
  </div>
 
  {/* Metric + Mode + Range controls */}

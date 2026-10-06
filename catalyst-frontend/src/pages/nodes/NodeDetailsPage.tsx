@@ -44,6 +44,7 @@ import AgentControlPanel from '../../components/nodes/AgentControlPanel';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import WorkspaceHeader from '../../components/layout/WorkspaceHeader';
+import LastUpdated from '../../components/shared/LastUpdated';
 
 function ModalShell({
   open,
@@ -176,6 +177,10 @@ function NodeDetailsPage() {
     queryFn: () => nodesApi.getUnregisteredContainers(nodeId!),
     enabled: !!nodeId,
     staleTime: 60_000,
+    // P0-G: discovered_servers_updated SSE invalidates this; poll as defense
+    // in depth for tabs that never receive the admin stream.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const canAssignNodes = useMemo(
@@ -198,7 +203,10 @@ function NodeDetailsPage() {
     );
   }
 
-  if (isError || !node) {
+  // `!node` stays its own guard so TypeScript keeps narrowing `node` below.
+  // A failed background refetch keeps `node` cached while isError is true
+  // (P0.4), so the page renders and the failure shows as a banner instead.
+  if (!node) {
     return (
       <div className="flex items-center justify-center py-20">
         <TabErrorState
@@ -213,6 +221,9 @@ function NodeDetailsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Cached node stays on screen when a background refetch fails. */}
+      {isError && <TabErrorState message={t('details.loadError')} onRetry={() => refetch()} />}
+
       {/* ── Breadcrumb ── */}
       <Link
         to="/admin/nodes"
@@ -385,10 +396,13 @@ function NodeDetailsPage() {
                 {t('discovered.title')}
               </h3>
             </div>
-            <Button size="sm" onClick={() => setShowImportModal(true)} className="gap-1.5">
-              <Download className="h-3.5 w-3.5" />
-              {t('import.button')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <LastUpdated queryKey={qk.unregisteredContainers(nodeId!)} />
+              <Button size="sm" onClick={() => setShowImportModal(true)} className="gap-1.5">
+                <Download className="h-3.5 w-3.5" />
+                {t('import.button')}
+              </Button>
+            </div>
           </div>
           <div className="text-mini text-muted-foreground/50">
             {t('discovered.count', { total: unregisteredContainers.length })}

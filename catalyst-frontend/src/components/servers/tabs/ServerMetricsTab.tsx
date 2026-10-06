@@ -5,6 +5,8 @@ import MetricsTimeRangeSelector from '../MetricsTimeRangeSelector';
 import type { MetricsTimeRange } from '../../../hooks/useServerMetricsHistory';
 import type { ServerMetricsPoint } from '../../../types/server';
 import TabHeader from './TabHeader';
+import LastUpdated from '../../shared/LastUpdated';
+import { qk } from '../../../lib/queryKeys';
 import { BarChart3 } from 'lucide-react';
 import { formatBytes } from '../../../utils/formatters';
 
@@ -25,12 +27,19 @@ interface MetricsHistory {
 }
 
 interface Props {
+  /** Enables the history-query freshness stamp when provided. */
+  serverId?: string;
   serverCpuPercent: number;
   serverMemoryPercent: number;
   allocatedMemoryMb: number;
   allocatedDiskMb: number;
   liveMetrics: LiveMetrics | null;
-  isConnected: boolean;
+  /**
+   * Connected state of the dedicated metrics stream (/metrics/stream) — NOT
+   * the console socket (audit F10/P1.8). Drives the "live usage / agent
+   * offline" label below so numbers and label never disagree.
+   */
+  isMetricsConnected: boolean;
   serverStatus?: string;
   metricsHistory: MetricsHistory | undefined;
   metricsTimeRange: MetricsTimeRange;
@@ -38,12 +47,13 @@ interface Props {
 }
 
 export default function ServerMetricsTab({
+  serverId,
   serverCpuPercent,
   serverMemoryPercent,
   allocatedMemoryMb,
   allocatedDiskMb,
   liveMetrics,
-  isConnected,
+  isMetricsConnected,
   serverStatus,
   metricsHistory,
   metricsTimeRange,
@@ -68,7 +78,7 @@ export default function ServerMetricsTab({
         description={
           !isRunning
             ? t('tabs.metrics.serverOffline')
-            : isConnected
+            : isMetricsConnected
               ? [
                   memUsed != null ? t('tabs.metrics.ram', { used: memUsed }) : null,
                   diskUsed != null && diskTotal
@@ -83,14 +93,17 @@ export default function ServerMetricsTab({
               : t('tabs.metrics.agentOffline')
         }
         actions={
-          <MetricsTimeRangeSelector
-            selectedRange={metricsTimeRange}
-            onRangeChange={onMetricsTimeRangeChange}
-          />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {serverId && <LastUpdated queryKey={qk.serverMetrics(serverId)} />}
+            <MetricsTimeRangeSelector
+              selectedRange={metricsTimeRange}
+              onRangeChange={onMetricsTimeRangeChange}
+            />
+          </div>
         }
       />
 
-      <ServerMetrics cpu={cpu} memory={memory} isLive={isRunning && isConnected} />
+      <ServerMetrics cpu={cpu} memory={memory} isLive={isRunning && isMetricsConnected} />
 
       <ServerMetricsTrends
         history={metricsHistory?.history ?? []}

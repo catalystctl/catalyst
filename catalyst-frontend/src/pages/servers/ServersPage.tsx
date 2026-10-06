@@ -44,6 +44,7 @@ const STATE_TONE: Record<string, Tone> = {
   crashed: 'alarm',
   error: 'alarm',
   suspended: 'hazard',
+  unhealthy: 'hazard',
   archived: 'idle',
 };
 const toneForState = (status: string): Tone => STATE_TONE[status] ?? 'info';
@@ -92,7 +93,7 @@ function severityClass(value: number | null) {
 
 function stateTextClass(status: ServerStatus) {
   if (status === 'crashed' || status === 'error') return 'text-danger';
-  if (status === 'suspended') return 'text-warning';
+  if (status === 'suspended' || status === 'unhealthy') return 'text-warning';
   return 'text-muted-foreground';
 }
 
@@ -324,7 +325,7 @@ function ServersPage() {
       if (server.status === 'running') { counts.running += 1; return; }
       if (server.status === 'stopped') { counts.stopped += 1; return; }
       if (['installing', 'starting', 'stopping', 'transferring', 'cloning', 'restoring', 'creating_backup'].includes(server.status)) { counts.transitioning += 1; return; }
-      if (server.status === 'crashed' || server.status === 'suspended' || server.status === 'error') { counts.issues += 1; }
+      if (server.status === 'crashed' || server.status === 'suspended' || server.status === 'unhealthy' || server.status === 'error') { counts.issues += 1; }
     });
     return counts;
   }, [data]);
@@ -421,7 +422,7 @@ function ServersPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">{t('filters.allStatuses')}</SelectItem>
-              {(['running', 'stopped', 'installing', 'starting', 'stopping', 'crashed', 'transferring', 'cloning', 'suspended'] as ServerStatus[]).map(
+              {(['running', 'stopped', 'installing', 'starting', 'stopping', 'crashed', 'unhealthy', 'transferring', 'cloning', 'suspended'] as ServerStatus[]).map(
                 (value) => (
                   <SelectItem key={value} value={value}>
                     {serverStatusLabel(t, value)}

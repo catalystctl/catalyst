@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
 import {
  Search,
@@ -494,6 +495,7 @@ function AdminNodesPage() {
  <p className="text-mini text-muted-foreground">{t('nodes.description')}</p>
  </div>
  <div className="flex flex-wrap items-center gap-2">
+ <LastUpdated queryKey={qk.adminNodes()} />
  {canCreate && <NodeCreateModal />}
  {canWrite && (
  <button
@@ -736,7 +738,7 @@ function AdminNodesPage() {
  <div className="max-h-[min(32rem,50dvh)] min-w-0 overflow-y-auto bg-background/25">
  {isLoading ? (
  <TableSkeleton />
- ) : isError ? (
+ ) : isError && !data ? (
  <div className="p-3"><TabErrorState message={t('nodes.loadFailed')} onRetry={() => refetch()} /></div>
  ) : showGroupedView ? (
  groupedByLocation.length > 0 ? (

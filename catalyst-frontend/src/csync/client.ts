@@ -76,22 +76,36 @@ export class QueryCache {
     return query;
   }
   remove(query: QueryClass<unknown, unknown>) {
-    if (this.queries.get(query.queryHash) === query) {
-      this.queries.delete(query.queryHash);
-      if (query.refetchTimer) {
-        clearInterval(query.refetchTimer);
-        query.refetchTimer = null;
-      }
-      if (query.gcTimer) {
-        clearTimeout(query.gcTimer);
-        query.gcTimer = null;
-      }
-      if (query.abortController) {
-        try { query.abortController.abort(); } catch { /* abort is best-effort */ }
-        query.abortController = null;
-      }
-      this.notify({ type: 'removed', query });
+    if (this.queries.get(query.queryHash) !== query) return;
+    // Detach timers and the in-flight fetch from the dying instance either way.
+    if (query.refetchTimer) {
+      clearInterval(query.refetchTimer);
+      query.refetchTimer = null;
     }
+    if (query.gcTimer) {
+      clearTimeout(query.gcTimer);
+      query.gcTimer = null;
+    }
+    if (query.abortController) {
+      try { query.abortController.abort(); } catch { /* abort is best-effort */ }
+      query.abortController = null;
+    }
+    if (query.observers > 0) {
+      // P0-D (TanStack semantics): never strand mounted observers on the
+      // deleted instance — they memoise it (getSnapshot fallback) and would
+      // freeze with dead poll timers, unreachable by invalidate/focus passes.
+      // Replace the entry with a fresh, empty, invalidated query for the same
+      // hash so observers refetch; 'removed' + 'added' let react's
+      // maybeResubscribe migrate them onto the replacement.
+      const replacement = new QueryClass(query.queryKey, query.options);
+      replacement.setState({ isInvalidated: true });
+      this.queries.set(query.queryHash, replacement);
+      this.notify({ type: 'removed', query });
+      this.notify({ type: 'added', query: replacement });
+      return;
+    }
+    this.queries.delete(query.queryHash);
+    this.notify({ type: 'removed', query });
   }
 
   clear() {
@@ -267,6 +281,10 @@ export class QueryClient {
     const prev = existing?.state.data as TData | undefined;
     const data = resolveUpdater(updater, prev);
     if (typeof data === 'undefined') return prev;
+    // P2-13: a patch returning the identical reference changes nothing — skip
+    // the write entirely so it cannot stamp dataUpdatedAt / clear
+    // isInvalidated and fake freshness that no fetch ever produced.
+    if (data === prev) return prev;
     const query = this.ensureQuery<TData>({ queryKey }) as unknown as QueryClass<TData, unknown>;
     const resolved = data as TData;
     query.setState({
@@ -293,6 +311,11 @@ export class QueryClient {
     for (const query of this.queryCache.findAll(filters)) {
       const data = resolveUpdater(updater, query.state.data as TData | undefined);
       if (typeof data !== 'undefined') {
+        // P2-13: identical reference → true no-op; don't stamp freshness.
+        if (data === query.state.data) {
+          result.push([query.queryKey, data]);
+          continue;
+        }
         query.setState({
           data,
           status: 'success',
@@ -325,6 +348,19 @@ export class QueryClient {
     for (const query of this.queryCache.findAll(filters)) {
       this.queryCache.remove(query);
       this.dropTags(query);
+      // P0-D: when remove() replaced the entry for mounted observers, make
+      // sure the replacement actually fetches. Deferred to a microtask so a
+      // setQueryData landing in the same tick wins (staleness is rechecked at
+      // execution time); joins an in-flight fetch instead of duplicating it.
+      const replacement = this.queryCache.get(query.queryHash);
+      if (replacement && replacement !== query) {
+        queueMicrotask(() => {
+          if (this.queryCache.get(query.queryHash) !== replacement) return;
+          if (replacement.observers <= 0 || !replacement.hasEnabledObserver()) return;
+          if (!replacement.options.queryFn) return;
+          void this.fetchQuery({ ...replacement.options, queryKey: replacement.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
+        });
+      }
     }
   }
 
@@ -525,9 +561,16 @@ export class QueryClient {
                 : failureCount < (maxRetries as number);
           if (!canRetry) {
             if (query.fetchId === fetchId) {
+              // P0.4: a terminal failure always records `status: 'error'`,
+              // even when cached data survives in `state.data` — keeping
+              // `status: 'success'` here made `isError` unreachable while
+              // `isSuccess` went false too, so `isError && data` retry
+              // banners were dead branches. The cached payload is untouched;
+              // the next success (or an SSE setQueryData patch) clears
+              // `error` and restores `status: 'success'`.
               query.setState({
                 error: err as TError,
-                status: hasData ? query.state.status : 'error',
+                status: 'error',
                 fetchStatus: 'idle',
                 errorUpdatedAt: Date.now(),
                 failureCount,
@@ -566,6 +609,21 @@ export class QueryClient {
     return this.queryCache
       .findAll(filters ?? {})
       .filter((q) => q.state.fetchStatus === 'fetching').length;
+  }
+
+  /**
+   * Newest `dataUpdatedAt` (ms epoch) across queries matching `filters`, so the
+   * "last refreshed" indicator can show one timestamp for a scope: no filters =
+   * the whole cache, a `queryKey` prefix = one page/section. Queries that never
+   * loaded (`dataUpdatedAt === 0`) are ignored; returns 0 when nothing matched
+   * has ever loaded.
+   */
+  getLatestDataUpdatedAt(filters?: QueryFilters): number {
+    let latest = 0;
+    for (const query of this.queryCache.findAll(filters ?? {})) {
+      if (query.state.dataUpdatedAt > latest) latest = query.state.dataUpdatedAt;
+    }
+    return latest;
   }
 
   clear() {
@@ -716,6 +774,31 @@ export class QueryClient {
     this.setupRefetchInterval(query);
   }
 
+  /**
+   * P0-D: unmount teardown for an observer that migrated onto a replacement
+   * instance (removeQueries). The subscribeQuery unsub only knows the original
+   * instance, so this undoes the observer bookkeeping on the replacement:
+   * detach the entry, stop polling when it was the last observer and let GC
+   * reclaim it.
+   */
+  detachMigratedObserver(query: QueryClass<unknown, unknown>, observerId: number): void {
+    query.observerEntries.delete(observerId);
+    query.observers = Math.max(0, query.observers - 1);
+    this.queryCache.notify({ type: 'observerRemoved', query });
+    if (query.observers === 0) {
+      if (query.refetchTimer) {
+        clearInterval(query.refetchTimer);
+        query.refetchTimer = null;
+      }
+      this.scheduleGc(query);
+    } else if (query.hasEnabledObserver()) {
+      this.setupRefetchInterval(query);
+    } else if (query.refetchTimer) {
+      clearInterval(query.refetchTimer);
+      query.refetchTimer = null;
+    }
+  }
+
   private scheduleGc(query: QueryClass<unknown, unknown>): void {
     if (query.observers > 0) return;
     if (query.state.fetchStatus === 'fetching') return;
@@ -738,6 +821,22 @@ export class QueryClient {
     for (const query of this.queryCache.getAll()) {
       if (query.observers <= 0) continue;
       if (!query.hasEnabledObserver()) continue;
+      if (!query.options.queryFn) continue;
+      // Tab-return catch-up (audit §2.3): hidden tabs skip interval ticks while
+      // the timer keeps its phase, so the next poll can land a full interval
+      // late. Any interval-polled query older than its own effective interval
+      // (function variants evaluated) is force-refetched — deliberately
+      // independent of `refetchOnWindowFocus`, because the interval itself
+      // promises that cadence.
+      const interval = query.effectiveRefetchInterval();
+      if (
+        typeof interval === 'number' &&
+        interval > 0 &&
+        Date.now() - query.state.dataUpdatedAt >= interval
+      ) {
+        void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>, { force: true }).catch(() => {});
+        continue;
+      }
       const flag = query.options.refetchOnWindowFocus ?? false;
       if (!flag) continue;
       const staleTime = query.options.staleTime ?? 60_000;
@@ -745,7 +844,7 @@ export class QueryClient {
         flag === 'always' ||
         query.state.isInvalidated ||
         Date.now() - query.state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
-      if (stale && query.options.queryFn) {
+      if (stale) {
         void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>).catch(() => {});
       }
     }

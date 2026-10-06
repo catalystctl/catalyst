@@ -32,6 +32,8 @@ import { Button } from '../../components/ui/button';
 import { rolesApi } from '../../services/api/roles';
 import { serversApi } from '../../services/api/servers';
 import { useNodes } from '../../hooks/useNodes';
+import { useStreamAwareInterval } from '../../hooks/useStreamAwareInterval';
+import LastUpdated from '../../components/shared/LastUpdated';
 import {
  useServerPermissionOptions,
  serverPermissionLabel,
@@ -975,10 +977,15 @@ function RolesPage() {
  const [activePreset, setActivePreset] = useState<string | null>(null);
 
  // Fetch roles
+ // P1-24: role CRUD arrives via the admin stream only — poll during outages
+ // (same pattern as useAdmin.ts useAdminRoles).
+ const rolesOutagePoll = useStreamAwareInterval(60_000);
  const { data: roles = [], isLoading } = useQuery({
  queryKey: qk.adminRoles(),
  queryFn: rolesApi.list,
  staleTime: 5 * 60 * 1000,
+ refetchInterval: rolesOutagePoll,
+ refetchIntervalInBackground: false,
  });
 
  // Scoped-access inputs: shared permission list, nodes, servers
@@ -1193,6 +1200,8 @@ function RolesPage() {
  </h1>
  <p className="text-mini text-muted-foreground">{t('roles.description')}</p>
  </div>
+ <div className="flex flex-wrap items-center gap-2">
+ <LastUpdated queryKey={qk.adminRoles()} />
  <Button
  size="sm"
  onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }}
@@ -1201,6 +1210,7 @@ function RolesPage() {
  <Plus className="h-3.5 w-3.5" />
  {t('roles.createTitle')}
  </Button>
+ </div>
  </header>
 
  {/* ── The deck: controls, columns and rows in one frame ── */}

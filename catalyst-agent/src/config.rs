@@ -146,6 +146,9 @@ pub struct AgentPathsConfig {
     /// GitHub repository for agent release binaries.
     #[serde(default = "default_release_repo")]
     pub release_repo: String,
+    /// Interval between resource-stats/health reports, in seconds (min 1).
+    #[serde(default = "default_stats_interval_secs")]
+    pub stats_interval_secs: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -195,12 +198,21 @@ fn default_config_path() -> PathBuf {
 fn default_release_repo() -> String {
     "catalystctl/catalyst".to_string()
 }
+fn default_stats_interval_secs() -> u64 {
+    5
+}
+
+/// Stats/health cadence floor: sub-second polling of every container is wasteful.
+fn clamp_stats_interval_secs(secs: u64) -> u64 {
+    secs.max(1)
+}
 
 impl Default for AgentPathsConfig {
     fn default() -> Self {
         Self {
             config_path: default_config_path(),
             release_repo: default_release_repo(),
+            stats_interval_secs: default_stats_interval_secs(),
         }
     }
 }
@@ -257,6 +269,9 @@ impl AgentConfig {
         }
         // Clamp file-loaded server count to the operator ceiling.
         config.server.max_connections = config.server.max_connections.min(1000);
+        // Enforce the stats/health cadence floor.
+        config.agent.stats_interval_secs =
+            clamp_stats_interval_secs(config.agent.stats_interval_secs);
         // SEC-H-04: never accept a redacted placeholder as the real api_key —
         // it would lock the node out (or become a known shared secret).
         if config.server.api_key.trim() == "[REDACTED]" {
@@ -385,6 +400,11 @@ impl AgentConfig {
                 self.agent.release_repo = v;
             }
         }
+        if let Ok(v) = std::env::var("STATS_INTERVAL_SECS") {
+            if let Ok(n) = v.parse::<u64>() {
+                self.agent.stats_interval_secs = clamp_stats_interval_secs(n);
+            }
+        }
         if let Ok(v) = std::env::var("SFTP_PORT") {
             if let Ok(port) = v.parse::<u16>() {
                 self.sftp.port = port;
@@ -475,6 +495,11 @@ impl AgentConfig {
                 ),
                 release_repo: std::env::var("AGENT_RELEASE_REPO")
                     .unwrap_or_else(|_| "catalystctl/catalyst".to_string()),
+                stats_interval_secs: std::env::var("STATS_INTERVAL_SECS")
+                    .ok()
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .map(clamp_stats_interval_secs)
+                    .unwrap_or_else(default_stats_interval_secs),
             },
             sftp: SftpConfigSection {
                 port: std::env::var("SFTP_PORT")
@@ -551,5 +576,58 @@ mod config_security_tests {
     #[test]
     fn host_network_defaults_to_allowed() {
         assert!(ContainerdConfig::default().allow_host_network);
+    }
+}
+
+#[cfg(test)]
+mod stats_interval_tests {
+    use super::*;
+
+    const MINIMAL_TOML: &str = "[server]\n\
+backend_url = \"wss://localhost:3000/ws\"\n\
+node_id = \"n1\"\n\
+api_key = \"test-key\"\n\
+hostname = \"h1\"\n\
+data_dir = \"/tmp/catalyst\"\n\
+max_connections = 10\n\n\
+[containerd]\n\
+socket_path = \"/run/containerd/containerd.sock\"\n\
+namespace = \"catalyst\"\n\n\
+[logging]\n\
+level = \"info\"\n\
+format = \"json\"\n";
+
+    fn write_config(dir: &std::path::Path, extra: &str) -> String {
+        let path = dir.join("config.toml");
+        std::fs::write(&path, format!("{}{}", MINIMAL_TOML, extra)).unwrap();
+        path.to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn stats_interval_defaults_to_five() {
+        assert_eq!(AgentPathsConfig::default().stats_interval_secs, 5);
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_config(dir.path(), "");
+        let cfg = AgentConfig::from_file(&path).unwrap();
+        assert_eq!(cfg.agent.stats_interval_secs, 5);
+    }
+
+    #[test]
+    fn stats_interval_from_file_is_used() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_config(dir.path(), "\n[agent]\nstats_interval_secs = 10\n");
+        let cfg = AgentConfig::from_file(&path).unwrap();
+        assert_eq!(cfg.agent.stats_interval_secs, 10);
+    }
+
+    #[test]
+    fn stats_interval_clamped_to_minimum_one() {
+        assert_eq!(clamp_stats_interval_secs(0), 1);
+        assert_eq!(clamp_stats_interval_secs(1), 1);
+        assert_eq!(clamp_stats_interval_secs(30), 30);
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_config(dir.path(), "\n[agent]\nstats_interval_secs = 0\n");
+        let cfg = AgentConfig::from_file(&path).unwrap();
+        assert_eq!(cfg.agent.stats_interval_secs, 1);
     }
 }

@@ -178,7 +178,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
           }
 
           // Disable scheduled tasks
-          await prisma.scheduledTask.updateMany({
+          const disabledBulkTasks = await prisma.scheduledTask.updateMany({
             where: { serverId, enabled: true },
             data: { enabled: false },
           });
@@ -188,6 +188,20 @@ export async function bulkServerRoutes(app: FastifyInstance) {
           });
           for (const task of tasks) {
             if (scheduler) scheduler.unscheduleTask(task.id);
+          }
+          if (disabledBulkTasks.count > 0) {
+            // One aggregate event — FE invalidates the whole tasks(serverId) key.
+            const bulkTaskEvent = {
+              type: 'task_updated',
+              serverId,
+              timestamp: new Date().toISOString(),
+            };
+            if (gateway?.pushToGlobalSubscribers) {
+              gateway.pushToGlobalSubscribers('task_updated', bulkTaskEvent);
+            }
+            if (gateway?.routeToClients) {
+              void gateway.routeToClients(serverId, bulkTaskEvent).catch(() => {});
+            }
           }
 
           auditLogs.push({
@@ -229,27 +243,25 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       }
 
       // Broadcast server_suspended events for each successfully suspended server
+      // on all three scopes: admin, global, and the server's own stream.
       const wsGatewayBulkSuspend = (app as any).wsGateway;
-      if (wsGatewayBulkSuspend?.pushToAdminSubscribers) {
-        for (const id of result.success) {
-          wsGatewayBulkSuspend.pushToAdminSubscribers('server_suspended', {
-            type: 'server_suspended',
-            serverId: id,
-            bulk: true,
-            triggeredBy: userId,
-            timestamp: new Date().toISOString(),
-          });
+      for (const id of result.success) {
+        const event = {
+          type: 'server_suspended',
+          serverId: id,
+          nodeId: serverMap.get(id)?.nodeId,
+          bulk: true,
+          triggeredBy: userId,
+          timestamp: new Date().toISOString(),
+        };
+        if (wsGatewayBulkSuspend?.pushToAdminSubscribers) {
+          wsGatewayBulkSuspend.pushToAdminSubscribers('server_suspended', event);
         }
-      }
-      if (wsGatewayBulkSuspend?.pushToGlobalSubscribers) {
-        for (const id of result.success) {
-          wsGatewayBulkSuspend.pushToGlobalSubscribers('server_suspended', {
-            type: 'server_suspended',
-            serverId: id,
-            bulk: true,
-            triggeredBy: userId,
-            timestamp: new Date().toISOString(),
-          });
+        if (wsGatewayBulkSuspend?.pushToGlobalSubscribers) {
+          wsGatewayBulkSuspend.pushToGlobalSubscribers('server_suspended', event);
+        }
+        if (wsGatewayBulkSuspend?.routeToClients) {
+          void wsGatewayBulkSuspend.routeToClients(id, event).catch(() => {});
         }
       }
 
@@ -293,7 +305,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
       const servers = await prisma.server.findMany({
         where: { id: { in: serverIds } },
-        select: { id: true, name: true, suspendedAt: true, ownerId: true },
+        select: { id: true, name: true, suspendedAt: true, ownerId: true, nodeId: true },
       });
       const serverMap = new Map(servers.map((s) => [s.id, s]));
       const actorDetails = await resolveActorDetails(userId);
@@ -341,6 +353,19 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             for (const task of tasks) {
               if (scheduler) scheduler.scheduleTask(task);
             }
+            // One aggregate event — FE invalidates the whole tasks(serverId) key.
+            const bulkGateway = (app as any).wsGateway;
+            const bulkTaskEvent = {
+              type: 'task_updated',
+              serverId,
+              timestamp: new Date().toISOString(),
+            };
+            if (bulkGateway?.pushToGlobalSubscribers) {
+              bulkGateway.pushToGlobalSubscribers('task_updated', bulkTaskEvent);
+            }
+            if (bulkGateway?.routeToClients) {
+              void bulkGateway.routeToClients(serverId, bulkTaskEvent).catch(() => {});
+            }
           }
 
           auditLogs.push({
@@ -374,27 +399,25 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       }
 
       // Broadcast server_unsuspended events for each successfully unsuspended server
+      // on all three scopes: admin, global, and the server's own stream.
       const wsGatewayBulkUnsuspend = (app as any).wsGateway;
-      if (wsGatewayBulkUnsuspend?.pushToAdminSubscribers) {
-        for (const id of result.success) {
-          wsGatewayBulkUnsuspend.pushToAdminSubscribers('server_unsuspended', {
-            type: 'server_unsuspended',
-            serverId: id,
-            bulk: true,
-            triggeredBy: userId,
-            timestamp: new Date().toISOString(),
-          });
+      for (const id of result.success) {
+        const event = {
+          type: 'server_unsuspended',
+          serverId: id,
+          nodeId: serverMap.get(id)?.nodeId,
+          bulk: true,
+          triggeredBy: userId,
+          timestamp: new Date().toISOString(),
+        };
+        if (wsGatewayBulkUnsuspend?.pushToAdminSubscribers) {
+          wsGatewayBulkUnsuspend.pushToAdminSubscribers('server_unsuspended', event);
         }
-      }
-      if (wsGatewayBulkUnsuspend?.pushToGlobalSubscribers) {
-        for (const id of result.success) {
-          wsGatewayBulkUnsuspend.pushToGlobalSubscribers('server_unsuspended', {
-            type: 'server_unsuspended',
-            serverId: id,
-            bulk: true,
-            triggeredBy: userId,
-            timestamp: new Date().toISOString(),
-          });
+        if (wsGatewayBulkUnsuspend?.pushToGlobalSubscribers) {
+          wsGatewayBulkUnsuspend.pushToGlobalSubscribers('server_unsuspended', event);
+        }
+        if (wsGatewayBulkUnsuspend?.routeToClients) {
+          void wsGatewayBulkUnsuspend.routeToClients(id, event).catch(() => {});
         }
       }
 
@@ -507,6 +530,21 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             }
           }
 
+          // Per-server viewers get server_deleted while the row still exists —
+          // routeToClients re-checks access against it, so a push after the
+          // delete below would find no server and silently drop the event.
+          const bulkDeletedEvent = {
+            type: 'server_deleted',
+            serverId,
+            nodeId: server.nodeId,
+            bulk: true,
+            triggeredBy: userId,
+            timestamp: new Date().toISOString(),
+          };
+          if (gateway?.routeToClients) {
+            void gateway.routeToClients(serverId, bulkDeletedEvent).catch(() => {});
+          }
+
           await prisma.$transaction(async (tx) => {
             await rip(tx, serverId);
             await tx.server.delete({ where: { id: serverId } });
@@ -548,28 +586,23 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         webhookService.serverBulkDeleted(result.success, userId).catch(() => {});
       }
 
-      // Broadcast server_deleted events for each successfully deleted server
+      // Broadcast server_deleted events for each successfully deleted server.
+      // The per-server leg was already emitted pre-delete inside the loop.
       const wsGatewayBulkDelete = (app as any).wsGateway;
-      if (wsGatewayBulkDelete?.pushToAdminSubscribers) {
-        for (const id of result.success) {
-          wsGatewayBulkDelete.pushToAdminSubscribers('server_deleted', {
-            type: 'server_deleted',
-            serverId: id,
-            bulk: true,
-            triggeredBy: userId,
-            timestamp: new Date().toISOString(),
-          });
+      for (const id of result.success) {
+        const event = {
+          type: 'server_deleted',
+          serverId: id,
+          nodeId: serverMap.get(id)?.nodeId,
+          bulk: true,
+          triggeredBy: userId,
+          timestamp: new Date().toISOString(),
+        };
+        if (wsGatewayBulkDelete?.pushToAdminSubscribers) {
+          wsGatewayBulkDelete.pushToAdminSubscribers('server_deleted', event);
         }
-      }
-      if (wsGatewayBulkDelete?.pushToGlobalSubscribers) {
-        for (const id of result.success) {
-          wsGatewayBulkDelete.pushToGlobalSubscribers('server_deleted', {
-            type: 'server_deleted',
-            serverId: id,
-            bulk: true,
-            triggeredBy: userId,
-            timestamp: new Date().toISOString(),
-          });
+        if (wsGatewayBulkDelete?.pushToGlobalSubscribers) {
+          wsGatewayBulkDelete.pushToGlobalSubscribers('server_deleted', event);
         }
       }
 

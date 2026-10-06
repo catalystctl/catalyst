@@ -143,7 +143,13 @@ function ServerDetailsPage() {
  const navigate = useNavigate();
  const queryClient = useQueryClient();
  const { data: server, isLoading, isError, refetch } = useServer(serverId);
- const liveMetrics = useServerMetrics(serverId, server?.allocatedMemoryMb);
+ // F10: live gauges + the metrics tab's "live usage" label are driven by the
+ // metrics stream's own status, never by the console socket.
+ const { metrics: liveMetrics, status: metricsStreamStatus } = useServerMetrics(
+   serverId,
+   server?.allocatedMemoryMb,
+ );
+ const metricsStreamConnected = metricsStreamStatus === 'connected';
  const user = useAuthStore((s) => s.user);
  const serverPluginTabs = usePluginTabs('server');
  const rawUserPermissions = user?.permissions;
@@ -993,7 +999,10 @@ function ServerDetailsPage() {
  navigate,
  ]);
 
-  if (isError) {
+  // Only blank the page when there is nothing to show. A failed background
+  // refetch keeps `server` cached (P0.4 sets isError with data), and replacing
+  // every tab with an error panel would discard perfectly good content.
+  if (isError && !server) {
     return (
       <div className="flex items-center justify-center p-8">
         <TabErrorState
@@ -1049,6 +1058,15 @@ function ServerDetailsPage() {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+      {/* Cached server stays on screen when a background refetch fails. */}
+      {isError && (
+        <TabErrorState
+          message={t('errors.unableToLoadServerDetails')}
+          onRetry={() => {
+            void refetch();
+          }}
+        />
+      )}
       <WorkspaceHeader
         icon={Terminal}
         variant={isSuspended ? 'danger' : server?.status === 'running' ? 'success' : 'default'}
@@ -1096,6 +1114,7 @@ function ServerDetailsPage() {
             allocatedMemoryMb={server?.allocatedMemoryMb}
             allocatedDiskMb={diskLimitMb}
             serverStatus={server?.status}
+            live={metricsStreamConnected}
           />
         }
         actions={
@@ -1220,6 +1239,7 @@ function ServerDetailsPage() {
 
  {!isPluginTab && activeTab === 'databases' && server && (
  <ServerDatabasesTab
+ serverId={server.id}
  isSuspended={isSuspended}
  databases={databases}
  databasesLoading={databasesLoading}
@@ -1244,12 +1264,13 @@ function ServerDetailsPage() {
 
  {!isPluginTab && activeTab === 'metrics' && server && (
  <ServerMetricsTab
+ serverId={server.id}
  serverCpuPercent={isServerRunning ? (server.cpuPercent ?? 0) : 0}
  serverMemoryPercent={isServerRunning ? (server.memoryPercent ?? 0) : 0}
  allocatedMemoryMb={server.allocatedMemoryMb ?? 0}
  allocatedDiskMb={diskLimitMb}
  liveMetrics={displayMetrics}
- isConnected={isConnected}
+ isMetricsConnected={metricsStreamConnected}
  serverStatus={server.status}
  metricsHistory={metricsHistory}
  metricsTimeRange={metricsTimeRange}

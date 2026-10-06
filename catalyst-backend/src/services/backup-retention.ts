@@ -10,7 +10,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type pino from "pino";
-import type { WebSocketGateway } from "../websocket/gateway";
+import { getWsGateway, type WebSocketGateway } from "../websocket/gateway";
 import { ServerState } from "../shared-types";
 import { deleteBackupFromStorage } from "./backup-storage";
 import { captureSystemError } from "./error-logger";
@@ -159,7 +159,21 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gatew
         // Use deleteMany to avoid P2025 (RecordNotFound) when gateway inline
         // retention already deleted this backup between our findMany and here.
         const deleted = await prisma.backup.deleteMany({ where: { id: backup.id } });
-        if (deleted.count > 0) totalDeleted++;
+        if (deleted.count > 0) {
+          totalDeleted++;
+          // Per-server push so open backup lists refresh (F16).
+          const ws = gateway ?? getWsGateway();
+          if (typeof ws?.routeToClients === "function") {
+            void ws
+              .routeToClients(server.id, {
+                type: "backup_deleted",
+                serverId: server.id,
+                backupId: backup.id,
+                timestamp: new Date().toISOString(),
+              })
+              .catch(() => {});
+          }
+        }
       } catch (err: any) {
         // Storage cleanup failed — keep DB record so we can retry next cycle
         logger.warn(
@@ -260,7 +274,21 @@ async function cleanupStuckBackupStates(prisma: PrismaClient, logger: pino.Logge
           select: { id: true },
         });
         for (const backup of orphaned) {
-          await prisma.backup.delete({ where: { id: backup.id } }).catch(() => {});
+          const deleted = await prisma.backup.deleteMany({ where: { id: backup.id } }).catch(() => ({ count: 0 }));
+          if (deleted.count > 0) {
+            // Per-server push so open backup lists drop the orphan (F16).
+            const ws = gateway ?? getWsGateway();
+            if (typeof ws?.routeToClients === "function") {
+              void ws
+                .routeToClients(server.id, {
+                  type: "backup_deleted",
+                  serverId: server.id,
+                  backupId: backup.id,
+                  timestamp: new Date().toISOString(),
+                })
+                .catch(() => {});
+            }
+          }
         }
         if (orphaned.length > 0) {
           logger.info({ serverId: server.id, orphaned: orphaned.length }, "Deleted orphaned in-progress backup records");

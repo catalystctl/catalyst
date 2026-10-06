@@ -28,7 +28,10 @@ import {
  SelectTrigger,
  SelectValue,
 } from '../../components/ui/select';
-import { useSystemErrors, useResolveSystemError, useResolveAllSystemErrors } from '../../hooks/useAdmin';
+import { useResolveSystemError, useResolveAllSystemErrors } from '../../hooks/useAdmin';
+import { useQuery } from '@/csync';
+import { qk } from '../../lib/queryKeys';
+import LastUpdated from '../../components/shared/LastUpdated';
 import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { formatDateTime } from '../../i18n/format';
 import { systemErrorComponentLabel, systemErrorMessage, systemErrorMetadataLabel } from '../../utils/logLabels';
@@ -69,6 +72,14 @@ const buildDefaultRange = () => {
  from: initialFrom.toISOString().slice(0, 16),
  to: now.toISOString().slice(0, 16),
  };
+};
+
+/** Quick-range window lengths; '' (custom) pins the from/to inputs instead. */
+const RANGE_MS: Record<string, number> = {
+ '1h': 3_600_000,
+ '6h': 6 * 3_600_000,
+ '24h': 24 * 3_600_000,
+ '7d': 7 * 24 * 3_600_000,
 };
 
 // ── Level Color Helpers ──
@@ -189,17 +200,25 @@ function useSseStatus() {
  useEffect(() => {
  // Lazy import avoids circular deps with admin page bundle
  let unsub: (() => void) | undefined;
+ // P2-14: unmount before the import resolves must not leak the subscription —
+ // track cancellation and unsubscribe from whichever side finishes second.
+ let cancelled = false;
  import('../../services/api/admin-events')
  .then(({ createAdminEventsStream }) => {
- unsub = createAdminEventsStream(
+ const unsubscribe = createAdminEventsStream(
  () => {
  /* status-only subscriber — cache updates come from AppLayout useSseAdminEvents */
  },
  (s) => setStatus(s),
  );
+ if (cancelled) unsubscribe();
+ else unsub = unsubscribe;
  })
- .catch(() => setStatus('error'));
+ .catch(() => {
+ if (!cancelled) setStatus('error');
+ });
  return () => {
+ cancelled = true;
  unsub?.();
  };
  }, []);
@@ -726,16 +745,62 @@ function SystemErrorsPage() {
 
  const resolvedBool = resolved === '' ? undefined : resolved === 'true';
 
- const { data, isLoading } = useSystemErrors({
+ // P1-10 (same class as AuditLogsPage): in quick-range mode the window end is
+ // computed at fetch time, so errors created after mount survive the refetch
+ // that the system_error SSE optimistic-prepend triggers. The key carries the
+ // window mode, not timestamps, so it stays stable across refetches.
+ const autoEnd = range !== '';
+ const windowMs = RANGE_MS[range] ?? 24 * 3_600_000;
+
+ const { data, isLoading, dataUpdatedAt } = useQuery({
+ queryKey: qk.adminSystemErrors({
  page,
  limit: pageSize,
  level: level || undefined,
  component: component || undefined,
  nodeId: nodeId || undefined,
  resolved: resolvedBool,
- from: from ? new Date(from).toISOString() : undefined,
- to: to ? new Date(to).toISOString() : undefined,
+ ...(autoEnd
+ ? { window: range }
+ : { from: from || undefined, to: to || undefined }),
+ }),
+ queryFn: () => {
+ const end = autoEnd ? Date.now() : undefined;
+ return adminApi.listSystemErrors({
+ page,
+ limit: pageSize,
+ level: level || undefined,
+ component: component || undefined,
+ nodeId: nodeId || undefined,
+ resolved: resolvedBool,
+ from: autoEnd
+ ? new Date(end! - windowMs).toISOString()
+ : from
+ ? new Date(from).toISOString()
+ : undefined,
+ to: autoEnd
+ ? new Date(end!).toISOString()
+ : to
+ ? new Date(to).toISOString()
+ : undefined,
  });
+ },
+ staleTime: 60_000,
+ // P1-15: system_error SSE updates the cache, plus a slow safety poll for
+ // narrower admins who never receive the admin stream.
+ refetchInterval: 60_000,
+ refetchIntervalInBackground: false,
+ });
+
+ // Auto mode shows the window of the most recent fetch in the inputs.
+ const displayTo =
+ autoEnd && dataUpdatedAt
+ ? new Date(dataUpdatedAt).toISOString().slice(0, 16)
+ : to;
+ const displayFrom =
+ autoEnd && dataUpdatedAt
+ ? new Date(dataUpdatedAt - windowMs).toISOString().slice(0, 16)
+ : from;
 
  const resolveMutation = useResolveSystemError();
  const resolveAllMutation = useResolveAllSystemErrors();
@@ -775,14 +840,24 @@ function SystemErrorsPage() {
 
  const handleResolveAllConfirm = () => {
   setResolveAllError(null);
+  // Resolve across the same effective window the list query uses.
+  const end = autoEnd ? Date.now() : undefined;
   resolveAllMutation.mutate(
    {
     level: level || undefined,
     component: component || undefined,
     nodeId: nodeId || undefined,
     resolved: resolved || undefined,
-    from: from ? new Date(from).toISOString() : undefined,
-    to: to ? new Date(to).toISOString() : undefined,
+    from: autoEnd
+     ? new Date(end! - windowMs).toISOString()
+     : from
+     ? new Date(from).toISOString()
+     : undefined,
+    to: autoEnd
+     ? new Date(end!).toISOString()
+     : to
+     ? new Date(to).toISOString()
+     : undefined,
    },
    {
     onSuccess: () => {
@@ -807,6 +882,7 @@ function SystemErrorsPage() {
  <p className="text-mini text-muted-foreground">{t('systemErrors.description')}</p>
  </div>
  <div className="flex flex-wrap items-center gap-2">
+ <LastUpdated queryKey={qk.adminSystemErrors()} />
  <span className="flex items-center gap-1.5 text-micro uppercase">
  <StatusLed tone={isLive ? 'go' : 'idle'} pulse={isLive} />
  <span className="text-muted-foreground">
@@ -929,7 +1005,7 @@ function SystemErrorsPage() {
  <span className="type-overline">{t('systemErrors.from')}</span>
  <Input
  type="datetime-local"
- value={from}
+ value={displayFrom}
  onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }}
  className="h-7 rounded-sm border-border/60 text-mini"
  />
@@ -938,7 +1014,7 @@ function SystemErrorsPage() {
  <span className="type-overline">{t('systemErrors.to')}</span>
  <Input
  type="datetime-local"
- value={to}
+ value={displayTo}
  onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }}
  className="h-7 rounded-sm border-border/60 text-mini"
  />
@@ -949,16 +1025,12 @@ function SystemErrorsPage() {
  value={range || 'custom'}
  onValueChange={(next) => {
  const value = next === 'custom' ? '' : next;
+ if (!value) {
+ // Pin the currently displayed auto window into the manual inputs.
+ setFrom(displayFrom);
+ setTo(displayTo);
+ }
  setRange(value);
- if (!value) return;
- const now = new Date();
- const nextFrom = new Date(now);
- if (value === '1h') nextFrom.setHours(now.getHours() - 1);
- if (value === '6h') nextFrom.setHours(now.getHours() - 6);
- if (value === '24h') nextFrom.setHours(now.getHours() - 24);
- if (value === '7d') nextFrom.setDate(now.getDate() - 7);
- setFrom(nextFrom.toISOString().slice(0, 16));
- setTo(now.toISOString().slice(0, 16));
  setPage(1);
  }}
  >

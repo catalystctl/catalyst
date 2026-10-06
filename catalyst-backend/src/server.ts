@@ -23,7 +23,7 @@ import "./types"; // Load type augmentations
 import { WebSocketGateway, setWsGateway } from "./websocket/gateway";
 import { setErrorLoggerGateway, captureSystemError } from "./services/error-logger";
 import { mapHttpError } from "./lib/http-error";
-import { applyRemoteCacheInvalidate } from "./lib/cache-bus";
+import { applyRemoteCacheInvalidate, onCacheInvalidate } from "./lib/cache-bus";
 import { subscribeCacheInvalidations } from "./lib/event-bus";
 import { cachedConfig } from "./lib/config-cache";
 import { closeRedis, getRedis, getRedisStats } from "./lib/redis";
@@ -201,13 +201,18 @@ setWsGateway(wsGateway);
 setErrorLoggerGateway(wsGateway);
 // Cross-host cache coherence: apply Redis invalidations locally (no-op without REDIS_URL).
 subscribeCacheInvalidations((channel, payload) => {
+  // Routes into the onCacheInvalidate handlers, including 'server-access' below.
   applyRemoteCacheInvalidate(channel, payload);
-  // Keep the gateway's server-access allowlist coherent across workers/hosts:
-  // a revocation on instance A must not keep streaming on instance B for 30s.
-  if (channel === 'server-access') {
-    wsGateway.invalidateServerAccess(payload.flushAll ? undefined : payload.serverId);
-  }
 }).catch(() => { /* degraded mode */ });
+// Keep the gateway's server-access allowlist coherent across workers/hosts:
+// a revocation on instance A must not keep streaming on instance B for 30s.
+// cache-bus relays invalidations over cluster IPC (same-host multi-worker,
+// works WITHOUT Redis) and over Redis pub/sub (cross-host, applied through
+// applyRemoteCacheInvalidate above) — this handler covers both paths exactly
+// once, plus the mutating worker's own local broadcast.
+onCacheInvalidate('server-access', (payload) => {
+  wsGateway.invalidateServerAccess(payload.flushAll ? undefined : payload.serverId);
+});
 // Best-effort Redis connect so the first command does not pay dial latency.
 getRedis()?.connect().catch(() => { /* degraded mode */ });
 // Bounded observability for Redis outages: at most one warn log / SystemError

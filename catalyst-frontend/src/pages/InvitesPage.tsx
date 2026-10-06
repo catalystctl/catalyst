@@ -118,8 +118,12 @@ function InvitesPage() {
     </header>
   );
 
+  // P0.4: an error with a cached preview means a background refresh failed, not
+  // that the invite is unusable — only treat it as invalid when nothing loaded.
+  const isPreviewUnusable = isPreviewError && invitePreview === undefined;
+
   if (!isAuthenticated) {
-    if (!token || isPreviewError) {
+    if (!token || isPreviewUnusable) {
       return (
         <div className="mx-auto w-full max-w-lg space-y-3">
           {header(t('invite.registerDescription'))}
@@ -222,7 +226,7 @@ function InvitesPage() {
     <div className="mx-auto w-full max-w-lg space-y-3">
       {header(t('invite.signedInDescription'))}
       <ServerTabCard>
-        {!token || isPreviewError ? (
+        {!token || isPreviewUnusable ? (
           <TabEmptyState title={getLocalizedErrorMessage(previewError, 'INVITE_NOT_FOUND')} />
         ) : isPreviewLoading ? (
           <TabLoadingState rows={3} />

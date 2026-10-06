@@ -21,6 +21,8 @@ export function serverStatusLabel(t: TFunction, status: string): string {
       return t('common:status.stopping');
     case 'crashed':
       return t('common:status.crashed');
+    case 'unhealthy':
+      return t('common:status.unhealthy');
     case 'transferring':
       return t('common:status.transferring');
     case 'cloning':

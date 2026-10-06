@@ -1,6 +1,7 @@
 import { useQuery } from '@/csync';
 import { qk } from '../lib/queryKeys';
 import { serversApi } from '../services/api/servers';
+import { useStreamAwareInterval } from './useStreamAwareInterval';
 import type { ServerListParams } from '../types/server';
 
 const EMPTY_SERVERS: import('../types/server').Server[] = [];
@@ -8,6 +9,9 @@ const EMPTY_SERVERS: import('../types/server').Server[] = [];
 const transitionalStatuses = new Set(['installing', 'starting', 'stopping', 'transferring', 'cloning']);
 
 export function useServers(params?: ServerListParams) {
+  // P1-24: the 2s poll below is transitional-only, so during an SSE outage
+  // the steady-state list would freeze — poll at 30s while streams are down.
+  const outagePoll = useStreamAwareInterval(30_000);
   return useQuery({
     queryKey: qk.servers(params as Record<string, unknown> | undefined),
     queryFn: () => serversApi.list(params),
@@ -21,7 +25,7 @@ export function useServers(params?: ServerListParams) {
       Array.isArray(query.state.data) &&
       query.state.data.some((server) => transitionalStatuses.has(server.status))
         ? 2000
-        : false,
+        : outagePoll,
     refetchIntervalInBackground: false,
   });
 }

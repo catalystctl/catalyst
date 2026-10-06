@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Sidebar from './Sidebar';
 import Breadcrumbs from './Breadcrumbs';
 import FleetHeartbeat from './FleetHeartbeat';
+import DataFreshness from './DataFreshness';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
 import { useSseAdminEvents } from '../../hooks/useSseAdminEvents';
 import { useProfileSync } from '../../hooks/useProfileSync';
@@ -215,6 +216,7 @@ function AppLayout() {
               <Breadcrumbs />
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <DataFreshness />
               <FleetHeartbeat />
               <button
                 type="button"

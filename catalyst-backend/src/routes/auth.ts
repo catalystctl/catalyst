@@ -121,9 +121,31 @@ export async function authRoutes(app: FastifyInstance) {
           where: { id: user.id },
           select: {
             name: true, firstName: true, lastName: true, image: true,
-            roles: { select: { name: true } },
+            createdAt: true, updatedAt: true,
+            roles: { select: { id: true, name: true } },
           },
         });
+
+        // P1-30: notify admins about the self-registered user (best-effort,
+        // same payload shape as the admin.ts user_created broadcast).
+        try {
+          const wsGateway = (app as any).wsGateway;
+          if (wsGateway?.pushToAdminSubscribers && profile) {
+            wsGateway.pushToAdminSubscribers('user_created', {
+              type: 'user_created',
+              user: {
+                id: user.id,
+                email: user.email,
+                username: user.username ?? username,
+                createdAt: profile.createdAt,
+                updatedAt: profile.updatedAt,
+                roles: profile.roles,
+              },
+              createdBy: user.id,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch { /* best-effort */ }
 
         // Send welcome email (non-blocking)
         try {
@@ -469,9 +491,38 @@ export async function authRoutes(app: FastifyInstance) {
         const user = await prisma.user.update({
           where: { id: request.user.userId },
           data,
-          select: { id: true, username: true, firstName: true, lastName: true },
+          select: {
+            id: true, username: true, firstName: true, lastName: true,
+            email: true, roles: { select: { id: true, name: true } },
+          },
         });
-        reply.send(serialize({ success: true, data: user }));
+
+        // P1-30: mirror the admin.ts user_updated broadcast for self-edits.
+        try {
+          const wsGateway = (app as any).wsGateway;
+          if (wsGateway?.pushToAdminSubscribers) {
+            wsGateway.pushToAdminSubscribers('user_updated', {
+              type: 'user_updated',
+              userId: user.id,
+              email: user.email,
+              username: user.username,
+              roles: user.roles,
+              updatedBy: request.user.userId,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch { /* best-effort */ }
+
+        // Response shape unchanged: only the editable profile fields.
+        reply.send(serialize({
+          success: true,
+          data: {
+            id: user.id,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+          },
+        }));
       } catch (err: any) {
         if (err.code === 'P2002' && err.meta?.target?.includes('username')) {
           return apiError(reply, 409, ErrorCodes.AUTH_USERNAME_TAKEN, 'Username already taken');
@@ -752,7 +803,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       const userRecord = await prisma.user.findUnique({
         where: { id: userId },
-        select: { email: true },
+        select: { email: true, username: true },
       });
       const userEmail = userRecord?.email || '';
 
@@ -782,6 +833,20 @@ export async function authRoutes(app: FastifyInstance) {
       if (webhookService) {
         webhookService.userDeleted(userId, userEmail, "self-deleted", userId).catch(() => {});
       }
+
+      // P1-30: mirror the admin.ts user_deleted broadcast for self-deletion.
+      try {
+        if (wsGateway?.pushToAdminSubscribers) {
+          wsGateway.pushToAdminSubscribers('user_deleted', {
+            type: 'user_deleted',
+            userId,
+            email: userEmail,
+            username: userRecord?.username,
+            deletedBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch { /* best-effort */ }
 
       // Clear all better-auth cookies
       const secureAttr = process.env.NODE_ENV !== "development" && process.env.COOKIE_SECURE !== 'false' ? '; Secure' : '';

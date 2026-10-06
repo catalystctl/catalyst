@@ -13,6 +13,7 @@ import {
   buildBackupPaths,
 } from "./backup-storage";
 import { ServerState } from "../shared-types";
+import { getWsGateway } from "../websocket/gateway";
 
 export type BackupServer = Server & {
   node: Node;
@@ -76,6 +77,23 @@ export async function createServerBackup(
   const { prisma, logger, server, name, sendToAgent, onStarted } = params;
   const serverId = server.id;
 
+  // Best-effort per-server state push for backup lock transitions (P1-29).
+  const emitStateUpdate = (state: string) => {
+    try {
+      const gateway = getWsGateway();
+      if (typeof gateway?.routeToClients === "function") {
+        void gateway
+          .routeToClients(serverId, {
+            type: "server_state_update",
+            serverId,
+            state,
+            timestamp: new Date().toISOString(),
+          })
+          .catch(() => {});
+      }
+    } catch { /* WS push is best-effort */ }
+  };
+
   if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
     return {
       ok: false,
@@ -111,14 +129,17 @@ export async function createServerBackup(
       error: `Server must be stopped before creating a backup (current: ${current?.status ?? "unknown"})`,
     };
   }
+  emitStateUpdate(ServerState.CREATING_BACKUP);
 
   const revertToStopped = async () => {
-    await prisma.server
+    const reverted = await prisma.server
       .update({
         where: { id: serverId },
         data: { status: ServerState.STOPPED },
       })
-      .catch(() => {});
+      .then(() => true)
+      .catch(() => false);
+    if (reverted) emitStateUpdate(ServerState.STOPPED);
   };
 
   try {

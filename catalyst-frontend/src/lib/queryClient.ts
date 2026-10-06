@@ -12,7 +12,12 @@ export const queryClient = new QueryClient({
       staleTime: 60_000,
       gcTime: 10 * 60 * 1000,
       retry: 2,
-      refetchOnWindowFocus: false,
+      // P2.1: returning to the tab is the cheapest freshness floor available —
+      // the focus handler refetches queries that are past their staleTime (and
+      // force-refetches interval queries that missed ticks while hidden).
+      // Individual call sites that must not refetch on focus keep passing
+      // `refetchOnWindowFocus: false` explicitly; those are honored as-is.
+      refetchOnWindowFocus: true,
     },
     mutations: {
       retry: 0,

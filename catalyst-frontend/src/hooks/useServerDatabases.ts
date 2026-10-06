@@ -16,6 +16,9 @@ export function useServerDatabases(serverId?: string) {
     enabled: Boolean(serverId),
     placeholderData: (prev) => prev,
     staleTime: 5 * 60 * 1000,
+    // database_* push is being added backend-side; belt-and-braces 60s poll (U3).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -25,5 +28,8 @@ export function useAvailableDatabaseHosts() {
     queryFn: databasesApi.listHosts,
     staleTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev,
+    // Host list can change under a non-admin; 60s safety poll (U3).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }

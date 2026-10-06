@@ -27,6 +27,7 @@ import TabHeader from './TabHeader';
 import TabEmptyState from './TabEmptyState';
 import TabErrorState from './TabErrorState';
 import TabLoadingState from './TabLoadingState';
+import LastUpdated from '../../shared/LastUpdated';
 import i18n from '@/i18n';
 import { formatDateTime } from '@/i18n/format';
 
@@ -471,12 +472,16 @@ export default function ServerActivityLogTab({ serverId }: Props) {
         icon={Activity}
         title={t('tabs.activity.title')}
         description={t('tabs.activity.description')}
+        actions={<LastUpdated queryKey={qk.serverActivity(serverId)} />}
       />
 
       <ServerTabCard>
+        {/* A failed poll keeps the cached entries; only an initial failure replaces them. */}
+        {isError && data && <TabErrorState message={error instanceof Error ? error.message : t('tabs.activity.loadFailed')} />}
+
         {isLoading ? (
           <TabLoadingState rows={5} />
-        ) : isError ? (
+        ) : isError && !data ? (
           <TabErrorState
             message={error instanceof Error ? error.message : t('tabs.activity.loadFailed')}
           />

@@ -65,7 +65,10 @@ function TemplateDetailsPage() {
     );
   }
 
-  if (isError || !template) {
+  // `!template` stays its own guard so TypeScript keeps narrowing below. A
+  // failed background refetch keeps `template` cached while isError is true
+  // (P0.4), so the page renders and the failure shows as a banner instead.
+  if (!template) {
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <div className="flex min-w-0 flex-col gap-1">
@@ -102,6 +105,9 @@ function TemplateDetailsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* Cached template stays on screen when a background refetch fails. */}
+      {isError && <TabErrorState message={t('details.loadError')} onRetry={() => refetch()} />}
+
       {/* ── Breadcrumb ── */}
       <Link
         to="/admin/templates"

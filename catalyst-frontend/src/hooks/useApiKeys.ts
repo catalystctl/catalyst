@@ -13,8 +13,8 @@ export function useApiKeys() {
     queryKey: qk.apiKeys(),
     queryFn: () => apiKeyService.list(),
     staleTime: 60_000,
-    // api_key_* admin SSE.
-    refetchInterval: false,
+    // api_key_* SSE is admin-gated; 60s safety poll covers the rest (U8).
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -28,6 +28,9 @@ export function useApiKey(id: string | undefined) {
     queryFn: () => apiKeyService.get(id!),
     enabled: !!id,
     staleTime: 60_000,
+    // api_key_* SSE is admin-gated; 60s safety poll covers the rest (U8).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 

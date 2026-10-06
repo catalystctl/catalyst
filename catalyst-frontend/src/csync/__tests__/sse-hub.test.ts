@@ -5,8 +5,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   subscribeSharedEventSource,
+  subscribeSharedStatus,
+  getSharedStreamStatus,
   __sharedEventSourceStats,
   __resetSharedEventSources,
+  type StreamStatus,
 } from '../../services/api/sse-hub';
 
 class FakeEventSource {
@@ -109,5 +112,34 @@ describe('sse-hub shared EventSource', () => {
     expect(stats).toHaveLength(1);
     expect(stats[0].isLeader).toBe(true);
     expect(stats[0].hasSocket).toBe(true);
+  });
+
+  // ── P2.2: global status API ──
+  it('subscribeSharedStatus receives transitions of streams created after subscribing', async () => {
+    const events: Array<{ url: string; status: StreamStatus; prev: StreamStatus }> = [];
+    const off = subscribeSharedStatus((url, status, prev) => events.push({ url, status, prev }));
+
+    expect(getSharedStreamStatus('/api/s')).toBeUndefined();
+    const unsub = subscribeSharedEventSource('/api/s', ['foo'], vi.fn());
+    await Promise.resolve();
+    expect(getSharedStreamStatus('/api/s')).toBe('connected');
+    expect(events).toEqual([{ url: '/api/s', status: 'connected', prev: 'connecting' }]);
+
+    // A second, unrelated stream also flows through the same listener.
+    const unsub2 = subscribeSharedEventSource('/api/s2', ['foo'], vi.fn());
+    await Promise.resolve();
+    expect(events.map((e) => e.url)).toEqual(['/api/s', '/api/s2']);
+
+    unsub();
+    unsub2();
+    off();
+    expect(getSharedStreamStatus('/api/s')).toBeUndefined();
+    expect(getSharedStreamStatus('/api/s2')).toBeUndefined();
+    // D1: teardown notifies 'closed' once per stream (before map deletion), so
+    // global subscribers (DataFreshness) can drop their per-URL state.
+    expect(events).toHaveLength(4);
+    expect(events.map((e) => e.status)).toEqual(['connected', 'connected', 'closed', 'closed']);
+    expect(events[2]).toEqual({ url: '/api/s', status: 'closed', prev: 'connected' });
+    expect(events[3]).toEqual({ url: '/api/s2', status: 'closed', prev: 'connected' });
   });
 });

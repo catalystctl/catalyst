@@ -75,6 +75,12 @@ export type UseQueryResult<TData = unknown, TError = Error> = {
   isError: boolean;
   isSuccess: boolean;
   isFetched: boolean;
+  /** Milliseconds the cached payload was last written (0 = never loaded). */
+  dataUpdatedAt: number;
+  /** Milliseconds the last fetch failure was recorded (0 = never failed). */
+  errorUpdatedAt: number;
+  /** Per-observer staleTime verdict — recomputed on render (feeds "last refreshed"). */
+  isStale: boolean;
   status: 'pending' | 'error' | 'success';
   fetchStatus: 'fetching' | 'paused' | 'idle';
   refetch: () => Promise<TData>;
@@ -138,22 +144,26 @@ export function useQuery<TData = unknown, TError = Error>(
       let maxId = 0;
       for (const k of qAny.observerEntries.keys()) if (k > maxId) maxId = k;
       observerIdRef.current = maxId;
-      let resubscribed = false;
+      // P0-D: the cache entry for this hash can be REPLACED (removeQueries
+      // swaps a fresh instance in for mounted observers). `active` tracks the
+      // instance this observer's bookkeeping currently lives on; every
+      // replacement migrates it — no one-shot latch, so repeated removes can't
+      // strand the observer on a dead instance.
+      let active = current;
       const maybeResubscribe = (event: { type: string; query: { queryHash: string } }): void => {
-        if (resubscribed) return;
         if (event.type !== 'added' && event.type !== 'removed') return;
         if (event.query.queryHash !== query.queryHash) return;
         const fresh = client.getQueryCache().get(query.queryHash) as unknown as Query | undefined;
-        if (!fresh || fresh === current) return;
-        resubscribed = true;
+        if (!fresh || fresh === active) return;
         // Migrate observer to fresh instance and re-notify
-        const oldEntry = (current as unknown as { observerEntries: Map<number, { options: unknown }> }).observerEntries.get(maxId);
+        const oldEntry = (active as unknown as { observerEntries: Map<number, { options: unknown }> }).observerEntries.get(maxId);
         if (oldEntry) {
           (fresh as unknown as { observerEntries: Map<number, { options: unknown }> }).observerEntries.set(maxId, oldEntry);
-          (current as unknown as { observerEntries: Map<number, unknown> }).observerEntries.delete(maxId);
+          (active as unknown as { observerEntries: Map<number, unknown> }).observerEntries.delete(maxId);
         }
-        fresh.observers = Math.max(fresh.observers, 1);
-        (current as unknown as { observers: number }).observers = Math.max(0, current.observers - 1);
+        fresh.observers += 1;
+        (active as unknown as { observers: number }).observers = Math.max(0, active.observers - 1);
+        active = fresh;
         (client as unknown as { setupRefetchInterval: (q: unknown) => void }).setupRefetchInterval(fresh as unknown as Query);
         onStoreChange();
       };
@@ -161,6 +171,15 @@ export function useQuery<TData = unknown, TError = Error>(
       return () => {
         observerIdRef.current = null;
         cacheUnsub();
+        if (active !== current) {
+          // Observer migrated onto a replacement instance — detach it there;
+          // `unsub` below only knows the original one.
+          (
+            client as unknown as {
+              detachMigratedObserver?: (q: unknown, id: number) => void;
+            }
+          ).detachMigratedObserver?.(active as unknown as Query, maxId);
+        }
         unsub();
       };
     },
@@ -229,13 +248,31 @@ export function useQuery<TData = unknown, TError = Error>(
   const isFetching = state.fetchStatus === 'fetching';
   // Initial isLoading should be true for empty enabled query before fetch starts (fix first-render false)
   const isLoading = Boolean(isPending && (isFetching || state.data === undefined));
-  // If placeholder data is present, treat as success for derived flags (TanStack placeholder semantics)
-  const effectiveStatus = isPlaceholderData ? 'success' as const : state.status;
+  // P0.4 semantics: a failed background refetch keeps the cached payload and
+  // records `status: 'error'` + a non-null `error`, so both flags hold at once —
+  // `isError` (together with `data`) drives retry banners like
+  // `{isError && data && <TabErrorState/>}`, while `isSuccess` keeps data-backed
+  // UI rendering instead of blanking to a fallback. The next successful fetch
+  // (or an SSE `setQueryData` patch) clears `error` and flips `isError` back.
   const isError = !isPlaceholderData && state.status === 'error' && state.error !== null;
-  const isSuccess = isPlaceholderData || (state.data !== undefined && state.error === null && effectiveStatus === 'success');
+  const isSuccess = isPlaceholderData || (state.data !== undefined && state.status !== 'pending');
+  // Staleness mirrors the mount effect's staleTime gate (per-observer option,
+  // falling back to client defaults). It is derived at render time, so a
+  // consumer that needs a ticking value re-renders on its own cadence.
+  const staleTime = options.staleTime ?? client.getDefaultOptions().queries?.staleTime ?? 60_000;
+  const isStale =
+    state.isInvalidated ||
+    state.data === undefined ||
+    Date.now() - state.dataUpdatedAt >= (typeof staleTime === 'number' ? staleTime : 0);
 
   const refetch = useCallback(() => {
-    return client.fetchQuery({ ...optionsRef.current, queryKey: optionsRef.current.queryKey });
+    // P0.1: a manual refetch is an explicit "give me the network now" — pass
+    // force so fetchQuery's staleTime gate cannot serve cached data instead
+    // (a Refresh button used to no-op while data was still fresh).
+    return client.fetchQuery(
+      { ...optionsRef.current, queryKey: optionsRef.current.queryKey },
+      { force: true },
+    );
   }, [client]);
 
   const resultRef = useRef<UseQueryResult<TData, TError> | null>(null);
@@ -248,6 +285,9 @@ export function useQuery<TData = unknown, TError = Error>(
     isError,
     isSuccess,
     isFetched: state.dataUpdatedAt > 0 || state.errorUpdatedAt > 0,
+    dataUpdatedAt: state.dataUpdatedAt,
+    errorUpdatedAt: state.errorUpdatedAt,
+    isStale,
     status: isPlaceholderData ? 'success' : state.status,
     fetchStatus: state.fetchStatus,
     refetch,
@@ -264,6 +304,9 @@ export function useQuery<TData = unknown, TError = Error>(
     prev.isError === next.isError &&
     prev.isSuccess === next.isSuccess &&
     prev.isFetched === next.isFetched &&
+    prev.dataUpdatedAt === next.dataUpdatedAt &&
+    prev.errorUpdatedAt === next.errorUpdatedAt &&
+    prev.isStale === next.isStale &&
     prev.status === next.status &&
     prev.fetchStatus === next.fetchStatus &&
     prev.failureCount === next.failureCount &&

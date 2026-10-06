@@ -53,6 +53,10 @@
     "retry": "Réessayer",
     "title": "Une erreur est survenue"
   },
+  "freshness": {
+    "never": "Aucune donnée pour le moment",
+    "updatedAt": "Mis à jour {{when}}"
+  },
   "language": {
     "description": "Choisissez la langue de l’interface du panneau.",
     "label": "Langue"
@@ -143,7 +147,8 @@
     "stopped": "Arrêté",
     "stopping": "Arrêt en cours",
     "suspended": "Suspendu",
-    "transferring": "Transfert"
+    "transferring": "Transfert",
+    "unhealthy": "Malsain"
   },
   "statusBadge": {
     "title": "État du serveur : {{label}}"

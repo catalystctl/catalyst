@@ -574,6 +574,12 @@ impl WebSocketHandler {
                     "Auto-restarting server {} after crash (exit {:?})",
                     server_id, exit_code
                 );
+                // Agent-initiated restart: announce the transient state so the
+                // panel does not jump straight to running/error. Backend-
+                // commanded starts set STARTING themselves and are unaffected.
+                let _ = self
+                    .emit_server_state_update(server_id, "starting", None, None, None)
+                    .await;
                 if let Err(e) = self.start_server_with_details(&msg).await {
                     warn!("Auto-restart failed for {}: {}", server_id, e);
                     self.report_error(
@@ -831,77 +837,119 @@ impl WebSocketHandler {
                 .await
                 .unwrap_or(false);
             let mut had_data = false;
+            // P1-25: console_output is dropped when no live connection exists,
+            // so hold the read offsets while the socket is down — skip reads
+            // entirely; the log files themselves buffer the gap and a
+            // reconnect re-reads and re-emits it. The idle poll cadence below
+            // keeps this from spinning hot, and nothing accumulates in memory.
+            let writer_live = self.has_live_writer().await;
 
-            match read_new_tail_bytes(&stdout_path, &mut stdout_pos).await {
-                Ok(new_text) => {
-                    if !new_text.is_empty() {
-                        let (lines, trailing) = shell_utils::split_terminal_lines(&new_text);
-                        let processed_len = new_text.len() - trailing.len();
-                        let mut batch = String::new();
-                        for line in lines {
-                            batch.push_str(&line);
-                            batch.push('\n');
-                            if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                                self.emit_console_output(server_id, "stdout", &batch)
+            if writer_live {
+                match read_new_tail_bytes(&stdout_path, &mut stdout_pos).await {
+                    Ok(new_text) => {
+                        if !new_text.is_empty() {
+                            let (lines, trailing) = shell_utils::split_terminal_lines(&new_text);
+                            let processed_len = new_text.len() - trailing.len();
+                            let mut batch = String::new();
+                            let mut delivered = true;
+                            for line in lines {
+                                batch.push_str(&line);
+                                batch.push('\n');
+                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                    if !self
+                                        .emit_console_output(server_id, "stdout", &batch)
+                                        .await?
+                                    {
+                                        delivered = false;
+                                        break;
+                                    }
+                                    batch.clear();
+                                }
+                            }
+                            if delivered && !batch.is_empty() {
+                                delivered = self
+                                    .emit_console_output(server_id, "stdout", &batch)
                                     .await?;
-                                batch.clear();
+                            }
+                            if delivered {
+                                stdout_pos += processed_len as u64;
+                                had_data = true;
+                                debug!(
+                                    "server {} stdout: read {} bytes, emitted {} bytes, pos now {}",
+                                    server_id,
+                                    new_text.len(),
+                                    processed_len,
+                                    stdout_pos
+                                );
+                            } else {
+                                // Undelivered bytes stay below the offset and
+                                // are retried on a later iteration.
+                                debug!(
+                                    "server {} stdout: read {} bytes, delivery incomplete — holding pos {}",
+                                    server_id,
+                                    new_text.len(),
+                                    stdout_pos
+                                );
                             }
                         }
-                        if !batch.is_empty() {
-                            self.emit_console_output(server_id, "stdout", &batch)
-                                .await?;
+                    }
+                    Err(e) => {
+                        if loop_count <= 5 {
+                            warn!("server {} stdout read error: {}", server_id, e);
                         }
-                        stdout_pos += processed_len as u64;
-                        had_data = true;
-                        debug!(
-                            "server {} stdout: read {} bytes, emitted {} bytes, pos now {}",
-                            server_id,
-                            new_text.len(),
-                            processed_len,
-                            stdout_pos
-                        );
                     }
                 }
-                Err(e) => {
-                    if loop_count <= 5 {
-                        warn!("server {} stdout read error: {}", server_id, e);
-                    }
-                }
-            }
 
-            match read_new_tail_bytes(&stderr_path, &mut stderr_pos).await {
-                Ok(new_text) => {
-                    if !new_text.is_empty() {
-                        let (lines, trailing) = shell_utils::split_terminal_lines(&new_text);
-                        let processed_len = new_text.len() - trailing.len();
-                        let mut batch = String::new();
-                        for line in lines {
-                            batch.push_str(&line);
-                            batch.push('\n');
-                            if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                                self.emit_console_output(server_id, "stderr", &batch)
+                match read_new_tail_bytes(&stderr_path, &mut stderr_pos).await {
+                    Ok(new_text) => {
+                        if !new_text.is_empty() {
+                            let (lines, trailing) = shell_utils::split_terminal_lines(&new_text);
+                            let processed_len = new_text.len() - trailing.len();
+                            let mut batch = String::new();
+                            let mut delivered = true;
+                            for line in lines {
+                                batch.push_str(&line);
+                                batch.push('\n');
+                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                    if !self
+                                        .emit_console_output(server_id, "stderr", &batch)
+                                        .await?
+                                    {
+                                        delivered = false;
+                                        break;
+                                    }
+                                    batch.clear();
+                                }
+                            }
+                            if delivered && !batch.is_empty() {
+                                delivered = self
+                                    .emit_console_output(server_id, "stderr", &batch)
                                     .await?;
-                                batch.clear();
+                            }
+                            if delivered {
+                                stderr_pos += processed_len as u64;
+                                had_data = true;
+                                debug!(
+                                    "server {} stderr: read {} bytes, emitted {} bytes, pos now {}",
+                                    server_id,
+                                    new_text.len(),
+                                    processed_len,
+                                    stderr_pos
+                                );
+                            } else {
+                                debug!(
+                                    "server {} stderr: read {} bytes, delivery incomplete — holding pos {}",
+                                    server_id,
+                                    new_text.len(),
+                                    stderr_pos
+                                );
                             }
                         }
-                        if !batch.is_empty() {
-                            self.emit_console_output(server_id, "stderr", &batch)
-                                .await?;
-                        }
-                        stderr_pos += processed_len as u64;
-                        had_data = true;
-                        debug!(
-                            "server {} stderr: read {} bytes, emitted {} bytes, pos now {}",
-                            server_id,
-                            new_text.len(),
-                            processed_len,
-                            stderr_pos
-                        );
                     }
-                }
-                Err(e) => {
-                    if loop_count <= 5 {
-                        warn!("server {} stderr read error: {}", server_id, e);
+                    Err(e) => {
+                        if loop_count <= 5 {
+                            warn!("server {} stderr read error: {}", server_id, e);
+                        }
                     }
                 }
             }
@@ -931,75 +979,114 @@ impl WebSocketHandler {
             }
 
             if !running {
-                info!(
-                    "server {} container stopped — flushing trailing console data",
-                    server_id
-                );
-                // Container stopped — flush any trailing partial lines too
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                if let Ok(content) = tokio::fs::read_to_string(&stdout_path).await {
-                    if (stdout_pos as usize) < content.len() {
-                        let new_text = &content[stdout_pos as usize..];
-                        let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
-                        let mut batch = String::new();
-                        for line in lines {
-                            batch.push_str(&line);
-                            batch.push('\n');
-                            if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                                self.emit_console_output(server_id, "stdout", &batch)
+                if !writer_live {
+                    // P1-25: flushing now would drop the trailing lines. Wait
+                    // for a reconnect so the final output is delivered, then
+                    // end the stream. Throttled: an outage can last hours.
+                    if loop_count.is_multiple_of(50) {
+                        debug!(
+                            "server {} stopped while backend disconnected — deferring final console flush",
+                            server_id
+                        );
+                    }
+                } else {
+                    info!(
+                        "server {} container stopped — flushing trailing console data",
+                        server_id
+                    );
+                    // Container stopped — flush any trailing partial lines too
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    let mut flushed = true;
+                    if let Ok(content) = tokio::fs::read_to_string(&stdout_path).await {
+                        if (stdout_pos as usize) < content.len() {
+                            let new_text = &content[stdout_pos as usize..];
+                            let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
+                            let mut batch = String::new();
+                            let mut delivered = true;
+                            for line in lines {
+                                batch.push_str(&line);
+                                batch.push('\n');
+                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                    if !self
+                                        .emit_console_output(server_id, "stdout", &batch)
+                                        .await?
+                                    {
+                                        delivered = false;
+                                        break;
+                                    }
+                                    batch.clear();
+                                }
+                            }
+                            if delivered && !trailing.is_empty() {
+                                batch.push_str(trailing);
+                                batch.push('\n');
+                            }
+                            if delivered && !batch.is_empty() {
+                                delivered = self
+                                    .emit_console_output(server_id, "stdout", &batch)
                                     .await?;
-                                batch.clear();
+                            }
+                            if delivered {
+                                stdout_pos = content.len() as u64;
+                            } else {
+                                flushed = false;
                             }
                         }
-                        if !trailing.is_empty() {
-                            batch.push_str(trailing);
-                            batch.push('\n');
-                        }
-                        if !batch.is_empty() {
-                            self.emit_console_output(server_id, "stdout", &batch)
-                                .await?;
-                        }
-                        stdout_pos = content.len() as u64;
                     }
-                }
-                if let Ok(content) = tokio::fs::read_to_string(&stderr_path).await {
-                    if (stderr_pos as usize) < content.len() {
-                        let new_text = &content[stderr_pos as usize..];
-                        let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
-                        let mut batch = String::new();
-                        for line in lines {
-                            batch.push_str(&line);
-                            batch.push('\n');
-                            if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                                self.emit_console_output(server_id, "stderr", &batch)
+                    if let Ok(content) = tokio::fs::read_to_string(&stderr_path).await {
+                        if (stderr_pos as usize) < content.len() {
+                            let new_text = &content[stderr_pos as usize..];
+                            let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
+                            let mut batch = String::new();
+                            let mut delivered = true;
+                            for line in lines {
+                                batch.push_str(&line);
+                                batch.push('\n');
+                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                    if !self
+                                        .emit_console_output(server_id, "stderr", &batch)
+                                        .await?
+                                    {
+                                        delivered = false;
+                                        break;
+                                    }
+                                    batch.clear();
+                                }
+                            }
+                            if delivered && !trailing.is_empty() {
+                                batch.push_str(trailing);
+                                batch.push('\n');
+                            }
+                            if delivered && !batch.is_empty() {
+                                delivered = self
+                                    .emit_console_output(server_id, "stderr", &batch)
                                     .await?;
-                                batch.clear();
+                            }
+                            if delivered {
+                                stderr_pos = content.len() as u64;
+                            } else {
+                                flushed = false;
                             }
                         }
-                        if !trailing.is_empty() {
-                            batch.push_str(trailing);
-                            batch.push('\n');
-                        }
-                        if !batch.is_empty() {
-                            self.emit_console_output(server_id, "stderr", &batch)
-                                .await?;
-                        }
-                        stderr_pos = content.len() as u64;
                     }
+                    if flushed {
+                        // Persist final offsets so a later respawn does not re-emit the flush.
+                        {
+                            let mut offsets = match self.log_stream_offsets.lock() {
+                                Ok(g) => g,
+                                Err(p) => p.into_inner(),
+                            };
+                            offsets.insert(container_id.to_string(), (stdout_pos, stderr_pos));
+                        }
+                        info!(
+                            "Console log stream ended for server {} (container {}) after {} loops",
+                            server_id, container_id, loop_count
+                        );
+                        break;
+                    }
+                    // Some trailing data was not delivered: keep the offsets
+                    // and retry the flush once the socket is back.
                 }
-                // Persist final offsets so a later respawn does not re-emit the flush.
-                {
-                    let mut offsets = match self.log_stream_offsets.lock() {
-                        Ok(g) => g,
-                        Err(p) => p.into_inner(),
-                    };
-                    offsets.insert(container_id.to_string(), (stdout_pos, stderr_pos));
-                }
-                info!(
-                    "Console log stream ended for server {} (container {}) after {} loops",
-                    server_id, container_id, loop_count
-                );
-                break;
             }
 
             tokio::time::sleep(Duration::from_millis(if had_data { 50 } else { 200 })).await;
@@ -1069,5 +1156,73 @@ impl WebSocketHandler {
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod console_tail_tests {
+    use super::read_new_tail_bytes;
+
+    #[tokio::test]
+    async fn reads_only_bytes_appended_since_pos() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stdout");
+        tokio::fs::write(&path, "hello\n").await.unwrap();
+        let mut pos = 0u64;
+        let text = read_new_tail_bytes(&path, &mut pos).await.unwrap();
+        assert_eq!(text, "hello\n");
+        // The helper leaves pos to the caller on a successful read.
+        assert_eq!(pos, 0);
+        pos += text.len() as u64;
+        // No new data → empty read, pos unchanged.
+        let text = read_new_tail_bytes(&path, &mut pos).await.unwrap();
+        assert!(text.is_empty());
+        assert_eq!(pos, 6);
+        // Append → only the new bytes come back.
+        tokio::fs::write(&path, "hello\nworld\n").await.unwrap();
+        let text = read_new_tail_bytes(&path, &mut pos).await.unwrap();
+        assert_eq!(text, "world\n");
+    }
+
+    #[tokio::test]
+    async fn resets_pos_when_file_shrinks() {
+        // Rotation/truncation: pos beyond the new EOF restarts from 0.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stdout");
+        tokio::fs::write(&path, "0123456789").await.unwrap();
+        let mut pos = 10u64;
+        tokio::fs::write(&path, "new\n").await.unwrap();
+        let text = read_new_tail_bytes(&path, &mut pos).await.unwrap();
+        assert_eq!(pos, 0);
+        assert_eq!(text, "new\n");
+    }
+
+    #[tokio::test]
+    async fn skips_non_utf8_chunk_to_eof() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stdout");
+        tokio::fs::write(&path, b"ok\n\xff\xfebad").await.unwrap();
+        let mut pos = 0u64;
+        let text = read_new_tail_bytes(&path, &mut pos).await.unwrap();
+        assert!(text.is_empty());
+        // Undecodable chunk skipped instead of wedging the tail on it.
+        assert_eq!(pos, 8);
+    }
+
+    #[tokio::test]
+    async fn held_pos_rereads_same_bytes() {
+        // P1-25: when output could not be delivered, the caller holds pos;
+        // the next poll must return the same bytes (plus new appends) so a
+        // reconnect re-emits the gap.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stdout");
+        tokio::fs::write(&path, "line1\n").await.unwrap();
+        let mut pos = 0u64;
+        let first = read_new_tail_bytes(&path, &mut pos).await.unwrap();
+        assert_eq!(first, "line1\n");
+        // Delivery failed → pos stays 0; more data appends meanwhile.
+        tokio::fs::write(&path, "line1\nline2\n").await.unwrap();
+        let second = read_new_tail_bytes(&path, &mut pos).await.unwrap();
+        assert_eq!(second, "line1\nline2\n");
     }
 }

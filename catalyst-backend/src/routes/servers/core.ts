@@ -59,6 +59,15 @@ subscribeCacheInvalidations((channel) => {
   if (channel === 'server-list') serverListCache.clear();
 });
 
+/**
+ * Also deliver an admin+global lifecycle event on the server's own stream so
+ * open viewers of that server refresh. Fire-and-forget (house style).
+ */
+function routeLifecycleToClients(wsGateway: any, serverId: string, event: Record<string, unknown>): void {
+  if (typeof wsGateway?.routeToClients !== 'function') return;
+  void wsGateway.routeToClients(serverId, event).catch(() => {});
+}
+
 // Lean select for list-servers — avoids fetching huge template/environment blobs
 // and heavy relations. Matches withConnectionInfo needs.
 const serverListSelect = {
@@ -218,13 +227,12 @@ async function runCloneFileCopy(args: {
     });
 
     const doneGateway = (app as any).wsGateway;
-    if (doneGateway?.pushToGlobalSubscribers) {
-      doneGateway.pushToGlobalSubscribers('server_state_update', {
-        type: 'server_state_update',
-        serverId: cloneServerId,
-        state: ServerState.STOPPED,
-      });
-    }
+    // routeToClients also feeds the global stream, so per-server viewers get it.
+    routeLifecycleToClients(doneGateway, cloneServerId, {
+      type: 'server_state_update',
+      serverId: cloneServerId,
+      state: ServerState.STOPPED,
+    });
     emitServerOperationProgress(doneGateway, {
       serverId: cloneServerId,
       operation: 'clone',
@@ -255,13 +263,11 @@ async function runCloneFileCopy(args: {
     });
 
     const failGateway = (app as any).wsGateway;
-    if (failGateway?.pushToGlobalSubscribers) {
-      failGateway.pushToGlobalSubscribers('server_state_update', {
-        type: 'server_state_update',
-        serverId: cloneServerId,
-        state: ServerState.STOPPED,
-      });
-    }
+    routeLifecycleToClients(failGateway, cloneServerId, {
+      type: 'server_state_update',
+      serverId: cloneServerId,
+      state: ServerState.STOPPED,
+    });
     if (failGateway?.routeToClients) {
       void failGateway
         .routeToClients(cloneServerId, {
@@ -842,6 +848,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           serverId: server.id,
           serverName: server.name,
           ownerId: effectiveOwnerId,
+          nodeId: server.nodeId,
           createdBy: userId,
           timestamp: new Date().toISOString(),
         });
@@ -852,10 +859,20 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           serverId: server.id,
           serverName: server.name,
           ownerId: effectiveOwnerId,
+          nodeId: server.nodeId,
           createdBy: userId,
           timestamp: new Date().toISOString(),
         });
       }
+      routeLifecycleToClients(wsGatewayServerCreated, server.id, {
+        type: 'server_created',
+        serverId: server.id,
+        serverName: server.name,
+        ownerId: effectiveOwnerId,
+        nodeId: server.nodeId,
+        createdBy: userId,
+        timestamp: new Date().toISOString(),
+      });
     }
   );
 
@@ -1143,13 +1160,11 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           data: { status: ServerState.CLONING },
         });
 
-        if (gateway?.pushToGlobalSubscribers) {
-          gateway.pushToGlobalSubscribers('server_state_update', {
-            type: 'server_state_update',
-            serverId: cloneServerId,
-            state: ServerState.CLONING,
-          });
-        }
+        routeLifecycleToClients(gateway, cloneServerId, {
+          type: 'server_state_update',
+          serverId: cloneServerId,
+          state: ServerState.CLONING,
+        });
         emitServerOperationProgress(gateway, {
           serverId: cloneServerId,
           operation: 'clone',
@@ -1272,6 +1287,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         serverId: cloneServerId,
         serverName: server.name,
         ownerId: plan.resolved.ownerId,
+        nodeId: node.id,
         createdBy: userId,
         timestamp: new Date().toISOString(),
       };
@@ -1281,6 +1297,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       if (createdGateway?.pushToGlobalSubscribers) {
         createdGateway.pushToGlobalSubscribers('server_created', createdEvent);
       }
+      routeLifecycleToClients(createdGateway, cloneServerId, createdEvent);
     }
   );
 
@@ -1372,13 +1389,11 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         },
       });
 
-      if (gateway?.pushToGlobalSubscribers) {
-        gateway.pushToGlobalSubscribers('server_state_update', {
-          type: 'server_state_update',
-          serverId: cloneId,
-          state: ServerState.CLONING,
-        });
-      }
+      routeLifecycleToClients(gateway, cloneId, {
+        type: 'server_state_update',
+        serverId: cloneId,
+        state: ServerState.CLONING,
+      });
       emitServerOperationProgress(gateway, {
         serverId: cloneId,
         operation: 'clone',
@@ -2197,6 +2212,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         wsGatewayServerUpdated.pushToAdminSubscribers('server_updated', {
           type: 'server_updated',
           serverId: server.id,
+          nodeId: server.nodeId,
           updatedBy: userId,
           timestamp: new Date().toISOString(),
         });
@@ -2205,10 +2221,18 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         wsGatewayServerUpdated.pushToGlobalSubscribers('server_updated', {
           type: 'server_updated',
           serverId: server.id,
+          nodeId: server.nodeId,
           updatedBy: userId,
           timestamp: new Date().toISOString(),
         });
       }
+      routeLifecycleToClients(wsGatewayServerUpdated, server.id, {
+        type: 'server_updated',
+        serverId: server.id,
+        nodeId: server.nodeId,
+        updatedBy: userId,
+        timestamp: new Date().toISOString(),
+      });
     }
   );
 
@@ -2329,6 +2353,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         wsGateway.pushToAdminSubscribers('server_updated', {
           type: 'server_updated',
           serverId,
+          nodeId: server.nodeId,
           updatedBy: userId,
           change: 'storage_resize',
           timestamp: new Date().toISOString(),
@@ -2338,11 +2363,20 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         wsGateway.pushToGlobalSubscribers('server_updated', {
           type: 'server_updated',
           serverId,
+          nodeId: server.nodeId,
           updatedBy: userId,
           change: 'storage_resize',
           timestamp: new Date().toISOString(),
         });
       }
+      routeLifecycleToClients(wsGateway, serverId, {
+        type: 'server_updated',
+        serverId,
+        nodeId: server.nodeId,
+        updatedBy: userId,
+        change: 'storage_resize',
+        timestamp: new Date().toISOString(),
+      });
 
       // Disk allocation changed — evict list payloads everywhere.
       clearServerListCache();
@@ -2464,6 +2498,18 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         }
       }
 
+      // Per-server viewers get server_deleted while the row still exists —
+      // routeToClients re-checks access against it, so a push after the delete
+      // below would find no server and silently drop the event.
+      routeLifecycleToClients((app as any).wsGateway, serverId, {
+        type: 'server_deleted',
+        serverId: serverId,
+        serverName: server.name,
+        nodeId: server.nodeId,
+        deletedBy: userId,
+        timestamp: new Date().toISOString(),
+      });
+
       await prisma.$transaction(async (tx) => {
         await releaseIpForServer(tx, serverId);
         await tx.server.delete({ where: { id: serverId } });
@@ -2501,6 +2547,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           type: 'server_deleted',
           serverId: serverId,
           serverName: server.name,
+          nodeId: server.nodeId,
           deletedBy: userId,
           timestamp: new Date().toISOString(),
         });
@@ -2510,6 +2557,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           type: 'server_deleted',
           serverId: serverId,
           serverName: server.name,
+          nodeId: server.nodeId,
           deletedBy: userId,
           timestamp: new Date().toISOString(),
         });

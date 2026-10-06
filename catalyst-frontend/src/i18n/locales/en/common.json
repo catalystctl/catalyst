@@ -53,6 +53,10 @@
     "retry": "Try again",
     "title": "Something went wrong"
   },
+  "freshness": {
+    "never": "No data yet",
+    "updatedAt": "Updated {{when}}"
+  },
   "language": {
     "description": "Choose the language used for the panel interface.",
     "label": "Language"
@@ -143,7 +147,8 @@
     "stopped": "Stopped",
     "stopping": "Stopping",
     "suspended": "Suspended",
-    "transferring": "Transferring"
+    "transferring": "Transferring",
+    "unhealthy": "Unhealthy"
   },
   "statusBadge": {
     "title": "Server status: {{label}}"

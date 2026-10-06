@@ -31,6 +31,73 @@ use crate::{
     NetworkManager, StorageManager,
 };
 
+/// Process-wide slot for layers that hold no `WebSocketHandler` reference —
+/// currently the SFTP server — to push unsolicited control-plane events.
+///
+/// Holds what a send actually needs (the live write half and the storage
+/// manager for the disconnect buffer) rather than the handler itself, so it
+/// needs no `Arc<WebSocketHandler>` and cannot create a reference cycle. The
+/// write half is refreshed on every connect and cleared on teardown, so the
+/// slot always reflects the live connection.
+#[derive(Clone)]
+pub struct OutboundEventChannel {
+    write: Arc<RwLock<Option<Arc<tokio::sync::Mutex<WsWrite>>>>>,
+    storage_manager: Arc<StorageManager>,
+}
+
+static OUTBOUND_EVENT_CHANNEL: OnceLock<OutboundEventChannel> = OnceLock::new();
+
+/// Publish the outbound event channel. Idempotent: the agent runs exactly one
+/// handler, and `write`/`storage_manager` are shared with it by `Arc`, so the
+/// first registration stays valid for the whole process.
+pub fn install_outbound_event_channel(
+    write: Arc<RwLock<Option<Arc<tokio::sync::Mutex<WsWrite>>>>>,
+    storage_manager: Arc<StorageManager>,
+) {
+    let _ = OUTBOUND_EVENT_CHANNEL.set(OutboundEventChannel {
+        write,
+        storage_manager,
+    });
+}
+
+/// Fire-and-forget dispatch of an already-serialized event payload.
+///
+/// Returns `false` when the channel is not installed yet or the agent is
+/// shutting down. Callers must treat `false` as "dropped", never as an error:
+/// a missing notification must not fail the file operation that triggered it.
+/// The send runs on a spawned task, so callers never block or observe latency.
+pub fn dispatch_outbound_event(payload_text: String) -> bool {
+    let Some(channel) = OUTBOUND_EVENT_CHANNEL.get().cloned() else {
+        return false;
+    };
+    tokio::spawn(async move {
+        // Mirrors send_or_buffer_event: send on the live socket, or persist for
+        // replay after the next reconnect — no new queue is invented here.
+        let writer = { channel.write.read().await.clone() };
+        if let Some(ws) = writer {
+            let sent = tokio::time::timeout(
+                WS_SEND_TIMEOUT,
+                ws.lock()
+                    .await
+                    .send(Message::Text(payload_text.clone().into())),
+            )
+            .await;
+            if matches!(sent, Ok(Ok(()))) {
+                return;
+            }
+            warn!("Outbound event WS send failed; buffering for replay");
+        }
+        if let Err(e) = channel
+            .storage_manager
+            .append_buffered_event(&payload_text)
+            .await
+        {
+            warn!("Failed to buffer outbound event for replay: {}", e);
+        }
+    });
+    true
+}
+
 pub(crate) type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 pub(crate) type WsWrite = SplitSink<WsStream, Message>;
@@ -1208,6 +1275,12 @@ impl WebSocketHandler {
     }
 
     pub async fn connect_and_listen(&self) -> AgentResult<()> {
+        // Publish the outbound-event channel so the SFTP server (which has no
+        // handler reference) can report file changes. Shares the same write
+        // slot and storage manager, so it follows this connection's lifecycle
+        // without a second queue.
+        install_outbound_event_channel(self.write.clone(), self.storage_manager.clone());
+
         // Spawn periodic log rotation task (every 5 minutes)
         {
             let runtime = self.runtime.clone();
@@ -1496,6 +1569,13 @@ impl WebSocketHandler {
         // containers may still be running and writing to stdout/stderr files.
         self.restart_console_streams().await;
 
+        // Replay error reports / critical state updates buffered while offline.
+        // Must run BEFORE the live reconcile so stale buffered
+        // server_state_updates cannot land on top of the fresh sync below.
+        if let Err(e) = self.flush_buffered_events(write.clone()).await {
+            warn!("Failed to flush buffered events: {}", e);
+        }
+
         // Reconcile server states to prevent drift after reconnection
         if let Err(e) = self.reconcile_server_states().await {
             warn!("Failed to reconcile server states: {}", e);
@@ -1504,11 +1584,6 @@ impl WebSocketHandler {
         // Flush any buffered metrics now that we're connected
         if let Err(e) = self.flush_buffered_metrics(write.clone()).await {
             warn!("Failed to flush buffered metrics: {}", e);
-        }
-
-        // Replay error reports / critical state updates buffered while offline
-        if let Err(e) = self.flush_buffered_events(write.clone()).await {
-            warn!("Failed to flush buffered events: {}", e);
         }
 
         // Report errors that happened before the connection was up (startup
@@ -3613,7 +3688,7 @@ impl WebSocketHandler {
     async fn handle_clone_server_files(
         &self,
         msg: &Value,
-        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+        _write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
         let request_id = msg.get("requestId").cloned().unwrap_or(Value::Null);
         let source_uuid = msg["sourceServerUuid"]
@@ -3638,9 +3713,8 @@ impl WebSocketHandler {
                 "success": false,
                 "error": format!("Source server directory not found: {}", source_dir.display()),
             });
-            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
-                .await
-                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            // P1-27: completion must survive a disconnect — send now or replay.
+            self.send_or_buffer_event(&event.to_string()).await?;
             return Ok(());
         }
 
@@ -3652,9 +3726,7 @@ impl WebSocketHandler {
                 "success": false,
                 "error": "Source and target directories are identical",
             });
-            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
-                .await
-                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            self.send_or_buffer_event(&event.to_string()).await?;
             return Ok(());
         }
 
@@ -3668,9 +3740,7 @@ impl WebSocketHandler {
                     "success": false,
                     "error": format!("Failed to clear target directory: {}", e),
                 });
-                send_ws_with_timeout(write, Message::Text(event.to_string().into()))
-                    .await
-                    .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+                self.send_or_buffer_event(&event.to_string()).await?;
                 return Ok(());
             }
         }
@@ -3711,9 +3781,7 @@ impl WebSocketHandler {
                 "success": false,
                 "error": format!("cp -a exited with code {}", status.code().unwrap_or(-1)),
             });
-            send_ws_with_timeout(write, Message::Text(event.to_string().into()))
-                .await
-                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            self.send_or_buffer_event(&event.to_string()).await?;
             return Ok(());
         }
 
@@ -3758,9 +3826,7 @@ impl WebSocketHandler {
             "success": true,
             "bytes": copied_bytes,
         });
-        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
-            .await
-            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        self.send_or_buffer_event(&event.to_string()).await?;
 
         Ok(())
     }
@@ -3768,7 +3834,7 @@ impl WebSocketHandler {
     async fn handle_resize_storage(
         &self,
         msg: &Value,
-        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+        _write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
         let server_id = msg["serverId"]
             .as_str()
@@ -3818,9 +3884,8 @@ impl WebSocketHandler {
             }),
         };
 
-        send_ws_with_timeout(write, Message::Text(event.to_string().into()))
-            .await
-            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        // P1-27: completion must survive a disconnect — send now or replay.
+        self.send_or_buffer_event(&event.to_string()).await?;
 
         result?;
 
@@ -4103,19 +4168,31 @@ impl WebSocketHandler {
         }
     }
 
+    /// True while a live WebSocket write half is installed. Console tails use
+    /// this to hold their read offsets across a disconnect (P1-25): the log
+    /// files themselves buffer the gap until the socket returns.
+    pub(crate) async fn has_live_writer(&self) -> bool {
+        self.write.read().await.is_some()
+    }
+
+    /// Best-effort console delivery. Returns `true` only when the data reached
+    /// a live connection (or was empty). Callers that track read offsets must
+    /// not advance past undelivered bytes (P1-25) so a reconnect re-reads and
+    /// re-emits the gap instead of losing it.
     pub(crate) async fn emit_console_output(
         &self,
         server_id: &str,
         stream: &str,
         data: &str,
-    ) -> AgentResult<()> {
+    ) -> AgentResult<bool> {
         if data.is_empty() {
-            return Ok(());
+            return Ok(true);
         }
 
         // SEC-H-05: console is best-effort. Sanitize ANSI/CSI/OSC on emit so
         // terminal escapes from game output cannot attack panel terminals,
-        // then drop (don't error) when the slow consumer times out.
+        // then report non-delivery (don't error) when the slow consumer times
+        // out or the socket is down.
         let clean = sanitize_console_text(data);
         let msg = ConsoleOutput {
             ty: "console_output",
@@ -4130,24 +4207,24 @@ impl WebSocketHandler {
         if let Some(ws) = writer {
             if let Err(err) = send_ws_with_timeout(&ws, Message::Text(text.into())).await {
                 debug!(
-                    "console_output dropped for server {} (slow consumer: {})",
+                    "console_output not delivered for server {} (slow consumer: {})",
                     server_id, err
                 );
-            } else {
-                debug!(
-                    "console_output sent for server {} ({} bytes)",
-                    server_id,
-                    data.len()
-                );
+                return Ok(false);
             }
-        } else {
             debug!(
-                "console_output dropped for server {} — no active WebSocket",
-                server_id
+                "console_output sent for server {} ({} bytes)",
+                server_id,
+                data.len()
             );
+            return Ok(true);
         }
 
-        Ok(())
+        debug!(
+            "console_output not delivered for server {} — no active WebSocket",
+            server_id
+        );
+        Ok(false)
     }
 
     pub(crate) async fn emit_eula_required(

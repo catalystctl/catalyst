@@ -258,7 +258,7 @@ export default function ServerStartupVariablesSection({
               <div key={i} className="h-10 animate-pulse rounded-sm bg-surface-2" />
             ))}
           </div>
-        ) : isError ? (
+        ) : isError && !variablesData ? (
           <div className="flex items-center gap-2 py-3 text-mini text-danger">
             <AlertCircle className="h-4 w-4" />
             {t('tabs.startup.loadFailed')}

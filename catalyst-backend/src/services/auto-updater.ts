@@ -5,6 +5,7 @@ import fetch from "node-fetch";
 import { captureSystemError } from "./error-logger";
 import { getCurrentVersion } from "../lib/panel-version";
 import { getAutoUpdateSettings, DEFAULT_AUTO_UPDATE_INTERVAL_MS } from "./auto-update-settings";
+import { getWsGateway } from "../websocket/gateway";
 
 export { getCurrentVersion };
 
@@ -80,6 +81,49 @@ let updateState: UpdateState = {
 	logs: [],
 };
 
+/** P1-31: event vocabulary for the admin `panel_update_state` stream. */
+type PanelUpdateEventState =
+	| "checking"
+	| "downloading"
+	| "installing"
+	| "completed"
+	| "failed";
+
+/** Maps the internal UpdateState onto panel_update_state event states. */
+const UPDATE_STATE_EVENT: Record<UpdateState["state"], PanelUpdateEventState | null> = {
+	idle: null,
+	pulling: "downloading",
+	restarting: "installing",
+	failed: "failed",
+};
+
+/** Best-effort admin push; emission failures must never break the update flow. */
+function emitPanelUpdateState(state: PanelUpdateEventState, message?: string | null) {
+	try {
+		getWsGateway()?.pushToAdminSubscribers("panel_update_state", {
+			type: "panel_update_state",
+			state,
+			...(typeof message === "string" ? { message } : {}),
+			timestamp: new Date().toISOString(),
+		});
+	} catch {
+		/* best-effort */
+	}
+}
+
+function emitPanelUpdateAvailable(currentVersion: string, latestVersion: string | null) {
+	try {
+		getWsGateway()?.pushToAdminSubscribers("panel_update_available", {
+			type: "panel_update_available",
+			currentVersion,
+			latestVersion,
+			timestamp: new Date().toISOString(),
+		});
+	} catch {
+		/* best-effort */
+	}
+}
+
 function setUpdateState(state: UpdateState["state"], message?: string | null) {
 	if (state === "pulling") {
 		clearUpdateLogs();
@@ -94,6 +138,9 @@ function setUpdateState(state: UpdateState["state"], message?: string | null) {
 		updatedAt: new Date().toISOString(),
 		logs: [...updateLogs],
 	};
+	// P1-31: mirror every lifecycle transition to admin SSE subscribers.
+	const event = UPDATE_STATE_EVENT[state];
+	if (event) emitPanelUpdateState(event, message ?? null);
 }
 
 export function getUpdateState(): UpdateState {
@@ -137,6 +184,7 @@ export async function checkForUpdate(logger?: any): Promise<UpdateStatus> {
 	const currentVersion = getCurrentVersion();
 	const isDockerEnv = isDocker();
 	const settings = await getAutoUpdateSettings();
+	emitPanelUpdateState("checking");
 
 	try {
 		const response = await fetch(
@@ -157,6 +205,11 @@ export async function checkForUpdate(logger?: any): Promise<UpdateStatus> {
 			currentVersion !== "unknown" &&
 			compareVersions(currentVersion, latestVersion);
 
+		// P1-31: announce only fresh discoveries so repeated polls (or the
+		// manual /check re-run) do not re-broadcast the same release.
+		const alreadyAnnounced =
+			cachedStatus.updateAvailable && cachedStatus.latestVersion === latestVersion;
+
 		cachedStatus = {
 			currentVersion,
 			latestVersion,
@@ -170,6 +223,10 @@ export async function checkForUpdate(logger?: any): Promise<UpdateStatus> {
 			autoUpdateIntervalMs: settings.intervalMs,
 			autoUpdatePolling: checkInterval !== null,
 		};
+
+		if (updateAvailable && !alreadyAnnounced) {
+			emitPanelUpdateAvailable(currentVersion, latestVersion);
+		}
 
 		if (logger) {
 			logger.info(
@@ -487,6 +544,13 @@ export async function performUpdate(logger?: {
 				appendUpdateLog(`Failed to start restart helper: ${err.message}`);
 				logger?.error?.({ err }, "failed to start compose apply helper");
 			});
+
+			// P1-31: this process has done all it can — the sibling helper
+			// recreates the containers (this panel goes down briefly).
+			emitPanelUpdateState(
+				"completed",
+				"Update initiated: images pulled and containers restarting. The panel may be briefly unavailable.",
+			);
 
 			return {
 				success: true,

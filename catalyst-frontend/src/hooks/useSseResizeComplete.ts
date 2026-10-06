@@ -4,7 +4,7 @@
  * Listens for `storage_resize_complete` events via SSE and triggers
  * Catalyst Sync invalidation + toast notification.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@/csync';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 import { qk } from '../lib/queryKeys';
@@ -18,6 +18,12 @@ export function useSseResizeComplete(
   onComplete: (result: ResizeResult) => void,
 ) {
   const queryClient = useQueryClient();
+  // P1-23: callers pass an inline closure, so keeping onComplete in the deps
+  // tore the subscription down on every keystroke. Read it through a ref.
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     const disconnect = createServerEventsStream(
@@ -43,11 +49,11 @@ export function useSseResizeComplete(
           queryClient.invalidateQueries({ queryKey: qk.dashboardStats() }),
         ]);
 
-        onComplete(result);
+        onCompleteRef.current(result);
       },
       () => {},
     );
 
     return disconnect;
-  }, [serverId, queryClient, onComplete]);
+  }, [serverId, queryClient]);
 }

@@ -11,7 +11,10 @@
  *      duplicated. Content is never used for dedupe (identical lines repeat).
  *   3. SSE events are batched via rAF so high-rate output does not thrash React.
  *   4. Polling every 2s when the stream is fully down; reconcile every 10s even
- *      when connected to catch throttled or otherwise missed SSE lines.
+ *      when connected to catch throttled or otherwise missed SSE lines, and
+ *      immediately on the transition to 'connected'. The connected reconcile
+ *      is incremental (`sinceTs` = max seen log timestamp) while the buffer
+ *      carries timestamps; a fixed-tail fetch otherwise.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -67,6 +70,25 @@ function toHistoryEntry(log: ServerLogEntry): ConsoleEntry {
   };
 }
 
+/**
+ * Both log endpoints answer chronologically (ASC), but normalize anyway so a
+ * DESC-shaped response (older backend, proxy rewrite) cannot append the batch
+ * in reverse (P1-18).
+ */
+function normalizeChronological(logs: ServerLogEntry[]): ServerLogEntry[] {
+  if (logs.length < 2) return logs;
+  const ts = (v: unknown) => {
+    const s = String(v ?? '');
+    return /^\d+$/.test(s) ? Number(s) : Date.parse(s);
+  };
+  const first = ts(logs[0].timestamp);
+  const last = ts(logs[logs.length - 1].timestamp);
+  if (Number.isFinite(first) && Number.isFinite(last) && first > last) {
+    return [...logs].reverse();
+  }
+  return logs;
+}
+
 export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
   const [entries, setEntries] = useState<ConsoleEntry[]>([]);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>('connecting');
@@ -84,9 +106,23 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
    * buffer when history lands so a late setEntries(history) cannot clobber them.
    */
   const pendingLiveRef = useRef<ConsoleEntry[]>([]);
+  /**
+   * Max seen log timestamp (epoch ms) across history + live rows — the
+   * `sinceTs` cursor for incremental connected reconciles (P1-18).
+   */
+  const maxSeenTsRef = useRef(0);
+  /** Latest reconcile closure — see the updater effect below (P1-18). */
+  const reconcileRef = useRef<() => void>(() => {});
 
   const batchBuffer = useRef<ConsoleEntry[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
+
+  const noteTimestamp = useCallback((ts: unknown) => {
+    if (ts == null) return;
+    const s = String(ts);
+    const ms = /^\d+$/.test(s) ? Number(s) : Date.parse(s);
+    if (Number.isFinite(ms) && ms > maxSeenTsRef.current) maxSeenTsRef.current = ms;
+  }, []);
 
   const trim = useCallback(
     (list: ConsoleEntry[]) => (list.length > maxEntries ? list.slice(-maxEntries) : list),
@@ -146,6 +182,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
 
   const pushLiveOutput = useCallback(
     (stream: string, data: string, timestamp?: string, logId?: string) => {
+      noteTimestamp(timestamp);
       pushLive({
         id: logId ? `hist:${logId}` : `live-${nextId.current++}`,
         stream,
@@ -153,7 +190,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
         timestamp,
       });
     },
-    [pushLive],
+    [pushLive, noteTimestamp],
   );
 
   // ── Load initial log history via REST ──
@@ -190,6 +227,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     historyAppliedRef.current = false;
     loadedKeyRef.current = '';
     seenIdsRef.current = new Set();
+    maxSeenTsRef.current = 0;
     if (flushTimerRef.current !== null) {
       cancelAnimationFrame(flushTimerRef.current);
       flushTimerRef.current = null;
@@ -197,13 +235,37 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     setEntries([]);
   }, [serverId]);
 
+  /**
+   * Append-only merge of history rows into the buffer: id dedupe, never a
+   * wipe. Shared by the query effect (fixed-tail fetches) and the direct
+   * `sinceTs` reconcile (P1-18).
+   */
+  const mergeHistoryRows = useCallback(
+    (rows: ServerLogEntry[]) => {
+      if (!Array.isArray(rows) || rows.length === 0) return;
+      const history = normalizeChronological(rows).map(toHistoryEntry);
+      for (const e of history) noteTimestamp(e.timestamp);
+      const unseen = history.filter((e) => !seenIdsRef.current.has(e.id));
+      // Drain any stragglers held before the gate opened.
+      const pending = pendingLiveRef.current;
+      pendingLiveRef.current = [];
+      const freshPending = pending.filter((e) =>
+        e.id.startsWith('hist:') ? !seenIdsRef.current.has(e.id) : true,
+      );
+      const additions = unseen.concat(freshPending);
+      if (additions.length === 0) return;
+      rememberIds(additions.filter((e) => e.id.startsWith('hist:')).map((e) => e.id));
+      setEntries((prev) => trim(prev.concat(additions)));
+    },
+    [noteTimestamp, rememberIds, trim],
+  );
+
   // ── Apply history monotonically: append unseen rows, never replace ──
   useEffect(() => {
     if (!serverId || !Array.isArray(logsQuery.data)) return;
 
     const key = `${serverId}:${initialLines}`;
     const isInitialLoad = loadedKeyRef.current !== key || !historyAppliedRef.current;
-    const history: ConsoleEntry[] = logsQuery.data.map((log: ServerLogEntry) => toHistoryEntry(log));
 
     if (flushTimerRef.current !== null) {
       cancelAnimationFrame(flushTimerRef.current);
@@ -215,6 +277,10 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     }
 
     if (isInitialLoad) {
+      const history: ConsoleEntry[] = normalizeChronological(logsQuery.data).map(
+        (log: ServerLogEntry) => toHistoryEntry(log),
+      );
+      for (const e of history) noteTimestamp(e.timestamp);
       const historyIds = new Set(history.map((e) => e.id));
       rememberIds([...historyIds]);
       // Live lines that arrived while history was in flight: keep any row whose
@@ -231,18 +297,10 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
       return;
     }
 
-    // Subsequent fetches (down-polling, connected reconcile, manual retry):
-    // append only rows never seen. No wipe, no content matching.
-    const unseen = history.filter((e) => !seenIdsRef.current.has(e.id));
-    // Drain any stragglers held before the gate opened.
-    const pending = pendingLiveRef.current;
-    pendingLiveRef.current = [];
-    const freshPending = pending.filter((e) => (e.id.startsWith('hist:') ? !seenIdsRef.current.has(e.id) : true));
-    const additions = unseen.concat(freshPending);
-    if (additions.length === 0) return;
-    rememberIds(additions.filter((e) => e.id.startsWith('hist:')).map((e) => e.id));
-    setEntries((prev) => trim(prev.concat(additions)));
-  }, [logsQuery.data, serverId, initialLines, trim, rememberIds]);
+    // Subsequent fetches (down-polling, manual retry): append only rows never
+    // seen. No wipe, no content matching.
+    mergeHistoryRows(logsQuery.data);
+  }, [logsQuery.data, serverId, initialLines, trim, rememberIds, mergeHistoryRows, noteTimestamp]);
 
   // If history request fails, still open the live gate so SSE/commands aren't stuck.
   useEffect(() => {
@@ -296,7 +354,12 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
       }
     });
 
-    const unsubStatus = consoleSseClient.onStatusChange(setStreamStatus);
+    const unsubStatus = consoleSseClient.onStatusChange((s) => {
+      setStreamStatus(s);
+      // P1-18a: reconcile immediately when the stream (re)connects — lines
+      // emitted during the outage must not wait for the next 10s tick.
+      if (s === 'connected') reconcileRef.current();
+    });
 
     return () => {
       unsubEvent();
@@ -312,6 +375,28 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
 
   // ── Fallback polling when SSE is fully down ──
   const refetchLogs = logsQuery.refetch;
+
+  // P1-18: one reconcile shared by the connected interval and the immediate
+  // catch-up on (re)connect. When the buffer already carries timestamps it
+  // asks for rows newer than the newest seen one (sinceTs, ASC, capped at
+  // 5000 server-side); otherwise it keeps the fixed-tail fetch. Held in a
+  // ref (updated every render) so identity churn never tears down the SSE
+  // subscription or the interval.
+  useEffect(() => {
+    reconcileRef.current = () => {
+      if (!serverId) return;
+      const sinceTs = maxSeenTsRef.current;
+      if (historyAppliedRef.current && sinceTs > 0) {
+        serversApi
+          .logs(serverId, { sinceTs })
+          .then((rows) => mergeHistoryRows(rows))
+          .catch(() => {});
+        return;
+      }
+      refetchLogs().catch(() => {});
+    };
+  });
+
   useEffect(() => {
     if (!serverId) return;
     if (
@@ -335,10 +420,10 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     if (!serverId) return;
     if (streamStatus !== 'connected') return;
     const interval = setInterval(() => {
-      refetchLogs().catch(() => {});
+      reconcileRef.current();
     }, RECONCILE_CONNECTED_MS);
     return () => clearInterval(interval);
-  }, [serverId, streamStatus, refetchLogs]);
+  }, [serverId, streamStatus]);
 
   // ── Command sending ──
   const send = useCallback(

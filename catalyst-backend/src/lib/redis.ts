@@ -139,6 +139,12 @@ export class CatalystRedis {
   private lastFailureLogAt = 0;
   /** Hook for structured observability (circuit opens, sustained failures). */
   failureEventSink: ((event: 'failure' | 'circuit-open') => void) | null = null;
+  /**
+   * Hook invoked after the subscriber socket successfully resubscribes
+   * following a disconnect. Pub/sub has no replay, so messages published
+   * while the socket was down are lost — consumers use this to resync.
+   */
+  subscriberRecoverySink: (() => void) | null = null;
 
   commandsTotal = 0;
   errorsTotal = 0;
@@ -583,10 +589,23 @@ export class CatalystRedis {
     if (channels.length === 0) return;
     try {
       await this.ensureSubscriber();
+      let restored = 0;
       for (const channel of channels) {
-        try { await this.subCommand('SUBSCRIBE', channel); } catch { /* retry later */ }
+        try {
+          await this.subCommand('SUBSCRIBE', channel);
+          restored += 1;
+        } catch { /* retry later */ }
       }
+      if (restored > 0) this.emitSubscriberRecovery();
     } catch { /* stay degraded */ }
+  }
+
+  private emitSubscriberRecovery(): void {
+    const sink = this.subscriberRecoverySink;
+    if (!sink) return;
+    try {
+      sink();
+    } catch { /* observability must not throw into the reconnect path */ }
   }
 
   async quit(): Promise<void> {

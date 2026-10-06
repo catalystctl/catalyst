@@ -4,7 +4,8 @@
  * Broadcasts create/delete/update events for users, nodes, servers, templates,
  * and alerts to all connected admin clients in real-time.
  *
- * All events are pushed via wsGateway.pushToGlobalSubscribers().
+ * Subscribers are registered on the gateway admin registry via
+ * wsGateway.addAdminEventSubscriber() and pushed by pushToAdminSubscribers().
  * Event types:
  *   user_created, user_deleted, user_updated
  *   server_created, server_deleted
@@ -23,7 +24,11 @@ import { ErrorCodes } from '../shared-types';
 import { openSseStream } from '../utils/sse.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
-const ADMIN_EVENT_TYPES = [
+// Cap the admin stream like the per-server (100) and console (50) streams.
+// Checked before openSseStream so a full stream still returns JSON 503.
+// Per-worker: each cluster worker enforces its own registry cap.
+export const MAX_ADMIN_SSE_SUBSCRIBERS = 150;
+export const ADMIN_EVENT_TYPES = [
   'user_created', 'user_deleted', 'user_updated',
   'server_created', 'server_deleted', 'server_updated',
   'server_suspended', 'server_unsuspended',
@@ -40,7 +45,7 @@ const ADMIN_EVENT_TYPES = [
   'security_settings_updated', 'smtp_settings_updated', 'theme_settings_updated',
   'system_settings_updated', 'oidc_settings_updated', 'plugin_updated',
   'audit_log_created', 'auth_lockout_created', 'auth_lockout_cleared',
-  'system_error',
+  'system_error', 'system_error_resolved',
   // Task CRUD events
   'task_created', 'task_updated', 'task_deleted',
   // Database events
@@ -57,6 +62,20 @@ const ADMIN_EVENT_TYPES = [
   'agent_update_started', 'agent_update_failed', 'agent_update_progress',
   // Node live metrics (from agent health_report)
   'node_metrics_updated',
+  // P0.2: events already pushed to the admin stream but missing from this
+  // allowlist (dropped at the gateway filter before this change).
+  'env_settings_updated', 'mcp_settings_updated', 'node_flapping',
+  'templates_batch_imported',
+  // Server network CRUD (emitted from the gateway network fan-out)
+  'network_created', 'network_updated', 'network_deleted',
+  // Node allocation CRUD (emitted from routes/nodes.ts)
+  'allocation_created', 'allocation_updated', 'allocation_deleted',
+  // Alert webhook/email delivery state (emitted from alert routes)
+  'alert_delivery_updated',
+  // Panel auto-update lifecycle (emitted from admin update routes)
+  'panel_update_available', 'panel_update_state',
+  // Discovered unregistered containers per node (emitted from the gateway)
+  'discovered_servers_updated',
 ];
 
 type ReqHeaders = Record<string, string | string[] | undefined>;
@@ -106,6 +125,17 @@ export function adminEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGate
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
       }
 
+      // Enforce the admin-stream subscriber cap BEFORE openSseStream so the
+      // client still gets a JSON error instead of a hijacked dead socket.
+      if (wsGateway.getAdminSseSubscriberCount() >= MAX_ADMIN_SSE_SUBSCRIBERS) {
+        return apiError(
+          reply,
+          503,
+          ErrorCodes.SSE_SUBSCRIBER_LIMIT_REACHED,
+          'Too many event subscribers. Please try again later.',
+        );
+      }
+
       // Take ownership of the socket so Fastify does not end the response on return.
       const sse = openSseStream(request, reply);
       sse.comment('connected');
@@ -118,15 +148,28 @@ export function adminEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGate
         sse.push(eventType, data);
       };
 
-      // Subscribe to all admin event types
-      const { unsubscribe, touch } = wsGateway.addAdminEventSubscriber(ADMIN_EVENT_TYPES, push);
+      // Subscribe to all admin event types. userId + close feed the gateway's
+      // periodic re-auth sweeper: on admin.read revocation it pushes an error
+      // event, destroys the hijacked socket and unsubscribes.
+      const { unsubscribe, touch } = wsGateway.addAdminEventSubscriber(ADMIN_EVENT_TYPES, push, {
+        userId: userId ?? undefined,
+        close: () => {
+          try {
+            (reply.raw as { destroy?: () => void }).destroy?.();
+          } catch { /* socket already gone */ }
+        },
+      });
 
       const heartbeatTimer = setInterval(() => {
         try {
           sse.comment('heartbeat');
+          // Named-event heartbeat: the FE half-open watchdog (P2.5) needs a
+          // real dispatched event, not just an SSE comment.
+          sse.push('ping', { t: Date.now() });
           // Keep the gateway subscriber alive while the browser stream lives.
           touch();
         } catch {
+          // Socket is dead (destroyed by the write failure) — stop the timer.
           clearInterval(heartbeatTimer);
         }
       }, HEARTBEAT_INTERVAL_MS);

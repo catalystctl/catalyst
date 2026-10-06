@@ -1,6 +1,7 @@
 import cluster from 'cluster';
 import os from 'os';
 import { initCacheBusPrimary } from './lib/cache-bus.js';
+import { isRedisConfigured } from './lib/redis.js';
 import { RESTART_MESSAGE_TYPE } from './lib/panel-restart.js';
 
 /**
@@ -32,6 +33,15 @@ if (cluster.isWorker && process.env.CATALYST_BACKGROUND_JOB_OWNER === '1') {
  *   - single-process mode (WORKERS unset/0): always true
  *   - clustered mode: only the tracked background-job worker (the first
  *     forked worker; by PID so replacements after a crash inherit the role)
+ *
+ * Browser SSE fan-out across workers REQUIRES Redis. Cross-worker event
+ * relay goes through `event-bus.publishFanout`, which returns early (no-ops)
+ * when REDIS_URL is not set. With WORKERS>1 and no REDIS_URL, an event
+ * emitted on one worker is silently lost to every client connected to the
+ * other workers — including all background-job emissions (task scheduler,
+ * alert service, error logger, backup retention), which run only on the
+ * job-owner worker. There is no sequence/replay/ack even with Redis:
+ * delivery is best-effort (duplicates possible on reconnect).
  *
  * Process-local caches (agent-auth, permissions, admin-user, node-access):
  * Invalidations are broadcast across workers via the cluster IPC bus in
@@ -70,6 +80,33 @@ export function bootstrapCluster(mainFn: () => Promise<void>) {
           `[cluster] Fix: set WORKERS=0 or 1 (recommended), or terminate TLS at a sticky load balancer\n` +
           `[cluster] that routes by nodeId/cookie to a single backend instance.`,
       );
+      if (!isRedisConfigured()) {
+        // publishFanout()/publishAgentCommand() no-op without REDIS_URL, so
+        // every cross-worker realtime event is silently dropped. Repeated so
+        // it cannot scroll out of view in a busy log.
+        const redisMsg =
+          `[cluster] CRITICAL: WORKERS=${workers} but REDIS_URL is not set — cross-worker SSE fan-out is TOTALLY BROKEN.\n` +
+          `[cluster] Events emitted on one worker (server state, console, metrics, admin stream, task\n` +
+          `[cluster] scheduler, alerts, retention) never reach clients connected to the other workers.\n` +
+          `[cluster] Fix: set REDIS_URL (required for WORKERS>1), or run single-process (WORKERS=0/1).`;
+        console.error(redisMsg);
+        const reminder = setInterval(() => console.error(redisMsg), 60_000);
+        reminder.unref?.();
+        // Dynamic import keeps the Prisma client out of the primary on the
+        // normal (correctly configured) path.
+        void import('./services/error-logger.js')
+          .then(({ captureSystemError }) =>
+            captureSystemError({
+              level: 'critical',
+              component: 'Cluster',
+              message:
+                `WORKERS=${workers} without REDIS_URL: cross-worker SSE fan-out is totally broken — ` +
+                'events emitted on one worker never reach subscribers on the others. Set REDIS_URL or run single-process.',
+              metadata: { workers },
+            }),
+          )
+          .catch(() => { /* error logging must not crash the primary */ });
+      }
     }
     // The first worker forked owns background jobs. Track it by PID: after a
     // worker dies and is re-forked, the replacement gets a NEW worker.id, so

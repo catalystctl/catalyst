@@ -115,12 +115,32 @@ export const serversApi = {
     const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/unsuspend`);
     return data;
   },
-  logs: async (id: string, params?: { lines?: number; stream?: string }) => {
+  logs: async (id: string, params?: { lines?: number; stream?: string; sinceTs?: number }) => {
+    // sinceTs (epoch ms): incremental mode — rows with timestamp >= sinceTs,
+    // ASC, capped at 5000 (P1-18). Mutually exclusive with the fixed tail.
     const data = await apiClient.get<ApiResponse<ServerLogs>>(
       `/api/servers/${id}/logs`,
       { params },
     );
     return Array.isArray(data.data?.logs) ? data.data.logs : [];
+  },
+  stats: async (id: string) => {
+    // Latest metrics snapshot (routes/metrics.ts /servers/:serverId/stats) —
+    // REST fallback for the SSE metrics stream (P1-17).
+    const data = await apiClient.get<ApiResponse<{
+      cpuPercent?: number;
+      memoryUsageMb?: number;
+      memoryAllocatedMb?: number;
+      memoryPercentage?: number;
+      diskIoMb?: number;
+      diskUsageMb?: number;
+      networkRxBytes?: string | number;
+      networkTxBytes?: string | number;
+      timestamp?: string;
+      message?: string;
+      server?: { id: string; name: string; status?: string };
+    }>>(`/api/servers/${id}/stats`);
+    return data.data;
   },
   metrics: async (id: string, params?: { hours?: number; limit?: number }) => {
     const data = await apiClient.get<ApiResponse<any>>(`/api/servers/${id}/metrics`, { params });

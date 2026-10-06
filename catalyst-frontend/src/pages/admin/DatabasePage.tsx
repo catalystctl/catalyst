@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@/csync';
 import { qk } from '@/lib/queryKeys';
+import LastUpdated from '@/components/shared/LastUpdated';
 import {
  Database,
  Plus,
@@ -468,6 +469,7 @@ function DatabasePage() {
     description={t('database.description')}
     actions={
       <div className="flex items-center gap-2">
+        <LastUpdated queryKey={qk.adminDatabaseHosts()} />
         <Button
           size="sm"
           onClick={() => { resetForm(); setIsCreateOpen(true); }}

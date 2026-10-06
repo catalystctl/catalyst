@@ -111,6 +111,18 @@ export async function envRoutes(app: FastifyInstance): Promise<void> {
 				resource: "system",
 				details: { key },
 			});
+			// Sibling of PUT: a reset changes effective values the same way.
+			try {
+				(app as any).wsGateway?.pushToAdminSubscribers("env_settings_updated", {
+					type: "env_settings_updated",
+					keys: [key],
+					action: "reset",
+					updatedBy: (request as any).user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			} catch {
+				/* WS push is best-effort */
+			}
 			return reply.send({ success: true, data: overview });
 		} catch (error) {
 			if (error instanceof EnvValidationError) {
@@ -132,6 +144,19 @@ export async function envRoutes(app: FastifyInstance): Promise<void> {
 			details: { strategy },
 		});
 		schedulePanelRestart();
+		// Sibling of PUT: tell admin viewers the env set changed (the panel is
+		// about to drop every stream connection anyway).
+		try {
+			(app as any).wsGateway?.pushToAdminSubscribers("env_settings_updated", {
+				type: "env_settings_updated",
+				keys: [],
+				action: "restart_scheduled",
+				updatedBy: (request as any).user.userId,
+				timestamp: new Date().toISOString(),
+			});
+		} catch {
+			/* WS push is best-effort */
+		}
 		return reply.send({
 			success: true,
 			data: {

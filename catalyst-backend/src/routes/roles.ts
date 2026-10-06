@@ -32,6 +32,36 @@ function flushAllPermissionCaches(): void {
 }
 
 /**
+ * F27: user-targeted global push so the affected user's clients refresh
+ * their effective permissions. A global push carrying `userId` is delivered
+ * only to that user's own subscribers (same pattern as the owner-visible
+ * alert event in services/alert-service.ts). Best-effort.
+ */
+function emitPermissionsUpdated(app: FastifyInstance, userId: string): void {
+  try {
+    const gw = (app as any).wsGateway;
+    if (typeof gw?.pushToGlobalSubscribers !== 'function') return;
+    // Never rejects (the gateway catches internally) — safe to float.
+    void gw.pushToGlobalSubscribers('permissions_updated', {
+      type: 'permissions_updated',
+      userId,
+      timestamp: Date.now(),
+    });
+  } catch { /* best-effort */ }
+}
+
+/** F27: notify every current member of a role that their permissions changed. */
+async function emitRoleMembersPermissionsUpdated(app: FastifyInstance, roleId: string): Promise<void> {
+  try {
+    const members = await prisma.user.findMany({
+      where: { roles: { some: { id: roleId } } },
+      select: { id: true },
+    });
+    for (const member of members) emitPermissionsUpdated(app, member.id);
+  } catch { /* best-effort */ }
+}
+
+/**
  * Fresh editor permissions for escalation guards. request.user.permissions is
  * cached up to 30s, so a recently-demoted editor could otherwise still grant
  * permissions they no longer hold. Always resolve live here.
@@ -500,6 +530,7 @@ export async function roleRoutes(app: FastifyInstance) {
       // Role permission changes affect all assigned users — flush cache
       if (permissions !== undefined || scopeChanged) {
         flushAllPermissionCaches();
+        void emitRoleMembersPermissionsUpdated(app, roleId);
       }
 
       await createAuditLog(userId, {
@@ -561,12 +592,19 @@ export async function roleRoutes(app: FastifyInstance) {
         });
       }
 
+      // F27: capture members before the delete (the guard above rejects
+      // assigned roles, so normally none; this stays correct under races).
+      const memberIds = await prisma.user
+        .findMany({ where: { roles: { some: { id: roleId } } }, select: { id: true } })
+        .catch(() => [] as { id: string }[]);
+
       await prisma.role.delete({
         where: { id: roleId },
       });
 
       // Grants cascade with the role; members may lose scoped access
       flushAllPermissionCaches();
+      for (const member of memberIds) emitPermissionsUpdated(app, member.id);
 
       await createAuditLog(userId, {
         request,
@@ -645,6 +683,7 @@ export async function roleRoutes(app: FastifyInstance) {
 
       // Permission set changed for all users with this role
       flushAllPermissionCaches();
+      void emitRoleMembersPermissionsUpdated(app, roleId);
 
       await createAuditLog(userId, {
         request,
@@ -720,6 +759,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       flushAllPermissionCaches();
+      void emitRoleMembersPermissionsUpdated(app, roleId);
 
       await createAuditLog(userId, {
         request,
@@ -846,6 +886,7 @@ export async function roleRoutes(app: FastifyInstance) {
       invalidateUserPermissions(userId);
       invalidateAdminUserCache(userId);
       invalidateNodeAccessCache(userId);
+      emitPermissionsUpdated(app, userId);
 
       await createAuditLog(currentUserId, {
         request,
@@ -916,6 +957,7 @@ export async function roleRoutes(app: FastifyInstance) {
       invalidateUserPermissions(userId);
       invalidateAdminUserCache(userId);
       invalidateNodeAccessCache(userId);
+      emitPermissionsUpdated(app, userId);
 
       await createAuditLog(currentUserId, {
         request,

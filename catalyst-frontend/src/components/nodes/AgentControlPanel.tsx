@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime, formatTime } from '@/i18n/format';
-import { subscribeSharedEventSource } from '../../services/api/sse-hub';
+import { subscribeSharedEventSource, type StreamStatus } from '../../services/api/sse-hub';
 import { useQuery, useMutation, useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
 import { agentApi } from '../../services/api/agent';
@@ -11,6 +11,7 @@ import type {
 import { notifyError, notifySuccess } from '../../utils/notify';
 import SectionHeader from '../servers/tabs/SectionHeader';
 import StatGrid from '../servers/tabs/StatGrid';
+import LastUpdated from '../shared/LastUpdated';
 import { Button } from '../ui/button';
 import { Meter, StatusLed } from '../deck/primitives';
 import ConfirmDialog from '../shared/ConfirmDialog';
@@ -82,6 +83,10 @@ const LOG_LEVEL_COLORS: Record<string, string> = {
   debug: 'text-muted-foreground bg-surface-2 border-border/20',
   trace: 'text-muted-foreground bg-surface-2 border-border/20',
 };
+
+// P2-15: generous tail cap — merges append, they never replace history.
+const MAX_LOG_LINES = 2000;
+const logKey = (l: AgentLogEntry) => `${l.timestamp}|${l.target}|${l.message}`;
 
 // ── Main Component ──
 interface AgentControlPanelProps {
@@ -298,7 +303,10 @@ function AgentStatusTab({ node, stats }: { node: NodeInfo; stats: NodeStats | nu
       {/* Live Resource Bars — measured host usage from the agent, not allocations */}
       {res && (
         <div className="space-y-3">
-          <SectionHeader icon={MonitorDot} title={t('agent.liveResources')} />
+          <div className="flex items-start justify-between gap-2">
+            <SectionHeader icon={MonitorDot} title={t('agent.liveResources')} />
+            <LastUpdated queryKey={qk.nodeStats(node.id)} />
+          </div>
           {[
             { label: t('card.cpu'), pct: res.actualCpuPercent },
             {
@@ -336,11 +344,32 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
   const { t } = useTranslation('nodes');
   const [logs, setLogs] = useState<AgentLogEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamStatus, setStreamStatus] = useState<StreamStatus>('connecting');
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const prevStatusRef = useRef<StreamStatus>('connecting');
+
+  // P2-15: append + dedupe with a generous cap — every merge path (initial
+  // load, stream batch, refresh, reconnect backfill) keeps prior history.
+  const mergeLogs = useCallback((incoming: AgentLogEntry[] | undefined | null) => {
+    if (!incoming || incoming.length === 0) return;
+    setLogs((prev) => {
+      const existing = new Set(prev.map(logKey));
+      const fresh = incoming
+        .filter((l) => !existing.has(logKey(l)))
+        .map((l) => ({
+          timestamp: l.timestamp,
+          level: l.level,
+          target: l.target,
+          message: l.message,
+        }));
+      if (fresh.length === 0) return prev;
+      return [...prev, ...fresh].slice(-MAX_LOG_LINES);
+    });
+  }, []);
 
   // Fetch initial logs
   const { data: initialLogs, isLoading } = useQuery({
@@ -355,12 +384,7 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
   const [prevInitialLogs, setPrevInitialLogs] = useState(initialLogs);
   if (initialLogs && initialLogs.length > 0 && logs.length === 0 && initialLogs !== prevInitialLogs) {
     setPrevInitialLogs(initialLogs);
-    setLogs(initialLogs.map((l) => ({
-      timestamp: l.timestamp,
-      level: l.level,
-      target: l.target,
-      message: l.message,
-    })));
+    mergeLogs(initialLogs);
   }
 
   // Live tail via shared SSE hub (/api/nodes/:id/agent/logs/stream).
@@ -375,23 +399,20 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
       (type, data) => {
         if (type !== 'agent_logs') return;
         const fresh = Array.isArray((data as any).logs) ? ((data as any).logs as AgentLogEntry[]) : [];
-        if (fresh.length === 0) return;
-        setLogs((prev) => {
-          const existing = new Set(prev.map((l) => `${l.timestamp}|${l.target}|${l.message}`));
-          const newEntries = fresh
-            .filter((l) => !existing.has(`${l.timestamp}|${l.target}|${l.message}`))
-            .map((l) => ({
-              timestamp: l.timestamp,
-              level: l.level,
-              target: l.target,
-              message: l.message,
-            }));
-          if (newEntries.length === 0) return prev;
-          return [...prev, ...newEntries].slice(-2000);
-        });
+        mergeLogs(fresh);
+      },
+      (status) => {
+        setStreamStatus(status);
+        const prev = prevStatusRef.current;
+        prevStatusRef.current = status;
+        // P2-15: on recovery after a failure, backfill the missed gap.
+        // 'closed' is teardown (pause/unmount), not a failure — never backfill on it.
+        if (status === 'connected' && prev !== 'connected' && prev !== 'connecting') {
+          agentApi.getLogs(nodeId, { lines: 300 }).then(mergeLogs).catch(() => {});
+        }
       },
     );
-  }, [nodeId, isStreaming]);
+  }, [nodeId, isStreaming, mergeLogs]);
 
   // Auto-scroll
   useEffect(() => {
@@ -408,19 +429,11 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
 
   const handleRefresh = useCallback(async () => {
     try {
-      const fresh = await agentApi.getLogs(nodeId, { lines: 300 });
-      if (fresh) {
-        setLogs(fresh.map((l) => ({
-          timestamp: l.timestamp,
-          level: l.level,
-          target: l.target,
-          message: l.message,
-        })));
-      }
+      mergeLogs(await agentApi.getLogs(nodeId, { lines: 300 }));
     } catch {
       // ignore
     }
-  }, [nodeId]);
+  }, [nodeId, mergeLogs]);
 
   const filteredLogs = useMemo(() => {
     let result = logs;
@@ -453,9 +466,16 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
         </Button>
 
         {isStreaming && (
-          <span className="flex items-center gap-1.5 type-overline text-success">
-            <StatusLed tone="go" pulse />
-            {t('agent.polling')}
+          <span
+            className={`flex items-center gap-1.5 type-overline ${
+              streamStatus === 'connected' ? 'text-success' : 'text-warning'
+            }`}
+          >
+            <StatusLed
+              tone={streamStatus === 'connected' ? 'go' : 'hazard'}
+              pulse={streamStatus === 'connected'}
+            />
+            {streamStatus === 'connected' ? t('agent.polling') : t('layout:shell.reconnecting')}
           </span>
         )}
 

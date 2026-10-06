@@ -1,13 +1,18 @@
 /**
- * SSE-based EULA prompt hook.
+ * EULA prompt hook (accept / decline modal).
  *
- * Listens for `eula_required` events via SSE and provides
- * an `accept` / `decline` callback that calls the backend API.
+ * The one-shot `eula_required` event is captured by the AppLayout-mounted
+ * global stream (`useServerStateUpdates`) into `useEulaStore`; this hook
+ * consumes that store instead of opening its own per-server stream, so the
+ * prompt no longer depends on this component being mounted at the exact
+ * moment the agent emits (audit P1.9 / F12 / U5).
+ *
+ * Exported API is unchanged: { eulaPrompt, isLoading, respond, dismiss }.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { serversApi } from '../services/api/servers';
-import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 import { notifyError } from '../utils/notify';
+import { consumePendingEula, usePendingEula } from './useEulaStore';
 
 type EulaPrompt = {
   serverId: string;
@@ -15,27 +20,20 @@ type EulaPrompt = {
 };
 
 export function useEulaPrompt(serverId?: string) {
+  const pending = usePendingEula(serverId);
   const [eulaPrompt, setEulaPrompt] = useState<EulaPrompt | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // One-shot: move the stored prompt into component state and clear the
+  // store so a re-render / remount does not reopen the modal by itself.
   useEffect(() => {
-    if (!serverId) return;
-
-    const disconnect = createServerEventsStream(
-      serverId,
-      (type: ServerEventType, data: Record<string, unknown>) => {
-        if (type === 'eula_required' && String(data.serverId) === serverId) {
-          setEulaPrompt({
-            serverId: String(data.serverId),
-            eulaText: String(data.eulaText ?? ''),
-          });
-        }
-      },
-      () => {},
-    );
-
-    return disconnect;
-  }, [serverId]);
+    if (!pending) return;
+    setEulaPrompt({
+      serverId: pending.serverId,
+      eulaText: pending.message ?? '',
+    });
+    consumePendingEula(pending.serverId);
+  }, [pending]);
 
   const respond = useCallback(
     async (accepted: boolean) => {

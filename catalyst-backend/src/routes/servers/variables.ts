@@ -191,24 +191,24 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         details: { updatedKeys: Object.keys(body), updatedCount: Object.keys(body).length },
       });
 
+      // 3-scope broadcast: admin + global + per-server stream.
       const wsGateway = app.wsGateway;
+      const variablesUpdatedEvent = {
+        type: 'server_updated',
+        serverId,
+        nodeId: updated.nodeId,
+        updatedBy: userId,
+        change: 'variables_updated',
+        timestamp: new Date().toISOString(),
+      };
       if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'variables_updated',
-          timestamp: new Date().toISOString(),
-        });
+        wsGateway.pushToAdminSubscribers('server_updated', variablesUpdatedEvent);
       }
       if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'variables_updated',
-          timestamp: new Date().toISOString(),
-        });
+        wsGateway.pushToGlobalSubscribers('server_updated', variablesUpdatedEvent);
+      }
+      if (wsGateway?.routeToClients) {
+        void wsGateway.routeToClients(serverId, variablesUpdatedEvent).catch(() => {});
       }
 
       return reply.send({ success: true, data: updated.environment });

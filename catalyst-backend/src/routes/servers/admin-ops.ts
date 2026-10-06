@@ -10,6 +10,26 @@ import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
 
 export async function serverAdminopsRoutes(app: FastifyInstance) {
+  /**
+   * Broadcast server_updated on admin + global SSE and on the server's own
+   * stream. Per-server viewers previously never heard these lifecycle
+   * changes — they were pushed only to the admin/global scopes.
+   */
+  const emitServerUpdated = (gateway: any, serverId: string, updatedBy: string, change: string) => {
+    try {
+      const event = {
+        type: 'server_updated',
+        serverId,
+        updatedBy,
+        change,
+        timestamp: new Date().toISOString(),
+      };
+      if (gateway?.pushToAdminSubscribers) gateway.pushToAdminSubscribers('server_updated', event);
+      if (gateway?.pushToGlobalSubscribers) gateway.pushToGlobalSubscribers('server_updated', event);
+      if (gateway?.routeToClients) void gateway.routeToClients(serverId, event).catch(() => {});
+    } catch { /* WS push is best-effort */ }
+  };
+
   app.patch(
     "/:id/restart-policy",
     { onRequest: [app.authenticate] },
@@ -62,24 +82,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       const wsGateway = app.wsGateway;
-      if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId: id,
-          updatedBy: request.user.userId,
-          change: 'restart_policy_updated',
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId: id,
-          updatedBy: request.user.userId,
-          change: 'restart_policy_updated',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      emitServerUpdated(wsGateway, id, request.user.userId, 'restart_policy_updated');
 
       reply.send({
         success: true,
@@ -126,24 +129,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       const wsGateway = app.wsGateway;
-      if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId: id,
-          updatedBy: request.user.userId,
-          change: 'crash_count_reset',
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId: id,
-          updatedBy: request.user.userId,
-          change: 'crash_count_reset',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      emitServerUpdated(wsGateway, id, request.user.userId, 'crash_count_reset');
 
       reply.send({ success: true, message: "Crash count reset" });
     }
@@ -358,24 +344,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       });
 
       const wsGateway = app.wsGateway;
-      if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId: id,
-          updatedBy: request.user.userId,
-          change: 'backup_settings_updated',
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId: id,
-          updatedBy: request.user.userId,
-          change: 'backup_settings_updated',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      emitServerUpdated(wsGateway, id, request.user.userId, 'backup_settings_updated');
 
       reply.send({
         success: true,
@@ -682,17 +651,10 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
           },
         });
 
-        // Broadcast server_updated event (node transfer)
+        // Broadcast server_updated event (node transfer) — admin was the only
+        // scope before; owners need it on the global + per-server streams.
         const wsGatewayTransfer = (app as any).wsGateway;
-        if (wsGatewayTransfer?.pushToAdminSubscribers) {
-          wsGatewayTransfer.pushToAdminSubscribers('server_updated', {
-            type: 'server_updated',
-            serverId: id,
-            updatedBy: request.user.userId,
-            change: 'node_transferred',
-            timestamp: new Date().toISOString(),
-          });
-        }
+        emitServerUpdated(wsGatewayTransfer, id, request.user.userId, 'node_transferred');
       } catch (error: any) {
         // Rollback on error
         await prisma.server.update({
@@ -858,24 +820,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       try {
         publishCacheInvalidate('server-access', { serverId });
       } catch { /* degraded */ }
-      if (wsGatewayOwnership?.pushToAdminSubscribers) {
-        wsGatewayOwnership.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'ownership_transferred',
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (wsGatewayOwnership?.pushToGlobalSubscribers) {
-        wsGatewayOwnership.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'ownership_transferred',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      emitServerUpdated(wsGatewayOwnership, serverId, userId, 'ownership_transferred');
 
       return reply.send({ success: true, data: updated });
     }
@@ -945,24 +890,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
 
       // Broadcast server_updated event (archived)
       const wsGatewayArchive = (app as any).wsGateway;
-      if (wsGatewayArchive?.pushToAdminSubscribers) {
-        wsGatewayArchive.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'archived',
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (wsGatewayArchive?.pushToGlobalSubscribers) {
-        wsGatewayArchive.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'archived',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      emitServerUpdated(wsGatewayArchive, serverId, userId, 'archived');
 
       return reply.send({ success: true, data: updated });
     }
@@ -1019,24 +947,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
 
       // Broadcast server_updated event (restored from archive)
       const wsGatewayRestore = (app as any).wsGateway;
-      if (wsGatewayRestore?.pushToAdminSubscribers) {
-        wsGatewayRestore.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'restored',
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (wsGatewayRestore?.pushToGlobalSubscribers) {
-        wsGatewayRestore.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'restored',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      emitServerUpdated(wsGatewayRestore, serverId, userId, 'restored');
 
       return reply.send({ success: true, data: updated });
     }

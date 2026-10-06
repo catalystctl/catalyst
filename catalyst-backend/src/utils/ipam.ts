@@ -266,6 +266,30 @@ export const shouldUseIpam = (networkMode?: string) => {
   return networkMode !== "bridge" && networkMode !== "host";
 };
 
+/**
+ * Best-effort admin notification after a pool-usage mutation (P0-H).
+ * Dynamic import avoids a static cycle (gateway.ts imports this module).
+ * The gateway may not exist yet (early startup, tests) — never throws.
+ */
+const emitIpPoolUpdated = (nodeId: string, poolId: string): void => {
+  void (async () => {
+    try {
+      const { getWsGateway } = await import("../websocket/gateway");
+      const gateway = getWsGateway();
+      if (gateway && typeof gateway.pushToAdminSubscribers === "function") {
+        gateway.pushToAdminSubscribers("ip_pool_updated", {
+          type: "ip_pool_updated",
+          nodeId,
+          poolId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch {
+      // best-effort
+    }
+  })();
+};
+
 export const allocateIpForServer = async (
   prisma: PrismaLike,
   {
@@ -302,9 +326,12 @@ export const allocateIpForServer = async (
   // rows in this pool so their (poolId, ip) unique-index slots free up for
   // re-allocation (rows soft-released before the hard-delete change would
   // otherwise block their IPs forever).
-  await prisma.ipAllocation.deleteMany({
+  const legacyCleanup = await prisma.ipAllocation.deleteMany({
     where: { poolId: pool.id, releasedAt: { not: null } },
   });
+  if (legacyCleanup.count > 0) {
+    emitIpPoolUpdated(nodeId, pool.id);
+  }
 
   const reserved = getReservedIps(pool);
   const range = getPoolRange(pool);
@@ -354,6 +381,7 @@ export const allocateIpForServer = async (
       throw err;
     }
 
+    emitIpPoolUpdated(nodeId, pool.id);
     return requestedIp;
   }
 
@@ -370,6 +398,7 @@ export const allocateIpForServer = async (
             ip,
           },
         });
+        emitIpPoolUpdated(nodeId, pool.id);
         return ip;
       }
       value += 1n;
@@ -389,6 +418,7 @@ export const allocateIpForServer = async (
         },
       });
 
+      emitIpPoolUpdated(nodeId, pool.id);
       return ip;
     }
   }
@@ -418,6 +448,20 @@ export const releaseIpForServer = async (
   await prisma.ipAllocation.delete({
     where: { id: allocation.id },
   });
+
+  // Release changes pool usage — resolve the owning pool's node for the event.
+  // Best-effort: never fail the release because the lookup threw.
+  try {
+    const pool = await prisma.ipPool.findUnique({
+      where: { id: allocation.poolId },
+      select: { nodeId: true },
+    });
+    if (pool) {
+      emitIpPoolUpdated(pool.nodeId, allocation.poolId);
+    }
+  } catch {
+    // ignore — event emission is best-effort
+  }
 
   return allocation.ip;
 };

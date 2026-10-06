@@ -67,6 +67,17 @@ function setLocalIpCache(ip: string, count: number, resetAt: number): void {
 }
 
 /**
+ * P1-13: tell admins a lockout was cleared without a manual delete. Same
+ * payload shape as the manual-clear emission in routes/admin.ts; bulk
+ * lazy-expiry deletes carry no row id, so lockoutId is null.
+ */
+function emitLockoutCleared(): void {
+  try {
+    getWsGateway()?.pushToAdminSubscribers('auth_lockout_cleared', { lockoutId: null });
+  } catch { /* ignore — WS push is best-effort */ }
+}
+
+/**
  * Record one failed login for an unknown email against the caller's IP.
  * Persists counters in AuthLockout so multi-worker deployments share state.
  * Uses a synthetic email key `__ip__:<ip>` so rows are unique per IP without
@@ -283,13 +294,14 @@ async function maybeCleanupExpiredIpLockouts(prisma: PrismaClient): Promise<void
   lastIpCleanupAt = now;
   const cutoff = new Date(now - IP_RATE_LIMIT_WINDOW_MS);
   try {
-    await prisma.authLockout.deleteMany({
+    const deleted = await prisma.authLockout.deleteMany({
       where: {
         email: { startsWith: '__ip__:' },
         lastFailedAt: { lt: cutoff },
         OR: [{ lockedUntil: null }, { lockedUntil: { lt: new Date(now) } }],
       },
     });
+    if (deleted.count > 0) emitLockoutCleared();
   } catch {
     // best-effort
   }
@@ -444,9 +456,10 @@ export const handleSuccessfulLogin = async (
 
   // Clear any admin-visible AuthLockout rows for this email
   try {
-    await prisma.authLockout.deleteMany({
+    const deleted = await prisma.authLockout.deleteMany({
       where: { email: user.email },
     });
+    if (deleted.count > 0) emitLockoutCleared();
   } catch {
     // best-effort
   }
@@ -472,9 +485,10 @@ export const unlockUserAccount = async (
   });
 
   try {
-    await prisma.authLockout.deleteMany({
+    const deleted = await prisma.authLockout.deleteMany({
       where: { email: user.email },
     });
+    if (deleted.count > 0) emitLockoutCleared();
   } catch {
     // best-effort
   }

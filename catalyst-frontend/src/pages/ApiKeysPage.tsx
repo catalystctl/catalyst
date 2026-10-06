@@ -481,7 +481,7 @@ export function ApiKeysPage() {
             <div className="p-3">
               <TabLoadingState rows={4} />
             </div>
-          ) : isError ? (
+          ) : isError && !apiKeys ? (
             <div className="p-3">
               <TabErrorState message={t('apiKeys.loadFailed')} onRetry={() => refetch?.()} />
             </div>

@@ -5,7 +5,7 @@ import { fetchPlugins } from './api';
 import { loadPluginFrontend, unmountPluginFrontend } from './loader';
 import { useAuthStore } from '../stores/authStore';
 import { PluginContext, type PluginContextValue } from './PluginContext';
-import { createAdminEventsStream } from '../services/api/admin-events';
+import { createAdminEventsStream, hasAdminReadPermission } from '../services/api/admin-events';
 import type { LoadedPlugin } from './types';
 export function PluginProvider({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation('plugins');
@@ -109,8 +109,17 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   // Live hot reload: backend pushes plugin_updated on install/upgrade/reload/
   // enable/disable. Re-fetch manifests and swap frontend bundles in place so
   // an update takes effect without a page refresh or panel reboot.
+  //
+  // P0.6: /api/admin/events requires literal admin.read (routes/admin-events.ts:105).
+  // Without the gate every non-admin tab opened a stream that 403s, and the
+  // poisoned shared EventSource entry then blocked later subscribers too.
+  const permissions = useAuthStore((s) => s.user?.permissions);
+  const canSubscribeAdminEvents = useMemo(
+    () => hasAdminReadPermission(permissions),
+    [permissions],
+  );
   useEffect(() => {
-    if (!initialized || !isAuthenticated) return;
+    if (!initialized || !isAuthenticated || !canSubscribeAdminEvents) return;
     const disconnect = createAdminEventsStream((type) => {
       if (type !== 'plugin_updated') return;
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
@@ -122,7 +131,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
       disconnect();
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
     };
-  }, [initialized, isAuthenticated, loadPlugins]);
+  }, [initialized, isAuthenticated, canSubscribeAdminEvents, loadPlugins]);
 
   const value: PluginContextValue = useMemo(() => ({
     plugins,

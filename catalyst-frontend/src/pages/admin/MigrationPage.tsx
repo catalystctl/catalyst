@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useQuery, useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
 import {
@@ -1017,6 +1018,7 @@ export default function MigrationPage() {
  icon={ArrowRightLeft}
  title={t('migration.title')}
  description={t('migration.description')}
+ actions={<LastUpdated queryKey={qk.migrationJobs()} />}
  />
 
  {/* Tab Bar */}

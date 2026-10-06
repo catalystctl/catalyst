@@ -3,6 +3,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
 import {
  UserPlus,
@@ -894,6 +895,8 @@ function UsersPage() {
  </h1>
  <p className="text-mini text-muted-foreground">{t('users.description')}</p>
  </div>
+ <div className="flex flex-wrap items-center gap-2">
+ <LastUpdated queryKey={qk.adminUsers()} />
  <Button
  size="sm"
  onClick={() => {
@@ -905,6 +908,7 @@ function UsersPage() {
  <UserPlus className="h-3.5 w-3.5" />
  {t('users.createTitle')}
  </Button>
+ </div>
  </header>
 
  {/* ── The deck: controls, columns, rows and totals in one frame ── */}
@@ -1110,7 +1114,7 @@ function UsersPage() {
  </div>
  ))}
  </div>
- ) : isError ? (
+ ) : isError && !data ? (
  <div className="p-3"><TabErrorState message={t('users.loadFailed')} onRetry={() => refetch()} /></div>
  ) : filteredUsers.length > 0 ? (
  filteredUsers.map((user: AdminUser) => {

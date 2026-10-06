@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
 import { useParams, Link } from 'react-router-dom';
 import {
@@ -362,6 +363,7 @@ function NodeAllocationsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <LastUpdated queryKey={qk.adminNodeAllocations(nodeId!)} />
           <Link
             to="/admin/nodes"
             className="flex h-7 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 text-mini text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"

@@ -81,47 +81,53 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       // A stopped server has no live usage: never replay the last running
       // sample (or an old DB row) as if it were current, otherwise an offline
       // server renders stale memory (e.g. 4.8 GB) as live usage.
-      const isLive = (server as { status?: string }).status === 'running';
-      if (!isLive) {
-        const cached = wsGateway.getLatestResourceStats(serverId) as Record<string, unknown> | undefined;
-        const diskUsageMb = typeof cached?.diskUsageMb === 'number' ? (cached.diskUsageMb as number) : 0;
-        push('resource_stats', {
-          type: 'resource_stats',
-          serverId,
-          cpuPercent: 0,
-          memoryUsageMb: 0,
-          networkRxBytes: '0',
-          networkTxBytes: '0',
-          diskIoMb: 0,
-          diskUsageMb,
-          diskTotalMb: server.allocatedDiskMb ?? 0,
-          timestamp: Date.now(),
-        });
-      } else {
-        const cached = wsGateway.getLatestResourceStats(serverId);
-        if (cached) {
-          push('resource_stats', cached);
-        } else {
-          // Fallback: query the DB for the most recent metric
-          const latest = await prisma.serverMetrics.findFirst({
-            where: { serverId },
-            orderBy: { timestamp: 'desc' },
+      // A DB blip (or a socket that died mid-snapshot) must not kill the
+      // stream before the heartbeat is registered — skip the snapshot.
+      try {
+        const isLive = (server as { status?: string }).status === 'running';
+        if (!isLive) {
+          const cached = wsGateway.getLatestResourceStats(serverId) as Record<string, unknown> | undefined;
+          const diskUsageMb = typeof cached?.diskUsageMb === 'number' ? (cached.diskUsageMb as number) : 0;
+          push('resource_stats', {
+            type: 'resource_stats',
+            serverId,
+            cpuPercent: 0,
+            memoryUsageMb: 0,
+            networkRxBytes: '0',
+            networkTxBytes: '0',
+            diskIoMb: 0,
+            diskUsageMb,
+            diskTotalMb: server.allocatedDiskMb ?? 0,
+            timestamp: Date.now(),
           });
-          if (latest) {
-            push('resource_stats', {
-              type: 'resource_stats',
-              serverId,
-              cpuPercent: latest.cpuPercent,
-              memoryUsageMb: latest.memoryUsageMb,
-              networkRxBytes: latest.networkRxBytes.toString(),
-              networkTxBytes: latest.networkTxBytes.toString(),
-              diskIoMb: latest.diskIoMb ?? 0,
-              diskUsageMb: latest.diskUsageMb,
-              diskTotalMb: server.allocatedDiskMb ?? 0,
-              timestamp: latest.timestamp.getTime(),
+        } else {
+          const cached = wsGateway.getLatestResourceStats(serverId);
+          if (cached) {
+            push('resource_stats', cached);
+          } else {
+            // Fallback: query the DB for the most recent metric
+            const latest = await prisma.serverMetrics.findFirst({
+              where: { serverId },
+              orderBy: { timestamp: 'desc' },
             });
+            if (latest) {
+              push('resource_stats', {
+                type: 'resource_stats',
+                serverId,
+                cpuPercent: latest.cpuPercent,
+                memoryUsageMb: latest.memoryUsageMb,
+                networkRxBytes: latest.networkRxBytes.toString(),
+                networkTxBytes: latest.networkTxBytes.toString(),
+                diskIoMb: latest.diskIoMb ?? 0,
+                diskUsageMb: latest.diskUsageMb,
+                diskTotalMb: server.allocatedDiskMb ?? 0,
+                timestamp: latest.timestamp.getTime(),
+              });
+            }
           }
         }
+      } catch {
+        /* snapshot skipped — live events and heartbeats continue */
       }
 
       // Ask the agent to send fresh stats immediately (don't wait for the 30s tick)
@@ -139,6 +145,9 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const heartbeatTimer = setInterval(() => {
         try {
           sse.comment('heartbeat');
+          // Named-event heartbeat: the FE half-open watchdog (P2.5) waits on a
+          // dispatched event, which an SSE comment can never produce.
+          sse.push('ping', { t: Date.now() });
           touch();
         } catch {
           clearInterval(heartbeatTimer);

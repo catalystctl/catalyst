@@ -405,9 +405,9 @@ export default function ServerAdminTab({
 
  const canEdit = !isSuspended && server.status !== 'archived';
  const canEditWhenStopped =
- canEdit && (server.status === 'stopped' || server.status === 'crashed' || server.status === 'error');
+ canEdit && (server.status === 'stopped' || server.status === 'crashed' || server.status === 'unhealthy' || server.status === 'error');
  const canEditAllocations =
- canEdit && (server.status === 'stopped' || server.status === 'running' || server.status === 'crashed' || server.status === 'error');
+ canEdit && (server.status === 'stopped' || server.status === 'running' || server.status === 'crashed' || server.status === 'unhealthy' || server.status === 'error');
  const isRunning = server.status === 'running';
 
  // ── Handlers ──

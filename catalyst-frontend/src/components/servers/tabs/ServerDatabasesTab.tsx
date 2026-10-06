@@ -8,7 +8,9 @@ import TabLoadingState from './TabLoadingState';
 import TabErrorState from './TabErrorState';
 import DataField from './DataField';
 import { ConfirmDialog } from '../../shared/ConfirmDialog';
+import LastUpdated from '../../shared/LastUpdated';
 import DatabaseCredentialsDialog from './DatabaseCredentialsDialog';
+import { qk } from '../../../lib/queryKeys';
 import type { ServerDatabase } from '../../../types/database';
 import { Database } from 'lucide-react';
 
@@ -20,6 +22,8 @@ interface DatabaseHost {
 }
 
 interface Props {
+ /** Enables the freshness stamp when provided; list is event-driven (database_*). */
+ serverId?: string;
  isSuspended: boolean;
  databases: ServerDatabase[];
  databasesLoading: boolean;
@@ -42,6 +46,7 @@ interface Props {
 }
 
 export default function ServerDatabasesTab({
+ serverId,
  isSuspended,
  databases: databasesProp,
  databasesLoading,
@@ -85,8 +90,10 @@ export default function ServerDatabasesTab({
  })
  }
  actions={
- canManageDatabases ? (
- <div className="flex flex-wrap items-center gap-2">
+ <div className="flex flex-wrap items-center justify-end gap-2">
+ {serverId ? <LastUpdated queryKey={qk.serverDatabases(serverId)} /> : null}
+ {canManageDatabases ? (
+ <>
  <select
  className="h-7 rounded-sm border border-border/60 bg-background/40 pl-2 pr-7 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={databaseHostId}
@@ -115,8 +122,9 @@ export default function ServerDatabasesTab({
  >
  {t('common:actions.create')}
  </button>
+ </>
+ ) : null}
  </div>
- ) : undefined
  }
  />
 

@@ -8,6 +8,9 @@ export function useNodes() {
     queryKey: qk.nodes(),
     queryFn: nodesApi.list,
     staleTime: 5 * 60 * 1000,
+    // node_* SSE reaches admins only; 60s safety poll for everyone else (U9).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -16,6 +19,9 @@ export function useAccessibleNodes() {
     queryKey: qk.accessibleNodes(),
     queryFn: nodesApi.getAccessibleNodes,
     staleTime: 5 * 60 * 1000,
+    // node_* SSE reaches admins only; 60s safety poll for everyone else (U9).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -29,6 +35,9 @@ export function useNode(nodeId?: string) {
     },
     enabled: Boolean(nodeId),
     staleTime: 5 * 60 * 1000,
+    // node_* SSE reaches admins only; 60s safety poll for everyone else (U9).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     placeholderData: (prev) => prev,
   });
 }

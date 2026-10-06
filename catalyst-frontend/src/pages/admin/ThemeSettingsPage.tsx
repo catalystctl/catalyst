@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
 import { useThemeSettings, useOidcConfig } from '../../hooks/useAdmin';
@@ -1762,6 +1763,7 @@ function ThemeSettingsPage() {
  description={t('theme.description')}
  actions={
  <div className="flex items-center gap-2">
+ <LastUpdated queryKey={qk.adminThemeSettings()} />
  <button
  type="button"
  onClick={handleResetAll}

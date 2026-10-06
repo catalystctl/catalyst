@@ -81,6 +81,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       }
 
       // Cap check before hijacking so we can still send a JSON 503.
+      // Per-worker cap (registry is process-local).
       const MAX_SSE_CONSOLE_PER_SERVER = 50;
       if (wsGateway.getSseSubscriberCount(serverId) >= MAX_SSE_CONSOLE_PER_SERVER) {
         apiError(reply, 503, ErrorCodes.CONSOLE_VIEWER_LIMIT_REACHED, 'Too many console viewers. Please try again later.');
@@ -92,15 +93,36 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       sse.push('connected', { serverId, timestamp: new Date().toISOString() });
 
       // Register SSE subscriber — pushes events to this HTTP connection
-      const { unsubscribe, touch } = wsGateway.addSseSubscriber(serverId, (event, data) => {
-        // data may already be a JSON string from the gateway
-        sse.write(formatSseMessage(event, data));
-      }, userId);
+      let unsubscribe: () => void;
+      let touch: () => void;
+      try {
+        ({ unsubscribe, touch } = wsGateway.addSseSubscriber(serverId, (event, data) => {
+          // data may already be a JSON string from the gateway
+          sse.write(formatSseMessage(event, data));
+        }, userId));
+      } catch {
+        // Cap TOCTOU: the registry filled between the pre-check and here.
+        // Notify and destroy the socket so the browser doesn't sit on a
+        // silent open stream.
+        try {
+          sse.push('error', {
+            type: 'error',
+            error: ErrorCodes.CONSOLE_VIEWER_LIMIT_REACHED,
+            code: ErrorCodes.CONSOLE_VIEWER_LIMIT_REACHED,
+            timestamp: Date.now(),
+          });
+        } catch { /* socket already gone */ }
+        request.raw.destroy();
+        return;
+      }
 
       // Keep-alive heartbeat every 25s (below most proxy 30s timeouts)
       const heartbeat = setInterval(() => {
         try {
           sse.comment('heartbeat');
+          // Named-event heartbeat: the FE half-open watchdog (P2.5) waits on a
+          // dispatched event, which an SSE comment can never produce.
+          sse.push('ping', { t: Date.now() });
           // Touch the subscriber so the backend sweep knows this connection is
           // still alive even when the agent is offline and no console data is
           // flowing. Without this, subscribers are deleted after 5 min of agent

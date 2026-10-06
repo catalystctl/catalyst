@@ -213,7 +213,8 @@ function FileList({
  );
  }
 
- if (isError) {
+ // Rows win over the error panel: a failed refresh must not blank the listing.
+ if (isError && !files.length) {
  return (
  <div className="flex h-full flex-col items-center justify-center gap-1 px-4 py-10 text-center">
  <Folder className="h-5 w-5 text-danger" />

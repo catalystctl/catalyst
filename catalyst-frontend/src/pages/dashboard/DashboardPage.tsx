@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 
 // Statuses that mean "this server needs an operator" on the fleet wall.
-const DOWN_STATUSES = new Set(['crashed', 'error', 'suspended']);
+const DOWN_STATUSES = new Set(['crashed', 'error', 'suspended', 'unhealthy']);
 
 interface AttentionItem {
   key: string;
@@ -145,7 +145,7 @@ function DashboardPage() {
       if (DOWN_STATUSES.has(server.status)) {
         items.push({
           key: server.id,
-          tone: server.status === 'suspended' ? 'warning' : 'danger',
+          tone: server.status === 'suspended' || server.status === 'unhealthy' ? 'warning' : 'danger',
           title: server.name,
           detail: serverStatusLabel(t, server.status),
           to: `/servers/${server.id}`,
@@ -233,7 +233,7 @@ function DashboardPage() {
             <Skeleton height={12} className="h-3 w-2/3" />
             <Skeleton height={12} className="h-3 w-1/2" />
           </div>
-        ) : statsError ? (
+        ) : statsError && !stats ? (
           <div className="flex items-start gap-2.5 px-3 py-3">
             <StatusLed tone="alarm" className="mt-1" />
             <div className="min-w-0">
@@ -341,7 +341,7 @@ function DashboardPage() {
               <Skeleton height={12} className="h-3 w-2/3" />
               <Skeleton height={12} className="h-3 w-1/2" />
             </div>
-          ) : activitiesError ? (
+          ) : activitiesError && !activities ? (
             <div className="flex items-start gap-2.5 px-3 py-3">
               <StatusLed tone="alarm" className="mt-1" />
               <div className="min-w-0">

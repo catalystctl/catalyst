@@ -32,6 +32,8 @@ export enum ServerState {
   CREATING_BACKUP = "creating_backup",
   TRANSFERRING = "transferring",
   CLONING = "cloning",
+  /** Running container failed its TCP port probe (agent-emitted). */
+  UNHEALTHY = "unhealthy",
 }
 
 export enum NetworkMode {

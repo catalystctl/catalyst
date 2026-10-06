@@ -10,6 +10,31 @@ import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
 
 export async function serverInvitesRoutes(app: FastifyInstance) {
+  /**
+   * Broadcast server_updated on all three scopes: admin SSE (pre-existing),
+   * global SSE (delivery access-checks the payload's serverId, so the owner
+   * and a just-granted subuser hear about it), and the server's own stream so
+   * open viewers of that server refresh too.
+   */
+  const emitServerUpdated = (serverId: string, updatedBy: string, change: string, extra: Record<string, unknown> = {}) => {
+    try {
+      const wsGateway = (app as any).wsGateway;
+      const event = {
+        type: 'server_updated',
+        serverId,
+        updatedBy,
+        change,
+        ...extra,
+        timestamp: new Date().toISOString(),
+      };
+      if (wsGateway?.pushToAdminSubscribers) wsGateway.pushToAdminSubscribers('server_updated', event);
+      if (wsGateway?.pushToGlobalSubscribers) wsGateway.pushToGlobalSubscribers('server_updated', event);
+      if (wsGateway?.routeToClients) {
+        void wsGateway.routeToClients(serverId, event).catch(() => {});
+      }
+    } catch { /* WS push is best-effort */ }
+  };
+
   app.get(
     "/:serverId/permissions",
     { onRequest: [app.authenticate] },
@@ -198,25 +223,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         details: { email: normalizedEmail, permissions: sanitizedPermissions },
       });
 
-      const wsGateway = app.wsGateway;
-      if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'invite_created',
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'invite_created',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      emitServerUpdated(serverId, userId, 'invite_created', { nodeId: server.nodeId });
 
       reply.status(201).send({
         success: true,
@@ -299,6 +306,10 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         details: { email: updated.email, inviteId: updated.id },
       });
 
+      // Sibling of invite create: the token changed, so stale viewers must
+      // refetch the pending-invite list (was emitting nothing).
+      emitServerUpdated(serverId, userId, 'invite_regenerated', { nodeId: server.nodeId });
+
       return reply.send({
         success: true,
         data: updated,
@@ -351,25 +362,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         details: { email: invite.email },
       });
 
-      const wsGateway = app.wsGateway;
-      if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'invite_cancelled',
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'invite_cancelled',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      emitServerUpdated(serverId, userId, 'invite_cancelled', { nodeId: server.nodeId });
 
       reply.send({ success: true });
     }
@@ -439,25 +432,11 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       },
     });
 
-    const wsGateway = app.wsGateway;
-    if (wsGateway?.pushToAdminSubscribers) {
-      wsGateway.pushToAdminSubscribers('server_updated', {
-        type: 'server_updated',
-        serverId: invite.serverId,
-        updatedBy: args.userId,
-        change: 'invite_accepted',
-        timestamp: new Date().toISOString(),
-      });
-    }
-    if (wsGateway?.pushToGlobalSubscribers) {
-      wsGateway.pushToGlobalSubscribers('server_updated', {
-        type: 'server_updated',
-        serverId: invite.serverId,
-        updatedBy: args.userId,
-        change: 'invite_accepted',
-        timestamp: new Date().toISOString(),
-      });
-    }
+    const inviteServer = await prisma.server.findUnique({
+      where: { id: invite.serverId },
+      select: { nodeId: true },
+    });
+    emitServerUpdated(invite.serverId, args.userId, 'invite_accepted', { nodeId: inviteServer?.nodeId });
 
     return invite;
   };
@@ -548,6 +527,28 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       const accepted = await acceptInviteForUser({ userId: signUpUser.id, token, reply, invite });
       if (!accepted) {
         return;
+      }
+
+      // Mirror the admin user-create broadcast (routes/admin.ts) so admin
+      // user lists refresh for invite-based self-registrations too.
+      const createdUser = await prisma.user.findUnique({
+        where: { id: signUpUser.id },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          createdAt: true,
+          updatedAt: true,
+          roles: { select: { id: true, name: true } },
+        },
+      });
+      const wsGatewayUserCreated = (app as any).wsGateway;
+      if (createdUser && wsGatewayUserCreated?.pushToAdminSubscribers) {
+        wsGatewayUserCreated.pushToAdminSubscribers('user_created', {
+          type: 'user_created',
+          user: createdUser,
+          timestamp: new Date().toISOString(),
+        });
       }
 
       const roles = await prisma.role.findMany({
@@ -683,6 +684,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         update: { permissions: sanitizedPermissions },
       });
       try { (app as any).wsGateway?.invalidateServerAccess?.(serverId); } catch { /* ignore */ }
+      try { publishCacheInvalidate('server-access', { serverId }); } catch { /* degraded */ }
 
       await createAuditLog(userId, {
         action: "server.access.update",
@@ -694,17 +696,10 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
       reply.send({ success: true, data: access });
 
-      // Broadcast server_updated event (access change)
-      const wsGatewayAccessUpdated = (app as any).wsGateway;
-      if (wsGatewayAccessUpdated?.pushToAdminSubscribers) {
-        wsGatewayAccessUpdated.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'access_updated',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      // Broadcast server_updated event (access change). Global + per-server
+      // delivery reach the affected subuser directly — admin-only pushed left
+      // their permission view ≥5 min stale.
+      emitServerUpdated(serverId, userId, 'access_updated', { targetUserId, nodeId: server.nodeId });
     }
   );
 
@@ -743,6 +738,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       // Instantly revoke SFTP tokens for the removed user on this server
       revokeSftpTokensForUser(targetUserId, serverId);
       try { (app as any).wsGateway?.invalidateServerAccess?.(serverId); } catch { /* ignore */ }
+      try { publishCacheInvalidate('server-access', { serverId }); } catch { /* degraded */ }
 
       await createAuditLog(userId, {
         action: "server.access.remove",
@@ -754,17 +750,9 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
       reply.send({ success: true });
 
-      // Broadcast server_updated event (access removed)
-      const wsGatewayAccessRemoved = (app as any).wsGateway;
-      if (wsGatewayAccessRemoved?.pushToAdminSubscribers) {
-        wsGatewayAccessRemoved.pushToAdminSubscribers('server_updated', {
-          type: 'server_updated',
-          serverId,
-          updatedBy: userId,
-          change: 'access_removed',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      // Broadcast server_updated event (access removed) — same scope widening
+      // as the grant above so the revoked user stops seeing a live surface.
+      emitServerUpdated(serverId, userId, 'access_removed', { targetUserId, nodeId: server.nodeId });
     }
   );
 

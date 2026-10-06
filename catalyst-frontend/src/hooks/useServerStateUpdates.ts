@@ -9,10 +9,42 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useQueryClient, type Query } from '@/csync';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
+import { invalidateOnce, type InvalidateTarget } from '../lib/invalidateOnce';
+import { setPendingEula } from './useEulaStore';
+import { useAuthStore } from '../stores/authStore';
 import { qk } from '../lib/queryKeys';
 import i18n from '@/i18n';
 
 const DEBOUNCE_MS = 16; // ~60fps
+
+/**
+ * Coalescing window for backend `resync` requests (same leading+trailing
+ * pattern as useStreamRecovery): the first request re-syncs immediately,
+ * further requests inside the window are replayed once when it closes.
+ * Module-level so every hook instance shares one window.
+ */
+const RESYNC_DEBOUNCE_MS = 5_000;
+let lastResyncAt = 0;
+let resyncTrailingTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleFullResync(client: InvalidateTarget) {
+  const run = () => {
+    lastResyncAt = Date.now();
+    // Bare invalidate-all: no query identity to dedupe on, the window above
+    // is the coalescing boundary (mirrors useStreamRecovery).
+    void client.invalidateQueries({});
+  };
+  const elapsed = Date.now() - lastResyncAt;
+  if (lastResyncAt === 0 || elapsed >= RESYNC_DEBOUNCE_MS) {
+    run();
+    return;
+  }
+  if (resyncTrailingTimer !== null) return;
+  resyncTrailingTimer = setTimeout(() => {
+    resyncTrailingTimer = null;
+    if (Date.now() - lastResyncAt >= RESYNC_DEBOUNCE_MS) run();
+  }, RESYNC_DEBOUNCE_MS - elapsed);
+}
 
 const TRANSITIONAL = new Set(['installing', 'starting', 'stopping', 'transferring', 'cloning']);
 function transitionalStage(state: string): string | undefined {
@@ -130,17 +162,22 @@ export function useServerStateUpdates() {
       );
     }
 
-    // Update all servers list caches (unfiltered + filtered query keys like ['servers', filters])
+    // Update all servers list caches (unfiltered + filtered query keys like ['servers', filters]).
     // Skip detail keys where queryKey[1] is a server id string.
+    // P1-9: ['admin-servers', …] list caches get the same status patch —
+    // patching (not invalidating) keeps the admin table live without a
+    // refetch storm on every fleet tick.
     q.setQueriesData(
       {
         predicate: (query: Query) => {
-          if (!Array.isArray(query.queryKey) || query.queryKey[0] !== 'servers') return false;
-          // ['servers'] — unfiltered list
+          if (!Array.isArray(query.queryKey)) return false;
+          const head = query.queryKey[0];
+          if (head !== 'servers' && head !== 'admin-servers') return false;
+          // ['servers'] / ['admin-servers'] — unfiltered list
           if (query.queryKey.length === 1) return true;
           // ['servers', null] legacy
           if (query.queryKey.length === 2 && query.queryKey[1] === null) return true;
-          // ['servers', { status: 'running' }] — filtered lists
+          // ['servers', { status: 'running' }] / ['admin-servers', params] — filtered lists
           if (query.queryKey.length >= 2 && typeof query.queryKey[1] === 'object' && query.queryKey[1] !== null) {
             return true;
           }
@@ -148,11 +185,16 @@ export function useServerStateUpdates() {
         },
       },
       (prev: any) => {
-        if (!Array.isArray(prev)) return prev;
-        return prev.map((srv: any) => {
+        const patchRow = (srv: any) => {
           const update = updates.get(srv.id) || updates.get(srv.uuid);
           return update ? { ...srv, status: update.state } : srv;
-        });
+        };
+        if (Array.isArray(prev)) return prev.map(patchRow);
+        // admin-servers caches { servers, pagination }
+        if (prev && typeof prev === 'object' && Array.isArray(prev.servers)) {
+          return { ...prev, servers: prev.servers.map(patchRow) };
+        }
+        return prev;
       },
     );
 
@@ -225,6 +267,37 @@ export function useServerStateUpdates() {
     const disconnect = createServerEventsStream(
       'all-servers',
       (type: ServerEventType, data: Record<string, unknown>) => {
+        const q = queryClient as any;
+
+        // ── Server-agnostic events (P0-B) ────────────────────────────
+        // Handled BEFORE the serverId guard: these payloads are user- or
+        // cache-scoped and carry no serverId, so the guard used to drop
+        // every one of them (the `alert` branch below was unreachable).
+        if (type === 'alert') {
+          invalidateOnce(q, { queryKey: qk.alerts() });
+          invalidateOnce(q, { queryKey: qk.alertStats() });
+          return;
+        }
+
+        // F27: permission grant changed for the signed-in user — re-read
+        // my-permissions and refresh the auth store (same calls the
+        // user_updated self-branch in useSseAdminEvents makes).
+        if (type === 'permissions_updated') {
+          const userId = String(data.userId ?? '');
+          const currentUser = useAuthStore.getState().user;
+          if (userId && currentUser && currentUser.id === userId) {
+            invalidateOnce(q, { queryKey: qk.myPermissions() });
+            useAuthStore.getState().refresh().catch(() => {});
+          }
+          return;
+        }
+
+        // Backend-requested full cache resync (5s debounce, leading+trailing).
+        if (type === 'resync') {
+          scheduleFullResync(q);
+          return;
+        }
+
         const serverId = String(data.serverId ?? '');
         if (!serverId) return;
 
@@ -236,7 +309,9 @@ export function useServerStateUpdates() {
           return;
         }
 
-        if (type === 'server_state_update' || type === 'server_state') {
+        // `server_state` (dead alias, pruned from both allowlists in P1.4)
+        // is no longer matched — only `server_state_update` is emitted.
+        if (type === 'server_state_update') {
           // Queue update instead of processing immediately
           if (!pendingUpdates.current) {
             pendingUpdates.current = new Map();
@@ -247,18 +322,29 @@ export function useServerStateUpdates() {
             data,
           });
           scheduleProcess();
+          // P1-16: a crash (or any reported exit code) changes detail-page
+          // data the status patch cannot express (lastExitCode, crash count,
+          // restart policy state) — reconcile the detail cache once.
+          if (state === 'crashed' || data.exitCode != null) {
+            invalidateOnce(queryClient as any, { queryKey: qk.server(serverId) });
+          }
           // Invalidate file queries when server starts/stops (new files may be generated)
           if (state === 'running' || state === 'stopped' || state === 'offline') {
-            (queryClient as any).invalidateQueries({ queryKey: qk.files(serverId) });
+            invalidateOnce(queryClient as any, { queryKey: qk.files(serverId) });
           }
           // Activity log records power transitions
-          (queryClient as any).invalidateQueries({ queryKey: qk.serverActivity(serverId) });
+          invalidateOnce(queryClient as any, { queryKey: qk.serverActivity(serverId) });
+          // F4: online/total counts on the dashboard (and the admin dashboard)
+          // must move on every power transition — not only on the next 60s
+          // poll. Only this branch invalidates them; `resource_stats` ticks
+          // above must never do so (they fire per second per server).
+          invalidateOnce(queryClient as any, { queryKey: qk.dashboardStats() });
+          invalidateOnce(queryClient as any, { queryKey: qk.adminStats() });
           return;
         }
 
         if (type === 'server_deleted') {
           // Remove the deleted server from all list caches
-          const q = queryClient as any;
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'servers' },
@@ -274,25 +360,58 @@ export function useServerStateUpdates() {
           q.removeQueries({ queryKey: qk.serverAllocations(serverId) });
           q.removeQueries({ queryKey: qk.backups(serverId) });
           q.removeQueries({ queryKey: qk.tasks(serverId) });
-          q.invalidateQueries({ queryKey: qk.servers() });
+          invalidateOnce(q, { queryKey: qk.servers() });
           return;
         }
 
         // Server lifecycle events — invalidate list and detail caches
         if (type === 'server_created' || type === 'server_updated' || type === 'server_suspended' || type === 'server_unsuspended') {
-          const q = queryClient as any;
-          q.invalidateQueries({ queryKey: qk.servers() });
+          invalidateOnce(q, { queryKey: qk.servers() });
           if (serverId) {
-            q.invalidateQueries({ queryKey: qk.server(serverId) });
-            q.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
-            q.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
-            q.invalidateQueries({ queryKey: qk.serverActivity(serverId) });
+            invalidateOnce(q, { queryKey: qk.server(serverId) });
+            invalidateOnce(q, { queryKey: qk.serverAllocations(serverId) });
+            invalidateOnce(q, { queryKey: qk.serverPermissions(serverId) });
+            invalidateOnce(q, { queryKey: qk.serverActivity(serverId) });
+            if (type === 'server_updated') {
+              // U4/U6: backend pushes server_updated globally but the handler
+              // used to omit both keys — pending invites (10 min stale) and
+              // startup variables (silent overwrite of a second actor's save).
+              invalidateOnce(q, { queryKey: qk.serverInvites(serverId) });
+              invalidateOnce(q, { queryKey: qk.serverVariables(serverId) });
+            }
           }
           return;
         }
 
+        // P1.9: a failed clone otherwise looks like "still cloning" forever.
+        if (type === 'clone_failed') {
+          invalidateOnce(q, { queryKey: qk.server(serverId) });
+          invalidateOnce(q, { queryKey: qk.servers() });
+          invalidateOnce(q, { queryKey: qk.adminServers() });
+          return;
+        }
+
+        // P1.9: resize completion observed globally (the per-server listener
+        // in UpdateServerModal only exists while that modal is mounted).
+        if (type === 'storage_resize_complete') {
+          invalidateOnce(q, { queryKey: qk.server(serverId) });
+          invalidateOnce(q, { queryKey: qk.servers() });
+          invalidateOnce(q, { queryKey: qk.dashboardResources() });
+          invalidateOnce(q, { queryKey: qk.dashboardStats() });
+          return;
+        }
+
+        // P1.9: store the one-shot prompt so useEulaPrompt (and any future
+        // consumer) can show it regardless of which surface started the server.
+        if (type === 'eula_required') {
+          setPendingEula(serverId, {
+            eulaText: data.eulaText,
+            message: data.message,
+          });
+          return;
+        }
+
         if (type === 'server_operation_progress') {
-          const q = queryClient as any;
           const stage = typeof data.stage === 'string' ? data.stage : undefined;
           const progress =
             typeof data.progress === 'number'
@@ -360,11 +479,10 @@ export function useServerStateUpdates() {
           type === 'backup_restore_complete' ||
           type === 'backup_delete_complete'
         ) {
-          (queryClient as any).invalidateQueries({ queryKey: qk.backups(serverId) });
+          invalidateOnce(queryClient as any, { queryKey: qk.backups(serverId) });
         }
 
         if (type === 'server_files_changed') {
-          const q = queryClient as any;
           const changedPath = typeof data.path === 'string' ? data.path
             : typeof data.from === 'string' ? data.from
             : typeof data.to === 'string' ? data.to
@@ -375,14 +493,14 @@ export function useServerStateUpdates() {
             const parent = normalized.includes('/')
               ? normalized.replace(/\/[^/]*$/, '') || '/'
               : '/';
-            q.invalidateQueries({ queryKey: qk.files(serverId, parent) });
-            q.invalidateQueries({ queryKey: qk.files(serverId, normalized) });
+            invalidateOnce(q, { queryKey: qk.files(serverId, parent) });
+            invalidateOnce(q, { queryKey: qk.files(serverId, normalized) });
             // Also invalidate root when change is nested (tree may show ancestors)
             if (parent !== '/') {
-              q.invalidateQueries({ queryKey: qk.files(serverId, '/') });
+              invalidateOnce(q, { queryKey: qk.files(serverId, '/') });
             }
           } else {
-            q.invalidateQueries({ queryKey: qk.files(serverId) });
+            invalidateOnce(q, { queryKey: qk.files(serverId) });
           }
         }
 
@@ -390,15 +508,37 @@ export function useServerStateUpdates() {
         if (type === 'task_progress' || type === 'task_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            (queryClient as any).invalidateQueries({ queryKey: qk.tasks(serverId) });
+            invalidateOnce(queryClient as any, { queryKey: qk.tasks(serverId) });
           }
+        }
+
+        // P0-A: task CRUD changes the list even without an execution event.
+        if (type === 'task_created' || type === 'task_updated' || type === 'task_deleted') {
+          invalidateOnce(queryClient as any, { queryKey: qk.tasks(serverId) });
+          return;
+        }
+
+        // P1-8: database CRUD invalidates the server's database list.
+        if (
+          type === 'database_created' ||
+          type === 'database_deleted' ||
+          type === 'database_password_rotated'
+        ) {
+          invalidateOnce(queryClient as any, { queryKey: qk.serverDatabases(serverId) });
+          return;
+        }
+
+        // F16: backup list/detail changes outside the start/complete lifecycle.
+        if (type === 'backup_updated' || type === 'backup_deleted') {
+          invalidateOnce(queryClient as any, { queryKey: qk.backups(serverId) });
+          return;
         }
 
         // Mod manager events - invalidate mod manager query cache
         if (type === 'mod_install_complete' || type === 'mod_uninstall_complete' || type === 'mod_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            (queryClient as any).invalidateQueries({ queryKey: qk.modManagerInstalled(serverId) });
+            invalidateOnce(queryClient as any, { queryKey: qk.modManagerInstalled(serverId) });
           }
         }
 
@@ -406,15 +546,12 @@ export function useServerStateUpdates() {
         if (type === 'plugin_install_complete' || type === 'plugin_uninstall_complete' || type === 'plugin_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            (queryClient as any).invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId) });
+            invalidateOnce(queryClient as any, { queryKey: qk.pluginManagerInstalled(serverId) });
           }
         }
 
-        // Alert events - invalidate alert queries
-        if (type === 'alert') {
-          (queryClient as any).invalidateQueries({ queryKey: qk.alerts() });
-          (queryClient as any).invalidateQueries({ queryKey: qk.alertStats() });
-        }
+        // Alert events are server-agnostic — handled above, before the
+        // serverId guard (P0-B).
 
         // Resource stats stream frequently — live gauges use useServerMetrics (dedicated SSE).
         // Do NOT invalidate historical metrics charts on every tick (refetch storm).

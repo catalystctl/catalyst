@@ -7,6 +7,8 @@ import TabHeader from './TabHeader';
 import TabEmptyState from './TabEmptyState';
 import TabLoadingState from './TabLoadingState';
 import { ConfirmDialog } from '../../shared/ConfirmDialog';
+import LastUpdated from '../../shared/LastUpdated';
+import { qk } from '../../../lib/queryKeys';
 import { Clock } from 'lucide-react';
 import { formatDateTime } from '@/i18n/format';
 import type { Task } from '../../../types/task';
@@ -47,7 +49,11 @@ export default function ServerTasksTab({
  title={t('tabs.tasks.title')}
  description={t('tabs.tasks.description')}
  actions={
+ <div className="flex flex-wrap items-center justify-end gap-2">
+ {/* Task list is event-driven (task_*) — the stamp shows it is current. */}
+ <LastUpdated queryKey={qk.tasks(serverId)} />
  <ScheduleTaskModal serverId={serverId} trigger="primary" disabled={isSuspended} />
+ </div>
  }
  />
 

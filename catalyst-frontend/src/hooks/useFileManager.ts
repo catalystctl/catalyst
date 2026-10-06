@@ -36,8 +36,8 @@ export function useFileManager(serverId?: string, initialPath = '/') {
     },
     enabled: Boolean(serverId),
     // server_files_changed SSE (useServerStateUpdates) invalidates file lists.
-    // Long safety poll only — avoids 10s thrash on idle file managers.
-    refetchInterval: 60_000,
+    // P1-20: 30s safety poll — a missed event left the listing stale for a minute.
+    refetchInterval: 30_000,
     staleTime: 30_000,
     refetchIntervalInBackground: false,
   });

@@ -16,6 +16,7 @@ import { adminApi } from './services/api/admin';
 import { reportSystemError } from './services/api/systemErrors';
 import { describeError } from './utils/errors';
 import { useAuthStore } from './stores/authStore';
+import { useStreamRecovery } from './hooks/useStreamRecovery';
 
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -88,6 +89,9 @@ function PageTransition({ children }: { children: React.ReactNode }) {
 
 function App() {
  useAuthInit();
+ // P2.2: one app-wide repair hook for every shared SSE stream — mounted once
+ // here (not per-page) so a reconnect after an outage re-syncs all queries.
+ useStreamRecovery();
  const { t } = useTranslation();
  const location = useLocation();
  const theme = useThemeStore((s) => s.theme);

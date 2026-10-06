@@ -65,11 +65,60 @@ export type FanoutEvent = {
   payload: unknown;
 };
 
+// Dropped-publish observability: a silent .catch() here hid sustained
+// cross-instance fan-out loss. Count every failure and warn throttled
+// (first failure, every 100th, and at most 1/min in between).
+let fanoutPublishFailures = 0;
+let lastFanoutFailureWarnAt = 0;
+
+/** Total fan-out publishes dropped since process start (Redis publish failures). */
+export function getFanoutPublishFailures(): number {
+  return fanoutPublishFailures;
+}
+
+function recordFanoutPublishFailure(eventType: string, err: unknown): void {
+  fanoutPublishFailures += 1;
+  const now = Date.now();
+  const every100th = fanoutPublishFailures % 100 === 0;
+  const oncePerMin = now - lastFanoutFailureWarnAt >= 60_000;
+  // First failure, every 100th (rate-limited to 1/s), or at most 1/min otherwise.
+  if (fanoutPublishFailures !== 1 && !(every100th && now - lastFanoutFailureWarnAt >= 1_000) && !oncePerMin) {
+    return;
+  }
+  lastFanoutFailureWarnAt = now;
+  const reason = err instanceof Error ? err.message : String(err);
+  console.warn(
+    `[event-bus] fan-out publish failed (${fanoutPublishFailures} dropped total, last eventType=${eventType}): ${reason}`,
+  );
+}
+
 export function publishFanout(event: FanoutEvent): void {
   const redis = getRedis();
   if (!redis) return;
   const envelope = JSON.stringify({ ...event, origin: instanceId, ts: Date.now() });
-  redis.publish(RedisChannels.fanout(), envelope).catch(() => { /* degraded */ });
+  redis.publish(RedisChannels.fanout(), envelope).catch((err) => {
+    recordFanoutPublishFailure(event.eventType, err);
+  });
+}
+
+// ── Fan-out subscriber recovery ─────────────────────────────────────────────
+// The Redis subscriber socket resubscribes after a reconnect, but messages
+// published while it was down are lost (pub/sub has no replay). Consumers
+// register here to tell local SSE subscribers to resync their state.
+const fanoutResubscribedHandlers = new Set<() => void>();
+
+/** Register a callback invoked after the fan-out subscriber socket successfully resubscribes. */
+export function onFanoutResubscribed(handler: () => void): () => void {
+  fanoutResubscribedHandlers.add(handler);
+  return () => {
+    fanoutResubscribedHandlers.delete(handler);
+  };
+}
+
+function notifyFanoutResubscribed(): void {
+  for (const fn of fanoutResubscribedHandlers) {
+    try { fn(); } catch { /* handler must not throw into the redis client */ }
+  }
 }
 
 export async function subscribeFanout(
@@ -90,6 +139,9 @@ export async function subscribeFanout(
         }
       } catch { /* malformed remote message */ }
     });
+    // Recovery hook: fan-out events published during a subscriber disconnect
+    // are lost — let the gateway ask local SSE clients to resync.
+    redis.subscriberRecoverySink = notifyFanoutResubscribed;
   } catch {
     fanoutSubscribed = false;
   }

@@ -35,6 +35,7 @@ import {
  providerKeyConfigured,
 } from '../../../services/api/providerKeys';
 import { qk } from '../../../lib/queryKeys';
+import { useStreamAwareInterval } from '../../../hooks/useStreamAwareInterval';
 import {
  notifyError,
  notifySuccess,
@@ -208,9 +209,10 @@ function VersionSelector({
        </span>
       )}
      </div>
-     {isError ? (
+     {isError && (
       <p className="text-mini text-danger">{t('tabs.plugins.versionsFailed')}</p>
-     ) : (
+     )}
+     {isError && versionOptions.length === 0 ? null : (
       <div className="flex items-end gap-2">
        <div className="relative flex-1">
         <select
@@ -465,6 +467,8 @@ export default function ServerPluginManagerTab({
  enabled: Boolean(serverId && pluginProvider && selectedPlugin),
  });
 
+ // P1-24: install/uninstall/update complete via SSE — poll only during outages.
+ const installedOutagePoll = useStreamAwareInterval(60_000);
  const {
  data: installedPlugins = [],
  refetch: refetchInstalledPlugins,
@@ -473,7 +477,7 @@ export default function ServerPluginManagerTab({
  queryFn: () => pluginManagerApi.installed(serverId ?? ''),
  enabled: Boolean(serverId && pluginManagerConfig),
  staleTime: 300_000,
- refetchInterval: false, // install/uninstall/update complete via SSE
+ refetchInterval: installedOutagePoll, // install/uninstall/update complete via SSE
  refetchIntervalInBackground: false,
  });
 

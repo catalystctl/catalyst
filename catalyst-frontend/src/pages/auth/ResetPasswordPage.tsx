@@ -32,9 +32,10 @@ function ResetPasswordPage() {
  const { panelName, logoUrl } = usePanelBranding();
 
  const {
+ data: tokenChecked,
  isLoading: tokenValidating,
  isSuccess: tokenValid,
- isError: tokenInvalid,
+ isError: tokenValidationError,
  } = useQuery({
  queryKey: ['resetToken', token],
  queryFn: async () => {
@@ -48,6 +49,11 @@ function ResetPasswordPage() {
 
  const isValidating = Boolean(token) && tokenValidating;
  const isValid = tokenValid;
+ // P0.4 sets isError on a failed background refetch too. Only treat the link as
+ // invalid when validation never produced a result (`data`) — otherwise a
+ // transient refresh blip would discard an already validated token. `retry: false`
+ // above keeps a genuinely invalid token surfacing here.
+ const tokenInvalid = Boolean(tokenValidationError) && tokenChecked === undefined;
 
  // Notify once when token is invalid
  useEffect(() => {

@@ -9,7 +9,7 @@ import TabHeader from '../../components/servers/tabs/TabHeader';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { BracketLabel, StatusLed } from '../../components/deck/primitives';
 import { Button } from '@/components/ui/button';
-import { formatTime } from '@/i18n/format';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { useAuthStore } from '../../stores/authStore';
 import { Server, Activity, ArrowUpRight, Database } from 'lucide-react';
 
@@ -20,7 +20,11 @@ function AdminDashboardPage() {
   const { data: stats } = useAdminStats();
   const { data: health, isLoading: healthLoading } = useAdminHealth();
   const { data: nodesData } = useAdminNodes();
-  const { data: clusterMetrics, isLoading: metricsLoading } = useClusterMetrics(60_000);
+  const {
+    data: clusterMetrics,
+    isLoading: metricsLoading,
+    dataUpdatedAt: metricsUpdatedAt,
+  } = useClusterMetrics(60_000);
 
   const nodes = nodesData?.nodes ?? [];
   const onlineNodes = nodes.filter((n) => n.isOnline).length;
@@ -78,7 +82,8 @@ function AdminDashboardPage() {
             {!healthLoading && (
               <div className="flex items-center justify-between px-3 py-1.5 text-mini text-muted-foreground">
                 <span>{t('dashboard.health.lastChecked')}</span>
-                <span className="font-mono tabular-nums">{formatTime(Date.now())}</span>
+                {/* Real cluster-metrics fetch time, not a render-time fake. */}
+                <LastUpdated updatedAt={metricsUpdatedAt} className="text-mini" />
               </div>
             )}
           </div>

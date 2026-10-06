@@ -73,6 +73,43 @@ function forwardAuthHeaders(response: any, reply: FastifyReply) {
 	}
 }
 
+// F23: best-effort broadcasts once setup finalizes, so already-open admin
+// sessions pick up the new branding/settings and the first admin user.
+// Payload shapes mirror the corresponding admin-route broadcasts.
+function emitSetupCompletedEvents(
+	app: FastifyInstance,
+	adminUser: {
+		id: string;
+		email: string;
+		username: string;
+		createdAt: Date;
+		updatedAt: Date;
+		roles: { id: string; name: string }[];
+	} | null,
+): void {
+	try {
+		const gw = (app as any).wsGateway;
+		if (!gw?.pushToAdminSubscribers) return;
+		const timestamp = new Date().toISOString();
+		gw.pushToAdminSubscribers("system_settings_updated", {
+			type: "system_settings_updated",
+			timestamp,
+		});
+		gw.pushToAdminSubscribers("theme_settings_updated", {
+			type: "theme_settings_updated",
+			timestamp,
+		});
+		if (adminUser) {
+			gw.pushToAdminSubscribers("user_created", {
+				type: "user_created",
+				user: adminUser,
+				createdBy: adminUser.id,
+				timestamp,
+			});
+		}
+	} catch { /* best-effort */ }
+}
+
 export async function setupRoutes(app: FastifyInstance) {
 	const getHeaders = (request: FastifyRequest) =>
 		fromNodeHeaders(
@@ -289,6 +326,16 @@ export async function setupRoutes(app: FastifyInstance) {
 		if (!fullUser) {
 			return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to retrieve user record during setup recovery");
 		}
+
+		// F23: settings/branding changed and the admin was (re)provisioned.
+		emitSetupCompletedEvents(app, {
+			id: fullUser.id,
+			email: fullUser.email,
+			username: fullUser.username,
+			createdAt: fullUser.createdAt,
+			updatedAt: fullUser.updatedAt,
+			roles: fullUser.roles.map((r) => ({ id: r.id, name: r.name })),
+		});
 
 		const envStatus = await getEnvRestartStatus();
 		return reply.send({
@@ -580,6 +627,16 @@ export async function setupRoutes(app: FastifyInstance) {
 				if (!fullUser) {
 					return apiError(reply, 500, ErrorCodes.INTERNAL_ERROR, "Failed to retrieve user record after creation");
 				}
+
+				// F23: notify any already-open admin sessions (best-effort).
+				emitSetupCompletedEvents(app, {
+					id: fullUser.id,
+					email: fullUser.email,
+					username: fullUser.username,
+					createdAt: fullUser.createdAt,
+					updatedAt: fullUser.updatedAt,
+					roles: fullUser.roles.map((r) => ({ id: r.id, name: r.name })),
+				});
 
 				const envStatus = await getEnvRestartStatus();
 				return reply.send({

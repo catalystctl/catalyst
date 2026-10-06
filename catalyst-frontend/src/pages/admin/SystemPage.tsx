@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
 import {
  Settings,
@@ -186,6 +187,7 @@ function SystemPage() {
  total: health?.nodes.total ?? 0,
  servers: stats?.servers ?? 0,
  })}
+        actions={<LastUpdated queryKey={qk.adminHealth()} />}
       />
 
 

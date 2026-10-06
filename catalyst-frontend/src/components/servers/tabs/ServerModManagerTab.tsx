@@ -23,6 +23,7 @@ import {
  providerKeyConfigured,
 } from '../../../services/api/providerKeys';
 import { qk } from '../../../lib/queryKeys';
+import { useStreamAwareInterval } from '../../../hooks/useStreamAwareInterval';
 import {
  notifyError,
  notifySuccess,
@@ -196,9 +197,10 @@ function VersionSelector({
  <label className="type-overline">
  {t('tabs.mods.versionLabel')}
  </label>
- {isError ? (
+ {isError && (
  <p className="text-mini text-danger">{t('tabs.mods.versionsFailed')}</p>
- ) : (
+ )}
+ {isError && versionOptions.length === 0 ? null : (
  <div className="flex items-end gap-2">
  <div className="relative flex-1">
  <select
@@ -474,6 +476,8 @@ export default function ServerModManagerTab({
  enabled: Boolean(serverId && modProvider && selectedProject),
  });
 
+ // P1-24: install/uninstall/update complete via SSE — poll only during outages.
+ const installedOutagePoll = useStreamAwareInterval(60_000);
  const {
  data: installedMods = [],
  refetch: refetchInstalledMods,
@@ -482,7 +486,7 @@ export default function ServerModManagerTab({
  queryFn: () => modManagerApi.installed(serverId ?? '', modTarget),
  enabled: Boolean(serverId && modManagerConfig),
  staleTime: 300_000,
- refetchInterval: false, // install/uninstall/update complete via SSE
+ refetchInterval: installedOutagePoll, // install/uninstall/update complete via SSE
  refetchIntervalInBackground: false,
  });
 

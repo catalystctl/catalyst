@@ -27,6 +27,7 @@
 #   MAX_CONNECTIONS      - Maximum number of game servers on this node (default: 100, cap 1000)
 #   CATALYST_CONFIG_PATH - Path to config.toml for persistence (default: /opt/catalyst-agent/config.toml)
 #   AGENT_RELEASE_REPO   - GitHub repo for agent release binaries (default: catalystctl/catalyst)
+#   STATS_INTERVAL_SECS  - Resource-stats/health report interval in seconds (default: 5, min: 1)
 #
 # Security / Development:
 #   CATALYST_ALLOW_INSECURE_WS - Set to "1" to allow insecure ws:// connections (dev only)
@@ -128,3 +129,6 @@ format = "json"
 
 # GitHub repository for agent release binaries.
 # release_repo = "catalystctl/catalyst"
+
+# Interval between resource-stats/health reports, in seconds (default: 5, min: 1).
+# stats_interval_secs = 5

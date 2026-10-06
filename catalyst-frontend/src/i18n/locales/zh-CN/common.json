@@ -53,6 +53,10 @@
     "retry": "重试",
     "title": "出错了"
   },
+  "freshness": {
+    "never": "暂无数据",
+    "updatedAt": "更新于{{when}}"
+  },
   "language": {
     "description": "选择面板界面所使用的语言。",
     "label": "语言"
@@ -143,7 +147,8 @@
     "stopped": "已停止",
     "stopping": "停止中",
     "suspended": "已暂停",
-    "transferring": "正在转移"
+    "transferring": "正在转移",
+    "unhealthy": "异常"
   },
   "statusBadge": {
     "title": "服务器状态：{{label}}"

@@ -29,6 +29,7 @@ import { describeError } from '../../utils/errors';
 import FileList from './FileList';
 import FileTree from './FileTree';
 import FileUploader from './FileUploader';
+import LastUpdated from '../shared/LastUpdated';
 import { useFileManager } from '../../hooks/useFileManager';
 import { filesApi, DEFAULT_MAX_UPLOAD_MB } from '../../services/api/files';
 import { adminApi } from '../../services/api/admin';
@@ -955,6 +956,9 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
 
  <div className="hidden sm:block h-4 w-px bg-border/60" />
 
+ {/* Directory listing freshness (30s poll) next to the manual refresh. */}
+ <LastUpdated queryKey={qk.files(serverId, path)} className="hidden md:inline" />
+
  <button type="button" className={tbtnIcon} onClick={() => refetch()} aria-label={t('common:actions.refresh')}>
  <RefreshCw className="h-3.5 w-3.5" />
  </button>
@@ -1086,7 +1090,7 @@ function FileManager({ serverId, isSuspended = false, canWrite = false }: { serv
  files={sortedFiles}
  selectedPaths={selectedPaths}
  isLoading={isLoading}
- isError={isError}
+ isError={isError && !files.length}
  allSelected={allSelected}
  sortField={sortField}
  sortDirection={sortDirection}

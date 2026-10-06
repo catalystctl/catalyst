@@ -13,5 +13,8 @@ export function useAlertRules(params?: {
     queryKey: qk.alertRules(params as Record<string, unknown> | undefined),
     queryFn: () => alertsApi.listRules(params),
     staleTime: 60_000,
+    // Rule CRUD SSE is admin-only; 60s safety poll keeps non-admin rules fresh.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }

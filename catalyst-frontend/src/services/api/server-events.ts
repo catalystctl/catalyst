@@ -6,20 +6,24 @@
  * share one connection instead of opening N sockets.
  *
  * Handles:
- *   - server_state_update / server_state — status changes
+ *   - server_state_update — status changes
  *   - backup_complete / backup_restore_complete / backup_delete_complete
  *   - eula_required
  *   - alert
- *   - server_log
  *   - task_progress / task_complete
  *   - resource_stats — real-time CPU, memory, disk metrics
  *   - server_operation_progress — install/transfer/clone % + stage
+ *   - task_/database_/backup_ CRUD, permissions_updated, resync
+ *
+ * Dead-alias note: `server_state` (legacy name for `server_state_update`) was
+ * pruned here and on the backend allowlist (audit §6.2 / P1.4) — neither side
+ * ever emitted it. `console_output` remains an FE-only entry because that
+ * payload belongs to the dedicated console stream, not this one.
  */
 import { subscribeSharedEventSource, type StreamStatus } from './sse-hub';
 
 export type ServerEventType =
   | 'server_state_update'
-  | 'server_state'
   | 'backup_complete'
   | 'backup_restore_complete'
   | 'backup_delete_complete'
@@ -28,6 +32,10 @@ export type ServerEventType =
   | 'backup_delete_started'
   | 'eula_required'
   | 'alert'
+  // Dead entry on THIS stream: console_output is only ever delivered on the
+  // dedicated console stream (/api/servers/:id/console), never on /events.
+  // Kept so the console fallback path can reuse this type union; exempted in
+  // csync/__tests__/sse-event-contract.test.ts from the FE⊆BE check.
   | 'console_output'
   | 'task_progress'
   | 'task_complete'
@@ -39,6 +47,9 @@ export type ServerEventType =
   | 'server_suspended'
   | 'server_unsuspended'
   | 'server_files_changed'
+  // A failed clone (routes/servers/core.ts) — without it an SSE-only client
+  // shows the clone as still cloning forever.
+  | 'clone_failed'
   // Mod manager events
   | 'mod_install_complete'
   | 'mod_uninstall_complete'
@@ -47,7 +58,23 @@ export type ServerEventType =
   | 'plugin_install_complete'
   | 'plugin_uninstall_complete'
   | 'plugin_update_complete'
-  | 'server_operation_progress';
+  | 'server_operation_progress'
+  // Task/database CRUD (payloads: {type, taskId?, serverId, timestamp} /
+  // {type, serverId, databaseId?, timestamp})
+  | 'task_created'
+  | 'task_updated'
+  | 'task_deleted'
+  | 'database_created'
+  | 'database_deleted'
+  | 'database_password_rotated'
+  // Backup list changes outside the start/complete lifecycle
+  // ({type, serverId, backupId, timestamp})
+  | 'backup_updated'
+  | 'backup_deleted'
+  // User-scoped: {type, userId, timestamp}
+  | 'permissions_updated'
+  // Server-agnostic cache resync request: {type, reason?, timestamp}
+  | 'resync';
 
 export type { StreamStatus };
 
@@ -55,7 +82,6 @@ export type ServerEventHandler = (type: ServerEventType, data: Record<string, un
 
 export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'server_state_update',
-  'server_state',
   'backup_complete',
   'backup_restore_complete',
   'backup_delete_complete',
@@ -75,6 +101,7 @@ export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'server_suspended',
   'server_unsuspended',
   'server_files_changed',
+  'clone_failed',
   'mod_install_complete',
   'mod_uninstall_complete',
   'mod_update_complete',
@@ -82,6 +109,16 @@ export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'plugin_uninstall_complete',
   'plugin_update_complete',
   'server_operation_progress',
+  'task_created',
+  'task_updated',
+  'task_deleted',
+  'database_created',
+  'database_deleted',
+  'database_password_rotated',
+  'backup_updated',
+  'backup_deleted',
+  'permissions_updated',
+  'resync',
 ];
 
 /**

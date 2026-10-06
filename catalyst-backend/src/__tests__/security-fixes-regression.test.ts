@@ -95,6 +95,10 @@ describe("IPAM hard-delete release", () => {
           return allocation;
         },
       },
+      // Pool lookup feeds the best-effort ip_pool_updated emission.
+      ipPool: {
+        findUnique: async () => ({ nodeId: "node-1" }),
+      },
     };
     const { releaseIpForServer } = await import("../utils/ipam.js");
     const ip = await releaseIpForServer(prismaLike, "srv-1");

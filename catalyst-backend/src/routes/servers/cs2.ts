@@ -179,6 +179,21 @@ export async function serverCs2Routes(app: FastifyInstance) {
     return ensureServerAccess(serverId, userId, perm, reply);
   };
 
+  // Mirror routes/servers/mod-plugins.ts: completion events go to the admin
+  // AND global streams so open mod/plugin managers refresh. CS2 writes the
+  // same installedMod table but previously emitted nothing (gap G11).
+  const emitCs2InstallEvent = (
+    type: "mod_install_complete" | "mod_uninstall_complete" | "plugin_uninstall_complete",
+    payload: { serverId: string; target: string; filename: string; projectName?: string },
+  ) => {
+    try {
+      const gateway = (app as any).wsGateway;
+      const event = { type, ...payload, timestamp: Date.now() };
+      if (gateway?.pushToAdminSubscribers) gateway.pushToAdminSubscribers(type, event);
+      if (gateway?.pushToGlobalSubscribers) gateway.pushToGlobalSubscribers(type, event);
+    } catch { /* WS push is best-effort */ }
+  };
+
   // List available CS2 frameworks and their install state
   app.get(
     "/:serverId/cs2/frameworks",
@@ -346,6 +361,12 @@ export async function serverCs2Routes(app: FastifyInstance) {
           type: "plugin",
         },
       });
+      emitCs2InstallEvent("mod_install_complete", {
+        serverId,
+        target: "frameworks",
+        filename: asset.filename,
+        projectName: fw.name,
+      });
       return reply.send({ success: true, data: { filename: asset.filename, tag: String(tag).trim() } });
     }
   );
@@ -406,6 +427,12 @@ export async function serverCs2Routes(app: FastifyInstance) {
       } catch {
         // ignore
       }
+      emitCs2InstallEvent("mod_uninstall_complete", {
+        serverId,
+        target: "frameworks",
+        filename: fid,
+        projectName: fw.name,
+      });
       try {
         await createAuditLog(userId, {
           action: "cs2.framework.uninstall",
@@ -477,6 +504,11 @@ export async function serverCs2Routes(app: FastifyInstance) {
         const res = await fileTunnel.queueRequest(server.nodeId, "delete", server.uuid, normalized);
         if (!res.success) return apiError(reply, 400, ErrorCodes.MOD_UNINSTALL_FAILED, res.error || "Failed to uninstall plugin");
         await prisma.installedMod.deleteMany({ where: { serverId, filename: targetName } });
+        emitCs2InstallEvent("plugin_uninstall_complete", {
+          serverId,
+          target: "plugins",
+          filename: targetName,
+        });
         await createAuditLog(userId, {
           action: "cs2.plugin.uninstall",
           resource: "server",

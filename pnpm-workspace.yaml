@@ -54,6 +54,9 @@ overrides:
   mysql2@<=3.23.0: '>=3.23.1 <4'
   nodemailer@<9.1.1: '>=9.1.1 <10'
   nodemailer@>=6.9.16 <9.1.1: '>=9.1.1 <10'
+  # source-map-js: ReDoS (GHSA-68fv-2mgg-jv7q), patched in 1.2.2; transitive
+  # via postcss/css-tree (build + test tooling only).
+  'source-map-js@<1.2.2': '>=1.2.2 <2'
   vitest@>=2.1.0 <4.1.11: '>=4.1.11 <5'
   ws: 8.21.3
 # extract-zip 2.0.1 is the newest release and has no patched version; both

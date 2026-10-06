@@ -10,6 +10,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
+import LastUpdated from '../../components/shared/LastUpdated';
+import { qk } from '@/lib/queryKeys';
 import { BracketLabel } from '../../components/deck/primitives';
 import { Input } from '../../components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -338,6 +340,7 @@ function EnvironmentPage() {
         icon={SlidersHorizontal}
         title={t('title')}
         description={t('description', { overridden: overriddenCount })}
+        actions={<LastUpdated queryKey={qk.adminEnv()} />}
       />
 
       {overview?.restartRequired && <RestartCta />}

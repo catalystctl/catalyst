@@ -5,6 +5,8 @@ export type ServerStatus =
   | 'starting'
   | 'stopping'
   | 'crashed'
+  // Agent TCP-probe failure while the container is nominally up (P1-26).
+  | 'unhealthy'
   | 'transferring'
   | 'cloning'
   | 'suspended'

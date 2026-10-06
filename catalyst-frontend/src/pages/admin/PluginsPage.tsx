@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useQuery, useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
+import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
 import {
   ChevronRight,
@@ -609,6 +610,7 @@ export default function PluginsPage() {
           <p className="text-mini text-muted-foreground">{t('pluginsAdmin.pluginsDescription')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <LastUpdated queryKey={qk.adminPlugins()} />
           <Button variant="outline" size="sm" className="h-8 rounded-sm px-3 text-mini" onClick={() => setMarketplaceOpen(true)}>
             <Store className="h-3.5 w-3.5" />
             {t('pluginsAdmin.marketplace')}

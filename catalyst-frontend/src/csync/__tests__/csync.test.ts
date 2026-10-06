@@ -68,6 +68,32 @@ describe('csync core', () => {
     expect(client.getQueryData(['servers', '1'])).toEqual({ id: '1', status: 'running' });
   });
 
+  it('no-op patches do not stamp freshness (P2-13)', async () => {
+    const data = { v: 1 };
+    client.setQueryData(['noop'], data);
+    const q = client.getQueryCache().get(hashQueryKey(['noop']))!;
+    const stamp = q.state.dataUpdatedAt;
+    q.setState({ isInvalidated: true });
+    await new Promise((r) => setTimeout(r, 5)); // ensure the clock has advanced
+
+    // Identical reference → skip the write entirely: no dataUpdatedAt bump,
+    // no isInvalidated clear (SSE patches that change nothing must not fake
+    // freshness).
+    client.setQueryData(['noop'], () => data);
+    expect(q.state.dataUpdatedAt).toBe(stamp);
+    expect(q.state.isInvalidated).toBe(true);
+    client.setQueriesData({ queryKey: ['noop'] }, () => data);
+    expect(q.state.dataUpdatedAt).toBe(stamp);
+    expect(q.state.isInvalidated).toBe(true);
+
+    // A real change still writes and stamps as before.
+    const next = { v: 2 };
+    client.setQueryData(['noop'], () => next);
+    expect(q.state.dataUpdatedAt).toBeGreaterThan(stamp);
+    expect(q.state.isInvalidated).toBe(false);
+    expect(client.getQueryData(['noop'])).toBe(next);
+  });
+
   it('setQueryData on an unobserved query schedules GC', () => {
     client.setQueryData(['orphan-sse'], { v: 1 });
     const query = client.getQueryCache().get(hashQueryKey(['orphan-sse']));

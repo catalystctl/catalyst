@@ -4,6 +4,7 @@ import { Activity, Cpu, HardDrive, MemoryStick } from 'lucide-react';
 import { formatBytes } from '../../utils/formatters';
 import { cn } from '@/lib/utils';
 import { Meter } from '../deck/primitives';
+import LastUpdated from '../shared/LastUpdated';
 import type { ServerMetrics } from '../../types/server';
 
 function formatMem(mb: number) {
@@ -53,11 +54,17 @@ export default function ServerHeaderStats({
   allocatedMemoryMb,
   allocatedDiskMb,
   serverStatus,
+  live = true,
 }: {
   metrics: ServerMetrics | null;
   allocatedMemoryMb?: number | null;
   allocatedDiskMb?: number | null;
   serverStatus?: string;
+  /**
+   * False while the metrics SSE stream is down and the readouts come from the
+   * 30s REST fallback (P1-17): dims the numbers and shows how old they are.
+   */
+  live?: boolean;
 }) {
   const { t } = useTranslation('servers');
   const prevNetRef = useRef<{ rx: number; tx: number; t: number } | null>(null);
@@ -110,13 +117,16 @@ export default function ServerHeaderStats({
   const diskPercent =
     diskUsed != null && diskTotal && diskTotal > 0 ? Math.min(100, (diskUsed / diskTotal) * 100) : 0;
 
+  // P1-17: on the REST fallback the sample can be up to 30s old — stamp it.
+  const metricsTs = metrics?.timestamp ? Date.parse(metrics.timestamp) : NaN;
+
   return (
     <>
-    <div className="hidden items-end gap-5 md:flex lg:hidden">
+    <div className={cn('hidden items-end gap-5 md:flex lg:hidden', !live && 'opacity-60')}>
       <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
       <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
     </div>
-    <div className="hidden items-end gap-5 lg:flex">
+    <div className={cn('hidden items-end gap-5 lg:flex', !live && 'opacity-60')}>
       <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
       <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
       <HeaderStat icon={HardDrive} label={t('metrics.labels.disk')} value={diskValue} percent={diskPercent} />
@@ -126,6 +136,9 @@ export default function ServerHeaderStats({
         value={isRunning ? `↓ ${formatBytes(netRate.rx)}/s  ↑ ${formatBytes(netRate.tx)}/s` : '↓ 0 B/s  ↑ 0 B/s'}
       />
     </div>
+    {!live && Number.isFinite(metricsTs) && (
+      <LastUpdated updatedAt={metricsTs} className="mt-1 hidden md:block" />
+    )}
     </>
   );
 }

@@ -1439,4 +1439,38 @@ mod tests {
         );
         let _ = err;
     }
+
+    #[tokio::test]
+    async fn buffered_events_roundtrip_and_clear() {
+        // P1-27: completion events appended while the socket is down must be
+        // readable in order for replay, then cleared.
+        let tmp = tempfile::tempdir().unwrap();
+        let sm = StorageManager::new(tmp.path().to_path_buf());
+        assert!(sm.read_buffered_events().await.unwrap().is_empty());
+        sm.append_buffered_event(r#"{"type":"backup_complete","backupId":"b1"}"#)
+            .await
+            .unwrap();
+        sm.append_buffered_event(r#"{"type":"storage_resize_complete","success":true}"#)
+            .await
+            .unwrap();
+        let events = sm.read_buffered_events().await.unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0]["type"], "backup_complete");
+        assert_eq!(events[1]["type"], "storage_resize_complete");
+        sm.clear_buffered_events().await.unwrap();
+        assert!(sm.read_buffered_events().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn buffered_events_skip_invalid_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sm = StorageManager::new(tmp.path().to_path_buf());
+        sm.append_buffered_event("not-json").await.unwrap();
+        sm.append_buffered_event(r#"{"type":"backup_delete_complete"}"#)
+            .await
+            .unwrap();
+        let events = sm.read_buffered_events().await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["type"], "backup_delete_complete");
+    }
 }

@@ -6,7 +6,8 @@ export function useDashboardStats() {
   return useQuery({
     queryKey: qk.dashboardStats(),
     queryFn: dashboardApi.getStats,
-    // server/node CRUD SSE invalidates this; light safety poll for online counts.
+    // SSE invalidations for this key live in the admin-gated hook only;
+    // this 60s safety poll is the freshness path for everyone else.
     refetchInterval: 60_000,
     staleTime: 15_000,
     refetchIntervalInBackground: false,
@@ -18,8 +19,10 @@ export function useDashboardActivity(limit = 5) {
     queryKey: qk.dashboardActivity({ limit } as Record<string, unknown>),
     queryFn: () => dashboardApi.getActivity(limit),
     staleTime: 30_000,
-    // audit_log_created + server lifecycle SSE invalidate activity.
-    refetchInterval: false,
+    // SSE invalidations for this key (audit_log_created, server lifecycle)
+    // live in the admin-gated hook only; this 60s safety poll is the
+    // freshness path for non-admins (U10).
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }

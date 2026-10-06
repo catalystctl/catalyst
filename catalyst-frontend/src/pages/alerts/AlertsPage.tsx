@@ -4,6 +4,7 @@ import { formatDateTime } from '@/i18n/format';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
+import LastUpdated from '@/components/shared/LastUpdated';
 
 import {
  Bell,
@@ -20,6 +21,7 @@ import { alertsApi } from '../../services/api/alerts';
 import { useNodes } from '../../hooks/useNodes';
 import { useServers } from '../../hooks/useServers';
 import { useAlertRules } from '../../hooks/useAlertRules';
+import { useStreamAwareInterval } from '../../hooks/useStreamAwareInterval';
 import { useAuthStore } from '../../stores/authStore';
 import type { AlertRule, AlertType } from '../../types/alert';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -239,6 +241,8 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  };
 
  // Queries
+ // P1-24: alert lifecycle is event-driven — poll only while SSE is down.
+ const outagePoll = useStreamAwareInterval(60_000);
  const { data: alertData, isLoading: alertsLoading } = useQuery({
  queryKey: qk.alerts({ filterResolved, serverId, scope }),
  queryFn: () => alertsApi.list({
@@ -247,14 +251,16 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  scope,
  }),
  staleTime: 30_000,
- refetchInterval: false as const, // alert SSE via admin/server streams
+ refetchInterval: outagePoll, // alert SSE via admin/server streams
+ refetchIntervalInBackground: false,
  });
  const { data: alertStats } = useQuery({
  queryKey: qk.alertStats({ scope, serverId }),
  queryFn: () => alertsApi.statsScoped({ scope }),
  enabled: !serverId,
  staleTime: 30_000,
- refetchInterval: false as const, // alert SSE via admin/server streams
+ refetchInterval: outagePoll, // alert SSE via admin/server streams
+ refetchIntervalInBackground: false,
  });
  const { data: alertRules = [] } = useAlertRules({
  scope,
@@ -433,10 +439,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  {showAdminTargets ? t('page.descriptionAll') : t('page.descriptionMine')}
  </p>
  </div>
+ <div className="flex flex-wrap items-center gap-2">
+ <LastUpdated queryKey={qk.alerts()} />
  <Button size="sm" onClick={openCreateRule} className="h-8 rounded-sm px-3 text-mini shadow-none">
  <Plus className="h-3.5 w-3.5" />
  {t('page.createRule')}
  </Button>
+ </div>
  </header>
 
  {/* ── Stats (admin overview only; header no longer duplicates badges) ── */}

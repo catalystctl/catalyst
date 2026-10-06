@@ -35,7 +35,10 @@ import {
  SelectTrigger,
  SelectValue,
 } from '../../components/ui/select';
-import { useAuditLogs } from '../../hooks/useAdmin';
+import { useQuery } from '@/csync';
+import { qk } from '../../lib/queryKeys';
+import LastUpdated from '../../components/shared/LastUpdated';
+import { createAdminEventsStream, type StreamStatus } from '../../services/api/admin-events';
 import { adminApi } from '../../services/api/admin';
 import type { AuditLogEntry } from '../../types/admin';
 import Pagination from '../../components/shared/Pagination';
@@ -340,6 +343,15 @@ return (
 }
 
 // ── Main Page ──
+
+/** Quick-range window lengths; '' (custom) pins the from/to inputs instead. */
+const RANGE_MS: Record<string, number> = {
+  '1h': 3_600_000,
+  '6h': 6 * 3_600_000,
+  '24h': 24 * 3_600_000,
+  '7d': 7 * 24 * 3_600_000,
+};
+
 function AuditLogsPage() {
  const { t } = useTranslation('admin-access');
  const [page, setPage] = useState(1);
@@ -352,24 +364,69 @@ function AuditLogsPage() {
  const [to, setTo] = useState(defaultRange.to);
  const [range, setRange] = useState('24h');
  const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
- const [livePoll, setLivePoll] = useState(false);
+ const [livePoll, setLivePoll] = useState(true);
 
- const { data, isLoading, isError, refetch, isFetching } = useAuditLogs({
+ // "Live" badge follows the real admin stream, not the poll toggle.
+ // 'closed' (intentional teardown) simply reads as not-connected here.
+ const [adminStream, setAdminStream] = useState<StreamStatus>('connecting');
+ useEffect(() => createAdminEventsStream(() => {}, setAdminStream), []);
+ const isLive = adminStream === 'connected';
+
+ // P1-10: in quick-range mode the window end is computed at fetch time
+ // (Date.now() inside queryFn), so rows created after mount show up on the
+ // next refetch instead of being excluded by a `to` frozen at mount. The key
+ // carries the window mode, not timestamps, so it stays stable across
+ // refetches (no skeleton flashes; pagination/filters keep working).
+ const autoEnd = range !== '';
+ const windowMs = RANGE_MS[range] ?? 24 * 3_600_000;
+
+ const { data, isLoading, isError, refetch, isFetching, dataUpdatedAt } = useQuery({
+ queryKey: qk.adminAuditLogs({
  page,
  limit: pageSize,
  action: action || undefined,
  resource: resource || undefined,
  userId: userId || undefined,
- from: from ? new Date(from).toISOString() : undefined,
- to: to ? new Date(to).toISOString() : undefined,
+ ...(autoEnd
+ ? { window: range }
+ : { from: from || undefined, to: to || undefined }),
+ }),
+ queryFn: () => {
+ const end = autoEnd ? Date.now() : undefined;
+ return adminApi.listAuditLogs({
+ page,
+ limit: pageSize,
+ action: action || undefined,
+ resource: resource || undefined,
+ userId: userId || undefined,
+ from: autoEnd
+ ? new Date(end! - windowMs).toISOString()
+ : from
+ ? new Date(from).toISOString()
+ : undefined,
+ to: autoEnd
+ ? new Date(end!).toISOString()
+ : to
+ ? new Date(to).toISOString()
+ : undefined,
+ });
+ },
+ staleTime: 60_000,
+ // P1-15: audit_log_created SSE (AppLayout) is primary; "Auto" keeps the
+ // slow safety poll for narrower admins who never receive the admin stream.
+ refetchInterval: livePoll ? 60_000 : false,
+ refetchIntervalInBackground: false,
  });
 
- useEffect(() => {
- if (!livePoll) return;
- // Prefer audit_log_created admin SSE (AppLayout). Safety poll while "Auto" is on.
- const interval = setInterval(() => refetch(), 60_000);
- return () => clearInterval(interval);
- }, [livePoll, refetch]);
+ // Auto mode shows the window of the most recent fetch in the inputs.
+ const displayTo =
+ autoEnd && dataUpdatedAt
+ ? new Date(dataUpdatedAt).toISOString().slice(0, 16)
+ : to;
+ const displayFrom =
+ autoEnd && dataUpdatedAt
+ ? new Date(dataUpdatedAt - windowMs).toISOString().slice(0, 16)
+ : from;
 
  const logs = useMemo(() => data?.logs ?? [], [data?.logs]);
  const pagination = data?.pagination;
@@ -412,12 +469,22 @@ function AuditLogsPage() {
  };
 
  const handleExport = async () => {
+ // Export the same effective window the list query uses.
+ const end = autoEnd ? Date.now() : undefined;
  const payload = await adminApi.exportAuditLogs({
  action: action || undefined,
  resource: resource || undefined,
  userId: userId || undefined,
- from: from ? new Date(from).toISOString() : undefined,
- to: to ? new Date(to).toISOString() : undefined,
+ from: autoEnd
+ ? new Date(end! - windowMs).toISOString()
+ : from
+ ? new Date(from).toISOString()
+ : undefined,
+ to: autoEnd
+ ? new Date(end!).toISOString()
+ : to
+ ? new Date(to).toISOString()
+ : undefined,
  format: 'csv',
  });
  const blob = new Blob([payload], { type: 'text/csv' });
@@ -440,7 +507,8 @@ function AuditLogsPage() {
  description={t('audit.description')}
  actions={
  <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto">
- {livePoll && (
+ <LastUpdated queryKey={qk.adminAuditLogs()} className="justify-self-end sm:justify-self-auto" />
+ {isLive && (
  <Badge variant="outline" className="gap-1.5 border-success/30 text-success text-micro">
  <StatusLed tone="go" pulse />
  {t('audit.live')}
@@ -505,13 +573,13 @@ function AuditLogsPage() {
  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
  <Input
  type="datetime-local"
- value={from}
+ value={displayFrom}
  onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }}
  className="h-7 rounded-sm border-border/40 bg-card font-mono text-mini"
  />
  <Input
  type="datetime-local"
- value={to}
+ value={displayTo}
  onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }}
  className="h-7 rounded-sm border-border/40 bg-card font-mono text-mini"
  />
@@ -519,16 +587,12 @@ function AuditLogsPage() {
  value={range || 'custom'}
  onValueChange={(next) => {
  const value = next === 'custom' ? '' : next;
+ if (!value) {
+ // Pin the currently displayed auto window into the manual inputs.
+ setFrom(displayFrom);
+ setTo(displayTo);
+ }
  setRange(value);
- if (!value) return;
- const now = new Date();
- const nextFrom = new Date(now);
- if (value === '1h') nextFrom.setHours(now.getHours() - 1);
- if (value === '6h') nextFrom.setHours(now.getHours() - 6);
- if (value === '24h') nextFrom.setHours(now.getHours() - 24);
- if (value === '7d') nextFrom.setDate(now.getDate() - 7);
- setFrom(nextFrom.toISOString().slice(0, 16));
- setTo(now.toISOString().slice(0, 16));
  setPage(1);
  }}
  >
@@ -560,7 +624,7 @@ function AuditLogsPage() {
  {/* ── Log Feed ── */}
  {isLoading ? (
  <TabLoadingState rows={6} rowHeight="h-16" />
- ) : isError ? (
+ ) : isError && !data ? (
  <TabErrorState message={t('audit.loadFailed')} onRetry={() => refetch()} />
  ) : filteredLogs.length > 0 ? (
  <div className="deck-panel max-h-[min(32rem,45dvh)] overflow-y-auto">
