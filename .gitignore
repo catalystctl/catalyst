@@ -120,3 +120,8 @@ catalyst-doc/
 
 # Local agent code-index state (session tooling, never commit)
 .dsh-code-index/
+
+# Local tooling caches and analysis output (session tooling, never commit)
+.graphflow-cache/
+graphflow-out/
+.serena/
