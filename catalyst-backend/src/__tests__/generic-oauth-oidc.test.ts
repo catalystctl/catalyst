@@ -21,6 +21,15 @@ const OIDC_ENV = {
   WHMCS_OIDC_DISCOVERY_URL: 'https://idp.example.com/.well-known/openid-configuration',
 } as const;
 
+const OIDC_ENV_KEYS = [
+  'WHMCS_OIDC_CLIENT_ID',
+  'WHMCS_OIDC_CLIENT_SECRET',
+  'WHMCS_OIDC_DISCOVERY_URL',
+  'PAYMENTER_OIDC_CLIENT_ID',
+  'PAYMENTER_OIDC_CLIENT_SECRET',
+  'PAYMENTER_OIDC_DISCOVERY_URL',
+] as const;
+
 const DISCOVERY = {
   issuer: 'https://idp.example.com',
   authorization_endpoint: 'https://idp.example.com/authorize',
@@ -34,8 +43,11 @@ const savedEnv: Record<string, string | undefined> = {};
 
 describe('generic OIDC sign-in (better-auth 1.7 core endpoints)', () => {
   beforeEach(() => {
-    for (const key of Object.keys(OIDC_ENV)) {
+    for (const key of OIDC_ENV_KEYS) {
       savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+    for (const key of Object.keys(OIDC_ENV)) {
       process.env[key] = OIDC_ENV[key as keyof typeof OIDC_ENV];
     }
     vi.stubGlobal('fetch', vi.fn(async () =>
@@ -48,7 +60,7 @@ describe('generic OIDC sign-in (better-auth 1.7 core endpoints)', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    for (const key of Object.keys(OIDC_ENV)) {
+    for (const key of OIDC_ENV_KEYS) {
       if (savedEnv[key] === undefined) delete process.env[key];
       else process.env[key] = savedEnv[key];
     }
