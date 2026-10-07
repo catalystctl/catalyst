@@ -4,6 +4,7 @@ import cron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
 import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
+import { Actor, enforceKeyScope, ensureServerAccess } from './servers/_helpers.js';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 
@@ -14,6 +15,21 @@ type TaskAction = (typeof TASK_ACTIONS)[number];
 function isValidTaskAction(action: string): action is TaskAction {
   return (TASK_ACTIONS as readonly string[]).includes(action);
 }
+
+/**
+ * Per-action permission requirements: a scheduled task executes its action
+ * server-side without re-checking the creator's rights at fire time, so the
+ * creator must hold the same permission the direct route would demand.
+ * "restart" needs start AND stop (power-route all-of contract); "command"
+ * keeps the console.write double-check.
+ */
+const TASK_ACTION_PERMISSIONS: Record<TaskAction, readonly string[]> = {
+  start: ['server.start'],
+  stop: ['server.stop'],
+  restart: ['server.start', 'server.stop'],
+  backup: ['backup.create'],
+  command: ['console.write'],
+};
 export async function taskRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
   const authenticate = (app as any).authenticate;
@@ -22,7 +38,15 @@ export async function taskRoutes(app: FastifyInstance) {
     serverId: string,
     reply: FastifyReply,
     message: string,
+    // Mandatory actor: the key-scope ceiling below must never be silently
+    // skipped. System/cron callers pass SYSTEM_ACTOR.
+    actor: Actor,
   ) => {
+    // Key-scope ceiling: an API key must itself hold server.schedule.
+    if (!enforceKeyScope(actor, 'server.schedule')) {
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
+      return false;
+    }
     const server = await prisma.server.findUnique({
       where: { id: serverId },
       select: { ownerId: true, suspendedAt: true, suspensionReason: true, nodeId: true },
@@ -67,9 +91,11 @@ export async function taskRoutes(app: FastifyInstance) {
     // SECURITY: a bare node assignment must NOT grant scheduling (tasks can
     // run arbitrary console commands via action "command" in ANY server's
     // container on the node). Node access only counts when paired with the
-    // node.update management permission — mirrors routes/backups.ts and
-    // decideServerAccess's node-manage path.
-    const hasNodeAccessToServer = nodeGrant && rolePerms.includes('node.update');
+    // node-manage capability — mirrors decideServerAccess (legacy
+    // node.update or its split value node.server_manage).
+    const hasNodeAccessToServer =
+      nodeGrant &&
+      (rolePerms.includes('node.update') || rolePerms.includes('node.server_manage'));
 
     if (!serverAccess && !hasNodeAccessToServer && !roleAllowed) {
       apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
@@ -83,38 +109,56 @@ export async function taskRoutes(app: FastifyInstance) {
 
     return true;
   };
-  const ensureCommandPermission = async (
+  /**
+   * Action-capability double-check: the task's action must be backed by the
+   * matching server permission (row grant, role grant, or node-manage), not
+   * just server.schedule. Owner always passes.
+   */
+  const ensureActionPermission = async (
     userId: string,
     serverId: string,
     nodeId: string,
+    action: TaskAction,
     reply: FastifyReply,
+    // Mandatory actor: the key-scope ceiling below must never be silently
+    // skipped. System/cron callers pass SYSTEM_ACTOR.
+    actor: Actor,
   ) => {
+    const required = TASK_ACTION_PERMISSIONS[action];
+    // Key-scope ceiling: an API key must itself hold every required
+    // permission (all-of, so restart needs both start and stop).
+    if (!required.every((p) => enforceKeyScope(actor, p))) {
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `You do not have permission to schedule ${action} tasks on this server`);
+      return false;
+    }
     const server = await prisma.server.findUnique({
       where: { id: serverId },
       select: { ownerId: true },
     });
     if (server?.ownerId === userId) return true;
     const access = await prisma.serverAccess.findFirst({
-      where: { serverId, userId, permissions: { has: 'console.write' } },
+      where: { serverId, userId, permissions: { hasEvery: [...required] } },
     });
     if (access) return true;
     const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
     const { hasGrant } = await import('../lib/permissions.js');
     const rolePerms = await resolveServerPermissions(userId, serverId, nodeId);
-    if (hasGrant(rolePerms, 'console.write')) {
+    if (required.every((p) => hasGrant(rolePerms, p))) {
       return true;
     }
-    if ((await hasNodeAccess(prisma, userId, nodeId)) && rolePerms.includes('node.update')) {
+    if ((await hasNodeAccess(prisma, userId, nodeId)) && (rolePerms.includes('node.update') || rolePerms.includes('node.server_manage'))) {
       return true;
     }
-    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'You do not have permission to run console commands on this server');
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, action === 'command'
+      ? 'You do not have permission to run console commands on this server'
+      : `You do not have permission to schedule ${action} tasks on this server`);
     return false;
   };
 
   // Create a scheduled task
   app.post(
     '/:serverId/tasks',
-    { preHandler: authenticate },
+    { preHandler: authenticate, config: { requiredPermission: 'server.schedule' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId } = request.params as { serverId: string };
@@ -146,12 +190,13 @@ export async function taskRoutes(app: FastifyInstance) {
         serverId,
         reply,
         'You do not have permission to schedule tasks for this server',
+        request.user,
       );
       if (!canSchedule) return;
 
-      if (action === 'command') {
+      {
         const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
-        if (!serverRow || !(await ensureCommandPermission(user.userId, serverId, serverRow.nodeId, reply))) {
+        if (!serverRow || !(await ensureActionPermission(user.userId, serverId, serverRow.nodeId, action, reply, request.user))) {
           if (serverRow) return;
           return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         }
@@ -213,20 +258,17 @@ export async function taskRoutes(app: FastifyInstance) {
   );
 
   // List scheduled tasks for a server
+  // Reads gate on server.read like every other server read (A-READ-GAP:
+  // task listings previously demanded server.schedule, locking read-tier
+  // subusers and admin.read roles out of viewing their own tasks).
   app.get(
     '/:serverId/tasks',
-    { preHandler: authenticate },
+    { preHandler: authenticate, config: { requiredPermission: 'server.read' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId } = request.params as { serverId: string };
 
-      const canSchedule = await ensureSchedulePermission(
-        user.userId,
-        serverId,
-        reply,
-        'You do not have permission to view tasks for this server',
-      );
-      if (!canSchedule) return;
+      if (!(await ensureServerAccess(serverId, user.userId, 'server.read', reply, request.user))) return;
 
       const tasks = await prisma.scheduledTask.findMany({
         where: { serverId },
@@ -240,18 +282,12 @@ export async function taskRoutes(app: FastifyInstance) {
   // Get a specific task
   app.get(
     '/:serverId/tasks/:taskId',
-    { preHandler: authenticate },
+    { preHandler: authenticate, config: { requiredPermission: 'server.read' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
 
-      const canSchedule = await ensureSchedulePermission(
-        user.userId,
-        serverId,
-        reply,
-        'You do not have permission to view tasks for this server',
-      );
-      if (!canSchedule) return;
+      if (!(await ensureServerAccess(serverId, user.userId, 'server.read', reply, request.user))) return;
 
       const task = await prisma.scheduledTask.findFirst({
         where: {
@@ -271,7 +307,7 @@ export async function taskRoutes(app: FastifyInstance) {
   // Update a scheduled task
   app.put(
     '/:serverId/tasks/:taskId',
-    { preHandler: authenticate },
+    { preHandler: authenticate, config: { requiredPermission: 'server.schedule' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
@@ -289,11 +325,25 @@ export async function taskRoutes(app: FastifyInstance) {
         serverId,
         reply,
         'You do not have permission to modify tasks for this server',
+        request.user,
       );
       if (!canSchedule) return;
-      if (action === 'command') {
+      // Re-check the effective action's capability: the new action when the
+      // body changes it, otherwise the stored one (guards payload injection
+      // into an existing command/power/backup task, not just action flips).
+      let effectiveAction: TaskAction | undefined;
+      if (action !== undefined) {
+        effectiveAction = isValidTaskAction(action) ? action : undefined;
+      } else {
+        const existingTask = await prisma.scheduledTask.findFirst({
+          where: { id: taskId, serverId },
+          select: { action: true },
+        });
+        effectiveAction = existingTask?.action as TaskAction | undefined;
+      }
+      if (effectiveAction) {
         const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
-        if (!serverRow || !(await ensureCommandPermission(user.userId, serverId, serverRow.nodeId, reply))) {
+        if (!serverRow || !(await ensureActionPermission(user.userId, serverId, serverRow.nodeId, effectiveAction, reply, request.user))) {
           if (serverRow) return;
           return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         }
@@ -391,7 +441,7 @@ export async function taskRoutes(app: FastifyInstance) {
   // Delete a scheduled task
   app.delete(
     '/:serverId/tasks/:taskId',
-    { preHandler: authenticate },
+    { preHandler: authenticate, config: { requiredPermission: 'server.schedule' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
@@ -401,6 +451,7 @@ export async function taskRoutes(app: FastifyInstance) {
         serverId,
         reply,
         'You do not have permission to delete tasks for this server',
+        request.user,
       );
       if (!canSchedule) return;
 
@@ -445,7 +496,7 @@ export async function taskRoutes(app: FastifyInstance) {
   // Execute a task immediately (one-time run)
   app.post(
     '/:serverId/tasks/:taskId/execute',
-    { preHandler: authenticate },
+    { preHandler: authenticate, config: { requiredPermission: 'server.schedule' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
@@ -455,6 +506,7 @@ export async function taskRoutes(app: FastifyInstance) {
         serverId,
         reply,
         'You do not have permission to execute tasks for this server',
+        request.user,
       );
       if (!canSchedule) return;
 
@@ -469,9 +521,11 @@ export async function taskRoutes(app: FastifyInstance) {
       if (!task) {
         return apiError(reply, 404, ErrorCodes.TASK_NOT_FOUND, 'Task not found');
       }
-      if (task.action === 'command') {
+      {
+        // The stored action's capability must be backed at execute time too
+        // (execute runs the action immediately, same as the direct routes).
         const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
-        if (!serverRow || !(await ensureCommandPermission(user.userId, serverId, serverRow.nodeId, reply))) {
+        if (!serverRow || !(await ensureActionPermission(user.userId, serverId, serverRow.nodeId, task.action as TaskAction, reply, request.user))) {
           if (serverRow) return;
           return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         }

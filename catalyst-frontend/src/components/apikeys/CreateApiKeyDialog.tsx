@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Copy, CheckCircle2, AlertTriangle, Key, Shield, ShieldCheck, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useCreateApiKey, usePermissionsCatalog, useMyPermissions } from '../../hooks/useApiKeys';
 import { CreateApiKeyRequest, PermissionCategory } from '../../services/apiKeys';
+import { hasAnyPermission } from '../auth/ProtectedRoute';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -56,8 +57,11 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  return catalog.map((cat) => ({
  ...cat,
  // Only include permissions the user actually has (unless wildcard)
+ // hasAnyPermission admits the permission itself, its legacy alias, or
+ // admin.read for read-tier entries — mirrors the backend grant
+ // validator (paired fix; the backend side is admin-people's).
  permissions: cat.permissions.filter(
- (p) => userHasWildcard || myPermissions.includes(p.value),
+ (p) => userHasWildcard || hasAnyPermission(myPermissions, [p.value]),
  ),
  // Exclude the wildcard '*' from category permissions — handled by allPermissions toggle
  }));

@@ -13,7 +13,7 @@ import { serialize } from "../utils/serialize";
 export async function providerKeyRoutes(app: FastifyInstance) {
   app.get(
     "/status",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'mod-provider key status booleans for server-detail tabs; any authenticated user by design' }},
     async (_request: FastifyRequest, reply: FastifyReply) => {
       const settings = await getModManagerSettings();
       reply.send(

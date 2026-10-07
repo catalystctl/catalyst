@@ -357,7 +357,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Get current user ─────────────────────────────────────────────────
   app.get(
     "/me",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own identity', rateLimit: { max: 120, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const meCacheKey = `user:${request.user.userId}`;
       const cachedMe = meCache.get(meCacheKey);
@@ -401,7 +401,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Profile summary ──────────────────────────────────────────────────
   app.get(
     "/profile",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data', rateLimit: { max: 120, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userRecord = await prisma.user.findUnique({
         where: { id: request.user.userId },
@@ -437,7 +437,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post(
     "/profile/sso/unlink",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data' }},
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { providerId, accountId } = request.body as {
         providerId: string; accountId?: string;
@@ -479,7 +479,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Update profile ──────────────────────────────────────────────────
   app.patch(
     "/profile",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data', rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { username, firstName, lastName } = request.body as {
         username?: string; firstName?: string; lastName?: string;
@@ -564,7 +564,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Update user preferences ─────────────────────────────────────────
   app.patch(
     "/profile/preferences",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data', rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const preferencesSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).refine(
         obj => JSON.stringify(obj).length <= 16384,
@@ -593,7 +593,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Avatar upload ───────────────────────────────────────────────────
   app.post(
     "/profile/avatar",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data', rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = await request.file();
       if (!data) {
@@ -641,7 +641,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Remove avatar ───────────────────────────────────────────────────
   app.delete(
     "/profile/avatar",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       await prisma.user.update({
         where: { id: request.user.userId },
@@ -657,7 +657,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Personal audit log ──────────────────────────────────────────────
   app.get(
     "/profile/audit-log",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data', rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { limit = 50, offset = 0 } = request.query as { limit?: string; offset?: string };
       const [logs, total] = await Promise.all([
@@ -678,7 +678,7 @@ export async function authRoutes(app: FastifyInstance) {
   // Fans out 6 parallel queries per hit: keep a strict per-route cap.
   app.get(
     "/profile/export",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data', rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const [user, sessions, accounts, apiKeys, auditLogs, serverAccess] = await Promise.all([
@@ -730,7 +730,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── User's API keys overview ────────────────────────────────────────
   app.get(
     "/profile/api-keys",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data' }},
     async (request: FastifyRequest, reply: FastifyReply) => {
       const keys = await prisma.apikey.findMany({
         where: { userId: request.user.userId },
@@ -801,7 +801,7 @@ export async function authRoutes(app: FastifyInstance) {
   // Sub-users (no servers) can delete freely.
   app.post(
     "/profile/delete",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'self-service: caller own profile data', rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const { confirm, currentPassword } = request.body as { confirm?: string; currentPassword?: string };
@@ -837,6 +837,26 @@ export async function authRoutes(app: FastifyInstance) {
           params: { serverCount: ownedServers.length },
           ownedServers: ownedServers.map((s) => ({ id: s.id, name: s.name })),
         });
+      }
+
+      // Last-admin guard: an admin-tier user (any role holding '*' or
+      // admin.write) cannot self-delete while no other admin remains —
+      // mirrors the admin.ts delete-user guard.
+      const ownRoles = await prisma.role.findMany({
+        where: { users: { some: { id: userId } } },
+        select: { permissions: true },
+      });
+      const ownPerms = ownRoles.flatMap((role) => (role.permissions as string[]) ?? []);
+      if (ownPerms.includes('*') || ownPerms.includes('admin.write')) {
+        const otherAdmins = await prisma.user.count({
+          where: {
+            id: { not: userId },
+            roles: { some: { permissions: { hasSome: ['*', 'admin.write'] } } },
+          },
+        });
+        if (otherAdmins === 0) {
+          return apiError(reply, 409, ErrorCodes.ADMIN_LAST_ADMIN, 'Cannot delete the last administrator');
+        }
       }
 
       const userRecord = await prisma.user.findUnique({

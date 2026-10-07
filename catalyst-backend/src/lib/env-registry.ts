@@ -246,6 +246,10 @@ export const ENV_VAR_REGISTRY: readonly EnvVarSpec[] = [
 		default: "false",
 		description: "Accept API keys hashed with the legacy scheme.",
 	}),
+	base("KEY_SCOPE_ENFORCE", "auth", "boolean", {
+		default: "true",
+		description: "Enforce API-key scope ceilings (route config.requiredPermission). Rollout rollback knob.",
+	}),
 	base("COOKIE_SECURE", "auth", "boolean", {
 		default: "true",
 		description: "Force the Secure flag on auth cookies. Disable only for plain-HTTP setups.",

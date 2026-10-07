@@ -1,24 +1,24 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { hasAnyPermission } from "../lib/permissions";
+import { hasGrant } from "../lib/permissions";
 import { serialize } from '../utils/serialize';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 
 // There is no nest.* permission. Nests group templates, so nest reads follow
 // template.read and nest mutations follow the matching template.* permission.
-// admin.write / * remain valid (hasAnyPermission treats "*" as everything).
-const ensureAnyPermission = async (
-  userId: string,
+// hasGrant admits '*', admin.write for any concrete permission, and admin.read
+// for read-class entries — reading request.user.permissions makes this the
+// API-key scope ceiling.
+const ensureAnyPermission = (
+  request: FastifyRequest,
   reply: FastifyReply,
   required: string[]
 ) => {
-  const has = await hasAnyPermission(prisma, userId, required);
-  if (!has) {
-    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
-    return false;
-  }
-  return true;
+  const perms: string[] = (request as any).user?.permissions ?? [];
+  if (required.some((permission) => hasGrant(perms, permission))) return true;
+  apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
+  return false;
 };
 
 export async function nestRoutes(app: FastifyInstance) {
@@ -27,8 +27,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const has = await ensureAnyPermission(request.user.userId, reply, ["template.read", "admin.read", "admin.write"]);
-      if (!has) return;
+      if (!ensureAnyPermission(request, reply, ["template.read"])) return;
 
       const nests = await prisma.nest.findMany({
         orderBy: { name: "asc" },
@@ -53,8 +52,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/:nestId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const has = await ensureAnyPermission(request.user.userId, reply, ["template.read", "admin.read", "admin.write"]);
-      if (!has) return;
+      if (!ensureAnyPermission(request, reply, ["template.read"])) return;
 
       const { nestId } = request.params as { nestId: string };
 
@@ -80,7 +78,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      if (!(await ensureAnyPermission(request.user.userId, reply, ["template.create", "admin.write"]))) return;
+      if (!ensureAnyPermission(request, reply, ["template.create"])) return;
 
       const { name, description, icon, author } = request.body as {
         name: string;
@@ -131,7 +129,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/:nestId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      if (!(await ensureAnyPermission(request.user.userId, reply, ["template.update", "admin.write"]))) return;
+      if (!ensureAnyPermission(request, reply, ["template.update"])) return;
 
       const { nestId } = request.params as { nestId: string };
       const { name, description, icon, author } = request.body as {
@@ -189,7 +187,7 @@ export async function nestRoutes(app: FastifyInstance) {
     "/:nestId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      if (!(await ensureAnyPermission(request.user.userId, reply, ["template.delete", "admin.write"]))) return;
+      if (!ensureAnyPermission(request, reply, ["template.delete"])) return;
 
       const { nestId } = request.params as { nestId: string };
 

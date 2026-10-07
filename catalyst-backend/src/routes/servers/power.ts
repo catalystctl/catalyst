@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { describeError } from "../../utils/describe-error.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
-import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, isHostNetworkDisabledAgentError, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
+import { hasGrant } from "../../lib/permissions.js";
+import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, enforceKeyScope, injectPterodactylCompatibilityVars, isHostNetworkDisabledAgentError, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { buildInstallCommand, InstallPayloadError } from "../../services/server-install.js";
 import { emitServerStatusEvent } from "../../plugins/host-events.js";
@@ -46,12 +47,11 @@ function pushServerState(app: FastifyInstance, serverId: string, state: string):
 }
 
 /**
- * Power/lifecycle gates previously accepted only the owner, admin.write, or a
- * ServerAccess row. Node managers (node assignment + node.update) and global
- * roles holding the matching server permission are advertised through
- * effectivePermissions and rendered as controls by the panel, but those clicks
- * 403'd. Delegate to the canonical decision helper, mirroring
- * ensureServerAccess so UI and backend stay consistent.
+ * Power/lifecycle gate delegating to the canonical decideServerAccess contract
+ * (owner | ServerAccess | global role | node manager), mirroring
+ * ensureServerAccess so UI and backend stay consistent. API keys act within
+ * their own scope: the key owner's identity, grants, and node assignments
+ * never widen a key.
  */
 async function ensurePowerAccess(
   request: FastifyRequest,
@@ -61,6 +61,18 @@ async function ensurePowerAccess(
   requireAll = false,
 ): Promise<boolean> {
   const userId = request.user.userId;
+  // Key-scope ceiling: a key must itself hold every (requireAll) or any
+  // (default) required permission, regardless of its owner's grants.
+  if (request.user.apiKeyId) {
+    const keyScopeOk = (permission: string) => enforceKeyScope(request.user, permission);
+    const ceilingOk = requireAll
+      ? permissions.every(keyScopeOk)
+      : permissions.some(keyScopeOk);
+    if (!ceilingOk) {
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "API key scope does not permit this operation");
+      return false;
+    }
+  }
   if (server.ownerId === userId) return true;
   if (checkIsAdmin(request, "admin.write")) return true;
 
@@ -72,18 +84,23 @@ async function ensurePowerAccess(
 
   const decisions: boolean[] = [];
   for (const permission of permissions) {
+    // hasGrant keeps legacy alias values valid (server.stop covers
+    // server.kill, server.update covers server.network, ...) for explicit
+    // ServerAccess rows and roles alike.
     const explicit = await prisma.serverAccess.findFirst({
-      where: { userId, serverId: server.id, permissions: { has: permission } },
-      select: { userId: true },
+      where: { userId, serverId: server.id },
+      select: { permissions: true },
     });
+    const hasExplicitGrant =
+      explicit?.permissions.some((p) => hasGrant([p], permission)) ?? false;
     decisions.push(
       decideServerAccess({
         isOwner: false,
-        hasExplicitServerAccess: Boolean(explicit),
+        hasExplicitServerAccess: hasExplicitGrant,
         rolePermissions,
         hasNodeAccess: nodeAccess,
         requiredPermission: permission,
-      }).allowed,
+      }).allowed || hasGrant(rolePermissions, permission),
     );
   }
 
@@ -1045,7 +1062,9 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return;
       }
 
-      if (!(await ensurePowerAccess(request, reply, server, ["server.stop"]))) {
+      // Force-kill is its own capability (server.kill); legacy server.stop
+      // grants stay valid via the hasGrant alias window.
+      if (!(await ensurePowerAccess(request, reply, server, ["server.kill"]))) {
         return;
       }
 

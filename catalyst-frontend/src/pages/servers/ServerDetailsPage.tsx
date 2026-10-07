@@ -206,6 +206,9 @@ function ServerDetailsPage() {
  ),
  [user?.permissions],
  );
+ // server.archive gate; hasAnyPermission keeps admin.write/* and legacy
+ // server.suspend grants (alias window) working.
+ const canArchive = hasAnyPermission(user?.permissions, ['server.archive']);
  const serverPerms = useMemo(
  () => new Set(server?.effectivePermissions ?? []),
  [server?.effectivePermissions],
@@ -277,13 +280,16 @@ function ServerDetailsPage() {
  isError: databasesError,
  } = useServerDatabases(serverId);
  const { data: databaseHosts = [], isFetched: databaseHostsFetched } = useAvailableDatabaseHosts();
+ // hasAnyPermission keeps admin.write/scoped grants working (mirrors the
+ // backend gates); owners always manage their own server's databases.
  const canManageDatabases =
- user?.permissions?.includes('*') ||
- user?.permissions?.includes('admin.read') ||
- user?.permissions?.includes('database.create') ||
- user?.permissions?.includes('database.read') ||
- user?.permissions?.includes('database.rotate') ||
- user?.permissions?.includes('database.delete') ||
+ hasAnyPermission(user?.permissions, [
+ 'admin.read',
+ 'database.create',
+ 'database.read',
+ 'database.rotate',
+ 'database.delete',
+ ]) ||
  Boolean(server && user?.id && server.ownerId === user.id);
  const databaseAllocation = server?.databaseAllocation ?? 0;
 
@@ -559,6 +565,40 @@ function ServerDetailsPage() {
  return serversApi.unsuspend(server.id);
  },
  onSuccess: () => notifySuccess(t('details.serverUnsuspended')),
+ onSettled: () => {
+ if (server?.id) queryClient.invalidateQueries({ queryKey: qk.server(server.id) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
+ },
+ onError: (error: any) =>
+ notifyError(error),
+ });
+
+ const archiveMutation = useMutation({
+ mutationFn: () => {
+ if (!server?.id) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'archiveMutation' } });
+ throw new Error('Server not loaded');
+ }
+ return serversApi.archive(server.id);
+ },
+ onSuccess: () => notifySuccess(t('details.serverArchived')),
+ onSettled: () => {
+ if (server?.id) queryClient.invalidateQueries({ queryKey: qk.server(server.id) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
+ },
+ onError: (error: any) =>
+ notifyError(error),
+ });
+
+ const restoreMutation = useMutation({
+ mutationFn: () => {
+ if (!server?.id) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'restoreMutation' } });
+ throw new Error('Server not loaded');
+ }
+ return serversApi.restore(server.id);
+ },
+ onSuccess: () => notifySuccess(t('details.serverRestored')),
  onSettled: () => {
  if (server?.id) queryClient.invalidateQueries({ queryKey: qk.server(server.id) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
@@ -1377,6 +1417,11 @@ function ServerDetailsPage() {
  onSuspend={(reason) => suspendMutation.mutate(reason)}
  unsuspendPending={unsuspendMutation.isPending}
  onUnsuspend={() => unsuspendMutation.mutate()}
+ canArchive={canArchive}
+ archivePending={archiveMutation.isPending}
+ onArchive={() => archiveMutation.mutate()}
+ restorePending={restoreMutation.isPending}
+ onRestore={() => restoreMutation.mutate()}
  allocations={allocations}
  allocationsError={allocationsError}
  availableNodeAllocations={availableNodeAllocations}

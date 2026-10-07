@@ -15,6 +15,7 @@ import {
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 import { PANEL_VERSION } from '../../utils/version';
 import { useAuthStore } from '../../stores/authStore';
+import { hasAnyPermission } from '../auth/ProtectedRoute';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import UpdateProgressModal, { consumePostUpdateReloadToast } from '../admin/UpdateProgressModal';
@@ -65,7 +66,7 @@ type DismissScope = 'session' | 'version' | 'global' | null;
  * Update-available flyout.
  *
  * Only users who are actually allowed to run an update (admin.write) can
- * see it — update checks require that permission server-side anyway, so
+ * see it — the status check itself is admin.read-gated server-side, so
  * everyone else would just get 403s and a notification they cannot act on.
  *
  * Positioned in the shell flow directly under the marquee, right-aligned, so
@@ -75,8 +76,11 @@ type DismissScope = 'session' | 'version' | 'global' | null;
  */
 export default function UpdateNotification() {
  const { t } = useTranslation('common');
- const { data: updateData } = useUpdateCheck();
  const user = useAuthStore((s) => s.user);
+ // Read gate mirrors the backend admin.read check; without it the query
+ // would 403 for non-admins.
+ const canCheckUpdates = hasAnyPermission(user?.permissions, ['admin.read']);
+ const { data: updateData } = useUpdateCheck(canCheckUpdates);
  const [sessionDismissed, setSessionDismissed] = useState(false);
  const [showDismissModal, setShowDismissModal] = useState(false);
  const [showProgressModal, setShowProgressModal] = useState(false);
@@ -139,10 +143,9 @@ export default function UpdateNotification() {
  }
  }, [t]);
 
- // Permission gate: no admin.write, no banner at all. Update checks are
- // admin.write-gated server-side, so anyone else would just see a
- // notification they can neither act on nor legitimately query. Kept
- // below all hooks to satisfy the rules of hooks.
+ // Permission gate: no admin.write, no banner at all — it is an action
+ // prompt, and read-only admins cannot trigger. Kept below all hooks to
+ // satisfy the rules of hooks.
  if (!hasAdminWrite) return null;
 
  const visible =

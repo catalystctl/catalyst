@@ -56,6 +56,8 @@ describe('RBAC - Permission Utilities', () => {
  'admin.read',
  'admin.write',
  'apikey.manage',
+ 'apikey.read',
+ 'apikey.write',
  ];
 
  it('should return true when user has admin.read permission', () => {
@@ -151,11 +153,37 @@ describe('RBAC - Permission Utilities', () => {
  });
  });
 
+ describe('legacy alias window (one-directional)', () => {
+ it('granted legacy split values satisfy their new narrow permissions', () => {
+ expect(hasAnyPermission(['server.stop'], ['server.kill'])).toBe(true);
+ expect(hasAnyPermission(['server.update'], ['server.network'])).toBe(true);
+ expect(hasAnyPermission(['server.update'], ['server.storage'])).toBe(true);
+ expect(hasAnyPermission(['server.suspend'], ['server.archive'])).toBe(true);
+ expect(hasAnyPermission(['server.transfer'], ['server.migrate'])).toBe(true);
+ expect(hasAnyPermission(['server.create'], ['server.clone'])).toBe(true);
+ expect(hasAnyPermission(['apikey.manage'], ['apikey.read'])).toBe(true);
+ expect(hasAnyPermission(['apikey.manage'], ['apikey.write'])).toBe(true);
+ expect(hasAnyPermission(['node.update'], ['node.server_manage'])).toBe(true);
+ expect(hasAnyPermission(['node.update'], ['node.agent_control'])).toBe(true);
+ });
+
+ it('new narrow values never satisfy the old broad permission', () => {
+ expect(hasAnyPermission(['server.kill'], ['server.stop'])).toBe(false);
+ expect(hasAnyPermission(['server.network'], ['server.update'])).toBe(false);
+ expect(hasAnyPermission(['server.archive'], ['server.suspend'])).toBe(false);
+ expect(hasAnyPermission(['server.migrate'], ['server.transfer'])).toBe(false);
+ expect(hasAnyPermission(['apikey.read'], ['apikey.manage'])).toBe(false);
+ expect(hasAnyPermission(['node.server_manage'], ['node.update'])).toBe(false);
+ });
+ });
+
  describe('ADMIN_PERMISSIONS constant', () => {
  it('should contain all expected admin permission categories', () => {
  expect(ADMIN_PERMISSIONS).toContain('admin.read');
  expect(ADMIN_PERMISSIONS).toContain('admin.write');
  expect(ADMIN_PERMISSIONS).toContain('apikey.manage');
+ expect(ADMIN_PERMISSIONS).toContain('apikey.read');
+ expect(ADMIN_PERMISSIONS).toContain('apikey.write');
  });
 
  it('should contain server admin permissions', () => {
@@ -229,6 +257,13 @@ describe('RBAC - Permission Utilities', () => {
  expect(ADMIN_PERMISSIONS).not.toContain('server.console');
  expect(ADMIN_PERMISSIONS).not.toContain('file.read');
  expect(ADMIN_PERMISSIONS).not.toContain('file.write');
+ expect(ADMIN_PERMISSIONS).not.toContain('server.network');
+ expect(ADMIN_PERMISSIONS).not.toContain('server.storage');
+ expect(ADMIN_PERMISSIONS).not.toContain('server.archive');
+ expect(ADMIN_PERMISSIONS).not.toContain('server.migrate');
+ expect(ADMIN_PERMISSIONS).not.toContain('server.clone');
+ expect(ADMIN_PERMISSIONS).not.toContain('mods.manage');
+ expect(ADMIN_PERMISSIONS).not.toContain('plugins.manage');
  });
 
  it('must not treat ordinary power controls as admin-panel access', () => {
@@ -254,7 +289,7 @@ describe('RBAC - Permission Category Coverage', () => {
  backup: ['read', 'create', 'delete', 'restore'],
  alert: ['read', 'create', 'update', 'delete'],
  admin: ['read', 'write'],
- apikey: ['manage'],
+ apikey: ['manage', 'read', 'write'],
  };
 
  for (const [category, actions] of Object.entries(expectedCategories)) {

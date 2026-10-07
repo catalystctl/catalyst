@@ -174,9 +174,15 @@ function checkDependencies(frameworkId: Cs2FrameworkId, installed: Set<Cs2Framew
 export async function serverCs2Routes(app: FastifyInstance) {
   const fileTunnel = (app as unknown as { fileTunnel: { queueRequest: (nodeId: string, op: string, uuid: string, p: string, data?: Record<string, unknown>) => Promise<{ success: boolean; data?: unknown; error?: string }> } }).fileTunnel;
 
-  const ensureAccess = async (serverId: string, userId: string, perm: string, reply: FastifyReply) => {
+  const ensureAccess = async (
+    serverId: string,
+    userId: string,
+    perm: string,
+    reply: FastifyReply,
+    actor: { permissions?: string[]; apiKeyId?: string },
+  ) => {
     const { ensureServerAccess } = await import("./_helpers.js");
-    return ensureServerAccess(serverId, userId, perm, reply);
+    return ensureServerAccess(serverId, userId, perm, reply, actor);
   };
 
   // Mirror routes/servers/mod-plugins.ts: completion events go to the admin
@@ -197,11 +203,11 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // List available CS2 frameworks and their install state
   app.get(
     "/:serverId/cs2/frameworks",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate] },
+    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
-      const server = await ensureAccess(serverId, userId, "server.read", reply);
+      const server = await ensureAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
       if (!gate) return;
@@ -231,7 +237,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // List releases for a framework (paginated)
   app.get(
     "/:serverId/cs2/frameworks/:frameworkId/releases",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } } },
+    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, frameworkId } = request.params as { serverId: string; frameworkId: string };
       const { page, perPage, query } = request.query as { page?: string; perPage?: string; query?: string };
@@ -239,7 +245,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
       const fid = frameworkId.toLowerCase() as Cs2FrameworkId;
       const fw = CS2_FRAMEWORKS[fid];
       if (!fw) return apiError(reply, 404, ErrorCodes.FRAMEWORK_NOT_FOUND, "Unknown framework");
-      const server = await ensureAccess(serverId, userId, "server.read", reply);
+      const server = await ensureAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
       if (!gate) return;
@@ -268,7 +274,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // Install a framework release
   app.post(
     "/:serverId/cs2/frameworks/:frameworkId/install",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } } },
+    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, frameworkId } = request.params as { serverId: string; frameworkId: string };
       const { tag, allowDependencyInstall } = request.body as { tag?: string; allowDependencyInstall?: boolean };
@@ -277,7 +283,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
       const fw = CS2_FRAMEWORKS[fid];
       if (!fw) return apiError(reply, 404, ErrorCodes.FRAMEWORK_NOT_FOUND, "Unknown framework");
       if (!tag || !String(tag).trim()) return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "tag is required");
-      const server = await ensureAccess(serverId, userId, "file.write", reply);
+      const server = await ensureAccess(serverId, userId, "mods.manage", reply, request.user);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
       if (!gate) return;
@@ -374,14 +380,14 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // Uninstall framework (removes known paths)
   app.post(
     "/:serverId/cs2/frameworks/:frameworkId/uninstall",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } } },
+    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, frameworkId } = request.params as { serverId: string; frameworkId: string };
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
       const fid = frameworkId.toLowerCase() as Cs2FrameworkId;
       const fw = CS2_FRAMEWORKS[fid];
       if (!fw) return apiError(reply, 404, ErrorCodes.FRAMEWORK_NOT_FOUND, "Unknown framework");
-      const server = await ensureAccess(serverId, userId, "file.write", reply);
+      const server = await ensureAccess(serverId, userId, "mods.manage", reply, request.user);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
       if (!gate) return;
@@ -454,11 +460,11 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // CS2 plugins: list installed plugins from addons/counterstrikesharp/plugins
   app.get(
     "/:serverId/cs2/plugins",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate] },
+    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
-      const server = await ensureAccess(serverId, userId, "server.read", reply);
+      const server = await ensureAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
       if (!gate) return;
@@ -485,13 +491,13 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // CS2 plugins: uninstall a plugin folder/file under addons/counterstrikesharp/plugins
   app.post(
     "/:serverId/cs2/plugins/uninstall",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } } },
+    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "plugins.manage" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { filename } = request.body as { filename?: string };
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
       if (!filename || !String(filename).trim()) return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filename is required");
-      const server = await ensureAccess(serverId, userId, "file.write", reply);
+      const server = await ensureAccess(serverId, userId, "plugins.manage", reply, request.user);
       if (!server) return;
       const gate = ensureCs2FrameworkEnabled(server, reply);
       if (!gate) return;

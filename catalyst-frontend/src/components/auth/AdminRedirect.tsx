@@ -11,7 +11,7 @@ const ADMIN_ROUTES: Array<{ path: string; permissions: string[] }> = [
  { path: '/admin/alerts', permissions: ['alert.read', 'alert.create', 'alert.update', 'alert.delete', 'admin.read', 'admin.write'] },
  { path: '/admin/database', permissions: ['admin.read', 'admin.write'] },
  { path: '/admin/audit-logs', permissions: ['admin.read', 'admin.write'] },
- { path: '/admin/api-keys', permissions: ['apikey.manage', 'admin.read', 'admin.write'] },
+ { path: '/admin/api-keys', permissions: ['apikey.read', 'apikey.write', 'admin.read', 'admin.write'] },
  { path: '/admin/system', permissions: ['admin.write'] },
  { path: '/admin/security', permissions: ['admin.read', 'admin.write'] },
  { path: '/admin/plugins', permissions: ['admin.read', 'admin.write'] },

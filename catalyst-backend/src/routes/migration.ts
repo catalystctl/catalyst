@@ -9,6 +9,7 @@ import { MigrationService } from "../services/migration/index.js";
 
 import { serialize } from "../utils/serialize.js";
 import { apiError } from "../lib/http-error";
+import { hasGrant } from "../lib/permissions";
 import { ErrorCodes } from "../shared-types";
 import { captureSystemError } from "../services/error-logger.js";
 import { describeError } from "../utils/describe-error.js";
@@ -32,10 +33,17 @@ export async function migrationRoutes(app: FastifyInstance) {
   const logger = app.log;
   const authenticate = (app as any).authenticate;
 
-  // Helper to check admin permission (runs after authenticate preHandler)
-  const requireAdmin = (request: FastifyRequest, reply: FastifyReply) => {
+  // Helper to check admin permission (runs after authenticate preHandler).
+  // hasGrant semantics: '*' / admin.write pass everything; admin.read passes
+  // read-class requirements. Reads use 'admin.read' (admin.read = read the
+  // entire panel); writes use the migration.manage delegation grant.
+  const requireAdmin = (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    permission: 'admin.read' | 'migration.manage' = 'migration.manage',
+  ) => {
     const perms: string[] = (request as any).user?.permissions ?? [];
-    if (!perms.includes('*') && !perms.includes('admin.write')) {
+    if (!hasGrant(perms, permission)) {
       apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin permission required");
       return false;
     }
@@ -50,7 +58,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * List Catalyst nodes available as migration targets (online only)
    */
   app.get("/api/admin/migration/catalyst-nodes", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply, 'admin.read'))) return;
 
     try {
       const nodes = await prisma.node.findMany({
@@ -354,7 +362,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * List all migration jobs
    */
   app.get("/api/admin/migration", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply, 'admin.read'))) return;
 
     try {
       const service = getMigrationService(logger);
@@ -370,7 +378,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * Get migration job status
    */
   app.get("/api/admin/migration/:jobId", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply, 'admin.read'))) return;
 
     const { jobId } = request.params as any;
 
@@ -443,7 +451,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * Get steps for a migration job
    */
   app.get("/api/admin/migration/:jobId/steps", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply, 'admin.read'))) return;
 
     const { jobId } = request.params as any;
     const query = request.query as any;

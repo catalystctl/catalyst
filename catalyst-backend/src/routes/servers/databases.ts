@@ -12,28 +12,45 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = (request as any).user?.userId;
-      const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
-      const rolePerms = await resolveServerPermissions(userId, "", "");
-      const isPrivileged =
-        rolePerms.includes("*") ||
-        rolePerms.includes("admin.write") ||
-        rolePerms.includes("admin.read") ||
-        rolePerms.includes("database.read") ||
-        rolePerms.includes("database.create") ||
-        rolePerms.includes("server.read");
-      const hasAnyServer = isPrivileged
-        ? true
-        : Boolean(
-            (await prisma.server.count({ where: { ownerId: userId } })) > 0 ||
-              (await prisma.serverAccess.count({ where: { userId } })) > 0,
-          );
-      if (!hasAnyServer) {
+      const { hasGrant } = await import("../../lib/permissions.js");
+      // request.user.permissions is the API-key scope for key requests, so
+      // checking it (not DB-resolved roles) also enforces the key ceiling.
+      const perms: string[] = (request as any).user?.permissions ?? [];
+      // Full panel-wide host inventory is an admin read (TARGET-VOCABULARY
+      // §2.3): admin.read via hasGrant keeps admin.write/* passing.
+      if (hasGrant(perms, "admin.read")) {
+        const hosts = await prisma.databaseHost.findMany({
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, host: true, port: true },
+        });
+        return reply.send({ success: true, data: hosts });
+      }
+      // Non-admins keep a minimal create-database dropdown: only hosts
+      // already referenced by databases on servers they own or hold
+      // ServerAccess on. No panel-wide infra disclosure to bare subusers.
+      const [ownedServers, accessRows] = await Promise.all([
+        prisma.server.findMany({ where: { ownerId: userId }, select: { id: true } }),
+        prisma.serverAccess.findMany({ where: { userId }, select: { serverId: true } }),
+      ]);
+      const serverIds = [
+        ...new Set([...ownedServers.map((s) => s.id), ...accessRows.map((a) => a.serverId)]),
+      ];
+      if (serverIds.length === 0) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
-      const hosts = await prisma.databaseHost.findMany({
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, host: true, port: true },
+      const dbRows = await prisma.serverDatabase.findMany({
+        where: { serverId: { in: serverIds } },
+        select: { hostId: true },
       });
+      const hostIds = [...new Set(dbRows.map((d) => d.hostId))];
+      const hosts =
+        hostIds.length > 0
+          ? await prisma.databaseHost.findMany({
+              where: { id: { in: hostIds } },
+              orderBy: { name: "asc" },
+              select: { id: true, name: true, host: true, port: true },
+            })
+          : [];
       reply.send({ success: true, data: hosts });
     }
   );

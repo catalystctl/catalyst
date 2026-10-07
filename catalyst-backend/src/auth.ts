@@ -312,6 +312,41 @@ export function initAuth() {
       before: async (ctx: any) => {
         const path = ctx.path ?? '';
 
+        // ── Before better-auth admin endpoints: RBAC gate ───────────
+        // The legacy User.role column must never be the HTTP authority
+        // for /api/auth/admin/* (impersonation, ban, set-password, …).
+        // Catalyst RBAC decides: hasGrant(perms, 'admin.write'). The
+        // User.role column is synced derived state (syncUserAdminRoleColumn)
+        // so auth.api internals keep working for panel-appointed admins.
+        if (path.startsWith('/admin/') && path.length > '/admin/'.length) {
+          const sessionUserId = ctx.context?.session?.user?.id;
+          if (sessionUserId) {
+            let perms: string[] = [];
+            try {
+              const { resolveUserPermissionsLive } = await import(
+                './lib/permissions-catalog.js'
+              );
+              perms = await resolveUserPermissionsLive(sessionUserId);
+            } catch {
+              // Fail closed: settings/DB errors must not open the admin surface.
+              return {
+                response: { error: 'Unable to verify admin permissions', code: 'ADMIN_PERMISSION_CHECK_FAILED' },
+                status: 503,
+                headers: null,
+              } as any;
+            }
+            const { hasGrant } = await import('./lib/permissions.js');
+            if (!hasGrant(perms, 'admin.write')) {
+              return {
+                response: { error: 'Insufficient permissions', code: 'INSUFFICIENT_PERMISSIONS' },
+                status: 403,
+                headers: null,
+              } as any;
+            }
+          }
+          // No session: better-auth's own auth check rejects with 401.
+        }
+
         // ── Before email sign-up: enforce registrationEnabled ─────────
         // Blocks both the better-auth catch-all (/api/auth/sign-up/email)
         // and any direct better-auth sign-up path. Custom /register also
@@ -686,6 +721,39 @@ export function initAuth() {
       useSecureCookies: process.env.NODE_ENV === 'production',
     },
   });
+}
+
+/**
+ * Re-derive the better-auth `User.role` column from live RBAC state.
+ * The column feeds the admin plugin's internal auth checks (auth.api
+ * banUser / setUserPassword / admin endpoints) — it is DERIVED state,
+ * never the HTTP authority (the /admin/ before-hook gates on
+ * hasGrant(admin.write)). Called after every role mutation so
+ * panel-appointed admins keep working and demoted ones lose access.
+ */
+export async function syncUserAdminRoleColumn(userId: string): Promise<void> {
+  try {
+    const { resolveUserPermissionsLive } = await import(
+      './lib/permissions-catalog.js'
+    );
+    const perms = await resolveUserPermissionsLive(userId);
+    const nextRole =
+      perms.includes('*') || perms.includes('admin.write')
+        ? 'administrator'
+        : 'user';
+    const current = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (current && current.role !== nextRole) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { role: nextRole },
+      });
+    }
+  } catch {
+    // Best-effort derived state — role mutations must never fail on it.
+  }
 }
 
 /** Backward-compatible proxy that delegates to the initialized auth instance. */

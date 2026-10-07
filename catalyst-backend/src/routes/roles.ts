@@ -8,8 +8,9 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createAuditLog } from '../middleware/audit';
+import { syncUserAdminRoleColumn } from '../auth';
 import {
-  hasPermission,
+  hasGrant,
   getUserPermissions,
   PERMISSION_PRESETS,
   flushRbacCaches,
@@ -17,13 +18,66 @@ import {
   invalidateNodeAccessCache,
 } from '../lib/permissions';
 import {
+  hasPermission,
   invalidateUserPermissions,
   flushPermissionsCache,
   resolveUserPermissionsLive,
   ALL_SERVER_PERMISSIONS,
+  PERMISSION_CATEGORIES,
 } from '../lib/permissions-catalog';
 import { apiError } from '../lib/http-error';
 import { ErrorCodes } from '../shared-types';
+
+/**
+ * Hierarchy guards (TARGET §2.14): a role holding any of these is
+ * admin-equivalent — editing it, or removing it from a user, requires '*'.
+ * admin.read included: a read-admin account still exposes the whole panel.
+ */
+const ADMIN_EQUIVALENT_PERMS = ['*', 'admin.write', 'admin.read'];
+
+function isAdminEquivalentRole(permissions: string[]): boolean {
+  return permissions.some((p) => ADMIN_EQUIVALENT_PERMS.includes(p));
+}
+
+/**
+ * Shared guard for admin-equivalent role edits (PUT /:roleId,
+ * DELETE /:roleId/permissions/*) and role-member removal
+ * (DELETE /:roleId/users/:userId). Returns true when the actor may proceed.
+ */
+function assertCanAffectAdminRole(
+  role: { permissions: string[] },
+  actorPerms: string[]
+): boolean {
+  if (!isAdminEquivalentRole(role.permissions)) return true;
+  return actorPerms.includes('*');
+}
+
+/**
+ * Last-admin invariant for member removal: true when removing this role
+ * from the target would still leave at least one admin-tier user (any
+ * role holding '*' or 'admin.write'). read-tier roles are exempt — they
+ * are not write authority.
+ */
+async function anotherAdminTierRemains(
+  roleId: string,
+  targetUserId: string
+): Promise<boolean> {
+  const otherAdmins = await prisma.user.count({
+    where: {
+      id: { not: targetUserId },
+      roles: { some: { permissions: { hasSome: ['*', 'admin.write'] } } },
+    },
+  });
+  if (otherAdmins > 0) return true;
+  const targetRetains = await prisma.role.count({
+    where: {
+      id: { not: roleId },
+      users: { some: { id: targetUserId } },
+      permissions: { hasSome: ['*', 'admin.write'] },
+    },
+  });
+  return targetRetains > 0;
+}
 
 /** Role permission mutations affect admin + node-access caches too. */
 function flushAllPermissionCaches(): void {
@@ -58,6 +112,11 @@ async function emitRoleMembersPermissionsUpdated(app: FastifyInstance, roleId: s
       select: { id: true },
     });
     for (const member of members) emitPermissionsUpdated(app, member.id);
+    // Permission mutations change every member's admin tier — keep the
+    // derived better-auth User.role column aligned (TARGET §2.10b).
+    for (const member of members) {
+      await syncUserAdminRoleColumn(member.id).catch(() => {});
+    }
   } catch { /* best-effort */ }
 }
 
@@ -123,15 +182,14 @@ async function applyRoleScope(
   }
 
   // Same escalation guard as global permissions: editors cannot grant
-  // server permissions they do not hold themselves (or via '*').
-  if (!editorPerms.includes('*')) {
-    const cantGrant = permissions.filter((p) => !editorPerms.includes(p));
-    if (cantGrant.length > 0) {
-      throw Object.assign(
-        new Error(`Cannot grant permissions you don't have: ${cantGrant.join(', ')}`),
-        { statusCode: 403 }
-      );
-    }
+  // server permissions they do not hold themselves. hasGrant semantics —
+  // admin.write-only editors can grant any concrete scoped permission.
+  const cantGrant = permissions.filter((p) => !hasGrant(editorPerms, p));
+  if (cantGrant.length > 0) {
+    throw Object.assign(
+      new Error(`Cannot grant permissions you don't have: ${cantGrant.join(', ')}`),
+      { statusCode: 403 }
+    );
   }
 
   if (mode === 'nodes') {
@@ -199,14 +257,17 @@ import { serialize } from '../utils/serialize';
 export async function roleRoutes(app: FastifyInstance) {
   const authenticate = (app as any).authenticate;
 
-  // Helper to check permissions
-  const checkPermission = async (
-    userId: string,
+  // Request-based permission gate (Phase 3 key-scope swap): reads
+  // request.user.permissions — the API key's own scope for key auth, the
+  // role-resolved set for sessions — instead of re-resolving the owner's
+  // DB permissions. Escalation guards below intentionally stay on live DB
+  // resolution (freshEditorPermissions).
+  const checkPermission = (
+    request: FastifyRequest,
     permission: string,
     reply: FastifyReply
-  ): Promise<boolean> => {
-    const has = await hasPermission(prisma, userId, permission);
-    if (!has) {
+  ): boolean => {
+    if (!hasPermission(request, permission)) {
       apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions');
       return false;
     }
@@ -220,7 +281,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
 
-      if (!(await checkPermission(userId, 'role.read', reply))) return;
+      if (!checkPermission(request, 'role.read', reply)) return;
 
       const roles = await prisma.role.findMany({
         orderBy: { name: 'asc' },
@@ -255,7 +316,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
 
-      if (!(await checkPermission(userId, 'role.read', reply))) return;
+      if (!checkPermission(request, 'role.read', reply)) return;
 
       const { roleId } = request.params as { roleId: string };
 
@@ -341,7 +402,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
 
-      if (!(await checkPermission(userId, 'role.create', reply))) return;
+      if (!checkPermission(request, 'role.create', reply)) return;
 
       const { name, description, permissions } = request.body as {
         name: string;
@@ -357,19 +418,18 @@ export async function roleRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Permissions must be an array');
       }
 
-      // Validate user can grant these permissions (prevent privilege escalation)
-      // Use freshly resolved permissions, not the cached request snapshot.
+      // Validate user can grant these permissions (prevent privilege
+      // escalation). Freshly resolved perms + hasGrant semantics: an
+      // admin.write-only editor can grant any concrete permission and
+      // legacy alias holders can grant the split values; '*' still needs '*'.
       const userPerms: string[] = await freshEditorPermissions(userId, request.user?.permissions ?? []);
-      const hasWildcard = userPerms.includes('*');
-      if (!hasWildcard) {
-        const cantGrant = permissions.filter(
-          (p) => !userPerms.includes(p),
-        );
-        if (cantGrant.length > 0) {
-          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`, {
-            params: { permissions: cantGrant.join(', ') },
-          });
-        }
+      const cantGrant = permissions.filter(
+        (p) => !hasGrant(userPerms, p),
+      );
+      if (cantGrant.length > 0) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`, {
+          params: { permissions: cantGrant.join(', ') },
+        });
       }
 
       // Check for duplicate name
@@ -443,7 +503,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
 
-      if (!(await checkPermission(userId, 'role.update', reply))) return;
+      if (!checkPermission(request, 'role.update', reply)) return;
 
       const { roleId } = request.params as { roleId: string };
       const { name, description, permissions, scope } = request.body as {
@@ -459,6 +519,12 @@ export async function roleRoutes(app: FastifyInstance) {
 
       if (!role) {
         return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
+      }
+
+      // Hierarchy guard (TARGET §2.14): editing an admin-equivalent role
+      // (any role holding '*', admin.write or admin.read) requires '*'.
+      if (!assertCanAffectAdminRole(role, request.user?.permissions ?? [])) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to modify an admin-equivalent role');
       }
 
       // Prevent self-modification: users cannot update a role they are assigned to
@@ -491,19 +557,18 @@ export async function roleRoutes(app: FastifyInstance) {
           return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Permissions must be an array');
         }
 
-        // Validate user can grant these permissions (prevent privilege escalation)
-        // Use freshly resolved permissions, not the cached request snapshot.
+        // Validate user can grant these permissions (prevent privilege
+        // escalation). Freshly resolved perms + hasGrant semantics — an
+        // admin.write-only editor can grant any concrete permission;
+        // '*' still needs '*'.
         const userPerms: string[] = await freshEditorPermissions(userId, request.user?.permissions ?? []);
-        const hasWildcard = userPerms.includes('*');
-        if (!hasWildcard) {
-          const cantGrant = permissions.filter(
-            (p) => !userPerms.includes(p),
-          );
-          if (cantGrant.length > 0) {
-            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`, {
-              params: { permissions: cantGrant.join(', ') },
-            });
-          }
+        const cantGrant = permissions.filter(
+          (p) => !hasGrant(userPerms, p),
+        );
+        if (cantGrant.length > 0) {
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`, {
+            params: { permissions: cantGrant.join(', ') },
+          });
         }
 
         updateData.permissions = permissions;
@@ -541,7 +606,7 @@ export async function roleRoutes(app: FastifyInstance) {
         details: {
           name: role.name,
           changes: updateData,
-          scope: scopeChanged ? { mode: scope!.mode } : undefined,
+          scope: scopeChanged && scope ? { mode: scope.mode } : undefined,
         },
       });
 
@@ -569,7 +634,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
 
-      if (!(await checkPermission(userId, 'role.delete', reply))) return;
+      if (!checkPermission(request, 'role.delete', reply)) return;
 
       const { roleId } = request.params as { roleId: string };
 
@@ -635,7 +700,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
 
-      if (!(await checkPermission(userId, 'role.update', reply))) return;
+      if (!checkPermission(request, 'role.update', reply)) return;
 
       const { roleId } = request.params as { roleId: string };
       const { permission } = request.body as { permission: string };
@@ -644,11 +709,10 @@ export async function roleRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Permission is required');
       }
 
-      // Validate user can grant this permission (prevent privilege escalation)
-      // Use freshly resolved permissions, not the cached request snapshot.
+      // Validate user can grant this permission (prevent privilege
+      // escalation). Freshly resolved perms + hasGrant semantics.
       const userPerms: string[] = await freshEditorPermissions(userId, request.user?.permissions ?? []);
-      const hasWildcard = userPerms.includes('*');
-      if (!hasWildcard && !userPerms.includes(permission)) {
+      if (!hasGrant(userPerms, permission)) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot grant permission you don't have: ${permission}`, {
           params: { permission },
         });
@@ -660,6 +724,12 @@ export async function roleRoutes(app: FastifyInstance) {
 
       if (!role) {
         return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
+      }
+
+      // Hierarchy guard (TARGET §2.14): adding permissions to an
+      // admin-equivalent role requires '*'.
+      if (!assertCanAffectAdminRole(role, request.user?.permissions ?? [])) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to modify an admin-equivalent role');
       }
 
       // Prevent self-modification: users cannot add permissions to a role they are assigned to
@@ -721,7 +791,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
 
-      if (!(await checkPermission(userId, 'role.update', reply))) return;
+      if (!checkPermission(request, 'role.update', reply)) return;
 
       const { roleId } = request.params as { roleId: string };
       // Get the wildcard param which contains our permission
@@ -739,6 +809,12 @@ export async function roleRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
+      // Hierarchy guard (TARGET §2.14): removing a permission from an
+      // admin-equivalent role requires '*'.
+      if (!assertCanAffectAdminRole(role, request.user?.permissions ?? [])) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to modify an admin-equivalent role');
+      }
+
       // Prevent self-modification: users cannot remove permissions from a role they are assigned to
       const selfAssigned = await prisma.user.findFirst({
         where: { id: userId, roles: { some: { id: roleId } } },
@@ -749,6 +825,27 @@ export async function roleRoutes(app: FastifyInstance) {
 
       if (!role.permissions.includes(permission)) {
         return apiError(reply, 404, ErrorCodes.ROLE_PERMISSION_NOT_FOUND, 'Role does not have this permission');
+      }
+
+      // Last-admin guard: stripping '*' or 'admin.write' from the last
+      // admin-capable role that still has members would lock the panel.
+      if ((permission === '*' || permission === 'admin.write') && role.permissions.includes(permission)) {
+        const remaining = role.permissions.filter((p) => p !== permission);
+        const roleStillAdminCapable = remaining.includes('*') || remaining.includes('admin.write');
+        if (!roleStillAdminCapable) {
+          const otherAdminCapableRoles = await prisma.role.count({
+            where: {
+              id: { not: roleId },
+              permissions: { hasSome: ['*', 'admin.write'] },
+            },
+          });
+          const memberCount = await prisma.user.count({
+            where: { roles: { some: { id: roleId } } },
+          });
+          if (otherAdminCapableRoles === 0 && memberCount > 0) {
+            return apiError(reply, 409, ErrorCodes.ADMIN_LAST_ADMIN, 'Cannot remove the last admin-capable permission from the last admin role');
+          }
+        }
       }
 
       const updated = await prisma.role.update({
@@ -796,7 +893,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const currentUserId = request.user.userId;
 
-      if (!(await checkPermission(currentUserId, 'user.set_roles', reply))) return;
+      if (!checkPermission(request, 'user.set_roles', reply)) return;
 
       const { roleId, userId } = request.params as { roleId: string; userId: string };
 
@@ -819,13 +916,14 @@ export async function roleRoutes(app: FastifyInstance) {
       }
 
       // Validate current user has all permissions in the target role
-      // This prevents privilege escalation via role assignment
-      // Use freshly resolved permissions, not the cached request snapshot.
+      // This prevents privilege escalation via role assignment.
+      // Freshly resolved perms + hasGrant semantics — an admin.write-only
+      // assigner can assign roles holding concrete permissions.
       const currentUserPerms: string[] = await freshEditorPermissions(currentUserId, request.user?.permissions ?? []);
       const hasWildcard = currentUserPerms.includes('*');
       if (!hasWildcard && role.permissions.length > 0) {
         const cantGrant = role.permissions.filter(
-          (p) => !currentUserPerms.includes(p),
+          (p) => !hasGrant(currentUserPerms, p),
         );
         if (cantGrant.length > 0) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`, {
@@ -855,7 +953,7 @@ export async function roleRoutes(app: FastifyInstance) {
           ),
         ];
         const cantGrantScoped = scopedPerms.filter(
-          (p) => !currentUserPerms.includes(p),
+          (p) => !hasGrant(currentUserPerms, p),
         );
         if (cantGrantScoped.length > 0) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot assign role with scoped permissions you don't have: ${cantGrantScoped.join(', ')}`, {
@@ -887,6 +985,8 @@ export async function roleRoutes(app: FastifyInstance) {
       invalidateAdminUserCache(userId);
       invalidateNodeAccessCache(userId);
       emitPermissionsUpdated(app, userId);
+      // Keep the derived better-auth User.role column in sync (TARGET §2.10b).
+      await syncUserAdminRoleColumn(userId);
 
       await createAuditLog(currentUserId, {
         request,
@@ -920,7 +1020,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const currentUserId = request.user.userId;
 
-      if (!(await checkPermission(currentUserId, 'user.set_roles', reply))) return;
+      if (!checkPermission(request, 'user.set_roles', reply)) return;
 
       const { roleId, userId } = request.params as { roleId: string; userId: string };
 
@@ -947,6 +1047,19 @@ export async function roleRoutes(app: FastifyInstance) {
         return apiError(reply, 403, ErrorCodes.ADMIN_SELF_MODIFICATION, 'Cannot remove roles from yourself');
       }
 
+      // Hierarchy guard (TARGET §2.14, mirrors admin.ts PUT /users demotion
+      // guard): removing an admin-equivalent role from a user requires '*'.
+      if (!assertCanAffectAdminRole(role, request.user?.permissions ?? [])) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to remove an admin-equivalent role');
+      }
+
+      // Last-admin guard (mirrors admin.ts:951-970): removing the last
+      // admin-tier role from the last admin-tier user locks the panel.
+      const roleIsAdminTier = role.permissions.includes('*') || role.permissions.includes('admin.write');
+      if (roleIsAdminTier && !(await anotherAdminTierRemains(roleId, userId))) {
+        return apiError(reply, 409, ErrorCodes.ADMIN_LAST_ADMIN, 'Cannot remove the last administrator');
+      }
+
       await prisma.user.update({
         where: { id: userId },
         data: {
@@ -958,6 +1071,8 @@ export async function roleRoutes(app: FastifyInstance) {
       invalidateAdminUserCache(userId);
       invalidateNodeAccessCache(userId);
       emitPermissionsUpdated(app, userId);
+      // Keep the derived better-auth User.role column in sync (TARGET §2.10b).
+      await syncUserAdminRoleColumn(userId);
 
       await createAuditLog(currentUserId, {
         request,
@@ -991,7 +1106,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const currentUserId = request.user.userId;
 
-      if (!(await checkPermission(currentUserId, 'user.read', reply))) return;
+      if (!checkPermission(request, 'user.read', reply)) return;
 
       const { userId } = request.params as { userId: string };
 
@@ -1034,6 +1149,28 @@ export async function roleRoutes(app: FastifyInstance) {
     }
   );
 
+  // GET /api/roles/permissions-catalog - Serve the canonical permission
+  // catalog to the role editor (frontend dependency, TARGET §3). Any
+  // role read/create/update holder (hasGrant) — admin bits included.
+  app.get(
+    '/permissions-catalog',
+    { onRequest: [authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const perms: string[] = request.user?.permissions ?? [];
+      const allowed = ['role.read', 'role.create', 'role.update'].some((p) =>
+        hasGrant(perms, p)
+      );
+      if (!allowed) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions');
+      }
+
+      reply.send({
+        success: true,
+        data: PERMISSION_CATEGORIES,
+      });
+    }
+  );
+
   // GET /api/roles/presets - Get available role presets
   app.get(
     '/presets',
@@ -1041,7 +1178,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
 
-      if (!(await checkPermission(userId, 'role.read', reply))) return;
+      if (!checkPermission(request, 'role.read', reply)) return;
 
       reply.send({
         success: true,
@@ -1060,7 +1197,7 @@ export async function roleRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const currentUserId = request.user.userId;
 
-      if (!(await checkPermission(currentUserId, 'node.read', reply))) return;
+      if (!checkPermission(request, 'node.read', reply)) return;
 
       const { roleId } = request.params as { roleId: string };
 
@@ -1169,7 +1306,7 @@ export async function roleRoutes(app: FastifyInstance) {
 
       // Users can view their own accessible nodes
       if (currentUserId !== (request.params as any).userId) {
-        if (!(await checkPermission(currentUserId, 'node.read', reply))) return;
+        if (!checkPermission(request, 'node.read', reply)) return;
       }
 
       const { userId } = request.params as { userId: string };

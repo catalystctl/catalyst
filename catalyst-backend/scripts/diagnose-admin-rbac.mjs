@@ -44,4 +44,41 @@ console.log(`resolveServerPermissions rows: serverGrants=${sg.length}, nodeGrant
 console.log(`global perms include admin.write/*: ${globalPerms.includes('*') || globalPerms.includes('admin.write')}`);
 console.log('=> decideServerAccess: ALLOWED (admin branch)' );
 
+// ── Legacy split-value count report (alias window tracker) ────────────────
+// Duplicate of LEGACY_ALIASES keys (src/lib/permission-vocabulary.ts — the
+// single source; .mjs cannot import TS). When every count below is zero,
+// it is safe to drop the alias window.
+const LEGACY_KEYS = [
+  'apikey.manage', 'server.update', 'node.update', 'server.suspend',
+  'server.transfer', 'server.create', 'server.stop',
+];
+const STORES = [
+  ['Role', prisma.role],
+  ['ApiKey', prisma.apikey],
+  ['ServerAccess', prisma.serverAccess],
+  ['ServerAccessInvite', prisma.serverAccessInvite],
+  ['RoleServerGrant', prisma.roleServerGrant],
+  ['RoleNodeGrant', prisma.roleNodeGrant],
+];
+console.log('\nLegacy split values still stored (run db:migrate-permissions to append the new values; these stay until the alias window closes):');
+let totalLegacy = 0;
+for (const [name, model] of STORES) {
+  const rows = await model.findMany({ select: { permissions: true } });
+  const counts = {};
+  for (const row of rows) {
+    for (const stored of row.permissions) {
+      const base = stored.split(':')[0];
+      if (LEGACY_KEYS.includes(base)) counts[base] = (counts[base] ?? 0) + 1;
+    }
+  }
+  const detail = Object.entries(counts).map(([k, n]) => `${k}×${n}`).join(', ');
+  totalLegacy += Object.values(counts).reduce((s, n) => s + n, 0);
+  console.log(`  ${name}: ${detail || 'none'}`);
+}
+console.log(
+  totalLegacy === 0
+    ? '=> zero legacy values stored: LEGACY_ALIASES can be removed (post wave-2 + UI retraining).'
+    : `=> ${totalLegacy} legacy values stored across all grant stores.`,
+);
+
 await prisma.$disconnect();

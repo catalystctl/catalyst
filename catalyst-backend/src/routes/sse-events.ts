@@ -149,7 +149,7 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       if (!isGlobal) {
         // Per-server: same AuthZ as decideServerAccess / ensureServerAccess.
         // Bare hasNodeAccess is NOT enough — need owner, ServerAccess,
-        // (node access + node.update), or admin.write/*.
+        // (node access + node.server_manage), or admin.write/*.
         const server = await prisma.server.findUnique({
           where: { id: serverId },
           include: {
@@ -187,10 +187,15 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         serverNodeId = server.nodeId;
       } else {
         // Global subscription: build the set of servers this user may observe.
-        // Contract matches decideServerAccess:
-        //   owner | ServerAccess | (hasNodeAccess AND node.update) | admin.write/*
-        // Do NOT fan out all servers on accessible nodes without node.update.
-        // admin.read alone is NOT full-admin for cross-tenant event fanout.
+        // Scoped snapshot contract matches decideServerAccess:
+        //   owner | ServerAccess | (hasNodeAccess AND node.server_manage)
+        // Do NOT fan out all servers on accessible nodes without
+        // node.server_manage (legacy node.update split value still
+        // satisfies raw-includes checks).
+        // Read tiers (admin.read/admin.write/*) read the whole panel — this
+        // stream has no write channel, so the unfiltered feed IS the read
+        // feed (contract item 1). Revocation is handled by the gateway's
+        // 60s unfiltered-feed re-auth sweeper.
         if (!userId) {
           apiError(reply, 401, ErrorCodes.UNAUTHORIZED, 'Unauthorized');
           return;
@@ -199,8 +204,8 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         const { resolveUserPermissions } = await import('../lib/permissions-catalog.js');
         const rolePerms = await resolveUserPermissions(userId);
 
-        if (isFullAdminRole(rolePerms)) {
-          // Full admins (*/admin.write) may receive all server lifecycle events.
+        if (isFullAdminRole(rolePerms) || rolePerms.includes('admin.read')) {
+          // Read tiers may receive all server lifecycle events.
           allowedServerIds = undefined;
         } else {
           const [owned, shared, accessibleNodes] = await Promise.all([
@@ -220,9 +225,14 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
             ...shared.map((a) => a.serverId),
           ]);
 
-          // Node-assigned servers only when role also holds node.update.
-          // Bare node assignment alone must NOT fan out every server on the node.
-          if (rolePerms.includes('node.update') && accessibleNodes.nodeIds.length > 0) {
+          // Node-assigned servers only when the role also holds
+          // node.server_manage (legacy node.update split value still
+          // satisfies raw-includes checks). Bare node assignment alone must
+          // NOT fan out every server on the node.
+          if (
+            (rolePerms.includes('node.server_manage') || rolePerms.includes('node.update')) &&
+            accessibleNodes.nodeIds.length > 0
+          ) {
             const nodeServers = await prisma.server.findMany({
               where: { nodeId: { in: accessibleNodes.nodeIds } },
               select: { id: true },
@@ -271,8 +281,9 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       };
 
       // Per-server subscription OR user-scoped global subscription for AppLayout.
-      // For non-admins always pass an explicit list (may be empty). Only full
-      // admins pass undefined (= unfiltered). Empty must NOT become unfiltered.
+      // For non-admins always pass an explicit list (may be empty). Only read
+      // tiers (admin.read/admin.write/*) pass undefined (= unfiltered). Empty
+      // must NOT become unfiltered.
       const wasFirstSubscriber = !isGlobal && wsGateway.getSseEventSubscriberCount(serverId) === 0;
       let unsubscribe: () => void;
       let touch: () => void;
@@ -283,6 +294,13 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
               push,
               allowedServerIds === undefined ? undefined : [...allowedServerIds],
               userId,
+              // Feeds the gateway's 60s unfiltered-feed re-auth sweeper: on
+              // loss of the read-tier grant it destroys this hijacked socket.
+              () => {
+                try {
+                  (reply.raw as { destroy?: () => void }).destroy?.();
+                } catch { /* socket already gone */ }
+              },
             )
           : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push, userId));
       } catch {

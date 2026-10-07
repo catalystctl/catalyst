@@ -26,6 +26,7 @@ import { createCollectionStorage } from './storage/collection-storage';
 import { resolveConfigValue } from './config-utils';
 import { matchFilter, applyUpdateOperators } from './path-utils';
 import { normalizePermissionList } from './safety';
+import { hasGrant } from '../lib/permissions.js';
 
 // ── Simple unique ID generator ──────────────────────────────────────────────
 function generateId(): string {
@@ -1155,13 +1156,15 @@ export function createPluginContext(
     },
 
     /**
-     * True when the request user holds any of the given permission strings
-     * (or `*`). Use for soft checks inside handlers.
+     * True when the request user holds any of the given permission strings.
+     * hasGrant semantics: `*` grants everything, admin.write satisfies any
+     * concrete permission, admin.read satisfies read-class permissions, and
+     * legacy split values keep satisfying the values they were split into.
+     * Use for soft checks inside handlers.
      */
     hasPermission(request: any, ...required: string[]): boolean {
       const perms: string[] = request?.user?.permissions ?? [];
-      if (perms.includes('*')) return true;
-      return required.some((p) => perms.includes(p));
+      return required.some((p) => hasGrant(perms, p));
     },
 
     /**
@@ -1178,7 +1181,7 @@ export function createPluginContext(
     requirePermission(...required: string[]) {
       return async (request: FastifyRequest, reply: FastifyReply) => {
         const perms: string[] = (request as any)?.user?.permissions ?? [];
-        if (perms.includes('*') || required.some((p) => perms.includes(p))) {
+        if (required.some((p) => hasGrant(perms, p))) {
           return;
         }
         return reply.status(403).send({

@@ -7,17 +7,24 @@ const now = new Date().toISOString();
 // Explicit grant list: the panel's server-permission checks match exact
 // strings (no '*' wildcard at the server scope), so the demo admin needs
 // every permission spelled out for all tabs to appear.
+// Mirrors backend ALL_SERVER_PERMISSIONS (permissions-catalog.ts).
 const allServerPermissions = [
   'server.read',
   'server.start',
   'server.stop',
+  'server.kill',
   'server.install',
   'server.reinstall',
   'server.rebuild',
+  'server.update',
+  'server.network',
+  'server.storage',
+  'server.archive',
+  'server.migrate',
   'server.transfer',
   'server.delete',
   'server.schedule',
-  'server.update',
+  'server.clone',
   'console.read',
   'console.write',
   'file.read',
@@ -26,6 +33,7 @@ const allServerPermissions = [
   'backup.create',
   'backup.restore',
   'backup.delete',
+  'backup.download',
   'database.read',
   'database.create',
   'database.rotate',
@@ -34,6 +42,8 @@ const allServerPermissions = [
   'alert.create',
   'alert.update',
   'alert.delete',
+  'mods.manage',
+  'plugins.manage',
 ];
 
 export const demoUser = {

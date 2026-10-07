@@ -49,6 +49,15 @@ export interface PermissionInfo {
 /**
  * Human-facing metadata for known plugin permissions. Unknown tokens fall back
  * to a generic entry rather than being rejected — plugins may declare new scopes.
+ *
+ * NOTE: these tokens are PLUGIN-SCOPE capabilities (granted per plugin via the
+ * safety-consent flow, enforced by src/plugins/context.ts) — a SEPARATE
+ * namespace from panel RBAC permissions (lib/permissions-catalog.ts), even
+ * where names collide ('admin.read', 'admin.write', 'server.read',
+ * 'server.write', 'user.read', 'user.write'). A plugin holding the plugin-
+ * scope 'admin.read' token may register admin-read routes; it does NOT mean
+ * the caller holds the RBAC 'admin.read' permission. Do not unify or
+ * cross-map the two namespaces.
  */
 export const PERMISSION_INFO: Record<string, PermissionInfo> = {
   '*': {

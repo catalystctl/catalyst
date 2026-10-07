@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { createApiKey, deleteApiKey as deleteApiKeyService, updateApiKey as updateApiKeyService } from "../services/api-key-service";
 import { PERMISSION_CATEGORIES, hasPermission, isAdmin } from "../lib/permissions-catalog";
+import { hasGrant } from "../lib/permissions";
 import { serialize } from '../utils/serialize';
 import { captureSystemError } from "../services/error-logger";
 import { createAuditLog } from "../middleware/audit.js";
@@ -32,20 +33,23 @@ export async function apiKeyRoutes(app: FastifyInstance) {
     return perms.includes("*") || perms.includes("admin.write");
   };
 
-  // Middleware: authenticate + check apikey.manage permission
-  const requireApiKeyManage = async (request: any, reply: any) => {
-    if (!hasPermission(request, 'apikey.manage')) {
-      return reply.status(403).send({ success: false, error: "Requires apikey.manage permission", code: ErrorCodes.PERMISSION_DENIED });
+  // Middleware: authenticate + check apikey.write (create/rename/enable/revoke
+  // own keys). Legacy apikey.manage satisfies it via LEGACY_ALIASES; cross-user
+  // key admin stays admin.write-tier via the own-or-isWriteAdmin checks.
+  const requireApiKeyWrite = async (request: any, reply: any) => {
+    if (!hasPermission(request, 'apikey.write')) {
+      return reply.status(403).send({ success: false, error: "Requires apikey.write permission", code: ErrorCodes.PERMISSION_DENIED });
     }
   };
 
-  // Read gate for the admin API-keys page: apikey.manage holders plus
-  // read-only admins (admin.read, matched by the route and the list
-  // comment). Mutating routes stay behind requireApiKeyManage; the list
-  // handler still scopes non-admins to their own keys.
+  // Read gate for the admin API-keys page: apikey.read (or legacy
+  // apikey.manage) holders plus read admins (admin.read — hasGrant treats
+  // apikey.read as a read permission). Mutating routes stay behind
+  // requireApiKeyWrite; list/GET handlers still scope non-admins to their
+  // own keys.
   const requireApiKeyRead = async (request: any, reply: any) => {
-    if (!hasPermission(request, 'apikey.manage') && !isAdmin(request)) {
-      return reply.status(403).send({ success: false, error: "Requires apikey.manage permission", code: ErrorCodes.PERMISSION_DENIED });
+    if (!hasPermission(request, 'apikey.read') && !isAdmin(request)) {
+      return reply.status(403).send({ success: false, error: "Requires apikey.read permission", code: ErrorCodes.PERMISSION_DENIED });
     }
   };
 
@@ -71,19 +75,21 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // ── POST / ──
   // Create a new API key with optional permission scoping.
   app.post("/api/admin/api-keys", {
-    preHandler: [authenticate, requireApiKeyManage],
+    preHandler: [authenticate, requireApiKeyWrite],
   }, async (request: any, reply) => {
     try {
       const body = createApiKeySchema.parse(request.body);
       const userId = request.user.userId;
 
       // If allPermissions is requested, no need to validate specific permissions.
-      // If specific permissions are requested, validate they don't exceed creator's permissions.
+      // If specific permissions are requested, validate they don't exceed
+      // creator's authority — hasGrant semantics so an admin.write-only
+      // creator can scope keys to any concrete permission, and legacy
+      // apikey.manage holders can grant the split values via aliases.
       if (!body.allPermissions) {
         const creatorPerms: string[] = request.user.permissions ?? [];
-        const hasWildcard = creatorPerms.includes('*');
         const invalidPerms = body.permissions.filter(
-          (p) => !hasWildcard && !creatorPerms.includes(p),
+          (p) => !hasGrant(creatorPerms, p),
         );
         if (invalidPerms.length > 0) {
           return reply.status(403).send({
@@ -248,7 +254,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
   // ── PATCH /:id ──
   app.patch<{ Params: { id: string } }>("/api/admin/api-keys/:id", {
-    preHandler: [authenticate, requireApiKeyManage],
+    preHandler: [authenticate, requireApiKeyWrite],
   }, async (request: any, reply) => {
     try {
       const { id } = request.params;
@@ -315,7 +321,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
   // ── DELETE /:id ──
   app.delete<{ Params: { id: string } }>("/api/admin/api-keys/:id", {
-    preHandler: [authenticate, requireApiKeyManage],
+    preHandler: [authenticate, requireApiKeyWrite],
   }, async (request: any, reply) => {
     try {
       const { id } = request.params;
@@ -378,8 +384,10 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   });
 
   // ── GET /:id/usage ──
+  // Read-only: apikey.manage holders + read admins (admin.read) — the
+  // in-handler own-or-admin check below scopes non-admins to their own keys.
   app.get<{ Params: { id: string } }>("/api/admin/api-keys/:id/usage", {
-    preHandler: [authenticate, requireApiKeyManage],
+    preHandler: [authenticate, requireApiKeyRead],
   }, async (request: any, reply) => {
     try {
       const { id } = request.params;

@@ -247,7 +247,7 @@ describe("role assignment scoped-grant authority (static contract)", () => {
 });
 
 describe("node agent-key minting requires node-manage path (static contract)", () => {
-  it("deployment-token and api-key routes check hasNodeAccess + node.update", async () => {
+  it("deployment-token and api-key routes check hasNodeAccess + node.server_manage", async () => {
     const fs = await import("fs");
     const src = await fs.promises.readFile(
       new URL("../routes/nodes.ts", import.meta.url),
@@ -257,7 +257,8 @@ describe("node agent-key minting requires node-manage path (static contract)", (
     const apiKeyIdx = src.indexOf("minting an agent API key makes the caller");
     expect(deployIdx).toBeGreaterThan(-1);
     expect(apiKeyIdx).toBeGreaterThan(-1);
-    // Both mint routes must pair hasNodeAccess with node.update.
-    expect(src).toContain('rolePerms.includes("node.update")');
+    // Both mint routes must pair hasNodeAccess with the node-manage grant
+    // (hasGrant honors the legacy node.update alias for stored roles).
+    expect(src).toContain('hasGrant(rolePerms, "node.server_manage")');
   });
 });

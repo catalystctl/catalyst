@@ -41,6 +41,7 @@ import {
 import { useAdminNodes } from '../../hooks/useAdmin';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 import { useAuthStore } from '../../stores/authStore';
+import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 import type { NodeInfo } from '../../types/node';
 import { nodesApi } from '../../services/api/nodes';
 import { locationsApi } from '../../services/api/locations';
@@ -286,13 +287,16 @@ function AdminNodesPage() {
  [user?.permissions],
  );
 
+ // hasAnyPermission mirrors the backend hasGrant gates: exact grant,
+ // scoped variant (node.create:node_x), admin.write, '*'. admin.read
+ // stays denied — node writes are not read-everything.
  const canCreate = useMemo(
-  () => Boolean(user?.permissions?.includes('node.create') || user?.permissions?.includes('*')),
+   () => hasAnyPermission(user?.permissions, ['node.create']),
   [user?.permissions],
   );
 
  const canDelete = useMemo(
- () => Boolean(user?.permissions?.includes('node.delete') || user?.permissions?.includes('*')),
+ () => hasAnyPermission(user?.permissions, ['node.delete']),
  [user?.permissions],
  );
  const canDeleteAnyNode = canDelete && Boolean(canWrite);

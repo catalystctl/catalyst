@@ -1,7 +1,7 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { serialize } from '../utils/serialize';
-import { hasNodeAccess } from '../lib/permissions';
+import { hasGrant, hasNodeAccess } from '../lib/permissions';
 import { resolveServerPermissions } from '../lib/permissions-catalog';
 import { SimpleCache } from '../lib/cache.js';
 import { apiError } from "../lib/http-error";
@@ -21,7 +21,7 @@ export async function metricsRoutes(app: FastifyInstance) {
   // Get server metrics
   app.get(
     "/servers/:serverId/metrics",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -74,16 +74,20 @@ export async function metricsRoutes(app: FastifyInstance) {
       // (server.read / admin), or node assignment
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       // SECURITY: bare node assignment must not expose other tenants'
-      // metrics — require the node.update management pairing
-      // (decideServerAccess node-manage contract). Wildcard admins pass via
-      // rolePerms("*")/server.read below.
+      // metrics — require the node-manage pairing (mirrors
+      // decideServerAccess: legacy node.update or its split value
+      // node.server_manage).
       const hasNodeAccessToServer =
         (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-        (rolePerms.includes("node.update") || rolePerms.includes("*"));
+        (rolePerms.includes("node.update") ||
+          rolePerms.includes("node.server_manage") ||
+          rolePerms.includes("*"));
+      // hasGrant: admin.read and bare admin.write roles also satisfy
+      // server.read (the exact-match include previously locked them out).
       const canReadMetrics =
         server.ownerId === userId ||
         Boolean(access?.permissions?.includes("server.read")) ||
-        rolePerms.includes("server.read") ||
+        hasGrant(rolePerms, "server.read") ||
         hasNodeAccessToServer;
       if (!canReadMetrics) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
@@ -277,7 +281,7 @@ export async function metricsRoutes(app: FastifyInstance) {
   // Get current server stats (latest only)
   app.get(
     "/servers/:serverId/stats",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -340,16 +344,20 @@ export async function metricsRoutes(app: FastifyInstance) {
       // (server.read / admin), or node assignment
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       // SECURITY: bare node assignment must not expose other tenants'
-      // metrics — require the node.update management pairing
-      // (decideServerAccess node-manage contract). Wildcard admins pass via
-      // rolePerms("*")/server.read below.
+      // metrics — require the node-manage pairing (mirrors
+      // decideServerAccess: legacy node.update or its split value
+      // node.server_manage).
       const hasNodeAccessToServer =
         (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-        (rolePerms.includes("node.update") || rolePerms.includes("*"));
+        (rolePerms.includes("node.update") ||
+          rolePerms.includes("node.server_manage") ||
+          rolePerms.includes("*"));
+      // hasGrant: admin.read and bare admin.write roles also satisfy
+      // server.read (the exact-match include previously locked them out).
       const canReadMetrics =
         server.ownerId === userId ||
         Boolean(access?.permissions?.includes("server.read")) ||
-        rolePerms.includes("server.read") ||
+        hasGrant(rolePerms, "server.read") ||
         hasNodeAccessToServer;
       if (!canReadMetrics) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
@@ -403,11 +411,10 @@ export async function metricsRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const perms: string[] = request.user?.permissions ?? [];
-      const isAdmin =
-        perms.includes("*") ||
-        perms.includes("admin.write") ||
-        perms.includes("admin.read");
-      if (!isAdmin) {
+      // hasGrant admits node.view_stats (the targeted permission for node
+      // statistics) as well as the admin bits: admin.read is read-classified
+      // for node.view_stats, and admin.write satisfies any concrete permission.
+      if (!hasGrant(perms, "node.view_stats")) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access required");
       }
       const { nodeId } = request.params as { nodeId: string };

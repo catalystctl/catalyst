@@ -37,7 +37,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/permissions",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -51,7 +51,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       }
 
       // Check if user has access - owner, admin.write/*, ServerAccess, or (node + node.update)
-      if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
+      if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
@@ -76,7 +76,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // List pending server invites
   app.get(
     "/:serverId/invites",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -90,7 +90,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      if (!(await canAccessServer(userId, server))) {
+      if (!(await canAccessServer(userId, server, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
@@ -99,14 +99,20 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         orderBy: { createdAt: "desc" },
       });
 
-      reply.send({ success: true, data: invites });
+      // Raw invite tokens are visible only to manage-capable callers
+      // (owner / admin / node-manage): read-tier viewers get metadata,
+      // not the bearer token that accepts the invite.
+      const canManage = await canManageSubusers(userId, server, request.user);
+      const data = invites.map(({ token, ...meta }) => (canManage ? { ...meta, token } : meta));
+
+      reply.send({ success: true, data });
     }
   );
 
   // Create invite
   app.post(
     "/:serverId/invites",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -130,7 +136,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
       // Subuser management is owner-or-manage-path (admin, node manager) —
       // plain subusers cannot invite others.
-      if (!(await canManageSubusers(userId, server))) {
+      if (!(await canManageSubusers(userId, server, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
@@ -239,7 +245,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // the original link was lost or SMTP was not configured at creation time.
   app.post(
     "/:serverId/invites/:inviteId/regenerate",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, inviteId } = request.params as {
         serverId: string;
@@ -254,7 +260,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       if (!server) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
-      if (!(await canManageSubusers(userId, server))) {
+      if (!(await canManageSubusers(userId, server, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
@@ -323,7 +329,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Cancel invite
   app.delete(
     "/:serverId/invites/:inviteId",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, inviteId } = request.params as { serverId: string; inviteId: string };
       const userId = request.user.userId;
@@ -337,7 +343,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      if (!(await canManageSubusers(userId, server))) {
+      if (!(await canManageSubusers(userId, server, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
@@ -444,7 +450,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Accept invite (authenticated)
   app.post(
     "/invites/accept",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'invite acceptance is gated by the bearer invite token itself, not a permission' }},
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const { token } = request.body as { token?: string };
@@ -621,7 +627,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Add or update server access
   app.post(
     "/:serverId/access",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -643,7 +649,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      if (!(await canManageSubusers(userId, server))) {
+      if (!(await canManageSubusers(userId, server, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
@@ -706,7 +712,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Remove server access
   app.delete(
     "/:serverId/access/:targetUserId",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, targetUserId } = request.params as {
         serverId: string;
@@ -723,7 +729,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      if (!(await canManageSubusers(userId, server))) {
+      if (!(await canManageSubusers(userId, server, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 

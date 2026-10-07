@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, ensureServerAccess, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, serverUpdateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, validateVariableRule, withConnectionInfo } from './_helpers.js';
+import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, enforceKeyScope, ensureNotSuspended, ensureServerAccess, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, serverUpdateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, validateVariableRule, withConnectionInfo } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { minimumDiskMbFromHints } from "../../utils/egg-import.js";
 import { describeError } from "../../utils/describe-error.js";
@@ -9,6 +9,9 @@ import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb
 import { SimpleCache } from "../../lib/cache.js";
 import { registerCacheStats } from "../../lib/cache.js";
 import { resolveUserPermissions } from "../../lib/permissions-catalog";
+import { hasGrant } from "../../lib/permissions.js";
+import { READ_PERMISSIONS } from "../../lib/permission-vocabulary.js";
+import { decideServerAccess } from "../../lib/server-access.js";
 import { publishCacheInvalidate, subscribeCacheInvalidations } from "../../lib/event-bus.js";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
@@ -48,6 +51,12 @@ const serverListCache = new SimpleCache<string, any>(5000);
 const serverListInflight = new Map<string, Promise<any>>();
 
 registerCacheStats('servers.list', () => serverListCache.stats());
+
+// Server-scoped READ subset served to admin.read callers on list endpoints
+// (mirrors getEffectiveServerPermissions's adminRead subset in _helpers).
+const ADMIN_READ_SERVER_PERMISSIONS = ALL_SERVER_PERMISSIONS.filter((p) =>
+  READ_PERMISSIONS.has(p),
+);
 
 /** Evict the process-local list cache and tell sibling workers/hosts. */
 function clearServerListCache(): void {
@@ -109,7 +118,7 @@ async function buildCloneAuth(
   const nodeAccess = await hasNodeAccess(prisma, userId, targetNodeId);
   return {
     userId,
-    canCreate: isAdmin || checkPerm(request, 'server.create'),
+    canCreate: isAdmin || checkPerm(request, 'server.clone'),
     canSetOwner: isAdmin || checkPerm(request, 'user.create'),
     canTransfer: isAdmin || checkPerm(request, 'server.transfer'),
     canManageSuspended: isAdmin,
@@ -333,14 +342,23 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       // For admin/API-key callers, allow specifying a different owner.
       // Regular users can only create servers for themselves.
-      // Global roles may grant server.create directly (a "game manager" role
-      // can deploy servers panel-wide without full admin.write).
+      // Creation gate: server.create (or admin.write), or the node_manage
+      // path — node assignment + node.server_manage (legacy node.update).
+      // Bare node assignment alone grants nothing (decideServerAccess contract).
       const canCreate =
         checkIsAdmin(request, "admin.write") || checkPerm(request, "server.create");
-      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, nodeId);
+      const assignedToNode = await hasNodeAccess(prisma, userId, nodeId);
+      const nodeManage =
+        assignedToNode &&
+        decideServerAccess({
+          isOwner: false,
+          hasExplicitServerAccess: false,
+          rolePermissions: request.user.permissions ?? [],
+          hasNodeAccess: assignedToNode,
+        }).reason === "node_manage";
 
-      if (!canCreate && !hasNodeAccessResult) {
-        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access, server.create permission, or node assignment required");
+      if (!canCreate && !nodeManage) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access, server.create permission, or node management access required");
       }
 
       // An omitted owner means the caller; assigning another user requires user.create.
@@ -894,7 +912,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const body = request.body as any;
       const userId = request.user.userId;
 
-      if (!checkPerm(request, 'server.create')) {
+      // server.clone is the clone gate; legacy server.create grants keep
+      // working through the hasGrant alias window.
+      if (!checkPerm(request, 'server.clone')) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create a server');
       }
       if (body.copyBackupCredentials && !checkIsAdmin(request, 'admin.write')) {
@@ -905,7 +925,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       if (!source) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Source server not found');
       }
-      if (!(await canAccessServer(userId, { id: source.id, ownerId: source.ownerId, nodeId: source.nodeId }))) {
+      if (!(await canAccessServer(userId, { id: source.id, ownerId: source.ownerId, nodeId: source.nodeId }, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Cannot access source server');
       }
 
@@ -995,9 +1015,10 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         if (idempotencyHash) await releaseIdempotency(idempotencyScope, idempotencyHash);
       };
 
-      // Cloning creates a new server, so server.create is required. The
-      // source access check below additionally scopes which server may be read.
-      if (!checkPerm(request, 'server.create')) {
+      // Cloning creates a new server: server.clone is the gate (legacy
+      // server.create grants keep working via the alias window). The source
+      // access check below additionally scopes which server may be read.
+      if (!checkPerm(request, 'server.clone')) {
         await releaseCloneClaim();
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create a server');
       }
@@ -1011,7 +1032,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         await releaseCloneClaim();
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Source server not found');
       }
-      if (!(await canAccessServer(userId, { id: source.id, ownerId: source.ownerId, nodeId: source.nodeId }))) {
+      if (!(await canAccessServer(userId, { id: source.id, ownerId: source.ownerId, nodeId: source.nodeId }, request.user))) {
         await releaseCloneClaim();
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Cannot access source server');
       }
@@ -1311,7 +1332,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const { serverId, cloneId } = request.params as { serverId: string; cloneId: string };
       const userId = request.user.userId;
 
-      if (!checkPerm(request, 'server.create')) {
+      if (!checkPerm(request, 'server.clone')) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions to create a server');
       }
 
@@ -1319,7 +1340,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       if (!source) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Source server not found');
       }
-      if (!(await canAccessServer(userId, { id: source.id, ownerId: source.ownerId, nodeId: source.nodeId }))) {
+      if (!(await canAccessServer(userId, { id: source.id, ownerId: source.ownerId, nodeId: source.nodeId }, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Cannot access source server');
       }
 
@@ -1427,7 +1448,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // Supports ?limit &offset &withMetrics=1 (default limit 50, max 500, metrics off)
   app.get(
     "/",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const query = request.query as { limit?: string; offset?: string; withMetrics?: string; metrics?: string };
@@ -1440,10 +1461,15 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       // Cache key: per-user + pagination + metrics flag + wildcard flag
       // For non-wildcard users the accessibleNodeIds set matters; we include its hash
       // lazily after loading it, but we first try fast-path cache for admin/wildcard.
-      const isUserAdminFast = checkIsAdmin(request, "admin.write");
-      // Fast path key for admin (most benchmark traffic is admin)
-      if (isUserAdminFast) {
-        const fastKey = `${userId}:${limit}:${offset}:${withMetrics?1:0}:admin`;
+      // Fast path for admins (most benchmark traffic is admin): admin.write/*
+      // see everything with the full effective permission set; admin.read sees
+      // everything with the server READ subset (read-everything contract).
+      const isAdminFast = checkIsAdmin(request, "admin.read");
+      const isAdminReadOnly = isAdminFast && !checkIsAdmin(request, "admin.write");
+      if (isAdminFast) {
+        // Key kind matters: read-admins must not be served write-grade
+        // effectivePermissions from a write-admin's cached response.
+        const fastKey = `${userId}:${limit}:${offset}:${withMetrics?1:0}:${isAdminReadOnly ? "adminread" : "admin"}`;
         const hit = serverListCache.get(fastKey);
         if (hit) {
           reply.header("X-Cache", "HIT");
@@ -1488,7 +1514,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
                 memoryUsageMb: m?.memoryUsageMb ?? null,
                 diskUsageMb: m?.diskUsageMb ?? null,
                 diskTotalMb: s.allocatedDiskMb > 0 ? s.allocatedDiskMb : null,
-                effectivePermissions: [...ALL_SERVER_PERMISSIONS],
+                effectivePermissions: isAdminReadOnly
+                  ? [...ADMIN_READ_SERVER_PERMISSIONS]
+                  : [...ALL_SERVER_PERMISSIONS],
               };
             }),
           }));
@@ -1705,7 +1733,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // Get server details
   app.get(
     "/:serverId",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1862,8 +1890,13 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const normalizedPrimaryIp = typeof primaryIp === "string" ? primaryIp.trim() : null;
 
       // Sensitive fields flow into container execution or infrastructure.
-      // server.update is the catalog grant for settings; rebuild is not a
-      // substitute, and a name-only subuser must not change them either.
+      // The base gate (ensureServerAccess above) already demands
+      // server.update; this re-assert is hasGrant-based and is deliberately
+      // REACHABLE where the base gate is not: node managers pass the base
+      // gate via the node_manage branch, but sensitive settings additionally
+      // demand an explicit server.update grant (row or global/scoped role).
+      // It is also the plug point for the server.network / server.storage
+      // field-family split.
       const touchesSensitiveFields =
         environment !== undefined ||
         startupCommand !== undefined ||
@@ -1883,10 +1916,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         if (!sensitiveAccess) {
           const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
           const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-          const nodeManage =
-            (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-            rolePerms.includes("node.update");
-          if (!rolePerms.includes("server.update") && !rolePerms.includes("*") && !nodeManage) {
+          if (!hasGrant(rolePerms, "server.update")) {
             return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
           }
         }
@@ -2247,7 +2277,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // Resize server storage (grow online, shrink requires stop)
   app.post(
     "/:serverId/storage/resize",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.storage" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { allocatedDiskMb } = request.body as { allocatedDiskMb?: number };
@@ -2270,9 +2300,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return;
       }
 
+      // Key-scope ceiling: the owner path below bypasses the DB checks, so a
+      // scoped API key must itself hold server.storage (legacy server.update
+      // satisfies it via the alias window; enforceKeyScope is session-inert).
+      if (request.user.apiKeyId && !enforceKeyScope(request.user, "server.storage")) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "API key scope does not permit this operation");
+      }
+
       if (server.ownerId !== userId) {
         // Standard decideServerAccess contract:
-        //   owner | explicit ServerAccess | admin.write/* | (node access + node.update)
+        //   owner | explicit ServerAccess | admin.write/* | (node access + node.manage)
         // This route previously only recognized owners + ServerAccess rows, which
         // locked panel admins (and node managers) out of disk resizes.
         const access = await prisma.serverAccess.findUnique({
@@ -2288,16 +2325,18 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           rolePermissions: rolePerms,
           hasNodeAccess: hasNodeAccessToServer,
           // A global role granting server.update may resize too; explicit
-          // subuser grants still need a write-capable permission (below).
+          // subuser grants are checked against server.storage below.
           requiredPermission: "server.update",
         });
         if (!decision.allowed) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
-        // Explicit subuser grants still need a write-capable permission for resize
+        // Explicit subuser grants must hold server.storage for a disk resize
+        // (rows with the legacy server.update keep working through hasGrant's
+        // alias window; file-manager writes are NOT resize authority).
         if (decision.reason === "server_access") {
           const accessPermissions = (access?.permissions as string[] | undefined) ?? [];
-          if (!accessPermissions.some((p) => p === 'file.write' || p === 'server.update')) {
+          if (!accessPermissions.some((p) => hasGrant([p], "server.storage"))) {
             return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions for storage resize");
           }
         }
@@ -2392,10 +2431,10 @@ export async function serverCoreRoutes(app: FastifyInstance) {
     }
   );
 
-  // Get server files
+  // Delete server (drops databases + releases allocations first)
   app.delete(
     "/:serverId",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.delete" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -2418,8 +2457,13 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         });
       }
 
-      // Check permission - owner, admin.write/*, ServerAccess(server.delete), or (node + node.update)
+      // Check permission - owner, admin.write/*, ServerAccess(server.delete), or (node + node.manage)
       // Bare node assignment / admin.read alone is NOT enough.
+      // Key-scope ceiling: the owner path below bypasses the DB checks, so a
+      // scoped API key must itself hold server.delete.
+      if (request.user.apiKeyId && !enforceKeyScope(request.user, "server.delete")) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "API key scope does not permit this operation");
+      }
       if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
           where: { serverId, userId, permissions: { has: "server.delete" } },

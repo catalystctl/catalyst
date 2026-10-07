@@ -16,6 +16,7 @@ import {
 	MAX_AUTO_UPDATE_INTERVAL_MS,
 } from '../services/auto-update-settings.js';
 import { createAuditLog } from '../middleware/audit.js';
+import { hasGrant } from '../lib/permissions.js';
 import { apiError } from '../lib/http-error.js';
 import { ErrorCodes } from '../shared-types';
 
@@ -29,18 +30,20 @@ function isCacheStale(status: ReturnType<typeof getUpdateStatus>): boolean {
 export async function updateRoutes(app: FastifyInstance) {
 	const authenticate = (app as any).authenticate;
 
+	// hasGrant semantics: '*' / admin.write satisfy anything; admin.read
+	// satisfies read-class requirements only.
 	const checkPerm = (request: any, permission: string): boolean => {
 		const perms: string[] = request.user?.permissions ?? [];
-		return perms.includes('*') || perms.includes(permission);
+		return hasGrant(perms, permission);
 	};
 
-	// Get update status (admin only)
+	// Get update status (admin read)
 	app.get(
 		'/status',
 		{ preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!checkPerm(request, 'admin.write')) {
-				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
+			if (!checkPerm(request, 'admin.read')) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
 			}
 
 			if (isCacheStale(getUpdateStatus())) {
@@ -63,15 +66,15 @@ export async function updateRoutes(app: FastifyInstance) {
 		},
 	);
 
-	// Read the stored update-automation settings (admin only). Unlike
+	// Read the stored update-automation settings (admin read). Unlike
 	// /status these come straight from the database, so the panel can render
 	// the editable controls without triggering a release check.
 	app.get(
 		'/settings',
 		{ preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!checkPerm(request, 'admin.write')) {
-				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
+			if (!checkPerm(request, 'admin.read')) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
 			}
 
 			const stored = await readStoredAutoUpdateSettings();
@@ -159,13 +162,14 @@ export async function updateRoutes(app: FastifyInstance) {
 		},
 	);
 
-	// Force a release check now (admin only).
+	// Force a release check now (update.trigger; admin.write/* still pass
+	// via hasGrant implications).
 	app.post(
 		'/check',
 		{ preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!checkPerm(request, 'admin.write')) {
-				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
+			if (!checkPerm(request, 'update.trigger')) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Update trigger permission required');
 			}
 			const status = await checkForUpdate(app.log);
 			return reply.send({
@@ -179,13 +183,14 @@ export async function updateRoutes(app: FastifyInstance) {
 		},
 	);
 
-	// Trigger update (admin only)
+	// Trigger update (update.trigger; admin.write/* still pass via hasGrant
+	// implications).
 	app.post(
 		'/trigger',
 		{ preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!checkPerm(request, 'admin.write')) {
-				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
+			if (!checkPerm(request, 'update.trigger')) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Update trigger permission required');
 			}
 
 			const result = await performUpdate(app.log);
@@ -203,14 +208,14 @@ export async function updateRoutes(app: FastifyInstance) {
 		},
 	);
 
-	// Live update progress (admin only) — polled by the frontend while an
+	// Live update progress (admin read) — polled by the frontend while an
 	// update is running so users can see what the panel is doing.
 	app.get(
 		'/state',
 		{ preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!checkPerm(request, 'admin.write')) {
-				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
+			if (!checkPerm(request, 'admin.read')) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
 			}
 			return reply.send(getUpdateState());
 		},

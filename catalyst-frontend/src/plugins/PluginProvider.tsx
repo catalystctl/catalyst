@@ -19,7 +19,18 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Plugin inventory reads are admin.read-gated on the backend. Skipping
+  // bootstrap for everyone else means no doomed /api/plugins request and
+  // no /plugins-assets bundle imports — non-admins just see no plugin
+  // store or tabs (fail-silent).
+  const permissions = useAuthStore((s) => s.user?.permissions);
+  const canBootstrapPlugins = useMemo(
+    () => hasAdminReadPermission(permissions),
+    [permissions],
+  );
+
   const loadPlugins = useCallback(async (opts: { forceReload?: boolean } = {}) => {
+    if (!canBootstrapPlugins) return;
     setLoading(true);
     setError(null);
 
@@ -62,10 +73,10 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setError, setPlugins, setInitialized, t]);
+  }, [canBootstrapPlugins, setLoading, setError, setPlugins, setInitialized, t]);
 
   useEffect(() => {
-    if (initialized || !isAuthenticated) return;
+    if (initialized || !isAuthenticated || !canBootstrapPlugins) return;
 
     let active = true;
     (async () => {
@@ -104,7 +115,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-    }, [initialized, isAuthenticated, setLoading, setError, setPlugins, setInitialized, t]);
+    }, [initialized, isAuthenticated, canBootstrapPlugins, setLoading, setError, setPlugins, setInitialized, t]);
 
   // Live hot reload: backend pushes plugin_updated on install/upgrade/reload/
   // enable/disable. Re-fetch manifests and swap frontend bundles in place so
@@ -113,7 +124,6 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   // P0.6: /api/admin/events requires literal admin.read (routes/admin-events.ts:105).
   // Without the gate every non-admin tab opened a stream that 403s, and the
   // poisoned shared EventSource entry then blocked later subscribers too.
-  const permissions = useAuthStore((s) => s.user?.permissions);
   const canSubscribeAdminEvents = useMemo(
     () => hasAdminReadPermission(permissions),
     [permissions],

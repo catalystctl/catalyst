@@ -43,6 +43,12 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
       { value: 'server.install', label: 'Install servers' },
       { value: 'server.reinstall', label: 'Reinstall servers' },
       { value: 'server.rebuild', label: 'Rebuild servers' },
+      { value: 'server.clone', label: 'Clone servers' },
+      { value: 'server.kill', label: 'Force-kill servers' },
+      { value: 'server.network', label: 'Manage allocations and ports' },
+      { value: 'server.storage', label: 'Resize server storage' },
+      { value: 'server.archive', label: 'Archive and restore servers' },
+      { value: 'server.migrate', label: 'Move servers between nodes' },
     ],
   },
   {
@@ -57,6 +63,8 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
       { value: 'node.view_stats', label: 'View node statistics' },
       { value: 'node.manage_allocation', label: 'Manage allocations' },
       { value: 'node.assign', label: 'Assign nodes' },
+      { value: 'node.server_manage', label: 'Manage servers on assigned nodes' },
+      { value: 'node.agent_control', label: 'Restart and update node agents' },
     ],
   },
   {
@@ -163,7 +171,30 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
     label: 'API Keys',
     description: 'Manage API keys',
     permissions: [
+      // apikey.manage stays listed during the split alias window (wave 2
+      // removes it; legacy grants keep working via LEGACY_ALIASES).
       { value: 'apikey.manage', label: 'Create and manage API keys' },
+      { value: 'apikey.read', label: 'View API keys' },
+      { value: 'apikey.write', label: 'Create and manage own API keys' },
+    ],
+  },
+  {
+    id: 'server-content',
+    label: 'Server Content',
+    description: 'Install and remove mods and plugins on servers',
+    permissions: [
+      { value: 'mods.manage', label: 'Manage mods and datapacks' },
+      { value: 'plugins.manage', label: 'Manage server plugins' },
+    ],
+  },
+  {
+    id: 'operations',
+    label: 'Panel Operations',
+    description: 'Run migrations, trigger panel updates, download diagnostics',
+    permissions: [
+      { value: 'migration.manage', label: 'Run Pterodactyl migrations' },
+      { value: 'update.trigger', label: 'Trigger panel updates' },
+      { value: 'diagnostics.download', label: 'Download diagnostics bundles' },
     ],
   },
 ];
@@ -172,6 +203,43 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
 export const ALL_PERMISSIONS = PERMISSION_CATEGORIES.flatMap((c) =>
   c.permissions.map((p) => p.value),
 );
+
+// Vocabulary single source: the pure data lives in permission-vocabulary.ts
+// (dependency-free) so lib/permissions.ts can consume it without an import
+// cycle. This module re-exports it as the public source.
+export {
+  READ_PERMISSIONS,
+  LEGACY_ALIASES,
+  PERMISSION_PRESETS,
+  satisfiesLegacyAlias,
+  expandPermissionAliases,
+} from './permission-vocabulary.js';
+
+import { LEGACY_ALIASES as LEGACY_ALIAS_MAP } from './permission-vocabulary.js';
+
+/**
+ * True for '*', any catalog value, any legacy split value, or a scoped form
+ * 'value:resourceId' of either. Validation schemas use this so unknown
+ * permission strings stop entering the grant stores.
+ */
+export function isValidPermission(value: string): boolean {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  if (value === '*') return true;
+  const colonIndex = value.indexOf(':');
+  if (colonIndex === -1) {
+    return (
+      ALL_PERMISSIONS.includes(value) ||
+      Object.prototype.hasOwnProperty.call(LEGACY_ALIAS_MAP, value)
+    );
+  }
+  const base = value.slice(0, colonIndex);
+  const scope = value.slice(colonIndex + 1);
+  if (scope.length === 0 || base === '*') return false;
+  return (
+    ALL_PERMISSIONS.includes(base) ||
+    Object.prototype.hasOwnProperty.call(LEGACY_ALIAS_MAP, base)
+  );
+}
 
 /** Get human-readable label for a permission value */
 export function getPermissionLabel(value: string): string {
@@ -236,14 +304,16 @@ import { hasGrant } from './permissions';
  *     in both automatically)
  */
 export const ALL_SERVER_PERMISSIONS = [
-  'server.read', 'server.start', 'server.stop', 'server.install',
-  'server.reinstall', 'server.rebuild', 'server.update',
-  'server.transfer', 'server.delete', 'server.schedule',
+  'server.read', 'server.start', 'server.stop', 'server.kill',
+  'server.install', 'server.reinstall', 'server.rebuild', 'server.update',
+  'server.network', 'server.storage', 'server.archive', 'server.migrate',
+  'server.transfer', 'server.delete', 'server.schedule', 'server.clone',
   'console.read', 'console.write',
   'file.read', 'file.write',
   'backup.read', 'backup.create', 'backup.restore', 'backup.delete', 'backup.download',
   'database.read', 'database.create', 'database.rotate', 'database.delete',
   'alert.read', 'alert.create', 'alert.update', 'alert.delete',
+  'mods.manage', 'plugins.manage',
 ] as const;
 
 // 30-second TTL cache for resolved user permissions

@@ -1,23 +1,22 @@
 import { prisma } from "../db.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { hasAnyPermission } from "../lib/permissions";
+import { hasGrant } from "../lib/permissions";
 import { serialize } from "../utils/serialize";
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 
-// Catalog permission, or the admin-write / super-admin path that previously
-// gated these routes. admin.read is intentionally not enough to mutate.
-const ensureAnyPermission = async (
-	userId: string,
+// Catalog permission via the request grant set — hasGrant admits '*', and
+// admin.write for any concrete permission, so admin.read alone never mutates.
+// Reading request.user.permissions makes this the API-key scope ceiling.
+const ensureAnyPermission = (
+	request: FastifyRequest,
 	reply: FastifyReply,
 	required: string[],
 ) => {
-	const has = await hasAnyPermission(prisma, userId, required);
-	if (!has) {
-		apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
-		return false;
-	}
-	return true;
+	const perms: string[] = (request as any).user?.permissions ?? [];
+	if (required.some((permission) => hasGrant(perms, permission))) return true;
+	apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
+	return false;
 };
 
 export async function locationRoutes(app: FastifyInstance) {
@@ -26,12 +25,7 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			const has = await ensureAnyPermission(request.user.userId, reply, [
-				"location.read",
-				"admin.read",
-				"admin.write",
-			]);
-			if (!has) return;
+			if (!ensureAnyPermission(request, reply, ["location.read"])) return;
 
 			const locations = await prisma.location.findMany({
 				orderBy: { name: "asc" },
@@ -56,15 +50,9 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/:locationId",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			// location.read is the catalog read. admin.read stays so existing
-			// admin panels keep working, but it must not receive node secrets
-			// (those require node.read, and the node routes omit `secret`).
-			const has = await ensureAnyPermission(request.user.userId, reply, [
-				"location.read",
-				"admin.read",
-				"admin.write",
-			]);
-			if (!has) return;
+			// location.read is the catalog read; admin bits pass via hasGrant.
+			// Node secrets stay node.read-gated (the nodes routes omit them).
+			if (!ensureAnyPermission(request, reply, ["location.read"])) return;
 
 			const { locationId } = request.params as { locationId: string };
 
@@ -91,12 +79,7 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (
-				!(await ensureAnyPermission(request.user.userId, reply, [
-					"location.create",
-					"admin.write",
-				]))
-			)
+			if (!ensureAnyPermission(request, reply, ["location.create"]))
 				return;
 
 			const { name, description } = request.body as {
@@ -144,12 +127,7 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/:locationId",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (
-				!(await ensureAnyPermission(request.user.userId, reply, [
-					"location.update",
-					"admin.write",
-				]))
-			)
+			if (!ensureAnyPermission(request, reply, ["location.update"]))
 				return;
 
 			const { locationId } = request.params as { locationId: string };
@@ -205,12 +183,7 @@ export async function locationRoutes(app: FastifyInstance) {
 		"/:locationId",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (
-				!(await ensureAnyPermission(request.user.userId, reply, [
-					"location.delete",
-					"admin.write",
-				]))
-			)
+			if (!ensureAnyPermission(request, reply, ["location.delete"]))
 				return;
 
 			const { locationId } = request.params as { locationId: string };

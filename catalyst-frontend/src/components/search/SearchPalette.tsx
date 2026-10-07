@@ -328,7 +328,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  to: '/admin/api-keys',
  category: 'Admin',
  keywords: ['api key', 'token', 'api', 'authentication', 'key management'],
- permissions: ['apikey.manage', 'admin.read'],
+ permissions: ['apikey.read', 'apikey.write', 'admin.read'],
  badge: t('layout:nav.admin'),
  path: '/admin/api-keys',
  },

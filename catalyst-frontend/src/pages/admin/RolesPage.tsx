@@ -72,6 +72,9 @@ const PERMISSION_CATEGORIES = [
  permissions: [
  'server.read', 'server.create', 'server.start', 'server.stop',
  'server.delete', 'server.suspend', 'server.transfer', 'server.schedule',
+ 'server.update', 'server.install', 'server.reinstall', 'server.rebuild',
+ 'server.clone', 'server.kill', 'server.network', 'server.storage',
+ 'server.archive', 'server.migrate',
  ],
  },
  {
@@ -84,6 +87,7 @@ const PERMISSION_CATEGORIES = [
  permissions: [
  'node.read', 'node.create', 'node.update', 'node.delete',
  'node.view_stats', 'node.manage_allocation', 'node.assign',
+ 'node.server_manage', 'node.agent_control',
  ],
  },
  {
@@ -129,7 +133,7 @@ const PERMISSION_CATEGORIES = [
  accent: 'text-primary',
  border: 'border-primary/20',
  bg: 'bg-primary/5',
- permissions: ['backup.read', 'backup.create', 'backup.delete', 'backup.restore'],
+ permissions: ['backup.read', 'backup.create', 'backup.delete', 'backup.restore', 'backup.download'],
  },
  {
  key: 'fileManagement',
@@ -174,9 +178,48 @@ const PERMISSION_CATEGORIES = [
  accent: 'text-primary',
  border: 'border-primary/20',
  bg: 'bg-primary/5',
- permissions: ['admin.read', 'admin.write', 'apikey.manage'],
+ // apikey.manage stays listed during the split alias window.
+ permissions: ['admin.read', 'admin.write', 'apikey.manage', 'apikey.read', 'apikey.write'],
+ },
+ {
+ key: 'serverContent',
+ icon: Info,
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
+ permissions: ['mods.manage', 'plugins.manage'],
+ },
+ {
+ key: 'operations',
+ icon: Lock,
+ color: 'bg-primary/10',
+ accent: 'text-primary',
+ border: 'border-primary/20',
+ bg: 'bg-primary/5',
+ permissions: ['migration.manage', 'update.trigger', 'diagnostics.download'],
  },
 ];
+
+// Backend category id → local category key (apikeys + admin both feed the
+// systemAdministration group).
+const BACKEND_CATEGORY_KEY: Record<string, string> = {
+ admin: 'systemAdministration',
+ apikeys: 'systemAdministration',
+ servers: 'server',
+ nodes: 'node',
+ locations: 'location',
+ templates: 'template',
+ users: 'userManagement',
+ roles: 'roleManagement',
+ backups: 'backup',
+ files: 'fileManagement',
+ console: 'console',
+ databases: 'database',
+ alerts: 'alerts',
+ 'server-content': 'serverContent',
+ operations: 'operations',
+};
 
 // Permission presets
 const PERMISSION_PRESETS = [
@@ -188,10 +231,11 @@ const PERMISSION_PRESETS = [
  {
  key: 'moderator',
  icon: Shield, color: 'bg-primary/10',
+ // Mirrors backend PERMISSION_PRESETS.moderator (permission-vocabulary.ts).
  permissions: [
- 'node.read', 'node.update', 'node.view_stats', 'node.assign',
+ 'node.read', 'node.update', 'node.server_manage', 'node.view_stats',
  'location.read', 'template.read', 'user.read', 'server.read',
- 'server.start', 'server.stop', 'file.read', 'file.write',
+ 'server.start', 'server.stop', 'server.kill', 'file.read', 'file.write',
  'console.read', 'console.write', 'alert.read', 'alert.create',
  'alert.update', 'alert.delete',
  ],
@@ -204,9 +248,11 @@ const PERMISSION_PRESETS = [
  {
  key: 'support',
  icon: Eye, color: 'bg-primary/10',
+ // Mirrors backend PERMISSION_PRESETS.support (permission-vocabulary.ts).
  permissions: [
  'node.read', 'node.view_stats', 'location.read', 'template.read',
  'server.read', 'file.read', 'console.read', 'alert.read', 'user.read',
+ 'diagnostics.download',
  ],
  },
 ];
@@ -218,10 +264,20 @@ function formatPermission(t: TFunction<'admin-access'>, perm: string): string {
     case 'server.create': return t('roles.permissionLabels.serverCreate');
     case 'server.start': return t('roles.permissionLabels.serverStart');
     case 'server.stop': return t('roles.permissionLabels.serverStop');
+    case 'server.kill': return t('roles.permissionLabels.serverKill');
     case 'server.delete': return t('roles.permissionLabels.serverDelete');
     case 'server.suspend': return t('roles.permissionLabels.serverSuspend');
     case 'server.transfer': return t('roles.permissionLabels.serverTransfer');
     case 'server.schedule': return t('roles.permissionLabels.serverSchedule');
+    case 'server.update': return t('roles.permissionLabels.serverUpdate');
+    case 'server.install': return t('roles.permissionLabels.serverInstall');
+    case 'server.reinstall': return t('roles.permissionLabels.serverReinstall');
+    case 'server.rebuild': return t('roles.permissionLabels.serverRebuild');
+    case 'server.clone': return t('roles.permissionLabels.serverClone');
+    case 'server.network': return t('roles.permissionLabels.serverNetwork');
+    case 'server.storage': return t('roles.permissionLabels.serverStorage');
+    case 'server.archive': return t('roles.permissionLabels.serverArchive');
+    case 'server.migrate': return t('roles.permissionLabels.serverMigrate');
     case 'node.read': return t('roles.permissionLabels.nodeRead');
     case 'node.create': return t('roles.permissionLabels.nodeCreate');
     case 'node.update': return t('roles.permissionLabels.nodeUpdate');
@@ -229,6 +285,8 @@ function formatPermission(t: TFunction<'admin-access'>, perm: string): string {
     case 'node.view_stats': return t('roles.permissionLabels.nodeViewStats');
     case 'node.manage_allocation': return t('roles.permissionLabels.nodeManageAllocation');
     case 'node.assign': return t('roles.permissionLabels.nodeAssign');
+    case 'node.server_manage': return t('roles.permissionLabels.nodeServerManage');
+    case 'node.agent_control': return t('roles.permissionLabels.nodeAgentControl');
     case 'location.read': return t('roles.permissionLabels.locationRead');
     case 'location.create': return t('roles.permissionLabels.locationCreate');
     case 'location.update': return t('roles.permissionLabels.locationUpdate');
@@ -252,6 +310,7 @@ function formatPermission(t: TFunction<'admin-access'>, perm: string): string {
     case 'backup.create': return t('roles.permissionLabels.backupCreate');
     case 'backup.delete': return t('roles.permissionLabels.backupDelete');
     case 'backup.restore': return t('roles.permissionLabels.backupRestore');
+    case 'backup.download': return t('roles.permissionLabels.backupDownload');
     case 'file.read': return t('roles.permissionLabels.fileRead');
     case 'file.write': return t('roles.permissionLabels.fileWrite');
     case 'console.read': return t('roles.permissionLabels.consoleRead');
@@ -267,6 +326,13 @@ function formatPermission(t: TFunction<'admin-access'>, perm: string): string {
     case 'admin.read': return t('roles.permissionLabels.adminRead');
     case 'admin.write': return t('roles.permissionLabels.adminWrite');
     case 'apikey.manage': return t('roles.permissionLabels.apikeyManage');
+    case 'apikey.read': return t('roles.permissionLabels.apikeyRead');
+    case 'apikey.write': return t('roles.permissionLabels.apikeyWrite');
+    case 'mods.manage': return t('roles.permissionLabels.modsManage');
+    case 'plugins.manage': return t('roles.permissionLabels.pluginsManage');
+    case 'migration.manage': return t('roles.permissionLabels.migrationManage');
+    case 'update.trigger': return t('roles.permissionLabels.updateTrigger');
+    case 'diagnostics.download': return t('roles.permissionLabels.diagnosticsDownload');
     default: return perm.split('.').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' › ');
   }
 }
@@ -307,6 +373,8 @@ function permissionCategoryLabel(t: TFunction<'admin-access'>, key: string): str
     case 'database': return t('roles.permissionCategories.database');
     case 'alerts': return t('roles.permissionCategories.alerts');
     case 'systemAdministration': return t('roles.permissionCategories.systemAdministration');
+    case 'serverContent': return t('roles.permissionCategories.serverContent');
+    case 'operations': return t('roles.permissionCategories.operations');
     default: return key;
   }
 }
@@ -1004,6 +1072,42 @@ function RolesPage() {
  staleTime: 10 * 60 * 1000,
  });
 
+ // Merge backend preset permission sets into the local cards (icons and
+ // keys stay local); fall back to the static list when unreachable.
+ const wizardPresets = useMemo(
+ () => PERMISSION_PRESETS.map((local) => {
+ const remote = presets.find((p) => p.key === local.key);
+ return remote ? { ...local, permissions: remote.permissions } : local;
+ }),
+ [presets],
+ );
+
+ // Canonical permission catalog: GET /api/roles/permissions-catalog (role
+ // read/create/update holders). Merged into the local category cards —
+ // icons/keys stay local, permission values come from the backend; the
+ // static list below remains the fallback when unreachable.
+ const { data: permissionCatalog } = useQuery({
+ queryKey: ['role-permissions-catalog'],
+ queryFn: rolesApi.getPermissionCatalog,
+ staleTime: 10 * 60 * 1000,
+ retry: 1,
+ });
+ const wizardCategories = useMemo(() => {
+ const cats = permissionCatalog;
+ if (!cats?.length) return PERMISSION_CATEGORIES;
+ const byKey = new Map<string, string[]>();
+ for (const cat of cats) {
+ const key = BACKEND_CATEGORY_KEY[cat.id] ?? cat.id;
+ const values = (cat.permissions ?? [])
+ .map((p: { value?: string }) => p?.value)
+ .filter((v: string | undefined): v is string => Boolean(v));
+ byKey.set(key, [...(byKey.get(key) ?? []), ...values]);
+ }
+ return PERMISSION_CATEGORIES.map((local) =>
+ byKey.has(local.key) ? { ...local, permissions: byKey.get(local.key)! } : local,
+ );
+ }, [permissionCatalog]);
+
  const createMutation = useMutation({
  mutationFn: (data: { name: string; description?: string; permissions: string[]; scope?: RoleScope }) => rolesApi.create(data),
  onSuccess: () => {
@@ -1336,7 +1440,7 @@ function RolesPage() {
  <span className="text-sm font-semibold text-foreground">{t('roles.presetsHeading')}</span>
  </div>
  <div className="grid grid-cols-2 gap-3">
- {PERMISSION_PRESETS.map((preset) => (
+ {wizardPresets.map((preset) => (
  <PresetCard
  key={preset.key}
  preset={preset}
@@ -1415,7 +1519,7 @@ function RolesPage() {
  {/* Category grid */}
  {!selectedPermissions.has('*') && (
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
- {PERMISSION_CATEGORIES.map((category) => (
+ {wizardCategories.map((category) => (
  <PermissionCategoryCard
  key={category.key}
  category={category}

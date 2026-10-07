@@ -54,18 +54,31 @@ describe('Admin nodes list access and failures', () => {
   });
   afterEach(() => { cleanup(); queryClient.clear(); vi.unstubAllGlobals(); });
 
-  it('gates create/delete independently of admin.write while retaining location management', () => {
+  it('surfaces create/delete for admin.write and explicit grants while denying admin.read (backend parity)', () => {
     h.nodes = [node('node-1')];
+    // Backend parity: hasGrant admits admin.write on node writes, so the
+    // affordances surface; read-everything admins stay denied.
     useAuthStore.setState({ user: { id: 'admin', permissions: ['admin.write'] } as never });
     const view = page();
-    expect(screen.queryByRole('button', { name: 'Register Node' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Register Node' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Locations' })).toBeInTheDocument();
+    expect(within(screen.getByRole('row')).getByRole('checkbox')).toBeInTheDocument();
+
+    act(() => useAuthStore.setState({ user: { id: 'reader', permissions: ['admin.read'] } as never }));
+    view.rerender(<MemoryRouter><QueryClientProvider client={queryClient}><AdminNodesPage /></QueryClientProvider></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: 'Register Node' })).not.toBeInTheDocument();
     expect(within(screen.getByRole('row')).queryByRole('checkbox')).not.toBeInTheDocument();
 
     act(() => useAuthStore.setState({ user: { id: 'creator', permissions: ['node.create'] } as never }));
     view.rerender(<MemoryRouter><QueryClientProvider client={queryClient}><AdminNodesPage /></QueryClientProvider></MemoryRouter>);
     expect(screen.getByRole('button', { name: 'Register Node' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Locations' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('row')).queryByRole('checkbox')).not.toBeInTheDocument();
+
+    // Scoped grant: node.create:node_x satisfies the base gate.
+    act(() => useAuthStore.setState({ user: { id: 'scoped', permissions: ['node.create:node_x'] } as never }));
+    view.rerender(<MemoryRouter><QueryClientProvider client={queryClient}><AdminNodesPage /></QueryClientProvider></MemoryRouter>);
+    expect(screen.getByRole('button', { name: 'Register Node' })).toBeInTheDocument();
   });
 
   it('shows retry instead of an empty state after a failed node fetch', () => {

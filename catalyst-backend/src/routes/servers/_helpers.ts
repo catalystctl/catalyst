@@ -12,6 +12,7 @@ import { fileURLToPath } from "url";
 import { captureSystemError } from "../../services/error-logger";
 import { normalizeHostIp, shouldUseIpam } from "../../utils/ipam";
 import { hasGrant, hasNodeAccess } from "../../lib/permissions";
+import { READ_PERMISSIONS, expandPermissionAliases } from "../../lib/permission-vocabulary.js";
 import { decideServerAccess } from "../../lib/server-access";
 import { getSecuritySettings } from "../../services/mailer";
 import { apiError } from "../../lib/http-error";
@@ -31,6 +32,7 @@ export const DEFAULT_PERMISSION_PRESETS = {
     "server.read",
     "server.start",
     "server.stop",
+    "server.kill",
     "server.install",
     "server.reinstall",
     "server.rebuild",
@@ -55,11 +57,20 @@ export const DEFAULT_PERMISSION_PRESETS = {
     "server.read",
     "server.start",
     "server.stop",
+    "server.kill",
     "server.install",
     "server.reinstall",
     "server.rebuild",
+    "server.update",
+    "server.network",
+    "server.storage",
+    "server.archive",
+    "server.migrate",
     "server.transfer",
     "server.schedule",
+    "server.clone",
+    "mods.manage",
+    "plugins.manage",
     "alert.read",
     "alert.create",
     "alert.update",
@@ -460,7 +471,7 @@ export type { ServerAccessDecision } from "../../lib/server-access";
 
 /**
  * Whether the user may manage subusers/invites on this server: the owner,
- * or a manage path (admin.write/*, node access + node.update).
+ * or a manage path (admin.write/*, node access + node.server_manage).
  *
  * Deliberately NOT granted by plain ServerAccess rows or scoped role grants
  * (RoleServerGrant/RoleNodeGrant): inviting and removing users is an
@@ -469,7 +480,13 @@ export type { ServerAccessDecision } from "../../lib/server-access";
 export const canManageSubusers = async (
   userId: string,
   server: { id: string; ownerId: string; nodeId: string },
+  actor: Actor,
 ): Promise<boolean> => {
+  // Key-scope ceiling (interim): subuser management is an ownership-level
+  // capability with no catalog permission yet — a key must hold a full
+  // admin bit to exercise it. Owner-via-key cannot mint an unrepresentable
+  // capability; allPermissions and admin keys still work.
+  if (!enforceKeyScope(actor, "admin.write")) return false;
   if (server.ownerId === userId) return true;
   const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
   const { decideServerAccess } = await import("../../lib/server-access.js");
@@ -484,8 +501,27 @@ export const canManageSubusers = async (
   return decision.allowed && (decision.reason === "admin" || decision.reason === "node_manage");
 };
 
+/**
+ * Authenticated principal for key-scope ceilings (request.user shape: the
+ * authenticate middleware sets permissions to the KEY's scope on the
+ * API-key path, the owner's role set on the session path).
+ */
+export interface Actor {
+  permissions?: string[];
+  apiKeyId?: string;
+  /** Present only on the SYSTEM_ACTOR sentinel. */
+  system?: true;
+}
+
+/**
+ * Sentinel for system/cron callers with no user context: no apiKeyId, so
+ * key-scope enforcement is inert by construction. Never substitute this for
+ * a request-scoped caller — thread request.user instead.
+ */
+export const SYSTEM_ACTOR: Actor = { system: true };
+
 export const enforceKeyScope = (
-  actor: { permissions?: string[]; apiKeyId?: string } | undefined,
+  actor: Actor | undefined,
   permission: string,
 ): boolean => {
   if (!actor?.apiKeyId) return true;
@@ -497,7 +533,9 @@ export const ensureServerAccess = async (
   userId: string,
   permission: string,
   reply: FastifyReply,
-  actor?: { permissions?: string[]; apiKeyId?: string },
+  // Mandatory actor: the key-scope ceiling below must never be silently
+  // skipped. System/cron callers pass SYSTEM_ACTOR.
+  actor: Actor,
 ) => {
   const server = await prisma.server.findUnique({
     where: { id: serverId },
@@ -511,17 +549,16 @@ export const ensureServerAccess = async (
     return null;
   }
 
-  // Explicit per-server permission grant (only needed for non-owners)
+  // Explicit per-server permission grant (only needed for non-owners).
+  // hasGrant — not a raw `permissions: { has }` DB filter — so legacy split
+  // values on unmigrated rows keep satisfying the new requirements.
   let hasExplicitServerAccess = false;
   if (server.ownerId !== userId) {
     const access = await prisma.serverAccess.findFirst({
-      where: {
-        serverId,
-        userId,
-        permissions: { has: permission },
-      },
+      where: { serverId, userId },
+      select: { permissions: true },
     });
-    hasExplicitServerAccess = Boolean(access);
+    hasExplicitServerAccess = access ? hasGrant(access.permissions, permission) : false;
   }
 
   // Server-scoped resolution: global role perms + RoleServerGrant +
@@ -1305,7 +1342,22 @@ export const isAdminUser = async (userId: string, required: "admin.read" | "admi
 export const canAccessServer = async (
   userId: string,
   server: { id?: string; ownerId: string; nodeId: string },
+  // Mandatory actor (request.user or SYSTEM_ACTOR): the key ceiling below
+  // must never be silently skipped by an unthreaded call site.
+  actor: Actor,
 ): Promise<boolean> => {
+  // Key-scope ceiling: an API key must itself cover at least one
+  // server-scoped permission (or an admin bit) — the owner's grants never
+  // widen a key. Mirrors the route-config hook: a key holding no
+  // server-scoped value cannot see or act on servers at all.
+  if (
+    actor.apiKeyId &&
+    !(ALL_SERVER_PERMISSION_KEYS as readonly string[]).some((p) =>
+      hasGrant(actor.permissions ?? [], p),
+    )
+  ) {
+    return false;
+  }
   if (server.ownerId === userId) return true;
 
   let hasExplicitServerAccess = false;
@@ -1400,34 +1452,46 @@ export const getEffectiveServerPermissions = async (
     preComputedNodeAccess ?? (await hasNodeAccess(prisma, userId, server.nodeId));
 
   // Full-admin / node-manage win full permission sets even if a narrower
-  // ServerAccess row also exists (manage paths are superset grants).
+  // ServerAccess row also exists (manage paths are superset grants). The
+  // node-manage path is node.server_manage (legacy node.update alias).
   if (
     rolePermissions.includes("*") ||
     rolePermissions.includes("admin.write") ||
-    (hasNodeAccessToServer && rolePermissions.includes("node.update"))
+    (hasNodeAccessToServer &&
+      (rolePermissions.includes("node.server_manage") ||
+        rolePermissions.includes("node.update")))
   ) {
     return [...ALL_SERVER_PERMISSION_KEYS];
   }
 
   // Global roles may grant granular server permissions (e.g. a "game manager"
   // role holding server.start / file.write); scoped role grants are already
-  // merged into rolePermissions by resolveServerPermissions.
-  const roleGranted = rolePermissions.filter((p) =>
-    (ALL_SERVER_PERMISSION_KEYS as readonly string[]).includes(p),
-  );
+  // merged into rolePermissions by resolveServerPermissions. Legacy split
+  // values expand to their alias targets so unmigrated rows keep rendering
+  // the new capabilities (mirrors what hasGrant enforces).
+  const roleGranted = rolePermissions
+    .filter((p) => (ALL_SERVER_PERMISSION_KEYS as readonly string[]).includes(p))
+    .flatMap((p) => expandPermissionAliases(p))
+    .filter((p) => (ALL_SERVER_PERMISSION_KEYS as readonly string[]).includes(p));
 
-  // admin.read is read-everything: add the server-scoped READ subset. Union,
-  // never replace — an explicit ServerAccess row may still grant writes.
+  // admin.read is read-everything: add the server-scoped READ subset (the
+  // canonical READ_PERMISSIONS set, intersected with server-scoped values).
+  // Union, never replace — an explicit ServerAccess row may still grant writes.
   const adminReadSubset = rolePermissions.includes("admin.read")
-    ? (ALL_SERVER_PERMISSION_KEYS as readonly string[]).filter(
-        (p) => p.endsWith(".read") || p === "backup.download",
+    ? (ALL_SERVER_PERMISSION_KEYS as readonly string[]).filter((p) =>
+        READ_PERMISSIONS.has(p),
       )
     : [];
 
   if (hasExplicitServerAccess) {
     const access = serverAccess?.find((a) => a.userId === userId);
+    // Row permissions expand the same way — enforcement (hasGrant) and the
+    // effective-set mapping must agree.
+    const rowPerms = (access?.permissions ?? []).flatMap((p) =>
+      expandPermissionAliases(p),
+    );
     return [
-      ...new Set([...roleGranted, ...adminReadSubset, ...(access?.permissions ?? [])]),
+      ...new Set([...roleGranted, ...adminReadSubset, ...rowPerms]),
     ];
   }
 
@@ -1449,7 +1513,9 @@ export const ensureDatabasePermission = async (
   reply: FastifyReply,
   permission: string,
   message: string,
-  actor?: { permissions?: string[]; apiKeyId?: string },
+  // Mandatory actor: the key-scope ceiling inside must never be silently
+  // skipped. System/cron callers pass SYSTEM_ACTOR.
+  actor: Actor,
 ) => {
   const server = await prisma.server.findUnique({
     where: { id: serverId },
@@ -1479,15 +1545,14 @@ export const ensureDatabasePermission = async (
     return true;
   }
 
+  // Row check via hasGrant (alias-aware) — the DB `has:` filter would miss
+  // legacy split values on unmigrated rows.
   const access = await prisma.serverAccess.findFirst({
-    where: {
-      serverId,
-      userId,
-      permissions: { has: permission },
-    },
+    where: { serverId, userId },
+    select: { permissions: true },
   });
 
-  if (access) {
+  if (access && hasGrant(access.permissions, permission)) {
     if (!enforceKeyScope(actor, permission)) {
       apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
       return false;
@@ -1499,11 +1564,14 @@ export const ensureDatabasePermission = async (
   // RoleNodeGrant rows covering this server.
   const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
   const rolePermissions = await resolveServerPermissions(userId, serverId, server.nodeId);
-  if (
-    rolePermissions.includes("*") ||
-    rolePermissions.includes("admin.write") ||
-    rolePermissions.includes(permission)
-  ) {
+  // decideServerAccess parity: hasGrant covers '*' / admin.write / exact /
+  // legacy aliases / admin.read+read. The node manage path is node
+  // assignment + node.server_manage (legacy node.update keeps working).
+  const canManageViaNode =
+    (await hasNodeAccess(prisma, userId, server.nodeId)) &&
+    (rolePermissions.includes("node.server_manage") ||
+      rolePermissions.includes("node.update"));
+  if (hasGrant(rolePermissions, permission) || canManageViaNode) {
     if (!enforceKeyScope(actor, permission)) {
       apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, message);
       return false;

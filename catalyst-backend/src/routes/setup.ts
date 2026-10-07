@@ -254,32 +254,19 @@ export async function setupRoutes(app: FastifyInstance) {
 			},
 		});
 
+		// Canonical default User role — keep aligned with prisma/seed.ts
+		// (TARGET-VOCABULARY §4.4): minimal read-only access; owners grant
+		// file/console/power per server.
 		await prisma.role.upsert({
 			where: { name: "User" },
 			update: {
 				description: "Standard user access",
-				permissions: [
-					"server.read",
-					"server.start",
-					"server.stop",
-					"file.read",
-					"file.write",
-					"console.read",
-					"console.write",
-				],
+				permissions: ["server.read"],
 			},
 			create: {
 				name: "User",
 				description: "Standard user access",
-				permissions: [
-					"server.read",
-					"server.start",
-					"server.stop",
-					"file.read",
-					"file.write",
-					"console.read",
-					"console.write",
-				],
+				permissions: ["server.read"],
 			},
 		});
 
@@ -539,33 +526,20 @@ export async function setupRoutes(app: FastifyInstance) {
 					},
 				});
 
-				// 5. Create User role
+				// 5. Create User role. Canonical default — keep aligned with
+				// prisma/seed.ts (TARGET-VOCABULARY §4.4): minimal read-only
+				// access; file/console/power is granted per server by the
+				// owner, not by the global default role.
 				await prisma.role.upsert({
 					where: { name: "User" },
 					update: {
 						description: "Standard user access",
-						permissions: [
-							"server.read",
-							"server.start",
-							"server.stop",
-							"file.read",
-							"file.write",
-							"console.read",
-							"console.write",
-						],
+						permissions: ["server.read"],
 					},
 					create: {
 						name: "User",
 						description: "Standard user access",
-						permissions: [
-							"server.read",
-							"server.start",
-							"server.stop",
-							"file.read",
-							"file.write",
-							"console.read",
-							"console.write",
-						],
+						permissions: ["server.read"],
 					},
 				});
 

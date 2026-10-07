@@ -18,6 +18,14 @@ import type { PrismaClient } from "@prisma/client";
 import { SimpleCache } from "./cache";
 import { broadcastCacheInvalidate, onCacheInvalidate } from "./cache-bus";
 import { registerCacheStats } from "./cache";
+import {
+  READ_PERMISSIONS,
+  satisfiesLegacyAlias,
+} from "./permission-vocabulary.js";
+
+// Canonical preset list (single source: permission-vocabulary.ts, re-exported
+// by permissions-catalog.ts). Re-exported here for the existing roles.ts import.
+export { PERMISSION_PRESETS } from "./permission-vocabulary.js";
 
 // 30-second TTL cache for isAdminUser results
 const adminUserCache = new SimpleCache<string, boolean>(30_000);
@@ -126,23 +134,24 @@ export function buildScopedPermission(
 /**
  * True for permissions that only observe state. `admin.read` grants these
  * (it is the read-everything admin grant); everything else is a write.
+ * Delegates to the canonical READ_PERMISSIONS set — the single source lives
+ * in permission-vocabulary.ts (re-exported by permissions-catalog.ts).
  */
 export function isReadPermission(permission: string): boolean {
-  return (
-    permission.endsWith(".read") ||
-    permission === "node.view_stats" ||
-    permission === "backup.download"
-  );
+  return READ_PERMISSIONS.has(permission);
 }
 
 /**
  * True when a granted permission set satisfies `required`.
  * `*` grants everything; `admin.write` grants every concrete permission;
- * `admin.read` grants every read permission.
+ * `admin.read` grants every read permission; legacy split values keep
+ * satisfying the values they were split into (one-directional — new narrow
+ * values never satisfy the old broad checks).
  */
 export function hasGrant(granted: readonly string[], required: string): boolean {
   if (granted.includes("*")) return true;
   if (granted.includes(required)) return true;
+  if (granted.some((p) => satisfiesLegacyAlias(p, required))) return true;
   if (required !== "*" && granted.includes("admin.write")) return true;
   if (granted.includes("admin.read") && isReadPermission(required)) return true;
   return false;
@@ -176,8 +185,13 @@ export function permissionMatches(
     if (userPerm === "admin.read" && isReadPermission(requiredPermission)) return true;
   }
 
-  // Exact permission match
-  if (userPerm === requiredPermission) {
+  // Exact permission match, including unscoped legacy split aliases: a role
+  // still holding 'server.update' matches a 'server.network' requirement.
+  // Scoped legacy grants are not expanded — scope-suffixed strings stay narrow.
+  const matchesRequired =
+    userPerm === requiredPermission ||
+    (!userResourceId && satisfiesLegacyAlias(userPerm, requiredPermission));
+  if (matchesRequired) {
     // If we have a scoped user permission, check if it applies to the resource
     if (userResourceId) {
       // User permission is scoped to a specific resource
@@ -345,11 +359,12 @@ export async function getUserRoles(
 }
 
 /**
- * Check if a user is an administrator
+ * Check if a user is an administrator by permission bits only — never role
+ * names (a user-created role can be named "Administrator").
  * An admin has either:
  * - The "*" wildcard permission
  * - The "admin.write" permission
- * - A role named "Administrator" (case-insensitive)
+ * - The "admin.read" permission (only when requireWrite is false)
  *
  * @param prisma - Prisma client
  * @param userId - User ID
@@ -426,180 +441,10 @@ export async function hasResourcePermission(
   return hasPermission(prisma, userId, requiredPermission);
 }
 
-/**
- * Permission categories for UI organization
- */
-export const PERMISSION_CATEGORIES = {
-  server: {
-    label: "Server",
-    permissions: [
-      "server.read",
-      "server.create",
-      "server.start",
-      "server.stop",
-      "server.delete",
-      "server.suspend",
-      "server.transfer",
-      "server.schedule",
-    ],
-  },
-  node: {
-    label: "Node",
-    permissions: [
-      "node.read",
-      "node.create",
-      "node.update",
-      "node.delete",
-      "node.view_stats",
-      "node.manage_allocation",
-      "node.assign",
-    ],
-  },
-  location: {
-    label: "Location",
-    permissions: [
-      "location.read",
-      "location.create",
-      "location.update",
-      "location.delete",
-    ],
-  },
-  template: {
-    label: "Template",
-    permissions: [
-      "template.read",
-      "template.create",
-      "template.update",
-      "template.delete",
-    ],
-  },
-  user: {
-    label: "User Management",
-    permissions: [
-      "user.read",
-      "user.create",
-      "user.update",
-      "user.delete",
-      "user.ban",
-      "user.unban",
-      "user.set_roles",
-    ],
-  },
-  role: {
-    label: "Role Management",
-    permissions: [
-      "role.read",
-      "role.create",
-      "role.update",
-      "role.delete",
-    ],
-  },
-  backup: {
-    label: "Backup",
-    permissions: [
-      "backup.read",
-      "backup.create",
-      "backup.delete",
-      "backup.restore",
-    ],
-  },
-  files: {
-    label: "File Management",
-    permissions: [
-      "file.read",
-      "file.write",
-    ],
-  },
-  console: {
-    label: "Console",
-    permissions: [
-      "console.read",
-      "console.write",
-    ],
-  },
-  database: {
-    label: "Database",
-    permissions: [
-      "database.create",
-      "database.read",
-      "database.delete",
-      "database.rotate",
-    ],
-  },
-  alerts: {
-    label: "Alerts",
-    permissions: [
-      "alert.read",
-      "alert.create",
-      "alert.update",
-      "alert.delete",
-    ],
-  },
-  admin: {
-    label: "System Administration",
-    permissions: [
-      "admin.read",
-      "admin.write",
-      "apikey.manage",
-    ],
-  },
-} as const;
-
-/**
- * Permission presets for quick role setup
- */
-export const PERMISSION_PRESETS = {
-  administrator: {
-    label: "Administrator",
-    description: "Full system access",
-    permissions: ["*"],
-  },
-  moderator: {
-    label: "Moderator",
-    description: "Can manage most resources but not users/roles",
-    permissions: [
-      "node.read",
-      "node.update",
-      "node.view_stats",
-      "location.read",
-      "template.read",
-      "user.read",
-      "server.read",
-      "server.start",
-      "server.stop",
-      "file.read",
-      "file.write",
-      "console.read",
-      "console.write",
-      "alert.read",
-      "alert.create",
-      "alert.update",
-      "alert.delete",
-    ],
-  },
-  user: {
-    label: "User",
-    description: "Basic access to own servers",
-    permissions: [
-      "server.read",
-    ],
-  },
-  support: {
-    label: "Support",
-    description: "Read-only access for support staff",
-    permissions: [
-      "node.read",
-      "node.view_stats",
-      "location.read",
-      "template.read",
-      "server.read",
-      "file.read",
-      "console.read",
-      "alert.read",
-      "user.read",
-    ],
-  },
-} as const;
+// The stale duplicate PERMISSION_CATEGORIES / PERMISSION_PRESETS that used
+// to live here was removed (wave 1). The canonical catalog and presets live
+// in lib/permissions-catalog.ts, backed by lib/permission-vocabulary.ts;
+// PERMISSION_PRESETS is re-exported above for existing importers.
 
 // ============================================================================
 // NODE ASSIGNMENT & ACCESS
@@ -628,24 +473,29 @@ export interface NodeAssignmentInfo {
  * 2. User has a wildcard node assignment (all nodes) (not expired)
  * 3. User has a role that is assigned to the node (not expired)
  * 4. User has a role with wildcard node assignment (not expired)
- * 5. User has admin permissions (admin.write or wildcard)
+ * 5. User has admin permissions (admin.write or wildcard; admin.read with
+ *    mode "read")
  *
  * @param prisma - Prisma client
  * @param userId - User ID to check
  * @param nodeId - Node ID to check
+ * @param mode - "write" (default, unchanged behavior) counts only write-level
+ *   admins; "read" also counts admin.read for read/visibility callers
  * @returns True if user has access to the node
  */
 export async function hasNodeAccess(
   prisma: PrismaClient,
   userId: string,
-  nodeId: string
+  nodeId: string,
+  mode: "read" | "write" = "write"
 ): Promise<boolean> {
-  const cacheKey = `hasNodeAccess:${userId}:${nodeId}`;
+  const cacheKey = `hasNodeAccess:${mode}:${userId}:${nodeId}`;
   const cached = nodeAccessCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  // First check if user is admin
-  const isAdmin = await isAdminUser(prisma, userId, true);
+  // First check if user is admin (write-tier by default; read mode lets
+  // read-admins pass for visibility decisions only)
+  const isAdmin = await isAdminUser(prisma, userId, mode === "write");
   if (isAdmin) {
     nodeAccessCache.set(cacheKey, true);
     return true;
@@ -768,17 +618,21 @@ function assignmentTtlMs(expiresAt?: Date | string | null): number {
  *
  * @param prisma - Prisma client
  * @param userId - User ID
+ * @param mode - "write" (default, unchanged behavior) counts only write-level
+ *   admins as wildcard; "read" also counts admin.read for read/visibility
+ *   callers
  * @returns Object with array of node IDs and whether user has wildcard access
  */
 export async function getUserAccessibleNodes(
   prisma: PrismaClient,
-  userId: string
+  userId: string,
+  mode: "read" | "write" = "write"
 ): Promise<{ nodeIds: string[]; hasWildcard: boolean }> {
-  const cacheKey = `getUserAccessibleNodes:${userId}`;
+  const cacheKey = `getUserAccessibleNodes:${mode}:${userId}`;
   const cached = userAccessibleNodesCache.get(cacheKey);
   if (cached) return cached;
 
-  const isAdmin = await isAdminUser(prisma, userId, true);
+  const isAdmin = await isAdminUser(prisma, userId, mode === "write");
   if (isAdmin) {
     // Admins have access to all nodes (effectively wildcard)
     const allNodes = await prisma.node.findMany({

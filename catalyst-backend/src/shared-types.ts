@@ -55,6 +55,12 @@ export enum Permission {
   SERVER_INSTALL = "server.install",
   SERVER_REINSTALL = "server.reinstall",
   SERVER_REBUILD = "server.rebuild",
+  SERVER_CLONE = "server.clone",
+  SERVER_KILL = "server.kill",
+  SERVER_NETWORK = "server.network",
+  SERVER_STORAGE = "server.storage",
+  SERVER_ARCHIVE = "server.archive",
+  SERVER_MIGRATE = "server.migrate",
   // Node permissions
   NODE_READ = "node.read",
   NODE_CREATE = "node.create",
@@ -63,6 +69,8 @@ export enum Permission {
   NODE_VIEW_STATS = "node.view_stats",
   NODE_MANAGE_ALLOCATION = "node.manage_allocation",
   NODE_ASSIGN = "node.assign",
+  NODE_SERVER_MANAGE = "node.server_manage",
+  NODE_AGENT_CONTROL = "node.agent_control",
   // Location permissions
   LOCATION_READ = "location.read",
   LOCATION_CREATE = "location.create",
@@ -112,6 +120,15 @@ export enum Permission {
   ADMIN_WRITE = "admin.write",
   // API Key management
   APIKEY_MANAGE = "apikey.manage",
+  APIKEY_READ = "apikey.read",
+  APIKEY_WRITE = "apikey.write",
+  // Server content management (mods / plugins)
+  MODS_MANAGE = "mods.manage",
+  PLUGINS_MANAGE = "plugins.manage",
+  // Panel operations
+  MIGRATION_MANAGE = "migration.manage",
+  UPDATE_TRIGGER = "update.trigger",
+  DIAGNOSTICS_DOWNLOAD = "diagnostics.download",
 }
 
 // ============================================================================

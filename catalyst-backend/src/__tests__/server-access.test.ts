@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { decideServerAccess, isFullAdminRole, canManageViaNode } from "../lib/server-access";
-import { hasGrant } from "../lib/permissions";
+import { hasGrant, isReadPermission, permissionMatches } from "../lib/permissions";
 
 describe("decideServerAccess — node-access no longer bypasses", () => {
   it("allows the server owner without extra grants", () => {
@@ -78,6 +78,26 @@ describe("decideServerAccess — node-access no longer bypasses", () => {
     expect(result).toEqual({ allowed: true, reason: "node_manage" });
   });
 
+  it("allows node access paired with node.server_manage (split value)", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["node.server_manage"],
+      hasNodeAccess: true,
+    });
+    expect(result).toEqual({ allowed: true, reason: "node_manage" });
+  });
+
+  it("DENIES node.server_manage without node assignment", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["node.server_manage"],
+      hasNodeAccess: false,
+    });
+    expect(result.allowed).toBe(false);
+  });
+
   it("DENIES node.update without hasNodeAccess", () => {
     const result = decideServerAccess({
       isOwner: false,
@@ -138,9 +158,11 @@ describe("isFullAdminRole / canManageViaNode helpers", () => {
     expect(isFullAdminRole([])).toBe(false);
   });
 
-  it("canManageViaNode requires both assignment and node.update", () => {
+  it("canManageViaNode requires both assignment and the node-manage path", () => {
     expect(canManageViaNode(true, ["node.update"])).toBe(true);
+    expect(canManageViaNode(true, ["node.server_manage"])).toBe(true);
     expect(canManageViaNode(true, ["node.read"])).toBe(false);
+    expect(canManageViaNode(true, ["node.agent_control"])).toBe(false);
     expect(canManageViaNode(false, ["node.update"])).toBe(false);
     expect(canManageViaNode(false, [])).toBe(false);
   });
@@ -156,6 +178,64 @@ describe("decideServerAccess — requiredPermission (global role grants)", () =>
       requiredPermission: "server.start",
     });
     expect(result).toEqual({ allowed: true, reason: "role_permission" });
+  });
+
+  it("legacy 'server.stop' role satisfies requiredPermission 'server.kill'", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["server.stop"],
+      hasNodeAccess: false,
+      requiredPermission: "server.kill",
+    });
+    expect(result).toEqual({ allowed: true, reason: "role_permission" });
+  });
+
+  it("legacy 'server.update' satisfies 'server.storage' (row path uses hasGrant)", () => {
+    // ensureServerAccess checks explicit ServerAccess rows with
+    // hasGrant(row.permissions, permission) — the same alias matrix.
+    expect(hasGrant(["server.update"], "server.storage")).toBe(true);
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["server.update"],
+      hasNodeAccess: false,
+      requiredPermission: "server.storage",
+    });
+    expect(result).toEqual({ allowed: true, reason: "role_permission" });
+  });
+
+  it("one-directional: new narrow values never satisfy old broad requirements", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["server.kill"],
+      hasNodeAccess: false,
+      requiredPermission: "server.stop",
+    });
+    expect(result).toEqual({ allowed: false, reason: "forbidden" });
+  });
+
+  it("no admin-bit double-fire: admin.read write requests still fail", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["admin.read"],
+      hasNodeAccess: false,
+      requiredPermission: "server.start",
+    });
+    expect(result).toEqual({ allowed: false, reason: "forbidden" });
+  });
+
+  it("admin.read read requests resolve as admin_read, not role_permission", () => {
+    const result = decideServerAccess({
+      isOwner: false,
+      hasExplicitServerAccess: false,
+      rolePermissions: ["admin.read"],
+      hasNodeAccess: false,
+      requiredPermission: "server.read",
+    });
+    expect(result).toEqual({ allowed: true, reason: "admin_read" });
   });
 
   it("denies when the role holds a DIFFERENT server permission", () => {
@@ -328,5 +408,102 @@ describe("hasGrant — non-admin permissions stay exact", () => {
     expect(hasGrant(["*"], "*")).toBe(true);
     expect(hasGrant(["*"], "server.delete")).toBe(true);
     expect(hasGrant(["*"], "admin.write")).toBe(true);
+  });
+});
+
+describe("hasGrant — legacy split aliases (wave 1)", () => {
+  it("expands legacy split values to their new targets", () => {
+    expect(hasGrant(["server.update"], "server.network")).toBe(true);
+    expect(hasGrant(["server.update"], "server.storage")).toBe(true);
+    expect(hasGrant(["server.update"], "server.update")).toBe(true);
+    expect(hasGrant(["apikey.manage"], "apikey.read")).toBe(true);
+    expect(hasGrant(["apikey.manage"], "apikey.write")).toBe(true);
+    expect(hasGrant(["apikey.manage"], "apikey.manage")).toBe(true);
+    expect(hasGrant(["node.update"], "node.server_manage")).toBe(true);
+    expect(hasGrant(["node.update"], "node.agent_control")).toBe(true);
+    expect(hasGrant(["node.update"], "node.update")).toBe(true);
+    expect(hasGrant(["server.suspend"], "server.archive")).toBe(true);
+    expect(hasGrant(["server.transfer"], "server.migrate")).toBe(true);
+    expect(hasGrant(["server.create"], "server.clone")).toBe(true);
+    expect(hasGrant(["server.stop"], "server.kill")).toBe(true);
+  });
+
+  it("is one-directional — new values never satisfy old broad checks", () => {
+    expect(hasGrant(["server.network"], "server.update")).toBe(false);
+    expect(hasGrant(["server.storage"], "server.update")).toBe(false);
+    expect(hasGrant(["apikey.read"], "apikey.manage")).toBe(false);
+    expect(hasGrant(["apikey.write"], "apikey.manage")).toBe(false);
+    expect(hasGrant(["node.server_manage"], "node.update")).toBe(false);
+    expect(hasGrant(["server.kill"], "server.stop")).toBe(false);
+    expect(hasGrant(["server.clone"], "server.create")).toBe(false);
+  });
+
+  it("does not bleed across permission families", () => {
+    expect(hasGrant(["server.update"], "apikey.read")).toBe(false);
+    expect(hasGrant(["node.update"], "server.network")).toBe(false);
+    expect(hasGrant(["apikey.manage"], "server.network")).toBe(false);
+  });
+
+  it("keeps the admin-bit semantics on top of aliases", () => {
+    expect(hasGrant(["server.update", "admin.read"], "server.read")).toBe(true);
+    expect(hasGrant(["server.update", "admin.read"], "server.network")).toBe(true);
+    expect(hasGrant(["admin.write"], "server.network")).toBe(true);
+    expect(hasGrant(["server.update"], "*")).toBe(false);
+    expect(hasGrant([], "server.read")).toBe(false);
+  });
+});
+
+describe("isReadPermission — declared read set (wave 1)", () => {
+  it("accepts the canonical read values", () => {
+    for (const perm of [
+      "admin.read", "apikey.read", "server.read", "backup.read",
+      "file.read", "console.read", "database.read", "alert.read",
+      "node.read", "location.read", "template.read", "user.read",
+      "role.read", "node.view_stats", "backup.download", "diagnostics.download",
+    ]) {
+      expect(isReadPermission(perm)).toBe(true);
+    }
+  });
+
+  it("rejects every write/capability value, new and old", () => {
+    for (const perm of [
+      "admin.write", "apikey.manage", "apikey.write", "server.start",
+      "server.stop", "server.kill", "server.network", "server.storage",
+      "server.archive", "server.migrate", "server.clone", "server.update",
+      "node.server_manage", "node.agent_control", "node.update",
+      "mods.manage", "plugins.manage", "migration.manage", "update.trigger",
+    ]) {
+      expect(isReadPermission(perm)).toBe(false);
+    }
+  });
+
+  it("uses the declared set, not the .read suffix", () => {
+    // Uncataloged strings ending in .read are NOT reads anymore — the
+    // declared READ_PERMISSIONS set is the single source.
+    expect(isReadPermission("uncataloged.read")).toBe(false);
+    expect(isReadPermission("")).toBe(false);
+  });
+});
+
+describe("permissionMatches — legacy alias handling (wave 1)", () => {
+  it("matches unscoped legacy grants against split targets", () => {
+    expect(permissionMatches("server.update", "server.network")).toBe(true);
+    expect(permissionMatches("apikey.manage", "apikey.write")).toBe(true);
+    expect(permissionMatches("node.update", "node.server_manage")).toBe(true);
+    expect(permissionMatches("server.stop", "server.kill")).toBe(true);
+  });
+
+  it("does not expand scoped legacy grants", () => {
+    // Scope-suffixed strings stay narrow — 'server.update:node_1' does not
+    // become 'server.network:node_1'.
+    expect(permissionMatches("server.update:node_1", "server.network", "node_1")).toBe(false);
+    expect(permissionMatches("server.update:node_1", "server.update", "node_1")).toBe(true);
+  });
+
+  it("keeps admin-bit scoping semantics unchanged", () => {
+    expect(permissionMatches("admin.write", "server.network")).toBe(true);
+    expect(permissionMatches("admin.read", "server.network")).toBe(false);
+    expect(permissionMatches("admin.read", "backup.read")).toBe(true);
+    expect(permissionMatches("admin.write:node_1", "server.read")).toBe(false);
   });
 });

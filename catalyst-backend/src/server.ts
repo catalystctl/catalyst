@@ -22,16 +22,13 @@ import { prisma } from "./db";
 import "./types"; // Load type augmentations
 import { WebSocketGateway, setWsGateway } from "./websocket/gateway";
 import { setErrorLoggerGateway, captureSystemError } from "./services/error-logger";
-import { mapHttpError } from "./lib/http-error";
+import { mapHttpError, apiError } from "./lib/http-error";
+import { ErrorCodes } from "./shared-types";
 import { applyRemoteCacheInvalidate, onCacheInvalidate } from "./lib/cache-bus";
 import { subscribeCacheInvalidations } from "./lib/event-bus";
 import { cachedConfig } from "./lib/config-cache";
-import {
-	cacheSessionUser,
-	extractSessionToken,
-	getCachedSessionUser,
-} from "./lib/auth-session-cache";
-import { resolveUserPermissions } from "./lib/permissions-catalog";
+import { createAuthenticate, enforceRouteKeyScope } from "./middleware/authenticate";
+import { hasGrant } from "./lib/permissions";
 import { closeRedis, getRedis, getRedisStats } from "./lib/redis";
 import { authRoutes } from "./routes/auth";
 import { nodeRoutes } from "./routes/nodes";
@@ -57,10 +54,7 @@ import { dashboardRoutes } from "./routes/dashboard";
 import { providerKeyRoutes } from "./routes/provider-keys";
 import { setupRoutes } from "./routes/setup";
 import { settingsRoutes } from "./routes/settings";
-import {
-	verifyApiKey as verifyApiKeyService,
-	resolveApiKeySecret,
-} from "./services/api-key-service";
+import { resolveApiKeySecret } from "./services/api-key-service";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { AlertService } from "./services/alert-service";
 import { getSecuritySettings, MAX_UPLOAD_MB_CEILING } from "./services/mailer";
@@ -70,15 +64,7 @@ import {
 	backgroundJobOwnerLabel,
 } from "./cluster";
 import { createServerBackup } from "./services/create-backup";
-import {
-	generateSftpToken,
-	validateSftpToken,
-	rotateSftpToken,
-	listSftpTokensForServer,
-	revokeSftpToken,
-	revokeAllSftpTokensForServer,
-	SFTP_TTL_OPTIONS,
-} from "./services/sftp-token-manager";
+import { validateSftpToken } from "./services/sftp-token-manager";
 import { startAuditRetention } from "./services/audit-retention";
 import { startStatRetention } from "./services/stat-retention";
 import { startBackupRetention, startStuckBackupStateWatchdog } from "./services/backup-retention";
@@ -86,7 +72,6 @@ import { startLogRetention } from "./services/log-retention";
 import { startMetricsRetention } from "./services/metrics-retention";
 import { startAuthRetention } from "./services/auth-retention";
 import { auth } from "./auth";
-import { fromNodeHeaders } from "better-auth/node";
 import { normalizeHostIp } from "./utils/ipam";
 import { PluginLoader } from "./plugins/loader";
 import { collectAuthProviders } from "./plugins/auth-providers";
@@ -97,6 +82,7 @@ import { fileTunnelRoutes } from "./routes/file-tunnel";
 import { migrationRoutes } from "./routes/migration";
 import { mcpRoutes } from "./routes/mcp";
 import { updateRoutes } from "./routes/update";
+import { sftpRoutes } from "./routes/sftp";
 import { verifyAgentApiKey } from "./lib/agent-auth";
 import { getCurrentVersion, normalizePanelVersion } from "./lib/panel-version";
 import {
@@ -439,160 +425,18 @@ taskScheduler.setTaskExecutor({
 // MIDDLEWARE
 // ============================================================================
 
-const authenticate = async (request: any, reply: any) => {
-	const authHeader = request.headers.authorization;
-
-	// Try API key authentication if header matches Bearer pattern
-	if (authHeader?.startsWith("Bearer ")) {
-		const token = authHeader.substring(7);
-
-		// Check if it's an API key (starts with prefix)
-		if (token.startsWith("catalyst")) {
-			try {
-				const verification = await verifyApiKeyService(token);
-
-				if (!verification?.valid || !verification?.key || !verification?.user) {
-					reply.status(401).send({ error: "Invalid API key" });
-					return;
-				}
-
-				// Reject banned or locked accounts before accepting API key auth
-				const account = await prisma.user.findUnique({
-					where: { id: verification.user.id },
-					select: { banned: true, lockedUntil: true },
-				});
-				if (account?.banned) {
-					reply.status(403).send({ error: "Account is banned", code: "ACCOUNT_BANNED" });
-					return;
-				}
-				if (account?.lockedUntil && new Date(account.lockedUntil) > new Date()) {
-					reply.status(403).send({ error: "Account is locked", code: "ACCOUNT_LOCKED" });
-					return;
-				}
-
-				// Attach user info and resolved permissions from the API key
-				const currentUserPermissions = await resolveUserPermissions(
-					verification.key.userId,
-				);
-				const hasWildcard = currentUserPermissions.includes("*");
-
-				// Validate API key permissions don't exceed user's current permissions.
-				// Applies to both scoped keys and allPermissions keys so revoked roles
-				// shrink (or zero out) the effective permission set immediately.
-				let permissions: string[];
-				if (verification.key.allPermissions) {
-					// allPermissions keys inherit live user perms only.
-					if (!hasWildcard && currentUserPermissions.length === 0) {
-						reply.status(403).send({
-							error:
-								"API key permissions revoked - user no longer has required permissions",
-						});
-						return;
-					}
-					permissions = currentUserPermissions;
-				} else {
-					permissions = verification.key.permissions;
-					if (!hasWildcard) {
-						const stalePermissions = permissions.filter(
-							(p) =>
-								!currentUserPermissions.includes(p) &&
-								!currentUserPermissions.includes("*"),
-						);
-						if (stalePermissions.length > 0) {
-							reply.status(403).send({
-								error:
-									"API key permissions revoked - user no longer has required permissions",
-							});
-							return;
-						}
-					}
-				}
-
-				request.user = {
-					userId: verification.user.id,
-					email: verification.user.email,
-					username: verification.user.username,
-					apiKeyId: verification.key.id,
-					permissions,
-				};
-				return; // API key auth successful
-			} catch (error: any) {
-				captureSystemError({
-					level: 'error',
-					component: 'Index',
-					message: error?.message || 'API key authentication error',
-					stack: error?.stack,
-					metadata: { context: 'api_key_auth' },
-				}).catch(() => {});
-				logger.error(error, "API key authentication error");
-				reply.status(401).send({ error: "Invalid or expired API key" });
-				return;
-			}
-		}
-	}
-
-	// Fall back to session authentication.
-	// Short-TTL L1 cache keyed by the session cookie: a warm request skips the
-	// better-auth session/user queries and the banned/locked lookup entirely
-	// (2-3 SQL round trips). Revocations flush it via the 'auth-session'
-	// cache-bus channel; see lib/auth-session-cache.ts for the staleness bound.
-	const sessionToken = extractSessionToken(request.headers.cookie);
-	if (sessionToken) {
-		const cachedUser = getCachedSessionUser(sessionToken);
-		if (cachedUser) {
-			request.user = { ...cachedUser };
-			return;
-		}
-	}
-	try {
-		const session = await auth.api.getSession({
-			headers: fromNodeHeaders(
-				request.headers as Record<string, string | string[] | undefined>,
-			),
-		});
-		if (!session) {
-			reply.status(401).send({ error: "Unauthorized" });
-			return;
-		}
-
-		// Reject banned or locked accounts on the main session auth path
-		const account = await prisma.user.findUnique({
-			where: { id: session.user.id },
-			select: { banned: true, lockedUntil: true },
-		});
-		if (account?.banned) {
-			reply.status(403).send({ error: "Account is banned", code: "ACCOUNT_BANNED" });
-			return;
-		}
-		if (account?.lockedUntil && new Date(account.lockedUntil) > new Date()) {
-			reply.status(403).send({ error: "Account is locked", code: "ACCOUNT_LOCKED" });
-			return;
-		}
-
-		// Resolve permissions from roles for session auth too
-		let permissions: string[] = [];
-		try {
-			permissions = await resolveUserPermissions(session.user.id);
-		} catch (permError) {
-			logger.error(permError, "Failed to resolve user permissions");
-			// Continue with empty permissions - better than failing auth entirely
-		}
-		request.user = {
-			userId: session.user.id,
-			email: session.user.email,
-			username: (session.user as any).username,
-			permissions,
-		};
-		if (sessionToken) {
-			cacheSessionUser(sessionToken, { ...request.user });
-		}
-	} catch {
-		reply.status(401).send({ error: "Unauthorized" });
-		return;
-	}
-};
+const authenticate = createAuthenticate({ logger });
 
 (app as any).authenticate = authenticate;
+// Key-scope ceiling: API-key requests must hold the route's declared
+// permission(s) via config.requiredPermission (the same route config
+// object as rateLimit). App-level preHandler hooks run before
+// route-level preHandlers, so routes that authenticate via preHandler
+// are covered by the tail-check inside authenticate itself; both
+// checks are idempotent.
+app.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
+	enforceRouteKeyScope(request, reply);
+});
 (app as any).wsGateway = wsGateway;
 (app as any).fileTunnel = fileTunnel;
 (app as any).taskScheduler = taskScheduler;
@@ -1122,7 +966,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			"/api/agent/version",
 			{
 				preHandler: [(app as any).authenticate],
-				config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+				config: { rateLimit: { max: 60, timeWindow: "1 minute" }, keyScopeExemptReason: 'auth-only informational: agent version constant' },
 			},
 			async (_request, reply) => {
 				const version = getCurrentVersion();
@@ -1446,10 +1290,10 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 				// SECURITY: a suspended server must not accept SFTP sessions —
 				// the HTTP file routes already 423 on suspension, and SFTP would
 				// otherwise bypass that enforcement for the lifetime of a minted
-				// token (up to 1 year).
+				// token (up to 24 h).
 				const sftpvServer = await prisma.server.findUnique({
 					where: { id: result.serverId },
-					select: { uuid: true, suspendedAt: true, nodeId: true },
+					select: { uuid: true, suspendedAt: true, nodeId: true, ownerId: true },
 				});
 				if (!sftpvServer) {
 					return reply.status(404).send({ success: true, data: { valid: false } });
@@ -1468,24 +1312,30 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					return reply.send({ success: true, data: { valid: false } });
 				}
 
-				// Check admin status — admins get wildcard permissions.
-				// SECURITY: the legacy `role` column is not synced with RBAC
-				// (demoting a user via roles does not rewrite it), so derive
-				// admin from live permission bits instead of the column.
-				const user = await prisma.user.findUnique({
-					where: { id: result.userId },
-					select: { role: true, roles: { select: { permissions: true } } },
-				});
-
-				const rolePerms = (user?.roles ?? []).flatMap(
-					(r: { permissions: string[] }) => r.permissions as string[],
+				// Derive the session's permissions from the caller's EFFECTIVE
+				// server permissions (owner/admin full set, admin.read read
+				// subset, subuser row subset) — never raw user roles: the old
+				// isAdmin?["*"]:row derivation handed owners and read-admins an
+				// empty set, which the agent froze into the SFTP session.
+				const { getEffectiveServerPermissions } = await import(
+					"./routes/servers/_helpers.js"
 				);
-				const isAdmin =
-					rolePerms.includes("*") ||
-					rolePerms.includes("admin.write");
-				const permissions = isAdmin
-					? ["*"]
-					: serverAccess?.permissions ?? [];
+				const permissions = await getEffectiveServerPermissions(
+					result.userId,
+					{
+						id: result.serverId,
+						ownerId: sftpvServer.ownerId,
+						nodeId: sftpvServer.nodeId,
+					},
+					serverAccess
+						? [
+								{
+									userId: result.userId,
+									permissions: serverAccess.permissions,
+								},
+							]
+						: [],
+				);
 
 				// The server UUID names the agent's FileManager data directory
 				// (e.g. /var/lib/catalyst/<uuid>).
@@ -1503,190 +1353,9 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			},
 		);
 
-		// SFTP connection info endpoint (authenticated)
-		// Uses a dedicated SFTP token manager with per-user configurable expiry.
-		// SFTP now runs on the node (not the backend), so we look up the
-		// server's assigned node and return the node's hostname + SFTP port.
-
-		app.get(
-			"/api/sftp/connection-info",
-			{ preHandler: [authenticate] },
-			async (request, reply) => {
-				const userId = request.user?.userId;
-				const serverId = (request.query as { serverId?: string }).serverId;
-
-				if (!userId || !serverId) {
-					return reply
-						.status(400)
-						.send({ error: "serverId query parameter is required" });
-				}
-
-				// SECURITY: only callers with access to this server may mint an
-				// SFTP token for it. Without this check any authenticated user
-				// could generate tokens bound to arbitrary server IDs (and learn
-				// node host/port metadata via the response).
-				const { resolveServerPermissions } = await import(
-					"./lib/permissions-catalog.js"
-				);
-				const { decideServerAccess } = await import("./lib/server-access.js");
-				const sftpServerRow = await prisma.server.findUnique({
-					where: { id: serverId },
-					select: { ownerId: true, nodeId: true },
-				});
-				if (!sftpServerRow) {
-					return reply.status(404).send({ error: "Server not found" });
-				}
-				const sftpAccessRow = await prisma.serverAccess.findFirst({
-					where: { serverId, userId },
-					select: { permissions: true },
-				});
-				const sftpHasFileAccess = Boolean(
-					sftpAccessRow?.permissions?.includes('server.read') ||
-						sftpAccessRow?.permissions?.includes('file.read') ||
-						sftpAccessRow?.permissions?.includes('file.write'),
-				);
-				const sftpRolePerms = await resolveServerPermissions(
-					userId,
-					serverId,
-					sftpServerRow.nodeId
-				);
-				const sftpHasNodeAccess = await (async () => {
-					const { hasNodeAccess } = await import(
-						"./routes/servers/_helpers.js"
-					);
-					return hasNodeAccess(prisma, userId, sftpServerRow.nodeId);
-				})();
-				const sftpDecision = decideServerAccess({
-					isOwner: sftpServerRow.ownerId === userId,
-					hasExplicitServerAccess: sftpHasFileAccess,
-					rolePermissions: sftpRolePerms,
-					hasNodeAccess: sftpHasNodeAccess,
-					requiredPermission: "server.read",
-				});
-				if (!sftpDecision.allowed) {
-					return reply.status(403).send({ error: "Forbidden" });
-				}
-
-				// Look up the server's node for SFTP host/port
-				const server = await prisma.server.findUnique({
-					where: { id: serverId },
-					select: {
-						node: {
-							select: {
-								hostname: true,
-								publicAddress: true,
-								sftpPort: true,
-								sftpEnabled: true,
-							},
-						},
-					},
-				});
-
-				let enabled = true;
-				let host = "unknown";
-				let port = 2022;
-
-				if (server?.node) {
-					enabled = server.node.sftpEnabled;
-					// Prefer publicAddress (IP) for SFTP, fallback to hostname
-					host = server.node.publicAddress || server.node.hostname;
-					port = server.node.sftpPort;
-				}
-
-				const ttlMs =
-					Number((request.query as { ttl?: string }).ttl) || undefined;
-				const result = generateSftpToken(userId, serverId, ttlMs);
-
-				reply.send({
-					success: true,
-					data: {
-						enabled,
-						host,
-						port,
-						// SFTP login username is the server id (agent scopes the session by it)
-						username: serverId,
-						sftpPassword: result.token,
-						expiresAt: result.expiresAt,
-						ttlMs: result.ttlMs,
-						ttlOptions: SFTP_TTL_OPTIONS.map((o) => ({
-							label: o.label,
-							value: o.value,
-						})),
-					},
-				});
-			},
-		);
-
-		// SFTP token rotation endpoint (authenticated)
-		app.post(
-			"/api/sftp/rotate-token",
-			{ preHandler: [authenticate] },
-			async (request, reply) => {
-				const userId = request.user?.userId;
-				const { serverId, ttlMs } = request.body as {
-					serverId: string;
-					ttlMs?: number;
-				};
-
-				if (!userId || !serverId) {
-					return reply.status(400).send({ error: "serverId is required" });
-				}
-
-				// SECURITY: mirror connection-info access check for rotation.
-				const { resolveServerPermissions } = await import(
-					"./lib/permissions-catalog.js"
-				);
-				const { decideServerAccess } = await import("./lib/server-access.js");
-				const rotServerRow = await prisma.server.findUnique({
-					where: { id: serverId },
-					select: { ownerId: true, nodeId: true },
-				});
-				if (!rotServerRow) {
-					return reply.status(404).send({ error: "Server not found" });
-				}
-				const rotAccessRow = await prisma.serverAccess.findFirst({
-					where: { serverId, userId },
-					select: { permissions: true },
-				});
-				const rotHasFileAccess = Boolean(
-					rotAccessRow?.permissions?.includes('server.read') ||
-						rotAccessRow?.permissions?.includes('file.read') ||
-						rotAccessRow?.permissions?.includes('file.write'),
-				);
-				const rotRolePerms = await resolveServerPermissions(
-					userId,
-					serverId,
-					rotServerRow.nodeId
-				);
-				const rotHasNodeAccess = await (async () => {
-					const { hasNodeAccess } = await import(
-						"./routes/servers/_helpers.js"
-					);
-					return hasNodeAccess(prisma, userId, rotServerRow.nodeId);
-				})();
-				const rotDecision = decideServerAccess({
-					isOwner: rotServerRow.ownerId === userId,
-					hasExplicitServerAccess: rotHasFileAccess,
-					rolePermissions: rotRolePerms,
-					hasNodeAccess: rotHasNodeAccess,
-					requiredPermission: "server.read",
-				});
-				if (!rotDecision.allowed) {
-					return reply.status(403).send({ error: "Forbidden" });
-				}
-
-				const result = rotateSftpToken(userId, serverId, ttlMs);
-
-				reply.send({
-					success: true,
-					data: {
-						sftpPassword: result.token,
-						expiresAt: result.expiresAt,
-						ttlMs: result.ttlMs,
-					},
-				});
-			},
-		);
+		// SFTP routes extracted to src/routes/sftp.ts (mint/rotate gate on
+		// effective file.read, key-scope enforced, token-value visibility).
+		await app.register(sftpRoutes);
 
 		// ── Server permission catalog (the shared subuser/role checklist) ──
 		// Single source: ALL_SERVER_PERMISSIONS in lib/permissions-catalog.ts.
@@ -1694,7 +1363,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		// so new server permissions appear in both automatically.
 		app.get(
 			"/api/permissions/server",
-			{ preHandler: [authenticate] },
+			{ preHandler: [authenticate], config: { keyScopeExemptReason: 'auth-only: server-scoped permission list for the subuser UI checklist' }},
 			async (_request, reply) => {
 				const { ALL_SERVER_PERMISSIONS } = await import(
 					"./lib/permissions-catalog.js"
@@ -1703,176 +1372,14 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			}
 		);
 
-		// List all SFTP tokens for a server (owner-only, or self-view for non-owners)
-		app.get(
-			"/api/sftp/tokens",
-			{ preHandler: [authenticate] },
-			async (request, reply) => {
-				const userId = request.user?.userId;
-				const serverId = (request.query as { serverId?: string }).serverId;
-
-				if (!userId || !serverId) {
-					return reply
-						.status(400)
-						.send({ error: "serverId query parameter is required" });
-				}
-
-				const server = await prisma.server.findUnique({
-					where: { id: serverId },
-					select: { ownerId: true, nodeId: true },
-				});
-				if (!server) {
-					return reply.status(404).send({ error: "Server not found" });
-				}
-
-				const isOwner = server.ownerId === userId;
-				// Server-scoped role resolution: global roles + RoleServerGrant +
-				// RoleNodeGrant rows covering this server. Token *values* stay
-				// visible to their owner only.
-				const { resolveServerPermissions } = await import("./lib/permissions-catalog.js");
-				const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-				const { decideServerAccess: decideSftpTokenAccess } = await import(
-					"./lib/server-access.js"
-				);
-				const { hasNodeAccess: checkSftpTokenNodeAccess } = await import(
-					"./routes/servers/_helpers.js"
-				);
-				const sftpTokenAccessRow = await prisma.serverAccess.findFirst({
-					where: { serverId, userId },
-					select: { userId: true },
-				});
-				const sftpTokenDecision = decideSftpTokenAccess({
-					isOwner,
-					hasExplicitServerAccess: Boolean(sftpTokenAccessRow),
-					rolePermissions: rolePerms,
-					hasNodeAccess: await checkSftpTokenNodeAccess(prisma, userId, server.nodeId),
-				});
-				if (!sftpTokenDecision.allowed) {
-					return reply.status(403).send({ error: "Forbidden" });
-				}
-				const canManageTokens =
-					isOwner ||
-					rolePerms.includes("*") ||
-					rolePerms.includes("admin.write") ||
-					rolePerms.includes("server.update");
-				const tokens = listSftpTokensForServer(serverId, userId, canManageTokens);
-
-				// Enrich tokens with user info
-				const enriched = await Promise.all(
-					tokens.map(async (t) => {
-						const user = await prisma.user.findUnique({
-							where: { id: t.userId },
-							select: { email: true, username: true },
-						});
-						return {
-							userId: t.userId,
-							email: user?.email ?? t.userId,
-							username: user?.username ?? null,
-							expiresAt: t.expiresAt,
-							ttlMs: t.ttlMs,
-							createdAt: t.createdAt,
-							token: t.token,
-							isSelf: t.isSelf,
-						};
-					}),
-				);
-
-				reply.send({ success: true, data: enriched });
-			},
-		);
-
-		// Revoke a specific user's SFTP token for a server (owner or self)
-		app.delete(
-			"/api/sftp/tokens/:targetUserId",
-			{ preHandler: [authenticate] },
-			async (request, reply) => {
-				const userId = request.user?.userId;
-				const { targetUserId } = request.params as { targetUserId: string };
-				const serverId = (request.query as { serverId?: string }).serverId;
-
-				if (!userId || !serverId || !targetUserId) {
-					return reply
-						.status(400)
-						.send({ error: "serverId and targetUserId are required" });
-				}
-
-				const server = await prisma.server.findUnique({
-					where: { id: serverId },
-					select: { ownerId: true, nodeId: true },
-				});
-				if (!server) {
-					return reply.status(404).send({ error: "Server not found" });
-				}
-
-				const isOwner = server.ownerId === userId;
-				// Server-scoped role resolution (mirrors the list/revoke-all routes).
-				const { resolveServerPermissions } = await import("./lib/permissions-catalog.js");
-				const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-				const canManageTokens =
-					isOwner ||
-					rolePerms.includes("*") ||
-					rolePerms.includes("admin.write") ||
-					rolePerms.includes("server.update");
-				const revoked = revokeSftpToken(
-					targetUserId,
-					serverId,
-					userId,
-					canManageTokens,
-				);
-
-				if (!revoked) {
-					return reply
-						.status(404)
-						.send({ error: "No active token found, or not authorized" });
-				}
-
-				reply.send({ success: true });
-			},
-		);
-
-		// Revoke ALL SFTP tokens for a server (owner or panel-side manager)
-		app.delete(
-			"/api/sftp/tokens",
-			{ preHandler: [authenticate] },
-			async (request, reply) => {
-				const userId = request.user?.userId;
-				const serverId = (request.query as { serverId?: string }).serverId;
-
-				if (!userId || !serverId) {
-					return reply
-						.status(400)
-						.send({ error: "serverId query parameter is required" });
-				}
-
-				const server = await prisma.server.findUnique({
-					where: { id: serverId },
-					select: { ownerId: true, nodeId: true },
-				});
-				if (!server) {
-					return reply.status(404).send({ error: "Server not found" });
-				}
-
-				// Server-scoped role resolution (mirrors the list/revoke routes).
-				const { resolveServerPermissions } = await import("./lib/permissions-catalog.js");
-				const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-				const canManageTokens =
-					server.ownerId === userId ||
-					rolePerms.includes("*") ||
-					rolePerms.includes("admin.write") ||
-					rolePerms.includes("server.update");
-				if (!canManageTokens) {
-					return reply
-						.status(403)
-						.send({ error: "Only the server owner can revoke all tokens" });
-				}
-
-				const count = revokeAllSftpTokensForServer(serverId);
-				reply.send({ success: true, data: { revoked: count } });
-			},
-		);
 
 		// Update status (authenticated; restart probe uses /health for liveness).
-		app.get("/api/update/check", { preHandler: [(app as any).authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (_request, reply) => {
+		app.get("/api/update/check", { preHandler: [(app as any).authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
+			// Panel update state is admin-only information (admin.read tier).
+			const perms: string[] = request.user?.permissions ?? [];
+			if (!hasGrant(perms, "admin.read")) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin read permission required");
+			}
 			const { getUpdateStatus, checkForUpdate } = await import("./services/auto-updater");
 			const status = getUpdateStatus();
 			// Refresh cache if stale (> 5 min) so the frontend gets real data

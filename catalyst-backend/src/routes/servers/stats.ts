@@ -8,7 +8,7 @@ import { ErrorCodes } from "../../shared-types";
 export async function serverStatsRoutes(app: FastifyInstance) {
   app.get(
     "/:serverId/stats/history",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -26,7 +26,7 @@ export async function serverStatsRoutes(app: FastifyInstance) {
       if (!server) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
-      if (!(await canAccessServer(userId, server))) {
+      if (!(await canAccessServer(userId, server, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
@@ -105,10 +105,10 @@ export async function serverStatsRoutes(app: FastifyInstance) {
     }
   );
 
-  // Update server
+  // Server activity log (audit trail, paginated)
   app.get(
     "/:serverId/activity",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -126,7 +126,7 @@ export async function serverStatsRoutes(app: FastifyInstance) {
       }
 
       // Permission check: decideServerAccess contract (not bare node assignment)
-      if (!(await canAccessServer(userId, server))) {
+      if (!(await canAccessServer(userId, server, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 

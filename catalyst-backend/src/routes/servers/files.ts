@@ -5,7 +5,7 @@ import { Transform } from "stream";
 import { pipeline } from "stream/promises";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { captureSystemError, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, isArchiveName, path, validateAndNormalizePath } from './_helpers.js';
+import { Actor, captureSystemError, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, isArchiveName, path, validateAndNormalizePath } from './_helpers.js';
 import { describeError } from '../../utils/describe-error.js';
 import { getSecuritySettings, MAX_UPLOAD_MB_CEILING, maxUploadBytesFromMb } from "../../services/mailer.js";
 import { apiError } from "../../lib/http-error";
@@ -78,7 +78,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     userId: string,
     permission: string,
     reply: FastifyReply,
-    actor?: { permissions?: string[]; apiKeyId?: string },
+    actor: Actor,
   ) => ensureServerAccess(serverId, userId, permission, reply, actor);
 
   const notifyFileChange = (serverId: string, status: string, action: string, path?: string, from?: string, to?: string) => {

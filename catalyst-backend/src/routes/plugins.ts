@@ -571,6 +571,10 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
+      // Plugin inventory reads are admin-gated (TARGET-VOCABULARY §2.1):
+      // sourcemaps can embed original source, so even asset bundles stay
+      // admin.read-tier.
+      if (!ensureAdmin(request, reply, 'admin.read')) return;
       const { name, filename } = request.params as { name: string; filename: string };
       if (!isValidPluginName(name)) {
         return reply.status(404).send({ success: false, code: ErrorCodes.NOT_FOUND });
@@ -615,7 +619,10 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
     {
       onRequest: [app.authenticate],
     },
-    async (request) => {
+    async (request, reply) => {
+      // Plugin inventory (capabilities, consent state, licensing) is
+      // admin.read-tier (TARGET-VOCABULARY §2.1).
+      if (!ensureAdmin(request, reply, 'admin.read')) return;
       const registry = pluginLoader.getRegistry();
       const plugins = registry.getAll();
 
@@ -665,6 +672,9 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
+      // Plugin detail (capabilities, consent, licensing) is admin.read-tier
+      // (TARGET-VOCABULARY §2.1).
+      if (!ensureAdmin(request, reply, 'admin.read')) return;
       const { name } = request.params as { name: string };
       const registry = pluginLoader.getRegistry();
       const plugin = registry.get(name);
@@ -1020,6 +1030,9 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
+      // Frontend manifests are admin.read-tier (TARGET-VOCABULARY §2.1) —
+      // the redaction below stays as defense-in-depth.
+      if (!ensureAdmin(request, reply, 'admin.read')) return;
       const { name } = request.params as { name: string };
       const registry = pluginLoader.getRegistry();
       const plugin = registry.get(name);

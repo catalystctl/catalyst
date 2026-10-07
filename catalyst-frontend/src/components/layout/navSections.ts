@@ -68,7 +68,7 @@ export function buildGroups(t: TFunction): NavGroup[] {
       links: [
         { to: '/admin/users', label: t('layout:nav.users'), icon: Users, permissions: ['user.read', 'user.create', 'user.update', 'user.delete', 'user.set_roles', 'admin.read', 'admin.write'] },
         { to: '/admin/roles', label: t('layout:nav.roles'), icon: Shield, permissions: ['role.read', 'role.create', 'role.update', 'role.delete', 'admin.read', 'admin.write'] },
-        { to: '/admin/api-keys', label: t('layout:nav.apiKeys'), icon: Key, permissions: ['apikey.manage', 'admin.read', 'admin.write'] },
+        { to: '/admin/api-keys', label: t('layout:nav.apiKeys'), icon: Key, permissions: ['apikey.read', 'apikey.write', 'admin.read', 'admin.write'] },
       ],
     },
     {

@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../db.js";
-import { canAccessServer, checkIsAdmin, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam, validateRequestBody } from './_helpers.js';
+import { hasGrant } from "../../lib/permissions.js";
+import { canAccessServer, checkIsAdmin, collectUsedHostPortsByIp, enforceKeyScope, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam, validateRequestBody } from './_helpers.js';
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
 
@@ -58,7 +59,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         id: serverId,
         ownerId: server.ownerId,
         nodeId: server.nodeId,
-      }))) {
+      }, request.user))) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
@@ -106,12 +107,9 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
   app.post(
     "/:serverId/allocations",
     // No onRequest RBAC gate here: the write-path contract (owner | ServerAccess
-    // update/delete | node access + node.update | admin.write/*) is enforced
-    // in-handler via canAccessServer below, same as DELETE and /primary.
-    // A requirePermission('server.update') middleware previously ran here and
-    // always 403'd non-super-admins — 'server.update' is not a grantable
-    // catalog permission, and the middleware ran before canAccessServer could
-    // apply the node-manage path.
+    // server.network | role server.network | node access + node.server_manage |
+    // admin.write/*) is enforced in-handler below, same as DELETE and /primary.
+    // API keys additionally act within their own scope.
     { onRequest: [app.authenticate], preHandler: [validateRequestBody(allocationSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -131,11 +129,18 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Write path: owner | ServerAccess(update/delete) | node+node.update | admin.write/*
+      // API keys act within their own scope; server.network is the allocation
+      // capability (legacy server.update stays valid via hasGrant aliases).
+      if (!enforceKeyScope(request.user, "server.network")) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+      }
+
+      // Write path: owner | ServerAccess(server.network) | role server.network |
+      // node manager (node.server_manage, legacy node.update) | admin.write/*.
       // Bare node assignment / admin.read alone is NOT enough.
       const hasWriteAccess = server.access.some(
         (access) => access.userId === userId &&
-          (access.permissions.includes('server.update'))
+          (access.permissions.some((p) => hasGrant([p], 'server.network')))
       );
       if (server.ownerId !== userId && !hasWriteAccess && !checkIsAdmin(request, "admin.write")) {
         const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
@@ -143,8 +148,8 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
         const nodeManage =
           (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-          rolePerms.includes("node.update");
-        if (!rolePerms.includes("server.update") && !rolePerms.includes("*") && !nodeManage) {
+          (rolePerms.includes("node.server_manage") || rolePerms.includes("node.update"));
+        if (!hasGrant(rolePerms, "server.network") && !nodeManage) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
@@ -368,9 +373,15 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
+      // API keys act within their own scope; server.network is the allocation
+      // capability (legacy server.update stays valid via hasGrant aliases).
+      if (!enforceKeyScope(request.user, "server.network")) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+      }
+
       const hasWriteAccess = server.access.some(
         (access) => access.userId === userId &&
-          (access.permissions.includes('server.update'))
+          (access.permissions.some((p) => hasGrant([p], 'server.network')))
       );
       if (server.ownerId !== userId && !hasWriteAccess && !checkIsAdmin(request, "admin.write")) {
         const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
@@ -378,8 +389,8 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
         const nodeManage =
           (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-          rolePerms.includes("node.update");
-        if (!rolePerms.includes("server.update") && !rolePerms.includes("*") && !nodeManage) {
+          (rolePerms.includes("node.server_manage") || rolePerms.includes("node.update"));
+        if (!hasGrant(rolePerms, "server.network") && !nodeManage) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
@@ -492,9 +503,15 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
+      // API keys act within their own scope; server.network is the allocation
+      // capability (legacy server.update stays valid via hasGrant aliases).
+      if (!enforceKeyScope(request.user, "server.network")) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+      }
+
       const hasWriteAccess = server.access.some(
         (access) => access.userId === userId &&
-          (access.permissions.includes('server.update'))
+          (access.permissions.some((p) => hasGrant([p], 'server.network')))
       );
       if (server.ownerId !== userId && !hasWriteAccess && !checkIsAdmin(request, "admin.write")) {
         const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
@@ -502,8 +519,8 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
         const nodeManage =
           (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-          rolePerms.includes("node.update");
-        if (!rolePerms.includes("server.update") && !rolePerms.includes("*") && !nodeManage) {
+          (rolePerms.includes("node.server_manage") || rolePerms.includes("node.update"));
+        if (!hasGrant(rolePerms, "server.network") && !nodeManage) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }

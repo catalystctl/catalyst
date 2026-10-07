@@ -1,0 +1,86 @@
+# API Permission Audit — server power / admin-ops / network
+
+Scope: `catalyst-backend/src/routes/servers/power.ts`, `admin-ops.ts`, `network.ts` (all mounted under `/api/servers`, server.ts:1072-1074). 23 endpoints total.
+Reference contract: `admin.read` = read everything; `admin.write` = read+write everything; `*` = superadmin; every other permission = one targeted capability.
+
+## Executive summary
+
+- Role-level (session) semantics are clean: `admin.read` reaches the one read endpoint in scope and **zero** writes; `admin.write`/`*` reach everything; every write is gated by a targeted catalog permission. The suspend test (authz-fixes.test.ts:83-86) matches live behavior.
+- **12 B-WRITE-LEAK verdicts, all one root cause: API-key scope is not enforced.** `ensurePowerAccess` (power.ts:56-95) and the inline network gates never call `enforceKeyScope` (_helpers.ts:487-493), and `backup-settings` drops the `actor` argument entirely (admin-ops.ts:218-223). A key scoped to `server.read` can kill/reinstall (data-wipe) any server its owner owns, and a zero-scope owner key can rewrite backup S3/SFTP credentials.
+- 1 A-READ-GAP: `GET /:serverId/transfer-candidates` (admin-ops.ts:699) denies `admin.read` on a read endpoint.
+- 3 E-BROAD: kill reuses `server.stop` (no kill/force separation); archive/restore reuse `server.suspend`.
+- 0 C-NO-CHECK (every endpoint has a real permission check beyond auth) and 0 D-CATALOG (every permission string used in scope exists in PERMISSION_CATEGORIES, permissions-catalog.ts:18-169).
+- Top fix (P0/P1): thread `request.user` through `ensurePowerAccess` + network gates + `backup-settings` so `enforceKeyScope` actually runs.
+
+## Legend
+
+- **AK-scope bypass**: for API-key requests `request.user.permissions` = the key's scope (server.ts:511-517); for sessions it = global role perms (server.ts:572-585). An "AK-scope bypass" means the handler authorizes via the *user's* DB grants (owner / ServerAccess / roles) without checking the key's declared scope, so a narrowly-scoped key inherits its owner's full power. `enforceKeyScope` is the existing guard that is being skipped.
+- `decideServerAccess` = lib/server-access.ts:33-68: owner | explicit ServerAccess(required perm) | `*`/admin.write | admin.read (reads only) | role holding required perm | node-assignment + `node.update`.
+- `hasGrant` = lib/permissions.ts:143-149 (`*`, exact, admin.write-any, admin.read-reads); `isReadPermission` = permissions.ts:130-136.
+
+## ENDPOINT TABLE
+
+| METHOD+PATH | Check (file:line) | R/W | Essential current check logic | VERDICT | Proposed fix |
+|---|---|---|---|---|---|
+| POST /:serverId/install | power.ts:193 | W | `ensurePowerAccess(["server.install"])` (power.ts:56): owner→allow **without key-scope check**; `*`/admin.write via request perms; else decideServerAccess: ServerAccess w/ server.install, role (global+scoped) server.install, node+node.update. admin.read→403 | B-WRITE-LEAK (AK-scope) | Role semantics OK. Add `actor` param to ensurePowerAccess; `enforceKeyScope(actor, "server.install")` on every allow path (mirror ensureServerAccess, _helpers.ts:553) |
+| POST /:serverId/reinstall | power.ts:290 | W | Same gate with `server.reinstall`. Wipes server data; admin.read→403 | B-WRITE-LEAK (AK-scope) | Same AK fix; highest impact (data wipe) |
+| POST /:serverId/cancel-install | power.ts:387 | W | Same gate, any-of `["server.install","server.reinstall"]` (requireAll=false, power.ts:61). admin.read→403 | B-WRITE-LEAK (AK-scope) | Same AK fix |
+| POST /eula (serverId in body) | power.ts:483 | W | `ensureServerAccess(serverId, userId, "server.start", reply, request.user)` — full contract incl. `enforceKeyScope`; admin.read→403 (server.start is not a read perm) | OK | EULA consent rides `server.start` (defensible: install/start lifecycle). Optional finer perm `server.eula` (see V2). No audit-log/state guard, unlike siblings |
+| POST /:serverId/rebuild | power.ts:555 | W | Same gate with `server.rebuild`. admin.read→403 | B-WRITE-LEAK (AK-scope) | Same AK fix |
+| POST /:serverId/start | power.ts:712 | W | Same gate with `server.start`. admin.read→403 | B-WRITE-LEAK (AK-scope) | Same AK fix |
+| POST /:serverId/stop | power.ts:913 | W | Same gate with `server.stop` (graceful). admin.read→403 | B-WRITE-LEAK (AK-scope) | Same AK fix |
+| POST /:serverId/kill | power.ts:1048 | W | Same gate with **`server.stop`** — force-kill (SIGKILL, data-loss risk) shares the graceful-stop permission. No `server.kill` exists anywhere (grep: only audit-log action names). admin.read→403 | E-BROAD (+ AK-scope bypass) | Introduce `server.kill`; check `["server.kill","server.stop"]` or require server.kill outright; apply AK fix too (V1) |
+| POST /:serverId/restart | power.ts:1180 | W | Same gate with `["server.start","server.stop"], requireAll=true` — BOTH required (owner path aside). admin.read→403 | B-WRITE-LEAK (AK-scope) | Same AK fix. AND-of-two-perms is good design |
+| POST /:serverId/suspend | power.ts:1339 | W | `ensureSuspendPermission` (_helpers.ts:1269-1279) → `checkAnyPerm(['*','admin.write','server.suspend'])` on request perms (= key scope for keys). admin.read→403 (test-asserted). Owner without the perm is also denied (by design) | OK | None. Matches contract: targeted `server.suspend`, admin.write, `*` |
+| POST /:serverId/unsuspend | power.ts:1514 | W | Same `ensureSuspendPermission`. admin.read→403 | OK | None |
+| PATCH /:id/restart-policy | admin-ops.ts:66-72 | W | `ensureServerAccess(id, userId, "server.update", reply, request.user)` — full contract incl. key scope. admin.read→403 | OK | None — this is the pattern the B rows should copy |
+| POST /:id/reset-crash-count | admin-ops.ts:114-120 | W | Same `ensureServerAccess("server.update")` incl. actor. admin.read→403 | OK | None |
+| PATCH /:id/backup-settings | admin-ops.ts:218-223 | W | `ensureServerAccess(id, userId, "backup.create", reply)` — **`actor` NOT passed** → `enforceKeyScope(undefined,…)` returns true (_helpers.ts:491): key scope never checked. Credential/storage changes (admin-ops.ts:277-315) additionally require decideServerAccess reason ∈ {owner, admin, node_manage} (excludes server_access/role_permission) — but that gate also reads DB only, not key scope. admin.read→403 | B-WRITE-LEAK (AK-scope omission) | P0: pass `request.user` as 5th arg. Storage-mode change redirects all future backups; a zero-scope owner key can set S3/SFTP creds (the exact exfiltration path the SECURITY comment guards subusers against) |
+| POST /:id/transfer (node migration) | admin-ops.ts:391-410 | W | owner (no key-scope check) → allow; else ServerAccess w/ `server.transfer`; `checkIsAdmin("admin.write")` on request perms (key scope honored on this branch); else role `server.transfer` / `*` / node+node.update (DB only). admin.read→403 | B-WRITE-LEAK (AK-scope, partial) | AK fix on owner/ServerAccess/role branches. Also V3: `server.transfer` is catalog-labeled "Transfer ownership" but is enforced here for node migration; subusers with the `full` preset (helpers:61) can migrate servers across nodes |
+| GET /:serverId/transfer-candidates | admin-ops.ts:699-702 | R | owner OR `checkIsAdmin(request, "admin.write")` (`*`/admin.write only, _helpers.ts:1264-1267). **admin.read→404** (masqueraded) — cannot read this endpoint | A-READ-GAP | Change gate to `checkIsAdmin(request, "admin.read")`; keep email field for admins (decide whether read-admins see emails — they already can via user.read-level endpoints). Key-scope note: gate uses request perms, so keys are constrained correctly |
+| POST /:serverId/transfer-ownership | admin-ops.ts:756-759 | W | owner OR `checkIsAdmin("admin.write")`. **`server.transfer` is NOT honored here** despite its catalog label. admin.read→403 | OK | Semantics safe (ownership is ownership-level, like subuser management). See V3 for the vocabulary split; document that `server.transfer` ≠ ownership transfer |
+| POST /:serverId/archive | admin-ops.ts:837 | W | `ensureSuspendPermission` → `*`/admin.write/**server.suspend**. Archive (incl. stopping a running server) is a fourth capability hidden inside the suspend permission. admin.read→403 | E-BROAD | Introduce `server.archive` (archive+restore pair); accept `server.suspend` as legacy fallback if needed (V4). Key scope IS enforced (request perms) |
+| POST /:serverId/restore | admin-ops.ts:907 | W | Same `ensureSuspendPermission`. admin.read→403 | E-BROAD | Same as archive |
+| GET /:serverId/allocations | network.ts:57-63 | R | `canAccessServer` (_helpers.ts:1305-1348): owner | any ServerAccess row (any perm) | `*`/admin.write | node+node.update | any scoped server-perm grant | **`rolePermissions.includes("admin.read")`** (helpers:1346) → admin.read CAN read ✓ | OK | None for roles. Minor: `canAccessServer` takes no actor → key scope ignored on this read (P3) |
+| POST /:serverId/allocations | network.ts:136-150 | W | Inline gate: owner (no key-scope check) | ServerAccess row w/ `server.update` (line 136-139) | `checkIsAdmin("admin.write")` (request perms) | role `server.update` (global+scoped, line 143-147) | `*` | node+node.update. admin.read→403. NOTE: `node.manage_allocation` is NOT consulted (see V5) | B-WRITE-LEAK (AK-scope) | Wrap allow paths with `enforceKeyScope(request.user, "server.update")` (P3). Role semantics OK |
+| DELETE /:serverId/allocations/:containerPort | network.ts:371-385 | W | Same inline gate as POST (only `server.update` checked; the comment's "update/delete" is stale). admin.read→403 | B-WRITE-LEAK (AK-scope) | Same AK fix (P3) |
+| POST /:serverId/allocations/primary | network.ts:495-509 | W | Same inline gate. admin.read→403 | B-WRITE-LEAK (AK-scope) | Same AK fix (P3) |
+
+**Counts: OK 7 · A-READ-GAP 1 · B-WRITE-LEAK 12 · E-BROAD 3 · C-NO-CHECK 0 · D-CATALOG 0** (23 endpoints)
+
+All 12 B rows are API-key-scope bypasses — **not** role-semantics leaks. Every one of them is correct for session users and for the `*`/admin.write tiers; the defect is that the key actor's narrower declared scope is never consulted.
+
+## Contract compliance check
+
+1. **admin.read = read everything**: satisfied for `GET /:serverId/allocations` (helpers:1346) — the only read endpoint in these three files. Violated once: `GET /:serverId/transfer-candidates` (A-READ-GAP). power.ts/admin-ops.ts contain no other read endpoints; power/state reads and read *streams* live in core.ts, stats.ts, sse-events.ts, console-stream.ts, metrics-stream.ts — outside this audit's files (see Boundary).
+2. **admin.write = everything**: satisfied on all 23 endpoints (`*`/admin.write reaches every one, via checkIsAdmin or decideServerAccess admin branch).
+3. **`*` superadmin**: satisfied everywhere.
+4. **Targeted permissions**: mostly good (install/reinstall/rebuild/start/stop/restart/update/transfer/backup.create/suspend each gate their own capability). Exceptions: kill≡stop (V1), archive/restore≡suspend (V4), server.transfer label mismatch (V3).
+
+## VOCABULARY FINDINGS
+
+- **V1 — `server.kill` missing (proposed).** Capability: force-kill (SIGKILL) a running/stopping container — distinct from graceful stop. Endpoint: POST /:serverId/kill (power.ts:1048). Today `server.stop` covers both; a subuser granted "stop" gets data-loss-grade force kill. Add to PERMISSION_CATEGORIES servers + ALL_SERVER_PERMISSIONS (permissions-catalog.ts:38-46, 238-247) and to the power/full presets (_helpers.ts:30-82).
+- **V2 — EULA consent has no dedicated permission.** POST /eula is gated by `server.start` (power.ts:483) — defensible (EULA is part of the install/start lifecycle), but it means "can start" ⇒ "can accept legal agreements on the owner's behalf". Optional targeted perm `server.eula`; at minimum document server.start's label as "Start servers (incl. EULA consent)".
+- **V3 — `server.transfer` semantic mismatch.** Catalog label "Transfer ownership" (permissions-catalog.ts:40) but enforced on **node migration** (admin-ops.ts:396,406); actual ownership transfer (admin-ops.ts:756) ignores it. Subusers with the `full` preset (includes server.transfer, _helpers.ts:61) can stream a server's data to a different node — far beyond the labeled capability. Proposal: rename the node-migration perm to `server.migrate` (endpoints: POST /:id/transfer), and either reserve `server.transfer` for ownership (currently owner/admin.write-only — safe to leave) or relabel the catalog entry.
+- **V4 — `server.archive` missing (proposed).** `server.suspend` currently means suspend+unsuspend+archive+restore (power.ts:1339,1514; admin-ops.ts:837,907) — four lifecycle capabilities on one bit. Proposal: `server.archive` for the archive/restore pair.
+- **V5 — `node.manage_allocation` is not the server-binding permission.** It is enforced only in nodes.ts pool CRUD (nodes.ts:1587,1663,1731,1775,1809); server-level allocation bind/unbind/primary uses `server.update` (network.ts:138,147,373,382,497,506). This split is defensible (pool management vs server config) but the catalog label "Manage allocations" (permissions-catalog.ts:58) is ambiguous — relabel to "Manage node allocation pools" and document that binding allocations to a server requires `server.update`.
+- **V6 — no missing-from-catalog strings.** Every permission string enforced in scope (`server.install/reinstall/rebuild/update/start/stop/transfer/suspend`, `backup.create`, `node.update`, `*`) exists in PERMISSION_CATEGORIES. Conversely, no catalog permission is dead *within these files* (server.suspend et al. are all enforced somewhere in scope). D-CATALOG = 0.
+- **V7 — API-key scope vocabulary exists but is skipped.** `enforceKeyScope`/`hasGrant` (_helpers.ts:487-493, permissions.ts:143-149) is the intended guard and is correctly used by ensureServerAccess callers that pass `actor`; ensurePowerAccess, the network inline gates, canAccessServer and backup-settings never invoke it. This is an enforcement gap, not a vocabulary gap — but it is why 12 rows are B-WRITE-LEAK.
+
+## FIX LIST (priority order)
+
+1. **P0 — admin-ops.ts:218-223 (backup-settings)**: pass `request.user` as the 5th argument to `ensureServerAccess(...)`. One-line change; closes credential-exfil via zero/narrow-scope keys on the most sensitive endpoint in scope. Also add a key-scope check to the credential-change gate (admin-ops.ts:277-315) — it currently trusts DB grants only.
+2. **P1 — power.ts:56-95 (ensurePowerAccess)**: add an `actor` parameter and call `enforceKeyScope(actor, permission)` on every allow path (owner early-return at line 64 included; per-permission loop at 74-88). Update the 8 call sites (power.ts:193,290,387,555,712,913,1048,1180) to pass `request.user`. Highest blast radius: reinstall (data wipe), kill, install.
+3. **P2 — network.ts:136-150, 371-385, 495-509**: wrap the inline gates with `enforceKeyScope(request.user, "server.update")` (or convert to `ensureServerAccess(..., "server.update", reply, request.user)` to also pick up suspension + 404 handling consistency). While there, delete the stale claim at network.ts:111-114 that `server.update` "is not a grantable catalog permission" (it is — permissions-catalog.ts:42) so nobody reintroduces the broken middleware.
+4. **P3 — network.ts:57-63 (GET, read)**: optional — extend `canAccessServer` with an optional actor or add a post-check so key actors are bounded by key scope on reads too (low severity).
+5. **P4 — admin-ops.ts:699-702 (transfer-candidates)**: change `checkIsAdmin(request, "admin.write")` to `"admin.read"` so read-admins can use the picker (A-READ-GAP); keep email exposure decision explicit.
+6. **P5 — kill separation**: add `server.kill` (catalog + ALL_SERVER_PERMISSIONS + presets) and gate power.ts:1048 on it (compat: also accept `server.stop` or `*`/admin.write during rollout). 
+7. **P6 — archive/restore**: add `server.archive` and gate admin-ops.ts:837/907 (fallback `server.suspend` acceptable during rollout).
+8. **P7 — V3 relabel/split** for `server.transfer` vs node migration (permissions-catalog.ts:40 + admin-ops.ts:406).
+9. **P8 — comment hygiene (no behavior change)**: power.ts:1330 says "List port allocations" above the suspend route; power.ts:1632 has a dead "Transfer server ownership" comment with no route (the real route is admin-ops.ts:734); admin-ops.ts:956-958 dead "PER-SERVER ACTIVITY LOG" section; network.ts:134 "ServerAccess(update/delete)" (only server.update is checked).
+
+## Boundary notes (for the Lead / other auditors)
+
+- Console commands are **not** in power.ts despite the mission hint: `POST /:serverId/console/command` + the console SSE stream live in console-stream.ts (server.ts:1076); server state/backups/alerts/EULA SSE in sse-events.ts (server.ts:1080); metrics stream in metrics-stream.ts. Whoever owns those files should verify admin.read reaches the read streams.
+- `POST /:serverId/storage/resize` lives in **core.ts:2249**, not admin-ops.ts. Adjacent observation for the core.ts auditor: its ServerAccess branch accepts **`file.write`** as the "write-capable permission" for disk resize (core.ts:2300) — an odd pairing worth reviewing — and like the power routes it resolves grants from the DB without consulting API-key scope.
+- Suspend/unsuspend live in power.ts (not admin-ops.ts); the suspend-permission semantics were verified against authz-fixes.test.ts:83-86 and match.

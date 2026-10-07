@@ -332,6 +332,8 @@ async function main() {
   console.log("✓ Moderator role created");
 
   // Create user role
+  // Canonical default User role — keep aligned with routes/setup.ts
+  // (TARGET-VOCABULARY §4.4): minimal read-only access.
   await prisma.role.upsert({
     where: { name: "User" },
     update: {

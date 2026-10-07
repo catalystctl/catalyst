@@ -86,6 +86,14 @@ export const rolesApi = {
     return data.data;
   },
 
+  // Canonical permission catalog (backend PERMISSION_CATEGORIES)
+  getPermissionCatalog: async () => {
+    const data = await apiClient.get<
+      ApiResponse<{ id: string; label: string; description?: string; permissions: { value: string; label: string }[] }[]>
+    >('/api/roles/permissions-catalog');
+    return Array.isArray(data.data) ? data.data : [];
+  },
+
   // Get role presets
   getPresets: async () => {
     const data = await apiClient.get<ApiResponse<RolePreset[]>>('/api/roles/presets');

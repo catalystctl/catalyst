@@ -332,7 +332,6 @@ export function invalidateSftpToken(userId: string, serverId: string): void {
 export function listSftpTokensForServer(
   serverId: string,
   requestUserId: string,
-  isOwner: boolean,
 ): Array<{
   userId: string;
   expiresAt: number;

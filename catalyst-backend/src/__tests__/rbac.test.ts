@@ -491,39 +491,45 @@ describe('RBAC - Permission Utilities', () => {
 
 describe('RBAC - Permission Categories and Presets', () => {
   it('PERMISSION_CATEGORIES should have all required categories', async () => {
-    const { PERMISSION_CATEGORIES } = await import('../lib/permissions');
+    // Canonical catalog (the stale duplicate in lib/permissions.ts was
+    // removed in wave 1).
+    const { PERMISSION_CATEGORIES } = await import('../lib/permissions-catalog');
 
-    // PERMISSION_CATEGORIES is an object, not an array
-    const categoryLabels = Object.values(PERMISSION_CATEGORIES).map((cat: any) => cat.label);
-    expect(categoryLabels).toContain('Server');
-    expect(categoryLabels).toContain('Node');
-    expect(categoryLabels).toContain('Location');
-    expect(categoryLabels).toContain('Template');
-    expect(categoryLabels).toContain('User Management');
-    expect(categoryLabels).toContain('Role Management');
-    expect(categoryLabels).toContain('Backup');
-    expect(categoryLabels).toContain('File Management');
+    const categoryLabels = PERMISSION_CATEGORIES.map((cat) => cat.label);
+    expect(categoryLabels).toContain('Servers');
+    expect(categoryLabels).toContain('Nodes');
+    expect(categoryLabels).toContain('Locations');
+    expect(categoryLabels).toContain('Templates');
+    expect(categoryLabels).toContain('Users');
+    expect(categoryLabels).toContain('Roles');
+    expect(categoryLabels).toContain('Backups');
+    expect(categoryLabels).toContain('Files');
     expect(categoryLabels).toContain('Console');
-    expect(categoryLabels).toContain('Database');
+    expect(categoryLabels).toContain('Databases');
     expect(categoryLabels).toContain('Alerts');
+    expect(categoryLabels).toContain('API Keys');
+    expect(categoryLabels).toContain('Server Content');
+    expect(categoryLabels).toContain('Panel Operations');
   });
 
   it('PERMISSION_CATEGORIES should have valid permissions for each category', async () => {
-    const { PERMISSION_CATEGORIES } = await import('../lib/permissions');
-    const validNodePermissions = [
+    const { PERMISSION_CATEGORIES } = await import('../lib/permissions-catalog');
+
+    const nodeCat = PERMISSION_CATEGORIES.find((cat) => cat.id === 'nodes');
+    expect(nodeCat?.permissions.map((p) => p.value)).toEqual([
       'node.read', 'node.create', 'node.update', 'node.delete',
-      'node.view_stats', 'node.manage_allocation', 'node.assign'
-    ];
-    const serverPermissions = [
+      'node.view_stats', 'node.manage_allocation', 'node.assign',
+      'node.server_manage', 'node.agent_control',
+    ]);
+
+    const serverCat = PERMISSION_CATEGORIES.find((cat) => cat.id === 'servers');
+    expect(serverCat?.permissions.map((p) => p.value)).toEqual([
       'server.read', 'server.create', 'server.start', 'server.stop',
-      'server.delete', 'server.suspend', 'server.transfer', 'server.schedule'
-    ];
-
-    const nodeCat = (PERMISSION_CATEGORIES as any).node;
-    expect(nodeCat?.permissions).toEqual(validNodePermissions);
-
-    const serverCat = (PERMISSION_CATEGORIES as any).server;
-    expect(serverCat?.permissions).toEqual(serverPermissions);
+      'server.delete', 'server.suspend', 'server.transfer', 'server.schedule',
+      'server.update', 'server.install', 'server.reinstall', 'server.rebuild',
+      'server.clone', 'server.kill', 'server.network', 'server.storage',
+      'server.archive', 'server.migrate',
+    ]);
   });
 
   it('PERMISSION_PRESETS should have all required presets', async () => {
@@ -535,6 +541,12 @@ describe('RBAC - Permission Categories and Presets', () => {
     expect(PERMISSION_PRESETS).toHaveProperty('support');
 
     expect(PERMISSION_PRESETS.administrator.permissions).toEqual(['*']);
+    // Wave 1 vocabulary: moderator carries the node-manage split value and
+    // the kill split; support gains the diagnostics download capability.
+    expect(PERMISSION_PRESETS.moderator.permissions).toContain('node.server_manage');
+    expect(PERMISSION_PRESETS.moderator.permissions).toContain('server.kill');
+    expect(PERMISSION_PRESETS.support.permissions).toContain('diagnostics.download');
+    expect(PERMISSION_PRESETS.user.permissions).toEqual(['server.read']);
   });
 });
 
@@ -697,9 +709,12 @@ describe('RBAC - Full Permission Coverage', () => {
     'server.read', 'server.create', 'server.start', 'server.stop',
     'server.delete', 'server.suspend', 'server.transfer', 'server.schedule',
     'server.update', 'server.install', 'server.reinstall', 'server.rebuild',
+    'server.clone', 'server.kill', 'server.network', 'server.storage',
+    'server.archive', 'server.migrate',
     // Node
     'node.read', 'node.create', 'node.update', 'node.delete',
     'node.view_stats', 'node.manage_allocation', 'node.assign',
+    'node.server_manage', 'node.agent_control',
     // Location
     'location.read', 'location.create', 'location.update', 'location.delete',
     // Template
@@ -721,6 +736,11 @@ describe('RBAC - Full Permission Coverage', () => {
     'alert.read', 'alert.create', 'alert.update', 'alert.delete',
     // Admin
     'admin.read', 'admin.write', 'apikey.manage',
+    'apikey.read', 'apikey.write',
+    // Server content
+    'mods.manage', 'plugins.manage',
+    // Panel operations
+    'migration.manage', 'update.trigger', 'diagnostics.download',
   ];
 
   it('all expected permissions should be defined in permission enum', async () => {

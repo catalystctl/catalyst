@@ -8,7 +8,7 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { serialize } from '../utils/serialize';
-import { getUserAccessibleNodes } from '../lib/permissions';
+import { getUserAccessibleNodes, hasGrant } from '../lib/permissions';
 import { enrichAuditDetails, resolveActorDetails, buildServerAuditDetails } from '../middleware/audit.js';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
@@ -24,69 +24,16 @@ export async function bulkServerRoutes(app: FastifyInstance) {
   /**
    * Helper: check the global permission for a bulk operation class.
    * Suspend/unsuspend require server.suspend (same as the single-server
-   * routes); delete requires server.delete. admin.write / * cover both.
+   * routes); delete requires server.delete. hasGrant semantics: admin.write
+   * and `*` satisfy any required permission. The gate is intentionally
+   * panel-global — there is no per-server scoping layer for bulk actions.
    */
   const ensureBulkPermission = (request: any, reply: FastifyReply, required: string[]) => {
     const perms: string[] = request.user?.permissions ?? [];
-    if (
-      perms.includes('*') ||
-      perms.includes('admin.write') ||
-      required.some((p) => perms.includes(p))
-    ) {
+    if (required.some((p) => hasGrant(perms, p))) {
       return true;
     }
     apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin access required for bulk operations');
-    return false;
-  };
-
-  /**
-   * Helper: check if user has access to a specific server for bulk operations.
-   * Returns true if user is admin, server owner, or has specific server permission.
-   */
-  const hasServerAccess = async (
-    prismaClient: typeof prisma,
-    request: any,
-    serverId: string,
-    requiredPermissions: string[]
-  ): Promise<boolean> => {
-    // Check permissions from request.user.permissions
-    const userPermissions = new Set(request.user?.permissions ?? []);
-
-    // Admins with write access have access
-    if (userPermissions.has('*') || userPermissions.has('admin.write')) {
-      return true;
-    }
-
-    // Check if user has any of the required permissions
-    for (const perm of requiredPermissions) {
-      if (userPermissions.has(perm)) return true;
-    }
-
-    // Check server access table
-    const access = await prismaClient.serverAccess.findUnique({
-      where: { userId_serverId: { userId: request.user.userId, serverId } },
-      select: { permissions: true },
-    });
-
-    if (access) {
-      const accessPerms = new Set(access.permissions as string[]);
-      for (const perm of requiredPermissions) {
-        if (accessPerms.has(perm)) return true;
-      }
-    }
-
-    // Check node access
-    const server = await prismaClient.server.findUnique({
-      where: { id: serverId },
-      select: { nodeId: true, ownerId: true },
-    });
-
-    // Node assignment alone must not grant bulk server power ops.
-    // Admins already passed via admin.write/* above; owners via ownerId below if needed.
-    if (server && server.ownerId === request.user.userId) {
-      return true;
-    }
-
     return false;
   };
 
@@ -98,7 +45,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
    */
   app.post(
     '/bulk/suspend',
-    { onRequest: [authenticate] },
+    { onRequest: [authenticate], config: { requiredPermission: 'server.suspend' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const { serverIds, reason, stopServer } = request.body as {
@@ -143,15 +90,6 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         if (server.suspendedAt) {
           result.failed.push({ id: serverId, error: 'Already suspended' });
-          continue;
-        }
-
-        // server.suspend is a global grant (not a subuser permission), and
-        // ownership alone does not suspend — same contract as
-        // ensureSuspendPermission on the single-server routes.
-        const hasServerPermission = await hasServerAccess(prisma, request, serverId, ['server.suspend']);
-        if (!hasServerPermission) {
-          result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
         }
 
@@ -285,7 +223,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
    */
   app.post(
     '/bulk/unsuspend',
-    { onRequest: [authenticate] },
+    { onRequest: [authenticate], config: { requiredPermission: 'server.suspend' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const { serverIds } = request.body as { serverIds?: string[] };
@@ -320,15 +258,6 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         if (!server.suspendedAt) {
           result.failed.push({ id: serverId, error: 'Not suspended' });
-          continue;
-        }
-
-        // server.suspend is a global grant (not a subuser permission), and
-        // ownership alone does not suspend — same contract as
-        // ensureSuspendPermission on the single-server routes.
-        const hasServerPermission = await hasServerAccess(prisma, request, serverId, ['server.suspend']);
-        if (!hasServerPermission) {
-          result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
         }
 
@@ -441,10 +370,12 @@ export async function bulkServerRoutes(app: FastifyInstance) {
    */
   app.delete(
     '/bulk',
-    { onRequest: [authenticate] },
+    { onRequest: [authenticate], config: { requiredPermission: 'server.delete' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
-      const { serverIds } = request.body as { serverIds?: string[] };
+      // DELETE bodies are optional in Fastify — guard before destructuring
+      // (a bodiless request must 400, not 500).
+      const { serverIds } = (request.body ?? {}) as { serverIds?: string[] };
 
       if (!Array.isArray(serverIds) || serverIds.length === 0) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'serverIds must be a non-empty array');
@@ -479,14 +410,6 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         if (!deletableStates.has(server.status)) {
           result.failed.push({ id: serverId, error: `Server must be stopped (current: ${server.status})` });
-          continue;
-        }
-
-        // server.update is not a delete grant; match DELETE /api/servers/:serverId.
-        const hasServerPermission = server.ownerId === userId ||
-          await hasServerAccess(prisma, request, serverId, ['server.delete']);
-        if (!hasServerPermission) {
-          result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
         }
 
@@ -626,7 +549,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
    */
   app.post(
     '/bulk/status',
-    { onRequest: [authenticate] },
+    { onRequest: [authenticate], config: { requiredPermission: 'server.read' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const { serverIds } = request.body as { serverIds?: string[] };
@@ -662,14 +585,14 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         },
       });
 
-      // Check if user has admin write permissions (can see all servers)
+      // Check if user has admin read permissions (can see all servers).
+      // hasGrant: admin.read admits admin.write and `*` too — the read
+      // everything contract covers bulk status.
       const perms: string[] = request.user?.permissions ?? [];
-      const isAdmin = perms.includes('*') || perms.includes('admin.write');
+      const isAdmin = hasGrant(perms, 'admin.read');
       const canManageNode = (nodeId: string) =>
         (hasAccessToAllNodes || allowedNodeIds.includes(nodeId)) &&
-        (perms.includes('*') ||
-          perms.includes('admin.write') ||
-          perms.includes('node.update'));
+        hasGrant(perms, 'node.update');
       const grantedServerIds = isAdmin
         ? new Set<string>()
         : new Set(

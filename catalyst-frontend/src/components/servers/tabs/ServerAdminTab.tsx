@@ -5,6 +5,7 @@ import { useQueryClient, useMutation, useQuery } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
 import {
   AlertTriangle,
+  Archive as ArchiveIcon,
   BarChart3,
   Container,
   Network,
@@ -125,6 +126,13 @@ interface Props {
  unsuspendPending: boolean;
  onUnsuspend: () => void;
 
+ // Archival (server.archive)
+ canArchive: boolean;
+ archivePending: boolean;
+ onArchive: () => void;
+ restorePending: boolean;
+ onRestore: () => void;
+
  // Allocations
  allocations: Allocation[];
  allocationsError: string | null;
@@ -179,6 +187,11 @@ export default function ServerAdminTab({
  onSuspend,
  unsuspendPending,
  onUnsuspend,
+ canArchive,
+ archivePending,
+ onArchive,
+ restorePending,
+ onRestore,
  allocations,
  allocationsError,
  availableNodeAllocations,
@@ -1107,6 +1120,42 @@ export default function ServerAdminTab({
  </div>
  )}
  </ServerTabCard>
+
+ {/* Archival */}
+ {canArchive && (
+ <ServerTabCard>
+ <SectionHeader icon={ArchiveIcon} title={t('tabs.admin.archival')} accent="warning" description={t('tabs.admin.archivalDescription')} />
+
+ {server.status === 'archived' ? (
+ <div className="flex items-center justify-between rounded-sm border border-warning/20 bg-warning/5 p-3">
+ <div>
+ <div className="text-mini font-medium text-foreground">{t('tabs.admin.archived')}</div>
+ <div className="mt-0.5 text-micro text-muted-foreground">{t('tabs.admin.archivedHint')}</div>
+ </div>
+ <button
+ type="button"
+ onClick={() => onRestore()}
+ disabled={restorePending}
+ className="shrink-0 rounded-sm border border-success/30 bg-success px-3 py-1.5 text-micro font-semibold text-foreground transition-colors hover:bg-success disabled:opacity-50"
+ >
+ {t('tabs.admin.restore')}
+ </button>
+ </div>
+ ) : (
+ <div className="flex items-center justify-between gap-3">
+ <div className="text-micro text-muted-foreground">{t('tabs.admin.archiveHint')}</div>
+ <button
+ type="button"
+ onClick={() => onArchive()}
+ disabled={archivePending || isSuspended}
+ className="h-7 shrink-0 rounded-sm bg-warning px-3 text-mini font-semibold text-warning-foreground transition-colors hover:bg-warning/90 disabled:opacity-50"
+ >
+ {t('tabs.admin.archive')}
+ </button>
+ </div>
+ )}
+ </ServerTabCard>
+ )}
  </div>
 
  {/* ── Danger Zone ── */}

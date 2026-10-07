@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import type { ZodIssue } from 'zod';
 import { describeError } from '../utils/describe-error.js';
+import { isValidPermission } from './permissions-catalog.js';
 
 /**
  * Password complexity requirements
@@ -224,12 +225,13 @@ export const apiKeyNameSchema = z.string()
  * - "*" — global wildcard
  * - "resource.action" — unscoped (e.g. server.read)
  * - "resource.action:resourceId" — scoped (e.g. node.delete:node_abc)
- * Multi-segment resources allowed (e.g. admin.read, file.sftp).
+ * Validated against the catalog (isValidPermission); legacy split values
+ * (e.g. apikey.manage) stay accepted during the alias window.
  */
 export const permissionSchema = z.string()
   .refine(
-    (value) => value === '*' || /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+(:[A-Za-z0-9_\-:.*]+)?$/.test(value),
-    { message: 'Permission must be "*", "resource.action", or "resource.action:resourceId"' },
+    (value) => isValidPermission(value),
+    { message: 'Permission must be "*", a known permission, or "permission:resourceId"' },
   );
 
 /**

@@ -16,6 +16,7 @@ import {
 import { useApiKeys, useDeleteApiKey, usePermissionsCatalog } from '../hooks/useApiKeys';
 import { useNodes } from '../hooks/useNodes';
 import { useAuthStore } from '../stores/authStore';
+import { hasAnyPermission } from '../components/auth/ProtectedRoute';
 import { ApiKey, PermissionCategory, getPermissionLabel } from '../services/apiKeys';
 import i18n from '@/i18n';
 import { formatDateTime } from '@/i18n/format';
@@ -302,10 +303,11 @@ export function ApiKeysPage() {
   const { data: apiKeys, isLoading, isError, refetch } = useApiKeys();
   const { data: catalog = [] } = usePermissionsCatalog();
   const { data: nodes = [] } = useNodes();
-  // Mutating API keys requires apikey.manage; read-only admins (admin.read)
-  // get a working list view with the mutation UI hidden.
+  // Mutating API keys requires apikey.write (legacy apikey.manage stays
+  // valid via the alias window); read-only admins (admin.read) get a
+  // working list view with the mutation UI hidden.
   const userPerms = useAuthStore((s) => s.user?.permissions) ?? [];
-  const canManage = userPerms.includes('*') || userPerms.includes('apikey.manage');
+  const canManage = hasAnyPermission(userPerms, ['apikey.write']);
   const deleteApiKey = useDeleteApiKey();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editKey, setEditKey] = useState<ApiKey | null>(null);

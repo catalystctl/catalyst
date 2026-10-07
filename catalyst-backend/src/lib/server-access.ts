@@ -1,4 +1,4 @@
-import { isReadPermission } from "./permissions";
+import { hasGrant, isReadPermission } from "./permissions";
 
 /**
  * Pure access decision for ensureServerAccess (no DB / reply side-effects).
@@ -10,11 +10,13 @@ import { isReadPermission } from "./permissions";
  * - Global `admin.read` allowed for READ operations only.
  * - Global roles may grant granular server permissions (e.g. a "game manager"
  *   role holding `server.start` or `file.write`): when `requiredPermission`
- *   is provided, a role holding exactly that permission counts like a
- *   per-server grant — on every server. Mirrored by
- *   getEffectiveServerPermissions so UI and backend stay consistent.
- * - Node assignment alone is NOT enough — must also hold `node.update`
- *   (or another explicit admin manage path above).
+ *   is provided, a role holding that permission — or a legacy split value
+ *   that satisfies it via hasGrant — counts like a per-server grant on every
+ *   server. Mirrored by getEffectiveServerPermissions so UI and backend
+ *   stay consistent.
+ * - Node assignment alone is NOT enough — must also hold `node.server_manage`
+ *   (or the legacy `node.update` split value, or another explicit admin
+ *   manage path above).
  *
  * Callers that need effective permission *sets* (not just allow/deny) should
  * still use this decision, then map:
@@ -57,11 +59,25 @@ export function decideServerAccess(input: {
   ) {
     return { allowed: true, reason: "admin_read" };
   }
-  if (input.requiredPermission && input.rolePermissions.includes(input.requiredPermission)) {
+  // hasGrant — not raw includes — so legacy split values on the role keep
+  // satisfying new requirements (e.g. 'server.stop' → 'server.kill').
+  // '*'/'admin.write' already returned above, and admin.read + a read
+  // requiredPermission returned at the admin_read branch, so the only new
+  // behavior here is alias satisfaction.
+  if (
+    input.requiredPermission &&
+    hasGrant(input.rolePermissions, input.requiredPermission)
+  ) {
     return { allowed: true, reason: "role_permission" };
   }
-  // Node assignment alone must NOT grant server power/file ops.
-  if (input.hasNodeAccess && input.rolePermissions.includes("node.update")) {
+  // Node assignment alone must NOT grant server power/file ops. The manage
+  // path is `node.server_manage`; the legacy `node.update` split value keeps
+  // working here (raw includes paths do not go through hasGrant aliases).
+  if (
+    input.hasNodeAccess &&
+    (input.rolePermissions.includes("node.server_manage") ||
+      input.rolePermissions.includes("node.update"))
+  ) {
     return { allowed: true, reason: "node_manage" };
   }
   return { allowed: false, reason: "forbidden" };
@@ -72,10 +88,15 @@ export function isFullAdminRole(rolePermissions: string[]): boolean {
   return rolePermissions.includes("*") || rolePermissions.includes("admin.write");
 }
 
-/** True when node assignment is paired with node.update (manage path). */
+/** True when node assignment is paired with the node-manage path
+ * (node.server_manage, or its legacy node.update split value). */
 export function canManageViaNode(
   hasNodeAccess: boolean,
   rolePermissions: string[],
 ): boolean {
-  return hasNodeAccess && rolePermissions.includes("node.update");
+  return (
+    hasNodeAccess &&
+    (rolePermissions.includes("node.server_manage") ||
+      rolePermissions.includes("node.update"))
+  );
 }

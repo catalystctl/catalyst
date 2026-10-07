@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useDashboardStats } from '../../hooks/useDashboard';
 import { useAuthStore } from '../../stores/authStore';
+import { hasAnyPermission } from '../auth/ProtectedRoute';
 
 /**
  * Live fleet heartbeat for the shell status row — a colored pulse plus an
@@ -19,9 +20,9 @@ import { useAuthStore } from '../../stores/authStore';
 export default function FleetHeartbeat() {
   const { t } = useTranslation('layout');
   const user = useAuthStore((s) => s.user);
-  const canSeeNodes = Boolean(
-    user?.permissions?.includes('*') || user?.permissions?.includes('node.read'),
-  );
+  // hasAnyPermission admits admin.read (read-everything) and scoped node
+  // readers, mirroring the backend gate for node counters.
+  const canSeeNodes = hasAnyPermission(user?.permissions, ['node.read']);
   const { data: stats } = useDashboardStats();
 
   const online = canSeeNodes ? (stats?.nodesOnline ?? 0) : (stats?.serversOnline ?? 0);

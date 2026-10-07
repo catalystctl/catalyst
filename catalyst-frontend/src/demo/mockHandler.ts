@@ -126,7 +126,12 @@ export function handleDemoRequest(
       }
       if (suffix === '/variables') return { handled: true, data: ok([{ name: 'EULA', description: 'Accept the Minecraft EULA', default: 'FALSE', required: true, input: 'checkbox', rules: [], value: 'TRUE' }]) };
       if (suffix === '/allocations') return { handled: true, data: ok([{ containerPort: 25565, hostPort: server.primaryPort ?? 25565, isPrimary: true, ip: server.primaryIp }]) };
-      if (suffix === '/permissions') return { handled: true, data: { success: true, data: [], presets: { readOnly: ['server.read'], power: ['server.read', 'server.start', 'server.stop'], full: ['*'] } } };
+      if (suffix === '/permissions') return { handled: true, data: { success: true, data: [], presets: {
+        // Mirrors backend DEFAULT_PERMISSION_PRESETS (_helpers.ts).
+        readOnly: ['server.read', 'alert.read', 'console.read', 'file.read', 'database.read', 'backup.read'],
+        power: ['server.read', 'server.start', 'server.stop', 'server.kill', 'server.install', 'server.reinstall', 'server.rebuild', 'alert.read', 'alert.create', 'alert.update', 'console.read', 'console.write', 'file.read', 'file.write', 'database.read', 'database.create', 'database.rotate', 'database.delete', 'backup.read', 'backup.create', 'backup.restore', 'backup.delete', 'backup.download'],
+        full: ['*'],
+      } } };
       if (suffix === '/invites') return { handled: true, data: ok([]) };
       if (suffix === '/backup-settings') return { handled: true, data: ok({ storageMode: 'local', retentionCount: 5, retentionDays: 7 }) };
       if (suffix === '/backups') {

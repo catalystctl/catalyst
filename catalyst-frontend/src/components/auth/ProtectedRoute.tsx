@@ -48,7 +48,25 @@ const ADMIN_PERMISSIONS = [
   'alert.update',
   'alert.delete',
   'apikey.manage',
+  'apikey.read',
+  'apikey.write',
 ];
+
+// Legacy alias window (mirrors backend permission-vocabulary LEGACY_ALIASES):
+// a granted legacy value satisfies its new split values, never the reverse.
+const LEGACY_ALIASES: Record<string, readonly string[]> = {
+  'apikey.manage': ['apikey.read', 'apikey.write'],
+  'server.update': ['server.network', 'server.storage'],
+  'node.update': ['node.server_manage', 'node.agent_control'],
+  'server.suspend': ['server.archive'],
+  'server.transfer': ['server.migrate'],
+  'server.create': ['server.clone'],
+  'server.stop': ['server.kill'],
+};
+
+function satisfiesLegacyAlias(granted: string, required: string): boolean {
+  return (LEGACY_ALIASES[granted] ?? []).includes(required);
+}
 
 function isReadPermission(required: string): boolean {
   return (
@@ -62,6 +80,8 @@ function permissionMatches(granted: string, required: string): boolean {
   if (granted === required || granted === '*') return true;
   // Scoped grants like "node.delete:node_123" satisfy base "node.delete"
   if (granted.startsWith(`${required}:`)) return true;
+  // Legacy alias: granted server.stop satisfies required server.kill etc.
+  if (satisfiesLegacyAlias(granted, required)) return true;
   // admin.write = every concrete permission; admin.read = every read.
   // Mirrors backend lib/permissions.ts. "*" stays exclusive to Super Admin.
   if (required !== '*' && granted === 'admin.write') return true;

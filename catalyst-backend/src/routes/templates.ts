@@ -1,6 +1,6 @@
 import { prisma } from "../db.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { hasPermission } from "../lib/permissions";
+import { hasGrant } from "../lib/permissions";
 import { serialize } from "../utils/serialize";
 import { githubRawFileUrl, githubRepoTreeUrl, parseGithubOwnerRepo } from "../lib/github-repo";
 import { importPterodactylEggSafe } from "../utils/egg-import";
@@ -60,18 +60,18 @@ subscribeCacheInvalidations((channel) => {
   if (channel === 'template') templateListCache.clear();
 });
 
-const ensurePermission = async (
-	prisma: any,
-	userId: string,
+// Catalog permission via the request grant set — hasGrant admits '*', and
+// admin.write for any concrete permission. Reading request.user.permissions
+// makes this the API-key scope ceiling.
+const ensurePermission = (
+	request: FastifyRequest,
 	reply: FastifyReply,
 	requiredPermission: string,
 ) => {
-	const has = await hasPermission(prisma, userId, requiredPermission);
-	if (!has) {
-		apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
-		return false;
-	}
-	return true;
+	const perms: string[] = (request as any).user?.permissions ?? [];
+	if (hasGrant(perms, requiredPermission)) return true;
+	apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
+	return false;
 };
 
 export async function templateRoutes(app: FastifyInstance) {
@@ -108,7 +108,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				return reply.send(data);
 			}
 
-			const has = await ensurePermission(prisma, request.user.userId, reply, "template.read");
+			const has = ensurePermission(request, reply, "template.read");
 			if (!has) return;
 
 			const p = (async () => {
@@ -158,9 +158,8 @@ export async function templateRoutes(app: FastifyInstance) {
 		"/:templateId",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			const has = await ensurePermission(
-				prisma,
-				request.user.userId,
+			const has = ensurePermission(
+				request,
 				reply,
 				"template.read",
 			);
@@ -189,9 +188,8 @@ export async function templateRoutes(app: FastifyInstance) {
 		"/",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			const has = await ensurePermission(
-				prisma,
-				request.user.userId,
+			const has = ensurePermission(
+				request,
 				reply,
 				"template.create",
 			);
@@ -309,9 +307,8 @@ export async function templateRoutes(app: FastifyInstance) {
 		"/:templateId",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			const has = await ensurePermission(
-				prisma,
-				request.user.userId,
+			const has = ensurePermission(
+				request,
 				reply,
 				"template.update",
 			);
@@ -443,9 +440,8 @@ export async function templateRoutes(app: FastifyInstance) {
 		"/:templateId",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			const has = await ensurePermission(
-				prisma,
-				request.user.userId,
+			const has = ensurePermission(
+				request,
 				reply,
 				"template.delete",
 			);
@@ -482,9 +478,8 @@ export async function templateRoutes(app: FastifyInstance) {
 		"/import-pterodactyl",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			const has = await ensurePermission(
-				prisma,
-				request.user.userId,
+			const has = ensurePermission(
+				request,
 				reply,
 				"template.create",
 			);
@@ -599,9 +594,8 @@ export async function templateRoutes(app: FastifyInstance) {
 		"/import-pterodactyl-batch",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			const has = await ensurePermission(
-				prisma,
-				request.user.userId,
+			const has = ensurePermission(
+				request,
 				reply,
 				"template.create",
 			);

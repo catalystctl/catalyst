@@ -51,6 +51,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/game-versions",
     {
       onRequest: [app.authenticate],
+      config: { requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -61,7 +62,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider is required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const modManager = ensureModManagerEnabled(server, reply);
       if (!modManager) return;
@@ -112,7 +113,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/search",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -131,7 +132,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider is required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const modManager = ensureModManagerEnabled(server, reply);
       if (!modManager) return;
@@ -258,7 +259,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/versions",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -273,7 +274,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider and projectId are required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const modManager = ensureModManagerEnabled(server, reply);
       if (!modManager) return;
@@ -320,7 +321,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/install",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -338,7 +339,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider, projectId, versionId, and target are required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "file.write", reply);
+      const server = await ensureServerAccess(serverId, userId, "mods.manage", reply, request.user);
       if (!server) return;
       const modManager = ensureModManagerEnabled(server, reply);
       if (!modManager) return;
@@ -481,6 +482,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/game-versions",
     {
       onRequest: [app.authenticate],
+      config: { requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -492,7 +494,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider is required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const pluginManager = ensurePluginManagerEnabled(server, reply);
       if (!pluginManager) return;
@@ -537,7 +539,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/search",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -555,7 +557,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider is required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const pluginManager = ensurePluginManagerEnabled(server, reply);
       if (!pluginManager) return;
@@ -662,7 +664,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/versions",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -677,7 +679,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider and projectId are required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const pluginManager = ensurePluginManagerEnabled(server, reply);
       if (!pluginManager) return;
@@ -724,7 +726,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/install",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "plugins.manage" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -741,7 +743,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider, projectId, and versionId are required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "file.write", reply);
+      const server = await ensureServerAccess(serverId, userId, "plugins.manage", reply, request.user);
       if (!server) return;
       const pluginManager = ensurePluginManagerEnabled(server, reply);
       if (!pluginManager) return;
@@ -923,14 +925,14 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/installed",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { target } = request.query as { target?: string };
       const userId = request.user.userId;
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const modManager = ensureModManagerEnabled(server, reply);
       if (!modManager) return;
@@ -973,13 +975,13 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/installed",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const pluginManager = ensurePluginManagerEnabled(server, reply);
       if (!pluginManager) return;
@@ -1022,7 +1024,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/uninstall",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1033,7 +1035,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filename is required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "file.write", reply);
+      const server = await ensureServerAccess(serverId, userId, "mods.manage", reply, request.user);
       if (!server) return;
       const modManager = ensureModManagerEnabled(server, reply);
       if (!modManager) return;
@@ -1087,7 +1089,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/uninstall",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "plugins.manage" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1098,7 +1100,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filename is required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "file.write", reply);
+      const server = await ensureServerAccess(serverId, userId, "plugins.manage", reply, request.user);
       if (!server) return;
       const pluginManager = ensurePluginManagerEnabled(server, reply);
       if (!pluginManager) return;
@@ -1149,13 +1151,13 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/check-updates",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: 15, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: 15, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const modManager = ensureModManagerEnabled(server, reply);
       if (!modManager) return;
@@ -1266,13 +1268,13 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/check-updates",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: 15, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: 15, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
       if (!server) return;
       const pluginManager = ensurePluginManagerEnabled(server, reply);
       if (!pluginManager) return;
@@ -1373,7 +1375,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/update",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1384,7 +1386,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filenames array is required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "file.write", reply);
+      const server = await ensureServerAccess(serverId, userId, "mods.manage", reply, request.user);
       if (!server) return;
       const modManager = ensureModManagerEnabled(server, reply);
       if (!modManager) return;
@@ -1514,7 +1516,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/update",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "plugins.manage" },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1525,7 +1527,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "filenames array is required");
       }
 
-      const server = await ensureServerAccess(serverId, userId, "file.write", reply);
+      const server = await ensureServerAccess(serverId, userId, "plugins.manage", reply, request.user);
       if (!server) return;
       const pluginManager = ensurePluginManagerEnabled(server, reply);
       if (!pluginManager) return;

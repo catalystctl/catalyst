@@ -22,16 +22,25 @@ type ApiResponse<T> = {
   error?: string;
 };
 
+// Mirrors backend ALL_SERVER_PERMISSIONS (permissions-catalog.ts); keep in
+// sync until the backend-served list is the only path.
 export const FALLBACK_SERVER_PERMISSIONS: string[] = [
   'server.read',
   'server.start',
   'server.stop',
+  'server.kill',
   'server.install',
   'server.reinstall',
   'server.rebuild',
+  'server.update',
+  'server.network',
+  'server.storage',
+  'server.archive',
+  'server.migrate',
   'server.transfer',
   'server.delete',
   'server.schedule',
+  'server.clone',
   'console.read',
   'console.write',
   'file.read',
@@ -40,6 +49,7 @@ export const FALLBACK_SERVER_PERMISSIONS: string[] = [
   'backup.create',
   'backup.restore',
   'backup.delete',
+  'backup.download',
   'database.read',
   'database.create',
   'database.rotate',
@@ -48,6 +58,8 @@ export const FALLBACK_SERVER_PERMISSIONS: string[] = [
   'alert.create',
   'alert.update',
   'alert.delete',
+  'mods.manage',
+  'plugins.manage',
 ];
 
 /**
@@ -63,18 +75,32 @@ export function serverPermissionLabel(perm: string): string {
       return i18n.t('serverPermissions.start', { ns: 'common' });
     case 'server.stop':
       return i18n.t('serverPermissions.stop', { ns: 'common' });
+    case 'server.kill':
+      return i18n.t('serverPermissions.kill', { ns: 'common' });
     case 'server.install':
       return i18n.t('serverPermissions.install', { ns: 'common' });
     case 'server.reinstall':
       return i18n.t('serverPermissions.reinstall', { ns: 'common' });
     case 'server.rebuild':
       return i18n.t('serverPermissions.rebuild', { ns: 'common' });
+    case 'server.update':
+      return i18n.t('serverPermissions.update', { ns: 'common' });
+    case 'server.network':
+      return i18n.t('serverPermissions.network', { ns: 'common' });
+    case 'server.storage':
+      return i18n.t('serverPermissions.storage', { ns: 'common' });
+    case 'server.archive':
+      return i18n.t('serverPermissions.archive', { ns: 'common' });
+    case 'server.migrate':
+      return i18n.t('serverPermissions.migrate', { ns: 'common' });
     case 'server.transfer':
       return i18n.t('serverPermissions.transfer', { ns: 'common' });
     case 'server.delete':
       return i18n.t('serverPermissions.delete', { ns: 'common' });
     case 'server.schedule':
       return i18n.t('serverPermissions.schedule', { ns: 'common' });
+    case 'server.clone':
+      return i18n.t('serverPermissions.clone', { ns: 'common' });
     case 'console.read':
       return i18n.t('serverPermissions.consoleRead', { ns: 'common' });
     case 'console.write':
@@ -91,6 +117,8 @@ export function serverPermissionLabel(perm: string): string {
       return i18n.t('serverPermissions.backupRestore', { ns: 'common' });
     case 'backup.delete':
       return i18n.t('serverPermissions.backupDelete', { ns: 'common' });
+    case 'backup.download':
+      return i18n.t('serverPermissions.backupDownload', { ns: 'common' });
     case 'database.read':
       return i18n.t('serverPermissions.databaseRead', { ns: 'common' });
     case 'database.create':
@@ -107,6 +135,10 @@ export function serverPermissionLabel(perm: string): string {
       return i18n.t('serverPermissions.alertUpdate', { ns: 'common' });
     case 'alert.delete':
       return i18n.t('serverPermissions.alertDelete', { ns: 'common' });
+    case 'mods.manage':
+      return i18n.t('serverPermissions.modsManage', { ns: 'common' });
+    case 'plugins.manage':
+      return i18n.t('serverPermissions.pluginsManage', { ns: 'common' });
     default:
       return perm;
   }
@@ -114,7 +146,8 @@ export function serverPermissionLabel(perm: string): string {
 
 /**
  * The shared server permission options, resolved from the backend with a
- * static fallback. `staleTime: Infinity` — the list only changes on deploy.
+ * static fallback. Refreshed every 10 minutes so backend catalog changes
+ * surface without a frontend deploy.
  */
 export function useServerPermissionOptions() {
   return useQuery({
@@ -131,7 +164,7 @@ export function useServerPermissionOptions() {
         return FALLBACK_SERVER_PERMISSIONS;
       }
     },
-    staleTime: Infinity,
+    staleTime: 10 * 60 * 1000,
     gcTime: Infinity,
     retry: 1,
   });

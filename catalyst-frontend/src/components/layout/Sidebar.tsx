@@ -241,10 +241,13 @@ function visibleGroups(t: TFunction, permissions: string[]) {
 
 export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapseOnMobile?: boolean }) {
   const { t } = useTranslation('layout');
-  const { data: updateData } = useUpdateCheck();
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
   const user = useAuthStore((s) => s.user);
+  // Query only when the backend admin.read gate would admit it.
+  const { data: updateData } = useUpdateCheck(
+    hasAnyPermission(user?.permissions, ['admin.read']),
+  );
   const logout = useAuthStore((s) => s.logout);
   const themeSettings = useThemeStore((s) => s.themeSettings);
   const navExpanded = useThemeStore((s) => s.navExpanded);

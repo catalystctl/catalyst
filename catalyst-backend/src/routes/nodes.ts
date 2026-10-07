@@ -31,6 +31,7 @@ const validateOverallocatePercent = (value: unknown): number | null => {
 };
 
 import {
+	hasGrant,
 	hasNodeAccess,
 	getUserAccessibleNodes,
 	getNodeAssignments,
@@ -57,12 +58,64 @@ onCacheInvalidate("node-list", () => nodeListCache.clear());
 const ensurePermission = (
 	request: any,
 	reply: FastifyReply,
-	requiredPermission: string,
+	requiredPermission: string | string[],
 ): boolean => {
 	const perms: string[] = request.user?.permissions ?? [];
-	if (perms.includes("*") || perms.includes(requiredPermission)) return true;
+	const required = Array.isArray(requiredPermission)
+		? requiredPermission
+		: [requiredPermission];
+	// hasGrant: '*' passes everything, admin.write any concrete permission,
+	// admin.read any read permission. Reading request.user.permissions makes
+	// this the API-key scope ceiling for static-permission routes.
+	if (required.some((permission) => hasGrant(perms, permission))) return true;
 	apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 	return false;
+};
+
+// Admin bits pass the request gate; every other caller needs node access
+// (assignment, or the admin fast path inside hasNodeAccess — read mode
+// also counts admin.read).
+const hasNodeScope = async (
+	request: any,
+	nodeId: string,
+	mode: "read" | "write",
+): Promise<boolean> => {
+	const perms: string[] = request.user?.permissions ?? [];
+	if (hasGrant(perms, mode === "read" ? "admin.read" : "admin.write")) {
+		return true;
+	}
+	return hasNodeAccess(prisma, request.user.userId, nodeId, mode);
+};
+
+// Hierarchy guard (audit/permission-audit/TARGET-VOCABULARY.md §2.7):
+// assignments touching admin-tier principals are '*'-only to modify.
+const assertCanAffectAssignmentTarget = async (
+	request: any,
+	targetType: "user" | "role",
+	targetId: string,
+	reply: FastifyReply,
+): Promise<boolean> => {
+	const actorPerms: string[] = request.user?.permissions ?? [];
+	if (actorPerms.includes("*")) return true;
+	const targetPerms =
+		targetType === "user"
+			? (
+					await prisma.user.findUnique({
+						where: { id: targetId },
+						select: { roles: { select: { permissions: true } } },
+					})
+				)?.roles.flatMap((role) => role.permissions) ?? []
+			: (
+					await prisma.role.findUnique({
+						where: { id: targetId },
+						select: { permissions: true },
+					})
+				)?.permissions ?? [];
+	if (targetPerms.includes("*") || targetPerms.includes("admin.write")) {
+		apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Cannot modify admin-tier assignments");
+		return false;
+	}
+	return true;
 };
 
 const PORT_FLOOR = 1024;
@@ -570,12 +623,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const userId = request.user.userId;
 
-			// Check if user is admin - admins see all nodes
+			// Admins (admin.read+) see all nodes
 			const perms: string[] = request.user?.permissions ?? [];
-			const isAdmin =
-				perms.includes("*") ||
-				perms.includes("admin.write") ||
-				perms.includes("admin.read");
+			const isAdmin = hasGrant(perms, "admin.read");
 
 			// Short TTL on the pre-serialized response: this list is polled by
 			// the dashboard and each node card, and every miss pays a findMany
@@ -633,11 +683,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
-			const userId = request.user.userId;
 
-			// Check if user has access to this specific node
-			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
-			if (!hasAccess) {
+			// Admin bits see every node; everyone else needs node access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -669,13 +717,13 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/deployment-token",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "node.create")) return;
+			if (!ensurePermission(request, reply, "node.server_manage")) return;
 			const { nodeId } = request.params as { nodeId: string };
 
 			// SECURITY: the deployment flow provisions an agent API key for this
-			// node. Require the node-manage path (admin, or node assignment +
-			// node.update), not just the node.create catalog permission.
-			const { hasNodeAccess } = await import("../lib/permissions.js");
+			// node. Require the node-manage path (write-admin, or node
+			// assignment + node.server_manage — hasGrant honors the legacy
+			// node.update grant), not just a catalog create permission.
 			const { resolveServerPermissions } = await import(
 				"../lib/permissions-catalog.js"
 			);
@@ -686,12 +734,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			);
 			const nodeManageAllowed =
 				(await hasNodeAccess(prisma, request.user.userId, nodeId)) &&
-				(rolePerms.includes("node.update") ||
-					rolePerms.includes("*") ||
-					// admin.write is the documented admin path; without this an
-					// admin.write role (no wildcard) was 403'd even though the
-					// panel shows it the Deploy / Generate Key buttons.
-					rolePerms.includes("admin.write"));
+				hasGrant(rolePerms, "node.server_manage");
 			if (!nodeManageAllowed) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Node management access required");
 			}
@@ -777,12 +820,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
-			const apiKeyPerms: string[] = (request as any).user?.permissions ?? [];
-			const isApiKeyAdmin =
-				apiKeyPerms.includes("*") ||
-				apiKeyPerms.includes("admin.write") ||
-				apiKeyPerms.includes("admin.read");
-			if (!isApiKeyAdmin && !(await hasNodeAccess(prisma, (request as any).user.userId, nodeId))) {
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 			}
 
@@ -841,15 +879,15 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/api-key",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "node.create")) return;
+			if (!ensurePermission(request, reply, "node.server_manage")) return;
 			const { nodeId } = request.params as { nodeId: string };
 			const { regenerate } = (request.body as { regenerate?: boolean }) || {};
 
 			// SECURITY: minting an agent API key makes the caller a valid agent
 			// for this node (verifyAgentApiKey keys on nodeId+key). Require the
-			// node-manage path (admin, or node assignment + node.update), not
-			// just the node.create catalog permission.
-			const { hasNodeAccess } = await import("../lib/permissions.js");
+			// node-manage path (write-admin, or node assignment +
+			// node.server_manage — hasGrant honors the legacy node.update
+			// grant), not just a catalog create permission.
 			const { resolveServerPermissions } = await import(
 				"../lib/permissions-catalog.js"
 			);
@@ -860,12 +898,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			);
 			const nodeManageAllowed =
 				(await hasNodeAccess(prisma, request.user.userId, nodeId)) &&
-				(rolePerms.includes("node.update") ||
-					rolePerms.includes("*") ||
-					// admin.write is the documented admin path; without this an
-					// admin.write role (no wildcard) was 403'd even though the
-					// panel shows it the Deploy / Generate Key buttons.
-					rolePerms.includes("admin.write"));
+				hasGrant(rolePerms, "node.server_manage");
 			if (!nodeManageAllowed) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Node management access required");
 			}
@@ -994,9 +1027,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.update")) return;
 			const { nodeId } = request.params as { nodeId: string };
-			const perms: string[] = (request as any).user?.permissions ?? [];
-			const isNodeAdmin = perms.includes("*") || perms.includes("admin.write");
-			if (!isNodeAdmin && !(await hasNodeAccess(prisma, (request as any).user.userId, nodeId))) {
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 			}
 			const {
@@ -1139,11 +1170,10 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.view_stats")) return;
 			const { nodeId } = request.params as { nodeId: string };
-			const userId = request.user.userId;
 
-			// Check if user has access to this specific node
-			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
-			if (!hasAccess) {
+			// node.view_stats holders need node access; admin bits read stats
+			// for every node without an assignment.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -1410,9 +1440,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.delete")) return;
 			const { nodeId } = request.params as { nodeId: string };
-			const perms: string[] = (request as any).user?.permissions ?? [];
-			const isNodeAdmin = perms.includes("*") || perms.includes("admin.write");
-			if (!isNodeAdmin && !(await hasNodeAccess(prisma, (request as any).user.userId, nodeId))) {
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
 			}
 
@@ -1496,11 +1524,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
-			const userId = request.user.userId;
 
-			// Check if user has access to this specific node
-			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
-			if (!hasAccess) {
+			// Admin bits see every node; everyone else needs node access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -1542,11 +1568,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
-			const userId = request.user.userId;
 
-			// Check if user has access to this specific node
-			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
-			if (!hasAccess) {
+			// Admin bits see every node; everyone else needs node access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -1584,13 +1608,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/allocations",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "node.manage_allocation")) return;
+			if (!ensurePermission(request, reply, ["node.read", "node.manage_allocation"])) return;
 			const { nodeId } = request.params as { nodeId: string };
-			const userId = request.user.userId;
 
-			// Check if user has access to this specific node
-			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
-			if (!hasAccess) {
+			// Read route: node.read holders (and admin bits) may list
+			// allocations for a node they can access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -1664,9 +1687,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			const { nodeId } = request.params as { nodeId: string };
 			const userId = request.user.userId;
 
-			// Check if user has access to this specific node
-			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
-			if (!hasAccess) {
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -1735,9 +1756,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			};
 			const userId = request.user.userId;
 
-			// Check if user has access to this specific node
-			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
-			if (!hasAccess) {
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -1779,9 +1798,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			};
 			const userId = request.user.userId;
 
-			// Check if user has access to this specific node
-			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
-			if (!hasAccess) {
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -1810,8 +1827,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			const { nodeId } = request.params as { nodeId: string };
 			const userId = request.user.userId;
 
-			const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
-			if (!hasAccess) {
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -1867,18 +1883,13 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/assignments",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "node.assign")) return;
+			if (!ensurePermission(request, reply, ["node.read", "node.assign"])) return;
 
 			const { nodeId } = request.params as { nodeId: string };
 
-			// Same scope as POST /:nodeId/assign: node.assign is not enough to
-			// read assignment rows for a node the caller cannot access.
-			const viewerHasAccess = await hasNodeAccess(
-				prisma,
-				request.user.userId,
-				nodeId,
-			);
-			if (!viewerHasAccess) {
+			// Read route: node.read holders (and admin bits) may view
+			// assignments; plain node.assign alone still requires node access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -1919,14 +1930,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
-			// Check if the user assigning the node has access to that node
-			// This prevents users with node.assign permission from assigning nodes they can't access
-			const assignerHasAccess = await hasNodeAccess(
-				prisma,
-				request.user.userId,
-				nodeId,
-			);
-			if (!assignerHasAccess) {
+			// The assigner must have access to that node — node.assign alone
+			// must not assign nodes the caller cannot access.
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
@@ -2054,6 +2060,23 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return apiError(reply, 404, ErrorCodes.NODE_ASSIGNMENT_NOT_FOUND, "Assignment not found for this node");
 			}
 
+			// Scope: mirror POST /assign — node.assign alone must not remove
+			// assignments on nodes the caller cannot access.
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
+			// Hierarchy: admin-tier targets are '*'-only (audit TARGET-§2.7).
+			if (
+				!(await assertCanAffectAssignmentTarget(
+					request,
+					assignment.userId ? "user" : "role",
+					assignment.userId ?? assignment.roleId ?? "",
+					reply,
+				))
+			) {
+				return;
+			}
+
 			// Delete the assignment
 			await removeNodeAssignment(prisma, assignmentId);
 
@@ -2101,14 +2124,20 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Check if user has node.read permission
 			if (!ensurePermission(request, reply, "node.read")) return;
 
-			// Get accessible node IDs
-			const accessibleResult = await getUserAccessibleNodes(prisma, userId);
+			// admin.read+ reads every node; others see their assignments only.
+			const isAdminReader = hasGrant(
+				request.user?.permissions ?? [],
+				"admin.read",
+			);
+			const accessibleResult = isAdminReader
+				? null
+				: await getUserAccessibleNodes(prisma, userId);
 
 			// Fetch node details
 			const nodes = await prisma.node.findMany({
-				where: {
-					id: { in: accessibleResult.nodeIds },
-				},
+				where: accessibleResult
+					? { id: { in: accessibleResult.nodeIds } }
+					: undefined,
 				omit: { secret: true },
 				include: {
 					location: {
@@ -2128,7 +2157,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				serialize({
 					success: true,
 					data: nodes,
-					hasWildcard: accessibleResult.hasWildcard,
+					hasWildcard: accessibleResult ? accessibleResult.hasWildcard : true,
 				}),
 			);
 		},
@@ -2143,8 +2172,13 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/unregistered-containers",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "admin.write")) return;
+			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
+
+			// Container discovery is read-only node visibility.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
 
 			const node = await prisma.node.findUnique({
 				where: { id: nodeId },
@@ -2190,8 +2224,13 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/unregistered-containers/:containerId/suggest-template",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "admin.write")) return;
+			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId, containerId } = request.params as { nodeId: string; containerId: string };
+
+			// Template matching is read-only node visibility.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
 
 			// Verify node exists
 			const node = await prisma.node.findUnique({
@@ -2321,8 +2360,27 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/import-server",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "admin.write")) return;
 			const { nodeId } = request.params as { nodeId: string };
+
+			// Server creation contract (audit TARGET-§2.4): server.create, or
+			// the node-manage path (node access + node.server_manage).
+			const actorPerms: string[] = request.user?.permissions ?? [];
+			if (!hasGrant(actorPerms, "server.create")) {
+				const { resolveServerPermissions } = await import(
+					"../lib/permissions-catalog.js"
+				);
+				const rolePerms = await resolveServerPermissions(
+					request.user.userId,
+					"",
+					nodeId,
+				);
+				const nodeManage =
+					(await hasNodeAccess(prisma, request.user.userId, nodeId)) &&
+					hasGrant(rolePerms, "node.server_manage");
+				if (!nodeManage) {
+					return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Insufficient permissions");
+				}
+			}
 			const {
 				containerId,
 				name,
@@ -2517,6 +2575,24 @@ export async function nodeRoutes(app: FastifyInstance) {
 				expiresAt?: string; // ISO date string
 			};
 
+			// SECURITY: a wildcard grant spans every node — require write-admin
+			// or the caller's own wildcard reach, never a bare node.assign.
+			const wildcardActorPerms: string[] = request.user?.permissions ?? [];
+			if (!hasGrant(wildcardActorPerms, "admin.write")) {
+				const reach = await getUserAccessibleNodes(prisma, request.user.userId);
+				if (!reach.hasWildcard) {
+					return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Wildcard node reach required");
+				}
+			}
+			// Self-target: granting yourself all-node access is the escalation.
+			if (targetType === "user" && targetId === request.user.userId) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Cannot assign wildcard access to yourself");
+			}
+			// Hierarchy: admin-tier targets are '*'-only.
+			if (!(await assertCanAffectAssignmentTarget(request, targetType, targetId, reply))) {
+				return;
+			}
+
 			// Validate targetType
 			if (targetType !== "user" && targetType !== "role") {
 				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "targetType must be 'user' or 'role'");
@@ -2632,6 +2708,20 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "targetType must be 'user' or 'role'");
 			}
 
+			// SECURITY: wildcard grants span every node — write-admin or own
+			// wildcard reach, never a bare node.assign; admin-tier targets
+			// are '*'-only (self-removal stays allowed: it is self-demotion).
+			const wildcardActorPerms: string[] = request.user?.permissions ?? [];
+			if (!hasGrant(wildcardActorPerms, "admin.write")) {
+				const reach = await getUserAccessibleNodes(prisma, request.user.userId);
+				if (!reach.hasWildcard) {
+					return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Wildcard node reach required");
+				}
+			}
+			if (!(await assertCanAffectAssignmentTarget(request, targetType, targetId, reply))) {
+				return;
+			}
+
 			// Find the wildcard assignment
 			const wildcardAssignment = await prisma.nodeAssignment.findFirst({
 				where: {
@@ -2689,6 +2779,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
+
+			// Agent visibility is node-scoped: admin bits or node access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
 
 			const node = await prisma.node.findUnique({
 				where: { id: nodeId },
@@ -2782,6 +2877,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 			const { nodeId } = request.params as { nodeId: string };
 			const { lines } = request.query as { lines?: string };
 
+			// Agent visibility is node-scoped: admin bits or node access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
+
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
 				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
@@ -2823,6 +2923,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
+
+			// Agent visibility is node-scoped: admin bits or node access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
@@ -2945,8 +3050,13 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/agent/restart",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "node.update")) return;
+			if (!ensurePermission(request, reply, "node.agent_control")) return;
 			const { nodeId } = request.params as { nodeId: string };
+
+			// Agent control is node-scoped: write-admin or node access.
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
@@ -2992,9 +3102,14 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/agent/update",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "node.update")) return;
+			if (!ensurePermission(request, reply, "node.agent_control")) return;
 			const { nodeId } = request.params as { nodeId: string };
 			const { targetVersion } = request.body as { targetVersion?: string };
+
+			// Agent control is node-scoped: write-admin or node access.
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
@@ -3075,6 +3190,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
 
+			// Agent visibility is node-scoped: admin bits or node access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
+
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
 				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
@@ -3129,6 +3249,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
 
+			// Agent visibility is node-scoped: admin bits or node access.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
+
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
 				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
@@ -3169,6 +3294,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
 
+			// Agent config is node-scoped read visibility (admin.read or node
+			// access) per audit TARGET-§2.6.
+			if (!(await hasNodeScope(request, nodeId, "read"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
+
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
 			if (!node) {
 				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
@@ -3204,12 +3335,17 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/agent/config",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "node.update")) return;
+			if (!ensurePermission(request, reply, "node.agent_control")) return;
 			const { nodeId } = request.params as { nodeId: string };
 			const { content, allowUnsafe } = request.body as {
 				content: string;
 				allowUnsafe?: boolean;
 			};
+
+			// Agent config writes are node-scoped: write-admin or node access.
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
 
 			if (!content || typeof content !== 'string') {
 				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Config content is required");
@@ -3283,9 +3419,14 @@ export async function nodeRoutes(app: FastifyInstance) {
 		"/:nodeId/host-network",
 		{ onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
-			if (!ensurePermission(request, reply, "node.update")) return;
+			if (!ensurePermission(request, reply, "node.agent_control")) return;
 			const { nodeId } = request.params as { nodeId: string };
 			const body = request.body as { enabled?: unknown } | undefined;
+
+			// Host-network rewrites are node-scoped: write-admin or node access.
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
 
 			if (typeof body?.enabled !== "boolean") {
 				return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "enabled (boolean) is required");

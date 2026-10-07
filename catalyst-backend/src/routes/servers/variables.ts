@@ -1,14 +1,15 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { checkIsAdmin, ensureNotSuspended, validateVariableRule } from './_helpers.js';
+import { checkIsAdmin, ensureNotSuspended, enforceKeyScope, validateVariableRule } from './_helpers.js';
+import { canManageViaNode } from "../../lib/server-access.js";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
 
 export async function serverVariablesRoutes(app: FastifyInstance) {
   app.get(
     "/:serverId/variables",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -21,8 +22,14 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
+      // Key-scope ceiling: a scoped API key must itself hold server.read
+      // (enforceKeyScope is session-inert).
+      if (request.user.apiKeyId && !enforceKeyScope(request.user, "server.read")) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "API key scope does not permit this operation");
+      }
+
       // Permission check: owner | ServerAccess with server.read | role
-      // server.read (admin.read is read-everything) | node+node.update | admin.write/*
+      // server.read (admin.read is read-everything) | node+node.manage | admin.write/*
       if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
           where: { userId, serverId, permissions: { has: "server.read" } },
@@ -31,9 +38,11 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
           const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
           const { hasGrant, hasNodeAccess } = await import("../../lib/permissions.js");
           const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-          const nodeManage =
-            (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-            rolePerms.includes("node.update");
+          // node_manage accepts node.server_manage and legacy node.update.
+          const nodeManage = canManageViaNode(
+            await hasNodeAccess(prisma, userId, server.nodeId),
+            rolePerms,
+          );
           if (!hasGrant(rolePerms, "server.read") && !nodeManage) {
             return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
           }
@@ -62,7 +71,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
 
   app.patch(
     "/:serverId/variables",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -80,8 +89,14 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         return;
       }
 
+      // Key-scope ceiling: environment variables shape container startup, so
+      // a scoped API key must itself hold server.update.
+      if (request.user.apiKeyId && !enforceKeyScope(request.user, "server.update")) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "API key scope does not permit this operation");
+      }
+
       // Permission check: owner | ServerAccess with server.update | global
-      // role with server.update/admin | node+node.update. Environment is a
+      // role with server.update/admin | node+node.manage. Environment is a
       // server setting, so server.rebuild is not the grant for it.
       if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
@@ -102,9 +117,11 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
           rolePerms.includes("server.update");
         if (!access && !roleAllowed) {
           const { hasNodeAccess } = await import("../../lib/permissions.js");
-          const nodeManage =
-            (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-            rolePerms.includes("node.update");
+          // node_manage accepts node.server_manage and legacy node.update.
+          const nodeManage = canManageViaNode(
+            await hasNodeAccess(prisma, userId, server.nodeId),
+            rolePerms,
+          );
           if (!nodeManage) {
             return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
           }

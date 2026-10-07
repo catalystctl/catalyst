@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
-import { allocateIpForServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, OWNER_SERVER_PERMISSIONS, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
+import { hasGrant } from "../../lib/permissions.js";
+import { allocateIpForServer, checkAnyPerm, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, enforceKeyScope, ensureNotSuspended, ensureServerAccess, OWNER_SERVER_PERMISSIONS, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { streamServerData } from "../../services/server-file-stream.js";
 import { publishCacheInvalidate } from "../../lib/event-bus.js";
@@ -28,6 +29,19 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       if (gateway?.pushToGlobalSubscribers) gateway.pushToGlobalSubscribers('server_updated', event);
       if (gateway?.routeToClients) void gateway.routeToClients(serverId, event).catch(() => {});
     } catch { /* WS push is best-effort */ }
+  };
+
+  /**
+   * Archive/restore gate: its own capability (server.archive), admin tier,
+   * or legacy server.suspend grants via the hasGrant alias window.
+   * admin.read is a read grant and must not archive.
+   */
+  const ensureArchivePermission = (request: FastifyRequest, reply: FastifyReply) => {
+    if (checkAnyPerm(request, ['*', 'admin.write', 'server.archive'])) {
+      return true;
+    }
+    apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Admin access required");
+    return false;
   };
 
   app.patch(
@@ -219,7 +233,8 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         id,
         request.user.userId,
         "backup.create",
-        reply
+        reply,
+        request.user,
       );
       if (!canUpdate) return;
 
@@ -386,24 +401,33 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       }
 
 
-      // Check permission: owner | ServerAccess(server.transfer) | node+node.update | admin.write/*
-      // Bare node assignment alone is NOT enough.
+      // API keys act within their own scope (same ceiling as ensureServerAccess).
+      if (!enforceKeyScope(request.user, "server.migrate")) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You do not have permission to transfer this server");
+      }
+
+      // Check permission: owner | ServerAccess(server.migrate) | node manager
+      // (node.server_manage, legacy node.update) | admin.write/*. hasGrant keeps
+      // legacy server.transfer grants valid during the alias window; bare node
+      // assignment alone is NOT enough.
       if (server.ownerId !== request.user.userId) {
-        const hasExplicitAccess = await prisma.serverAccess.findFirst({
+        const explicit = await prisma.serverAccess.findFirst({
           where: {
             serverId: id,
             userId: request.user.userId,
-            permissions: { has: "server.transfer" },
           },
+          select: { permissions: true },
         });
-        if (!hasExplicitAccess && !checkIsAdmin(request, "admin.write")) {
+        const hasExplicitGrant =
+          explicit?.permissions.some((p) => hasGrant([p], "server.migrate")) ?? false;
+        if (!hasExplicitGrant && !checkIsAdmin(request, "admin.write")) {
           const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
           const { hasNodeAccess } = await import("../../lib/permissions.js");
           const rolePerms = await resolveServerPermissions(request.user.userId, server.id, server.nodeId);
           const nodeManage =
             (await hasNodeAccess(prisma, request.user.userId, server.nodeId)) &&
-            rolePerms.includes("node.update");
-          if (!rolePerms.includes("server.transfer") && !rolePerms.includes("*") && !nodeManage) {
+            (rolePerms.includes("node.server_manage") || rolePerms.includes("node.update"));
+          if (!hasGrant(rolePerms, "server.migrate") && !nodeManage) {
             return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You do not have permission to transfer this server");
           }
         }
@@ -696,7 +720,10 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Not found");
       }
 
-      const isAdmin = checkIsAdmin(request, "admin.write");
+      // Read endpoint: owner or read-capable admin. checkIsAdmin's read branch
+      // admits admin.read (plus admin.write/*); non-admins get the 404
+      // masquerade to avoid server enumeration.
+      const isAdmin = checkIsAdmin(request, "admin.read");
       if (server.ownerId !== userId && !isAdmin) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Not found");
       }
@@ -753,9 +780,30 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
+      // API keys act within their own scope (same ceiling as ensureServerAccess).
+      if (!enforceKeyScope(request.user, "server.transfer")) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Only the server owner, a server.transfer holder, or an admin can transfer ownership");
+      }
+
+      // server.transfer finally gates ownership transfer: owner |
+      // ServerAccess(server.transfer) | global role holding server.transfer |
+      // admin.write/*. Node-manage deliberately does not apply — ownership is
+      // not a node operation.
       const isAdmin = checkIsAdmin(request, "admin.write");
       if (server.ownerId !== userId && !isAdmin) {
-        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Only the server owner or an admin can transfer ownership");
+        const explicit = await prisma.serverAccess.findFirst({
+          where: { serverId, userId },
+          select: { permissions: true },
+        });
+        const hasExplicitGrant =
+          explicit?.permissions.some((p) => hasGrant([p], "server.transfer")) ?? false;
+        if (!hasExplicitGrant) {
+          const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+          const rolePerms = await resolveServerPermissions(userId, serverId, null);
+          if (!hasGrant(rolePerms, "server.transfer")) {
+            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Only the server owner, a server.transfer holder, or an admin can transfer ownership");
+          }
+        }
       }
 
       if (newOwnerId === server.ownerId) {
@@ -834,7 +882,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      if (!(ensureSuspendPermission(request, reply, "Admin access required"))) {
+      if (!(ensureArchivePermission(request, reply))) {
         return;
       }
 
@@ -904,7 +952,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      if (!(ensureSuspendPermission(request, reply, "Admin access required"))) {
+      if (!(ensureArchivePermission(request, reply))) {
         return;
       }
 

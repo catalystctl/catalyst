@@ -608,7 +608,7 @@ function App() {
  path="admin/api-keys"
  element={
  <ProtectedRoute
- requirePermissions={['apikey.manage', 'admin.read', 'admin.write']}
+ requirePermissions={['apikey.read', 'apikey.write', 'admin.read', 'admin.write']}
  >
  <Suspense fallback={<PageFallback />}>
  <PageTransition>

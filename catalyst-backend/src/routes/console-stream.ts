@@ -19,7 +19,7 @@ import { hasNodeAccess } from '../lib/permissions.js';
 import { captureSystemError } from '../services/error-logger.js';
 import { describeError } from '../utils/describe-error.js';
 import { ErrorCodes } from '../shared-types.js';
-import { checkIsAdmin } from './servers/_helpers.js';
+import { checkIsAdmin, enforceKeyScope } from './servers/_helpers.js';
 import { openSseStream, formatSse as formatSseMessage } from '../utils/sse.js';
 import { apiError } from "../lib/http-error";
 
@@ -69,13 +69,21 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       const hasRoleConsoleRead = rolePerms.includes('console.read');
       // SECURITY: bare node assignment must not grant console read/write for
-      // every server on the node — require the node.update pairing
-      // (decideServerAccess node-manage contract).
+      // every server on the node — require the node.server_manage pairing
+      // (legacy node.update split value still satisfies raw-includes
+      // checks; decideServerAccess node-manage contract).
       const hasNodeAccessResult =
         (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-        rolePerms.includes('node.update');
+        (rolePerms.includes('node.server_manage') || rolePerms.includes('node.update'));
 
       if (!isOwner && !hasConsoleRead && !isAdmin && !hasNodeAccessResult && !hasRoleConsoleRead) {
+        apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Access denied');
+        return;
+      }
+
+      // API-key scope ceiling: the key itself must hold console.read even
+      // when its owner has console access (sessions carry no apiKeyId).
+      if (!enforceKeyScope(request.user, 'console.read')) {
         apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Access denied');
         return;
       }
@@ -181,18 +189,22 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         return;
       }
 
-      const isAdmin = checkIsAdmin(request, 'admin.read');
+      // Console write is a write channel: admin requires admin.write
+      // (matches the gateway re-check in sendConsoleCommand). admin.read
+      // must never authorize command injection.
+      const isAdmin = checkIsAdmin(request, 'admin.write');
       const access = server.access.find((a) => a.userId === userId);
       // Server-scoped resolution: global roles + RoleServerGrant +
       // RoleNodeGrant rows covering this server.
       const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
       const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
       // SECURITY: bare node assignment must not grant console read/write for
-      // every server on the node — require the node.update pairing
-      // (decideServerAccess node-manage contract).
+      // every server on the node — require the node.server_manage pairing
+      // (legacy node.update split value still satisfies raw-includes
+      // checks; decideServerAccess node-manage contract).
       const hasNodeAccessResult =
         (await hasNodeAccess(prisma, userId, server.nodeId)) &&
-        rolePerms.includes('node.update');
+        (rolePerms.includes('node.server_manage') || rolePerms.includes('node.update'));
       const hasRoleConsoleWrite = rolePerms.includes('console.write');
       const hasWritePermission =
         access?.permissions?.includes('console.write') ||
@@ -202,6 +214,13 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         hasRoleConsoleWrite;
 
       if (!hasWritePermission) {
+        apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, ErrorCodes.PERMISSION_DENIED);
+        return;
+      }
+
+      // API-key scope ceiling for the write channel: the key itself must
+      // hold console.write even when its owner does.
+      if (!enforceKeyScope(request.user, 'console.write')) {
         apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, ErrorCodes.PERMISSION_DENIED);
         return;
       }
@@ -216,7 +235,9 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const payload = trimmed.endsWith('\n') ? trimmed : `${trimmed}\n`;
 
       try {
-        await wsGateway.sendConsoleCommand(serverId, userId, payload);
+        // request.user carries the API-key scope when key-authenticated; the
+        // gateway re-checks it alongside its own user-level permission gate.
+        await wsGateway.sendConsoleCommand(serverId, userId, payload, request.user);
         return reply.status(202).send({ success: true, timestamp: new Date().toISOString() });
       } catch (err: any) {
         app.log.error({ err, serverId, userId }, 'Failed to send console command via SSE route');

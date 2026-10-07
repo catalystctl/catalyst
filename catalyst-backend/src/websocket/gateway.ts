@@ -11,7 +11,7 @@ import {
   ServerState,
   ErrorCodes,
 } from "../shared-types";
-import { hasPermission, hasNodeAccess } from "../lib/permissions";
+import { hasGrant, hasPermission, hasNodeAccess } from "../lib/permissions";
 import { ALL_SERVER_PERMISSIONS } from "../lib/permissions-catalog";
 import { sanitizeInput } from "../lib/validation";
 import { ServerStateMachine } from "../services/state-machine";
@@ -261,6 +261,11 @@ interface GlobalSseSubscriber {
   serverIds?: Set<string>;
   lastActivity: number;
   userId?: string;
+  /** Ends the hijacked socket when re-auth fails (provided by the route). */
+  close?: () => void;
+  /** Last unfiltered-feed re-auth result (admin.read via hasGrant), cached
+   *  between sweeper runs; undefined = not yet checked. */
+  adminOk?: boolean;
 }
 
 /** One admin entity-events SSE subscriber (unfiltered — admin.read gated). */
@@ -384,8 +389,11 @@ export class WebSocketGateway {
    */
   private pruneServerSubscriptions(serverId?: string): void {
     try {
-      const checkServer = async (sid: string, userIds: Set<string>) => {
-        const allowedUsers = await this.getAllowedUsersForServer(sid, true);
+      // Console subscribers (console SSE + WS consoleSubscriptions) prune
+      // against the console.read allowlist (rows must carry console.read);
+      // every other registry uses the server.read visibility allowlist.
+      const checkServer = async (sid: string, userIds: Set<string>, requiredPermission = "server.read") => {
+        const allowedUsers = await this.getAllowedUsersForServer(sid, true, requiredPermission);
         if (!allowedUsers) {
           for (const userId of userIds) this.removeUserServerSubscriptions(userId, sid);
           return;
@@ -394,19 +402,26 @@ export class WebSocketGateway {
           if (!allowedUsers.has(userId)) this.removeUserServerSubscriptions(userId, sid);
         }
       };
+      const sseUserIds = (subs: Map<string, { userId?: string }> | undefined): Set<string> => {
+        const ids = new Set<string>();
+        if (!subs) return ids;
+        for (const [, sub] of subs) {
+          if (sub.userId) ids.add(sub.userId);
+        }
+        return ids;
+      };
       if (serverId) {
         const holders = new Set<string>();
         for (const [, client] of this.clients) {
           if (client.subscriptions.has(serverId)) holders.add(client.userId);
         }
-        for (const subs of [this.sseSubscribers.get(serverId), this.sseEventSubscribers.get(serverId)]) {
-          if (!subs) continue;
-          for (const [, sub] of subs) {
-            const uid = (sub as { userId?: string }).userId;
-            if (uid) holders.add(uid);
-          }
+        for (const uid of sseUserIds(this.sseEventSubscribers.get(serverId))) holders.add(uid);
+        const consoleHolders = sseUserIds(this.sseSubscribers.get(serverId));
+        for (const [, client] of this.clients) {
+          if (client.consoleSubscriptions?.has(serverId)) consoleHolders.add(client.userId);
         }
         void checkServer(serverId, holders);
+        void checkServer(serverId, consoleHolders, "console.read");
       } else {
         const byServer = new Map<string, Set<string>>();
         for (const [, client] of this.clients) {
@@ -417,15 +432,32 @@ export class WebSocketGateway {
           }
         }
         for (const [sid, subs] of this.sseEventSubscribers) {
-          for (const [, sub] of subs) {
-            const uid = (sub as { userId?: string }).userId;
-            if (!uid) continue;
+          for (const uid of sseUserIds(subs)) {
             const set = byServer.get(sid) ?? new Set<string>();
             set.add(uid);
             byServer.set(sid, set);
           }
         }
+        // Console registry (SSE + WS consoleSubscriptions) was missing from
+        // the global flush: revoked console readers kept their streams when
+        // no serverId was targeted.
+        const consoleByServer = new Map<string, Set<string>>();
+        for (const [, client] of this.clients) {
+          for (const sid of client.consoleSubscriptions ?? []) {
+            const set = consoleByServer.get(sid) ?? new Set<string>();
+            set.add(client.userId);
+            consoleByServer.set(sid, set);
+          }
+        }
+        for (const [sid, subs] of this.sseSubscribers) {
+          for (const uid of sseUserIds(subs)) {
+            const set = consoleByServer.get(sid) ?? new Set<string>();
+            set.add(uid);
+            consoleByServer.set(sid, set);
+          }
+        }
         for (const [sid, holders] of byServer) void checkServer(sid, holders);
+        for (const [sid, holders] of consoleByServer) void checkServer(sid, holders, "console.read");
       }
     } catch { /* best-effort */ }
   }
@@ -479,6 +511,7 @@ export class WebSocketGateway {
   private pingInterval?: ReturnType<typeof setInterval>;
   private subscriberSweepInterval?: ReturnType<typeof setInterval>;
   private adminReauthInterval?: ReturnType<typeof setInterval>;
+  private globalReauthInterval?: ReturnType<typeof setInterval>;
 
   // ── Agent outbox ───────────────────────────────────────────────────────────
   // Commands queued per node when sendToAgent() finds no connected agent
@@ -3585,11 +3618,12 @@ export class WebSocketGateway {
         );
         // SECURITY: a bare node assignment must not grant console output or
         // server event visibility for every server on the node — require the
-        // node.update management pairing (same contract as server_control
-        // authorization and routes/backups.ts).
+        // node.server_manage pairing (legacy node.update split value still
+        // satisfies raw-includes checks) — same contract as server_control
+        // authorization and routes/backups.ts.
         const nodeAccess =
           (await hasNodeAccess(this.prisma, client.userId, server.nodeId)) &&
-          rolePerms.includes("node.update");
+          (rolePerms.includes("node.server_manage") || rolePerms.includes("node.update"));
         const roleCanServerRead =
           rolePerms.includes("server.read") ||
           rolePerms.includes("admin.write") ||
@@ -3688,7 +3722,8 @@ export class WebSocketGateway {
         // decideServerAccess contract: admin requires admin.write (admin.read
         // is observation-only), a global role granting the action's specific
         // server permission also counts, and node assignment alone grants
-        // nothing unless paired with node.update.
+        // nothing unless paired with node.server_manage (legacy node.update
+        // split value still satisfies raw-includes checks).
         const isOwner = server.ownerId === client.userId;
         const isAdmin = await this.userHasAdminWrite(client.userId);
         const rolePerms = await this.getUserServerRolePermissions(
@@ -3698,7 +3733,7 @@ export class WebSocketGateway {
         );
         const nodeAccess =
           (await hasNodeAccess(this.prisma, client.userId, server.nodeId)) &&
-          rolePerms.includes("node.update");
+          (rolePerms.includes("node.server_manage") || rolePerms.includes("node.update"));
         const requiredPermission =
           event.action === "start"
             ? "server.start"
@@ -3823,11 +3858,12 @@ export class WebSocketGateway {
           where: { userId_serverId: { userId: client.userId, serverId: server.id } },
         });
         // Node assignment alone must not grant console write (the
-        // decideServerAccess contract) — it requires node.update too.
+        // decideServerAccess contract) — it requires node.server_manage
+        // (legacy node.update split value still satisfies raw-includes checks).
         const rolePerms = await this.getUserServerRolePermissions(client.userId, server.id, server.nodeId);
         const consoleNodeAccess =
           (await hasNodeAccess(this.prisma, client.userId, server.nodeId)) &&
-          rolePerms.includes("node.update");
+          (rolePerms.includes("node.server_manage") || rolePerms.includes("node.update"));
         const roleConsoleWrite = rolePerms.includes("console.write");
         if (!access && server.ownerId !== client.userId && !isAdmin && !consoleNodeAccess && !roleConsoleWrite) {
           if (client.socket.readyState === 1) {
@@ -4143,8 +4179,12 @@ export class WebSocketGateway {
    * unfiltered streams aside).
    *
    * Snapshot-miss subscribers (payload serverId outside the handshake access
-   * snapshot) are re-checked live via serverAllowsUser() so events for
-   * servers granted/created after the connect still deliver (gap G3).
+   * snapshot) are re-checked live so events for servers granted/created after
+   * the connect still deliver (gap G3): read-tier admins (admin.read via
+   * hasGrant: admin.read/admin.write/*) deliver through the explicit
+   * admin_read branch — including events whose server row is already gone
+   * (server_deleted), where serverAllowsUser() cannot resolve — and everyone
+   * else through the per-server access allowlist.
    *
    * @param eventType - The event type (e.g. 'alert', 'server_created')
    * @param data - Event payload
@@ -4168,12 +4208,26 @@ export class WebSocketGateway {
       for (const [, sub] of this.globalSseSubscribers) {
         if (!sub.eventTypes.includes(eventType)) continue;
         const decision = evaluateGlobalSseDelivery(payload, sub);
-        if (decision === 'deliver') deliver(sub);
-        else if (decision === 'recheck-live') recheck.push(sub);
+        if (decision === 'deliver') {
+          // Cheap per-emit revocation gate for unfiltered feeds: the 60s
+          // sweeper caches its result; skip delivery once the subscriber has
+          // been marked revoked (scoped subscribers are allowlisted per emit).
+          if (sub.serverIds === undefined && sub.adminOk === false) continue;
+          deliver(sub);
+        } else if (decision === 'recheck-live') recheck.push(sub);
       }
       if (recheck.length > 0 && typeof payload.serverId === 'string') {
+        const adminReadCache = new Map<string, boolean>();
         for (const sub of recheck) {
-          if (sub.userId && (await this.serverAllowsUser(payload.serverId, sub.userId))) deliver(sub);
+          if (!sub.userId) continue;
+          // Explicit admin_read branch: read-tier admins receive every
+          // server's lifecycle events by contract, not by snapshot accident.
+          let isAdminRead = adminReadCache.get(sub.userId);
+          if (isAdminRead === undefined) {
+            isAdminRead = await this.userHasAdminRead(sub.userId);
+            adminReadCache.set(sub.userId, isAdminRead);
+          }
+          if (isAdminRead || (await this.serverAllowsUser(payload.serverId, sub.userId))) deliver(sub);
         }
       }
       publishFanout({ scope: 'global', eventType, payload: data });
@@ -4265,15 +4319,24 @@ export class WebSocketGateway {
     const server = await this.prisma.server.findUnique({
       where: { id: serverId },
       include: {
-        access: { select: { userId: true } },
+        access: { select: { userId: true, permissions: true } },
         node: { select: { id: true, nodeAssignments: { select: { userId: true, roleId: true } } } },
       },
     });
     if (!server) return null;
     // Same decision as subscribe: owner + explicit access + admins +
-    // node-managers (node.update) + role grants. Cached allowlist must not be
-    // narrower than the subscribe check or valid viewers lose fan-out.
-    const allowedUsers = new Set([server.ownerId, ...server.access.map((a) => a.userId)]);
+    // node-managers (node.server_manage) + role grants. Cached allowlist
+    // must not be narrower than the subscribe check or valid viewers lose
+    // fan-out.
+    // console.read narrows the baseline to rows that actually carry it: the
+    // console subscribe checks require console.read in the row (or a role
+    // grant), so seeding every row here would keep revoked console readers
+    // streaming (REALTIME_AUDIT P1.4).
+    const baselineAccess =
+      requiredPermission === "console.read"
+        ? server.access.filter((a) => (a.permissions ?? []).includes("console.read"))
+        : server.access;
+    const allowedUsers = new Set([server.ownerId, ...baselineAccess.map((a) => a.userId)]);
     try {
       const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
       const { decideServerAccess } = await import("../lib/server-access.js");
@@ -4283,6 +4346,21 @@ export class WebSocketGateway {
       }
       for (const [, client] of this.clients) {
         if (client.userId) candidateIds.add(client.userId);
+      }
+      // SSE subscribers are delivery targets too. Only WS clients were
+      // candidates before, so SSE-only admins and role-grant holders never
+      // resolved into the allowlist — their streams opened but silently
+      // received nothing at the per-emit gate.
+      for (const subs of [this.sseSubscribers.get(serverId), this.sseEventSubscribers.get(serverId)]) {
+        if (!subs) continue;
+        for (const [, sub] of subs) {
+          const uid = (sub as { userId?: string }).userId;
+          if (uid) candidateIds.add(uid);
+        }
+      }
+      for (const [, sub] of this.globalSseSubscribers) {
+        if (!sub.userId) continue;
+        if (sub.serverIds === undefined || sub.serverIds.has(serverId)) candidateIds.add(sub.userId);
       }
       for (const candidate of candidateIds) {
         if (allowedUsers.has(candidate)) continue;
@@ -4561,6 +4639,7 @@ export class WebSocketGateway {
     push: (event: string, data: any) => void,
     serverIds?: string[],
     userId?: string,
+    close?: () => void,
   ): { unsubscribe: () => void; touch: () => void } {
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     this.globalSseSubscribers.set(subscriberId, {
@@ -4570,6 +4649,9 @@ export class WebSocketGateway {
       serverIds: serverIds === undefined ? undefined : new Set(serverIds),
       lastActivity: Date.now(),
       userId,
+      // Ends the hijacked socket when the unfiltered-feed re-auth sweeper
+      // fails (mirrors addAdminEventSubscriber).
+      close,
     });
     this.logger.debug({ subscriberId, eventTypes, serverIds }, 'Global SSE subscriber added');
 
@@ -4855,6 +4937,11 @@ export class WebSocketGateway {
     this.adminReauthInterval = setInterval(() => {
       void this.reauthAdminSubscribers();
     }, 60_000);
+    // Same contract for unfiltered global (all-servers) streams: the feed is
+    // the read tier (admin.read via hasGrant admits admin.read/admin.write/*).
+    this.globalReauthInterval = setInterval(() => {
+      void this.reauthGlobalSubscribers();
+    }, 60_000);
   }
 
   private sweepSseSubscribers() {
@@ -4947,6 +5034,53 @@ export class WebSocketGateway {
           sub.close?.();
         } catch { /* socket already gone */ }
         this.adminEventSubscribers.delete(subId);
+      }),
+    );
+  }
+
+  /**
+   * Periodic global-stream re-auth (REALTIME_AUDIT P1.5): unfiltered
+   * (all-servers) subscribers authenticate once at subscribe time; the feed
+   * is the read tier (admin.read via hasGrant admits admin.read, admin.write
+   * and `*`), re-checked every 60s. On loss of the qualifying grant: push an
+   * error event, close the hijacked socket, unsubscribe — mirrors
+   * reauthAdminSubscribers. Scoped subscribers are not re-authed here: their
+   * snapshots are pruned per grant change and every emit re-checks the
+   * allowlist.
+   */
+  private async reauthGlobalSubscribers(): Promise<void> {
+    const targets: Array<[string, GlobalSseSubscriber]> = [];
+    for (const [subId, sub] of this.globalSseSubscribers) {
+      if (sub.serverIds === undefined && sub.userId) targets.push([subId, sub]);
+    }
+    if (targets.length === 0) return;
+    const checks = new Map<string, Promise<boolean>>();
+    await Promise.allSettled(
+      targets.map(async ([subId, sub]) => {
+        const userId = sub.userId as string;
+        let check = checks.get(userId);
+        if (!check) {
+          // A DB failure must not kick admins off their streams — treat an
+          // errored check as "unknown, keep previous result" (defaults true).
+          check = hasPermission(this.prisma, userId, "admin.read").catch(() => sub.adminOk !== false);
+          checks.set(userId, check);
+        }
+        const ok = await check;
+        sub.adminOk = ok;
+        if (ok) return;
+        this.logger.info({ userId, subId }, "Global SSE subscriber lost admin.read — closing stream");
+        try {
+          sub.push('error', JSON.stringify({
+            type: 'error',
+            error: 'admin_permission_revoked',
+            code: ErrorCodes.PERMISSION_DENIED,
+            timestamp: Date.now(),
+          }));
+        } catch { /* stream already dead */ }
+        try {
+          sub.close?.();
+        } catch { /* socket already gone */ }
+        this.globalSseSubscribers.delete(subId);
       }),
     );
   }
@@ -5418,7 +5552,12 @@ export class WebSocketGateway {
    * This is the HTTP-path equivalent of the WebSocket console_input handler.
    * Validates permissions and rate limits, then forwards to the agent.
    */
-  async sendConsoleCommand(serverId: string, userId: string, command: string): Promise<void> {
+  async sendConsoleCommand(
+    serverId: string,
+    userId: string,
+    command: string,
+    actor?: { permissions?: string[]; apiKeyId?: string },
+  ): Promise<void> {
     const server = await this.prisma.server.findUnique({
       where: { id: serverId },
     });
@@ -5429,6 +5568,11 @@ export class WebSocketGateway {
 
     // Permission check — same contract as the WS console_input path:
     // admin requires admin.write; node assignment alone is not enough.
+    // API-key scope ceiling: a key must itself hold console.write even when
+    // its owner does (sessions carry no apiKeyId and pass through).
+    if (actor?.apiKeyId && !hasGrant(actor.permissions ?? [], 'console.write')) {
+      throw Object.assign(new Error('Permission denied'), { code: 403 });
+    }
     const access = await this.prisma.serverAccess.findUnique({
       where: { userId_serverId: { userId, serverId } },
     });
@@ -5441,7 +5585,7 @@ export class WebSocketGateway {
     );
     const consoleNodeAccess =
       (await hasNodeAccess(this.prisma, userId, server.nodeId)) &&
-      rolePerms.includes("node.update");
+      (rolePerms.includes("node.server_manage") || rolePerms.includes("node.update"));
 
     if (
       !access &&
@@ -5612,6 +5756,7 @@ export class WebSocketGateway {
     if (this.pingInterval) clearInterval(this.pingInterval);
     if (this.subscriberSweepInterval) clearInterval(this.subscriberSweepInterval);
     if (this.adminReauthInterval) clearInterval(this.adminReauthInterval);
+    if (this.globalReauthInterval) clearInterval(this.globalReauthInterval);
     for (const timer of this.discoveredEmitTimers.values()) clearTimeout(timer);
     this.discoveredEmitTimers.clear();
     for (const [nodeId, agent] of this.agents) {

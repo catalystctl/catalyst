@@ -49,7 +49,9 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
   const canStart = hasWildcard || p.has('server.start');
   const canStop = hasWildcard || p.has('server.stop');
   const canRestart = canStart && canStop;
-  const canKill = canStop;
+  // server.kill is its own capability; legacy server.stop grants stay
+  // valid during the backend alias window (removal: wave 2).
+  const canKill = hasWildcard || p.has('server.kill') || p.has('server.stop');
   const canCancelInstall =
     hasWildcard || p.has('server.install') || p.has('server.reinstall');
 

@@ -13,6 +13,7 @@ import {
 import { serialize } from '../utils/serialize';
 import { captureSystemError } from '../services/error-logger';
 import { hasNodeAccess } from '../lib/permissions';
+import { Actor, enforceKeyScope } from './servers/_helpers.js';
 import { ServerState } from '../shared-types';
 import { createServerBackup } from '../services/create-backup';
 import { apiError } from "../lib/http-error";
@@ -44,7 +45,10 @@ export async function backupRoutes(app: FastifyInstance) {
     serverId: string,
     userId: string,
     reply: FastifyReply,
-    permission: string
+    permission: string,
+    // Mandatory actor: the key-scope ceiling below must never be silently
+    // skipped. System/cron callers pass SYSTEM_ACTOR.
+    actor: Actor,
   ) => {
     const server = await prisma.server.findUnique({
       where: { id: serverId },
@@ -64,6 +68,10 @@ export async function backupRoutes(app: FastifyInstance) {
       return null;
     }
     if (server.ownerId === userId) {
+      if (!enforceKeyScope(actor, permission)) {
+        apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+        return null;
+      }
       return server;
     }
     const access = await prisma.serverAccess.findFirst({
@@ -92,6 +100,13 @@ export async function backupRoutes(app: FastifyInstance) {
       apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       return null;
     }
+    // API-key scope ceiling: whatever user-level path allowed the request
+    // (ServerAccess row, node manage, role grant), the key itself must still
+    // hold the permission — same contract as ensureServerAccess.
+    if (!enforceKeyScope(actor, permission)) {
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+      return null;
+    }
     return server;
   };
 
@@ -103,7 +118,7 @@ export async function backupRoutes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const { name } = request.body as { name?: string };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.create");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.create", request.user);
       if (!accessServer) return;
 
       // Get server
@@ -172,7 +187,7 @@ export async function backupRoutes(app: FastifyInstance) {
         page?: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.read");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.read", request.user);
       if (!accessServer) return;
 
       const parsedLimit = parseInt(limit);
@@ -260,7 +275,7 @@ export async function backupRoutes(app: FastifyInstance) {
         backupId: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.read");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.read", request.user);
       if (!accessServer) return;
 
       const backup = await prisma.backup.findFirst({
@@ -303,7 +318,7 @@ export async function backupRoutes(app: FastifyInstance) {
         backupId: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.restore");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.restore", request.user);
       if (!accessServer) return;
 
       const server = await prisma.server.findUnique({
@@ -462,7 +477,7 @@ export async function backupRoutes(app: FastifyInstance) {
         backupId: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.delete");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.delete", request.user);
       if (!accessServer) return;
 
       const backup = await prisma.backup.findFirst({
@@ -536,7 +551,7 @@ export async function backupRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       // backup.read must not stream the archive. ensureBackupAccess already
       // wrote the 403 when this fails; do not fall through to another check.
-      const downloadServer = await ensureBackupAccess(serverId, userId, reply, "backup.download");
+      const downloadServer = await ensureBackupAccess(serverId, userId, reply, "backup.download", request.user);
       if (!downloadServer) return;
 
       const backup = await prisma.backup.findFirst({

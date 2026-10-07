@@ -1,7 +1,7 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { SimpleCache } from '../lib/cache.js';
-import { getUserAccessibleNodes } from '../lib/permissions.js';
+import { getUserAccessibleNodes, hasGrant } from '../lib/permissions.js';
 
 // Per-viewer+permission-shape cache (10s TTL). A single-entry slot thrashed
 // to 0% hit rate with two alternating users; a capped multi-entry map keeps
@@ -44,14 +44,17 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
       // Check if user has any relevant permission
       const canReadServers = perms.includes('*') || perms.includes('server.read');
-      const canReadNodes = perms.includes('*') || perms.includes('node.read');
+      const canReadNodes = hasGrant(perms, 'node.read');
       const canReadAlerts = perms.includes('*') || perms.includes('alert.read');
-      // Global server list / counts require admin.write or * — server.read alone is not global.
-      const isGlobalAdmin = perms.includes('*') || perms.includes('admin.write');
-      const isAdmin = isGlobalAdmin || perms.includes('admin.read');
+      // Global server counts: admin.read is the read-everything grant, so it
+      // sees the panel-wide inventory just like the write tier. A bare
+      // server.read must NOT (TARGET-VOCABULARY §2.1).
+      const isGlobalAdmin = hasGrant(perms, 'admin.read');
+      const isAdmin = isGlobalAdmin;
 
-      // Scope server counts to accessible servers unless the caller has global admin write/*.
-      // server.read alone must NOT expose panel-wide inventory.
+      // Scope server counts to accessible servers unless the caller is an
+      // admin-tier reader. server.read alone must NOT expose panel-wide
+      // inventory.
       let serverWhere: Record<string, unknown>;
       if (isGlobalAdmin) {
         serverWhere = {};
@@ -147,7 +150,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       const user = request.user;
       const limit = Math.min(20, parseInt(request.query.limit || '5', 10));
       const perms: string[] = user?.permissions ?? [];
-      const isAdmin = perms.includes('*') || perms.some(p => ['admin.read', 'admin.write'].includes(p));
+      const isAdmin = hasGrant(perms, 'admin.read');
 
       const activityCacheKey = `${isAdmin ? 'admin' : 'user'}:${user.userId}:${limit}`;
       const cachedActivity = activityCache.get(activityCacheKey);
@@ -200,8 +203,11 @@ export async function dashboardRoutes(app: FastifyInstance) {
       const user = request.user;
       const perms: string[] = user?.permissions ?? [];
 
-      const canReadNodes = perms.includes('*') || perms.includes('node.read');
-      const isAdmin = perms.includes('*') || perms.some(p => ['admin.read', 'admin.write'].includes(p));
+      // node.read OR node.view_stats (the stats-only grant) sees fleet
+      // aggregates; admin tiers pass via hasGrant implications.
+      const canReadNodes =
+        hasGrant(perms, 'node.read') || hasGrant(perms, 'node.view_stats');
+      const isAdmin = hasGrant(perms, 'admin.read');
 
       if (!canReadNodes && !isAdmin) {
         return reply.send({
@@ -288,6 +294,17 @@ export async function dashboardRoutes(app: FastifyInstance) {
       return reply.send({ data: payload });
     }
   );
+}
+
+/**
+ * Test-only: vitest runs with a shared module cache, so another suite's
+ * privileged /resources call can cache a zero aggregate before this
+ * module's tests plant their node metrics. Tests reset the caches to stay
+ * order-independent.
+ */
+export function __resetDashboardCachesForTests(): void {
+  resourcesCache = null;
+  activityCache.clear();
 }
 
 function clampPercent(value: number): number {
