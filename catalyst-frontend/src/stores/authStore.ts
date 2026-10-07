@@ -25,10 +25,11 @@ interface AuthState {
   register: (values: RegisterSchema) => Promise<void>;
   refresh: () => Promise<void>;
   init: () => Promise<void>;
-  logout: () => Promise<void>;
   setUser: (user: User | null) => void;
   setSession: (payload: { user: User }) => void;
   verifyTwoFactor: (payload: { code: string; trustDevice?: boolean }) => Promise<void>;
+  /** `stay` keeps the current route (public pages like the invite flow). */
+  logout: (opts?: { stay?: boolean }) => Promise<void>;
 }
 
 type AuthSet = (
@@ -230,7 +231,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         (set as AuthSet)({ isReady: true });
       }
     },
-    logout: async () => {
+    logout: async (opts?: { stay?: boolean }) => {
       localStorage.removeItem('catalyst-auth');
       (set as AuthSet)({ user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false });
       // Drop privileged React Query cache so admin/server data cannot flash
@@ -255,7 +256,9 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         // rehydrate a still-valid cookie and bounce the user back in). Navigate
         // to login instead.
       } finally {
-        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        // Public flows (e.g. the invite page) re-render into their signed-out
+        // branch right where they are — no hard navigation needed.
+        if (!opts?.stay && typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
           window.location.assign('/login');
         }
       }

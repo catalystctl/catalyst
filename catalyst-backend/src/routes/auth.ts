@@ -40,7 +40,9 @@ onCacheInvalidate('admin-user', () => meCache.clear());
 // Helper to forward response headers (set-auth-token, set-cookie) from better-auth to Fastify reply.
 // Must use getSetCookie() when available because Headers.get("set-cookie")
 // returns a comma-separated string which browsers cannot parse.
-function forwardAuthHeaders(response: any, reply: FastifyReply) {
+// Exported for the invite self-registration route, which must hand the new
+// session to the invitee's browser the same way the auth routes do.
+export function forwardAuthHeaders(response: any, reply: FastifyReply) {
   const headers = "headers" in response ? response.headers : null;
 
   const tokenHeader = headers?.get?.("set-auth-token") ?? null;

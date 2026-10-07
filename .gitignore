@@ -117,3 +117,6 @@ scripts/lxc-lab/*.local.env
 
 # Standalone docs checkout (own repo, not a submodule — clone separately)
 catalyst-doc/
+
+# Local agent code-index state (session tooling, never commit)
+.dsh-code-index/

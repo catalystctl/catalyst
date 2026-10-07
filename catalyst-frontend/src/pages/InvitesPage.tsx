@@ -7,7 +7,7 @@ import { serversApi } from '../services/api/servers';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { useAuthStore } from '../stores/authStore';
 import { reportSystemError } from '../services/api/systemErrors';
-import { getLocalizedErrorMessage } from '../i18n/api-errors';
+import { getApiErrorCode, getLocalizedErrorMessage } from '../i18n/api-errors';
 import type { ServerInvitePreview } from '../types/server';
 import ServerTabCard from '../components/servers/tabs/ServerTabCard';
 import TabEmptyState from '../components/servers/tabs/TabEmptyState';
@@ -17,15 +17,45 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+/** Server + granted permissions from the invite preview, shown on every branch. */
+function InviteSummary({ preview }: { preview: ServerInvitePreview | undefined }) {
+  const { t } = useTranslation('auth');
+  if (!preview) return null;
+  return (
+    <div className="rounded-sm border border-border/50 px-3 py-2">
+      <div className="type-overline">{t('invite.serverLabel')}</div>
+      <div className="font-display text-data font-semibold tracking-tight text-foreground">
+        {preview.serverName}
+      </div>
+      <div className="type-overline mt-2">{t('invite.permissions')}</div>
+      <div className="font-mono text-micro tabular-nums text-muted-foreground">
+        {preview.permissions.join(', ')}
+      </div>
+    </div>
+  );
+}
+
 function InvitesPage() {
   const { t } = useTranslation('auth');
   const { token } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
   const setSession = useAuthStore((s) => s.setSession);
+  const logout = useAuthStore((s) => s.logout);
   const queryClient = useQueryClient();
   const [accepted, setAccepted] = useState(false);
+  // The invited email gained an account after the preview loaded — the
+  // register branch reroutes to the sign-in card.
+  const [accountExists, setAccountExists] = useState(false);
+  // The session stopped matching the invited email (account switch or stale
+  // preview) — the accept branch reroutes to the wrong-account card.
+  const [accountMismatch, setAccountMismatch] = useState(false);
+  // Registered successfully but email verification is pending: better-auth
+  // hands out no session then, so the invitee verifies and signs in.
+  const [needsVerification, setNeedsVerification] = useState<{ mailConfigured: boolean } | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const {
     data: invitePreview,
     isLoading: isPreviewLoading,
@@ -51,17 +81,34 @@ function InvitesPage() {
   }
   const [registerPassword, setRegisterPassword] = useState('');
 
+  const invitedEmail = invitePreview?.email;
+  // Invite acceptance is email-bound: the server re-checks it, but knowing it
+  // up front routes the invitee to the right flow instead of a 403 dead end.
+  const emailMatches = useMemo(
+    () =>
+      Boolean(invitedEmail && user?.email) &&
+      invitedEmail!.toLowerCase() === user!.email.toLowerCase(),
+    [invitedEmail, user?.email],
+  );
+
   const acceptMutation = useMutation({
     mutationFn: () => serversApi.acceptInvite(token ?? ''),
     onSuccess: () => {
       setAccepted(true);
       notifySuccess(t('invite.acceptedToast'));
+      // The invite is consumed: drop the cached "pending" preview so a
+      // revisit refetches instead of re-offering a dead accept button.
+      queryClient.removeQueries({ queryKey: qk.invitePreview(token ?? '') });
       navigate('/servers');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.servers() });
     },
     onError: (error: any) => {
+      if (getApiErrorCode(error) === 'INVITE_NOT_VALID_FOR_ACCOUNT') {
+        setAccountMismatch(true);
+        queryClient.invalidateQueries({ queryKey: qk.invitePreview(token ?? '') });
+      }
       notifyError(error);
     },
   });
@@ -80,24 +127,40 @@ function InvitesPage() {
       return response;
     },
     onSuccess: (response: any) => {
-      if (response?.data?.userId) {
+      const data = response?.data;
+      notifySuccess(t('invite.accountCreatedToast'));
+      if (data?.token && data?.userId) {
+        // A session cookie was set with the response — sign straight in.
         setSession({
           user: {
-            id: response.data.userId,
-            email: response.data.email,
-            username: response.data.username,
+            id: data.userId,
+            email: data.email,
+            username: data.username,
             role: 'user',
-            permissions: response.data.permissions ?? [],
+            permissions: data.permissions ?? [],
           },
         });
+        navigate('/servers');
+        return;
       }
-      notifySuccess(t('invite.accountCreatedToast'));
-      navigate('/servers');
+      // No session handed over: better-auth withholds sign-in until the email
+      // is verified. Faking a session here would 401-bounce the invitee.
+      if (data?.emailVerificationRequired) {
+        setNeedsVerification({ mailConfigured: Boolean(data.mailConfigured) });
+      } else {
+        setAccountExists(true);
+      }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.servers() });
     },
     onError: (error: any) => {
+      if (getApiErrorCode(error) === 'INVITE_EMAIL_HAS_ACCOUNT') {
+        // The preview said "no account" but one exists now (or the preview
+        // came from an older backend): offer sign-in instead of a dead end.
+        setAccountExists(true);
+        queryClient.invalidateQueries({ queryKey: qk.invitePreview(token ?? '') });
+      }
       notifyError(error);
     },
   });
@@ -121,6 +184,17 @@ function InvitesPage() {
   // P0.4: an error with a cached preview means a background refresh failed, not
   // that the invite is unusable — only treat it as invalid when nothing loaded.
   const isPreviewUnusable = isPreviewError && invitePreview === undefined;
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      // Stay on the invite page: after the session clears it re-renders into
+      // the sign-in or create-account branch for the invited email.
+      await logout({ stay: true });
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   if (!isAuthenticated) {
     if (!token || isPreviewUnusable) {
@@ -152,22 +226,57 @@ function InvitesPage() {
       );
     }
 
+    // Registration succeeded but the account awaits email verification —
+    // tell the invitee what to do next instead of dropping them cold.
+    if (needsVerification) {
+      return (
+        <div className="mx-auto w-full max-w-lg space-y-3">
+          {header(
+            needsVerification.mailConfigured
+              ? t('invite.verifyEmailDescription', { email: invitedEmail ?? '' })
+              : t('invite.verifyEmailAdminDescription'),
+          )}
+          <ServerTabCard>
+            <InviteSummary preview={invitePreview} />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+                onClick={() => navigate('/login', { state: { from: location } })}
+              >
+                {t('invite.signIn')}
+              </button>
+            </div>
+          </ServerTabCard>
+        </div>
+      );
+    }
+
+    // The invited email already has an account — creating another one is
+    // impossible, so route straight to sign-in.
+    if (accountExists || invitePreview?.hasAccount) {
+      return (
+        <div className="mx-auto w-full max-w-lg space-y-3">
+          {header(t('invite.signInDescription', { email: invitedEmail ?? '' }))}
+          <ServerTabCard>
+            <InviteSummary preview={invitePreview} />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+                onClick={() => navigate('/login', { state: { from: location } })}
+              >
+                {t('invite.signInToAccept')}
+              </button>
+            </div>
+          </ServerTabCard>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto w-full max-w-lg space-y-3">
         {header(t('invite.registerDescription'))}
         <ServerTabCard>
-          {invitePreview ? (
-            <div className="rounded-sm border border-border/50 px-3 py-2">
-              <div className="type-overline">{t('invite.serverLabel')}</div>
-              <div className="font-display text-data font-semibold tracking-tight text-foreground">
-                {invitePreview.serverName}
-              </div>
-              <div className="type-overline mt-2">{t('invite.permissions')}</div>
-              <div className="font-mono text-micro tabular-nums text-muted-foreground">
-                {invitePreview.permissions.join(', ')}
-              </div>
-            </div>
-          ) : null}
+          <InviteSummary preview={invitePreview} />
           <div className="mt-3 space-y-3">
             <div className="space-y-2">
               <Label htmlFor="invite-email">{t('fields.email')}</Label>
@@ -222,28 +331,38 @@ function InvitesPage() {
     );
   }
 
+  const wrongAccount = accountMismatch || (Boolean(invitedEmail) && !emailMatches);
+
   return (
     <div className="mx-auto w-full max-w-lg space-y-3">
-      {header(t('invite.signedInDescription'))}
+      {wrongAccount
+        ? header(
+            t('invite.wrongAccountDescription', {
+              inviteEmail: invitedEmail ?? '',
+              currentEmail: user?.email ?? '',
+            }),
+          )
+        : header(t('invite.signedInDescription'))}
       <ServerTabCard>
         {!token || isPreviewUnusable ? (
           <TabEmptyState title={getLocalizedErrorMessage(previewError, 'INVITE_NOT_FOUND')} />
         ) : isPreviewLoading ? (
           <TabLoadingState rows={3} />
+        ) : wrongAccount ? (
+          <div className="space-y-3">
+            <InviteSummary preview={invitePreview} />
+            <p className="type-meta">{t('invite.wrongAccountHelp')}</p>
+            <button
+              className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+              onClick={() => void handleSignOut()}
+              disabled={isSigningOut}
+            >
+              {t('invite.signOut')}
+            </button>
+          </div>
         ) : (
           <div className="space-y-3">
-            {invitePreview ? (
-              <div className="rounded-sm border border-border/50 px-3 py-2">
-                <div className="type-overline">{t('invite.serverLabel')}</div>
-                <div className="font-display text-data font-semibold tracking-tight text-foreground">
-                  {invitePreview.serverName}
-                </div>
-                <div className="type-overline mt-2">{t('invite.permissions')}</div>
-                <div className="font-mono text-micro tabular-nums text-muted-foreground">
-                  {invitePreview.permissions.join(', ')}
-                </div>
-              </div>
-            ) : null}
+            <InviteSummary preview={invitePreview} />
             <button
               className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
               onClick={() => acceptMutation.mutate()}

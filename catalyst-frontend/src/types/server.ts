@@ -435,6 +435,9 @@ export interface InviteDeliveryResult {
 
 export interface ServerInvitePreview {
   email: string;
+  /** Whether the invited email already has an account — routes the invitee
+   *  to sign-in instead of account creation. Optional for older backends. */
+  hasAccount?: boolean;
   serverName: string;
   permissions: string[];
   expiresAt: string;

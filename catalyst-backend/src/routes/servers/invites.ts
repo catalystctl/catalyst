@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, canManageSubusers, captureSystemError, getEffectiveServerPermissions, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
-import { isMailConfigured } from '../../services/mailer.js';
+import { isMailConfigured, getSecuritySettings } from '../../services/mailer.js';
+import { forwardAuthHeaders } from '../auth.js';
 import { localeForEmail } from '../../i18n/user-locale.js';
 import { publishCacheInvalidate } from '../../lib/event-bus.js';
 import { withRegistrationBypass } from '../../lib/registration-gate.js';
@@ -140,7 +141,9 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
       }
 
-      const normalizedEmail = email.toLowerCase();
+      // Trim as well as lowercase: a stray space makes the invite email
+      // permanently unmatchable against user.email.
+      const normalizedEmail = email.trim().toLowerCase();
       const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       if (existingUser) {
         const existingAccess = await prisma.serverAccess.findUnique({
@@ -400,7 +403,9 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
     const user = await prisma.user.findUnique({ where: { id: args.userId } });
     if (!user || user.email.toLowerCase() !== invite.email.toLowerCase()) {
-      apiError(args.reply, 403, ErrorCodes.INVITE_NOT_VALID_FOR_ACCOUNT, "Invite not valid for this account");
+      apiError(args.reply, 403, ErrorCodes.INVITE_NOT_VALID_FOR_ACCOUNT, "Invite not valid for this account", {
+        params: { email: invite.email },
+      });
       return null;
     }
 
@@ -500,27 +505,45 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return apiError(reply, 410, ErrorCodes.INVITE_EXPIRED, "Invite expired");
       }
 
-      const existing = await prisma.user.findFirst({
-        where: { OR: [{ email: invite.email }, { username }] },
+      // Split the old combined check so the client can route each conflict:
+      // an existing account for the invited email means "sign in instead",
+      // while a taken username just needs a different username.
+      const existingByEmail = await prisma.user.findUnique({
+        where: { email: invite.email },
       });
-      if (existing) {
-        return apiError(reply, 409, ErrorCodes.CONFLICT, "Email or username already in use");
+      if (existingByEmail) {
+        return apiError(reply, 409, ErrorCodes.INVITE_EMAIL_HAS_ACCOUNT, "An account already exists for the invited email. Sign in to accept the invite.");
       }
 
-      const signUpResponse = await withRegistrationBypass(() =>
-        auth.api.signUpEmail({
-          headers: new Headers({
-            origin: request.headers.origin || request.headers.host || "http://localhost:3000",
+      const existingByUsername = await prisma.user.findUnique({
+        where: { username },
+      });
+      if (existingByUsername) {
+        return apiError(reply, 409, ErrorCodes.CONFLICT, "Username already in use");
+      }
+
+      // Better-auth throws APIError (4xx) on races the pre-checks above
+      // missed; surface it as a 4xx instead of an unhandled 500.
+      let signUpResponse;
+      try {
+        signUpResponse = await withRegistrationBypass(() =>
+          auth.api.signUpEmail({
+            headers: new Headers({
+              origin: request.headers.origin || request.headers.host || "http://localhost:3000",
+            }),
+            body: {
+              email: invite.email,
+              password,
+              name: username,
+              username,
+            } as any,
+            returnHeaders: true,
           }),
-          body: {
-            email: invite.email,
-            password,
-            name: username,
-            username,
-          } as any,
-          returnHeaders: true,
-        }),
-      );
+        );
+      } catch (err: any) {
+        const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 500 ? err.status : 400;
+        return apiError(reply, status, ErrorCodes.REGISTRATION_FAILED, err?.message || "Registration failed");
+      }
 
       const signUpUser =
         "headers" in signUpResponse && signUpResponse.response
@@ -563,12 +586,18 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
       const permissions = roles.flatMap((role) => role.permissions);
 
-      const tokenValue =
-        "headers" in signUpResponse ? signUpResponse.headers.get("set-auth-token") : null;
-      if (tokenValue) {
-        reply.header("set-auth-token", tokenValue);
-        reply.header("Access-Control-Expose-Headers", "set-auth-token");
-      }
+      // Forward better-auth's session cookies exactly like the /api/auth
+      // routes (forwardAuthHeaders): without set-cookie the invitee's browser
+      // never receives the session this response reports, and the post-register
+      // navigation 401-bounces back to /login.
+      const tokenValue = forwardAuthHeaders(signUpResponse, reply);
+
+      // Better-auth skips auto sign-in while email verification is pending,
+      // so no session exists yet — the client must not fake one.
+      const [security, mailConfigured] = await Promise.all([
+        getSecuritySettings(),
+        isMailConfigured(),
+      ]);
 
       reply.send({
         success: true,
@@ -578,6 +607,8 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
           username: signUpUser.username ?? username,
           permissions,
           token: tokenValue ?? null,
+          emailVerificationRequired: !tokenValue && security.requireEmailVerification,
+          mailConfigured,
         },
       });
     }
@@ -612,10 +643,18 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return apiError(reply, 410, ErrorCodes.INVITE_EXPIRED, "Invite expired");
       }
 
+      // Whether the invited email already has an account decides the
+      // sign-out flow the invitee sees: sign in vs create an account.
+      const invitedAccount = await prisma.user.findUnique({
+        where: { email: invite.email },
+        select: { id: true },
+      });
+
       reply.send({
         success: true,
         data: {
           email: invite.email,
+          hasAccount: Boolean(invitedAccount),
           serverName: invite.server.name,
           permissions: invite.permissions,
           expiresAt: invite.expiresAt,
